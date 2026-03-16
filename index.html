@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>삼봉패밀리 - 올인원 홈 포인트</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;400;700;900&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        // 1. 파이어베이스 모듈 임포트 (CDN 방식)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, serverTimestamp, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // React Hooks
+        const { useState, useEffect, useMemo } = React;
+
+        // 🚨 중요: 깃허브 페이지에서 실제 DB를 연동하려면 아래 따옴표 안에 선생님의 Firebase 설정값을 채워넣으셔야 합니다!
+        const fallbackConfig = {
+            apiKey: "AIzaSyAsih-sfnIZ_gX_1l7SAVZHCAhk3KzmiP8",
+            authDomain: "sambong-world-2026.firebaseapp.com",
+            projectId: "sambong-world-2026",
+            storageBucket: "sambong-world-2026.firebasestorage.app",
+            messagingSenderId: "",
+            appId: "1:728320769100:web:7510c9a77cca6b87a788e9",
+            measurementId: "G-H1RGMJHGTV"
+        };
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'home-note-app';
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // 2. Lucide 아이콘 렌더링 에러를 방지하는 헬퍼 함수
+        const createIcon = (name) => {
+            return ({ size = 24, color = "currentColor", className = "", ...props }) => {
+                const iconData = window.lucide && (window.lucide.icons[name] || window.lucide[name]);
+                if (!iconData) return null;
+
+                const renderNode = (node, i) => {
+                    const [tag, attrs, children] = node;
+                    const reactAttrs = { key: i };
+                    if (attrs) {
+                        for (const [k, v] of Object.entries(attrs)) {
+                            let reactKey = k.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+                            if (k === 'class') reactKey = 'className';
+                            reactAttrs[reactKey] = v;
+                        }
+                    }
+                    return React.createElement(tag, reactAttrs, (children || []).map((child, j) => renderNode(child, j)));
+                };
+
+                const childrenNodes = (Array.isArray(iconData) && typeof iconData[0] === 'string')
+                    ? (iconData[0] === 'svg' ? iconData[2] : [iconData]) : iconData;
+
+                return React.createElement(
+                    "svg",
+                    {
+                        xmlns: "http://www.w3.org/2000/svg", width: size, height: size, viewBox: "0 0 24 24",
+                        fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round",
+                        className: `lucide lucide-${name} ${className}`, ...props
+                    },
+                    (childrenNodes || []).map((child, i) => renderNode(child, i))
+                );
+            };
+        };
+
+        // 앱 전체에서 사용하는 아이콘 매핑
+        const Home = createIcon('Home');
+        const Calendar = createIcon('Calendar');
+        const Wallet = createIcon('Wallet');
+        const CheckSquare = createIcon('CheckSquare');
+        const BookOpen = createIcon('BookOpen');
+        const User = createIcon('User');
+        const Heart = createIcon('Heart');
+        const Bell = createIcon('Bell');
+        const Plus = createIcon('Plus');
+        const TrendingUp = createIcon('TrendingUp');
+        const TrendingDown = createIcon('TrendingDown');
+        const Droplets = createIcon('Droplets');
+        const Activity = createIcon('Activity');
+        const Scale = createIcon('Scale');
+        const ChevronLeft = createIcon('ChevronLeft');
+        const ChevronRight = createIcon('ChevronRight');
+        const X = createIcon('X');
+        const Trash2 = createIcon('Trash2');
+        const Sparkles = createIcon('Sparkles');
+        const ClipboardCheck = createIcon('ClipboardCheck');
+        const Calculator = createIcon('Calculator');
+        const Check = createIcon('Check');
+        const Camera = createIcon('Camera');
+        const CalendarIcon = createIcon('Calendar');
+        const ImageIcon = createIcon('Image');
+        const Edit3 = createIcon('Edit3');
+
+        // 정적 데이터 (살림 루틴)
+        const CHORE_MASTER_LIST = [
+            { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
+            { id: 4, task: "전자레인지" }, { id: 5, task: "에프" }, { id: 6, task: "안방 변기" }, 
+            { id: 7, task: "재활용 1" }, { id: 8, task: "침구 1" }, { id: 9, task: "쇼파 1" }, { id: 10, task: "집안 정비" },
+            { id: 11, task: "버리기" }, { id: 12, task: "현관" }, { id: 13, task: "다이슨 1" }, 
+            { id: 14, task: "재활용 2" }, { id: 15, task: "펜트리" }, { id: 16, task: "거실 변기" }, 
+            { id: 17, task: "로이 청소" }, { id: 18, task: "침구 2" }, { id: 19, task: "냉장고 2" }, { id: 20, task: "집안 정비" },
+            { id: 21, task: "재활용 3" }, { id: 22, task: "시하 책장" }, { id: 23, task: "카페트" }, 
+            { id: 24, task: "쇼파 2" }, { id: 25, task: "유리창" }, { id: 26, task: "세면대" }, 
+            { id: 27, task: "다이슨 2" }, { id: 28, task: "침구 3" }, { id: 29, task: "재활용 4" }, { id: 30, task: "집안 정비" }
+        ];
+
+        const App = () => {
+            // State Management
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState('home');
+            const [currentUserMode, setCurrentUserMode] = useState('husband'); 
+            const [isMenuOpen, setIsMenuOpen] = useState(true);
+
+            // Data States
+            const [familyTasks, setFamilyTasks] = useState([]);
+            const [sihaMemories, setSihaMemories] = useState([]);
+            const [weightLogs, setWeightLogs] = useState([]);
+            const [periodLogs, setPeriodLogs] = useState([]);
+            const [calendarEvents, setCalendarEvents] = useState([]);
+            const [monthlyChores, setMonthlyChores] = useState({});
+            const [ledgerItems, setLedgerItems] = useState([]);
+            
+            // UI States
+            const [newMemoryText, setNewMemoryText] = useState("");
+            const [inputWeight, setInputWeight] = useState("");
+            const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
+            const [selectedDate, setSelectedDate] = useState(null);
+            const [showEventModal, setShowEventModal] = useState(false);
+            const [newEventTitle, setNewEventTitle] = useState("");
+            
+            // Ledger Edit States
+            const [showLedgerAddModal, setShowLedgerAddModal] = useState(false);
+            const [newLedgerItem, setNewLedgerItem] = useState({ category: 'income_reg', title: '', amount: 0 });
+            const [editingLedgerId, setEditingLedgerId] = useState(null);
+            const [editAmount, setEditAmount] = useState("");
+
+            const todayDate = new Date().getDate();
+
+            // Firebase Auth
+            useEffect(() => {
+                const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) { console.error("Auth Error:", error); }
+                };
+                initAuth();
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                return () => unsubscribe();
+            }, []);
+
+            // Data Sync (Firestore)
+            useEffect(() => {
+                if (!user) return;
+
+                const unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'familyTasks'), (snap) => {
+                    setFamilyTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+                const unsubMemories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sihaMemories'), (snap) => {
+                    setSihaMemories(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+                });
+                const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), (snap) => {
+                    setCalendarEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                });
+                const unsubChores = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'monthlyChores'), (snap) => {
+                    const choresMap = {};
+                    snap.docs.forEach(doc => { choresMap[doc.id] = doc.data().done; });
+                    setMonthlyChores(choresMap);
+                });
+                const unsubLedger = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), (snap) => {
+                    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (items.length === 0) {
+                        initializeLedger();
+                    } else {
+                        setLedgerItems(items);
+                    }
+                });
+                const unsubWeight = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), (snap) => {
+                    setWeightLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(a.date) - new Date(b.date)));
+                });
+                const unsubPeriod = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), (snap) => {
+                    setPeriodLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date)));
+                });
+
+                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); };
+            }, [user]);
+
+            const initializeLedger = async () => {
+                const initialItems = [
+                    { category: 'income_reg', title: '본인 월소득', amount: 320 },
+                    { category: 'income_reg', title: '배우자 월소득', amount: 330 },
+                    { category: 'income_irr', title: '본인 보너스', amount: 1300 },
+                    { category: 'income_irr', title: '배우자 보너스', amount: 1419 },
+                    { category: 'expense_non', title: '교직원 공제회', amount: 75 },
+                    { category: 'expense_non', title: '하나손해보험', amount: 30 },
+                    { category: 'expense_non', title: 'KCGI 시하', amount: 36 },
+                    { category: 'expense_non', title: '적금 시하', amount: 15 },
+                    { category: 'expense_non', title: '보장성 보험(자녀)', amount: 24 },
+                    { category: 'expense_non', title: 'KCGI 연금저축', amount: 50 },
+                    { category: 'expense_non', title: '미래에셋 IRP', amount: 25 },
+                    { category: 'expense_fix', title: '대출이자', amount: 106 },
+                    { category: 'expense_fix', title: '교통/통신비', amount: 25 },
+                    { category: 'expense_fix', title: '관리비/공과금', amount: 33 },
+                    { category: 'expense_fix', title: '주식비(장보기)', amount: 70 },
+                    { category: 'expense_var', title: '문화생활비', amount: 9 },
+                    { category: 'expense_var', title: '경조사비', amount: 5 }
+                ];
+                for (const item of initialItems) {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), item);
+                }
+            };
+
+            // 가계부 연산 로직
+            const ledgerStats = useMemo(() => {
+                const res = { incReg: 0, incIrr: 0, expNon: 0, expFix: 0, expVar: 0 };
+                ledgerItems.forEach(item => {
+                    if (item.category === 'income_reg') res.incReg += item.amount;
+                    if (item.category === 'income_irr') res.incIrr += item.amount;
+                    if (item.category === 'expense_non') res.expNon += item.amount;
+                    if (item.category === 'expense_fix') res.expFix += item.amount;
+                    if (item.category === 'expense_var') res.expVar += item.amount;
+                });
+                res.totalExp = res.expNon + res.expFix + res.expVar;
+                res.irrMonthly = Math.round(res.incIrr / 12);
+                res.netCashFlow = res.incReg - res.totalExp;
+                return res;
+            }, [ledgerItems]);
+
+            // 공통 핸들러 함수들
+            const handleUpdateAmount = async (id) => {
+                if (!user) return;
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id);
+                    await updateDoc(docRef, { amount: parseFloat(editAmount) || 0 });
+                    setEditingLedgerId(null);
+                } catch (err) { console.error(err); }
+            };
+
+            const handleAddLedger = async () => {
+                if (!newLedgerItem.title || !user) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), {
+                        ...newLedgerItem, amount: parseFloat(newLedgerItem.amount) || 0, createdAt: serverTimestamp()
+                    });
+                    setNewLedgerItem({ category: 'income_reg', title: '', amount: 0 });
+                    setShowLedgerAddModal(false);
+                } catch (err) { console.error(err); }
+            };
+
+            const deleteLedgerItem = async (id) => {
+                if (!user) return;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id)); } 
+                catch (err) { console.error(err); }
+            };
+
+            const toggleMonthlyChore = async (day) => {
+                if (!user) return;
+                const currentStatus = monthlyChores[day] || false;
+                try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'monthlyChores', day.toString()), { done: !currentStatus, updatedAt: serverTimestamp() }); } 
+                catch (err) { console.error(err); }
+            };
+
+            const handleAddWeight = async () => { if (!inputWeight || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), { date: new Date().toISOString().split('T')[0], weight: parseFloat(inputWeight), createdAt: serverTimestamp() }); setInputWeight(""); } catch (err) { console.error(err); } };
+            const handleAddPeriod = async () => { if (!user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), { startDate: new Date().toISOString().split('T')[0], createdAt: serverTimestamp() }); } catch (err) { console.error(err); } };
+            const handleAddMemory = async () => { if (!newMemoryText.trim() || !user) return; const newEntry = { date: new Date().toISOString().split('T')[0], title: newMemoryText.substring(0, 15), content: newMemoryText, author: currentUserMode === 'husband' ? '남편' : '아내', image: "
