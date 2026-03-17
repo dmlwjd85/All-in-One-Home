@@ -332,7 +332,8 @@
 
                     while (retries < 5) {
                         try {
-                            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                            // 👇 선생님의 개인 키로 접근 가능한 정식 모델명(gemini-1.5-flash)으로 수정했습니다.
+                            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(payload)
