@@ -225,11 +225,12 @@
             }, [user]);
 
             const initializeLedger = async () => {
+                const currentMonth = new Date().getMonth() + 1;
                 const initialItems = [
-                    { category: 'income_reg', title: '알뜰 재윤 월소득', amount: 320 },
-                    { category: 'income_reg', title: '살뜰 의정 월소득', amount: 330 },
-                    { category: 'income_irr', title: '알뜰 재윤 보너스', amount: 1300 },
-                    { category: 'income_irr', title: '살뜰 의정 보너스', amount: 1419 },
+                    { category: 'income_reg', title: `${currentMonth}월 17일 살뜰 의정 월급`, amount: 320 },
+                    { category: 'income_reg', title: `${currentMonth}월 17일 알뜰 재윤 월급`, amount: 330 },
+                    { category: 'income_irr', title: '살뜰 의정 보너스', amount: 1300 },
+                    { category: 'income_irr', title: '알뜰 재윤 보너스', amount: 1419 },
                     { category: 'expense_non', title: '교직원 공제회', amount: 75 },
                     { category: 'expense_non', title: '하나손해보험', amount: 30 },
                     { category: 'expense_non', title: 'KCGI 시하', amount: 36 },
@@ -548,7 +549,7 @@
 
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                         <div className="space-y-6">
-                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingUp className="text-emerald-600"/> 소득 내역</h3>
+                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingUp className="text-emerald-600"/> {new Date().getMonth() + 1}월 소득 내역</h3>
                                             <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden divide-y divide-stone-200">
                                                 {['income_reg', 'income_irr'].map(cat => (
                                                 <div key={cat}>
@@ -575,7 +576,7 @@
                                         </div>
 
                                         <div className="space-y-6">
-                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingDown className="text-rose-500"/> 지출 내역</h3>
+                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingDown className="text-rose-500"/> {new Date().getMonth() + 1}월 지출 내역</h3>
                                             <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden divide-y divide-stone-200">
                                                 {['expense_non', 'expense_fix', 'expense_var'].map(cat => (
                                                 <div key={cat}>
@@ -611,7 +612,7 @@
                                                     <select value={newLedgerItem.category} onChange={(e) => setNewLedgerItem({...newLedgerItem, category: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-stone-400 outline-none text-stone-800">
                                                         <option value="income_reg">정기 소득</option><option value="income_irr">비정기 소득</option><option value="expense_non">비소비성 지출</option><option value="expense_fix">소비성 지출 (고정)</option><option value="expense_var">소비성 지출 (변동)</option>
                                                     </select>
-                                                    <input type="text" value={newLedgerItem.title} onChange={(e) => setNewLedgerItem({...newLedgerItem, title: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="항목명 (예: 관리비/공과금)" />
+                                                    <input type="text" value={newLedgerItem.title} onChange={(e) => setNewLedgerItem({...newLedgerItem, title: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder={newLedgerItem.category === 'income_reg' ? `${new Date().getMonth() + 1}월 17일 월급` : "항목명 (예: 관리비/공과금)"} />
                                                     <input type="number" value={newLedgerItem.amount} onChange={(e) => setNewLedgerItem({...newLedgerItem, amount: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="금액 (만원)" />
                                                     <div className="flex gap-3 pt-4">
                                                         <button onClick={() => setShowLedgerAddModal(false)} className="flex-1 py-4 bg-stone-200 text-stone-700 rounded-2xl font-bold hover:bg-stone-300 transition-colors">취소</button>
