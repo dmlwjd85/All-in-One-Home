@@ -461,7 +461,7 @@
                     title: newMemoryText.substring(0, 15), 
                     content: newMemoryText, 
                     author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', 
-                    image: uploadedImageBase64 || "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80", 
+                    image: uploadedImageBase64 || "[https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80](https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80)", 
                     tags: ["일상"], 
                     createdAt: serverTimestamp() 
                 }; 
@@ -835,7 +835,7 @@
                                                         ))}
                                                     </div>
                                                 </div>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     </div>
@@ -877,9 +877,22 @@
                                             <div className="grid grid-cols-7 bg-white border-b border-stone-100 font-black text-[10px] text-stone-400 uppercase tracking-widest py-2 shrink-0">
                                                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => <div key={d} className={`text-center ${i===0?'text-rose-400':i===6?'text-blue-400':''}`}>{d}</div>)}
                                             </div>
-                                            <div className="flex-1 grid grid-cols-7 overflow-y-auto bg-stone-50/30">
-                                                {schoolCalendarDays.map((d, i) => (
-                                                    <div key={i} className={`min-h-[80px] border-r border-b border-stone-100 p-1.5 ${!d.day ? 'bg-stone-50/80' : 'bg-white'}`}>
+                                            <div className="flex-1 grid grid-cols-7 overflow-y-auto bg-stone-50/30" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
+                                                {schoolCalendarDays.map((d, i) => {
+                                                    let isSelected = false;
+                                                    if (isDragging && dragStart && dragEnd && d.fullDate) {
+                                                        const current = new Date(d.fullDate);
+                                                        const start = new Date(dragStart <= dragEnd ? dragStart : dragEnd);
+                                                        const end = new Date(dragStart <= dragEnd ? dragEnd : dragStart);
+                                                        isSelected = current >= start && current <= end;
+                                                    }
+                                                    return (
+                                                    <div 
+                                                        key={i} 
+                                                        onMouseDown={() => handleMouseDown(d.fullDate)}
+                                                        onMouseEnter={() => handleMouseEnter(d.fullDate)}
+                                                        className={`min-h-[80px] border-r border-b border-stone-100 p-1.5 cursor-pointer transition-colors ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
+                                                    >
                                                         <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
                                                         <div className="mt-1 flex flex-col gap-1">
                                                             {calendarEvents.filter(e => e.date === d.fullDate && e.type === 'school').map(e => {
@@ -898,7 +911,8 @@
                                                             })}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
 
