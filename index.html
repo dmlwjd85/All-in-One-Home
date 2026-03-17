@@ -34,7 +34,7 @@
         .diary-font { font-family: 'Nanum Myeongjo', serif; }
         /* 스크롤바 숨기기 (깔끔한 UI 유지) */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     </style>
 </head>
 <body class="bg-paper-100 text-paper-800">
@@ -145,7 +145,7 @@
             const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [loginSelectedUser, setLoginSelectedUser] = useState(null);
             const [pinCode, setPinCode] = useState("");
-            const [userPins, setUserPins] = useState({ jaeyoon: null, uijeong: null }); // 신규: DB 연동 비밀번호 상태
+            const [userPins, setUserPins] = useState({ jaeyoon: null, uijeong: null });
 
             // Navigation & Mode
             const [user, setUser] = useState(null);
@@ -174,15 +174,15 @@
             const [newDiaryTitle, setNewDiaryTitle] = useState("");
             const [newDiaryContent, setNewDiaryContent] = useState("");
             
-            // 신규: 캘린더 드래그 상태
+            // 캘린더 드래그 상태
             const [dragStart, setDragStart] = useState(null);
             const [dragEnd, setDragEnd] = useState(null);
             const [isDragging, setIsDragging] = useState(false);
 
-            // 신규: 이음메시지 관리 상태
-            const [showIeumModal, setShowIeumModal] = useState(false);
+            // 이음메시지 관리 및 학사일정 상태
+            const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
             const [ieumMessage, setIeumMessage] = useState("");
-            const [analyzedEvents, setAnalyzedEvents] = useState([]);
+            const [analyzedResult, setAnalyzedResult] = useState(null);
             const [isAnalyzing, setIsAnalyzing] = useState(false);
 
             // Ledger Edit States
@@ -230,7 +230,6 @@
                 const unsubPeriod = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), (snap) => setPeriodLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
                 const unsubDiaries = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'diaries'), (snap) => setPersonalDiaries(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
 
-                // 신규: 비밀번호 데이터 연동 (초기화를 위해 경로 변경)
                 const unsubPins = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'pins_v2'), (snap) => {
                     if (snap.exists()) setUserPins(snap.data());
                 });
@@ -262,7 +261,6 @@
                 for (const item of initialItems) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), item);
             };
 
-            // 가계부 계산
             const ledgerStats = useMemo(() => {
                 const res = { incReg: 0, incIrr: 0, expNon: 0, expFix: 0, expVar: 0 };
                 ledgerItems.forEach(item => {
@@ -278,28 +276,42 @@
                 return res;
             }, [ledgerItems]);
 
-            // 관리비 추이 계산용 데이터
             const maintenanceData = useMemo(() => {
                 return ledgerItems.filter(item => item.title.includes('관리비') || item.title.includes('공과금'));
             }, [ledgerItems]);
 
-            // 이음메시지 분석 로직 (AI 연동)
+            const schoolCalendarDays = useMemo(() => {
+                const year = schoolViewDate.getFullYear(); const month = schoolViewDate.getMonth();
+                const days = []; const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay();
+                for (let i = 0; i < firstDay; i++) days.push({ day: null, fullDate: null });
+                for (let i = 1; i <= daysInMonth; i++) days.push({ day: i, fullDate: `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
+                return days;
+            }, [schoolViewDate]);
+
+            // 이음메시지 분석 로직 (AI 연동 - 비서 기능 포함)
             const handleAnalyzeIeum = async () => {
                 if (!ieumMessage.trim()) return;
                 setIsAnalyzing(true);
                 try {
                     const apiKey = ""; 
+                    const prompt = `당신은 초등학교 교사를 돕는 스마트 비서입니다. 다음 업무 메시지를 분석해주세요. 올해는 2026년입니다.
+                    1. 메시지가 일정(마감, 행사, 연수, 체험학습 등)을 포함하는지 확인하세요.
+                    2. 일정이 있다면 배열로 추출하고, 각각의 카테고리를 분류하세요. (deadline: 마감일/제출일, field_trip: 체험학습/현장학습, lecture: 강사수업/연수, general: 일반 행사 및 일정)
+                    3. 교사가 이해하기 쉽게 핵심만 요약해서 비서처럼 친절하고 명확하게 브리핑해주세요. (예: "선생님, 이 메시지는 ~에 관한 안내입니다.")
+                    반드시 아래 JSON 형식으로만 응답하세요.
+                    {"isSchedule": true/false, "summary": "비서의 요약 브리핑", "events": [{"date": "YYYY-MM-DD", "title": "일정/마감명", "category": "deadline"|"field_trip"|"lecture"|"general"}]}`;
+
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            contents: [{ parts: [{ text: `다음 메시지에서 학교 행사, 출장 등 일정 정보를 추출해서 JSON 배열로만 반환해줘. 포맷: [{"date": "YYYY-MM-DD", "title": "일정명"}] 올해는 2026년이야. 메시지: ${ieumMessage}` }] }],
+                            contents: [{ parts: [{ text: prompt + "\n\n메시지: " + ieumMessage }] }],
                             generationConfig: { responseMimeType: "application/json" }
                         })
                     });
                     const result = await response.json();
                     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) setAnalyzedEvents(JSON.parse(text));
+                    if (text) setAnalyzedResult(JSON.parse(text));
                 } catch (error) {
                     console.error("분석 실패:", error);
                     alert("메시지 분석에 실패했습니다.");
@@ -309,19 +321,18 @@
             };
 
             const handleRegisterIeumEvents = async () => {
-                if (!user || analyzedEvents.length === 0) return;
+                if (!user || !analyzedResult || !analyzedResult.events) return;
                 try {
-                    for (const ev of analyzedEvents) {
+                    for (const ev of analyzedResult.events) {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), {
-                            date: ev.date, title: `[이음] ${ev.title}`, type: 'school',
+                            date: ev.date, title: ev.title, type: 'school', category: ev.category || 'general',
                             author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp()
                         });
                     }
-                    setIeumMessage(""); setAnalyzedEvents([]); setShowIeumModal(false);
+                    setIeumMessage(""); setAnalyzedResult(null);
                 } catch (err) { console.error(err); }
             };
 
-            // 캘린더 드래그 앤 드롭 연속 선택 로직
             const handleMouseDown = (date) => {
                 if (!date) return;
                 setIsDragging(true); setDragStart(date); setDragEnd(date);
@@ -342,13 +353,11 @@
                 }
             };
 
-            // 보안 로그인 처리 (최초 설정 및 검증 기능 추가)
             const handleLoginSubmit = async () => {
                 if (!pinCode) return;
                 
                 const currentPin = userPins[loginSelectedUser];
                 if (!currentPin) {
-                    // 최초 접속 시 입력한 값으로 비밀번호 영구 설정
                     try {
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'pins_v2'), {
                             [loginSelectedUser]: pinCode
@@ -358,7 +367,6 @@
                         setPinCode("");
                     } catch (err) { console.error(err); }
                 } else {
-                    // 이후 접속 시 설정된 비밀번호와 대조
                     if (pinCode === currentPin) {
                         setCurrentUserMode(loginSelectedUser);
                         setIsAuthenticated(true);
@@ -370,7 +378,6 @@
                 }
             };
 
-            // 이미지 압축 함수 (용량 최적화)
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -382,7 +389,7 @@
                     img.src = event.target.result;
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 600; // 가로 최대 크기 제한
+                        const MAX_WIDTH = 600;
                         const scaleSize = MAX_WIDTH / img.width;
                         canvas.width = MAX_WIDTH;
                         canvas.height = img.height * scaleSize;
@@ -390,20 +397,19 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         
-                        // 0.6 품질로 JPEG 압축하여 용량 대폭 감소
                         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
                         setUploadedImageBase64(compressedBase64);
                     };
                 };
             };
 
-            // 핸들러 함수들
             const handleUpdateAmount = async (id) => { if (!user) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id), { amount: parseFloat(editAmount) || 0 }); setEditingLedgerId(null); } catch (err) { console.error(err); } };
             const handleAddLedger = async () => { if (!newLedgerItem.title || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), { ...newLedgerItem, amount: parseFloat(newLedgerItem.amount) || 0, createdAt: serverTimestamp() }); setNewLedgerItem({ category: 'income_reg', title: '', amount: 0 }); setShowLedgerAddModal(false); } catch (err) { console.error(err); } };
             const deleteLedgerItem = async (id) => { if (!user) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id)); } catch (err) { console.error(err); } };
             const toggleMonthlyChore = async (day) => { if (!user) return; const currentStatus = monthlyChores[day] || false; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'monthlyChores', day.toString()), { done: !currentStatus, updatedAt: serverTimestamp() }); } catch (err) { console.error(err); } };
             const handleAddWeight = async () => { if (!inputWeight || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), { date: new Date().toISOString().split('T')[0], weight: parseFloat(inputWeight), createdAt: serverTimestamp() }); setInputWeight(""); } catch (err) { console.error(err); } };
             const handleAddPeriod = async () => { if (!user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), { startDate: new Date().toISOString().split('T')[0], createdAt: serverTimestamp() }); } catch (err) { console.error(err); } };
+            
             const handleAddMemory = async () => { 
                 if (!newMemoryText.trim() || !user) return; 
                 const newEntry = { 
@@ -430,7 +436,6 @@
                         const end = new Date(endDateStr);
                         let current = new Date(start);
                         
-                        // 선택된 구간의 날짜를 하루씩 늘리며 모두 등록
                         while (current <= end) {
                             const dateStr = current.toISOString().split('T')[0];
                             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
@@ -449,7 +454,6 @@
                 } catch (err) { console.error(err); } 
             };
             
-            // 다이어리 기록 핸들러
             const handleAddDiary = async () => {
                 if (!newDiaryTitle.trim() || !user) return;
                 try {
@@ -482,7 +486,6 @@
                 { id: 'siha', icon: Heart, label: '시하 기록' },
             ];
 
-            // 로그인 화면 (보안 유지)
             if (!isAuthenticated) {
                 return (
                     <div className="flex h-screen bg-paper-100 items-center justify-center p-4">
@@ -531,7 +534,6 @@
 
             return (
                 <div className="flex h-screen bg-paper-100 text-paper-800 overflow-hidden font-sans">
-                    {/* 네비게이션 사이드바 (차분한 웜톤) */}
                     <nav className={`bg-paper-50 border-r border-stone-200 transition-all duration-300 ${isMenuOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 shadow-sm z-20`}>
                         <div className="p-6 flex items-center gap-3">
                             <div className="bg-stone-800 p-2 rounded-lg text-white"><Home size={24} /></div>
@@ -562,7 +564,6 @@
                         </div>
                     </nav>
 
-                    {/* 메인 콘텐츠 구역 */}
                     <main className="flex-1 flex flex-col overflow-hidden bg-paper-100">
                         <header className="h-16 bg-paper-50 border-b border-stone-200 px-8 flex items-center justify-between shrink-0 shadow-sm z-10">
                             <h2 className="text-xl font-black text-stone-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
@@ -611,7 +612,7 @@
                                 </div>
                             )}
 
-                            {/* 💰 가계부 탭 (관리비 추이 포함) */}
+                            {/* 💰 가계부 탭 */}
                             {activeTab === 'ledger' && (
                                 <div className="max-w-6xl mx-auto space-y-6 pb-20">
                                     <div className="flex flex-col md:flex-row gap-6 mb-8">
@@ -630,7 +631,6 @@
                                         </div>
                                     </div>
 
-                                    {/* 신규: 관리비 추이 요약 바 */}
                                     <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm mb-8">
                                         <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><TrendingDown className="text-sky-600"/> 최근 관리비/공과금 추이</h3>
                                         <div className="flex items-end gap-2 h-24 mt-4">
@@ -703,7 +703,6 @@
                                         </div>
                                     </div>
 
-                                    {/* 항목 추가 모달 */}
                                     {showLedgerAddModal && (
                                         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                                             <div className="bg-paper-50 rounded-3xl w-full max-w-md shadow-2xl p-8 border border-stone-200">
@@ -769,7 +768,6 @@
                                         </div>
                                         <div className="grid grid-cols-7" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
                                             {calendarDays.map((d, i) => {
-                                                // 드래그 중인 영역 하이라이트 계산
                                                 let isSelected = false;
                                                 if (isDragging && dragStart && dragEnd && d.fullDate) {
                                                     const current = new Date(d.fullDate);
@@ -803,7 +801,7 @@
                                                 <h3 className="text-lg font-bold mb-4 text-stone-800">{selectedDate} 일정 추가</h3>
                                                 <input type="text" autoFocus value={newEventTitle} onChange={(e) => setNewEventTitle(e.target.value)} className="w-full bg-white border border-stone-300 rounded-xl p-3 text-sm mb-4 outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="일정 제목을 입력하세요..." />
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => setShowEventModal(false)} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
+                                                    <button onClick={() => { setShowEventModal(false); setDragStart(null); setDragEnd(null); setIsDragging(false); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                                     <button onClick={handleAddEvent} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">저장하기</button>
                                                 </div>
                                             </div>
@@ -814,115 +812,119 @@
 
                             {/* 🏫 교무수첩 탭 */}
                             {activeTab === 'teacher' && (
-                                <div className="max-w-5xl mx-auto space-y-6">
-                                    <div className="flex items-center justify-between mb-4">
+                                <div className="max-w-7xl mx-auto space-y-6 h-[calc(100vh-8rem)] flex flex-col">
+                                    <div className="flex items-center justify-between mb-2 shrink-0">
                                         <h1 className="text-2xl font-black text-stone-800">
                                             {currentUserMode === 'uijeong' ? '삼봉초 교무수첩' : '성연초 6학년 학급 운영'}
                                         </h1>
                                         <span className="px-4 py-1 bg-stone-200 text-stone-800 rounded-full text-xs font-bold">2026학년도</span>
                                     </div>
                                     
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-indigo-500 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl"><User size={20}/></div><h3 className="font-bold text-stone-800 text-lg">학생 상담/행동록</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">특이사항과 상담 내용을 날짜별로 기록하고 안전하게 관리하세요.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-indigo-600 hover:text-white transition-colors rounded-2xl font-bold">기록 열기</button>
-                                        </div>
-                                        
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-emerald-500 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl"><BookOpen size={20}/></div><h3 className="font-bold text-stone-800 text-lg">수업/지도안 자료</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">오늘의 교과 지도안 및 준비물을 한 곳에서 관리합니다.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-emerald-600 hover:text-white transition-colors rounded-2xl font-bold">지도안 보기</button>
-                                        </div>
-
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-sky-500 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-sky-100 text-sky-700 rounded-xl"><CalendarIcon size={20}/></div><h3 className="font-bold text-stone-800 text-lg">주간 학사 일정표</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">{currentUserMode === 'uijeong' ? '삼봉초' : '성연초'} 전체 행사 및 시정표, 주간 업무 계획을 확인하세요.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-sky-600 hover:text-white transition-colors rounded-2xl font-bold">일정 확인</button>
-                                        </div>
-
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-rose-400 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-rose-100 text-rose-700 rounded-xl"><FileText size={20}/></div><h3 className="font-bold text-stone-800 text-lg">결석 및 출결 관리</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">교외체험학습 신청/보고서, 질병 결석계 서류 제출 현황을 체크합니다.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-rose-500 hover:text-white transition-colors rounded-2xl font-bold">출결 체크</button>
-                                        </div>
-
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-amber-500 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-amber-100 text-amber-700 rounded-xl"><LinkIcon size={20}/></div><h3 className="font-bold text-stone-800 text-lg">업무 포털 바로가기</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">나이스(NEIS), K-에듀파인, 인디스쿨 등 자주 쓰는 사이트 모음입니다.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-amber-500 hover:text-white transition-colors rounded-2xl font-bold">링크 열기</button>
-                                        </div>
-
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-stone-500 shadow-sm flex flex-col group hover:shadow-md transition-all">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-stone-200 text-stone-800 rounded-xl"><DollarSign size={20}/></div><h3 className="font-bold text-stone-800 text-lg">학급 예산/비품록</h3></div>
-                                            <p className="text-stone-500 text-sm mb-6 leading-relaxed flex-1">학급운영비 및 학습준비물 예산 잔액과 비품 현황을 기록합니다.</p>
-                                            <button className="w-full py-3 bg-stone-200 text-stone-700 hover:bg-stone-700 hover:text-white transition-colors rounded-2xl font-bold">예산 기록</button>
-                                        </div>
-
-                                        {/* 신규: 이음메시지 관리 보드 */}
-                                        <div className="bg-paper-50 p-6 rounded-3xl border-l-8 border-indigo-400 shadow-sm flex flex-col group hover:shadow-md transition-all lg:col-span-3">
-                                            <div className="flex items-center gap-3 mb-3"><div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl"><Sparkles size={20}/></div><h3 className="font-bold text-stone-800 text-lg">이음메시지 AI 매니저</h3></div>
-                                            <p className="text-stone-500 text-sm mb-4 leading-relaxed">업무메시지를 복사해서 넣으면 AI가 일정을 분석하여 캘린더에 자동 등록합니다.</p>
-                                            <button onClick={() => setShowIeumModal(true)} className="w-full py-3 bg-indigo-500 text-white hover:bg-indigo-600 transition-colors rounded-2xl font-bold shadow-md">메시지 분석기 열기</button>
-                                        </div>
-                                    </div>
-
-                                    {/* 이음메시지 분석 모달 */}
-                                    {showIeumModal && (
-                                        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                                            <div className="bg-paper-50 rounded-3xl w-full max-w-2xl shadow-2xl p-8 border border-stone-200 flex flex-col max-h-[90vh]">
-                                                <div className="flex justify-between items-center mb-6">
-                                                    <h3 className="text-2xl font-black flex items-center gap-2 text-stone-800"><Sparkles className="text-indigo-500"/> 이음메시지 분석</h3>
-                                                    <button onClick={() => setShowIeumModal(false)} className="text-stone-400 hover:text-stone-600"><X size={24}/></button>
-                                                </div>
-                                                <div className="space-y-4 overflow-y-auto pr-2">
-                                                    <textarea 
-                                                        value={ieumMessage} 
-                                                        onChange={(e) => setIeumMessage(e.target.value)} 
-                                                        placeholder="여기에 받은 이음메시지 내용을 붙여넣으세요..." 
-                                                        rows="5" 
-                                                        className="w-full bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-indigo-400 text-stone-800 resize-none"
-                                                    />
-                                                    <button onClick={handleAnalyzeIeum} disabled={isAnalyzing} className="w-full py-3 bg-stone-200 text-stone-800 rounded-2xl font-bold hover:bg-stone-300 transition-colors disabled:opacity-50">
-                                                        {isAnalyzing ? "AI로 일정 뽑아내는 중..." : "일정 분석하기"}
-                                                    </button>
-
-                                                    {analyzedEvents.length > 0 && (
-                                                        <div className="mt-6 bg-white p-4 rounded-2xl border border-stone-200">
-                                                            <h4 className="font-bold text-stone-800 mb-3 text-sm">추출된 일정 ({analyzedEvents.length}건)</h4>
-                                                            <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
-                                                                {analyzedEvents.map((ev, idx) => (
-                                                                    <div key={idx} className="flex justify-between items-center p-2 bg-stone-50 rounded-lg text-sm border border-stone-100">
-                                                                        <span className="font-bold text-indigo-600">{ev.date}</span>
-                                                                        <span className="text-stone-700 flex-1 ml-4 text-right truncate">{ev.title}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            <button onClick={handleRegisterIeumEvents} className="w-full py-3 bg-indigo-500 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-colors shadow-md">
-                                                                공용 캘린더에 일괄 등록
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                    <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-0">
+                                        <div className="xl:col-span-2 bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden">
+                                            <div className="p-4 flex items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0">
+                                                <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
+                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm">
+                                                    <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
+                                                    <span className="font-bold text-sm min-w-[80px] text-center text-stone-800">{schoolViewDate.getFullYear()}년 {schoolViewDate.getMonth() + 1}월</span>
+                                                    <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-100 rounded-lg rotate-180 text-stone-600"><ChevronLeft size={16}/></button>
                                                 </div>
                                             </div>
+                                            <div className="grid grid-cols-7 bg-white border-b border-stone-100 font-black text-[10px] text-stone-400 uppercase tracking-widest py-2 shrink-0">
+                                                {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => <div key={d} className={`text-center ${i===0?'text-rose-400':i===6?'text-blue-400':''}`}>{d}</div>)}
+                                            </div>
+                                            <div className="flex-1 grid grid-cols-7 overflow-y-auto bg-stone-50/30">
+                                                {schoolCalendarDays.map((d, i) => (
+                                                    <div key={i} className={`min-h-[80px] border-r border-b border-stone-100 p-1.5 ${!d.day ? 'bg-stone-50/80' : 'bg-white'}`}>
+                                                        <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
+                                                        <div className="mt-1 flex flex-col gap-1">
+                                                            {calendarEvents.filter(e => e.date === d.fullDate && e.type === 'school').map(e => {
+                                                                let bgClass = "bg-stone-100 text-stone-700 border-stone-200";
+                                                                let icon = null;
+                                                                if (e.category === 'deadline') { bgClass = "bg-rose-100 text-rose-700 border-rose-200"; icon = "🚨"; }
+                                                                else if (e.category === 'field_trip') { bgClass = "bg-emerald-100 text-emerald-700 border-emerald-200"; icon = "🚌"; }
+                                                                else if (e.category === 'lecture') { bgClass = "bg-purple-100 text-purple-700 border-purple-200"; icon = "👩‍🏫"; }
+                                                                else { bgClass = "bg-indigo-50 text-indigo-700 border-indigo-100"; }
+                                                                
+                                                                return (
+                                                                <div key={e.id} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm ${bgClass}`} title={e.title}>
+                                                                    {icon} {e.title}
+                                                                </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    )}
+
+                                        <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden relative">
+                                            <div className="p-4 bg-indigo-50 border-b border-indigo-100 shrink-0">
+                                                <h3 className="font-bold flex items-center gap-2 text-indigo-800"><Sparkles size={18} className="text-indigo-500"/> 이음메시지 스마트 비서</h3>
+                                                <p className="text-xs text-indigo-600/70 mt-1">메시지를 분석하여 일정표에 자동 등록합니다.</p>
+                                            </div>
+                                            <div className="p-4 flex flex-col gap-4 flex-1 overflow-y-auto">
+                                                <textarea 
+                                                    value={ieumMessage} 
+                                                    onChange={(e) => setIeumMessage(e.target.value)} 
+                                                    placeholder="수신된 이음메시지나 안내사항을 여기에 붙여넣으세요..." 
+                                                    className="w-full h-32 bg-white border border-stone-200 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-indigo-400 text-stone-800 resize-none shadow-inner shrink-0"
+                                                />
+                                                <button onClick={handleAnalyzeIeum} disabled={isAnalyzing} className="w-full py-3 bg-stone-800 text-white rounded-2xl font-bold hover:bg-stone-900 transition-colors disabled:opacity-50 shadow-md shrink-0">
+                                                    {isAnalyzing ? "AI 비서가 분석 중입니다..." : "비서에게 분석 맡기기"}
+                                                </button>
+
+                                                {analyzedResult && (
+                                                    <div className="mt-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2">
+                                                        <div className="bg-stone-50 p-3 rounded-xl border border-stone-100">
+                                                            <p className="text-sm font-bold text-stone-700 flex items-center gap-2 mb-1"><User size={14} className="text-indigo-500"/> 비서의 브리핑</p>
+                                                            <p className="text-xs text-stone-600 leading-relaxed">{analyzedResult.summary}</p>
+                                                        </div>
+
+                                                        {analyzedResult.isSchedule && analyzedResult.events?.length > 0 && (
+                                                            <>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-xs font-bold text-stone-500 ml-1">추출된 학사 일정</p>
+                                                                    <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
+                                                                        {analyzedResult.events.map((ev, idx) => {
+                                                                            let badge = "일반"; let bColor = "bg-stone-100 text-stone-600";
+                                                                            if(ev.category==='deadline'){ badge="마감"; bColor="bg-rose-100 text-rose-600"; }
+                                                                            if(ev.category==='field_trip'){ badge="체험"; bColor="bg-emerald-100 text-emerald-600"; }
+                                                                            if(ev.category==='lecture'){ badge="강사/연수"; bColor="bg-purple-100 text-purple-600"; }
+                                                                            return (
+                                                                                <div key={idx} className="flex justify-between items-center p-2 bg-white border border-stone-100 rounded-lg text-[11px] shadow-sm">
+                                                                                    <div className="flex items-center gap-2 truncate">
+                                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${bColor}`}>{badge}</span>
+                                                                                        <span className="font-bold text-stone-700 truncate">{ev.title}</span>
+                                                                                    </div>
+                                                                                    <span className="font-black text-indigo-500 shrink-0 ml-2">{ev.date.slice(5)}</span>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                                <button onClick={handleRegisterIeumEvents} className="w-full py-2.5 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-colors shadow-sm text-sm shrink-0">
+                                                                    학사 일정표에 일괄 등록
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* 👤 개인 공간 탭 (다이어리 컨셉) */}
+                            {/* 👤 개인 공간 탭 */}
                             {activeTab === 'personal' && (
                                 <div className="max-w-6xl mx-auto space-y-8">
                                     <div className="flex items-center justify-between">
                                         <h1 className="text-2xl font-black text-stone-800 diary-font tracking-widest">{currentUserMode === 'uijeong' ? '의정의 다이어리' : '재윤의 다이어리'}</h1>
                                     </div>
 
-                                    {/* 다이어리 메인 레이아웃 (좌: 목록/입력, 우: 위젯) */}
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                        
-                                        {/* 다이어리 좌측 (기록장) */}
                                         <div className="lg:col-span-2 bg-paper-50 rounded-[2rem] shadow-md border border-stone-200 overflow-hidden relative">
-                                            {/* 바인더 링 장식 */}
                                             <div className="absolute top-0 left-6 w-4 h-full bg-stone-100 flex flex-col justify-around py-8 border-r border-stone-200">
                                                 {[...Array(8)].map((_, i) => <div key={i} className="w-8 h-2 bg-stone-300 rounded-full -ml-2 shadow-inner"></div>)}
                                             </div>
@@ -947,7 +949,6 @@
                                             </div>
                                         </div>
 
-                                        {/* 다이어리 우측 (위젯 공간 - 아내분은 건강, 남편분은 빈 공간 활용) */}
                                         <div className="space-y-6">
                                             {currentUserMode === 'jaeyoon' ? (
                                                 <>
@@ -981,14 +982,13 @@
                                 </div>
                             )}
 
-                            {/* ❤️ 시하 기록 탭 (사진 업로드 압축 기능) */}
+                            {/* ❤️ 시하 기록 탭 */}
                             {activeTab === 'siha' && (
                                 <div className="max-w-5xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between mb-2">
                                         <div><h1 className="text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Heart className="text-rose-400 fill-rose-400" />시하 성장 기록</h1><p className="text-stone-500 text-sm mt-1">7살 우리 딸 시하의 소중한 순간들을 기록하세요.</p></div>
                                     </div>
                                     <div className="bg-paper-50 p-4 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-4 relative">
-                                        {/* 압축된 이미지가 미리보기로 보입니다 */}
                                         {uploadedImageBase64 && (
                                             <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200">
                                                 <img src={uploadedImageBase64} alt="preview" className="w-full h-full object-cover" />
