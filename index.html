@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>삼봉패밀리 - 올인원 홈 포인트</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -30,9 +30,9 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;400;700;900&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; }
+        body { font-family: 'Noto Sans KR', sans-serif; overscroll-behavior-y: none; }
         .diary-font { font-family: 'Nanum Myeongjo', serif; }
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     </style>
 </head>
@@ -150,6 +150,10 @@
             const [currentUserMode, setCurrentUserMode] = useState('uijeong'); 
             const [isMenuOpen, setIsMenuOpen] = useState(true);
 
+            // Touch Swipe States (모바일 개선)
+            const [touchStartPos, setTouchStartPos] = useState(null);
+            const [touchEndPos, setTouchEndPos] = useState(null);
+
             // Data States
             const [familyTasks, setFamilyTasks] = useState([]);
             const [sihaMemories, setSihaMemories] = useState([]);
@@ -159,6 +163,7 @@
             const [monthlyChores, setMonthlyChores] = useState({});
             const [ledgerItems, setLedgerItems] = useState([]);
             const [personalDiaries, setPersonalDiaries] = useState([]);
+            const [monthlyMaintenance, setMonthlyMaintenance] = useState({}); // 1~12월 관리비 입력 상태
             
             // 교무수첩 할 일, 회의록, 시간표 States
             const [teacherTodos, setTeacherTodos] = useState([]);
@@ -197,6 +202,47 @@
             const fileInputRef = useRef(null);
             const todayDate = new Date().getDate();
             const todayChore = CHORE_MASTER_LIST.find(c => c.id === todayDate);
+
+            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'teacher', 'siha'];
+
+            // 모바일 스와이프 핸들러
+            const handleTouchStart = (e) => {
+                // 가로 스크롤 영역(시간표 등)이나 입력창에서는 스와이프 탭 이동을 막음
+                if (e.target.closest('.overflow-x-auto') || e.target.closest('input') || e.target.closest('textarea')) {
+                    setTouchStartPos(null);
+                    return;
+                }
+                setTouchEndPos(null);
+                setTouchStartPos({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+            };
+
+            const handleTouchMove = (e) => {
+                if (!touchStartPos) return;
+                setTouchEndPos({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+            };
+
+            const handleTouchEnd = () => {
+                if (!touchStartPos || !touchEndPos) return;
+                const distanceX = touchStartPos.x - touchEndPos.x;
+                const distanceY = touchStartPos.y - touchEndPos.y;
+                
+                // 위아래 스크롤이 좌우 스와이프보다 크면 탭 이동 취소
+                if (Math.abs(distanceY) > Math.abs(distanceX)) return;
+
+                const minSwipeDistance = 50;
+                const isLeftSwipe = distanceX > minSwipeDistance;
+                const isRightSwipe = distanceX < -minSwipeDistance;
+
+                if (isLeftSwipe || isRightSwipe) {
+                    const currentIndex = tabOrder.indexOf(activeTab);
+                    if (isLeftSwipe && currentIndex < tabOrder.length - 1) {
+                        setActiveTab(tabOrder[currentIndex + 1]);
+                    }
+                    if (isRightSwipe && currentIndex > 0) {
+                        setActiveTab(tabOrder[currentIndex - 1]);
+                    }
+                }
+            };
 
             // Firebase Auth Setup
             useEffect(() => {
@@ -239,16 +285,19 @@
                     if (snap.exists()) setUserPins(snap.data());
                 }, errCb);
 
+                const unsubMaintenance = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'monthlyMaintenance'), (snap) => {
+                    if (snap.exists()) setMonthlyMaintenance(snap.data());
+                }, errCb);
+
                 const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos'), (snap) => setTeacherTodos(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))), errCb);
                 const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), (snap) => setMeetingMinutes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
                 
-                // FIXED: Change 5-segment reference to 6-segment document reference
                 const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), (snap) => {
                     if (snap.exists()) setTimetable(snap.data());
                     else setTimetable({});
                 }, errCb);
 
-                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
+                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubMaintenance(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
             }, [user]);
 
             const initializeLedger = async () => {
@@ -267,7 +316,6 @@
                     { category: 'expense_non', title: '미래에셋 IRP', amount: 25 },
                     { category: 'expense_fix', title: '대출이자', amount: 106 },
                     { category: 'expense_fix', title: '교통/통신비', amount: 25 },
-                    { category: 'expense_fix', title: '관리비/공과금', amount: 33 },
                     { category: 'expense_fix', title: '주식비(장보기)', amount: 70 },
                     { category: 'expense_var', title: '문화생활비', amount: 9 },
                     { category: 'expense_var', title: '경조사비', amount: 5 }
@@ -286,16 +334,20 @@
                     if (item.category === 'expense_fix') res.expFix += item.amount;
                     if (item.category === 'expense_var') res.expVar += item.amount;
                 });
-                res.totalExp = res.expNon + res.expFix + res.expVar;
-                res.irrMonthly = Math.round(res.incIrr / 12);
-                res.netCashFlow = res.incReg - res.totalExp;
-                // NaN 방지 위한 방어 코드 추가
-                res.expRatio = res.incReg > 0 ? Math.min(100, (res.totalExp / res.incReg) * 100) : 0; 
+                
+                // 소수점 아래 1자리 표기 및 부동소수점 오차 방지
+                const round1 = (num) => Math.round(num * 10) / 10;
+                res.incReg = round1(res.incReg);
+                res.incIrr = round1(res.incIrr);
+                res.expNon = round1(res.expNon);
+                res.expFix = round1(res.expFix);
+                res.expVar = round1(res.expVar);
+                
+                res.totalExp = round1(res.expNon + res.expFix + res.expVar);
+                res.irrMonthly = Math.round(res.incIrr / 12); // 평균치는 정수 유지
+                res.netCashFlow = round1(res.incReg - res.totalExp);
+                res.expRatio = res.incReg > 0 ? Math.min(100, round1((res.totalExp / res.incReg) * 100)) : 0; 
                 return res;
-            }, [ledgerItems]);
-
-            const maintenanceData = useMemo(() => {
-                return ledgerItems.filter(item => item.title.includes('관리비') || item.title.includes('공과금'));
             }, [ledgerItems]);
 
             const calendarDays = useMemo(() => {
@@ -388,6 +440,16 @@
             const handleAddWeight = async () => { if (!inputWeight || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), { date: new Date().toISOString().split('T')[0], weight: parseFloat(inputWeight), createdAt: serverTimestamp() }); setInputWeight(""); } catch (err) { console.error(err); } };
             const handleAddPeriod = async () => { if (!user) return; try { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), { startDate: new Date().toISOString().split('T')[0], createdAt: serverTimestamp() }); } catch (err) { console.error(err); } };
             
+            const handleMaintenanceChange = async (month, value) => {
+                if (!user) return;
+                const val = value === '' ? '' : Number(value);
+                const newMaintenance = { ...monthlyMaintenance, [month]: val };
+                setMonthlyMaintenance(newMaintenance);
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'monthlyMaintenance'), { [month]: val }, { merge: true });
+                } catch (err) { console.error(err); }
+            };
+
             const handleAddMemory = async () => { 
                 if (!newMemoryText.trim() || !user) return; 
                 const newEntry = { 
@@ -482,7 +544,6 @@
                 const newTimetable = { ...timetable, [`${day}-${period}`]: value };
                 setTimetable(newTimetable);
                 try {
-                    // FIXED: Changed 5-segment reference to 6-segment document reference
                     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), newTimetable, { merge: true });
                 } catch (err) { console.error(err); }
             };
@@ -511,10 +572,10 @@
 
             if (!isAuthenticated) {
                 return (
-                    <div className="flex h-screen bg-paper-100 items-center justify-center p-4">
-                        <div className="bg-paper-50 p-10 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-stone-200">
+                    <div className="flex h-[100dvh] bg-paper-100 items-center justify-center p-4">
+                        <div className="bg-paper-50 p-6 md:p-10 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-stone-200">
                             <div className="w-16 h-16 bg-stone-700 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md"><Home size={32}/></div>
-                            <h1 className="text-3xl font-black mb-8 text-paper-800 tracking-tight">삼봉패밀리 홈 포인트</h1>
+                            <h1 className="text-2xl md:text-3xl font-black mb-8 text-paper-800 tracking-tight">삼봉패밀리 홈 포인트</h1>
                             
                             {!loginSelectedUser ? (
                                 <div className="space-y-4">
@@ -556,8 +617,9 @@
             }
 
             return (
-                <div className="flex h-screen bg-paper-100 text-paper-800 overflow-hidden font-sans">
-                    <nav className={`bg-paper-50 border-r border-stone-200 transition-all duration-300 ${isMenuOpen ? 'w-64' : 'w-20'} flex flex-col shrink-0 shadow-sm z-20`}>
+                <div className="flex h-[100dvh] bg-paper-100 text-paper-800 overflow-hidden font-sans relative">
+                    {/* 데스크탑 사이드바 (모바일에서는 숨김) */}
+                    <nav className={`hidden md:flex bg-paper-50 border-r border-stone-200 transition-all duration-300 ${isMenuOpen ? 'w-64' : 'w-20'} flex-col shrink-0 shadow-sm z-20`}>
                         <div className="p-6 flex items-center gap-3">
                             <div className="bg-stone-800 p-2 rounded-lg text-white"><Home size={24} /></div>
                             {isMenuOpen && <span className="font-bold text-xl tracking-tight text-stone-800">삼봉패밀리</span>}
@@ -587,31 +649,36 @@
                         </div>
                     </nav>
 
-                    <main className="flex-1 flex flex-col overflow-hidden bg-paper-100">
-                        <header className="h-16 bg-paper-50 border-b border-stone-200 px-8 flex items-center justify-between shrink-0 shadow-sm z-10">
-                            <h2 className="text-xl font-black text-stone-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
-                            <div className="flex items-center gap-4">
+                    <main className="flex-1 flex flex-col overflow-hidden bg-paper-100 relative">
+                        <header className="h-16 bg-paper-50 border-b border-stone-200 px-4 md:px-8 flex items-center justify-between shrink-0 shadow-sm z-10">
+                            <h2 className="text-lg md:text-xl font-black text-stone-800 tracking-tight">{menuItems.find(i => i.id === activeTab)?.label}</h2>
+                            <div className="flex items-center gap-2 md:gap-4">
                                 <button className="p-2 text-stone-400 hover:text-stone-600 relative"><Bell size={20} /></button>
-                                <button onClick={() => activeTab === 'ledger' ? setShowLedgerAddModal(true) : {}} className="bg-stone-800 text-white px-4 py-2 rounded-xl font-bold hover:bg-stone-900 transition-all flex items-center gap-2 shadow-sm">
-                                    <Plus size={18} /> <span>항목 추가</span>
+                                <button onClick={() => activeTab === 'ledger' ? setShowLedgerAddModal(true) : {}} className="bg-stone-800 text-white px-3 md:px-4 py-2 rounded-xl font-bold hover:bg-stone-900 transition-all flex items-center gap-2 shadow-sm text-sm md:text-base">
+                                    <Plus size={18} /> <span className="hidden md:inline">항목 추가</span>
                                 </button>
                             </div>
                         </header>
 
-                        <div className="flex-1 overflow-y-auto p-8">
+                        <div 
+                            className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8"
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                        >
                             {/* 🏠 홈 탭 */}
                             {activeTab === 'home' && (
                                 <div className="max-w-5xl mx-auto space-y-6">
-                                    <section className="bg-stone-800 rounded-3xl p-8 text-white shadow-md relative overflow-hidden">
+                                    <section className="bg-stone-800 rounded-3xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
                                         <div className="absolute top-[-20px] right-[-20px] text-white opacity-5"><Calculator size={200}/></div>
-                                        <h1 className="text-3xl font-black mb-2 tracking-tighter">안녕하세요, {currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}! 👋</h1>
-                                        <p className="opacity-90 text-lg text-stone-200">이번 달 현금흐름 요약: <span className="font-bold underline decoration-stone-400 decoration-4 text-white">월 소득 {ledgerStats.incReg}만 원</span></p>
-                                        <p className="mt-4 text-sm opacity-90 font-medium flex items-center gap-2 text-stone-300">
+                                        <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter">안녕하세요, {currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}! 👋</h1>
+                                        <p className="opacity-90 text-sm md:text-lg text-stone-200">이번 달 현금흐름 요약: <span className="font-bold underline decoration-stone-400 decoration-4 text-white">월 소득 {ledgerStats.incReg}만 원</span></p>
+                                        <p className="mt-4 text-xs md:text-sm opacity-90 font-medium flex items-center gap-2 text-stone-300">
                                            <ClipboardCheck size={16}/> 오늘의 살림: {todayChore ? todayChore.task : "오늘의 정비"}
                                         </p>
                                     </section>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                         <div className="bg-paper-50 p-6 rounded-3xl shadow-sm border border-stone-200">
                                             <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><Wallet size={18} />가계부 현황</h3>
                                             <div className="flex justify-between items-center mb-2">
@@ -637,36 +704,49 @@
 
                             {/* 💰 가계부 탭 */}
                             {activeTab === 'ledger' && (
-                                <div className="max-w-6xl mx-auto space-y-6 pb-20">
-                                    <div className="flex flex-col md:flex-row gap-6 mb-8">
-                                        <div className="flex-1 bg-paper-50 p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
+                                <div className="max-w-6xl mx-auto space-y-6">
+                                    <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-8">
+                                        <div className="flex-1 bg-paper-50 p-6 md:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
                                             <p className="text-stone-500 text-sm font-bold mb-1">정기 월 소득 (A)</p>
-                                            <p className="text-4xl font-black text-stone-800">{ledgerStats.incReg}<span className="text-lg ml-1 font-bold">만 원</span></p>
+                                            <p className="text-3xl md:text-4xl font-black text-stone-800">{ledgerStats.incReg}<span className="text-base md:text-lg ml-1 font-bold">만 원</span></p>
                                         </div>
-                                        <div className="flex-1 bg-paper-50 p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
+                                        <div className="flex-1 bg-paper-50 p-6 md:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
                                             <p className="text-stone-500 text-sm font-bold mb-1">총 지출 합계 (B)</p>
-                                            <p className="text-4xl font-black text-rose-600">{ledgerStats.totalExp}<span className="text-lg ml-1 font-bold">만 원</span></p>
+                                            <p className="text-3xl md:text-4xl font-black text-rose-600">{ledgerStats.totalExp}<span className="text-base md:text-lg ml-1 font-bold">만 원</span></p>
                                         </div>
-                                        <div className="flex-1 bg-stone-800 p-8 rounded-3xl shadow-md text-white flex flex-col justify-center">
+                                        <div className="flex-1 bg-stone-800 p-6 md:p-8 rounded-3xl shadow-md text-white flex flex-col justify-center">
                                             <p className="text-stone-300 text-sm font-bold mb-1">매달 필요한 돈 (A-B)</p>
-                                            <p className={`text-4xl font-black ${ledgerStats.netCashFlow < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{ledgerStats.netCashFlow} <span className="text-lg font-bold">만 원</span></p>
+                                            <p className={`text-3xl md:text-4xl font-black ${ledgerStats.netCashFlow < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{ledgerStats.netCashFlow} <span className="text-base md:text-lg font-bold">만 원</span></p>
                                             <p className="text-[10px] mt-2 opacity-60 uppercase tracking-widest">Bonus 월 평균 {ledgerStats.irrMonthly}만 별도</p>
                                         </div>
                                     </div>
 
-                                    <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm mb-8">
-                                        <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><TrendingDown className="text-sky-600"/> 최근 관리비/공과금 추이</h3>
-                                        <div className="flex items-end gap-2 h-24 mt-4">
-                                            {maintenanceData.length > 0 ? maintenanceData.slice(-6).map((item, idx) => (
-                                                <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                                                    <div className="w-full bg-sky-100 rounded-t-lg relative hover:bg-sky-200 transition-colors" style={{ height: `${Math.min(100, (item.amount / 50) * 100)}%`, minHeight: '20px' }}>
-                                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-stone-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">{item.amount}만원</div>
+                                    {/* 1~12월 관리비 그래프 영역 */}
+                                    <div className="bg-paper-50 p-4 md:p-6 rounded-3xl border border-stone-200 shadow-sm mb-8 overflow-x-auto">
+                                        <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800 min-w-max"><TrendingDown className="text-sky-600"/> 1년치 관리비/공과금 추이 (단위: 만원)</h3>
+                                        <div className="flex items-end gap-1 md:gap-2 h-40 mt-4 min-w-[400px]">
+                                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => {
+                                                const amount = monthlyMaintenance[month] || 0;
+                                                const barHeight = Math.min(100, (amount / 50) * 100); // Max 50만원 기준 그래프
+                                                return (
+                                                    <div key={month} className="flex-1 flex flex-col items-center justify-end gap-1 h-full group">
+                                                        <div className="w-full bg-sky-100 rounded-t-lg relative hover:bg-sky-200 transition-colors" style={{ height: `${barHeight}%`, minHeight: amount > 0 ? '4px' : '0' }}>
+                                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-stone-600 opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
+                                                                {amount > 0 ? `${amount}` : ''}
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-stone-500">{month}월</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            value={monthlyMaintenance[month] === undefined ? '' : monthlyMaintenance[month]}
+                                                            onChange={(e) => handleMaintenanceChange(month, e.target.value)}
+                                                            className="w-full bg-white border border-stone-200 rounded p-1 text-center text-[10px] outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-bold text-stone-700"
+                                                            placeholder="입력"
+                                                        />
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-stone-400">{item.title}</span>
-                                                </div>
-                                            )) : (
-                                                <div className="w-full text-center text-stone-400 text-sm py-4">관리비 내역이 없습니다. (항목명에 '관리비' 포함 필요)</div>
-                                            )}
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
@@ -683,13 +763,13 @@
                                                         <div className="flex items-center gap-3">
                                                         {editingLedgerId === item.id ? (
                                                             <div className="flex items-center gap-1">
-                                                                <input type="number" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-stone-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
+                                                                <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-stone-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
                                                                 <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-stone-700 text-white rounded"><Check size={12}/></button>
                                                             </div>
                                                         ) : (
                                                             <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 cursor-pointer hover:text-stone-600 hover:underline">{item.amount}만</span>
                                                         )}
-                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                                                         </div>
                                                     </div>
                                                     ))}
@@ -710,13 +790,13 @@
                                                         <div className="flex items-center gap-3">
                                                         {editingLedgerId === item.id ? (
                                                             <div className="flex items-center gap-1">
-                                                                <input type="number" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-rose-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
+                                                                <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-rose-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
                                                                 <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-rose-600 text-white rounded"><Check size={12}/></button>
                                                             </div>
                                                         ) : (
                                                             <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 cursor-pointer hover:text-rose-600 hover:underline">{item.amount}만</span>
                                                         )}
-                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                                                         </div>
                                                     </div>
                                                     ))}
@@ -728,14 +808,14 @@
 
                                     {showLedgerAddModal && (
                                         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                                            <div className="bg-paper-50 rounded-3xl w-full max-w-md shadow-2xl p-8 border border-stone-200">
-                                                <h3 className="text-2xl font-black mb-6 flex items-center gap-2 text-stone-800"><Plus className="text-stone-600"/> 항목 추가</h3>
+                                            <div className="bg-paper-50 rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 border border-stone-200">
+                                                <h3 className="text-xl md:text-2xl font-black mb-6 flex items-center gap-2 text-stone-800"><Plus className="text-stone-600"/> 항목 추가</h3>
                                                 <div className="space-y-4">
                                                     <select value={newLedgerItem.category} onChange={(e) => setNewLedgerItem({...newLedgerItem, category: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm focus:ring-2 focus:ring-stone-400 outline-none text-stone-800">
                                                         <option value="income_reg">정기 소득</option><option value="income_irr">비정기 소득</option><option value="expense_non">비소비성 지출</option><option value="expense_fix">소비성 지출 (고정)</option><option value="expense_var">소비성 지출 (변동)</option>
                                                     </select>
                                                     <input type="text" value={newLedgerItem.title} onChange={(e) => setNewLedgerItem({...newLedgerItem, title: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder={newLedgerItem.category === 'income_reg' ? `${new Date().getMonth() + 1}월 17일 월급` : "항목명 (예: 관리비/공과금)"} />
-                                                    <input type="number" value={newLedgerItem.amount} onChange={(e) => setNewLedgerItem({...newLedgerItem, amount: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="금액 (만원)" />
+                                                    <input type="number" step="0.1" value={newLedgerItem.amount} onChange={(e) => setNewLedgerItem({...newLedgerItem, amount: e.target.value})} className="w-full bg-white border border-stone-300 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="금액 (만원)" />
                                                     <div className="flex gap-3 pt-4">
                                                         <button onClick={() => setShowLedgerAddModal(false)} className="flex-1 py-4 bg-stone-200 text-stone-700 rounded-2xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                                         <button onClick={handleAddLedger} className="flex-1 py-4 bg-stone-800 text-white rounded-2xl font-bold hover:bg-stone-900 transition-colors">저장하기</button>
@@ -751,9 +831,9 @@
                             {activeTab === 'chores' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between">
-                                        <div><h1 className="text-2xl font-bold flex items-center gap-2 text-stone-800"><ClipboardCheck className="text-stone-600" size={24} />월간 살림 루틴</h1><p className="text-stone-500 text-sm mt-1">매월 1일부터 30일까지 정해진 살림을 체크하세요.</p></div>
+                                        <div><h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><ClipboardCheck className="text-stone-600" size={24} />월간 살림 루틴</h1><p className="text-stone-500 text-xs md:text-sm mt-1">매월 1일부터 30일까지 정해진 살림을 체크하세요.</p></div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                         {[0, 1, 2].map(colIdx => (
                                         <div key={colIdx} className="bg-paper-50 rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
                                             <div className="p-4 bg-stone-100 border-b border-stone-200 font-bold text-xs text-stone-500">{colIdx * 10 + 1}일 ~ {(colIdx + 1) * 10}일</div>
@@ -777,9 +857,9 @@
                             {/* 📅 일정 탭 */}
                             {activeTab === 'calendar' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h1 className="text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
-                                        <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                                        <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
+                                        <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm self-start">
                                             <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-200 rounded-lg text-stone-600"><ChevronLeft/></button>
                                             <span className="font-bold text-sm min-w-[100px] text-center text-stone-800">{viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월</span>
                                             <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-200 rounded-lg rotate-180 text-stone-600"><ChevronLeft/></button>
@@ -803,12 +883,12 @@
                                                     key={i} 
                                                     onMouseDown={() => handleMouseDown(d.fullDate)}
                                                     onMouseEnter={() => handleMouseEnter(d.fullDate)}
-                                                    className={`min-h-[120px] border-r border-b border-stone-200 p-2 cursor-pointer transition-colors ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
+                                                    className={`min-h-[80px] md:min-h-[120px] border-r border-b border-stone-200 p-1 md:p-2 cursor-pointer transition-colors ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
                                                 >
-                                                    <span className={`text-xs font-bold ${i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
+                                                    <span className={`text-xs font-bold pl-1 md:pl-0 ${i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
                                                     <div className="mt-1 space-y-1">
                                                         {calendarEvents.filter(e => e.date === d.fullDate && (!e.type || e.type === 'general')).map(e => (
-                                                            <div key={e.id} className="text-[10px] bg-stone-200 text-stone-800 p-1.5 rounded font-bold truncate flex justify-between group shadow-sm border border-stone-300" title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
+                                                            <div key={e.id} className="text-[9px] md:text-[10px] bg-stone-200 text-stone-800 p-1 md:p-1.5 rounded font-bold truncate flex justify-between group shadow-sm border border-stone-300" title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
                                                                 <span className="truncate">{e.time && <span className="mr-1 opacity-60">[{e.time}]</span>}{e.title}</span>
                                                             </div>
                                                         ))}
@@ -823,20 +903,20 @@
 
                             {/* 🏫 교무수첩 탭 */}
                             {activeTab === 'teacher' && (
-                                <div className="max-w-7xl mx-auto space-y-6 flex flex-col pb-20">
-                                    <div className="flex items-center justify-between mb-2 shrink-0">
-                                        <h1 className="text-2xl font-black text-stone-800">
+                                <div className="max-w-7xl mx-auto space-y-6 flex flex-col">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 shrink-0 gap-2">
+                                        <h1 className="text-xl md:text-2xl font-black text-stone-800">
                                             {currentUserMode === 'uijeong' ? '삼봉초 교무수첩' : '성연초 6학년 학급 운영'}
                                         </h1>
-                                        <span className="px-4 py-1 bg-stone-200 text-stone-800 rounded-full text-xs font-bold">2026학년도</span>
+                                        <span className="px-4 py-1 bg-stone-200 text-stone-800 rounded-full text-xs font-bold self-start md:self-auto">2026학년도</span>
                                     </div>
                                     
                                     {/* 상단: 달력(2칸) + 할 일(1칸) */}
                                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[500px]">
                                         <div className="xl:col-span-2 bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden">
-                                            <div className="p-4 flex items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0">
+                                            <div className="p-4 flex flex-col md:flex-row md:items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0 gap-4">
                                                 <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
-                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm">
+                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto">
                                                     <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
                                                     <span className="font-bold text-sm min-w-[80px] text-center text-stone-800">{schoolViewDate.getFullYear()}년 {schoolViewDate.getMonth() + 1}월</span>
                                                     <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-100 rounded-lg rotate-180 text-stone-600"><ChevronLeft size={16}/></button>
@@ -845,7 +925,7 @@
                                             <div className="grid grid-cols-7 bg-white border-b border-stone-100 font-black text-[10px] text-stone-400 uppercase tracking-widest py-2 shrink-0">
                                                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => <div key={d} className={`text-center ${i===0?'text-rose-400':i===6?'text-blue-400':''}`}>{d}</div>)}
                                             </div>
-                                            <div className="flex-1 grid grid-cols-7 overflow-y-auto bg-stone-50/30" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
+                                            <div className="flex-1 grid grid-cols-7 bg-stone-50/30" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
                                                 {schoolCalendarDays.map((d, i) => {
                                                     let isSelected = false;
                                                     if (isDragging && dragStart && dragEnd && d.fullDate) {
@@ -859,7 +939,7 @@
                                                         key={i} 
                                                         onMouseDown={() => handleMouseDown(d.fullDate)}
                                                         onMouseEnter={() => handleMouseEnter(d.fullDate)}
-                                                        className={`min-h-[80px] border-r border-b border-stone-100 p-1.5 cursor-pointer transition-colors ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
+                                                        className={`min-h-[60px] md:min-h-[80px] border-r border-b border-stone-100 p-1 md:p-1.5 cursor-pointer transition-colors ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
                                                     >
                                                         <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
                                                         <div className="mt-1 flex flex-col gap-1">
@@ -873,7 +953,7 @@
                                                                 
                                                                 return (
                                                                 <div key={e.id} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm ${bgClass}`} title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
-                                                                    {icon} {e.time && <span className="mr-0.5 opacity-70">[{e.time}]</span>}{e.title}
+                                                                    <span className="hidden md:inline">{icon}</span> {e.time && <span className="mr-0.5 opacity-70 hidden md:inline">[{e.time}]</span>}{e.title}
                                                                 </div>
                                                                 );
                                                             })}
@@ -885,7 +965,7 @@
                                         </div>
 
                                         {/* 할 일 영역 */}
-                                        <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col h-full">
+                                        <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col h-[400px] xl:h-full">
                                             <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><CheckSquare size={18} className="text-emerald-500"/> 교무수첩 할 일</h3>
                                             <div className="flex gap-2 mb-4 shrink-0">
                                                 <input type="text" value={newTeacherTodo} onChange={e=>setNewTeacherTodo(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTeacherTodo()} className="flex-1 bg-white border border-stone-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 text-stone-800" placeholder="할 일 입력..."/>
@@ -898,10 +978,10 @@
                                                             {todo.isDone ? <CheckSquare size={18} className="text-emerald-500"/> : <div className="w-[18px] h-[18px] border-2 border-stone-300 rounded"/>}
                                                         </button>
                                                         <span className={`flex-1 text-sm ${todo.isDone ? 'line-through text-stone-400' : 'text-stone-700'}`}>{todo.task}</span>
-                                                        <button onClick={()=>deleteTeacherTodo(todo.id)} className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-rose-500 transition-opacity"><Trash2 size={14}/></button>
+                                                        <button onClick={()=>deleteTeacherTodo(todo.id)} className="opacity-100 md:opacity-0 group-hover:opacity-100 text-stone-400 hover:text-rose-500 transition-opacity"><Trash2 size={14}/></button>
                                                     </div>
                                                 ))}
-                                                {teacherTodos.length === 0 && <p className="text-xs text-stone-400 text-center py-4">등록된 할 일이 없습니다.</p>}
+                                                {teacherTodos.length === 0 && <p className="text-xs text-stone-400 text-center py-4">등록된 할 일 없습니다.</p>}
                                             </div>
                                         </div>
                                     </div>
@@ -921,14 +1001,14 @@
                                     </div>
 
                                     {/* 하단: 시간표 영역 */}
-                                    <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col shrink-0">
+                                    <div className="bg-paper-50 p-4 md:p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col shrink-0">
                                         <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><BookOpen size={18} className="text-orange-500"/> 우리 반 주간 시간표</h3>
-                                        <div className="overflow-x-auto">
+                                        <div className="overflow-x-auto w-full">
                                             <table className="w-full min-w-[500px] border-collapse bg-white rounded-xl overflow-hidden shadow-sm">
                                                 <thead>
                                                     <tr className="bg-stone-100 text-stone-600 text-sm">
-                                                        <th className="border-b border-r border-stone-200 p-3 w-16">교시</th>
-                                                        {['월', '화', '수', '목', '금'].map(day => <th key={day} className="border-b border-r border-stone-200 p-3 last:border-r-0">{day}</th>)}
+                                                        <th className="border-b border-r border-stone-200 p-2 md:p-3 w-12 md:w-16">교시</th>
+                                                        {['월', '화', '수', '목', '금'].map(day => <th key={day} className="border-b border-r border-stone-200 p-2 md:p-3 last:border-r-0">{day}</th>)}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -941,7 +1021,7 @@
                                                                         type="text"
                                                                         value={timetable[`${day}-${period}`] || ''}
                                                                         onChange={(e) => handleTimetableChange(day, period, e.target.value)}
-                                                                        className="w-full h-full p-3 outline-none text-center text-sm focus:bg-orange-50 focus:ring-2 focus:ring-orange-400 font-bold text-stone-700 transition-colors"
+                                                                        className="w-full h-full p-2 md:p-3 outline-none text-center text-xs md:text-sm focus:bg-orange-50 focus:ring-2 focus:ring-orange-400 font-bold text-black transition-colors"
                                                                         placeholder="과목"
                                                                     />
                                                                 </td>
@@ -959,7 +1039,7 @@
                             {activeTab === 'siha' && (
                                 <div className="max-w-5xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between mb-2">
-                                        <div><h1 className="text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Heart className="text-rose-400 fill-rose-400" />시하 성장 기록</h1><p className="text-stone-500 text-sm mt-1">7살 우리 딸 시하의 소중한 순간들을 기록하세요.</p></div>
+                                        <div><h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Heart className="text-rose-400 fill-rose-400" />시하 성장 기록</h1><p className="text-stone-500 text-xs md:text-sm mt-1">7살 우리 딸 시하의 소중한 순간들을 기록하세요.</p></div>
                                     </div>
                                     <div className="bg-paper-50 p-4 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-4 relative">
                                         {uploadedImageBase64 && (
@@ -968,26 +1048,28 @@
                                                 <button onClick={() => setUploadedImageBase64(null)} className="absolute top-2 right-2 p-1 bg-stone-900/50 text-white rounded-full"><X size={16}/></button>
                                             </div>
                                         )}
-                                        <div className="flex items-center gap-3">
-                                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="photo-upload" ref={fileInputRef} />
-                                            <label htmlFor="photo-upload" className="p-3 bg-rose-50 text-rose-500 rounded-2xl cursor-pointer hover:bg-rose-100 transition-colors flex shrink-0">
-                                                <ImagePlus size={24}/>
-                                            </label>
-                                            <input type="text" value={newMemoryText} onChange={(e) => setNewMemoryText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddMemory()} placeholder="오늘 시하에게 어떤 일이 있었나요?" className="flex-1 bg-white border border-stone-300 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200 text-stone-800" />
-                                            <button onClick={handleAddMemory} className="bg-stone-800 text-white px-6 py-3 rounded-2xl font-black hover:bg-stone-900 transition-colors shrink-0">저장</button>
+                                        <div className="flex flex-col md:flex-row items-center gap-3">
+                                            <div className="flex w-full md:w-auto gap-3">
+                                                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="photo-upload" ref={fileInputRef} />
+                                                <label htmlFor="photo-upload" className="p-3 bg-rose-50 text-rose-500 rounded-2xl cursor-pointer hover:bg-rose-100 transition-colors flex shrink-0">
+                                                    <ImagePlus size={24}/>
+                                                </label>
+                                                <input type="text" value={newMemoryText} onChange={(e) => setNewMemoryText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddMemory()} placeholder="오늘 시하에게 어떤 일이 있었나요?" className="flex-1 bg-white border border-stone-300 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200 text-stone-800" />
+                                            </div>
+                                            <button onClick={handleAddMemory} className="w-full md:w-auto bg-stone-800 text-white px-6 py-3 rounded-2xl font-black hover:bg-stone-900 transition-colors shrink-0">저장</button>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                                         {sihaMemories.map(m => (
-                                            <div key={m.id} className="bg-paper-50 rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-500">
-                                                <div className="h-64 overflow-hidden relative bg-stone-200 border-b border-stone-200">
+                                            <div key={m.id} className="bg-paper-50 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-500">
+                                                <div className="h-48 md:h-64 overflow-hidden relative bg-stone-200 border-b border-stone-200">
                                                     <img src={m.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                                                    <div className="absolute top-6 left-6 bg-white/90 backdrop-blur px-4 py-1.5 rounded-full text-[10px] font-black shadow-sm text-stone-700">{m.date}</div>
+                                                    <div className="absolute top-4 md:top-6 left-4 md:left-6 bg-white/90 backdrop-blur px-4 py-1.5 rounded-full text-[10px] font-black shadow-sm text-stone-700">{m.date}</div>
                                                 </div>
-                                                <div className="p-8">
-                                                    <h3 className="text-xl font-black mb-3 text-stone-800">{m.title}</h3>
+                                                <div className="p-6 md:p-8">
+                                                    <h3 className="text-lg md:text-xl font-black mb-3 text-stone-800">{m.title}</h3>
                                                     <p className="text-stone-600 text-sm leading-relaxed mb-6 line-clamp-3">{m.content}</p>
-                                                    <div className="pt-6 border-t border-stone-200 flex justify-between items-center text-[10px] font-bold text-stone-400">
+                                                    <div className="pt-4 md:pt-6 border-t border-stone-200 flex justify-between items-center text-[10px] font-bold text-stone-400">
                                                         <span className="flex items-center gap-1 uppercase tracking-widest"><User size={12}/> Written by {m.author}</span>
                                                     </div>
                                                 </div>
@@ -1034,7 +1116,7 @@
                                             </div>
                                         </div>
 
-                                        <textarea value={newMinuteContent} onChange={(e) => setNewMinuteContent(e.target.value)} placeholder="회의 내용을 상세히 기록하세요..." className="w-full flex-1 min-h-[300px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-blue-400 text-stone-800 resize-none mb-4" />
+                                        <textarea value={newMinuteContent} onChange={(e) => setNewMinuteContent(e.target.value)} placeholder="회의 내용을 상세히 기록하세요..." className="w-full flex-1 min-h-[150px] md:min-h-[300px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-blue-400 text-stone-800 resize-none mb-4" />
                                         <div className="flex gap-2 shrink-0">
                                             <button onClick={() => { setShowMinuteModal(false); setNewMinuteContent(""); setMinuteDate(null); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                             <button onClick={handleAddMinute} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">회의록 저장</button>
@@ -1042,9 +1124,20 @@
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </main>
+
+                    {/* 모바일 전용 하단 네비게이션 탭 */}
+                    {isAuthenticated && (
+                        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-paper-50 border-t border-stone-200 flex justify-around items-center h-[70px] z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-2 pt-1">
+                            {menuItems.map((item) => (
+                                <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${activeTab === item.id ? 'text-stone-800' : 'text-stone-400 hover:text-stone-600'}`}>
+                                    <item.icon size={22} className={activeTab === item.id ? 'text-stone-800' : ''} />
+                                    <span className={`text-[10px] font-bold ${activeTab === item.id ? 'text-stone-800' : 'text-stone-400'}`}>{item.label.split(' ')[0]}</span>
+                                </button>
+                            ))}
+                        </nav>
+                    )}
                 </div>
             );
         };
