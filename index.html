@@ -289,16 +289,22 @@
                     if (snap.exists()) setMonthlyMaintenance(snap.data());
                 }, errCb);
 
-                const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos'), (snap) => setTeacherTodos(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))), errCb);
+                // 할 일(Todos) 실시간 연동을 위해 public 경로로 변경
+                const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teacherTodos'), (snap) => {
+                    const allTodos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setTeacherTodos(allTodos.filter(t => t.owner === currentUserMode).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
+                }, errCb);
+                
                 const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), (snap) => setMeetingMinutes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
                 
-                const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), (snap) => {
+                // 시간표(Timetable) 실시간 연동을 위해 public 경로로 변경
+                const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'timetables', currentUserMode), (snap) => {
                     if (snap.exists()) setTimetable(snap.data());
                     else setTimetable({});
                 }, errCb);
 
                 return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubMaintenance(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
-            }, [user]);
+            }, [user, currentUserMode]); // currentUserMode가 바뀔 때마다 다시 동기화되도록 추가
 
             const initializeLedger = async () => {
                 const currentMonth = new Date().getMonth() + 1;
@@ -498,8 +504,8 @@
             const handleAddTeacherTodo = async () => {
                 if (!newTeacherTodo.trim() || !user) return;
                 try {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos'), {
-                        task: newTeacherTodo, isDone: false, createdAt: serverTimestamp()
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teacherTodos'), {
+                        task: newTeacherTodo, isDone: false, owner: currentUserMode, createdAt: serverTimestamp()
                     });
                     setNewTeacherTodo("");
                 } catch (err) { console.error(err); }
@@ -507,12 +513,12 @@
 
             const toggleTeacherTodo = async (id, currentStatus) => {
                 if (!user) return;
-                try { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos', id), { isDone: !currentStatus, updatedAt: serverTimestamp() }); } catch (err) { console.error(err); }
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teacherTodos', id), { isDone: !currentStatus, updatedAt: serverTimestamp() }); } catch (err) { console.error(err); }
             };
 
             const deleteTeacherTodo = async (id) => {
                 if (!user) return;
-                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos', id)); } catch (err) { console.error(err); }
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teacherTodos', id)); } catch (err) { console.error(err); }
             };
 
             const handleAddMinute = async () => {
@@ -544,7 +550,7 @@
                 const newTimetable = { ...timetable, [`${day}-${period}`]: value };
                 setTimetable(newTimetable);
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), newTimetable, { merge: true });
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'timetables', currentUserMode), newTimetable, { merge: true });
                 } catch (err) { console.error(err); }
             };
 
