@@ -11,7 +11,7 @@
             theme: {
                 extend: {
                     colors: {
-                        // 기존의 밝은 색상을 눈이 편안한 고급스러운 어두운 톤(다크 슬레이트)으로 반전 설정합니다.
+                        // 눈이 편안한 고급스러운 어두운 톤(다크 슬레이트)
                         paper: { 50: '#1e293b', 100: '#0f172a', 200: '#334155', 800: '#e2e8f0', 900: '#f8fafc' },
                         stone: { 50: '#1e293b', 100: '#334155', 200: '#475569', 300: '#64748b', 400: '#94a3b8', 500: '#cbd5e1', 600: '#e2e8f0', 700: '#f1f5f9', 800: '#f8fafc', 900: '#ffffff' },
                         white: '#1e293b',
@@ -32,7 +32,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap');
         body { font-family: 'Noto Sans KR', sans-serif; }
         .diary-font { font-family: 'Nanum Myeongjo', serif; }
-        /* 스크롤바 숨기기 (깔끔한 UI 유지) */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
     </style>
@@ -57,16 +56,21 @@
             measurementId: "G-H1RGMJHGTV"
         };
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : fallbackConfig;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'home-note-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : fallbackConfig;
+        const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'home-note-app';
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // 안전한 아이콘 생성 함수 (대소문자 지원 및 null 처리)
         const createIcon = (name) => {
             return ({ size = 24, color = "currentColor", className = "", ...props }) => {
-                const iconData = window.lucide && (window.lucide.icons[name] || window.lucide[name]);
+                let iconData = window.lucide && (window.lucide.icons[name] || window.lucide[name]);
+                if (!iconData && window.lucide) {
+                    const camelName = name.charAt(0).toLowerCase() + name.slice(1);
+                    iconData = window.lucide.icons[camelName] || window.lucide[camelName];
+                }
                 if (!iconData) return null;
 
                 const renderNode = (node, i) => {
@@ -112,21 +116,14 @@
         const Activity = createIcon('Activity');
         const Scale = createIcon('Scale');
         const ChevronLeft = createIcon('ChevronLeft');
-        const ChevronRight = createIcon('ChevronRight');
         const X = createIcon('X');
         const Trash2 = createIcon('Trash2');
-        const Sparkles = createIcon('Sparkles');
         const ClipboardCheck = createIcon('ClipboardCheck');
         const Calculator = createIcon('Calculator');
         const Check = createIcon('Check');
-        const Camera = createIcon('Camera');
-        const ImageIcon = createIcon('Image');
-        const Edit3 = createIcon('Edit3');
-        const FileText = createIcon('FileText');
-        const LinkIcon = createIcon('Link');
-        const DollarSign = createIcon('DollarSign');
-        const Lock = createIcon('Lock');
         const ImagePlus = createIcon('ImagePlus');
+        const Lock = createIcon('Lock');
+        const FileText = createIcon('FileText');
 
         const CHORE_MASTER_LIST = [
             { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
@@ -163,14 +160,26 @@
             const [ledgerItems, setLedgerItems] = useState([]);
             const [personalDiaries, setPersonalDiaries] = useState([]);
             
+            // 교무수첩 할 일, 회의록, 시간표 States
+            const [teacherTodos, setTeacherTodos] = useState([]);
+            const [newTeacherTodo, setNewTeacherTodo] = useState("");
+            const [meetingMinutes, setMeetingMinutes] = useState([]);
+            const [showMinuteModal, setShowMinuteModal] = useState(false);
+            const [newMinuteContent, setNewMinuteContent] = useState("");
+            const [minuteDate, setMinuteDate] = useState(null);
+            const [timetable, setTimetable] = useState({});
+
             // UI Input States
             const [newMemoryText, setNewMemoryText] = useState("");
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [inputWeight, setInputWeight] = useState("");
             const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
+            const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
             const [selectedDate, setSelectedDate] = useState(null);
             const [showEventModal, setShowEventModal] = useState(false);
             const [newEventTitle, setNewEventTitle] = useState("");
+            const [newEventTime, setNewEventTime] = useState("");
+            const [newEventMemo, setNewEventMemo] = useState("");
             const [newDiaryTitle, setNewDiaryTitle] = useState("");
             const [newDiaryContent, setNewDiaryContent] = useState("");
             
@@ -178,12 +187,6 @@
             const [dragStart, setDragStart] = useState(null);
             const [dragEnd, setDragEnd] = useState(null);
             const [isDragging, setIsDragging] = useState(false);
-
-            // 이음메시지 관리 및 학사일정 상태
-            const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
-            const [ieumMessage, setIeumMessage] = useState("");
-            const [analyzedResult, setAnalyzedResult] = useState(null);
-            const [isAnalyzing, setIsAnalyzing] = useState(false);
 
             // Ledger Edit States
             const [showLedgerAddModal, setShowLedgerAddModal] = useState(false);
@@ -193,6 +196,7 @@
 
             const fileInputRef = useRef(null);
             const todayDate = new Date().getDate();
+            const todayChore = CHORE_MASTER_LIST.find(c => c.id === todayDate);
 
             // Firebase Auth Setup
             useEffect(() => {
@@ -210,31 +214,41 @@
                 return () => unsubscribe();
             }, []);
 
-            // Data Sync
+            // Data Sync (에러 콜백 필수 적용)
             useEffect(() => {
                 if (!user) return;
+                const errCb = (err) => console.error("Snapshot Error:", err);
 
-                const unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'familyTasks'), (snap) => setFamilyTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-                const unsubMemories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sihaMemories'), (snap) => setSihaMemories(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
-                const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), (snap) => setCalendarEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'familyTasks'), (snap) => setFamilyTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))), errCb);
+                const unsubMemories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sihaMemories'), (snap) => setSihaMemories(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
+                const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), (snap) => setCalendarEvents(snap.docs.map(d => ({ id: d.id, ...d.data() }))), errCb);
                 const unsubChores = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'monthlyChores'), (snap) => {
                     const choresMap = {};
                     snap.docs.forEach(doc => { choresMap[doc.id] = doc.data().done; });
                     setMonthlyChores(choresMap);
-                });
+                }, errCb);
                 const unsubLedger = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), (snap) => {
                     const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     if (items.length === 0) initializeLedger(); else setLedgerItems(items);
-                });
-                const unsubWeight = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), (snap) => setWeightLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(a.date) - new Date(b.date))));
-                const unsubPeriod = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), (snap) => setPeriodLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
-                const unsubDiaries = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'diaries'), (snap) => setPersonalDiaries(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))));
+                }, errCb);
+                const unsubWeight = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'weightLogs'), (snap) => setWeightLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(a.date) - new Date(b.date))), errCb);
+                const unsubPeriod = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'periodLogs'), (snap) => setPeriodLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
+                const unsubDiaries = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'diaries'), (snap) => setPersonalDiaries(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
 
                 const unsubPins = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'pins_v2'), (snap) => {
                     if (snap.exists()) setUserPins(snap.data());
-                });
+                }, errCb);
 
-                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); };
+                const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos'), (snap) => setTeacherTodos(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0))), errCb);
+                const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), (snap) => setMeetingMinutes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
+                
+                // FIXED: Change 5-segment reference to 6-segment document reference
+                const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), (snap) => {
+                    if (snap.exists()) setTimetable(snap.data());
+                    else setTimetable({});
+                }, errCb);
+
+                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
             }, [user]);
 
             const initializeLedger = async () => {
@@ -258,7 +272,9 @@
                     { category: 'expense_var', title: '문화생활비', amount: 9 },
                     { category: 'expense_var', title: '경조사비', amount: 5 }
                 ];
-                for (const item of initialItems) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), item);
+                for (const item of initialItems) {
+                    try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), item); } catch(e){}
+                }
             };
 
             const ledgerStats = useMemo(() => {
@@ -273,12 +289,22 @@
                 res.totalExp = res.expNon + res.expFix + res.expVar;
                 res.irrMonthly = Math.round(res.incIrr / 12);
                 res.netCashFlow = res.incReg - res.totalExp;
+                // NaN 방지 위한 방어 코드 추가
+                res.expRatio = res.incReg > 0 ? Math.min(100, (res.totalExp / res.incReg) * 100) : 0; 
                 return res;
             }, [ledgerItems]);
 
             const maintenanceData = useMemo(() => {
                 return ledgerItems.filter(item => item.title.includes('관리비') || item.title.includes('공과금'));
             }, [ledgerItems]);
+
+            const calendarDays = useMemo(() => {
+                const year = viewDate.getFullYear(); const month = viewDate.getMonth();
+                const days = []; const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay();
+                for (let i = 0; i < firstDay; i++) days.push({ day: null, fullDate: null });
+                for (let i = 1; i <= daysInMonth; i++) days.push({ day: i, fullDate: `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
+                return days;
+            }, [viewDate]);
 
             const schoolCalendarDays = useMemo(() => {
                 const year = schoolViewDate.getFullYear(); const month = schoolViewDate.getMonth();
@@ -287,98 +313,6 @@
                 for (let i = 1; i <= daysInMonth; i++) days.push({ day: i, fullDate: `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
                 return days;
             }, [schoolViewDate]);
-
-            // 이음메시지 분석 로직 (AI 연동 - 비서 기능 포함)
-            const handleAnalyzeIeum = async () => {
-                if (!ieumMessage.trim()) return;
-                setIsAnalyzing(true);
-                try {
-                    // 미리보기(캔버스) 환경에서는 키를 비워두어야 자체 내장 AI가 작동합니다.
-                    // (★ 나중에 선생님의 깃허브에 실제로 올리실 때만 쌍따옴표 안에 발급받은 키를 넣어주세요!)
-                    const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk"; 
-                    
-                    // 스키마 충돌 방지를 위해 프롬프트를 하나로 통합하고 명확한 JSON 구조를 요구합니다.
-                    const promptText = `당신은 초등학교 교사를 돕는 스마트 비서입니다. 
-다음 업무 메시지를 분석하여 반드시 유효한 JSON 형식으로만 응답하세요. 마크다운(\`\`\`json)은 빼고 순수 JSON 텍스트만 출력하세요. 
-올해는 2026년입니다.
-
-[JSON 구조]
-{
-  "isSchedule": true 또는 false (일정 포함 여부),
-  "summary": "교사가 이해하기 쉽게 요약한 브리핑 (예: 선생님, 이 메시지는 ~안내입니다.)",
-  "events": [
-    {
-      "date": "YYYY-MM-DD", 
-      "title": "일정 또는 마감명", 
-      "category": "deadline(마감일) 또는 field_trip(체험학습) 또는 lecture(연수/수업) 또는 general(일반)"
-    }
-  ]
-}
-
-메시지: ${ieumMessage}`;
-
-                    const payload = {
-                        contents: [{ parts: [{ text: promptText }] }],
-                        generationConfig: { 
-                            responseMimeType: "application/json"
-                        }
-                    };
-
-                    let result = null;
-                    let retries = 0;
-                    const delays = [1000, 2000, 4000, 8000, 16000];
-
-                    while (retries < 5) {
-                        try {
-                            // 캔버스 환경 전용 모델 통로로 변경했습니다.
-                            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload)
-                            });
-                            
-                            if (!response.ok) {
-                                const errorData = await response.text();
-                                throw new Error(`HTTP Error ${response.status}: ${errorData}`);
-                            }
-                            
-                            result = await response.json();
-                            break;
-                        } catch (e) {
-                            if (retries === 4) throw e;
-                            await new Promise(res => setTimeout(res, delays[retries]));
-                            retries++;
-                        }
-                    }
-
-                    let text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text) {
-                        // AI가 혹시라도 마크다운(```json)을 붙여서 보낼 경우를 대비해 텍스트 정제
-                        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                        setAnalyzedResult(JSON.parse(text));
-                    } else {
-                        throw new Error("API 응답이 비어있습니다.");
-                    }
-                } catch (error) {
-                    console.error("분석 실패 상세 로그:", error);
-                    alert("메시지 분석에 실패했습니다. 혹시 계속 안 되면 개발자 도구(F12) 콘솔 창의 에러 메시지를 확인해주세요.");
-                } finally {
-                    setIsAnalyzing(false);
-                }
-            };
-
-            const handleRegisterIeumEvents = async () => {
-                if (!user || !analyzedResult || !analyzedResult.events) return;
-                try {
-                    for (const ev of analyzedResult.events) {
-                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), {
-                            date: ev.date, title: ev.title, type: 'school', category: ev.category || 'general',
-                            author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp()
-                        });
-                    }
-                    setIeumMessage(""); setAnalyzedResult(null);
-                } catch (err) { console.error(err); }
-            };
 
             const handleMouseDown = (date) => {
                 if (!date) return;
@@ -402,7 +336,6 @@
 
             const handleLoginSubmit = async () => {
                 if (!pinCode) return;
-                
                 const currentPin = userPins[loginSelectedUser];
                 if (!currentPin) {
                     try {
@@ -440,10 +373,8 @@
                         const scaleSize = MAX_WIDTH / img.width;
                         canvas.width = MAX_WIDTH;
                         canvas.height = img.height * scaleSize;
-
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
                         const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
                         setUploadedImageBase64(compressedBase64);
                     };
@@ -464,7 +395,7 @@
                     title: newMemoryText.substring(0, 15), 
                     content: newMemoryText, 
                     author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', 
-                    image: uploadedImageBase64 || "[https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80](https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80)", 
+                    image: uploadedImageBase64 || "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80", 
                     tags: ["일상"], 
                     createdAt: serverTimestamp() 
                 }; 
@@ -477,6 +408,7 @@
             const handleAddEvent = async () => { 
                 if (!newEventTitle.trim() || !selectedDate || !user) return; 
                 try { 
+                    const eventType = activeTab === 'teacher' ? 'school' : 'general';
                     if (selectedDate.includes('~')) {
                         const [startDateStr, endDateStr] = selectedDate.split(' ~ ');
                         const start = new Date(startDateStr);
@@ -486,19 +418,49 @@
                         while (current <= end) {
                             const dateStr = current.toISOString().split('T')[0];
                             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
-                                date: dateStr, title: newEventTitle, type: 'general', 
+                                date: dateStr, title: newEventTitle, time: newEventTime, memo: newEventMemo, type: eventType, 
                                 author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp() 
                             });
                             current.setDate(current.getDate() + 1);
                         }
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
-                            date: selectedDate, title: newEventTitle, type: 'general', 
+                            date: selectedDate, title: newEventTitle, time: newEventTime, memo: newEventMemo, type: eventType, 
                             author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp() 
                         }); 
                     }
-                    setNewEventTitle(""); setShowEventModal(false); setDragStart(null); setDragEnd(null);
+                    setNewEventTitle(""); setNewEventTime(""); setNewEventMemo(""); setShowEventModal(false); setDragStart(null); setDragEnd(null);
                 } catch (err) { console.error(err); } 
+            };
+
+            const handleAddTeacherTodo = async () => {
+                if (!newTeacherTodo.trim() || !user) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos'), {
+                        task: newTeacherTodo, isDone: false, createdAt: serverTimestamp()
+                    });
+                    setNewTeacherTodo("");
+                } catch (err) { console.error(err); }
+            };
+
+            const toggleTeacherTodo = async (id, currentStatus) => {
+                if (!user) return;
+                try { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos', id), { isDone: !currentStatus, updatedAt: serverTimestamp() }); } catch (err) { console.error(err); }
+            };
+
+            const deleteTeacherTodo = async (id) => {
+                if (!user) return;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'teacherTodos', id)); } catch (err) { console.error(err); }
+            };
+
+            const handleAddMinute = async () => {
+                if (!newMinuteContent.trim() || !minuteDate || !user) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), {
+                        date: minuteDate, content: newMinuteContent, createdAt: serverTimestamp()
+                    });
+                    setNewMinuteContent(""); setShowMinuteModal(false); setMinuteDate(null);
+                } catch (err) { console.error(err); }
             };
             
             const handleAddDiary = async () => {
@@ -515,13 +477,15 @@
                 } catch (err) { console.error(err); }
             };
 
-            const calendarDays = useMemo(() => {
-                const year = viewDate.getFullYear(); const month = viewDate.getMonth();
-                const days = []; const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay();
-                for (let i = 0; i < firstDay; i++) days.push({ day: null, fullDate: null });
-                for (let i = 1; i <= daysInMonth; i++) days.push({ day: i, fullDate: `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}` });
-                return days;
-            }, [viewDate]);
+            const handleTimetableChange = async (day, period, value) => {
+                if (!user) return;
+                const newTimetable = { ...timetable, [`${day}-${period}`]: value };
+                setTimetable(newTimetable);
+                try {
+                    // FIXED: Changed 5-segment reference to 6-segment document reference
+                    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'timetable'), newTimetable, { merge: true });
+                } catch (err) { console.error(err); }
+            };
 
             const menuItems = [
                 { id: 'home', icon: Home, label: '홈' },
@@ -529,9 +493,21 @@
                 { id: 'chores', icon: ClipboardCheck, label: '살림/할 일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
-                { id: 'personal', icon: User, label: '개인 공간' },
                 { id: 'siha', icon: Heart, label: '시하 기록' },
             ];
+
+            const getDaysUntilNextPeriod = () => {
+                if (periodLogs.length === 0) return '--';
+                const lastPeriodDate = new Date(periodLogs[0].startDate);
+                const nextPeriodDate = new Date(lastPeriodDate);
+                nextPeriodDate.setDate(nextPeriodDate.getDate() + 28);
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                nextPeriodDate.setHours(0,0,0,0);
+                const diffTime = nextPeriodDate - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays >= 0 ? diffDays : 0;
+            };
 
             if (!isAuthenticated) {
                 return (
@@ -631,7 +607,7 @@
                                         <h1 className="text-3xl font-black mb-2 tracking-tighter">안녕하세요, {currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}! 👋</h1>
                                         <p className="opacity-90 text-lg text-stone-200">이번 달 현금흐름 요약: <span className="font-bold underline decoration-stone-400 decoration-4 text-white">월 소득 {ledgerStats.incReg}만 원</span></p>
                                         <p className="mt-4 text-sm opacity-90 font-medium flex items-center gap-2 text-stone-300">
-                                           <ClipboardCheck size={16}/> 오늘의 살림: {CHORE_MASTER_LIST.find(c => c.id === todayDate)?.task}
+                                           <ClipboardCheck size={16}/> 오늘의 살림: {todayChore ? todayChore.task : "오늘의 정비"}
                                         </p>
                                     </section>
 
@@ -643,7 +619,7 @@
                                                 <span className={`text-sm font-bold ${ledgerStats.netCashFlow < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{ledgerStats.netCashFlow}만 원</span>
                                             </div>
                                             <div className="w-full bg-stone-200 h-2 rounded-full overflow-hidden">
-                                                <div className="bg-stone-600 h-full" style={{ width: `${Math.min(100, (ledgerStats.totalExp / ledgerStats.incReg) * 100)}%` }}></div>
+                                                <div className="bg-stone-600 h-full" style={{ width: `${ledgerStats.expRatio}%` }}></div>
                                             </div>
                                         </div>
                                         <div className="bg-paper-50 p-6 rounded-3xl shadow-sm border border-stone-200">
@@ -802,7 +778,7 @@
                             {activeTab === 'calendar' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h1 className="text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 (2026)</h1>
+                                        <h1 className="text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
                                         <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm">
                                             <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-200 rounded-lg text-stone-600"><ChevronLeft/></button>
                                             <span className="font-bold text-sm min-w-[100px] text-center text-stone-800">{viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월</span>
@@ -847,7 +823,7 @@
 
                             {/* 🏫 교무수첩 탭 */}
                             {activeTab === 'teacher' && (
-                                <div className="max-w-7xl mx-auto space-y-6 h-[calc(100vh-8rem)] flex flex-col">
+                                <div className="max-w-7xl mx-auto space-y-6 flex flex-col pb-20">
                                     <div className="flex items-center justify-between mb-2 shrink-0">
                                         <h1 className="text-2xl font-black text-stone-800">
                                             {currentUserMode === 'uijeong' ? '삼봉초 교무수첩' : '성연초 6학년 학급 운영'}
@@ -855,7 +831,8 @@
                                         <span className="px-4 py-1 bg-stone-200 text-stone-800 rounded-full text-xs font-bold">2026학년도</span>
                                     </div>
                                     
-                                    <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-0">
+                                    {/* 상단: 달력(2칸) + 할 일(1칸) */}
+                                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[500px]">
                                         <div className="xl:col-span-2 bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden">
                                             <div className="p-4 flex items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0">
                                                 <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
@@ -895,8 +872,8 @@
                                                                 else { bgClass = "bg-indigo-50 text-indigo-700 border-indigo-100"; }
                                                                 
                                                                 return (
-                                                                <div key={e.id} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm ${bgClass}`} title={e.title}>
-                                                                    {icon} {e.title}
+                                                                <div key={e.id} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm ${bgClass}`} title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
+                                                                    {icon} {e.time && <span className="mr-0.5 opacity-70">[{e.time}]</span>}{e.title}
                                                                 </div>
                                                                 );
                                                             })}
@@ -907,125 +884,72 @@
                                             </div>
                                         </div>
 
-                                        <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden relative">
-                                            <div className="p-4 bg-indigo-50 border-b border-indigo-100 shrink-0">
-                                                <h3 className="font-bold flex items-center gap-2 text-indigo-800"><Sparkles size={18} className="text-indigo-500"/> 이음메시지 스마트 비서</h3>
-                                                <p className="text-xs text-indigo-600/70 mt-1">메시지를 분석하여 일정표에 자동 등록합니다.</p>
+                                        {/* 할 일 영역 */}
+                                        <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col h-full">
+                                            <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><CheckSquare size={18} className="text-emerald-500"/> 교무수첩 할 일</h3>
+                                            <div className="flex gap-2 mb-4 shrink-0">
+                                                <input type="text" value={newTeacherTodo} onChange={e=>setNewTeacherTodo(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTeacherTodo()} className="flex-1 bg-white border border-stone-300 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 text-stone-800" placeholder="할 일 입력..."/>
+                                                <button onClick={handleAddTeacherTodo} className="bg-stone-800 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-stone-900">추가</button>
                                             </div>
-                                            <div className="p-4 flex flex-col gap-4 flex-1 overflow-y-auto">
-                                                <textarea 
-                                                    value={ieumMessage} 
-                                                    onChange={(e) => setIeumMessage(e.target.value)} 
-                                                    placeholder="수신된 이음메시지나 안내사항을 여기에 붙여넣으세요..." 
-                                                    className="w-full h-32 bg-white border border-stone-200 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-indigo-400 text-stone-800 resize-none shadow-inner shrink-0"
-                                                />
-                                                <button onClick={handleAnalyzeIeum} disabled={isAnalyzing} className="w-full py-3 bg-stone-800 text-white rounded-2xl font-bold hover:bg-stone-900 transition-colors disabled:opacity-50 shadow-md shrink-0">
-                                                    {isAnalyzing ? "AI 비서가 분석 중입니다..." : "비서에게 분석 맡기기"}
-                                                </button>
-
-                                                {analyzedResult && (
-                                                    <div className="mt-2 bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-2">
-                                                        <div className="bg-stone-50 p-3 rounded-xl border border-stone-100">
-                                                            <p className="text-sm font-bold text-stone-700 flex items-center gap-2 mb-1"><User size={14} className="text-indigo-500"/> 비서의 브리핑</p>
-                                                            <p className="text-xs text-stone-600 leading-relaxed">{analyzedResult.summary}</p>
-                                                        </div>
-
-                                                        {analyzedResult.isSchedule && analyzedResult.events?.length > 0 && (
-                                                            <>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-xs font-bold text-stone-500 ml-1">추출된 학사 일정</p>
-                                                                    <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
-                                                                        {analyzedResult.events.map((ev, idx) => {
-                                                                            let badge = "일반"; let bColor = "bg-stone-100 text-stone-600";
-                                                                            if(ev.category==='deadline'){ badge="마감"; bColor="bg-rose-100 text-rose-600"; }
-                                                                            if(ev.category==='field_trip'){ badge="체험"; bColor="bg-emerald-100 text-emerald-600"; }
-                                                                            if(ev.category==='lecture'){ badge="강사/연수"; bColor="bg-purple-100 text-purple-600"; }
-                                                                            return (
-                                                                                <div key={idx} className="flex justify-between items-center p-2 bg-white border border-stone-100 rounded-lg text-[11px] shadow-sm">
-                                                                                    <div className="flex items-center gap-2 truncate">
-                                                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${bColor}`}>{badge}</span>
-                                                                                        <span className="font-bold text-stone-700 truncate">{ev.title}</span>
-                                                                                    </div>
-                                                                                    <span className="font-black text-indigo-500 shrink-0 ml-2">{ev.date.slice(5)}</span>
-                                                                                </div>
-                                                                            )
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                                <button onClick={handleRegisterIeumEvents} className="w-full py-2.5 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-colors shadow-sm text-sm shrink-0">
-                                                                    학사 일정표에 일괄 등록
-                                                                </button>
-                                                            </>
-                                                        )}
+                                            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                                                {teacherTodos.map(todo => (
+                                                    <div key={todo.id} className="flex items-center gap-3 p-2 hover:bg-stone-100 rounded-lg group transition-colors">
+                                                        <button onClick={()=>toggleTeacherTodo(todo.id, todo.isDone)}>
+                                                            {todo.isDone ? <CheckSquare size={18} className="text-emerald-500"/> : <div className="w-[18px] h-[18px] border-2 border-stone-300 rounded"/>}
+                                                        </button>
+                                                        <span className={`flex-1 text-sm ${todo.isDone ? 'line-through text-stone-400' : 'text-stone-700'}`}>{todo.task}</span>
+                                                        <button onClick={()=>deleteTeacherTodo(todo.id)} className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-rose-500 transition-opacity"><Trash2 size={14}/></button>
                                                     </div>
-                                                )}
+                                                ))}
+                                                {teacherTodos.length === 0 && <p className="text-xs text-stone-400 text-center py-4">등록된 할 일이 없습니다.</p>}
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
 
-                            {/* 👤 개인 공간 탭 */}
-                            {activeTab === 'personal' && (
-                                <div className="max-w-6xl mx-auto space-y-8">
-                                    <div className="flex items-center justify-between">
-                                        <h1 className="text-2xl font-black text-stone-800 diary-font tracking-widest">{currentUserMode === 'uijeong' ? '의정의 다이어리' : '재윤의 다이어리'}</h1>
+                                    {/* 하단: 회의록 영역 */}
+                                    <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col shrink-0 min-h-[300px]">
+                                        <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><FileText size={18} className="text-blue-500"/> 회의록 보관함</h3>
+                                        <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pr-1 content-start">
+                                            {meetingMinutes.map(min => (
+                                                <div key={min.id} className="bg-white p-5 rounded-2xl border border-stone-100 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow h-fit">
+                                                    <span className="text-xs font-black text-blue-500 bg-blue-50 w-fit px-2 py-1 rounded">{min.date}</span>
+                                                    <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{min.content}</p>
+                                                </div>
+                                            ))}
+                                            {meetingMinutes.length === 0 && <p className="text-sm text-stone-400 col-span-full py-4 text-center mt-10">등록된 회의록이 없습니다.<br/>위 달력에서 날짜를 클릭해 작성해보세요.</p>}
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                        <div className="lg:col-span-2 bg-paper-50 rounded-[2rem] shadow-md border border-stone-200 overflow-hidden relative">
-                                            <div className="absolute top-0 left-6 w-4 h-full bg-stone-100 flex flex-col justify-around py-8 border-r border-stone-200">
-                                                {[...Array(8)].map((_, i) => <div key={i} className="w-8 h-2 bg-stone-300 rounded-full -ml-2 shadow-inner"></div>)}
-                                            </div>
-
-                                            <div className="pl-16 pr-8 py-8 space-y-6">
-                                                <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-sm">
-                                                    <input type="text" value={newDiaryTitle} onChange={e => setNewDiaryTitle(e.target.value)} placeholder="오늘의 다이어리 제목..." className="w-full text-lg font-bold border-b border-stone-200 pb-2 mb-4 outline-none diary-font text-stone-800 bg-transparent placeholder-stone-300" />
-                                                    <textarea value={newDiaryContent} onChange={e => setNewDiaryContent(e.target.value)} placeholder="오늘 하루는 어땠나요?" rows="3" className="w-full resize-none outline-none text-sm text-stone-600 leading-relaxed bg-transparent placeholder-stone-300 mb-4"></textarea>
-                                                    <div className="flex justify-end"><button onClick={handleAddDiary} className="px-6 py-2 bg-stone-800 text-white rounded-full font-bold text-sm hover:bg-stone-900 transition-colors">기록하기</button></div>
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    {personalDiaries.map(diary => (
-                                                        <div key={diary.id} className="p-6 bg-white rounded-2xl border border-stone-100 shadow-sm hover:shadow-md transition-shadow">
-                                                            <div className="text-xs text-stone-400 font-bold mb-2 diary-font">{diary.date}</div>
-                                                            <h3 className="font-bold text-stone-800 mb-2 diary-font text-lg">{diary.title}</h3>
-                                                            <p className="text-stone-600 text-sm whitespace-pre-wrap leading-relaxed">{diary.content}</p>
-                                                        </div>
-                                                    ))}
-                                                    {personalDiaries.length === 0 && <div className="text-center text-stone-400 py-10 diary-font">첫 다이어리를 작성해보세요.</div>}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-6">
-                                            {currentUserMode === 'jaeyoon' ? (
-                                                <>
-                                                    <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm">
-                                                        <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-stone-800 flex items-center gap-2 diary-font"><Scale className="text-emerald-600" size={18}/> 체중 변화</h3><div className="flex gap-1"><input type="number" value={inputWeight} onChange={(e) => setInputWeight(e.target.value)} className="w-16 bg-white border border-stone-300 rounded-lg px-2 py-1 text-center font-bold text-sm outline-none" /><button onClick={handleAddWeight} className="bg-stone-700 text-white px-3 py-1 rounded-lg font-bold text-xs">기록</button></div></div>
-                                                        <div className="h-32 flex items-end gap-1 px-2 border-b border-stone-200">
-                                                            {weightLogs.slice(-7).map((l, i) => (
-                                                                <div key={i} className="flex-1 bg-emerald-100/60 rounded-t-md relative group hover:bg-emerald-200" style={{ height: `${(l.weight / 100) * 100}%` }}>
-                                                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-stone-800 text-white text-[10px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100">{l.weight}</div>
-                                                                </div>
+                                    {/* 하단: 시간표 영역 */}
+                                    <div className="bg-paper-50 p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col shrink-0">
+                                        <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><BookOpen size={18} className="text-orange-500"/> 우리 반 주간 시간표</h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full min-w-[500px] border-collapse bg-white rounded-xl overflow-hidden shadow-sm">
+                                                <thead>
+                                                    <tr className="bg-stone-100 text-stone-600 text-sm">
+                                                        <th className="border-b border-r border-stone-200 p-3 w-16">교시</th>
+                                                        {['월', '화', '수', '목', '금'].map(day => <th key={day} className="border-b border-r border-stone-200 p-3 last:border-r-0">{day}</th>)}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {[1, 2, 3, 4, 5, 6].map(period => (
+                                                        <tr key={period} className="border-b border-stone-200 last:border-b-0">
+                                                            <td className="border-r border-stone-200 p-2 text-center font-bold text-stone-500 bg-stone-50 text-xs">{period}</td>
+                                                            {['월', '화', '수', '목', '금'].map(day => (
+                                                                <td key={day} className="border-r border-stone-200 p-0 last:border-r-0">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={timetable[`${day}-${period}`] || ''}
+                                                                        onChange={(e) => handleTimetableChange(day, period, e.target.value)}
+                                                                        className="w-full h-full p-3 outline-none text-center text-sm focus:bg-orange-50 focus:ring-2 focus:ring-orange-400 font-bold text-stone-700 transition-colors"
+                                                                        placeholder="과목"
+                                                                    />
+                                                                </td>
                                                             ))}
-                                                        </div>
-                                                    </div>
-                                                    <div className="bg-paper-50 p-6 rounded-3xl border border-rose-100 shadow-sm text-center relative overflow-hidden">
-                                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Droplets size={100} className="text-rose-500"/></div>
-                                                        <h3 className="text-rose-500 font-bold mb-4 flex items-center justify-center gap-2 diary-font">생리 주기 트래커</h3>
-                                                        <p className="text-xs text-stone-500 mb-1">다음 예정일까지</p>
-                                                        <p className="text-5xl font-black text-rose-400 mb-6">12<span className="text-sm font-normal">일</span></p>
-                                                        <button onClick={handleAddPeriod} className="w-full py-3 bg-rose-400 text-white rounded-xl font-bold hover:bg-rose-500 transition-colors shadow-sm text-sm">오늘 시작 기록</button>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="bg-paper-50 h-full min-h-[300px] p-6 rounded-3xl border border-stone-200 border-dashed flex flex-col items-center justify-center text-stone-400">
-                                                    <Sparkles size={40} className="mb-4 text-stone-300" />
-                                                    <p className="diary-font font-bold">나만의 위젯 공간</p>
-                                                    <p className="text-xs mt-2 text-stone-400 text-center">운동, 취미 등<br/>필요한 기록을 위한 공간입니다.</p>
-                                                </div>
-                                            )}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
                                 </div>
@@ -1073,12 +997,15 @@
                                 </div>
                             )}
 
-                            {/* 신규: 공통 모달 영역 (일정 추가, 회의록 추가) */}
+                            {/* 공통 모달 영역 (일정 추가, 회의록 추가) */}
                             {showEventModal && (
                                 <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-stone-200">
-                                        <h3 className="text-lg font-bold mb-4 text-stone-800">{selectedDate} 일정 추가</h3>
-                                        <input type="text" autoFocus value={newEventTitle} onChange={(e) => setNewEventTitle(e.target.value)} className="w-full bg-white border border-stone-300 rounded-xl p-3 text-sm mb-3 outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="일정 제목 (예: 학년 회의)" />
+                                        <h3 className="text-lg font-bold mb-4 text-stone-800">{selectedDate} {activeTab === 'teacher' ? '학사 일정' : '공용 일정'} 추가</h3>
+                                        <div className="mb-3">
+                                            <label className="block text-xs font-bold text-stone-500 mb-1">일정 헤드라인 (제목)</label>
+                                            <input type="text" autoFocus value={newEventTitle} onChange={(e) => setNewEventTitle(e.target.value)} className="w-full bg-white border border-stone-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="일정 제목 (예: 학년 회의)" />
+                                        </div>
                                         <div className="flex gap-2 mb-4">
                                             <input type="time" value={newEventTime} onChange={(e) => setNewEventTime(e.target.value)} className="w-1/3 bg-white border border-stone-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" />
                                             <input type="text" value={newEventMemo} onChange={(e) => setNewEventMemo(e.target.value)} className="w-2/3 bg-white border border-stone-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-stone-400 text-stone-800" placeholder="장소/메모" />
@@ -1098,6 +1025,15 @@
                                 <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-2xl p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[90vh]">
                                         <h3 className="text-xl font-black mb-4 flex items-center gap-2 text-stone-800"><FileText className="text-blue-500"/> {minuteDate} 회의록 작성</h3>
+                                        
+                                        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4 shrink-0">
+                                            <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-1 mb-2"><CheckSquare size={16}/> 회의 중 할 일 추가 (교무수첩 자동 연동)</h4>
+                                            <div className="flex gap-2">
+                                                <input type="text" value={newTeacherTodo} onChange={e=>setNewTeacherTodo(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTeacherTodo()} className="flex-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 text-stone-800" placeholder="회의에서 결정된 할 일 입력..."/>
+                                                <button onClick={handleAddTeacherTodo} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors shrink-0">할 일 등록</button>
+                                            </div>
+                                        </div>
+
                                         <textarea value={newMinuteContent} onChange={(e) => setNewMinuteContent(e.target.value)} placeholder="회의 내용을 상세히 기록하세요..." className="w-full flex-1 min-h-[300px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-blue-400 text-stone-800 resize-none mb-4" />
                                         <div className="flex gap-2 shrink-0">
                                             <button onClick={() => { setShowMinuteModal(false); setNewMinuteContent(""); setMinuteDate(null); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
