@@ -180,6 +180,8 @@
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [editingMemory, setEditingMemory] = useState(null); // 시하 기록 수정 상태
             
+            const [selectedEvent, setSelectedEvent] = useState(null); // 일정 조회 모달 상태
+
             const [inputWeight, setInputWeight] = useState("");
             const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
             const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
@@ -505,6 +507,15 @@
                 catch (err) { console.error(err); }
             };
 
+            // 일정 삭제
+            const handleDeleteEvent = async (id) => {
+                if (!user) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'calendarEvents', id));
+                    setSelectedEvent(null);
+                } catch (err) { console.error(err); }
+            };
+
             // 시하 기록 수정
             const handleUpdateMemory = async () => {
                 if (!editingMemory || !user) return;
@@ -576,6 +587,12 @@
                     setNewMinuteContent(""); setShowMinuteModal(false); setMinuteDate(null);
                 } catch (err) { console.error(err); }
             };
+
+            // 회의록 삭제
+            const deleteMinute = async (id) => {
+                if (!user) return;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes', id)); } catch (err) { console.error(err); }
+            };
             
             const handleAddDiary = async () => {
                 if (!newDiaryTitle.trim() || !user) return;
@@ -603,7 +620,7 @@
             const menuItems = [
                 { id: 'home', icon: Home, label: '홈' },
                 { id: 'calendar', icon: CalendarIcon, label: '공용 일정' },
-                { id: 'chores', icon: ClipboardCheck, label: '살림/할 일' },
+                { id: 'chores', icon: ClipboardCheck, label: '집안일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
                 { id: 'siha', icon: Heart, label: '시하 기록' },
@@ -726,7 +743,7 @@
                                         <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter">안녕하세요, {currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}! 👋</h1>
                                         <p className="opacity-90 text-sm md:text-lg text-stone-200">이번 달 현금흐름 요약: <span className="font-bold underline decoration-stone-400 decoration-4 text-white">월 소득 {ledgerStats.incReg}만 원</span></p>
                                         <p className="mt-4 text-xs md:text-sm opacity-90 font-medium flex items-center gap-2 text-stone-300">
-                                           <ClipboardCheck size={16}/> 오늘의 살림: {todayChore ? todayChore.task : "오늘의 정비"}
+                                           <ClipboardCheck size={16}/> 오늘의 집안일: {todayChore ? todayChore.task : "오늘의 정비"}
                                         </p>
                                     </section>
 
@@ -883,7 +900,7 @@
                             {activeTab === 'chores' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between">
-                                        <div><h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><ClipboardCheck className="text-stone-600" size={24} />월간 살림 루틴</h1><p className="text-stone-500 text-xs md:text-sm mt-1">매월 1일부터 30일까지 정해진 살림을 체크하세요.</p></div>
+                                        <div><h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><ClipboardCheck className="text-stone-600" size={24} />월간 집안일 루틴</h1><p className="text-stone-500 text-xs md:text-sm mt-1">매월 1일부터 30일까지 정해진 집안일을 체크하세요.</p></div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                         {[0, 1, 2].map(colIdx => (
@@ -940,7 +957,7 @@
                                                     <span className={`text-xs font-bold pl-1 md:pl-0 ${i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
                                                     <div className="mt-1 space-y-1">
                                                         {calendarEvents.filter(e => e.date === d.fullDate && (!e.type || e.type === 'general')).map(e => (
-                                                            <div key={e.id} className="text-[9px] md:text-[10px] bg-stone-200 text-stone-800 p-1 md:p-1.5 rounded font-bold truncate flex justify-between group shadow-sm border border-stone-300" title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
+                                                            <div key={e.id} onClick={(ev) => { ev.stopPropagation(); setSelectedEvent(e); }} className="text-[9px] md:text-[10px] bg-stone-200 hover:bg-stone-300 text-stone-800 p-1 md:p-1.5 rounded font-bold truncate flex justify-between group shadow-sm border border-stone-300 cursor-pointer transition-colors" title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
                                                                 <span className="truncate">{e.time && <span className="mr-1 opacity-60">[{e.time}]</span>}{e.title}</span>
                                                             </div>
                                                         ))}
@@ -1004,7 +1021,7 @@
                                                                 else { bgClass = "bg-indigo-50 text-indigo-700 border-indigo-100"; }
                                                                 
                                                                 return (
-                                                                <div key={e.id} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm ${bgClass}`} title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
+                                                                <div key={e.id} onClick={(ev) => { ev.stopPropagation(); setSelectedEvent(e); }} className={`text-[9px] p-1 rounded font-bold truncate border shadow-sm cursor-pointer hover:brightness-95 transition-all ${bgClass}`} title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
                                                                     <span className="hidden md:inline">{icon}</span> {e.time && <span className="mr-0.5 opacity-70 hidden md:inline">[{e.time}]</span>}{e.title}
                                                                 </div>
                                                                 );
@@ -1043,8 +1060,11 @@
                                         <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><FileText size={18} className="text-blue-500"/> 회의록 보관함</h3>
                                         <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pr-1 content-start">
                                             {meetingMinutes.map(min => (
-                                                <div key={min.id} className="bg-white p-5 rounded-2xl border border-stone-100 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow h-fit">
-                                                    <span className="text-xs font-black text-blue-500 bg-blue-50 w-fit px-2 py-1 rounded">{min.date}</span>
+                                                <div key={min.id} className="bg-white p-5 rounded-2xl border border-stone-100 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow h-fit group">
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-xs font-black text-blue-500 bg-blue-50 w-fit px-2 py-1 rounded">{min.date}</span>
+                                                        <button onClick={() => deleteMinute(min.id)} className="text-stone-300 hover:text-rose-500 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                                                    </div>
                                                     <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{min.content}</p>
                                                 </div>
                                             ))}
@@ -1055,25 +1075,25 @@
                                     {/* 하단: 시간표 영역 */}
                                     <div className="bg-paper-50 p-4 md:p-6 rounded-3xl border border-stone-200 shadow-sm flex flex-col shrink-0">
                                         <h3 className="font-bold flex items-center gap-2 text-stone-800 mb-4"><BookOpen size={18} className="text-orange-500"/> 우리 반 주간 시간표</h3>
-                                        <div className="overflow-x-auto w-full">
-                                            <table className="w-full min-w-[500px] border-collapse bg-white rounded-xl overflow-hidden shadow-sm">
+                                        <div className="w-full">
+                                            <table className="w-full border-collapse bg-white rounded-xl overflow-hidden shadow-sm table-fixed">
                                                 <thead>
-                                                    <tr className="bg-stone-100 text-stone-600 text-sm">
-                                                        <th className="border-b border-r border-stone-200 p-2 md:p-3 w-12 md:w-16">교시</th>
-                                                        {['월', '화', '수', '목', '금'].map(day => <th key={day} className="border-b border-r border-stone-200 p-2 md:p-3 last:border-r-0">{day}</th>)}
+                                                    <tr className="bg-stone-100 text-stone-600 text-[10px] md:text-sm">
+                                                        <th className="border-b border-r border-stone-200 p-1 md:p-3 w-8 md:w-16">교시</th>
+                                                        {['월', '화', '수', '목', '금'].map(day => <th key={day} className="border-b border-r border-stone-200 p-1 md:p-3 last:border-r-0 w-[18%]">{day}</th>)}
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {[1, 2, 3, 4, 5, 6].map(period => (
                                                         <tr key={period} className="border-b border-stone-200 last:border-b-0">
-                                                            <td className="border-r border-stone-200 p-2 text-center font-bold text-stone-500 bg-stone-50 text-xs">{period}</td>
+                                                            <td className="border-r border-stone-200 p-1 md:p-2 text-center font-bold text-stone-500 bg-stone-50 text-[10px] md:text-xs">{period}</td>
                                                             {['월', '화', '수', '목', '금'].map(day => (
                                                                 <td key={day} className="border-r border-stone-200 p-0 last:border-r-0">
                                                                     <input
                                                                         type="text"
                                                                         value={timetable[`${day}-${period}`] || ''}
                                                                         onChange={(e) => handleTimetableChange(day, period, e.target.value)}
-                                                                        className="w-full h-full p-2 md:p-3 outline-none text-center text-xs md:text-sm focus:bg-orange-50 focus:ring-2 focus:ring-orange-400 font-bold text-black transition-colors"
+                                                                        className="w-full h-full p-1 md:p-3 outline-none text-center text-[10px] md:text-sm focus:bg-orange-50 focus:ring-2 focus:ring-orange-400 font-bold text-black transition-colors"
                                                                         placeholder="과목"
                                                                     />
                                                                 </td>
@@ -1208,6 +1228,47 @@
                                         <div className="flex gap-2 shrink-0 pt-2">
                                             <button onClick={() => setEditingMemory(null)} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                             <button onClick={handleUpdateMemory} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">수정 완료</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 일정 상세 및 삭제 모달 */}
+                            {selectedEvent && (
+                                <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                    <div className="bg-paper-50 rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-stone-200">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <h3 className="text-lg font-black text-stone-800 flex items-center gap-2"><CalendarIcon size={20} className="text-indigo-500"/> 일정 상세</h3>
+                                            <button onClick={() => setSelectedEvent(null)} className="text-stone-400 hover:text-stone-600"><X size={20}/></button>
+                                        </div>
+                                        <div className="space-y-3 mb-6">
+                                            <div>
+                                                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">날짜</p>
+                                                <p className="font-semibold text-stone-800">{selectedEvent.date}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">제목</p>
+                                                <p className="font-semibold text-stone-800">{selectedEvent.title}</p>
+                                            </div>
+                                            {selectedEvent.time && (
+                                                <div>
+                                                    <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">시간</p>
+                                                    <p className="font-semibold text-stone-800">{selectedEvent.time}</p>
+                                                </div>
+                                            )}
+                                            {selectedEvent.memo && (
+                                                <div>
+                                                    <p className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-1">장소/메모</p>
+                                                    <p className="font-semibold text-stone-800 bg-stone-100 p-3 rounded-xl mt-1">{selectedEvent.memo}</p>
+                                                </div>
+                                            )}
+                                            <div className="pt-2 border-t border-stone-200 mt-4 flex items-center gap-1 text-[10px] font-bold text-stone-400">
+                                                <User size={12}/> 등록자: {selectedEvent.author}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleDeleteEvent(selectedEvent.id)} className="flex-1 py-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-2"><Trash2 size={16}/> 삭제하기</button>
+                                            <button onClick={() => setSelectedEvent(null)} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">닫기</button>
                                         </div>
                                     </div>
                                 </div>
