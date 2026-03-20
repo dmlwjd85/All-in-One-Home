@@ -124,6 +124,7 @@
         const ImagePlus = createIcon('ImagePlus');
         const Lock = createIcon('Lock');
         const FileText = createIcon('FileText');
+        const Pencil = createIcon('Pencil');
 
         const CHORE_MASTER_LIST = [
             { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
@@ -177,6 +178,8 @@
             // UI Input States
             const [newMemoryText, setNewMemoryText] = useState("");
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
+            const [editingMemory, setEditingMemory] = useState(null); // 시하 기록 수정 상태
+            
             const [inputWeight, setInputWeight] = useState("");
             const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
             const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
@@ -439,6 +442,28 @@
                 };
             };
 
+            // 시하 기록 이미지 수정용 업로드 핸들러
+            const handleEditImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600;
+                        const scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        setEditingMemory({...editingMemory, image: canvas.toDataURL('image/jpeg', 0.6)});
+                    };
+                };
+            };
+
             const handleUpdateAmount = async (id) => { if (!user) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id), { amount: parseFloat(editAmount) || 0 }); setEditingLedgerId(null); } catch (err) { console.error(err); } };
             const handleAddLedger = async () => { if (!newLedgerItem.title || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), { ...newLedgerItem, amount: parseFloat(newLedgerItem.amount) || 0, createdAt: serverTimestamp() }); setNewLedgerItem({ category: 'income_reg', title: '', amount: 0 }); setShowLedgerAddModal(false); } catch (err) { console.error(err); } };
             const deleteLedgerItem = async (id) => { if (!user) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id)); } catch (err) { console.error(err); } };
@@ -471,6 +496,27 @@
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sihaMemories'), newEntry); 
                     setNewMemoryText(""); setUploadedImageBase64(null);
                 } catch (err) { console.error(err); } 
+            };
+
+            // 시하 기록 삭제
+            const deleteMemory = async (id) => {
+                if (!user) return;
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sihaMemories', id)); } 
+                catch (err) { console.error(err); }
+            };
+
+            // 시하 기록 수정
+            const handleUpdateMemory = async () => {
+                if (!editingMemory || !user) return;
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sihaMemories', editingMemory.id), {
+                        title: editingMemory.content.substring(0, 15),
+                        content: editingMemory.content,
+                        image: editingMemory.image,
+                        updatedAt: serverTimestamp()
+                    });
+                    setEditingMemory(null);
+                } catch (err) { console.error(err); }
             };
             
             const handleAddEvent = async () => { 
@@ -1067,7 +1113,14 @@
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                                         {sihaMemories.map(m => (
-                                            <div key={m.id} className="bg-paper-50 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-500">
+                                            <div key={m.id} className="bg-paper-50 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-500 relative">
+                                                
+                                                {/* 수정 및 삭제 버튼 (모바일 항상 노출, PC hover시 노출) */}
+                                                <div className="absolute top-4 md:top-6 right-4 md:right-6 flex gap-2 z-10 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => setEditingMemory(m)} className="p-2 bg-white/90 backdrop-blur text-stone-600 rounded-full shadow-sm hover:bg-stone-100 transition-colors"><Pencil size={14}/></button>
+                                                    <button onClick={() => deleteMemory(m.id)} className="p-2 bg-white/90 backdrop-blur text-rose-500 rounded-full shadow-sm hover:bg-rose-50 transition-colors"><Trash2 size={14}/></button>
+                                                </div>
+
                                                 <div className="h-48 md:h-64 overflow-hidden relative bg-stone-200 border-b border-stone-200">
                                                     <img src={m.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                                     <div className="absolute top-4 md:top-6 left-4 md:left-6 bg-white/90 backdrop-blur px-4 py-1.5 rounded-full text-[10px] font-black shadow-sm text-stone-700">{m.date}</div>
@@ -1126,6 +1179,35 @@
                                         <div className="flex gap-2 shrink-0">
                                             <button onClick={() => { setShowMinuteModal(false); setNewMinuteContent(""); setMinuteDate(null); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                             <button onClick={handleAddMinute} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">회의록 저장</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 시하 기록 수정 모달 */}
+                            {editingMemory && (
+                                <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                    <div className="bg-paper-50 rounded-3xl w-full max-w-md p-6 shadow-2xl border border-stone-200 flex flex-col gap-4">
+                                        <h3 className="text-xl font-black flex items-center gap-2 text-stone-800"><Heart className="text-rose-400 fill-rose-400"/> 기록 수정</h3>
+                                        
+                                        <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200">
+                                            <img src={editingMemory.image} className="w-full h-full object-cover" />
+                                            <label className="absolute inset-0 bg-stone-900/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                                                <span className="text-white font-bold bg-stone-900/60 px-4 py-2 rounded-xl flex items-center gap-2"><ImagePlus size={16}/> 사진 변경</span>
+                                                <input type="file" accept="image/*" onChange={handleEditImageUpload} className="hidden" />
+                                            </label>
+                                        </div>
+
+                                        <textarea 
+                                            value={editingMemory.content} 
+                                            onChange={(e) => setEditingMemory({...editingMemory, content: e.target.value})} 
+                                            className="w-full min-h-[120px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-rose-200 text-stone-800 resize-none"
+                                            placeholder="수정할 내용을 입력하세요."
+                                        />
+
+                                        <div className="flex gap-2 shrink-0 pt-2">
+                                            <button onClick={() => setEditingMemory(null)} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
+                                            <button onClick={handleUpdateMemory} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">수정 완료</button>
                                         </div>
                                     </div>
                                 </div>
