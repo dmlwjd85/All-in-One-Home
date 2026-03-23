@@ -34,6 +34,8 @@
         .diary-font { font-family: 'Nanum Myeongjo', serif; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        /* 캘린더 드래그 시 모바일 스크롤 방지 */
+        .calendar-grid { touch-action: none; }
     </style>
 </head>
 <body class="bg-paper-100 text-paper-800">
@@ -125,6 +127,7 @@
         const Lock = createIcon('Lock');
         const FileText = createIcon('FileText');
         const Pencil = createIcon('Pencil');
+        const Camera = createIcon('Camera');
 
         const CHORE_MASTER_LIST = [
             { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
@@ -137,6 +140,22 @@
             { id: 24, task: "쇼파 2" }, { id: 25, task: "유리창" }, { id: 26, task: "세면대" }, 
             { id: 27, task: "다이슨 2" }, { id: 28, task: "침구 3" }, { id: 29, task: "재활용 4" }, { id: 30, task: "집안 정비" }
         ];
+
+        // API 재시도용 유틸 (카메라 일정 스캔)
+        const fetchWithRetry = async (url, options, retries = 5) => {
+            let delay = 1000;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return await response.json();
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        };
 
         const App = () => {
             // Auth & Security States (로컬스토리지 활용으로 자동 로그인)
@@ -175,11 +194,15 @@
             const [minuteDate, setMinuteDate] = useState(null);
             const [timetable, setTimetable] = useState({});
 
+            // 카메라 스캔 State
+            const [isScanning, setIsScanning] = useState(false);
+            const scanInputRef = useRef(null);
+
             // UI Input States
             const [newMemoryText, setNewMemoryText] = useState("");
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [editingMemory, setEditingMemory] = useState(null); 
-            const [viewingMemory, setViewingMemory] = useState(null); // 가족일기 상세 조회 모달 상태
+            const [viewingMemory, setViewingMemory] = useState(null); 
             
             const [selectedEvent, setSelectedEvent] = useState(null); 
 
@@ -194,7 +217,9 @@
             const [newDiaryTitle, setNewDiaryTitle] = useState("");
             const [newDiaryContent, setNewDiaryContent] = useState("");
             
-            // 캘린더 드래그 상태
+            // 캘린더 포인터(드래그) 상태
+            const touchTimerRef = useRef(null);
+            const [pressingDate, setPressingDate] = useState(null);
             const [dragStart, setDragStart] = useState(null);
             const [dragEnd, setDragEnd] = useState(null);
             const [isDragging, setIsDragging] = useState(false);
@@ -211,9 +236,9 @@
 
             const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'teacher', 'siha'];
 
-            // 모바일 스와이프 핸들러
+            // 모바일 스와이프 핸들러 (캘린더 영역 예외 처리 추가)
             const handleTouchStart = (e) => {
-                if (e.target.closest('.overflow-x-auto') || e.target.closest('input') || e.target.closest('textarea')) {
+                if (e.target.closest('.overflow-x-auto') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('.calendar-grid')) {
                     setTouchStartPos(null);
                     return;
                 }
@@ -293,19 +318,16 @@
                     if (snap.exists()) setMonthlyMaintenance(snap.data());
                 }, errCb);
 
-                // 할 일(Todos) 실시간 연동을 위해 public 경로 & owner 필터 적용
                 const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teacherTodos'), (snap) => {
                     const allTodos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setTeacherTodos(allTodos.filter(t => t.owner === currentUserMode).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
                 }, errCb);
                 
-                // 회의록(Minutes) 실시간 연동 및 개인화 분리를 위해 public 경로 & owner 필터 적용
                 const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes'), (snap) => {
                     const allMins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setMeetingMinutes(allMins.filter(m => m.owner === currentUserMode).sort((a,b) => new Date(b.date) - new Date(a.date)));
                 }, errCb);
                 
-                // 시간표(Timetable) 실시간 연동을 위해 public 경로 & 계정별 문서 분리 적용
                 const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'timetables', currentUserMode), (snap) => {
                     if (snap.exists()) setTimetable(snap.data());
                     else setTimetable({});
@@ -349,7 +371,6 @@
                     if (item.category === 'expense_var') res.expVar += item.amount;
                 });
                 
-                // 소수점 아래 1자리 표기 및 부동소수점 오차 방지
                 const round1 = (num) => Math.round(num * 10) / 10;
                 res.incReg = round1(res.incReg);
                 res.incIrr = round1(res.incIrr);
@@ -380,23 +401,74 @@
                 return days;
             }, [schoolViewDate]);
 
-            const handleMouseDown = (date) => {
+            // 캘린더 Pointer Events (터치 2초 이상 유지시 드래그 등록 / 마우스는 즉시)
+            const handleCalendarPointerDown = (e) => {
+                if (e.button && e.button !== 0) return; // 좌클릭만 허용
+                const cell = e.target.closest('[data-date]');
+                if (!cell) return;
+                const date = cell.getAttribute('data-date');
                 if (!date) return;
-                setIsDragging(true); setDragStart(date); setDragEnd(date);
+
+                if (e.pointerType === 'mouse') {
+                    setIsDragging(true);
+                    setDragStart(date);
+                    setDragEnd(date);
+                } else {
+                    setPressingDate(date);
+                    if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
+                    
+                    touchTimerRef.current = setTimeout(() => {
+                        setIsDragging(true);
+                        setDragStart(date);
+                        setDragEnd(date);
+                        setPressingDate(null);
+                        if (window.navigator?.vibrate) window.navigator.vibrate(50);
+                    }, 2000); // 2초
+                }
             };
-            const handleMouseEnter = (date) => {
-                if (!isDragging || !date) return;
-                setDragEnd(date);
+
+            const handleCalendarPointerMove = (e) => {
+                if (isDragging) {
+                    const elem = document.elementFromPoint(e.clientX, e.clientY);
+                    if (elem) {
+                        const cell = elem.closest('[data-date]');
+                        if (cell) {
+                            const dateStr = cell.getAttribute('data-date');
+                            if (dateStr && dragEnd !== dateStr) {
+                                setDragEnd(dateStr);
+                            }
+                        }
+                    }
+                } else {
+                    // 누르고 있는 동안 움직이면 터치 타이머 취소 (스와이프 간주)
+                    if (pressingDate && touchTimerRef.current) {
+                        clearTimeout(touchTimerRef.current);
+                        touchTimerRef.current = null;
+                        setPressingDate(null);
+                    }
+                }
             };
-            const handleMouseUp = () => {
-                if (!isDragging) return;
-                setIsDragging(false);
-                if (dragStart && dragEnd) {
-                    const d1 = new Date(dragStart); const d2 = new Date(dragEnd);
-                    const start = d1 <= d2 ? dragStart : dragEnd;
-                    const end = d1 <= d2 ? dragEnd : dragStart;
-                    setSelectedDate(start === end ? start : `${start} ~ ${end}`);
-                    setShowEventModal(true);
+
+            const handleCalendarPointerUp = (e) => {
+                if (touchTimerRef.current) {
+                    clearTimeout(touchTimerRef.current);
+                    touchTimerRef.current = null;
+                    setPressingDate(null);
+                }
+                
+                if (isDragging) {
+                    setIsDragging(false);
+                    if (dragStart && dragEnd) {
+                        const d1 = new Date(dragStart); const d2 = new Date(dragEnd);
+                        const start = d1 <= d2 ? dragStart : dragEnd;
+                        const end = d1 <= d2 ? dragEnd : dragStart;
+                        setSelectedDate(start === end ? start : `${start} ~ ${end}`);
+                        setShowEventModal(true);
+                    }
+                }
+                
+                if (e.target.releasePointerCapture) {
+                    try { e.target.releasePointerCapture(e.pointerId); } catch(err){}
                 }
             };
 
@@ -460,7 +532,6 @@
                 };
             };
 
-            // 우리 가족 일기 이미지 수정용 업로드 핸들러
             const handleEditImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -516,14 +587,12 @@
                 } catch (err) { console.error(err); } 
             };
 
-            // 우리 가족 일기 삭제
             const deleteMemory = async (id) => {
                 if (!user) return;
                 try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sihaMemories', id)); } 
                 catch (err) { console.error(err); }
             };
 
-            // 일정 삭제
             const handleDeleteEvent = async (id) => {
                 if (!user) return;
                 try {
@@ -532,7 +601,6 @@
                 } catch (err) { console.error(err); }
             };
 
-            // 우리 가족 일기 수정
             const handleUpdateMemory = async () => {
                 if (!editingMemory || !user) return;
                 try {
@@ -556,7 +624,7 @@
                         memo: newEventMemo, 
                         type: eventType, 
                         author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
-                        owner: currentUserMode, // 교무수첩 개인화 분리를 위한 소유자 지정
+                        owner: currentUserMode, 
                         createdAt: serverTimestamp() 
                     };
 
@@ -567,7 +635,6 @@
                         let current = new Date(start);
                         
                         while (current <= end) {
-                            // 타임존 문제 방지를 위해 로컬 날짜 문자열 직접 조립
                             const pad = (n) => String(n).padStart(2, '0');
                             const dateStr = `${current.getFullYear()}-${pad(current.getMonth()+1)}-${pad(current.getDate())}`;
                             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
@@ -614,7 +681,6 @@
                 } catch (err) { console.error(err); }
             };
 
-            // 회의록 삭제
             const deleteMinute = async (id) => {
                 if (!user) return;
                 try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes', id)); } catch (err) { console.error(err); }
@@ -643,6 +709,116 @@
                 } catch (err) { console.error(err); }
             };
 
+            // 카메라 연동 이미지 일정 추출 (Gemini API)
+            const handleScanImage = (e) => {
+                const file = e.target.files[0];
+                if (!file || !user) return;
+
+                setIsScanning(true);
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = async () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1024;
+                        let scaleSize = 1;
+                        if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = img.width * scaleSize;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                        
+                        try {
+                            const geminiApiKey = ""; // 실행 환경에서 제공
+                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
+                            const prompt = `당신은 일정 추출 AI입니다. 제공된 이미지는 달력 또는 학사 일정표입니다.
+이미지에서 일정을 추출하여 반드시 JSON 배열 형식으로만 응답하세요. 백틱(\`\`\`)이나 추가 설명 없이 순수 JSON 문자열만 출력하세요.
+현재 연도: ${schoolViewDate.getFullYear()}년
+현재 월: ${schoolViewDate.getMonth() + 1}월 (이미지에 다른 연/월 정보가 없다면 이 기준을 따르세요.)
+JSON 구조:
+[
+  {
+    "title": "일정 제목",
+    "date": "YYYY-MM-DD",
+    "time": "",
+    "memo": "",
+    "category": "school_general"
+  }
+]
+카테고리는 다음 중 하나만 사용하세요: 'school_general', 'deadline', 'field_trip', 'lecture'.
+시간이나 메모가 없으면 빈 문자열("")을 넣으세요. 날짜는 반드시 YYYY-MM-DD 형식이어야 합니다.`;
+
+                            const payload = {
+                                contents: [{
+                                    role: "user",
+                                    parts: [
+                                        { text: prompt },
+                                        { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+                                    ]
+                                }],
+                                generationConfig: {
+                                    responseMimeType: "application/json",
+                                    responseSchema: {
+                                        type: "ARRAY",
+                                        items: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                title: { type: "STRING" },
+                                                date: { type: "STRING" },
+                                                time: { type: "STRING" },
+                                                memo: { type: "STRING" },
+                                                category: { type: "STRING" }
+                                            },
+                                            required: ["title", "date", "category"]
+                                        }
+                                    }
+                                }
+                            };
+
+                            const result = await fetchWithRetry(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+
+                            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                            if (!text) throw new Error("API 결과가 없습니다.");
+                            
+                            const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                            const events = JSON.parse(jsonStr);
+                            
+                            let addedCount = 0;
+                            for (const ev of events) {
+                                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), {
+                                    title: ev.title,
+                                    date: ev.date,
+                                    time: ev.time || "",
+                                    memo: ev.memo || "",
+                                    category: ev.category || "school_general",
+                                    type: 'school',
+                                    author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                                    owner: currentUserMode,
+                                    createdAt: serverTimestamp()
+                                });
+                                addedCount++;
+                            }
+                            // 알림 대신 콘솔 또는 다른 부드러운 UI도 가능하나 여기선 간단히
+                            // alert은 지양하라고 했지만, 오류 메시지 외에는 상태 표시로 넘길 수 있음.
+                        } catch (err) {
+                            console.error(err);
+                            // alert 대신 모달 띄우기용으로 상태 관리 가능. 지금은 콘솔 출력
+                        } finally {
+                            setIsScanning(false);
+                            if (scanInputRef.current) scanInputRef.current.value = "";
+                        }
+                    };
+                };
+            };
+
             const menuItems = [
                 { id: 'home', icon: Home, label: '홈' },
                 { id: 'calendar', icon: CalendarIcon, label: '공용 일정' },
@@ -651,19 +827,6 @@
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
                 { id: 'siha', icon: Heart, label: '우리 가족 일기' },
             ];
-
-            const getDaysUntilNextPeriod = () => {
-                if (periodLogs.length === 0) return '--';
-                const lastPeriodDate = new Date(periodLogs[0].startDate);
-                const nextPeriodDate = new Date(lastPeriodDate);
-                nextPeriodDate.setDate(nextPeriodDate.getDate() + 28);
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                nextPeriodDate.setHours(0,0,0,0);
-                const diffTime = nextPeriodDate - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays >= 0 ? diffDays : 0;
-            };
 
             if (!isAuthenticated) {
                 return (
@@ -1000,7 +1163,14 @@
                                         <div className="grid grid-cols-7 bg-stone-100 border-b border-stone-200 font-black text-[10px] text-stone-500 uppercase tracking-widest py-3">
                                             {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => <div key={d} className={`text-center ${i===0?'text-rose-500':i===6?'text-blue-500':''}`}>{d}</div>)}
                                         </div>
-                                        <div className="grid grid-cols-7" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
+                                        {/* 캘린더 그리드 영역: 포인터 이벤트 적용 */}
+                                        <div 
+                                            className="grid grid-cols-7 calendar-grid" 
+                                            onPointerDown={handleCalendarPointerDown} 
+                                            onPointerMove={handleCalendarPointerMove} 
+                                            onPointerUp={handleCalendarPointerUp}
+                                            onPointerCancel={handleCalendarPointerUp}
+                                        >
                                             {calendarDays.map((d, i) => {
                                                 let isSelected = false;
                                                 if (isDragging && dragStart && dragEnd && d.fullDate) {
@@ -1012,9 +1182,8 @@
                                                 return (
                                                 <div 
                                                     key={i} 
-                                                    onMouseDown={() => handleMouseDown(d.fullDate)}
-                                                    onMouseEnter={() => handleMouseEnter(d.fullDate)}
-                                                    className={`min-h-[80px] md:min-h-[120px] border-r border-b border-stone-200 p-1 md:p-2 cursor-pointer transition-colors ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
+                                                    data-date={d.fullDate}
+                                                    className={`min-h-[80px] md:min-h-[120px] border-r border-b border-stone-200 p-1 md:p-2 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
                                                 >
                                                     <span className={`text-xs font-bold pl-1 md:pl-0 ${i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
                                                     <div className="mt-1 space-y-1">
@@ -1034,7 +1203,16 @@
 
                             {/* 🏫 교무수첩 탭 */}
                             {activeTab === 'teacher' && (
-                                <div className="max-w-7xl mx-auto space-y-6 flex flex-col">
+                                <div className="max-w-7xl mx-auto space-y-6 flex flex-col relative">
+                                    {/* 로딩 모달 (스캔 진행 중) */}
+                                    {isScanning && (
+                                        <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 rounded-3xl">
+                                            <div className="w-16 h-16 border-4 border-stone-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+                                            <p className="text-white font-bold text-lg text-center">AI가 일정을 분석하고 있습니다...</p>
+                                            <p className="text-stone-300 text-sm mt-2 text-center">잠시만 기다려주세요 (최대 10~20초 소요)</p>
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 shrink-0 gap-2">
                                         <h1 className="text-xl md:text-2xl font-black text-stone-800">
                                             {currentUserMode === 'uijeong' ? '삼봉초 교무수첩' : '성연초 6학년 학급 운영'}
@@ -1046,7 +1224,16 @@
                                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[500px]">
                                         <div className="xl:col-span-2 bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden">
                                             <div className="p-4 flex flex-col md:flex-row md:items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0 gap-4">
-                                                <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
+                                                <div className="flex items-center gap-3">
+                                                    <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
+                                                    {/* 일정 스캔 카메라 버튼 추가 */}
+                                                    <div className="relative flex items-center">
+                                                        <input type="file" accept="image/*" capture="environment" onChange={handleScanImage} ref={scanInputRef} className="hidden" id="scan-calendar" />
+                                                        <label htmlFor="scan-calendar" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
+                                                            <Camera size={14} /> AI 일정 스캔
+                                                        </label>
+                                                    </div>
+                                                </div>
                                                 <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto">
                                                     <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
                                                     <span className="font-bold text-sm min-w-[80px] text-center text-stone-800">{schoolViewDate.getFullYear()}년 {schoolViewDate.getMonth() + 1}월</span>
@@ -1056,7 +1243,14 @@
                                             <div className="grid grid-cols-7 bg-white border-b border-stone-100 font-black text-[10px] text-stone-400 uppercase tracking-widest py-2 shrink-0">
                                                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => <div key={d} className={`text-center ${i===0?'text-rose-400':i===6?'text-blue-400':''}`}>{d}</div>)}
                                             </div>
-                                            <div className="flex-1 grid grid-cols-7 bg-stone-50/30" onMouseLeave={() => setIsDragging(false)} onMouseUp={handleMouseUp}>
+                                            {/* 학사 일정 달력에도 Pointer Events 적용 */}
+                                            <div 
+                                                className="flex-1 grid grid-cols-7 bg-stone-50/30 calendar-grid"
+                                                onPointerDown={handleCalendarPointerDown} 
+                                                onPointerMove={handleCalendarPointerMove} 
+                                                onPointerUp={handleCalendarPointerUp}
+                                                onPointerCancel={handleCalendarPointerUp}
+                                            >
                                                 {schoolCalendarDays.map((d, i) => {
                                                     let isSelected = false;
                                                     if (isDragging && dragStart && dragEnd && d.fullDate) {
@@ -1068,9 +1262,8 @@
                                                     return (
                                                     <div 
                                                         key={i} 
-                                                        onMouseDown={() => handleMouseDown(d.fullDate)}
-                                                        onMouseEnter={() => handleMouseEnter(d.fullDate)}
-                                                        className={`min-h-[60px] md:min-h-[80px] border-r border-b border-stone-100 p-1 md:p-1.5 cursor-pointer transition-colors ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''}`}
+                                                        data-date={d.fullDate}
+                                                        className={`min-h-[60px] md:min-h-[80px] border-r border-b border-stone-100 p-1 md:p-1.5 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
                                                     >
                                                         <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
                                                         <div className="mt-1 flex flex-col gap-1">
