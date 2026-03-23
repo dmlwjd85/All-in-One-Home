@@ -139,16 +139,16 @@
         ];
 
         const App = () => {
-            // Auth & Security States
-            const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [loginSelectedUser, setLoginSelectedUser] = useState(null);
+            // Auth & Security States (로컬스토리지 활용으로 자동 로그인)
+            const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('isAuth') === 'true');
+            const [loginSelectedUser, setLoginSelectedUser] = useState(() => localStorage.getItem('loginUser') || null);
             const [pinCode, setPinCode] = useState("");
             const [userPins, setUserPins] = useState({ jaeyoon: null, uijeong: null });
 
             // Navigation & Mode
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('home');
-            const [currentUserMode, setCurrentUserMode] = useState('uijeong'); 
+            const [currentUserMode, setCurrentUserMode] = useState(() => localStorage.getItem('loginUser') || 'uijeong'); 
             const [isMenuOpen, setIsMenuOpen] = useState(true);
 
             // Touch Swipe States (모바일 개선)
@@ -164,7 +164,7 @@
             const [monthlyChores, setMonthlyChores] = useState({});
             const [ledgerItems, setLedgerItems] = useState([]);
             const [personalDiaries, setPersonalDiaries] = useState([]);
-            const [monthlyMaintenance, setMonthlyMaintenance] = useState({}); // 1~12월 관리비 입력 상태
+            const [monthlyMaintenance, setMonthlyMaintenance] = useState({}); 
             
             // 교무수첩 할 일, 회의록, 시간표 States
             const [teacherTodos, setTeacherTodos] = useState([]);
@@ -178,9 +178,9 @@
             // UI Input States
             const [newMemoryText, setNewMemoryText] = useState("");
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
-            const [editingMemory, setEditingMemory] = useState(null); // 시하 기록 수정 상태
+            const [editingMemory, setEditingMemory] = useState(null); 
             
-            const [selectedEvent, setSelectedEvent] = useState(null); // 일정 조회 모달 상태
+            const [selectedEvent, setSelectedEvent] = useState(null); 
 
             const [inputWeight, setInputWeight] = useState("");
             const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
@@ -212,7 +212,6 @@
 
             // 모바일 스와이프 핸들러
             const handleTouchStart = (e) => {
-                // 가로 스크롤 영역(시간표 등)이나 입력창에서는 스와이프 탭 이동을 막음
                 if (e.target.closest('.overflow-x-auto') || e.target.closest('input') || e.target.closest('textarea')) {
                     setTouchStartPos(null);
                     return;
@@ -231,7 +230,6 @@
                 const distanceX = touchStartPos.x - touchEndPos.x;
                 const distanceY = touchStartPos.y - touchEndPos.y;
                 
-                // 위아래 스크롤이 좌우 스와이프보다 크면 탭 이동 취소
                 if (Math.abs(distanceY) > Math.abs(distanceX)) return;
 
                 const minSwipeDistance = 50;
@@ -294,22 +292,26 @@
                     if (snap.exists()) setMonthlyMaintenance(snap.data());
                 }, errCb);
 
-                // 할 일(Todos) 실시간 연동을 위해 public 경로로 변경
+                // 할 일(Todos) 실시간 연동을 위해 public 경로 & owner 필터 적용
                 const unsubTeacherTodos = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'teacherTodos'), (snap) => {
                     const allTodos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     setTeacherTodos(allTodos.filter(t => t.owner === currentUserMode).sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
                 }, errCb);
                 
-                const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), (snap) => setMeetingMinutes(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => new Date(b.date) - new Date(a.date))), errCb);
+                // 회의록(Minutes) 실시간 연동 및 개인화 분리를 위해 public 경로 & owner 필터 적용
+                const unsubMinutes = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes'), (snap) => {
+                    const allMins = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setMeetingMinutes(allMins.filter(m => m.owner === currentUserMode).sort((a,b) => new Date(b.date) - new Date(a.date)));
+                }, errCb);
                 
-                // 시간표(Timetable) 실시간 연동을 위해 public 경로로 변경
+                // 시간표(Timetable) 실시간 연동을 위해 public 경로 & 계정별 문서 분리 적용
                 const unsubTimetable = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'timetables', currentUserMode), (snap) => {
                     if (snap.exists()) setTimetable(snap.data());
                     else setTimetable({});
                 }, errCb);
 
                 return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubMaintenance(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
-            }, [user, currentUserMode]); // currentUserMode가 바뀔 때마다 다시 동기화되도록 추가
+            }, [user, currentUserMode]);
 
             const initializeLedger = async () => {
                 const currentMonth = new Date().getMonth() + 1;
@@ -355,7 +357,7 @@
                 res.expVar = round1(res.expVar);
                 
                 res.totalExp = round1(res.expNon + res.expFix + res.expVar);
-                res.irrMonthly = Math.round(res.incIrr / 12); // 평균치는 정수 유지
+                res.irrMonthly = Math.round(res.incIrr / 12); 
                 res.netCashFlow = round1(res.incReg - res.totalExp);
                 res.expRatio = res.incReg > 0 ? Math.min(100, round1((res.totalExp / res.incReg) * 100)) : 0; 
                 return res;
@@ -405,12 +407,17 @@
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'pins_v2'), {
                             [loginSelectedUser]: pinCode
                         }, { merge: true });
+                        
+                        localStorage.setItem('isAuth', 'true');
+                        localStorage.setItem('loginUser', loginSelectedUser);
                         setCurrentUserMode(loginSelectedUser);
                         setIsAuthenticated(true);
                         setPinCode("");
                     } catch (err) { console.error(err); }
                 } else {
                     if (pinCode === currentPin) {
+                        localStorage.setItem('isAuth', 'true');
+                        localStorage.setItem('loginUser', loginSelectedUser);
                         setCurrentUserMode(loginSelectedUser);
                         setIsAuthenticated(true);
                         setPinCode("");
@@ -419,6 +426,14 @@
                         setPinCode("");
                     }
                 }
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('isAuth');
+                localStorage.removeItem('loginUser');
+                setIsAuthenticated(false);
+                setLoginSelectedUser(null);
+                setPinCode("");
             };
 
             const handleImageUpload = (e) => {
@@ -444,7 +459,7 @@
                 };
             };
 
-            // 시하 기록 이미지 수정용 업로드 핸들러
+            // 우리 가족 일기 이미지 수정용 업로드 핸들러
             const handleEditImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -500,7 +515,7 @@
                 } catch (err) { console.error(err); } 
             };
 
-            // 시하 기록 삭제
+            // 우리 가족 일기 삭제
             const deleteMemory = async (id) => {
                 if (!user) return;
                 try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sihaMemories', id)); } 
@@ -516,7 +531,7 @@
                 } catch (err) { console.error(err); }
             };
 
-            // 시하 기록 수정
+            // 우리 가족 일기 수정
             const handleUpdateMemory = async () => {
                 if (!editingMemory || !user) return;
                 try {
@@ -534,6 +549,16 @@
                 if (!newEventTitle.trim() || !selectedDate || !user) return; 
                 try { 
                     const eventType = activeTab === 'teacher' ? 'school' : 'general';
+                    const baseEvent = {
+                        title: newEventTitle, 
+                        time: newEventTime, 
+                        memo: newEventMemo, 
+                        type: eventType, 
+                        author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                        owner: currentUserMode, // 교무수첩 개인화 분리를 위한 소유자 지정
+                        createdAt: serverTimestamp() 
+                    };
+
                     if (selectedDate.includes('~')) {
                         const [startDateStr, endDateStr] = selectedDate.split(' ~ ');
                         const start = new Date(startDateStr);
@@ -541,17 +566,17 @@
                         let current = new Date(start);
                         
                         while (current <= end) {
-                            const dateStr = current.toISOString().split('T')[0];
+                            // 타임존 문제 방지를 위해 로컬 날짜 문자열 직접 조립
+                            const pad = (n) => String(n).padStart(2, '0');
+                            const dateStr = `${current.getFullYear()}-${pad(current.getMonth()+1)}-${pad(current.getDate())}`;
                             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
-                                date: dateStr, title: newEventTitle, time: newEventTime, memo: newEventMemo, type: eventType, 
-                                author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp() 
+                                ...baseEvent, date: dateStr 
                             });
                             current.setDate(current.getDate() + 1);
                         }
                     } else {
                         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), { 
-                            date: selectedDate, title: newEventTitle, time: newEventTime, memo: newEventMemo, type: eventType, 
-                            author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', createdAt: serverTimestamp() 
+                            ...baseEvent, date: selectedDate
                         }); 
                     }
                     setNewEventTitle(""); setNewEventTime(""); setNewEventMemo(""); setShowEventModal(false); setDragStart(null); setDragEnd(null);
@@ -581,8 +606,8 @@
             const handleAddMinute = async () => {
                 if (!newMinuteContent.trim() || !minuteDate || !user) return;
                 try {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes'), {
-                        date: minuteDate, content: newMinuteContent, createdAt: serverTimestamp()
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes'), {
+                        date: minuteDate, content: newMinuteContent, owner: currentUserMode, createdAt: serverTimestamp()
                     });
                     setNewMinuteContent(""); setShowMinuteModal(false); setMinuteDate(null);
                 } catch (err) { console.error(err); }
@@ -591,7 +616,7 @@
             // 회의록 삭제
             const deleteMinute = async (id) => {
                 if (!user) return;
-                try { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'meetingMinutes', id)); } catch (err) { console.error(err); }
+                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes', id)); } catch (err) { console.error(err); }
             };
             
             const handleAddDiary = async () => {
@@ -623,7 +648,7 @@
                 { id: 'chores', icon: ClipboardCheck, label: '집안일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
-                { id: 'siha', icon: Heart, label: '시하 기록' },
+                { id: 'siha', icon: Heart, label: '우리 가족 일기' },
             ];
 
             const getDaysUntilNextPeriod = () => {
@@ -702,7 +727,7 @@
                             ))}
                         </div>
                         <div className="p-4 border-t border-stone-200">
-                            <button onClick={() => { setIsAuthenticated(false); setLoginSelectedUser(null); setPinCode(""); }} className="w-full flex items-center gap-3 p-3 bg-paper-100 rounded-xl hover:bg-stone-200 transition-colors border border-stone-200">
+                            <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 bg-paper-100 rounded-xl hover:bg-stone-200 transition-colors border border-stone-200">
                                 <div className="w-8 h-8 rounded-full bg-stone-300 flex items-center justify-center text-stone-700 font-bold">
                                     {currentUserMode === 'uijeong' ? 'U' : 'J'}
                                 </div>
@@ -759,7 +784,7 @@
                                             </div>
                                         </div>
                                         <div className="bg-paper-50 p-6 rounded-3xl shadow-sm border border-stone-200">
-                                            <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><Heart size={18} className="text-rose-400" />시하 기록</h3>
+                                            <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><Heart size={18} className="text-rose-400" />우리 가족 일기</h3>
                                             {sihaMemories[0] && <p className="text-sm font-bold truncate text-stone-700">{sihaMemories[0].title}</p>}
                                             {!sihaMemories[0] && <p className="text-xs text-stone-400 italic text-center py-2">최근 기록이 없습니다.</p>}
                                         </div>
@@ -896,29 +921,31 @@
                                 </div>
                             )}
 
-                            {/* 🧹 살림/할 일 탭 */}
+                            {/* 🧹 집안일 탭 */}
                             {activeTab === 'chores' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between">
                                         <div><h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><ClipboardCheck className="text-stone-600" size={24} />월간 집안일 루틴</h1><p className="text-stone-500 text-xs md:text-sm mt-1">매월 1일부터 30일까지 정해진 집안일을 체크하세요.</p></div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-                                        {[0, 1, 2].map(colIdx => (
-                                        <div key={colIdx} className="bg-paper-50 rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
-                                            <div className="p-4 bg-stone-100 border-b border-stone-200 font-bold text-xs text-stone-500">{colIdx * 10 + 1}일 ~ {(colIdx + 1) * 10}일</div>
-                                            {CHORE_MASTER_LIST.slice(colIdx * 10, (colIdx + 1) * 10).map((item) => {
-                                            const isDone = monthlyChores[item.id] || false;
-                                            const isToday = item.id === todayDate;
-                                            return (
-                                                <div key={item.id} onClick={() => toggleMonthlyChore(item.id)} className={`flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-stone-100 border-b border-stone-100 last:border-0 ${isToday ? 'bg-amber-50/50' : ''}`}>
-                                                <span className={`text-xs font-black ${isToday ? 'text-amber-600' : 'text-stone-400'}`}>{String(item.id).padStart(2, '0')}</span>
-                                                <span className={`flex-1 text-sm font-bold ${isDone ? 'text-stone-400 line-through' : 'text-stone-700'}`}>{item.task}</span>
-                                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${isDone ? 'bg-stone-600 border-stone-600 text-white' : isToday ? 'border-amber-400' : 'border-stone-300'}`}>{isDone && <Check size={14} />}</div>
-                                                </div>
-                                            );
-                                            })}
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 overflow-hidden shadow-sm p-2 md:p-6">
+                                        <div className="grid grid-cols-3 gap-2 md:gap-6">
+                                            {[0, 1, 2].map(colIdx => (
+                                            <div key={colIdx} className="flex flex-col border border-stone-200 rounded-xl overflow-hidden">
+                                                <div className="p-2 md:p-4 bg-stone-100 border-b border-stone-200 font-bold text-[10px] md:text-xs text-stone-500 text-center">{colIdx * 10 + 1}일~{(colIdx + 1) * 10}일</div>
+                                                {CHORE_MASTER_LIST.slice(colIdx * 10, (colIdx + 1) * 10).map((item) => {
+                                                const isDone = monthlyChores[item.id] || false;
+                                                const isToday = item.id === todayDate;
+                                                return (
+                                                    <div key={item.id} onClick={() => toggleMonthlyChore(item.id)} className={`flex items-center gap-1 md:gap-4 px-2 py-2 md:px-5 md:py-4 cursor-pointer hover:bg-stone-100 border-b border-stone-100 last:border-0 ${isToday ? 'bg-amber-50/50' : ''}`}>
+                                                    <span className={`text-[9px] md:text-xs font-black ${isToday ? 'text-amber-600' : 'text-stone-400'}`}>{String(item.id).padStart(2, '0')}</span>
+                                                    <span className={`flex-1 text-[10px] md:text-sm font-bold truncate ${isDone ? 'text-stone-400 line-through' : 'text-stone-700'}`}>{item.task}</span>
+                                                    <div className={`w-3 h-3 md:w-6 md:h-6 rounded border md:border-2 flex items-center justify-center shrink-0 ${isDone ? 'bg-stone-600 border-stone-600 text-white' : isToday ? 'border-amber-400' : 'border-stone-300'}`}>{isDone && <Check size={10} />}</div>
+                                                    </div>
+                                                );
+                                                })}
+                                            </div>
+                                            ))}
                                         </div>
-                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -1012,7 +1039,7 @@
                                                     >
                                                         <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
                                                         <div className="mt-1 flex flex-col gap-1">
-                                                            {calendarEvents.filter(e => e.date === d.fullDate && e.type === 'school').map(e => {
+                                                            {calendarEvents.filter(e => e.date === d.fullDate && e.type === 'school' && e.owner === currentUserMode).map(e => {
                                                                 let bgClass = "bg-stone-100 text-stone-700 border-stone-200";
                                                                 let icon = null;
                                                                 if (e.category === 'deadline') { bgClass = "bg-rose-100 text-rose-700 border-rose-200"; icon = "🚨"; }
@@ -1107,11 +1134,11 @@
                                 </div>
                             )}
 
-                            {/* ❤️ 시하 기록 탭 */}
+                            {/* ❤️ 우리 가족 일기 탭 */}
                             {activeTab === 'siha' && (
                                 <div className="max-w-5xl mx-auto space-y-6">
                                     <div className="flex items-center justify-between mb-2">
-                                        <div><h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Heart className="text-rose-400 fill-rose-400" />시하 성장 기록</h1><p className="text-stone-500 text-xs md:text-sm mt-1">7살 우리 딸 시하의 소중한 순간들을 기록하세요.</p></div>
+                                        <div><h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Heart className="text-rose-400 fill-rose-400" />우리 가족 일기</h1><p className="text-stone-500 text-xs md:text-sm mt-1">우리 가족의 소중한 순간들을 기록하세요.</p></div>
                                     </div>
                                     <div className="bg-paper-50 p-4 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-4 relative">
                                         {uploadedImageBase64 && (
@@ -1126,7 +1153,7 @@
                                                 <label htmlFor="photo-upload" className="p-3 bg-rose-50 text-rose-500 rounded-2xl cursor-pointer hover:bg-rose-100 transition-colors flex shrink-0">
                                                     <ImagePlus size={24}/>
                                                 </label>
-                                                <input type="text" value={newMemoryText} onChange={(e) => setNewMemoryText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddMemory()} placeholder="오늘 시하에게 어떤 일이 있었나요?" className="flex-1 bg-white border border-stone-300 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200 text-stone-800" />
+                                                <input type="text" value={newMemoryText} onChange={(e) => setNewMemoryText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddMemory()} placeholder="오늘 우리 가족에게 어떤 일이 있었나요?" className="flex-1 bg-white border border-stone-300 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-2 focus:ring-rose-200 text-stone-800" />
                                             </div>
                                             <button onClick={handleAddMemory} className="w-full md:w-auto bg-stone-800 text-white px-6 py-3 rounded-2xl font-black hover:bg-stone-900 transition-colors shrink-0">저장</button>
                                         </div>
@@ -1204,7 +1231,7 @@
                                 </div>
                             )}
 
-                            {/* 시하 기록 수정 모달 */}
+                            {/* 우리 가족 일기 수정 모달 */}
                             {editingMemory && (
                                 <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-md p-6 shadow-2xl border border-stone-200 flex flex-col gap-4">
