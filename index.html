@@ -219,6 +219,7 @@
             
             // 캘린더 포인터(드래그) 상태
             const touchTimerRef = useRef(null);
+            const touchStartCoordsRef = useRef({x: 0, y: 0}); // ★손가락 떨림 오차 범위를 계산하기 위한 좌표 저장
             const [pressingDate, setPressingDate] = useState(null);
             const [dragStart, setDragStart] = useState(null);
             const [dragEnd, setDragEnd] = useState(null);
@@ -401,9 +402,9 @@
                 return days;
             }, [schoolViewDate]);
 
-            // 캘린더 Pointer Events (터치 2초 이상 유지시 드래그 등록 / 마우스는 즉시)
+            // ★ 캘린더 Pointer Events 수정됨 (터치 떨림 방지)
             const handleCalendarPointerDown = (e) => {
-                if (e.button && e.button !== 0) return; // 좌클릭만 허용
+                if (e.pointerType === 'mouse' && e.button !== 0) return; // 좌클릭만 허용
                 const cell = e.target.closest('[data-date]');
                 if (!cell) return;
                 const date = cell.getAttribute('data-date');
@@ -414,8 +415,9 @@
                     setDragStart(date);
                     setDragEnd(date);
                 } else {
+                    // 터치인 경우: 시작 좌표 저장 (오차범위 계산용)
+                    touchStartCoordsRef.current = { x: e.clientX, y: e.clientY };
                     setPressingDate(date);
-                    if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId);
                     
                     touchTimerRef.current = setTimeout(() => {
                         setIsDragging(true);
@@ -439,9 +441,11 @@
                             }
                         }
                     }
-                } else {
-                    // 누르고 있는 동안 움직이면 터치 타이머 취소 (스와이프 간주)
-                    if (pressingDate && touchTimerRef.current) {
+                } else if (pressingDate && touchTimerRef.current) {
+                    // ★ 터치 중 미세한 손가락 떨림 허용 (오차 범위 15px)
+                    const dx = Math.abs(e.clientX - touchStartCoordsRef.current.x);
+                    const dy = Math.abs(e.clientY - touchStartCoordsRef.current.y);
+                    if (dx > 15 || dy > 15) {
                         clearTimeout(touchTimerRef.current);
                         touchTimerRef.current = null;
                         setPressingDate(null);
@@ -465,10 +469,9 @@
                         setSelectedDate(start === end ? start : `${start} ~ ${end}`);
                         setShowEventModal(true);
                     }
-                }
-                
-                if (e.target.releasePointerCapture) {
-                    try { e.target.releasePointerCapture(e.pointerId); } catch(err){}
+                    // 모달 창이 뜬 후 상태를 리셋해줍니다.
+                    setDragStart(null);
+                    setDragEnd(null);
                 }
             };
 
@@ -806,11 +809,8 @@ JSON 구조:
                                 });
                                 addedCount++;
                             }
-                            // 알림 대신 콘솔 또는 다른 부드러운 UI도 가능하나 여기선 간단히
-                            // alert은 지양하라고 했지만, 오류 메시지 외에는 상태 표시로 넘길 수 있음.
                         } catch (err) {
                             console.error(err);
-                            // alert 대신 모달 띄우기용으로 상태 관리 가능. 지금은 콘솔 출력
                         } finally {
                             setIsScanning(false);
                             if (scanInputRef.current) scanInputRef.current.value = "";
