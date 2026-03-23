@@ -179,6 +179,7 @@
             const [newMemoryText, setNewMemoryText] = useState("");
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [editingMemory, setEditingMemory] = useState(null); 
+            const [viewingMemory, setViewingMemory] = useState(null); // 가족일기 상세 조회 모달 상태
             
             const [selectedEvent, setSelectedEvent] = useState(null); 
 
@@ -772,6 +773,24 @@
                                         </p>
                                     </section>
 
+                                    {/* 퀵 링크(숏컷) 버튼 영역 추가 */}
+                                    <div className="grid grid-cols-5 gap-2 md:gap-4">
+                                        {[
+                                            { id: 'calendar', icon: CalendarIcon, label: '일정', color: 'text-indigo-500', bg: 'bg-indigo-50' },
+                                            { id: 'chores', icon: ClipboardCheck, label: '집안일', color: 'text-amber-500', bg: 'bg-amber-50' },
+                                            { id: 'ledger', icon: Wallet, label: '가계부', color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                                            { id: 'teacher', icon: BookOpen, label: '교무수첩', color: 'text-blue-500', bg: 'bg-blue-50' },
+                                            { id: 'siha', icon: Heart, label: '가족일기', color: 'text-rose-500', bg: 'bg-rose-50' },
+                                        ].map(link => (
+                                            <button key={link.id} onClick={() => setActiveTab(link.id)} className="flex flex-col items-center justify-center py-3 md:py-4 rounded-2xl md:rounded-3xl border border-stone-200 shadow-sm hover:shadow-md transition-all bg-white group">
+                                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full ${link.bg} flex items-center justify-center mb-1.5 md:mb-2 group-hover:scale-110 transition-transform`}>
+                                                    <link.icon className={link.color} size={20} />
+                                                </div>
+                                                <span className="text-[10px] md:text-xs font-bold text-stone-700">{link.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                         <div className="bg-paper-50 p-6 rounded-3xl shadow-sm border border-stone-200">
                                             <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800"><Wallet size={18} />가계부 현황</h3>
@@ -796,46 +815,51 @@
                                 </div>
                             )}
 
-                            {/* 💰 가계부 탭 */}
+                            {/* 💰 가계부 탭 (집약형 디자인 적용) */}
                             {activeTab === 'ledger' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
-                                    <div className="flex flex-col md:flex-row gap-4 md:gap-6 mb-8">
-                                        <div className="flex-1 bg-paper-50 p-6 md:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
-                                            <p className="text-stone-500 text-sm font-bold mb-1">정기 월 소득 (A)</p>
-                                            <p className="text-3xl md:text-4xl font-black text-stone-800">{ledgerStats.incReg}<span className="text-base md:text-lg ml-1 font-bold">만 원</span></p>
+                                    {/* 상단 통합 대시보드 */}
+                                    <div className="bg-stone-800 p-6 md:p-8 rounded-3xl shadow-md text-white flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                                        <div className="absolute top-[-20px] right-[-20px] text-white opacity-5"><Wallet size={150}/></div>
+                                        <div className="flex-1 w-full text-center md:text-left z-10">
+                                            <p className="text-stone-400 text-sm font-bold mb-1">매달 남는 돈 (순수익)</p>
+                                            <p className={`text-3xl md:text-4xl font-black ${ledgerStats.netCashFlow < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{ledgerStats.netCashFlow} <span className="text-lg font-bold">만 원</span></p>
+                                            <p className="text-xs mt-2 opacity-60">보너스 월 평균 {ledgerStats.irrMonthly}만 별도</p>
                                         </div>
-                                        <div className="flex-1 bg-paper-50 p-6 md:p-8 rounded-3xl border border-stone-200 shadow-sm flex flex-col justify-center">
-                                            <p className="text-stone-500 text-sm font-bold mb-1">총 지출 합계 (B)</p>
-                                            <p className="text-3xl md:text-4xl font-black text-rose-600">{ledgerStats.totalExp}<span className="text-base md:text-lg ml-1 font-bold">만 원</span></p>
-                                        </div>
-                                        <div className="flex-1 bg-stone-800 p-6 md:p-8 rounded-3xl shadow-md text-white flex flex-col justify-center">
-                                            <p className="text-stone-300 text-sm font-bold mb-1">매달 필요한 돈 (A-B)</p>
-                                            <p className={`text-3xl md:text-4xl font-black ${ledgerStats.netCashFlow < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{ledgerStats.netCashFlow} <span className="text-base md:text-lg font-bold">만 원</span></p>
-                                            <p className="text-[10px] mt-2 opacity-60 uppercase tracking-widest">Bonus 월 평균 {ledgerStats.irrMonthly}만 별도</p>
+                                        <div className="flex w-full md:w-auto gap-4 bg-stone-900/50 p-4 rounded-2xl border border-stone-700 z-10">
+                                            <div className="flex-1 text-center px-2">
+                                                <p className="text-stone-500 text-xs font-bold mb-1">정기 소득 (A)</p>
+                                                <p className="text-xl font-black text-stone-200">{ledgerStats.incReg}만</p>
+                                            </div>
+                                            <div className="w-px bg-stone-700"></div>
+                                            <div className="flex-1 text-center px-2">
+                                                <p className="text-stone-500 text-xs font-bold mb-1">총 지출 (B)</p>
+                                                <p className="text-xl font-black text-rose-400">{ledgerStats.totalExp}만</p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* 1~12월 관리비 그래프 영역 */}
-                                    <div className="bg-paper-50 p-4 md:p-6 rounded-3xl border border-stone-200 shadow-sm mb-8 overflow-x-auto">
-                                        <h3 className="font-bold flex items-center gap-2 mb-4 text-stone-800 min-w-max"><TrendingDown className="text-sky-600"/> 1년치 관리비/공과금 추이 (단위: 만원)</h3>
-                                        <div className="flex items-end gap-1 md:gap-2 h-40 mt-4 min-w-[400px]">
+                                    {/* 1~12월 관리비 그래프 영역 (높이 조절) */}
+                                    <div className="bg-paper-50 p-4 rounded-3xl border border-stone-200 shadow-sm overflow-x-auto">
+                                        <h3 className="font-bold text-sm flex items-center gap-2 mb-2 text-stone-800 min-w-max"><TrendingDown className="text-sky-600" size={16}/> 1년치 공과금 추이</h3>
+                                        <div className="flex items-end gap-1 h-24 md:h-28 mt-2 min-w-[400px]">
                                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => {
                                                 const amount = monthlyMaintenance[month] || 0;
-                                                const barHeight = Math.min(100, (amount / 50) * 100); // Max 50만원 기준 그래프
+                                                const barHeight = Math.min(100, (amount / 50) * 100); 
                                                 return (
                                                     <div key={month} className="flex-1 flex flex-col items-center justify-end gap-1 h-full group">
-                                                        <div className="w-full bg-sky-100 rounded-t-lg relative hover:bg-sky-200 transition-colors" style={{ height: `${barHeight}%`, minHeight: amount > 0 ? '4px' : '0' }}>
-                                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-stone-600 opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
+                                                        <div className="w-full bg-sky-100 rounded-t relative hover:bg-sky-200 transition-colors" style={{ height: `${barHeight}%`, minHeight: amount > 0 ? '4px' : '0' }}>
+                                                            <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold text-stone-600 opacity-0 group-hover:opacity-100 whitespace-nowrap z-10">
                                                                 {amount > 0 ? `${amount}` : ''}
                                                             </div>
                                                         </div>
-                                                        <span className="text-[10px] font-bold text-stone-500">{month}월</span>
+                                                        <span className="text-[9px] font-bold text-stone-500">{month}월</span>
                                                         <input
                                                             type="number"
                                                             step="0.1"
                                                             value={monthlyMaintenance[month] === undefined ? '' : monthlyMaintenance[month]}
                                                             onChange={(e) => handleMaintenanceChange(month, e.target.value)}
-                                                            className="w-full bg-white border border-stone-200 rounded p-1 text-center text-[10px] outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-bold text-stone-700"
+                                                            className="w-full bg-white border border-stone-200 rounded p-0.5 text-center text-[9px] outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400 font-bold text-stone-700"
                                                             placeholder="입력"
                                                         />
                                                     </div>
@@ -844,58 +868,69 @@
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        <div className="space-y-6">
-                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingUp className="text-emerald-600"/> {new Date().getMonth() + 1}월 소득 내역</h3>
-                                            <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden divide-y divide-stone-200">
-                                                {['income_reg', 'income_irr'].map(cat => (
-                                                <div key={cat}>
-                                                    <div className="bg-stone-100 px-4 py-2 text-[10px] font-black text-stone-600 uppercase">{cat === 'income_reg' ? '정기 소득' : '비정기 소득 (보너스)'}</div>
-                                                    {ledgerItems.filter(i => i.category === cat).map(item => (
-                                                    <div key={item.id} className="p-4 flex justify-between items-center group hover:bg-stone-100/50 transition-colors">
-                                                        <span className="text-sm font-semibold text-stone-800">{item.title}</span>
-                                                        <div className="flex items-center gap-3">
-                                                        {editingLedgerId === item.id ? (
-                                                            <div className="flex items-center gap-1">
-                                                                <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-stone-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
-                                                                <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-stone-700 text-white rounded"><Check size={12}/></button>
+                                    {/* 리스트 영역 (압축형) */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                                        <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden flex flex-col">
+                                            <div className="bg-stone-100 px-4 py-3 border-b border-stone-200 flex items-center gap-2 font-black text-emerald-700">
+                                                <TrendingUp size={18}/> 소득 내역
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                {['income_reg', 'income_irr'].map(cat => {
+                                                    const items = ledgerItems.filter(i => i.category === cat);
+                                                    if (items.length === 0) return null;
+                                                    return (
+                                                    <div key={cat}>
+                                                        <div className="bg-stone-50 px-3 py-1 text-[10px] font-black text-stone-500 uppercase border-y border-stone-100 first:border-t-0">{cat === 'income_reg' ? '정기 소득' : '비정기 소득'}</div>
+                                                        {items.map(item => (
+                                                        <div key={item.id} className="py-2 px-3 md:px-4 flex justify-between items-center group hover:bg-stone-100 border-b border-stone-100 last:border-0 transition-colors">
+                                                            <span className="text-xs md:text-sm font-semibold text-stone-800 truncate pr-2">{item.title}</span>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                            {editingLedgerId === item.id ? (
+                                                                <div className="flex items-center gap-1">
+                                                                    <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-stone-300 rounded px-1 text-xs font-bold text-stone-800"/>
+                                                                    <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-stone-700 text-white rounded"><Check size={12}/></button>
+                                                                </div>
+                                                            ) : (
+                                                                <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 text-xs md:text-sm cursor-pointer hover:text-stone-600 hover:underline">{item.amount}만</span>
+                                                            )}
+                                                            <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-opacity p-1"><Trash2 size={14}/></button>
                                                             </div>
-                                                        ) : (
-                                                            <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 cursor-pointer hover:text-stone-600 hover:underline">{item.amount}만</span>
-                                                        )}
-                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                                                         </div>
+                                                        ))}
                                                     </div>
-                                                    ))}
-                                                </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         </div>
 
-                                        <div className="space-y-6">
-                                            <h3 className="text-xl font-black flex items-center gap-2 px-2 text-stone-800"><TrendingDown className="text-rose-500"/> {new Date().getMonth() + 1}월 지출 내역</h3>
-                                            <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden divide-y divide-stone-200">
-                                                {['expense_non', 'expense_fix', 'expense_var'].map(cat => (
-                                                <div key={cat}>
-                                                    <div className="bg-stone-100 px-4 py-2 text-[10px] font-black text-rose-600 uppercase">{cat === 'expense_non' ? '비소비성' : cat === 'expense_fix' ? '소비성 (고정)' : '소비성 (변동)'}</div>
-                                                    {ledgerItems.filter(i => i.category === cat).map(item => (
-                                                    <div key={item.id} className="p-4 flex justify-between items-center group hover:bg-stone-100/50 transition-colors">
-                                                        <span className="text-sm font-semibold text-stone-800">{item.title}</span>
-                                                        <div className="flex items-center gap-3">
-                                                        {editingLedgerId === item.id ? (
-                                                            <div className="flex items-center gap-1">
-                                                                <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-rose-300 rounded px-1 py-0.5 text-right font-bold text-stone-800"/>
-                                                                <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-rose-600 text-white rounded"><Check size={12}/></button>
+                                        <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden flex flex-col">
+                                            <div className="bg-stone-100 px-4 py-3 border-b border-stone-200 flex items-center gap-2 font-black text-rose-700">
+                                                <TrendingDown size={18}/> 지출 내역
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                {['expense_non', 'expense_fix', 'expense_var'].map(cat => {
+                                                    const items = ledgerItems.filter(i => i.category === cat);
+                                                    if (items.length === 0) return null;
+                                                    return (
+                                                    <div key={cat}>
+                                                        <div className="bg-stone-50 px-3 py-1 text-[10px] font-black text-rose-400 uppercase border-y border-stone-100 first:border-t-0">{cat === 'expense_non' ? '비소비성' : cat === 'expense_fix' ? '소비성 (고정)' : '소비성 (변동)'}</div>
+                                                        {items.map(item => (
+                                                        <div key={item.id} className="py-2 px-3 md:px-4 flex justify-between items-center group hover:bg-stone-100 border-b border-stone-100 last:border-0 transition-colors">
+                                                            <span className="text-xs md:text-sm font-semibold text-stone-800 truncate pr-2">{item.title}</span>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                            {editingLedgerId === item.id ? (
+                                                                <div className="flex items-center gap-1">
+                                                                    <input type="number" step="0.1" autoFocus value={editAmount} onChange={(e) => setEditAmount(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleUpdateAmount(item.id)} className="w-16 bg-white border border-rose-300 rounded px-1 text-xs font-bold text-stone-800"/>
+                                                                    <button onClick={() => handleUpdateAmount(item.id)} className="p-1 bg-rose-600 text-white rounded"><Check size={12}/></button>
+                                                                </div>
+                                                            ) : (
+                                                                <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 text-xs md:text-sm cursor-pointer hover:text-rose-600 hover:underline">{item.amount}만</span>
+                                                            )}
+                                                            <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-opacity p-1"><Trash2 size={14}/></button>
                                                             </div>
-                                                        ) : (
-                                                            <span onClick={() => { setEditingLedgerId(item.id); setEditAmount(item.amount); }} className="font-bold text-stone-800 cursor-pointer hover:text-rose-600 hover:underline">{item.amount}만</span>
-                                                        )}
-                                                        <button onClick={() => deleteLedgerItem(item.id)} className="text-stone-300 hover:text-rose-500 opacity-0 lg:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                                                         </div>
+                                                        ))}
                                                     </div>
-                                                    ))}
-                                                </div>
-                                                ))}
+                                                )})}
                                             </div>
                                         </div>
                                     </div>
@@ -1142,9 +1177,9 @@
                                     </div>
                                     <div className="bg-paper-50 p-4 rounded-3xl border border-stone-200 shadow-sm flex flex-col gap-4 relative">
                                         {uploadedImageBase64 && (
-                                            <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200">
-                                                <img src={uploadedImageBase64} alt="preview" className="w-full h-full object-cover" />
-                                                <button onClick={() => setUploadedImageBase64(null)} className="absolute top-2 right-2 p-1 bg-stone-900/50 text-white rounded-full"><X size={16}/></button>
+                                            <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200 bg-stone-100 flex items-center justify-center">
+                                                <img src={uploadedImageBase64} alt="preview" className="max-w-full max-h-full object-contain" />
+                                                <button onClick={() => setUploadedImageBase64(null)} className="absolute top-2 right-2 p-1 bg-stone-900/50 hover:bg-stone-900 transition-colors text-white rounded-full"><X size={16}/></button>
                                             </div>
                                         )}
                                         <div className="flex flex-col md:flex-row items-center gap-3">
@@ -1160,17 +1195,17 @@
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                                         {sihaMemories.map(m => (
-                                            <div key={m.id} className="bg-paper-50 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-500 relative">
+                                            <div key={m.id} onClick={() => setViewingMemory(m)} className="bg-paper-50 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden shadow-sm border border-stone-200 group hover:shadow-md transition-all duration-300 relative cursor-pointer">
                                                 
-                                                {/* 수정 및 삭제 버튼 (모바일 항상 노출, PC hover시 노출) */}
+                                                {/* 수정 및 삭제 버튼 (카드에서는 이벤트 전파 중단으로 상세조회와 분리) */}
                                                 <div className="absolute top-4 md:top-6 right-4 md:right-6 flex gap-2 z-10 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => setEditingMemory(m)} className="p-2 bg-white/90 backdrop-blur text-stone-600 rounded-full shadow-sm hover:bg-stone-100 transition-colors"><Pencil size={14}/></button>
-                                                    <button onClick={() => deleteMemory(m.id)} className="p-2 bg-white/90 backdrop-blur text-rose-500 rounded-full shadow-sm hover:bg-rose-50 transition-colors"><Trash2 size={14}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setEditingMemory(m); }} className="p-2 bg-white/90 backdrop-blur text-stone-600 rounded-full shadow-sm hover:bg-stone-100 transition-colors"><Pencil size={14}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteMemory(m.id); }} className="p-2 bg-white/90 backdrop-blur text-rose-500 rounded-full shadow-sm hover:bg-rose-50 transition-colors"><Trash2 size={14}/></button>
                                                 </div>
 
-                                                <div className="h-48 md:h-64 overflow-hidden relative bg-stone-200 border-b border-stone-200">
-                                                    <img src={m.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                                                    <div className="absolute top-4 md:top-6 left-4 md:left-6 bg-white/90 backdrop-blur px-4 py-1.5 rounded-full text-[10px] font-black shadow-sm text-stone-700">{m.date}</div>
+                                                <div className="h-40 md:h-48 overflow-hidden relative bg-stone-100 border-b border-stone-200 flex items-center justify-center p-2">
+                                                    <img src={m.image} className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-500 rounded" />
+                                                    <div className="absolute top-4 left-4 md:top-6 md:left-6 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black shadow-sm text-stone-700">{m.date}</div>
                                                 </div>
                                                 <div className="p-6 md:p-8">
                                                     <h3 className="text-lg md:text-xl font-black mb-3 text-stone-800">{m.title}</h3>
@@ -1233,12 +1268,12 @@
 
                             {/* 우리 가족 일기 수정 모달 */}
                             {editingMemory && (
-                                <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-md p-6 shadow-2xl border border-stone-200 flex flex-col gap-4">
                                         <h3 className="text-xl font-black flex items-center gap-2 text-stone-800"><Heart className="text-rose-400 fill-rose-400"/> 기록 수정</h3>
                                         
-                                        <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200">
-                                            <img src={editingMemory.image} className="w-full h-full object-cover" />
+                                        <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-stone-200 bg-stone-100 flex items-center justify-center">
+                                            <img src={editingMemory.image} className="max-w-full max-h-full object-contain" />
                                             <label className="absolute inset-0 bg-stone-900/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
                                                 <span className="text-white font-bold bg-stone-900/60 px-4 py-2 rounded-xl flex items-center gap-2"><ImagePlus size={16}/> 사진 변경</span>
                                                 <input type="file" accept="image/*" onChange={handleEditImageUpload} className="hidden" />
@@ -1255,6 +1290,31 @@
                                         <div className="flex gap-2 shrink-0 pt-2">
                                             <button onClick={() => setEditingMemory(null)} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                             <button onClick={handleUpdateMemory} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">수정 완료</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 우리 가족 일기 상세 조회 모달 */}
+                            {viewingMemory && (
+                                <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setViewingMemory(null)}>
+                                    <div className="bg-paper-50 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                                        <div className="relative bg-stone-100 flex items-center justify-center shrink-0 border-b border-stone-200 p-2">
+                                            <img src={viewingMemory.image} className="max-w-full max-h-[45vh] object-contain rounded" />
+                                            <button onClick={() => setViewingMemory(null)} className="absolute top-4 right-4 p-2 bg-stone-900/50 hover:bg-stone-900 text-white rounded-full transition-colors backdrop-blur"><X size={20}/></button>
+                                        </div>
+                                        <div className="p-6 md:p-8 overflow-y-auto">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded text-[10px] font-black">{viewingMemory.date}</span>
+                                                <span className="text-[10px] font-bold text-stone-400"><User size={12} className="inline mr-1 -mt-0.5"/>{viewingMemory.author}</span>
+                                            </div>
+                                            <h3 className="text-xl md:text-2xl font-black mb-4 text-stone-800">{viewingMemory.title}</h3>
+                                            <p className="text-stone-700 text-sm md:text-base leading-relaxed whitespace-pre-wrap">{viewingMemory.content}</p>
+                                            
+                                            <div className="mt-8 flex gap-2 justify-end border-t border-stone-200 pt-4">
+                                                <button onClick={() => { setEditingMemory(viewingMemory); setViewingMemory(null); }} className="px-5 py-2.5 bg-stone-200 text-stone-700 rounded-xl text-xs font-bold hover:bg-stone-300 flex items-center gap-1.5"><Pencil size={14}/> 수정</button>
+                                                <button onClick={() => { deleteMemory(viewingMemory.id); setViewingMemory(null); }} className="px-5 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold hover:bg-rose-100 flex items-center gap-1.5"><Trash2 size={14}/> 삭제</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
