@@ -767,7 +767,9 @@
                             // 👇 깃허브에 올리실 때는 아래 빈칸에 발급받은 실제 API 키를 넣으세요!
                             // 예시: const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk";
                             const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk"; 
-                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                            
+                            // ❗ 수정된 부분: gemini-2.5-flash-preview... 부분을 정식 모델인 gemini-1.5-flash 로 변경합니다.
+                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
                             
                             const promptText = `주어진 이미지에서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요.`;
 
@@ -874,7 +876,9 @@
                         // 👇 음성 인식 부분도 마찬가지로 아래 빈칸에 발급받은 실제 API 키를 넣으세요!
                         // 예시: const apiKey = "AIzaSyC-xxxxxxxxxxxxxxxxx";
                         const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk"; 
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                        
+                        // ❗ 수정된 부분: 음성 인식 URL도 정식 모델인 gemini-1.5-flash 로 변경합니다.
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
                         
                         const promptText = `사용자의 음성 기록을 분석해서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요. 음성 기록: "${transcript}"`;
 
