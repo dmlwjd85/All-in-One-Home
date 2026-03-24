@@ -738,7 +738,7 @@
                 } catch (err) { console.error(err); }
             };
 
-            // 카메라 연동 이미지 일정 추출 (Gemini API)
+            // ★ 완벽하게 재구성된 AI 일정 스캔 로직 (스키마 강제 적용 + 에러 원인 상세 출력)
             const handleScanImage = (e, targetType = 'school') => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
@@ -748,90 +748,102 @@
                 reader.readAsDataURL(file);
                 reader.onload = (event) => {
                     const img = new Image();
-                    img.src = event.target.result;
                     img.onload = async () => {
-                        const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 1024;
-                        let scaleSize = 1;
-                        if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
-                        canvas.width = img.width * scaleSize;
-                        canvas.height = img.height * scaleSize;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        
-                        const base64Data = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-                        
                         try {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 1024;
+                            let scaleSize = 1;
+                            if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
+                            canvas.width = img.width * scaleSize;
+                            canvas.height = img.height * scaleSize;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            const base64Data = dataUrl.split(',')[1];
+                            
                             const geminiApiKey = ""; // 실행 환경에서 제공
                             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
-                            const prompt = `당신은 일정 추출 AI입니다. 제공된 이미지는 달력 또는 학사 일정표입니다.
-이미지에서 일정을 추출하여 반드시 JSON 객체 형식으로만 응답하세요. 백틱(\`\`\`)이나 추가 설명 없이 순수 JSON 문자열만 출력하세요.
-현재 연도: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년
-현재 월: ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월 (이미지에 다른 연/월 정보가 없다면 이 기준을 따르세요.)
+                            
+                            const promptText = `주어진 이미지에서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요.`;
 
-반드시 아래와 같은 JSON 구조로 응답하세요:
-{
-  "events": [
-    {
-      "title": "일정 제목",
-      "date": "YYYY-MM-DD",
-      "time": "시간 (없으면 빈 문자열)",
-      "memo": "메모 (없으면 빈 문자열)",
-      "category": "${targetType === 'school' ? 'school_general' : 'general'}"
-    }
-  ]
-}
-${targetType === 'school' ? "카테고리는 다음 중 하나만 사용하세요: 'school_general', 'deadline', 'field_trip', 'lecture'." : "카테고리는 'general'만 사용하세요."}
-날짜는 반드시 YYYY-MM-DD 형식이어야 합니다.`;
-
+                            // JSON Schema를 강제하여 AI가 형식을 절대 벗어나지 못하도록 설정
                             const payload = {
                                 contents: [{
                                     role: "user",
                                     parts: [
-                                        { text: prompt },
+                                        { text: promptText },
                                         { inlineData: { mimeType: "image/jpeg", data: base64Data } }
                                     ]
                                 }],
                                 generationConfig: {
-                                    responseMimeType: "application/json"
+                                    responseMimeType: "application/json",
+                                    responseSchema: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            events: {
+                                                type: "ARRAY",
+                                                items: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        title: { type: "STRING" },
+                                                        date: { type: "STRING" },
+                                                        time: { type: "STRING" },
+                                                        memo: { type: "STRING" },
+                                                        category: { type: "STRING" }
+                                                    },
+                                                    required: ["title", "date", "time", "memo", "category"]
+                                                }
+                                            }
+                                        },
+                                        required: ["events"]
+                                    }
                                 }
                             };
 
-                            const result = await fetchWithRetry(url, {
+                            // fetch 직접 호출로 에러 텍스트를 잡아냄
+                            const response = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(payload)
                             });
 
-                            if (result.error) {
-                                throw new Error(result.error.message || "API 응답 오류");
+                            if (!response.ok) {
+                                const errData = await response.text();
+                                throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
                             }
 
+                            const result = await response.json();
                             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                            if (!text) throw new Error("API 결과가 없습니다.");
+                            if (!text) throw new Error("AI가 아무런 결과를 반환하지 않았습니다.");
                             
-                            const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                            const parsedData = JSON.parse(jsonStr);
-                            const events = parsedData.events || (Array.isArray(parsedData) ? parsedData : []);
+                            const parsedData = JSON.parse(text);
+                            const events = parsedData.events || [];
                             
                             if (events.length === 0) {
-                                alert("인식된 일정이 없습니다. 선명한 사진으로 다시 시도해주세요.");
+                                alert("이미지에서 텍스트(일정)를 찾지 못했습니다. 화질이 선명한 사진인지 확인해주세요.");
                                 setIsScanning(false);
                                 return;
                             }
 
-                            // 자동 저장을 멈추고 체크리스트 모달에 데이터 전달
                             setScannedEvents(events);
                             setScannedEventType(targetType);
-                            setSelectedScannedIndices(events.map((_, i) => i)); // 기본적으로 전체 선택
+                            setSelectedScannedIndices(events.map((_, i) => i)); 
                         } catch (err) {
                             console.error(err);
-                            alert("일정 추출 중 오류가 발생했습니다: " + err.message);
+                            alert("일정 추출 중 오류가 발생했습니다: \n" + err.message);
                         } finally {
                             setIsScanning(false);
-                            e.target.value = ""; // 동일 파일 연속 선택을 위해 input 초기화
+                            e.target.value = ""; // 초기화
                         }
                     };
+                    // HEIC 포맷 등 이미지 로드 자체가 실패하는 경우를 잡기 위한 에러 처리
+                    img.onerror = () => {
+                        alert("이미지를 정상적으로 불러올 수 없습니다.\n아이폰(HEIC 형식)의 경우 화면 캡처 후 업로드하시거나, 일반 JPG/PNG 사진을 사용해주세요.");
+                        setIsScanning(false);
+                        e.target.value = "";
+                    };
+                    img.src = event.target.result;
                 };
             };
 
