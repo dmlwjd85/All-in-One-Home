@@ -128,6 +128,7 @@
         const FileText = createIcon('FileText');
         const Pencil = createIcon('Pencil');
         const Camera = createIcon('Camera');
+        const Mic = createIcon('Mic');
 
         const CHORE_MASTER_LIST = [
             { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
@@ -194,8 +195,9 @@
             const [minuteDate, setMinuteDate] = useState(null);
             const [timetable, setTimetable] = useState({});
 
-            // 카메라 스캔 State
+            // 카메라/음성 스캔 State
             const [isScanning, setIsScanning] = useState(false);
+            const [isListening, setIsListening] = useState(false); // 음성 인식 상태
             const scanInputRef = useRef(null);
             
             // AI 스캔 일정 관리용 State 추가
@@ -738,7 +740,7 @@
                 } catch (err) { console.error(err); }
             };
 
-            // ★ 완벽하게 재구성된 AI 일정 스캔 로직 (스키마 강제 적용 + 에러 원인 상세 출력)
+            // ★ 완벽하게 재구성된 AI 일정 스캔 로직 (스키마 강제 적용 + 에러 원인 상세 출력 + API Key 연동 엄격화)
             const handleScanImage = (e, targetType = 'school') => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
@@ -762,12 +764,11 @@
                             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                             const base64Data = dataUrl.split(',')[1];
                             
-                            const geminiApiKey = ""; // 실행 환경에서 제공
-                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
+                            const apiKey = ""; // 실행 환경에서 자동 제공되도록 엄격한 변수명 사용
+                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
                             
                             const promptText = `주어진 이미지에서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요.`;
 
-                            // JSON Schema를 강제하여 AI가 형식을 절대 벗어나지 못하도록 설정
                             const payload = {
                                 contents: [{
                                     role: "user",
@@ -801,7 +802,6 @@
                                 }
                             };
 
-                            // fetch 직접 호출로 에러 텍스트를 잡아냄
                             const response = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -837,7 +837,6 @@
                             e.target.value = ""; // 초기화
                         }
                     };
-                    // HEIC 포맷 등 이미지 로드 자체가 실패하는 경우를 잡기 위한 에러 처리
                     img.onerror = () => {
                         alert("이미지를 정상적으로 불러올 수 없습니다.\n아이폰(HEIC 형식)의 경우 화면 캡처 후 업로드하시거나, 일반 JPG/PNG 사진을 사용해주세요.");
                         setIsScanning(false);
@@ -845,6 +844,101 @@
                     };
                     img.src = event.target.result;
                 };
+            };
+
+            // ★ 새 기능: 음성 인식 (STT) + AI 분석 연동
+            const handleVoiceInput = (targetType = 'school') => {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    alert("현재 브라우저에서는 음성 인식을 지원하지 않습니다. (크롬, 사파리, 엣지 최신 버전을 사용해주세요)");
+                    return;
+                }
+
+                const recognition = new SpeechRecognition();
+                recognition.lang = 'ko-KR';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = () => {
+                    setIsListening(true);
+                };
+
+                recognition.onresult = async (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    setIsListening(false);
+                    setIsScanning(true); // AI 분석 중 로딩 표시 재사용
+                    
+                    try {
+                        const apiKey = ""; // 실행 환경에서 제공
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                        
+                        const promptText = `사용자의 음성 기록을 분석해서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요. 음성 기록: "${transcript}"`;
+
+                        const payload = {
+                            contents: [{ role: "user", parts: [{ text: promptText }] }],
+                            generationConfig: {
+                                responseMimeType: "application/json",
+                                responseSchema: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        events: {
+                                            type: "ARRAY",
+                                            items: {
+                                                type: "OBJECT",
+                                                properties: {
+                                                    title: { type: "STRING" },
+                                                    date: { type: "STRING" },
+                                                    time: { type: "STRING" },
+                                                    memo: { type: "STRING" },
+                                                    category: { type: "STRING" }
+                                                },
+                                                required: ["title", "date", "time", "memo", "category"]
+                                            }
+                                        }
+                                    },
+                                    required: ["events"]
+                                }
+                            }
+                        };
+
+                        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        if (!response.ok) {
+                            const errData = await response.text();
+                            throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
+                        }
+                        
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const parsedData = JSON.parse(text);
+                        const events = parsedData.events || [];
+                        
+                        if (events.length === 0) {
+                            alert("음성에서 명확한 일정 정보를 찾지 못했습니다. 다시 말씀해주세요.");
+                            return;
+                        }
+
+                        // 분석된 결과를 기존 스캔 모달로 전달하여 확인 후 등록하도록 처리
+                        setScannedEvents(events);
+                        setScannedEventType(targetType);
+                        setSelectedScannedIndices(events.map((_, i) => i)); 
+                    } catch (err) {
+                        console.error(err);
+                        alert("음성 분석 중 오류가 발생했습니다: " + err.message);
+                    } finally {
+                        setIsScanning(false);
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    setIsListening(false);
+                    alert("음성 인식 오류가 발생했습니다: " + event.error);
+                };
+
+                recognition.onend = () => {
+                    setIsListening(false);
+                };
+
+                recognition.start();
             };
 
             const menuItems = [
@@ -1180,14 +1274,19 @@
                             {activeTab === 'calendar' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                                        <div className="flex items-center gap-4">
-                                            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
-                                            {/* AI 일정 스캔 추가 */}
-                                            <div className="relative flex items-center">
-                                                <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'general')} className="hidden" id="scan-calendar-general" />
-                                                <label htmlFor="scan-calendar-general" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
-                                                    <Camera size={14} /> AI 일정 스캔
-                                                </label>
+                                        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                                            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800 shrink-0"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
+                                            {/* AI 일정 스캔 및 음성 인식 버튼 */}
+                                            <div className="flex items-center gap-2">
+                                                <div className="relative flex items-center">
+                                                    <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'general')} className="hidden" id="scan-calendar-general" />
+                                                    <label htmlFor="scan-calendar-general" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm whitespace-nowrap">
+                                                        <Camera size={14} /> AI 사진
+                                                    </label>
+                                                </div>
+                                                <button onClick={() => handleVoiceInput('general')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors shadow-sm whitespace-nowrap ${isListening ? 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`}>
+                                                    <Mic size={14} /> {isListening ? '듣는 중...' : '음성 등록'}
+                                                </button>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm self-start">
@@ -1241,7 +1340,7 @@
                             {/* 🏫 교무수첩 탭 */}
                             {activeTab === 'teacher' && (
                                 <div className="max-w-7xl mx-auto space-y-6 flex flex-col relative">
-                                    {/* 로딩 모달 (스캔 진행 중) */}
+                                    {/* 로딩 모달 (스캔/음성 진행 중) */}
                                     {isScanning && (
                                         <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 rounded-3xl">
                                             <div className="w-16 h-16 border-4 border-stone-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
@@ -1261,17 +1360,22 @@
                                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 min-h-[500px]">
                                         <div className="xl:col-span-2 bg-paper-50 rounded-3xl border border-stone-200 shadow-sm flex flex-col overflow-hidden">
                                             <div className="p-4 flex flex-col md:flex-row md:items-center justify-between border-b border-stone-200 bg-stone-100 shrink-0 gap-4">
-                                                <div className="flex items-center gap-3">
-                                                    <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
-                                                    {/* 일정 스캔 카메라 버튼 추가 */}
-                                                    <div className="relative flex items-center">
-                                                        <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'school')} className="hidden" id="scan-calendar-school" />
-                                                        <label htmlFor="scan-calendar-school" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
-                                                            <Camera size={14} /> AI 일정 스캔
-                                                        </label>
+                                                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3">
+                                                    <h3 className="font-bold flex items-center gap-2 text-stone-800 shrink-0"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
+                                                    {/* 일정 스캔 및 음성 인식 버튼 */}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="relative flex items-center">
+                                                            <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'school')} className="hidden" id="scan-calendar-school" />
+                                                            <label htmlFor="scan-calendar-school" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm whitespace-nowrap">
+                                                                <Camera size={14} /> AI 사진
+                                                            </label>
+                                                        </div>
+                                                        <button onClick={() => handleVoiceInput('school')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors shadow-sm whitespace-nowrap ${isListening ? 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse' : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'}`}>
+                                                            <Mic size={14} /> {isListening ? '듣는 중...' : '음성 등록'}
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto">
+                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto shrink-0">
                                                     <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
                                                     <span className="font-bold text-sm min-w-[80px] text-center text-stone-800">{schoolViewDate.getFullYear()}년 {schoolViewDate.getMonth() + 1}월</span>
                                                     <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-100 rounded-lg rotate-180 text-stone-600"><ChevronLeft size={16}/></button>
@@ -1474,12 +1578,12 @@
                                 </div>
                             )}
 
-                            {/* AI 스캔 일정 선택 모달 (체크리스트) */}
+                            {/* AI 스캔/음성 일정 선택 모달 (체크리스트) */}
                             {scannedEvents && (
                                 <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[80vh]">
-                                        <h3 className="text-xl font-black mb-2 flex items-center gap-2 text-stone-800"><Camera className="text-indigo-500"/> AI 스캔 일정 등록</h3>
-                                        <p className="text-sm text-stone-500 mb-4">사진에서 추출된 일정입니다. 등록할 일정을 선택해주세요.</p>
+                                        <h3 className="text-xl font-black mb-2 flex items-center gap-2 text-stone-800"><Camera className="text-indigo-500"/> AI 분석 일정 등록</h3>
+                                        <p className="text-sm text-stone-500 mb-4">사진 또는 음성에서 추출된 일정입니다. 등록할 일정을 선택해주세요.</p>
                                         <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-2">
                                             {scannedEvents.map((ev, index) => (
                                                 <div key={index} className="flex items-start gap-3 p-3 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 transition-colors cursor-pointer" onClick={() => {
