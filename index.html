@@ -197,6 +197,11 @@
             // 카메라 스캔 State
             const [isScanning, setIsScanning] = useState(false);
             const scanInputRef = useRef(null);
+            
+            // AI 스캔 일정 관리용 State 추가
+            const [scannedEvents, setScannedEvents] = useState(null);
+            const [scannedEventType, setScannedEventType] = useState('general');
+            const [selectedScannedIndices, setSelectedScannedIndices] = useState([]);
 
             // UI Input States
             const [newMemoryText, setNewMemoryText] = useState("");
@@ -713,7 +718,7 @@
             };
 
             // 카메라 연동 이미지 일정 추출 (Gemini API)
-            const handleScanImage = (e) => {
+            const handleScanImage = (e, targetType = 'school') => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
 
@@ -740,8 +745,8 @@
                             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`;
                             const prompt = `당신은 일정 추출 AI입니다. 제공된 이미지는 달력 또는 학사 일정표입니다.
 이미지에서 일정을 추출하여 반드시 JSON 배열 형식으로만 응답하세요. 백틱(\`\`\`)이나 추가 설명 없이 순수 JSON 문자열만 출력하세요.
-현재 연도: ${schoolViewDate.getFullYear()}년
-현재 월: ${schoolViewDate.getMonth() + 1}월 (이미지에 다른 연/월 정보가 없다면 이 기준을 따르세요.)
+현재 연도: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년
+현재 월: ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월 (이미지에 다른 연/월 정보가 없다면 이 기준을 따르세요.)
 JSON 구조:
 [
   {
@@ -749,10 +754,10 @@ JSON 구조:
     "date": "YYYY-MM-DD",
     "time": "",
     "memo": "",
-    "category": "school_general"
+    "category": "${targetType === 'school' ? 'school_general' : 'general'}"
   }
 ]
-카테고리는 다음 중 하나만 사용하세요: 'school_general', 'deadline', 'field_trip', 'lecture'.
+${targetType === 'school' ? "카테고리는 다음 중 하나만 사용하세요: 'school_general', 'deadline', 'field_trip', 'lecture'." : "카테고리는 'general'만 사용하세요."}
 시간이나 메모가 없으면 빈 문자열("")을 넣으세요. 날짜는 반드시 YYYY-MM-DD 형식이어야 합니다.`;
 
                             const payload = {
@@ -794,26 +799,16 @@ JSON 구조:
                             const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
                             const events = JSON.parse(jsonStr);
                             
-                            let addedCount = 0;
-                            for (const ev of events) {
-                                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), {
-                                    title: ev.title,
-                                    date: ev.date,
-                                    time: ev.time || "",
-                                    memo: ev.memo || "",
-                                    category: ev.category || "school_general",
-                                    type: 'school',
-                                    author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
-                                    owner: currentUserMode,
-                                    createdAt: serverTimestamp()
-                                });
-                                addedCount++;
-                            }
+                            // 자동 저장을 멈추고 체크리스트 모달에 데이터 전달
+                            setScannedEvents(events);
+                            setScannedEventType(targetType);
+                            setSelectedScannedIndices(events.map((_, i) => i)); // 기본적으로 전체 선택
                         } catch (err) {
                             console.error(err);
+                            alert("일정 추출 중 오류가 발생했습니다. 다시 시도해주세요.");
                         } finally {
                             setIsScanning(false);
-                            if (scanInputRef.current) scanInputRef.current.value = "";
+                            e.target.value = ""; // 동일 파일 연속 선택을 위해 input 초기화
                         }
                     };
                 };
@@ -1152,7 +1147,16 @@ JSON 구조:
                             {activeTab === 'calendar' && (
                                 <div className="max-w-6xl mx-auto space-y-6">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                                        <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
+                                        <div className="flex items-center gap-4">
+                                            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-stone-800"><CalendarIcon className="text-stone-600"/> 공용 일정 ({viewDate.getFullYear()})</h1>
+                                            {/* AI 일정 스캔 추가 */}
+                                            <div className="relative flex items-center">
+                                                <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'general')} className="hidden" id="scan-calendar-general" />
+                                                <label htmlFor="scan-calendar-general" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
+                                                    <Camera size={14} /> AI 일정 스캔
+                                                </label>
+                                            </div>
+                                        </div>
                                         <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm self-start">
                                             <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-200 rounded-lg text-stone-600"><ChevronLeft/></button>
                                             <span className="font-bold text-sm min-w-[100px] text-center text-stone-800">{viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월</span>
@@ -1228,8 +1232,8 @@ JSON 구조:
                                                     <h3 className="font-bold flex items-center gap-2 text-stone-800"><CalendarIcon size={20} className="text-indigo-500"/> 월간 학사 일정표</h3>
                                                     {/* 일정 스캔 카메라 버튼 추가 */}
                                                     <div className="relative flex items-center">
-                                                        <input type="file" accept="image/*" capture="environment" onChange={handleScanImage} ref={scanInputRef} className="hidden" id="scan-calendar" />
-                                                        <label htmlFor="scan-calendar" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
+                                                        <input type="file" accept="image/*" capture="environment" onChange={(e) => handleScanImage(e, 'school')} className="hidden" id="scan-calendar-school" />
+                                                        <label htmlFor="scan-calendar-school" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-colors shadow-sm">
                                                             <Camera size={14} /> AI 일정 스캔
                                                         </label>
                                                     </div>
@@ -1433,6 +1437,56 @@ JSON 구조:
                                         {activeTab === 'teacher' && (
                                             <button onClick={() => { setShowEventModal(false); setMinuteDate(selectedDate); setShowMinuteModal(true); }} className="w-full mt-1 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold border border-indigo-200 hover:bg-indigo-100 transition-colors">📝 이 날짜에 회의록 작성하기</button>
                                         )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* AI 스캔 일정 선택 모달 (체크리스트) */}
+                            {scannedEvents && (
+                                <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+                                    <div className="bg-paper-50 rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[80vh]">
+                                        <h3 className="text-xl font-black mb-2 flex items-center gap-2 text-stone-800"><Camera className="text-indigo-500"/> AI 스캔 일정 등록</h3>
+                                        <p className="text-sm text-stone-500 mb-4">사진에서 추출된 일정입니다. 등록할 일정을 선택해주세요.</p>
+                                        <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-2">
+                                            {scannedEvents.map((ev, index) => (
+                                                <div key={index} className="flex items-start gap-3 p-3 bg-white border border-stone-200 rounded-xl hover:bg-stone-50 transition-colors cursor-pointer" onClick={() => {
+                                                    setSelectedScannedIndices(prev => prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]);
+                                                }}>
+                                                    <div className="mt-0.5">
+                                                        {selectedScannedIndices.includes(index) ? <CheckSquare size={18} className="text-indigo-500"/> : <div className="w-[18px] h-[18px] border-2 border-stone-300 rounded"/>}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm font-bold text-stone-800">{ev.title}</p>
+                                                        <p className="text-xs font-semibold text-stone-500">{ev.date} {ev.time && `| ${ev.time}`}</p>
+                                                        {ev.memo && <p className="text-[10px] text-stone-600 mt-1 bg-stone-100 p-1.5 rounded">{ev.memo}</p>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {scannedEvents.length === 0 && <p className="text-center text-stone-500 text-sm py-8">추출된 일정이 없습니다.</p>}
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={() => { setScannedEvents(null); setSelectedScannedIndices([]); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
+                                            <button onClick={async () => {
+                                                const selectedEvents = scannedEvents.filter((_, i) => selectedScannedIndices.includes(i));
+                                                for (const ev of selectedEvents) {
+                                                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'calendarEvents'), {
+                                                        title: ev.title,
+                                                        date: ev.date,
+                                                        time: ev.time || "",
+                                                        memo: ev.memo || "",
+                                                        category: ev.category || (scannedEventType === 'school' ? "school_general" : "general"),
+                                                        type: scannedEventType,
+                                                        author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                                                        owner: currentUserMode,
+                                                        createdAt: serverTimestamp()
+                                                    });
+                                                }
+                                                setScannedEvents(null);
+                                                setSelectedScannedIndices([]);
+                                            }} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50" disabled={selectedScannedIndices.length === 0}>
+                                                선택 항목 등록 ({selectedScannedIndices.length}건)
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
