@@ -768,7 +768,7 @@
                             // 예시: const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk";
                             const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk"; 
                             
-                            // ❗ 수정된 부분: gemini-2.5-flash-preview... 부분을 정식 모델인 gemini-1.5-flash 로 변경합니다.
+                            // ❗ 수정된 부분: 가장 안정적인 최신 정식 모델로 변경합니다.
                             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
                             
                             const promptText = `주어진 이미지에서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요.`;
@@ -877,7 +877,7 @@
                         // 예시: const apiKey = "AIzaSyC-xxxxxxxxxxxxxxxxx";
                         const apiKey = "AIzaSyCvWR64s1qB0_BXEGkptzkICjTUkf1mwEk"; 
                         
-                        // ❗ 수정된 부분: 음성 인식 URL도 정식 모델인 gemini-1.5-flash 로 변경합니다.
+                        // ❗ 수정된 부분: 가장 안정적인 최신 정식 모델로 변경합니다.
                         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
                         
                         const promptText = `사용자의 음성 기록을 분석해서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요. 음성 기록: "${transcript}"`;
