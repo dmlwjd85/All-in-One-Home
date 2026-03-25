@@ -821,6 +821,11 @@
                             });
 
                             if (!response.ok) {
+                                // 👇 추가된 부분: 키 만료(400) 또는 오류(403) 시 브라우저에 저장된 옛날 키를 강제 삭제
+                                if (response.status === 400 || response.status === 403) {
+                                    localStorage.removeItem('gemini_api_key');
+                                    alert("저장된 API 키가 만료되었거나 정지되었습니다.\n확인을 누르시고 다시 스캔 버튼을 눌러 '새 API 키'를 입력해주세요.");
+                                }
                                 const errData = await response.text();
                                 throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
                             }
@@ -926,6 +931,11 @@
 
                         const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                         if (!response.ok) {
+                            // 👇 추가된 부분: 음성 인식 쪽도 동일하게 옛날 키 강제 삭제 기능 추가
+                            if (response.status === 400 || response.status === 403) {
+                                localStorage.removeItem('gemini_api_key');
+                                alert("저장된 API 키가 만료되었거나 정지되었습니다.\n확인을 누르시고 다시 음성 버튼을 눌러 '새 API 키'를 입력해주세요.");
+                            }
                             const errData = await response.text();
                             throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
                         }
