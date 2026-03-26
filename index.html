@@ -193,6 +193,7 @@
             const [showMinuteModal, setShowMinuteModal] = useState(false);
             const [newMinuteContent, setNewMinuteContent] = useState("");
             const [minuteDate, setMinuteDate] = useState(null);
+            const [editingMinuteId, setEditingMinuteId] = useState(null);
             const [timetable, setTimetable] = useState({});
 
             // 카메라/음성 스캔 State
@@ -705,10 +706,17 @@
             const handleAddMinute = async () => {
                 if (!newMinuteContent.trim() || !minuteDate || !user) return;
                 try {
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes'), {
-                        date: minuteDate, content: newMinuteContent, owner: currentUserMode, createdAt: serverTimestamp()
-                    });
-                    setNewMinuteContent(""); setShowMinuteModal(false); setMinuteDate(null);
+                    if (editingMinuteId) {
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes', editingMinuteId), {
+                            content: newMinuteContent,
+                            updatedAt: serverTimestamp()
+                        });
+                    } else {
+                        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'meetingMinutes'), {
+                            date: minuteDate, content: newMinuteContent, owner: currentUserMode, createdAt: serverTimestamp()
+                        });
+                    }
+                    setNewMinuteContent(""); setShowMinuteModal(false); setMinuteDate(null); setEditingMinuteId(null);
                 } catch (err) { console.error(err); }
             };
 
@@ -821,10 +829,10 @@
                             });
 
                             if (!response.ok) {
-                                // 👇 추가된 부분: 키 만료(400) 또는 오류(403) 시 브라우저에 저장된 옛날 키를 강제 삭제
-                                if (response.status === 400 || response.status === 403) {
+                                // 👇 404 에러(잘못된 키/모델) 발생 시에도 브라우저에 저장된 키를 강제 삭제
+                                if (response.status === 400 || response.status === 403 || response.status === 404) {
                                     localStorage.removeItem('gemini_api_key');
-                                    alert("저장된 API 키가 만료되었거나 정지되었습니다.\n확인을 누르시고 다시 스캔 버튼을 눌러 '새 API 키'를 입력해주세요.");
+                                    alert("API 키가 올바르지 않거나 만료되었습니다.\n확인을 누르시고 다시 스캔 버튼을 눌러 '새 API 키'를 정확히 입력해주세요.");
                                 }
                                 const errData = await response.text();
                                 throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
@@ -931,10 +939,10 @@
 
                         const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                         if (!response.ok) {
-                            // 👇 추가된 부분: 음성 인식 쪽도 동일하게 옛날 키 강제 삭제 기능 추가
-                            if (response.status === 400 || response.status === 403) {
+                            // 👇 음성 인식 쪽도 동일하게 404 조건 추가
+                            if (response.status === 400 || response.status === 403 || response.status === 404) {
                                 localStorage.removeItem('gemini_api_key');
-                                alert("저장된 API 키가 만료되었거나 정지되었습니다.\n확인을 누르시고 다시 음성 버튼을 눌러 '새 API 키'를 입력해주세요.");
+                                alert("API 키가 올바르지 않거나 만료되었습니다.\n확인을 누르시고 다시 음성 버튼을 눌러 '새 API 키'를 정확히 입력해주세요.");
                             }
                             const errData = await response.text();
                             throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
@@ -1492,7 +1500,10 @@
                                                 <div key={min.id} className="bg-white p-5 rounded-2xl border border-stone-100 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow h-fit group">
                                                     <div className="flex justify-between items-start">
                                                         <span className="text-xs font-black text-blue-500 bg-blue-50 w-fit px-2 py-1 rounded">{min.date}</span>
-                                                        <button onClick={() => deleteMinute(min.id)} className="text-stone-300 hover:text-rose-500 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                                                        <div className="flex gap-2 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => { setEditingMinuteId(min.id); setMinuteDate(min.date); setNewMinuteContent(min.content); setShowMinuteModal(true); }} className="text-stone-300 hover:text-blue-500"><Pencil size={16}/></button>
+                                                            <button onClick={() => deleteMinute(min.id)} className="text-stone-300 hover:text-rose-500"><Trash2 size={16}/></button>
+                                                        </div>
                                                     </div>
                                                     <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed line-clamp-6">{min.content}</p>
                                                 </div>
@@ -1605,7 +1616,7 @@
                                             <button onClick={handleAddEvent} className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-bold hover:bg-stone-900 transition-colors">저장하기</button>
                                         </div>
                                         {activeTab === 'teacher' && (
-                                            <button onClick={() => { setShowEventModal(false); setMinuteDate(selectedDate); setShowMinuteModal(true); }} className="w-full mt-1 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold border border-indigo-200 hover:bg-indigo-100 transition-colors">📝 이 날짜에 회의록 작성하기</button>
+                                            <button onClick={() => { setShowEventModal(false); setMinuteDate(selectedDate); setEditingMinuteId(null); setNewMinuteContent(""); setShowMinuteModal(true); }} className="w-full mt-1 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold border border-indigo-200 hover:bg-indigo-100 transition-colors">📝 이 날짜에 회의록 작성하기</button>
                                         )}
                                     </div>
                                 </div>
@@ -1673,7 +1684,7 @@
                             {showMinuteModal && (
                                 <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-2xl p-6 shadow-2xl border border-stone-200 flex flex-col max-h-[90vh]">
-                                        <h3 className="text-xl font-black mb-4 flex items-center gap-2 text-stone-800"><FileText className="text-blue-500"/> {minuteDate} 회의록 작성</h3>
+                                        <h3 className="text-xl font-black mb-4 flex items-center gap-2 text-stone-800"><FileText className="text-blue-500"/> {minuteDate} 회의록 {editingMinuteId ? '수정' : '작성'}</h3>
                                         
                                         <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4 shrink-0">
                                             <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-1 mb-2"><CheckSquare size={16}/> 회의 중 할 일 추가 (교무수첩 자동 연동)</h4>
@@ -1685,7 +1696,7 @@
 
                                         <textarea value={newMinuteContent} onChange={(e) => setNewMinuteContent(e.target.value)} placeholder="회의 내용을 상세히 기록하세요..." className="w-full flex-1 min-h-[150px] md:min-h-[300px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-blue-400 text-stone-800 resize-none mb-4" />
                                         <div className="flex gap-2 shrink-0">
-                                            <button onClick={() => { setShowMinuteModal(false); setNewMinuteContent(""); setMinuteDate(null); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
+                                            <button onClick={() => { setShowMinuteModal(false); setNewMinuteContent(""); setMinuteDate(null); setEditingMinuteId(null); }} className="flex-1 py-3 bg-stone-200 text-stone-700 rounded-xl font-bold hover:bg-stone-300 transition-colors">취소</button>
                                             <button onClick={handleAddMinute} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">회의록 저장</button>
                                         </div>
                                     </div>
