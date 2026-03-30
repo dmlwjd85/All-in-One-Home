@@ -124,6 +124,7 @@
         const Calculator = createIcon('Calculator');
         const Check = createIcon('Check');
         const ImagePlus = createIcon('ImagePlus');
+        const Download = createIcon('Download');
         const Lock = createIcon('Lock');
         const FileText = createIcon('FileText');
         const Pencil = createIcon('Pencil');
@@ -211,6 +212,7 @@
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [editingMemory, setEditingMemory] = useState(null); 
             const [viewingMemory, setViewingMemory] = useState(null); 
+            const [isViewingImageZoomed, setIsViewingImageZoomed] = useState(false);
             
             const [selectedEvent, setSelectedEvent] = useState(null); 
 
@@ -569,6 +571,40 @@
                     };
                 };
             };
+
+            const downloadImage = async (url, filename) => {
+                try {
+                    if (typeof url === 'string' && url.startsWith('data:')) {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        return;
+                    }
+
+                    const response = await fetch(url, { mode: 'cors' });
+                    if (!response.ok) throw new Error(`이미지 다운로드 실패 (${response.status})`);
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = objectUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(objectUrl);
+                } catch (err) {
+                    console.error(err);
+                    alert("다운로드 중 오류가 발생했습니다. (외부 이미지의 경우 브라우저 정책으로 제한될 수 있어요)");
+                }
+            };
+
+            useEffect(() => {
+                // 상세 모달을 열 때마다 확대 상태 초기화
+                setIsViewingImageZoomed(false);
+            }, [viewingMemory?.id]);
 
             const handleUpdateAmount = async (id) => { if (!user) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id), { amount: parseFloat(editAmount) || 0 }); setEditingLedgerId(null); } catch (err) { console.error(err); } };
             const handleAddLedger = async () => { if (!newLedgerItem.title || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), { ...newLedgerItem, amount: parseFloat(newLedgerItem.amount) || 0, createdAt: serverTimestamp() }); setNewLedgerItem({ category: 'income_reg', title: '', amount: 0 }); setShowLedgerAddModal(false); } catch (err) { console.error(err); } };
@@ -1099,23 +1135,82 @@
                                         </p>
                                     </section>
 
-                                    {/* 퀵 링크(숏컷) 버튼 영역 추가 */}
-                                    <div className="grid grid-cols-5 gap-2 md:gap-4">
-                                        {[
-                                            { id: 'calendar', icon: CalendarIcon, label: '일정', color: 'text-indigo-500', bg: 'bg-indigo-50' },
-                                            { id: 'chores', icon: ClipboardCheck, label: '집안일', color: 'text-amber-500', bg: 'bg-amber-50' },
-                                            { id: 'ledger', icon: Wallet, label: '가계부', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                                            { id: 'teacher', icon: BookOpen, label: '교무수첩', color: 'text-blue-500', bg: 'bg-blue-50' },
-                                            { id: 'siha', icon: Heart, label: '가족일기', color: 'text-rose-500', bg: 'bg-rose-50' },
-                                        ].map(link => (
-                                            <button key={link.id} onClick={() => setActiveTab(link.id)} className="flex flex-col items-center justify-center py-3 md:py-4 rounded-2xl md:rounded-3xl border border-stone-200 shadow-sm hover:shadow-md transition-all bg-white group">
-                                                <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full ${link.bg} flex items-center justify-center mb-1.5 md:mb-2 group-hover:scale-110 transition-transform`}>
-                                                    <link.icon className={link.color} size={20} />
-                                                </div>
-                                                <span className="text-[10px] md:text-xs font-bold text-stone-700">{link.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                    {/* 각 메뉴 썸네일(카드)로 한눈에 보기 */}
+                                    <section className="bg-paper-50 p-5 md:p-6 rounded-3xl border border-stone-200 shadow-sm">
+                                        <div className="flex items-end justify-between gap-3 mb-4">
+                                            <div>
+                                                <h3 className="text-base md:text-lg font-black text-stone-800 tracking-tight">메뉴 한눈에 보기</h3>
+                                                <p className="text-xs md:text-sm text-stone-500 font-semibold mt-1">하단 탭 없이도 썸네일을 눌러 바로 이동할 수 있어요.</p>
+                                            </div>
+                                            <div className="hidden md:flex items-center gap-1 text-[11px] font-bold text-stone-400">
+                                                <span className="px-2 py-1 rounded-full bg-stone-100 border border-stone-200">클릭 → 탭 이동</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                                            {[
+                                                {
+                                                    id: 'calendar',
+                                                    icon: CalendarIcon,
+                                                    label: '공용 일정',
+                                                    desc: '가족 일정 등록/확인',
+                                                    grad: 'from-indigo-50 to-white',
+                                                    accent: 'text-indigo-600'
+                                                },
+                                                {
+                                                    id: 'chores',
+                                                    icon: ClipboardCheck,
+                                                    label: '집안일',
+                                                    desc: '월간 루틴 체크',
+                                                    grad: 'from-amber-50 to-white',
+                                                    accent: 'text-amber-600'
+                                                },
+                                                {
+                                                    id: 'ledger',
+                                                    icon: Wallet,
+                                                    label: '가계부',
+                                                    desc: '소득/지출 요약',
+                                                    grad: 'from-emerald-50 to-white',
+                                                    accent: 'text-emerald-700'
+                                                },
+                                                {
+                                                    id: 'teacher',
+                                                    icon: BookOpen,
+                                                    label: '교무수첩',
+                                                    desc: '업무/회의록/시간표',
+                                                    grad: 'from-sky-50 to-white',
+                                                    accent: 'text-sky-700'
+                                                },
+                                                {
+                                                    id: 'siha',
+                                                    icon: Heart,
+                                                    label: '우리 가족 앨범',
+                                                    desc: `${sihaMemories.length > 0 ? `최근 ${sihaMemories[0]?.date}` : '사진/글로 추억 저장'}`,
+                                                    grad: 'from-rose-50 to-white',
+                                                    accent: 'text-rose-600'
+                                                },
+                                            ].map(card => (
+                                                <button
+                                                    key={card.id}
+                                                    onClick={() => setActiveTab(card.id)}
+                                                    className={`group text-left bg-gradient-to-br ${card.grad} border border-stone-200 rounded-3xl p-4 md:p-5 shadow-sm hover:shadow-md transition-all`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className={`w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform`}>
+                                                            <card.icon size={22} className={card.accent} />
+                                                        </div>
+                                                        <div className="text-[10px] font-black text-stone-400 bg-white/70 border border-stone-200 px-2 py-1 rounded-full">
+                                                            바로가기
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3">
+                                                        <p className="text-sm md:text-base font-black text-stone-800 tracking-tight">{card.label}</p>
+                                                        <p className="text-[11px] md:text-xs text-stone-500 font-semibold mt-1 line-clamp-2">{card.desc}</p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </section>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                                         <div className="bg-paper-50 p-6 rounded-3xl shadow-sm border border-stone-200">
@@ -1737,8 +1832,27 @@
                                 <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setViewingMemory(null)}>
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                                         <div className="relative bg-stone-100 flex items-center justify-center shrink-0 border-b border-stone-200 p-2">
-                                            <img src={viewingMemory.image} className="max-w-full max-h-[45vh] object-contain rounded" />
+                                            <img
+                                                src={viewingMemory.image}
+                                                className={`max-w-full max-h-[45vh] object-contain rounded transition-transform duration-200 ${isViewingImageZoomed ? 'scale-[2.2]' : 'scale-100'} ${isViewingImageZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+                                                onClick={() => setIsViewingImageZoomed(v => !v)}
+                                                title={isViewingImageZoomed ? "클릭하면 축소" : "클릭하면 확대"}
+                                            />
                                             <button onClick={() => setViewingMemory(null)} className="absolute top-4 right-4 p-2 bg-stone-900/50 hover:bg-stone-900 text-white rounded-full transition-colors backdrop-blur"><X size={20}/></button>
+                                            <div className="absolute top-4 left-4 flex gap-2">
+                                                <button
+                                                    onClick={() => setIsViewingImageZoomed(v => !v)}
+                                                    className="px-3 py-2 bg-white/90 hover:bg-white text-stone-700 rounded-xl text-xs font-black border border-stone-200 shadow-sm transition-colors"
+                                                >
+                                                    {isViewingImageZoomed ? '축소' : '확대'}
+                                                </button>
+                                                <button
+                                                    onClick={() => downloadImage(viewingMemory.image, `우리-가족-앨범_${viewingMemory.date || 'photo'}.jpg`)}
+                                                    className="px-3 py-2 bg-white/90 hover:bg-white text-stone-700 rounded-xl text-xs font-black border border-stone-200 shadow-sm transition-colors flex items-center gap-1.5"
+                                                >
+                                                    <Download size={16}/> 다운로드
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="p-6 md:p-8 overflow-y-auto">
                                             <div className="flex items-center gap-2 mb-2">
