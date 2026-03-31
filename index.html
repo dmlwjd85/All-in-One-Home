@@ -212,7 +212,17 @@
             const [uploadedImageBase64, setUploadedImageBase64] = useState(null);
             const [editingMemory, setEditingMemory] = useState(null); 
             const [viewingMemory, setViewingMemory] = useState(null); 
-            const [isViewingImageZoomed, setIsViewingImageZoomed] = useState(false);
+            // 가족 앨범 상세 → 사진만 전체 화면 + 핀치/드래그 확대
+            const [memoryPhotoFullscreen, setMemoryPhotoFullscreen] = useState(false);
+            const [fsScale, setFsScale] = useState(1);
+            const [fsTx, setFsTx] = useState(0);
+            const [fsTy, setFsTy] = useState(0);
+            const fsScaleRef = useRef(1);
+            const fsTxRef = useRef(0);
+            const fsTyRef = useRef(0);
+            const fsPinchRef = useRef(null);
+            const fsPanRef = useRef(null);
+            const memoryFsLayerRef = useRef(null);
             
             const [selectedEvent, setSelectedEvent] = useState(null); 
 
@@ -602,9 +612,123 @@
             };
 
             useEffect(() => {
-                // 상세 모달을 열 때마다 확대 상태 초기화
-                setIsViewingImageZoomed(false);
+                fsScaleRef.current = fsScale;
+                fsTxRef.current = fsTx;
+                fsTyRef.current = fsTy;
+            }, [fsScale, fsTx, fsTy]);
+
+            useEffect(() => {
+                // 상세 모달을 바꿀 때마다 전체 화면 사진 뷰 초기화
+                setMemoryPhotoFullscreen(false);
+                setFsScale(1);
+                setFsTx(0);
+                setFsTy(0);
             }, [viewingMemory?.id]);
+
+            useEffect(() => {
+                // 상세 모달이 닫히면 전체 화면 사진 상태도 함께 정리 (같은 항목 재오픈 시 id 동일해도 안전)
+                if (!viewingMemory) {
+                    setMemoryPhotoFullscreen(false);
+                    setFsScale(1);
+                    setFsTx(0);
+                    setFsTy(0);
+                    fsPinchRef.current = null;
+                    fsPanRef.current = null;
+                }
+            }, [viewingMemory]);
+
+            // iOS 등에서 전체 화면 핀치 중 뒤로 스크롤·바운스 방지
+            useEffect(() => {
+                const el = memoryFsLayerRef.current;
+                if (!el || !memoryPhotoFullscreen) return;
+                const preventScroll = (e) => { e.preventDefault(); };
+                el.addEventListener('touchmove', preventScroll, { passive: false });
+                return () => el.removeEventListener('touchmove', preventScroll);
+            }, [memoryPhotoFullscreen]);
+
+            const closeMemoryPhotoFullscreen = () => {
+                setMemoryPhotoFullscreen(false);
+                setFsScale(1);
+                setFsTx(0);
+                setFsTy(0);
+                fsPinchRef.current = null;
+                fsPanRef.current = null;
+            };
+
+            const openMemoryPhotoFullscreen = () => {
+                setMemoryPhotoFullscreen(true);
+                setFsScale(1);
+                setFsTx(0);
+                setFsTy(0);
+                fsPinchRef.current = null;
+                fsPanRef.current = null;
+            };
+
+            /** 가족 앨범 전체 화면 사진: 두 손가락 핀치로 확대/축소, 확대 시 한 손가락으로 이동 */
+            const handleMemoryFsTouchStart = (e) => {
+                if (e.touches.length === 2) {
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const d0 = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    fsPinchRef.current = { d0, scale0: fsScaleRef.current };
+                    fsPanRef.current = null;
+                } else if (e.touches.length === 1 && fsScaleRef.current > 1.01) {
+                    const t = e.touches[0];
+                    fsPanRef.current = {
+                        x0: t.clientX,
+                        y0: t.clientY,
+                        tx0: fsTxRef.current,
+                        ty0: fsTyRef.current
+                    };
+                }
+            };
+
+            const handleMemoryFsTouchMove = (e) => {
+                if (e.touches.length >= 2 && fsPinchRef.current) {
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const d = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+                    const { d0, scale0 } = fsPinchRef.current;
+                    let newScale = scale0 * (d / d0);
+                    newScale = Math.min(6, Math.max(1, newScale));
+                    setFsScale(newScale);
+                    if (newScale <= 1.01) {
+                        setFsTx(0);
+                        setFsTy(0);
+                    }
+                } else if (e.touches.length === 1 && fsPanRef.current) {
+                    const t = e.touches[0];
+                    const p = fsPanRef.current;
+                    setFsTx(p.tx0 + (t.clientX - p.x0));
+                    setFsTy(p.ty0 + (t.clientY - p.y0));
+                }
+            };
+
+            const handleMemoryFsTouchEnd = (e) => {
+                if (e.touches.length < 2) fsPinchRef.current = null;
+                if (e.touches.length === 1 && fsScaleRef.current > 1.01) {
+                    const t = e.touches[0];
+                    fsPanRef.current = {
+                        x0: t.clientX,
+                        y0: t.clientY,
+                        tx0: fsTxRef.current,
+                        ty0: fsTyRef.current
+                    };
+                }
+                if (e.touches.length === 0) fsPanRef.current = null;
+            };
+
+            const handleMemoryFsWheel = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const factor = e.deltaY > 0 ? 0.9 : 1.1;
+                setFsScale((s) => {
+                    const n = Math.min(6, Math.max(1, s * factor));
+                    if (n <= 1.01) {
+                        setFsTx(0);
+                        setFsTy(0);
+                    }
+                    return n;
+                });
+            };
 
             const handleUpdateAmount = async (id) => { if (!user) return; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'ledgerItems', id), { amount: parseFloat(editAmount) || 0 }); setEditingLedgerId(null); } catch (err) { console.error(err); } };
             const handleAddLedger = async () => { if (!newLedgerItem.title || !user) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'ledgerItems'), { ...newLedgerItem, amount: parseFloat(newLedgerItem.amount) || 0, createdAt: serverTimestamp() }); setNewLedgerItem({ category: 'income_reg', title: '', amount: 0 }); setShowLedgerAddModal(false); } catch (err) { console.error(err); } };
@@ -1829,22 +1953,23 @@
 
                             {/* 우리 가족 일기 상세 조회 모달 */}
                             {viewingMemory && (
-                                <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setViewingMemory(null)}>
+                                <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => { closeMemoryPhotoFullscreen(); setViewingMemory(null); }}>
                                     <div className="bg-paper-50 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                                         <div className="relative bg-stone-100 flex items-center justify-center shrink-0 border-b border-stone-200 p-2">
                                             <img
                                                 src={viewingMemory.image}
-                                                className={`max-w-full max-h-[45vh] object-contain rounded transition-transform duration-200 ${isViewingImageZoomed ? 'scale-[2.2]' : 'scale-100'} ${isViewingImageZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
-                                                onClick={() => setIsViewingImageZoomed(v => !v)}
-                                                title={isViewingImageZoomed ? "클릭하면 축소" : "클릭하면 확대"}
+                                                className="max-w-full max-h-[45vh] object-contain rounded cursor-pointer active:opacity-90"
+                                                onClick={(e) => { e.stopPropagation(); openMemoryPhotoFullscreen(); }}
+                                                title="탭하면 화면 꽉 차게 보기 · 핀치로 확대"
                                             />
-                                            <button onClick={() => setViewingMemory(null)} className="absolute top-4 right-4 p-2 bg-stone-900/50 hover:bg-stone-900 text-white rounded-full transition-colors backdrop-blur"><X size={20}/></button>
+                                            <button onClick={() => { closeMemoryPhotoFullscreen(); setViewingMemory(null); }} className="absolute top-4 right-4 p-2 bg-stone-900/50 hover:bg-stone-900 text-white rounded-full transition-colors backdrop-blur"><X size={20}/></button>
                                             <div className="absolute top-4 left-4 flex gap-2">
                                                 <button
-                                                    onClick={() => setIsViewingImageZoomed(v => !v)}
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); openMemoryPhotoFullscreen(); }}
                                                     className="px-3 py-2 bg-white/90 hover:bg-white text-stone-700 rounded-xl text-xs font-black border border-stone-200 shadow-sm transition-colors"
                                                 >
-                                                    {isViewingImageZoomed ? '축소' : '확대'}
+                                                    크게 보기
                                                 </button>
                                                 <button
                                                     onClick={() => downloadImage(viewingMemory.image, `우리-가족-앨범_${viewingMemory.date || 'photo'}.jpg`)}
@@ -1868,6 +1993,49 @@
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* 가족 앨범: 상세에서 사진 탭 시 전체 화면 + 핀치/드래그 확대 */}
+                            {viewingMemory && memoryPhotoFullscreen && (
+                                <div
+                                    className="fixed inset-0 z-[70] bg-black touch-none select-none"
+                                    role="dialog"
+                                    aria-label="사진 전체 화면"
+                                    onClick={closeMemoryPhotoFullscreen}
+                                >
+                                    <div
+                                        ref={memoryFsLayerRef}
+                                        className="absolute inset-0 flex items-center justify-center overflow-hidden"
+                                        onTouchStart={handleMemoryFsTouchStart}
+                                        onTouchMove={handleMemoryFsTouchMove}
+                                        onTouchEnd={handleMemoryFsTouchEnd}
+                                        onWheel={handleMemoryFsWheel}
+                                    >
+                                        <img
+                                            alt="가족 앨범 사진"
+                                            src={viewingMemory.image}
+                                            draggable={false}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="max-h-full max-w-full object-contain"
+                                            style={{
+                                                transform: `translate(${fsTx}px, ${fsTy}px) scale(${fsScale})`,
+                                                transformOrigin: 'center center',
+                                                willChange: 'transform',
+                                            }}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="absolute top-4 right-4 p-2.5 bg-white/15 hover:bg-white/25 text-white rounded-full z-10 backdrop-blur-sm"
+                                        onClick={(e) => { e.stopPropagation(); closeMemoryPhotoFullscreen(); }}
+                                        aria-label="전체 화면 닫기"
+                                    >
+                                        <X size={22} />
+                                    </button>
+                                    <p className="absolute bottom-6 left-0 right-0 text-center text-white/55 text-[11px] pointer-events-none px-4">
+                                        두 손가락으로 확대·축소 · 확대 후 한 손가락으로 이동 · 빈 곳 탭하면 닫기
+                                    </p>
                                 </div>
                             )}
 
