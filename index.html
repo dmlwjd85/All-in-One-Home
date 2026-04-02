@@ -156,6 +156,8 @@
         const Camera = createIcon('Camera');
         const Mic = createIcon('Mic');
         const PieChart = createIcon('PieChart');
+        const Layers = createIcon('Layers');
+        const Search = createIcon('Search');
         const Info = createIcon('Info');
         const TargetIcon = createIcon('Target');
         const Car = createIcon('Car');
@@ -281,6 +283,29 @@
             };
         };
 
+        /** Finnhub 심볼 검색 (티커·이름) */
+        const fetchFinnhubSymbolSearch = async (query, token = FINNHUB_API_KEY) => {
+            if (!token || !query || String(query).trim().length < 1) return { ok: false, result: [], error: null };
+            try {
+                const res = await fetch(
+                    `https://finnhub.io/api/v1/search?q=${encodeURIComponent(String(query).trim())}&token=${encodeURIComponent(token)}`
+                );
+                const j = await res.json();
+                if (j.error) return { ok: false, result: [], error: j.error };
+                return { ok: true, result: Array.isArray(j.result) ? j.result : [], error: null };
+            } catch (e) {
+                console.warn('Finnhub 검색 실패', e);
+                return { ok: false, result: [], error: '검색 요청에 실패했습니다.' };
+            }
+        };
+
+        const isLikelyEtfSymbolResult = (r) => {
+            const t = (r.type || '').toUpperCase();
+            if (t === 'ETF' || t === 'ETP' || t === 'ETN') return true;
+            const d = (r.description || '').toUpperCase();
+            return d.includes(' ETF') || d.includes(' ETN') || d.startsWith('ETF ');
+        };
+
         /** 미국 상장 ETF 10종 고정 카탈로그 (추천 시 비중만 성향에 따라 조정) */
         const INVEST_ETF_TEN = [
             {
@@ -345,42 +370,123 @@
             },
         ];
 
-        /** Finnhub 주봉으로 약 1년·5년 전 대비 수익률(%) 추정 (종가 기준, 참고용) */
+        /** 캔들 배열에서 최근 유효 종가·약 1년·5년 전 수익률 계산 */
+        const calcReturnsFromCandles = (t, c) => {
+            if (!t || !c || t.length < 2 || c.length < 2) return { ret1y: null, ret5y: null };
+            const now = Math.floor(Date.now() / 1000);
+            const day = 86400;
+            const t1y = now - 365 * day;
+            const t5y = now - 5 * 365 * day;
+            let last = c[c.length - 1];
+            let li = c.length - 1;
+            while ((last == null || last === 0) && li > 0) last = c[--li];
+            if (last == null || last <= 0) return { ret1y: null, ret5y: null };
+            let idx1y = -1;
+            for (let i = t.length - 1; i >= 0; i--) {
+                if (t[i] <= t1y && c[i] != null && c[i] > 0) {
+                    idx1y = i;
+                    break;
+                }
+            }
+            let idx5y = -1;
+            for (let i = t.length - 1; i >= 0; i--) {
+                if (t[i] <= t5y && c[i] != null && c[i] > 0) {
+                    idx5y = i;
+                    break;
+                }
+            }
+            const ret1y = idx1y >= 0 ? ((last / c[idx1y]) - 1) * 100 : null;
+            const ret5y = idx5y >= 0 ? ((last / c[idx5y]) - 1) * 100 : null;
+            return { ret1y, ret5y };
+        };
+
+        /** Finnhub 캔들 (주봉 → 실패 시 일봉) */
         const fetchEtfHistoricalReturnsFinnhub = async (symbol, token = FINNHUB_API_KEY) => {
             if (!token) return { ret1y: null, ret5y: null };
             const now = Math.floor(Date.now() / 1000);
             const day = 86400;
             const from = now - 6 * 365 * day;
-            try {
-                const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=W&from=${from}&to=${now}&token=${encodeURIComponent(token)}`;
+            const tryRes = async (resolution) => {
+                const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${now}&token=${encodeURIComponent(token)}`;
                 const res = await fetch(url);
                 const data = await res.json();
-                if (data.s !== 'ok' || !data.c || !data.t || data.c.length < 2) return { ret1y: null, ret5y: null };
-                const { t, c } = data;
-                const last = c[c.length - 1];
-                const t1y = now - 365 * day;
-                const t5y = now - 5 * 365 * day;
-                let idx1y = -1;
-                for (let i = t.length - 1; i >= 0; i--) {
-                    if (t[i] <= t1y) {
-                        idx1y = i;
-                        break;
-                    }
-                }
-                let idx5y = -1;
-                for (let i = t.length - 1; i >= 0; i--) {
-                    if (t[i] <= t5y) {
-                        idx5y = i;
-                        break;
-                    }
-                }
-                const ret1y = idx1y >= 0 && c[idx1y] > 0 ? ((last / c[idx1y]) - 1) * 100 : null;
-                const ret5y = idx5y >= 0 && c[idx5y] > 0 ? ((last / c[idx5y]) - 1) * 100 : null;
-                return { ret1y, ret5y };
+                if (data.error) return null;
+                if (data.s !== 'ok' || !data.c || !data.t || data.c.length < 2) return null;
+                return calcReturnsFromCandles(data.t, data.c);
+            };
+            try {
+                let out = await tryRes('W');
+                if (out && (out.ret1y != null || out.ret5y != null)) return out;
+                out = await tryRes('D');
+                if (out) return out;
+                return { ret1y: null, ret5y: null };
             } catch (e) {
-                console.warn('과거 수익률 조회 실패', symbol, e);
+                console.warn('Finnhub 캔들 실패', symbol, e);
                 return { ret1y: null, ret5y: null };
             }
+        };
+
+        /** 야후 차트 응답 파싱 (allorigins·직접 JSON 등 혼합) */
+        const parseYahooChartJson = async (res) => {
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            let root;
+            if (ct.includes('application/json')) {
+                root = await res.json();
+            } else {
+                const text = await res.text();
+                try {
+                    root = JSON.parse(text);
+                } catch {
+                    return null;
+                }
+            }
+            if (root && typeof root.contents === 'string') {
+                try {
+                    return JSON.parse(root.contents);
+                } catch {
+                    return null;
+                }
+            }
+            return root;
+        };
+
+        /** 야후 차트 v8 (프록시) — Finnhub 실패 시 폴백 */
+        const fetchYahooHistoricalReturns = async (symbol) => {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5y&interval=1wk`;
+            const proxyUrls = [
+                `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            ];
+            for (const purl of proxyUrls) {
+                try {
+                    const res = await fetch(purl);
+                    if (!res.ok) continue;
+                    const data = await parseYahooChartJson(res);
+                    if (!data) continue;
+                    const r = data?.chart?.result?.[0];
+                    if (!r) continue;
+                    const ts = r.timestamp;
+                    const closes = r.indicators?.quote?.[0]?.close;
+                    if (!ts || !closes || ts.length < 2) continue;
+                    const { ret1y, ret5y } = calcReturnsFromCandles(ts, closes);
+                    if (ret1y != null || ret5y != null) return { ret1y, ret5y };
+                } catch (e) {
+                    console.warn('야후 차트 수익률 실패', symbol, e);
+                }
+            }
+            return { ret1y: null, ret5y: null };
+        };
+
+        /** 1년·5년 수익률: Finnhub(주·일) 후 부족분만 야후로 보완 */
+        const fetchEtfHistoricalReturnsCombined = async (symbol, token = FINNHUB_API_KEY) => {
+            const fh = await fetchEtfHistoricalReturnsFinnhub(symbol, token);
+            if (fh.ret1y != null && fh.ret5y != null) return fh;
+            const yh = await fetchYahooHistoricalReturns(symbol);
+            return {
+                ret1y: fh.ret1y != null ? fh.ret1y : yh.ret1y,
+                ret5y: fh.ret5y != null ? fh.ret5y : yh.ret5y,
+            };
         };
 
         /** 투자 성향 비율 → 위 ETF 10종 추천 (가중치 합 100%, 참고용) */
@@ -578,6 +684,39 @@
             const [invEtfError, setInvEtfError] = useState(null);
             const [invLastFetchAt, setInvLastFetchAt] = useState(null);
 
+            /** ETF 포트폴리오 시뮬: 검색·비중·시세 연동 */
+            const [pfRows, setPfRows] = useState(() => {
+                try {
+                    const s = localStorage.getItem('pfPortfolioV1');
+                    if (s) {
+                        const p = JSON.parse(s);
+                        if (Array.isArray(p) && p.length) {
+                            return p.map((row, i) => ({
+                                id: row.id || `pf-${i}-${row.symbol}`,
+                                symbol: String(row.symbol || '').toUpperCase(),
+                                description: row.description || '',
+                                weightPct: typeof row.weightPct === 'number' ? row.weightPct : Number(row.weightPct) || 0,
+                            }));
+                        }
+                    }
+                } catch (e) {}
+                return [];
+            });
+            const [pfSearch, setPfSearch] = useState('');
+            const [pfSearchHits, setPfSearchHits] = useState([]);
+            const [pfSearchLoading, setPfSearchLoading] = useState(false);
+            const [pfSearchErr, setPfSearchErr] = useState(null);
+            const [pfEtfOnly, setPfEtfOnly] = useState(true);
+            const [pfManualTicker, setPfManualTicker] = useState('');
+            const [pfPrincipal, setPfPrincipal] = useState('');
+            const [pfYears, setPfYears] = useState(10);
+            const [pfTarget, setPfTarget] = useState('');
+            const [pfAnnualRate, setPfAnnualRate] = useState(5);
+            const [pfAutoRateOnFetch, setPfAutoRateOnFetch] = useState(true);
+            const [pfDataLoading, setPfDataLoading] = useState(false);
+            const [pfDataErr, setPfDataErr] = useState(null);
+            const [pfLastFetchAt, setPfLastFetchAt] = useState(null);
+
             // 단기 목표 프로젝트 (만 원 단위)
             const [shortTermGoals, setShortTermGoals] = useState([]);
             const [sgTitle, setSgTitle] = useState('');
@@ -589,7 +728,7 @@
             const todayDate = new Date().getDate();
             const todayChore = CHORE_MASTER_LIST.find(c => c.id === todayDate);
 
-            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'invest', 'shortGoals', 'teacher', 'siha'];
+            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'invest', 'portfolioSim', 'shortGoals', 'teacher', 'siha'];
 
             // 모바일 스와이프 핸들러 (캘린더 영역 예외 처리 추가)
             const handleTouchStart = (e) => {
@@ -643,6 +782,19 @@
                 const unsubscribe = onAuthStateChanged(auth, setUser);
                 return () => unsubscribe();
             }, []);
+
+            // 포트폴리오 시뮬: 티커·비중만 로컬 저장 (시세 캐시는 제외)
+            useEffect(() => {
+                try {
+                    const slim = pfRows.map(({ id, symbol, description, weightPct }) => ({
+                        id,
+                        symbol,
+                        description,
+                        weightPct: Number(weightPct) || 0,
+                    }));
+                    localStorage.setItem('pfPortfolioV1', JSON.stringify(slim));
+                } catch (e) {}
+            }, [pfRows]);
 
             // Data Sync (에러 콜백 필수 적용)
             useEffect(() => {
@@ -1488,6 +1640,7 @@
                 { id: 'chores', icon: ClipboardCheck, label: '집안일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
                 { id: 'invest', icon: PieChart, label: '투자 계산기' },
+                { id: 'portfolioSim', icon: Layers, label: '포트폴리오 시뮬' },
                 { id: 'shortGoals', icon: TargetIcon, label: '단기 목표' },
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
                 { id: 'siha', icon: Heart, label: '우리 가족 일기' },
@@ -1495,6 +1648,162 @@
 
             const invPctSum = invPctPension + invPctLong + invPctMid + invPctShort;
             const invPctOk = Math.abs(invPctSum - 100) < 0.01;
+
+            const pfWeightSum = useMemo(() => pfRows.reduce((a, r) => a + (Number(r.weightPct) || 0), 0), [pfRows]);
+            const pfPctOk = Math.abs(pfWeightSum - 100) < 0.05;
+            const pfBlended1y = useMemo(() => {
+                let b = 0;
+                let has = false;
+                pfRows.forEach((r) => {
+                    if (r.ret1y != null && Number.isFinite(r.ret1y)) {
+                        b += ((Number(r.weightPct) || 0) / 100) * r.ret1y;
+                        has = true;
+                    }
+                });
+                return has ? Math.round(b * 10) / 10 : null;
+            }, [pfRows]);
+
+            const genPfId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+            const equalizePfWeights = (rows) => {
+                const n = rows.length;
+                if (n === 0) return [];
+                const each = Math.floor(1000 / n) / 10;
+                let acc = 0;
+                return rows.map((r, i) => {
+                    if (i === n - 1) return { ...r, weightPct: Math.round((100 - acc) * 10) / 10 };
+                    acc += each;
+                    return { ...r, weightPct: each };
+                });
+            };
+
+            /** 포트폴리오 시뮬: ETF 검색 */
+            const runPfSearch = async () => {
+                setPfSearchLoading(true);
+                setPfSearchErr(null);
+                setPfSearchHits([]);
+                try {
+                    const fr = await fetchFinnhubSymbolSearch(pfSearch, FINNHUB_API_KEY);
+                    if (!fr.ok) {
+                        setPfSearchErr(fr.error || '검색에 실패했습니다.');
+                        return;
+                    }
+                    let list = fr.result || [];
+                    if (pfEtfOnly) list = list.filter(isLikelyEtfSymbolResult);
+                    setPfSearchHits(list.slice(0, 50));
+                } catch (e) {
+                    setPfSearchErr('검색 중 오류가 났습니다.');
+                } finally {
+                    setPfSearchLoading(false);
+                }
+            };
+
+            const addPfRow = (symbol, description) => {
+                let sym = String(symbol || '').toUpperCase().replace(/\s+/g, '');
+                if (sym.includes(':')) sym = sym.split(':').pop() || sym;
+                if (!sym) return;
+                setPfRows((prev) => {
+                    if (prev.some((r) => r.symbol === sym)) return prev;
+                    const next = [...prev, { id: genPfId(), symbol: sym, description: description || '', weightPct: 0 }];
+                    return equalizePfWeights(next);
+                });
+            };
+
+            const removePfRow = (id) => {
+                setPfRows((prev) => equalizePfWeights(prev.filter((r) => r.id !== id)));
+            };
+
+            const updatePfWeight = (id, raw) => {
+                const v = parseFloat(String(raw).replace(/,/g, ''));
+                const w = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+                setPfRows((prev) => prev.map((r) => (r.id === id ? { ...r, weightPct: w } : r)));
+            };
+
+            /** 포트폴리오 시뮬: 시세·과거 수익률 (투자 계산기와 동일 파이프라인) */
+            const runPortfolioDataFetch = async () => {
+                if (!pfRows.length) {
+                    alert('포트폴리오에 종목을 추가해 주세요.');
+                    return;
+                }
+                if (!pfPctOk) {
+                    alert('비중 합계가 100%가 되도록 맞춰 주세요.');
+                    return;
+                }
+                const snapshot = pfRows.map((r) => ({ ...r }));
+                const syms = snapshot.map((r) => r.symbol);
+                setPfDataLoading(true);
+                setPfDataErr(null);
+                try {
+                    let quotes = [];
+                    let ok = false;
+                    let errMsg = null;
+                    const fr = await fetchFinnhubQuotesForSymbols(syms, FINNHUB_API_KEY);
+                    if (fr.ok && fr.quotes && fr.quotes.length) {
+                        quotes = fr.quotes;
+                        ok = true;
+                    } else if (fr.error) errMsg = fr.error;
+                    if (!ok) {
+                        const yh = await fetchYahooQuotesForSymbols(syms);
+                        if (yh.ok && yh.quotes && yh.quotes.length) {
+                            quotes = yh.quotes;
+                            ok = true;
+                        }
+                        if (!ok && yh.error) errMsg = errMsg ? `${errMsg} ${yh.error}` : yh.error;
+                    }
+                    const qMap = {};
+                    (quotes || []).forEach((q) => {
+                        const s = q.symbol || '';
+                        qMap[s] = q;
+                        const base = s.split('.')[0];
+                        if (base && base !== s) qMap[base] = q;
+                    });
+                    const retList = await Promise.all(syms.map((s) => fetchEtfHistoricalReturnsCombined(s, FINNHUB_API_KEY)));
+
+                    let blended = 0;
+                    let hasBlend = false;
+                    const merged = snapshot.map((row, idx) => {
+                        const q = qMap[row.symbol] || qMap[row.symbol.split('.')[0]] || {};
+                        const hist = retList[idx] || { ret1y: null, ret5y: null };
+                        const w = (Number(row.weightPct) || 0) / 100;
+                        if (hist.ret1y != null && Number.isFinite(hist.ret1y)) {
+                            blended += w * hist.ret1y;
+                            hasBlend = true;
+                        }
+                        return {
+                            ...row,
+                            ret1y: hist.ret1y,
+                            ret5y: hist.ret5y,
+                            price: q.regularMarketPrice ?? q.regularMarketPreviousClose ?? null,
+                            chgPct: q.regularMarketChangePercent ?? null,
+                            nameEn: q.shortName || q.longName || row.symbol,
+                            currency: q.currency || 'USD',
+                        };
+                    });
+                    setPfRows(merged);
+                    if (pfAutoRateOnFetch && hasBlend) setPfAnnualRate(Math.round(blended * 10) / 10);
+                    setPfDataErr(ok ? null : (errMsg || '일부 시세를 가져오지 못했을 수 있습니다.'));
+                    setPfLastFetchAt(new Date());
+                } catch (e) {
+                    console.error(e);
+                    setPfDataErr('시세·수익률 조회 중 오류가 났습니다.');
+                } finally {
+                    setPfDataLoading(false);
+                }
+            };
+
+            /** 포트폴리오 시뮬: 저장된 1년 수익률로 가중 평균만 다시 반영 */
+            const applyPfBlendedRateFromRows = () => {
+                let blended = 0;
+                let hasBlend = false;
+                pfRows.forEach((r) => {
+                    if (r.ret1y != null && Number.isFinite(r.ret1y)) {
+                        blended += ((Number(r.weightPct) || 0) / 100) * r.ret1y;
+                        hasBlend = true;
+                    }
+                });
+                if (hasBlend) setPfAnnualRate(Math.round(blended * 10) / 10);
+                else alert('먼저 시세·수익률을 불러오거나, 연 수익률을 직접 입력해 주세요.');
+            };
 
             /** 포트폴리오 추천 + 시세 (Finnhub 우선 → 야후 프록시) */
             const runInvestAnalysis = async () => {
@@ -1526,7 +1835,7 @@
                     const qMap = {};
                     (quotes || []).forEach((q) => { qMap[q.symbol] = q; });
                     const retList = await Promise.all(
-                        plan.map((row) => fetchEtfHistoricalReturnsFinnhub(row.symbol, FINNHUB_API_KEY))
+                        plan.map((row) => fetchEtfHistoricalReturnsCombined(row.symbol, FINNHUB_API_KEY))
                     );
                     const merged = plan.map((row, idx) => {
                         const q = qMap[row.symbol];
@@ -1773,6 +2082,14 @@
                                                     desc: '성향·목표·ETF 시세',
                                                     grad: 'from-teal-50 to-slate-100',
                                                     accent: 'text-teal-700'
+                                                },
+                                                {
+                                                    id: 'portfolioSim',
+                                                    icon: Layers,
+                                                    label: '포트폴리오 시뮬',
+                                                    desc: 'ETF 검색·비중·시뮬',
+                                                    grad: 'from-cyan-50 to-slate-100',
+                                                    accent: 'text-cyan-800'
                                                 },
                                                 {
                                                     id: 'shortGoals',
@@ -2451,47 +2768,310 @@
                                             {invEtfError && (
                                                 <div className="px-5 py-3 bg-amber-50 text-amber-900 text-xs font-semibold border-b border-amber-100">{invEtfError}</div>
                                             )}
-                                            <div className="overflow-x-auto">
+                                            {/* 모바일: 카드형으로 가로 스크롤 최소화 */}
+                                            <div className="md:hidden space-y-2.5 px-3 py-3">
+                                                {invEtfRows.map((row) => (
+                                                    <div key={row.symbol} className="rounded-2xl border border-stone-200 bg-white shadow-sm p-3 text-[12px]">
+                                                        <div className="flex justify-between gap-2 border-b border-stone-100 pb-2 mb-2">
+                                                            <div className="min-w-0">
+                                                                <span className="text-[10px] font-bold text-slate-500">{row.bucket}</span>
+                                                                <p className="font-bold text-slate-900 leading-tight text-[13px]">{row.nameKo}</p>
+                                                                <p className="font-mono font-black text-teal-700 text-[11px] mt-0.5">{row.symbol}</p>
+                                                            </div>
+                                                            <span className="shrink-0 font-black text-slate-900">{row.weightPct}%</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] mb-2">
+                                                            <span className="text-slate-500">1년</span>
+                                                            <span className={`font-bold text-right ${row.ret1y == null ? 'text-slate-400' : row.ret1y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret1y)}</span>
+                                                            <span className="text-slate-500">5년</span>
+                                                            <span className={`font-bold text-right ${row.ret5y == null ? 'text-slate-400' : row.ret5y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret5y)}</span>
+                                                            <span className="text-slate-500">가격</span>
+                                                            <span className="font-semibold text-slate-800 text-right">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency || ''}` : '—'}</span>
+                                                            <span className="text-slate-500">당일</span>
+                                                            <span className={`font-bold text-right ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                {row.chgPct != null ? `${row.chgPct >= 0 ? '+' : ''}${row.chgPct.toFixed(2)}%` : '—'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-600 leading-snug line-clamp-3">{row.descKo || '—'}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {/* 데스크톱: 전체 표 */}
+                                            <div className="hidden md:block overflow-x-auto">
                                                 <table className="w-full text-sm">
                                                     <thead>
-                                                        <tr className="bg-stone-100 text-slate-700 text-left text-xs">
-                                                            <th className="px-3 py-3 font-black w-[6.5rem]">구분</th>
-                                                            <th className="px-3 py-3 font-black min-w-[9rem]">ETF명 · 티커</th>
-                                                            <th className="px-3 py-3 font-black min-w-[12rem]">상품 설명</th>
-                                                            <th className="px-3 py-3 font-black whitespace-nowrap">비중</th>
-                                                            <th className="px-3 py-3 font-black whitespace-nowrap">1년 수익률</th>
-                                                            <th className="px-3 py-3 font-black whitespace-nowrap">5년 수익률</th>
-                                                            <th className="px-3 py-3 font-black whitespace-nowrap">가격(USD)</th>
-                                                            <th className="px-3 py-3 font-black whitespace-nowrap">당일</th>
+                                                        <tr className="bg-slate-800 text-white text-left text-xs border-b border-slate-900">
+                                                            <th className="px-2.5 py-2.5 font-black w-[5.5rem] text-white">구분</th>
+                                                            <th className="px-2.5 py-2.5 font-black min-w-[8rem] text-white">ETF명 · 티커</th>
+                                                            <th className="px-2.5 py-2.5 font-black min-w-[10rem] text-white">상품 설명</th>
+                                                            <th className="px-2.5 py-2.5 font-black whitespace-nowrap text-white">비중</th>
+                                                            <th className="px-2.5 py-2.5 font-black whitespace-nowrap text-white">1년 수익률</th>
+                                                            <th className="px-2.5 py-2.5 font-black whitespace-nowrap text-white">5년 수익률</th>
+                                                            <th className="px-2.5 py-2.5 font-black whitespace-nowrap text-white">가격(USD)</th>
+                                                            <th className="px-2.5 py-2.5 font-black whitespace-nowrap text-white">당일</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {invEtfRows.map((row) => (
                                                             <tr key={row.symbol} className="border-t border-stone-100 hover:bg-slate-50/90 align-top">
-                                                                <td className="px-3 py-3 text-xs text-slate-700 font-semibold whitespace-nowrap">{row.bucket}</td>
-                                                                <td className="px-3 py-3">
+                                                                <td className="px-2.5 py-2.5 text-xs text-slate-700 font-semibold whitespace-nowrap">{row.bucket}</td>
+                                                                <td className="px-2.5 py-2.5">
                                                                     <p className="font-bold text-slate-900">{row.nameKo}</p>
                                                                     <p className="text-[11px] font-mono font-black text-teal-700 mt-0.5">{row.symbol}</p>
                                                                     {row.nameEn && <p className="text-[10px] text-slate-500 mt-0.5">{row.nameEn}</p>}
                                                                 </td>
-                                                                <td className="px-3 py-3 text-[11px] text-slate-600 leading-relaxed">{row.descKo || '—'}</td>
-                                                                <td className="px-3 py-3 font-black text-slate-800 whitespace-nowrap">{row.weightPct}%</td>
-                                                                <td className={`px-3 py-3 text-sm font-bold whitespace-nowrap ${row.ret1y == null ? 'text-slate-400' : row.ret1y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret1y)}</td>
-                                                                <td className={`px-3 py-3 text-sm font-bold whitespace-nowrap ${row.ret5y == null ? 'text-slate-400' : row.ret5y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret5y)}</td>
-                                                                <td className="px-3 py-3 text-slate-800 whitespace-nowrap text-sm">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency || ''}` : '—'}</td>
-                                                                <td className={`px-3 py-3 font-bold whitespace-nowrap text-sm ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                <td className="px-2.5 py-2.5 text-[11px] text-slate-600 leading-relaxed">{row.descKo || '—'}</td>
+                                                                <td className="px-2.5 py-2.5 font-black text-slate-800 whitespace-nowrap">{row.weightPct}%</td>
+                                                                <td className={`px-2.5 py-2.5 text-sm font-bold whitespace-nowrap ${row.ret1y == null ? 'text-slate-400' : row.ret1y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret1y)}</td>
+                                                                <td className={`px-2.5 py-2.5 text-sm font-bold whitespace-nowrap ${row.ret5y == null ? 'text-slate-400' : row.ret5y >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>{fmtRetPct(row.ret5y)}</td>
+                                                                <td className="px-2.5 py-2.5 text-slate-800 whitespace-nowrap text-sm">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency || ''}` : '—'}</td>
+                                                                <td className={`px-2.5 py-2.5 font-bold whitespace-nowrap text-sm ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                                     {row.chgPct != null ? `${row.chgPct >= 0 ? '+' : ''}${row.chgPct.toFixed(2)}%` : '—'}
                                                                 </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
-                                                <p className="px-5 py-3 text-[11px] text-slate-500 leading-relaxed border-t border-stone-100 bg-slate-50/50">
-                                                    추천 종목은 <span className="font-bold text-slate-700">미국 상장 ETF 10종</span>으로 고정되며, 비중만 성향 비율에 따라 달라집니다. <span className="font-semibold text-slate-600">1년·5년 수익률</span>은 Finnhub 주봉 종가 기준으로 대략 계산한 값이며, 상장 이력이 짧으면 표시가 없을 수 있습니다. 과거 실적은 미래 수익을 보장하지 않으며, 세금·환율·수수료는 반영되지 않습니다.
-                                                </p>
                                             </div>
+                                            <p className="px-5 py-3 text-[11px] text-slate-500 leading-relaxed border-t border-stone-100 bg-slate-50/50">
+                                                추천 종목은 <span className="font-bold text-slate-700">미국 상장 ETF 10종</span>으로 고정되며, 비중만 성향 비율에 따라 달라집니다. <span className="font-semibold text-slate-600">1년·5년 수익률</span>은 Finnhub 캔들(주봉·일봉) 종가 기준으로 대략 계산하고, 데이터가 없으면 야후 차트로 보완합니다. 상장 이력이 짧으면 표시가 없을 수 있습니다. 과거 실적은 미래 수익을 보장하지 않으며, 세금·환율·수수료는 반영되지 않습니다.
+                                            </p>
                                         </div>
                                     )}
+                                </div>
+                                );
+                            })()}
+
+                            {/* 📑 ETF 포트폴리오 시뮬레이션 */}
+                            {activeTab === 'portfolioSim' && (() => {
+                                const pfPlan = computeInvestTargetPlan(pfPrincipal, pfYears, pfTarget, pfAnnualRate);
+                                const fmtMan = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString('ko-KR') : '—');
+                                const fmtRetPct = (v) => (v == null || Number.isNaN(v) ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`);
+                                const pfInp = 'w-full rounded-xl border border-slate-400 bg-slate-100 text-slate-900 placeholder:text-slate-500 font-bold outline-none focus:ring-2 focus:ring-cyan-500/50';
+                                const fvFormula = pfPlan.rAnnual === 0
+                                    ? `투입 ${fmtMan(pfPlan.W)}만 원 × 1 = ${fmtMan(pfPlan.fvLump)}만 원 (수익률 0%)`
+                                    : `투입 ${fmtMan(pfPlan.W)}만 원 × (1 + ${pfPlan.rPct} ÷ 100)^${pfPlan.n} ≈ ${fmtMan(pfPlan.fvLump)}만 원 (연 복리·만 원 반올림)`;
+                                return (
+                                <div className="max-w-4xl mx-auto space-y-6 pb-4">
+                                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+                                        <div>
+                                            <h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><Layers className="text-cyan-600" />포트폴리오 시뮬</h1>
+                                            <p className="text-stone-500 text-xs md:text-sm mt-1">티커를 검색해 담고 비중을 맞춘 뒤, 투입·기간·목표로 <span className="font-black text-stone-700">복리 시나리오</span>를 확인합니다.</p>
+                                        </div>
+                                        <p className="text-[10px] text-stone-400 flex items-start gap-1 max-w-md"><Info size={14} className="shrink-0 mt-0.5" /> 검색·시세는 Finnhub를 쓰며, 과거 수익률 가중 평균은 참고용 가정일 뿐입니다. 투자 권유가 아닙니다.</p>
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-4">
+                                        <h3 className="text-sm font-black text-stone-800 flex items-center gap-2"><Search size={16} className="text-cyan-600" />① ETF 검색 · 추가</h3>
+                                        <div className="flex flex-col sm:flex-row gap-2">
+                                            <input
+                                                value={pfSearch}
+                                                onChange={(e) => setPfSearch(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), runPfSearch())}
+                                                className={`${pfInp} px-4 py-3 flex-1`}
+                                                placeholder="티커 또는 이름 (예: VTI, bond)"
+                                            />
+                                            <button type="button" onClick={runPfSearch} disabled={pfSearchLoading} className="px-5 py-3 rounded-xl bg-slate-800 text-white font-black hover:bg-slate-900 disabled:opacity-50 shrink-0">
+                                                {pfSearchLoading ? '검색 중…' : '검색'}
+                                            </button>
+                                        </div>
+                                        <label className="flex items-center gap-2 text-xs font-bold text-stone-500 cursor-pointer">
+                                            <input type="checkbox" checked={pfEtfOnly} onChange={(e) => setPfEtfOnly(e.target.checked)} className="rounded border-stone-400" />
+                                            ETF·ETP·ETN 위주로 결과 좁히기 (해제 시 일반 주식도 표시)
+                                        </label>
+                                        {pfSearchErr && <p className="text-xs font-bold text-amber-700">{pfSearchErr}</p>}
+                                        {pfSearchHits.length > 0 && (
+                                            <div className="max-h-48 overflow-y-auto rounded-xl border border-stone-200 bg-white divide-y divide-stone-100">
+                                                {pfSearchHits.map((h, i) => (
+                                                    <button
+                                                        type="button"
+                                                        key={`${h.symbol}-${i}`}
+                                                        onClick={() => addPfRow(h.displaySymbol || h.symbol, h.description)}
+                                                        className="w-full text-left px-3 py-2.5 hover:bg-cyan-50/80 text-sm flex justify-between gap-2"
+                                                    >
+                                                        <span className="font-mono font-black text-teal-700">{h.displaySymbol || h.symbol}</span>
+                                                        <span className="text-stone-600 text-xs truncate flex-1">{h.description}</span>
+                                                        <span className="text-[10px] text-stone-400 shrink-0">{h.type || '—'}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center pt-2 border-t border-stone-200">
+                                            <span className="text-xs font-bold text-stone-500 shrink-0">티커 직접 입력 (미국 상장)</span>
+                                            <input
+                                                value={pfManualTicker}
+                                                onChange={(e) => setPfManualTicker(e.target.value.toUpperCase())}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        const t = String(pfManualTicker || '').replace(/[^A-Za-z0-9.-]/g, '').split('.')[0];
+                                                        if (t) { addPfRow(t, ''); setPfManualTicker(''); }
+                                                    }
+                                                }}
+                                                className={`${pfInp} px-3 py-2 flex-1 text-sm`}
+                                                placeholder="예: QQQ"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const t = String(pfManualTicker || '').replace(/[^A-Za-z0-9.-]/g, '').split('.')[0];
+                                                    if (t) { addPfRow(t, ''); setPfManualTicker(''); }
+                                                }}
+                                                className="px-4 py-2 rounded-xl bg-cyan-800 text-white font-black text-sm hover:bg-cyan-900 shrink-0"
+                                            >
+                                                추가
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <h3 className="text-sm font-black text-stone-800">② 포트폴리오 · 비중 (%)</h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                <button type="button" onClick={() => setPfRows((prev) => equalizePfWeights(prev))} className="text-xs font-black px-3 py-1.5 rounded-lg bg-stone-200 text-stone-800 hover:bg-stone-300">균등 배분</button>
+                                                <button type="button" onClick={() => { if (pfRows.length && window.confirm('포트폴리오를 비울까요?')) setPfRows([]); }} className="text-xs font-black px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50">전체 비우기</button>
+                                            </div>
+                                        </div>
+                                        <div className={`rounded-xl px-3 py-2 text-sm font-bold border ${pfPctOk ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                                            비중 합계: {pfWeightSum.toFixed(1)}% {pfPctOk ? '(OK)' : '→ 합계 100%로 맞춰 주세요'}
+                                        </div>
+                                        {pfRows.length === 0 ? (
+                                            <p className="text-center text-stone-500 text-sm py-8 border border-dashed border-stone-300 rounded-2xl">검색 또는 티커 입력으로 종목을 추가하세요.</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {pfRows.map((row) => (
+                                                    <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-3">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="font-mono font-black text-teal-700">{row.symbol}</p>
+                                                            {row.description ? <p className="text-[11px] text-stone-500 truncate">{row.description}</p> : null}
+                                                            {row.nameEn && row.nameEn !== row.symbol ? <p className="text-[10px] text-slate-500">{row.nameEn}</p> : null}
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="100"
+                                                                step="0.1"
+                                                                value={row.weightPct}
+                                                                onChange={(e) => updatePfWeight(row.id, e.target.value)}
+                                                                className={`${pfInp} w-20 px-2 py-1.5 text-sm text-center`}
+                                                            />
+                                                            <span className="text-stone-600 font-bold">%</span>
+                                                        </div>
+                                                        <button type="button" onClick={() => removePfRow(row.id)} className="p-2 rounded-lg text-rose-600 hover:bg-rose-50" aria-label="삭제"><Trash2 size={18} /></button>
+                                                        <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-stone-500">
+                                                            {row.ret1y != null && <span>1년 {fmtRetPct(row.ret1y)}</span>}
+                                                            {row.ret5y != null && <span>5년 {fmtRetPct(row.ret5y)}</span>}
+                                                            {row.price != null && <span>{Number(row.price).toFixed(2)} {row.currency || 'USD'}</span>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-center">
+                                            <button
+                                                type="button"
+                                                disabled={pfDataLoading || !pfPctOk || pfRows.length === 0}
+                                                onClick={runPortfolioDataFetch}
+                                                className="px-6 py-3 rounded-2xl bg-cyan-700 text-white font-black hover:bg-cyan-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                            >
+                                                {pfDataLoading ? '불러오는 중…' : <><TrendingUp size={18} /> 시세·과거 수익률 불러오기</>}
+                                            </button>
+                                            {pfLastFetchAt && <span className="text-[10px] text-stone-400">조회: {pfLastFetchAt.toLocaleString('ko-KR')}</span>}
+                                        </div>
+                                        <label className="flex items-center gap-2 text-xs font-bold text-stone-500 cursor-pointer">
+                                            <input type="checkbox" checked={pfAutoRateOnFetch} onChange={(e) => setPfAutoRateOnFetch(e.target.checked)} className="rounded border-stone-400" />
+                                            불러오기 성공 시 &quot;참고 연 수익률&quot; 입력란에 1년 가중 평균을 넣기
+                                        </label>
+                                        {pfBlended1y != null && (
+                                            <p className="text-xs text-stone-600">
+                                                현재 포트폴리오 기준 <span className="font-black text-stone-800">1년 가중 평균(참고): {fmtRetPct(pfBlended1y)}</span>
+                                                {' '}
+                                                <button type="button" onClick={applyPfBlendedRateFromRows} className="underline font-bold text-cyan-800">이 값을 연 수익률에 반영</button>
+                                            </p>
+                                        )}
+                                        {pfDataErr && <p className="text-xs font-semibold text-amber-800">{pfDataErr}</p>}
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-4">
+                                        <h3 className="text-sm font-black text-stone-800">③ 시뮬레이션 입력 (만 원 · 연 복리 · 세전)</h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">투입 자산 (만 원)</label>
+                                                <input type="number" min="0" inputMode="decimal" value={pfPrincipal} onChange={(e) => setPfPrincipal(e.target.value)} className={`${pfInp} px-4 py-3`} placeholder="예: 3000" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">거치 기간 (년)</label>
+                                                <input type="number" min="0" step="0.5" value={pfYears} onChange={(e) => setPfYears(parseFloat(e.target.value) || 0)} className={`${pfInp} px-4 py-3`} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">목표 금액 (만 원)</label>
+                                                <input type="number" min="0" value={pfTarget} onChange={(e) => setPfTarget(e.target.value)} className={`${pfInp} px-4 py-3`} placeholder="예: 8000" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">가정 연 수익률 (%, 복리)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={pfAnnualRate}
+                                                    onChange={(e) => { setPfAnnualRate(parseFloat(e.target.value) || 0); setPfAutoRateOnFetch(false); }}
+                                                    className={`${pfInp} px-4 py-3`}
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="text-[11px] text-stone-500 leading-relaxed">연 수익률은 직접 바꿀 수 있습니다. 수동으로 수정하면 &quot;불러올 때 자동 입력&quot; 체크가 꺼집니다.</p>
+                                    </div>
+
+                                    <div className="bg-stone-800 text-white rounded-3xl p-5 md:p-8 shadow-md space-y-4">
+                                        <h3 className="text-sm font-black text-cyan-200 flex items-center gap-2">④ 시뮬레이션 결과</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div className="bg-stone-900/50 rounded-2xl p-4 border border-stone-700">
+                                                <p className="text-stone-400 text-xs font-bold mb-1">투입액만 굴릴 때 {pfPlan.n}년 후 예상 잔고</p>
+                                                <p className="text-2xl font-black text-white">{fmtMan(pfPlan.fvLump)} <span className="text-sm font-bold text-stone-400">만 원</span></p>
+                                                <p className="text-[11px] text-stone-500 mt-2 leading-relaxed">{fvFormula}</p>
+                                            </div>
+                                            <div className="bg-stone-900/50 rounded-2xl p-4 border border-stone-700">
+                                                <p className="text-stone-400 text-xs font-bold mb-1">{pfPlan.n}년 후 목표 {fmtMan(pfPlan.T)}만 원의 &quot;오늘 기준 필요 원금&quot;(현재가치)</p>
+                                                <p className="text-2xl font-black text-emerald-300">{fmtMan(pfPlan.pvNeeded)} <span className="text-sm font-bold text-stone-400">만 원</span></p>
+                                                <p className="text-[11px] text-stone-500 mt-2 leading-relaxed">할인: 목표액 ÷ (1 + {pfPlan.rPct} ÷ 100)<sup>{pfPlan.n}</sup> (연 복리)</p>
+                                            </div>
+                                        </div>
+                                        <div className="bg-stone-900/80 rounded-2xl p-4 border border-stone-600 text-sm leading-relaxed text-stone-200 space-y-3">
+                                            <p className="font-bold text-white">요약</p>
+                                            <ol className="list-decimal list-inside space-y-2 text-[13px]">
+                                                <li>투입 {fmtMan(pfPlan.W)}만 원, 연 {pfPlan.rPct}%, 기간 {pfPlan.n}년을 가정했습니다.</li>
+                                                <li>추가 납입 없이 복리만 적용하면 약 {fmtMan(pfPlan.fvLump)}만 원으로 계산됩니다.</li>
+                                                <li>목표 대비 {pfPlan.shortfallAtEnd > 0 ? `약 ${fmtMan(pfPlan.shortfallAtEnd)}만 원 부족` : '목표 이상으로 도달하는 시나리오'}입니다.</li>
+                                                <li>오늘 기준 목표의 현재가치는 약 {fmtMan(pfPlan.pvNeeded)}만 원이며, 투입액과의 차이(추가 일시 원금)는 약 {fmtMan(pfPlan.gapLumpToday)}만 원입니다.</li>
+                                                {pfPlan.shortfallAtEnd > 0 && pfPlan.monthlyExtra > 0 && (
+                                                    <li>부족분을 월 적립으로만 메우려면 매월 약 {fmtMan(pfPlan.monthlyExtra)}만 원(말일·세전 참고) 규모입니다.</li>
+                                                )}
+                                            </ol>
+                                        </div>
+                                        {pfPlan.yearlyPath.length > 0 && (
+                                            <div className="rounded-2xl border border-stone-600 overflow-hidden">
+                                                <p className="px-4 py-2 bg-stone-900 text-xs font-bold text-cyan-200">연도별 예상 잔고 (추가 납입 없음)</p>
+                                                <div className="max-h-48 overflow-y-auto">
+                                                    <table className="w-full text-xs text-left">
+                                                        <thead className="bg-stone-900/80 text-stone-400 sticky top-0">
+                                                            <tr>
+                                                                <th className="px-3 py-2">연차</th>
+                                                                <th className="px-3 py-2">예상 잔고 (만 원)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {pfPlan.yearlyPath.map((row) => (
+                                                                <tr key={row.year} className="border-t border-stone-700/80">
+                                                                    <td className="px-3 py-1.5 text-stone-300">{row.year}년 후</td>
+                                                                    <td className="px-3 py-1.5 font-mono text-white">{fmtMan(row.balance)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 );
                             })()}
