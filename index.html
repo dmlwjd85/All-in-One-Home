@@ -130,6 +130,42 @@
         const Pencil = createIcon('Pencil');
         const Camera = createIcon('Camera');
         const Mic = createIcon('Mic');
+        const PieChart = createIcon('PieChart');
+        const Info = createIcon('Info');
+        const TargetIcon = createIcon('Target');
+        const Car = createIcon('Car');
+        const House = createIcon('House');
+        const Laptop = createIcon('Laptop');
+        const Plane = createIcon('Plane');
+        const Gift = createIcon('Gift');
+
+        /** Finnhub API 키 (앱 내 고정) */
+        const FINNHUB_API_KEY = 'd7782dhr01qp6afkis3gd7782dhr01qp6afkis40';
+
+        /** 단기 목표: 월 키 목록 생성 (YYYY-MM) */
+        const genYearMonths = (start, count) => {
+            const out = [];
+            const d = new Date(start.getFullYear(), start.getMonth(), 1);
+            for (let i = 0; i < count; i++) {
+                out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                d.setMonth(d.getMonth() + 1);
+            }
+            return out;
+        };
+
+        const sumMonthlyMap = (m) => {
+            if (!m || typeof m !== 'object') return 0;
+            return Object.values(m).reduce((a, v) => a + (Number(v) || 0), 0);
+        };
+
+        const SHORT_GOAL_KINDS = [
+            { id: 'car', label: '자동차', Icon: Car, stroke: '#0ea5e9' },
+            { id: 'house', label: '집', Icon: House, stroke: '#a855f7' },
+            { id: 'pc', label: '컴퓨터', Icon: Laptop, stroke: '#6366f1' },
+            { id: 'travel', label: '여행', Icon: Plane, stroke: '#14b8a6' },
+            { id: 'wedding', label: '결혼/예식', Icon: Heart, stroke: '#f43f5e' },
+            { id: 'other', label: '기타', Icon: Gift, stroke: '#64748b' },
+        ];
 
         const CHORE_MASTER_LIST = [
             { id: 1, task: "세탁조" }, { id: 2, task: "식세기-후드" }, { id: 3, task: "냉장고 1" }, 
@@ -157,6 +193,156 @@
                     delay *= 2;
                 }
             }
+        };
+
+        /** Finnhub 시세 (브라우저에서 CORS 허용) */
+        const fetchFinnhubQuotesForSymbols = async (symbols, token = FINNHUB_API_KEY) => {
+            if (!token || !symbols.length) return { ok: false, quotes: [], error: null };
+            try {
+                const quotes = await Promise.all(
+                    symbols.map(async (sym) => {
+                        const res = await fetch(
+                            `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(token)}`
+                        );
+                        if (!res.ok) throw new Error(String(res.status));
+                        const j = await res.json();
+                        if (j.error) throw new Error(j.error);
+                        return {
+                            symbol: sym,
+                            regularMarketPrice: j.c != null ? j.c : null,
+                            regularMarketChangePercent: j.dp != null ? j.dp : null,
+                            regularMarketPreviousClose: j.pc != null ? j.pc : null,
+                            currency: 'USD',
+                            shortName: sym,
+                        };
+                    })
+                );
+                return { ok: true, quotes, error: null };
+            } catch (e) {
+                console.warn('Finnhub 시세 실패', e);
+                return { ok: false, quotes: [], error: 'Finnhub 토큰이 잘못되었거나 호출 한도를 초과했을 수 있습니다.' };
+            }
+        };
+
+        /** 야후 파이낸스 v7 (프록시·GET 래핑 등 복수 경로) */
+        const fetchYahooQuotesForSymbols = async (symbols) => {
+            if (!symbols.length) return { ok: true, quotes: [], error: null };
+            const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}`;
+            const tryParseJson = (data) => {
+                if (data.quoteResponse && Array.isArray(data.quoteResponse.result)) return data.quoteResponse.result;
+                return null;
+            };
+            const proxyUrls = [
+                `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            ];
+            for (const purl of proxyUrls) {
+                try {
+                    const res = await fetch(purl);
+                    if (!res.ok) continue;
+                    const raw = await res.json();
+                    const data = raw.contents != null ? JSON.parse(raw.contents) : raw;
+                    const result = tryParseJson(data);
+                    if (result) return { ok: true, quotes: result, error: null };
+                } catch (e) {
+                    console.warn('야후 시세 조회 실패', e);
+                }
+            }
+            return {
+                ok: false,
+                quotes: [],
+                error: '야후 시세(프록시)도 불가할 수 있습니다. 네트워크를 확인해 주세요.',
+            };
+        };
+
+        /** 투자 성향 비율 → 미국 상장 ETF만 추천 (참고용) */
+        const buildInvestEtfPlan = (pctPension, pctLong, pctMid, pctShort) => {
+            const sum = pctPension + pctLong + pctMid + pctShort;
+            const s = sum > 0 ? sum : 1;
+            const p = pctPension / s, l = pctLong / s, m = pctMid / s, sh = pctShort / s;
+            const acc = {};
+            const add = (sym, nameKo, bucket, w) => {
+                if (w <= 0) return;
+                if (!acc[sym]) acc[sym] = { symbol: sym, nameKo, bucket, weight: 0, kind: 'ETF' };
+                acc[sym].weight += w;
+            };
+            if (p > 0) {
+                add('BND', 'Vanguard Total Bond ETF (BND)', '연금형 ETF', p * 0.55);
+                add('VGIT', 'Vanguard 중기 국채 ETF (VGIT)', '연금형 ETF', p * 0.45);
+            }
+            if (l > 0) {
+                add('VTI', 'Vanguard 미국 전체 주식 ETF (VTI)', '장기 ETF', l * 0.7);
+                add('VXUS', 'Vanguard 미국 외 선진국 ETF (VXUS)', '장기 ETF', l * 0.3);
+            }
+            if (m > 0) {
+                add('AOM', 'iShares 중립형 자산배분 ETF (AOM)', '중기 ETF', m);
+            }
+            if (sh > 0) {
+                add('SGOV', 'iShares 초단기 국채 ETF (SGOV)', '단기 ETF', sh);
+            }
+            return Object.values(acc)
+                .map((row) => ({ ...row, weightPct: (row.weight * 100).toFixed(1) }))
+                .sort((a, b) => b.weight - a.weight);
+        };
+
+        /** 만 원 단위: 복리 예상·목표 현재가치·연도별 경로 (연 단위 복리) */
+        const computeInvestTargetPlan = (principalMan, years, targetMan, annualRatePct) => {
+            const parseNum = (v) => {
+                if (v === '' || v == null) return 0;
+                const n = Number(String(v).replace(/,/g, '').trim());
+                return Number.isFinite(n) ? n : 0;
+            };
+            const W = Math.max(0, parseNum(principalMan));
+            const nRaw = parseNum(years);
+            const n = Math.max(0, nRaw);
+            const T = Math.max(0, parseNum(targetMan));
+            const rPct = parseNum(annualRatePct);
+            const rAnnual = rPct / 100;
+            const months = Math.max(0, Math.round(n * 12));
+
+            let fvLump = W * Math.pow(1 + rAnnual, n);
+            if (rAnnual === 0) fvLump = W;
+
+            let pvNeeded = 0;
+            if (T <= 0) pvNeeded = 0;
+            else if (rAnnual === 0) pvNeeded = T;
+            else pvNeeded = T / Math.pow(1 + rAnnual, n);
+
+            const gapLumpToday = Math.max(0, pvNeeded - W);
+            const shortfallAtEnd = Math.max(0, T - fvLump);
+
+            let monthlyExtra = 0;
+            if (shortfallAtEnd > 0 && months > 0) {
+                if (rAnnual === 0) {
+                    monthlyExtra = shortfallAtEnd / months;
+                } else {
+                    const rm = Math.pow(1 + rAnnual, 1 / 12) - 1;
+                    if (rm > 0) monthlyExtra = shortfallAtEnd * rm / (Math.pow(1 + rm, months) - 1);
+                }
+            }
+
+            const yearlyPath = [];
+            const maxYearIdx = Math.min(30, Math.max(0, Math.ceil(n)));
+            for (let y = 0; y <= maxYearIdx; y++) {
+                const bal = rAnnual === 0 ? W : W * Math.pow(1 + rAnnual, y);
+                yearlyPath.push({ year: y, balance: bal });
+            }
+
+            return {
+                fvLump,
+                pvNeeded,
+                gapLumpToday,
+                shortfallAtEnd,
+                monthlyExtra,
+                yearlyPath,
+                W,
+                n,
+                T,
+                rPct,
+                rAnnual,
+                months,
+            };
         };
 
         const App = () => {
@@ -251,11 +437,32 @@
             const [editingLedgerId, setEditingLedgerId] = useState(null);
             const [editAmount, setEditAmount] = useState("");
 
+            // 투자 계산기 (만 원 단위 입력)
+            const [invPrincipal, setInvPrincipal] = useState("");
+            const [invPctPension, setInvPctPension] = useState(25);
+            const [invPctLong, setInvPctLong] = useState(35);
+            const [invPctMid, setInvPctMid] = useState(25);
+            const [invPctShort, setInvPctShort] = useState(15);
+            const [invYears, setInvYears] = useState(10);
+            const [invTarget, setInvTarget] = useState("");
+            const [invTargetReturn, setInvTargetReturn] = useState(5);
+            const [invEtfLoading, setInvEtfLoading] = useState(false);
+            const [invEtfRows, setInvEtfRows] = useState([]);
+            const [invEtfError, setInvEtfError] = useState(null);
+            const [invLastFetchAt, setInvLastFetchAt] = useState(null);
+
+            // 단기 목표 프로젝트 (만 원 단위)
+            const [shortTermGoals, setShortTermGoals] = useState([]);
+            const [sgTitle, setSgTitle] = useState('');
+            const [sgKind, setSgKind] = useState('car');
+            const [sgTarget, setSgTarget] = useState('');
+            const [sgSeed, setSgSeed] = useState('');
+
             const fileInputRef = useRef(null);
             const todayDate = new Date().getDate();
             const todayChore = CHORE_MASTER_LIST.find(c => c.id === todayDate);
 
-            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'teacher', 'siha'];
+            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'invest', 'shortGoals', 'teacher', 'siha'];
 
             // 모바일 스와이프 핸들러 (캘린더 영역 예외 처리 추가)
             const handleTouchStart = (e) => {
@@ -354,7 +561,13 @@
                     else setTimetable({});
                 }, errCb);
 
-                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubMaintenance(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); };
+                const unsubShortGoals = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'shortTermGoals'), (snap) => {
+                    const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                    list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                    setShortTermGoals(list);
+                }, errCb);
+
+                return () => { unsubTasks(); unsubMemories(); unsubEvents(); unsubChores(); unsubLedger(); unsubWeight(); unsubPeriod(); unsubDiaries(); unsubPins(); unsubMaintenance(); unsubTeacherTodos(); unsubMinutes(); unsubTimetable(); unsubShortGoals(); };
             }, [user, currentUserMode]);
 
             const initializeLedger = async () => {
@@ -1147,9 +1360,132 @@
                 { id: 'calendar', icon: CalendarIcon, label: '공용 일정' },
                 { id: 'chores', icon: ClipboardCheck, label: '집안일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
+                { id: 'invest', icon: PieChart, label: '투자 계산기' },
+                { id: 'shortGoals', icon: TargetIcon, label: '단기 목표' },
                 { id: 'teacher', icon: BookOpen, label: '교무수첩' },
                 { id: 'siha', icon: Heart, label: '우리 가족 일기' },
             ];
+
+            const invPctSum = invPctPension + invPctLong + invPctMid + invPctShort;
+            const invPctOk = Math.abs(invPctSum - 100) < 0.01;
+
+            /** 포트폴리오 추천 + 시세 (Finnhub 우선 → 야후 프록시) */
+            const runInvestAnalysis = async () => {
+                if (!invPctOk) {
+                    alert('투자 목표 비율 합계가 100%가 되도록 맞춰 주세요.');
+                    return;
+                }
+                const plan = buildInvestEtfPlan(invPctPension, invPctLong, invPctMid, invPctShort);
+                const syms = plan.map((r) => r.symbol);
+                setInvEtfLoading(true);
+                setInvEtfError(null);
+                try {
+                    let quotes = [];
+                    let ok = false;
+                    let errMsg = null;
+                    const fr = await fetchFinnhubQuotesForSymbols(syms, FINNHUB_API_KEY);
+                    if (fr.ok && fr.quotes && fr.quotes.length) {
+                        quotes = fr.quotes;
+                        ok = true;
+                    } else if (fr.error) errMsg = fr.error;
+                    if (!ok) {
+                        const yh = await fetchYahooQuotesForSymbols(syms);
+                        if (yh.ok && yh.quotes && yh.quotes.length) {
+                            quotes = yh.quotes;
+                            ok = true;
+                        }
+                        if (!ok && yh.error) errMsg = errMsg ? `${errMsg} ${yh.error}` : yh.error;
+                    }
+                    const qMap = {};
+                    (quotes || []).forEach((q) => { qMap[q.symbol] = q; });
+                    const merged = plan.map((row) => {
+                        const q = qMap[row.symbol];
+                        return {
+                            ...row,
+                            price: q?.regularMarketPrice ?? q?.regularMarketPreviousClose ?? null,
+                            chgPct: q?.regularMarketChangePercent ?? null,
+                            nameEn: q?.shortName || q?.longName || row.symbol,
+                            currency: q?.currency || 'USD',
+                        };
+                    });
+                    setInvEtfRows(merged);
+                    setInvEtfError(ok ? null : (errMsg || '시세를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.'));
+                    setInvLastFetchAt(new Date());
+                } catch (e) {
+                    console.error(e);
+                    setInvEtfError('시세 조회 중 오류가 났습니다.');
+                    setInvEtfRows(plan.map((row) => ({ ...row, price: null, chgPct: null, nameEn: row.symbol, currency: 'USD' })));
+                } finally {
+                    setInvEtfLoading(false);
+                }
+            };
+
+            /** 단기 목표: 추가 */
+            const handleAddShortGoal = async () => {
+                if (!user || !sgTitle.trim()) {
+                    alert('목표 이름을 입력해 주세요.');
+                    return;
+                }
+                const target = parseFloat(String(sgTarget).replace(/,/g, '')) || 0;
+                if (target <= 0) {
+                    alert('필요 금액(만 원)을 올바르게 입력해 주세요.');
+                    return;
+                }
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'shortTermGoals'), {
+                        title: sgTitle.trim(),
+                        kind: sgKind,
+                        targetMan: target,
+                        seedMan: parseFloat(String(sgSeed).replace(/,/g, '')) || 0,
+                        monthly: {},
+                        createdAt: serverTimestamp(),
+                        author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                    });
+                    setSgTitle('');
+                    setSgTarget('');
+                    setSgSeed('');
+                    setSgKind('car');
+                } catch (err) {
+                    console.error(err);
+                    alert('목표 저장에 실패했습니다.');
+                }
+            };
+
+            /** 단기 목표: 월 납입액 갱신 */
+            const handleShortGoalMonth = async (goalId, ym, rawVal) => {
+                if (!user) return;
+                const v = rawVal === '' ? 0 : parseFloat(String(rawVal).replace(/,/g, '')) || 0;
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shortTermGoals', goalId), {
+                        [`monthly.${ym}`]: v,
+                    });
+                } catch (err) {
+                    console.error(err);
+                    alert('납입 금액 저장에 실패했습니다.');
+                }
+            };
+
+            /** 단기 목표: 초기/목표 금액 수정 */
+            const handleShortGoalMeta = async (goalId, field, rawVal) => {
+                if (!user) return;
+                const v = parseFloat(String(rawVal).replace(/,/g, '')) || 0;
+                try {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shortTermGoals', goalId), { [field]: v });
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            /** 단기 목표: 삭제 */
+            const handleDeleteShortGoal = async (goalId) => {
+                if (!user || !confirm('이 목표를 삭제할까요?')) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shortTermGoals', goalId));
+                } catch (err) {
+                    console.error(err);
+                    alert('삭제에 실패했습니다.');
+                }
+            };
 
             if (!isAuthenticated) {
                 return (
@@ -1296,6 +1632,22 @@
                                                     desc: '소득/지출 요약',
                                                     grad: 'from-emerald-50 to-white',
                                                     accent: 'text-emerald-700'
+                                                },
+                                                {
+                                                    id: 'invest',
+                                                    icon: PieChart,
+                                                    label: '투자 계산기',
+                                                    desc: '성향·목표·ETF 시세',
+                                                    grad: 'from-teal-50 to-white',
+                                                    accent: 'text-teal-700'
+                                                },
+                                                {
+                                                    id: 'shortGoals',
+                                                    icon: TargetIcon,
+                                                    label: '단기 목표',
+                                                    desc: '저축·납입·진행률',
+                                                    grad: 'from-violet-50 to-white',
+                                                    accent: 'text-violet-700'
                                                 },
                                                 {
                                                     id: 'teacher',
@@ -1816,6 +2168,333 @@
                                     </div>
                                 </div>
                             )}
+
+                            {/* 📈 투자 계산기 탭 */}
+                            {activeTab === 'invest' && (() => {
+                                const invPlan = computeInvestTargetPlan(invPrincipal, invYears, invTarget, invTargetReturn);
+                                const fmtMan = (v) => (Number.isFinite(v) ? Math.round(v).toLocaleString('ko-KR') : '—');
+                                const invInp = 'w-full rounded-xl border border-slate-400 bg-slate-100 text-slate-900 placeholder:text-slate-500 font-bold outline-none focus:ring-2 focus:ring-teal-500/50';
+                                const fvFormula = invPlan.rAnnual === 0
+                                    ? `투입 ${fmtMan(invPlan.W)}만 원 × 1 = ${fmtMan(invPlan.fvLump)}만 원 (수익률 0%)`
+                                    : `투입 ${fmtMan(invPlan.W)}만 원 × (1 + ${invPlan.rPct} ÷ 100)^${invPlan.n} ≈ ${fmtMan(invPlan.fvLump)}만 원 (연 복리·만 원 반올림)`;
+                                const profileNote = (() => {
+                                    const a = invPctPension, b = invPctLong, c = invPctMid, d = invPctShort;
+                                    const max = Math.max(a, b, c, d);
+                                    if (max === a) return '연금형 비중이 높아 채권·초단기 비중이 큰 ETF 조합을 제안합니다.';
+                                    if (max === b) return '장기 비중이 높아 글로벌 주식 ETF 비중을 크게 제안합니다.';
+                                    if (max === c) return '중기 비중이 높아 자산배분형 ETF 비중을 제안합니다.';
+                                    return '단기·유동성 비중이 높아 초단기 국채 ETF 비중을 크게 제안합니다.';
+                                })();
+                                return (
+                                <div className="max-w-4xl mx-auto space-y-6 pb-4">
+                                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+                                        <div>
+                                            <h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><PieChart className="text-teal-600" />투자 계산기</h1>
+                                            <p className="text-stone-500 text-xs md:text-sm mt-1">성향 비율에 맞춘 <span className="font-black text-stone-700">ETF</span>만 추천하고, 목표 기간·목표액 달성을 숫자로 풀어 드립니다.</p>
+                                        </div>
+                                        <p className="text-[10px] text-stone-400 flex items-start gap-1 max-w-md"><Info size={14} className="shrink-0 mt-0.5" /> 시세는 <span className="font-bold text-stone-500">Finnhub</span> API로 조회하고, 실패 시 야후 프록시를 시도합니다. 참고용이며 투자 권유가 아닙니다.</p>
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-5">
+                                        <h3 className="text-sm font-black text-stone-800 flex items-center gap-2">① 투입 자산 · 투자 목표 비율 (%)</h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">투입 자산 (만 원)</label>
+                                                <input type="number" min="0" inputMode="decimal" value={invPrincipal} onChange={(e) => setInvPrincipal(e.target.value)} className={`${invInp} px-4 py-3 text-base`} placeholder="예: 5000" />
+                                            </div>
+                                            <div className="flex items-end">
+                                                <div className={`w-full rounded-xl px-4 py-3 text-sm font-bold border ${invPctOk ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                                                    비율 합계: {invPctSum.toFixed(1)}% {invPctOk ? '(OK)' : '→ 합계 100%로 맞춰 주세요'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            {[
+                                                { v: invPctPension, set: setInvPctPension, label: '연금형\n(현금화 최소)', sub: '안정·분산' },
+                                                { v: invPctLong, set: setInvPctLong, label: '장기 투자', sub: '성장' },
+                                                { v: invPctMid, set: setInvPctMid, label: '중기 투자', sub: '균형' },
+                                                { v: invPctShort, set: setInvPctShort, label: '단기 투자', sub: '유동성' },
+                                            ].map((row, i) => (
+                                                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3">
+                                                    <label className="text-[10px] font-black text-slate-600 whitespace-pre-line leading-tight">{row.label}</label>
+                                                    <p className="text-[10px] text-slate-500 mb-2">{row.sub}</p>
+                                                    <div className="flex items-center gap-1">
+                                                        <input type="number" step="0.1" className={`${invInp} px-2 py-2 text-sm w-full`} value={row.v} onChange={(e) => row.set(parseFloat(e.target.value) || 0)} />
+                                                        <span className="text-slate-600 font-bold">%</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-4">
+                                        <h3 className="text-sm font-black text-stone-800">② 거치 기간 · 목표 금액 · 목표 수익률</h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">거치 기간 (년)</label>
+                                                <input type="number" min="0" step="0.5" value={invYears} onChange={(e) => setInvYears(parseFloat(e.target.value) || 0)} className={`${invInp} px-4 py-3`} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">목표 금액 (만 원)</label>
+                                                <input type="number" min="0" value={invTarget} onChange={(e) => setInvTarget(e.target.value)} className={`${invInp} px-4 py-3`} placeholder="예: 10000" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">목표 수익률 (연 %, 복리 가정)</label>
+                                                <input type="number" step="0.1" value={invTargetReturn} onChange={(e) => setInvTargetReturn(parseFloat(e.target.value) || 0)} className={`${invInp} px-4 py-3`} />
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={invEtfLoading || !invPctOk}
+                                            onClick={runInvestAnalysis}
+                                            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-teal-700 text-white font-black hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {invEtfLoading ? '시세 불러오는 중…' : <><TrendingUp size={18} /> ETF 추천 · 시세 반영</>}
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-stone-800 text-white rounded-3xl p-5 md:p-8 shadow-md space-y-4">
+                                        <h3 className="text-sm font-black text-teal-200 flex items-center gap-2">③ 목표 기간 안에서의 달성 과정 (만 원, 연 복리·세전)</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div className="bg-stone-900/50 rounded-2xl p-4 border border-stone-700">
+                                                <p className="text-stone-400 text-xs font-bold mb-1">투입액만 굴릴 때 {invPlan.n}년 후 예상 잔고</p>
+                                                <p className="text-2xl font-black text-white">{fmtMan(invPlan.fvLump)} <span className="text-sm font-bold text-stone-400">만 원</span></p>
+                                                <p className="text-[11px] text-stone-500 mt-2 leading-relaxed">{fvFormula}</p>
+                                            </div>
+                                            <div className="bg-stone-900/50 rounded-2xl p-4 border border-stone-700">
+                                                <p className="text-stone-400 text-xs font-bold mb-1">{invPlan.n}년 후 목표 {fmtMan(invPlan.T)}만 원의 &quot;오늘 기준 필요 원금&quot;(현재가치)</p>
+                                                <p className="text-2xl font-black text-emerald-300">{fmtMan(invPlan.pvNeeded)} <span className="text-sm font-bold text-stone-400">만 원</span></p>
+                                                <p className="text-[11px] text-stone-500 mt-2 leading-relaxed">할인: 목표액 ÷ (1 + {invPlan.rPct} ÷ 100)<sup>{invPlan.n}</sup> (연 복리)</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-stone-900/80 rounded-2xl p-4 border border-stone-600 text-sm leading-relaxed text-stone-200 space-y-3">
+                                            <p className="font-bold text-white">목표까지의 단계 안내</p>
+                                            <ol className="list-decimal list-inside space-y-2 text-[13px]">
+                                                <li><span className="text-white font-bold">입력 정리</span>: 투입 {fmtMan(invPlan.W)}만 원, 기간 {invPlan.n}년, 목표 수익률 연 {invPlan.rPct}%를 기준으로 합니다.</li>
+                                                <li><span className="text-white font-bold">미래 가치</span>: 추가 납입 없이 연 복리로만 불릴 때 {invPlan.n}년 뒤 잔고는 약 {fmtMan(invPlan.fvLump)}만 원으로 계산됩니다.</li>
+                                                <li><span className="text-white font-bold">목표와 비교</span>: 목표액 {fmtMan(invPlan.T)}만 원과 비교하면, 그때 필요한 금액 대비 {invPlan.shortfallAtEnd > 0 ? `약 ${fmtMan(invPlan.shortfallAtEnd)}만 원 부족` : '목표 이상으로 도달하는 시나리오'}입니다.</li>
+                                                <li><span className="text-white font-bold">오늘 기준 보완</span>: 목표를 지금 시점 원금으로 환산하면 약 {fmtMan(invPlan.pvNeeded)}만 원이 필요하고, 현재 투입액과의 차이(추가 일시 원금)는 약 {fmtMan(invPlan.gapLumpToday)}만 원입니다.</li>
+                                                {invPlan.shortfallAtEnd > 0 && invPlan.monthlyExtra > 0 && (
+                                                    <li><span className="text-white font-bold">월 적립 시나리오</span>: 일시금 없이 메우려면 매월 약 {fmtMan(invPlan.monthlyExtra)}만 원(말일 납입·세전 참고)을 {invPlan.months}개월 동안 넣는 것과 비슷한 규모입니다.</li>
+                                                )}
+                                            </ol>
+                                            <p className="text-[11px] text-stone-500 pt-2 border-t border-stone-700">{profileNote}</p>
+                                        </div>
+
+                                        {invPlan.yearlyPath.length > 0 && (
+                                            <div className="rounded-2xl border border-stone-600 overflow-hidden">
+                                                <p className="px-4 py-2 bg-stone-900 text-xs font-bold text-teal-200">연도별 예상 잔고 (추가 납입 없음, 투입액만 복리)</p>
+                                                <div className="max-h-48 overflow-y-auto">
+                                                    <table className="w-full text-xs text-left">
+                                                        <thead className="bg-stone-900/80 text-stone-400 sticky top-0">
+                                                            <tr>
+                                                                <th className="px-3 py-2">연차</th>
+                                                                <th className="px-3 py-2">예상 잔고 (만 원)</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {invPlan.yearlyPath.map((row) => (
+                                                                <tr key={row.year} className="border-t border-stone-700/80">
+                                                                    <td className="px-3 py-1.5 text-stone-300">{row.year}년 후</td>
+                                                                    <td className="px-3 py-1.5 font-mono text-white">{fmtMan(row.balance)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {(invEtfRows.length > 0 || invEtfError) && (
+                                        <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                                            <div className="px-5 py-4 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
+                                                <h3 className="text-sm font-black text-stone-800">추천 ETF 목록 · 시세 (참고)</h3>
+                                                {invLastFetchAt && <span className="text-[10px] text-stone-400">조회: {invLastFetchAt.toLocaleString('ko-KR')}</span>}
+                                            </div>
+                                            {invEtfError && (
+                                                <div className="px-5 py-3 bg-amber-50 text-amber-900 text-xs font-semibold border-b border-amber-100">{invEtfError}</div>
+                                            )}
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="bg-stone-100 text-slate-700 text-left text-xs">
+                                                            <th className="px-4 py-3 font-black">ETF 구분</th>
+                                                            <th className="px-4 py-3 font-black">ETF명</th>
+                                                            <th className="px-4 py-3 font-black">티커</th>
+                                                            <th className="px-4 py-3 font-black">비중</th>
+                                                            <th className="px-4 py-3 font-black">가격</th>
+                                                            <th className="px-4 py-3 font-black">변동</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {invEtfRows.map((row) => (
+                                                            <tr key={row.symbol} className="border-t border-stone-100 hover:bg-slate-50/90">
+                                                                <td className="px-4 py-3 text-xs text-slate-700 font-semibold whitespace-nowrap">{row.bucket}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <p className="font-bold text-slate-900">{row.nameKo}</p>
+                                                                    <p className="text-[10px] text-slate-500">{row.nameEn}</p>
+                                                                </td>
+                                                                <td className="px-4 py-3 font-mono font-bold text-teal-700">{row.symbol}</td>
+                                                                <td className="px-4 py-3 font-black text-slate-800">{row.weightPct}%</td>
+                                                                <td className="px-4 py-3 text-slate-800">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency}` : '—'}</td>
+                                                                <td className={`px-4 py-3 font-bold ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    {row.chgPct != null ? `${row.chgPct >= 0 ? '+' : ''}${row.chgPct.toFixed(2)}%` : '—'}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                );
+                            })()}
+
+                            {/* 🎯 단기 목표 프로젝트 */}
+                            {activeTab === 'shortGoals' && (() => {
+                                const sgInp = 'w-full rounded-xl border border-slate-400 bg-slate-100 text-slate-900 placeholder:text-slate-500 font-bold outline-none focus:ring-2 focus:ring-violet-500/50 px-3 py-2 text-sm';
+                                const monthKeys = genYearMonths(new Date(), 18);
+                                const fmtM = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString('ko-KR') : '0');
+                                return (
+                                <div className="max-w-4xl mx-auto space-y-6 pb-4">
+                                    <div>
+                                        <h1 className="text-xl md:text-2xl font-black flex items-center gap-2 tracking-tight text-stone-800"><TargetIcon className="text-violet-600" />단기 목표 프로젝트</h1>
+                                        <p className="text-stone-500 text-xs md:text-sm mt-1">물건 종류를 고르면 그림이 모이듯 진행됩니다. 금액은 <span className="font-black text-stone-700">만 원</span> 단위입니다.</p>
+                                    </div>
+
+                                    <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm p-5 md:p-6 space-y-4">
+                                        <h3 className="text-sm font-black text-stone-800">새 목표 추가</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">목표 이름</label>
+                                                <input value={sgTitle} onChange={(e) => setSgTitle(e.target.value)} className={`${sgInp} px-4 py-3`} placeholder="예: 가족 차 바꾸기" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">종류 (그림 선택)</label>
+                                                <select value={sgKind} onChange={(e) => setSgKind(e.target.value)} className={`${sgInp} px-4 py-3`}>
+                                                    {SHORT_GOAL_KINDS.map((k) => (
+                                                        <option key={k.id} value={k.id}>{k.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">필요 금액 (만 원)</label>
+                                                <input type="number" min="0" value={sgTarget} onChange={(e) => setSgTarget(e.target.value)} className={`${sgInp} px-4 py-3`} placeholder="3000" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-stone-500 mb-1">현재 모은 금 (만 원, 선택)</label>
+                                                <input type="number" min="0" value={sgSeed} onChange={(e) => setSgSeed(e.target.value)} className={`${sgInp} px-4 py-3`} placeholder="0" />
+                                            </div>
+                                        </div>
+                                        <button type="button" onClick={handleAddShortGoal} className="w-full md:w-auto px-6 py-3 rounded-2xl bg-violet-700 text-white font-black hover:bg-violet-800">목표 등록</button>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        {shortTermGoals.length === 0 && (
+                                            <p className="text-center text-stone-500 text-sm py-12 bg-paper-50 rounded-3xl border border-dashed border-stone-300">등록된 목표가 없습니다. 위에서 추가해 보세요.</p>
+                                        )}
+                                        {shortTermGoals.map((g) => {
+                                            const target = Number(g.targetMan) || 0;
+                                            const seed = Number(g.seedMan) || 0;
+                                            const monthSum = sumMonthlyMap(g.monthly);
+                                            const current = seed + monthSum;
+                                            const remaining = Math.max(0, target - current);
+                                            const progress = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+                                            const kindMeta = SHORT_GOAL_KINDS.find((k) => k.id === g.kind) || SHORT_GOAL_KINDS[SHORT_GOAL_KINDS.length - 1];
+                                            const IconDraw = kindMeta.Icon;
+                                            return (
+                                                <div key={g.id} className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+                                                    <div className="p-4 md:p-6 flex flex-col lg:flex-row gap-6">
+                                                        <div className="shrink-0 lg:w-[260px]">
+                                                            <div className="relative mx-auto w-full max-w-[260px] aspect-[4/3] rounded-3xl border-4 border-slate-400 bg-slate-200/90 overflow-hidden shadow-inner">
+                                                                <div className="absolute inset-0 flex items-center justify-center text-slate-400 pointer-events-none" aria-hidden>
+                                                                    <IconDraw size={130} strokeWidth={1} />
+                                                                </div>
+                                                                <div
+                                                                    className="absolute inset-0 flex items-center justify-center transition-[clip-path] duration-700 ease-out pointer-events-none"
+                                                                    style={{ clipPath: `inset(${100 - progress}% 0 0 0)` }}
+                                                                >
+                                                                    <IconDraw size={130} strokeWidth={2} color={kindMeta.stroke} className="drop-shadow-md" />
+                                                                </div>
+                                                                <div className="absolute bottom-0 left-0 right-0 h-3 bg-slate-500/40">
+                                                                    <div className="h-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+                                                                </div>
+                                                                <div className="absolute top-2 right-2 text-[11px] font-black bg-white/95 px-2 py-1 rounded-lg text-slate-900 shadow">{progress.toFixed(1)}%</div>
+                                                            </div>
+                                                            <p className="text-center text-xs font-bold text-stone-500 mt-2">{kindMeta.label} 그림이 진행률에 맞춰 위에서 아래로 채워집니다.</p>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 space-y-4">
+                                                            <div className="flex flex-wrap items-start justify-between gap-2">
+                                                                <div>
+                                                                    <h3 className="text-lg font-black text-stone-800">{g.title}</h3>
+                                                                    <p className="text-[10px] text-stone-500">작성: {g.author || '—'}</p>
+                                                                </div>
+                                                                <button type="button" onClick={() => handleDeleteShortGoal(g.id)} className="text-xs font-bold text-rose-600 px-3 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50">삭제</button>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                                                                <div className="rounded-2xl bg-stone-800 text-white p-3">
+                                                                    <p className="text-[10px] font-bold text-stone-400">필요 금액</p>
+                                                                    <p className="font-black">{fmtM(target)}<span className="text-xs font-bold ml-0.5">만</span></p>
+                                                                </div>
+                                                                <div className="rounded-2xl bg-emerald-900/90 text-white p-3">
+                                                                    <p className="text-[10px] font-bold text-emerald-300">현재 합계</p>
+                                                                    <p className="font-black">{fmtM(current)}<span className="text-xs font-bold ml-0.5">만</span></p>
+                                                                </div>
+                                                                <div className="rounded-2xl bg-amber-900/85 text-white p-3">
+                                                                    <p className="text-[10px] font-bold text-amber-200">남은 금액</p>
+                                                                    <p className="font-black">{fmtM(remaining)}<span className="text-xs font-bold ml-0.5">만</span></p>
+                                                                </div>
+                                                                <div className="rounded-2xl bg-violet-900/85 text-white p-3">
+                                                                    <p className="text-[10px] font-bold text-violet-200">진행률</p>
+                                                                    <p className="font-black">{progress.toFixed(1)}%</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-4 rounded-full bg-stone-200 overflow-hidden border border-stone-300">
+                                                                <div className="h-full bg-gradient-to-r from-violet-500 to-teal-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                                <div>
+                                                                    <label className="text-[10px] font-bold text-stone-500">필요 금액 수정 (만 원)</label>
+                                                                    <input type="number" min="0" defaultValue={target} key={`t-${g.id}-${target}`} onBlur={(e) => handleShortGoalMeta(g.id, 'targetMan', e.target.value)} className={`${sgInp} mt-1`} />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[10px] font-bold text-stone-500">처음 모은 금·시드 (만 원)</label>
+                                                                    <input type="number" min="0" defaultValue={seed} key={`s-${g.id}-${seed}`} onBlur={(e) => handleShortGoalMeta(g.id, 'seedMan', e.target.value)} className={`${sgInp} mt-1`} />
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-black text-stone-700 mb-2">월별 납입 (만 원) · 입력 후 칸 밖을 누르면 저장</p>
+                                                                <div className="max-h-56 overflow-y-auto rounded-xl border border-stone-200 bg-white/50 divide-y divide-stone-100">
+                                                                    {monthKeys.map((ym) => (
+                                                                        <div key={ym} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                                                            <span className="w-[4.5rem] shrink-0 font-mono font-bold text-slate-700">{ym}</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                className={`${sgInp} flex-1 py-1.5`}
+                                                                                placeholder="0"
+                                                                                defaultValue={g.monthly?.[ym] ?? ''}
+                                                                                key={`${g.id}-${ym}-${g.monthly?.[ym] ?? ''}`}
+                                                                                onBlur={(e) => handleShortGoalMonth(g.id, ym, e.target.value)}
+                                                                            />
+                                                                            <span className="text-stone-400 shrink-0">만 원</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <p className="text-[10px] text-stone-500 mt-1">현재 합계 = 시드 + 위 월별 납입의 합입니다.</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                );
+                            })()}
 
                             {/* 공통 모달 영역 (일정 추가, 회의록 추가) */}
                             {showEventModal && (
