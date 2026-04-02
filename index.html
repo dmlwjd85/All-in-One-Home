@@ -256,34 +256,64 @@
             };
         };
 
-        /** 투자 성향 비율 → 미국 상장 ETF만 추천 (참고용) */
+        /** 미국 상장 ETF 5종 고정 카탈로그 (추천 시 비중만 성향에 따라 조정) */
+        const INVEST_ETF_FIVE = [
+            {
+                symbol: 'BND',
+                nameKo: 'Vanguard Total Bond Market ETF',
+                bucket: '채권·안정',
+                descKo: '미국 투자등급 회사채·국채 등을 넓게 담아 이자 수익과 분산에 초점을 둔 대표 채권 ETF입니다. 주식 변동을 완충하는 역할을 기대할 수 있습니다.',
+            },
+            {
+                symbol: 'VGIT',
+                nameKo: 'Vanguard Intermediate-Term Treasury ETF',
+                bucket: '국채·금리',
+                descKo: '미국 국채(중기 만기) 위주로 금리 방향에 상대적으로 덜 민감한 국채 노출을 제공합니다. 안정·현금성에 가까운 채권층으로 쓰기 좋습니다.',
+            },
+            {
+                symbol: 'VTI',
+                nameKo: 'Vanguard Total Stock Market ETF',
+                bucket: '미국 주식',
+                descKo: '미국 전체 시장(대·중·소형)을 시가총액 가중으로 추종하는 대표 주식 ETF입니다. 장기 성장을 노릴 때 코어 자산으로 자주 쓰입니다.',
+            },
+            {
+                symbol: 'VXUS',
+                nameKo: 'Vanguard Total International Stock ETF',
+                bucket: '해외 주식',
+                descKo: '미국 외 선진·신흥국 주식에 분산 투자해 지역·통화 리스크를 나눕니다. 국내(미국) 주식만 가질 때의 집중도를 낮추는 데 도움이 됩니다.',
+            },
+            {
+                symbol: 'SGOV',
+                nameKo: 'iShares 0-3 Month Treasury Bond ETF',
+                bucket: '초단기·유동성',
+                descKo: '만기가 매우 짧은 미국 국채에 투자해 현금에 가까운 유동성과 단기 금리 수익을 노리는 ETF입니다. 단기 목표·비상금 성격에 맞춥니다.',
+            },
+        ];
+
+        /** 투자 성향 비율 → 위 ETF 5종만 추천 (가중치 합 100%, 참고용) */
         const buildInvestEtfPlan = (pctPension, pctLong, pctMid, pctShort) => {
             const sum = pctPension + pctLong + pctMid + pctShort;
             const s = sum > 0 ? sum : 1;
             const p = pctPension / s, l = pctLong / s, m = pctMid / s, sh = pctShort / s;
-            const acc = {};
-            const add = (sym, nameKo, bucket, w) => {
-                if (w <= 0) return;
-                if (!acc[sym]) acc[sym] = { symbol: sym, nameKo, bucket, weight: 0, kind: 'ETF' };
-                acc[sym].weight += w;
-            };
-            if (p > 0) {
-                add('BND', 'Vanguard Total Bond ETF (BND)', '연금형 ETF', p * 0.55);
-                add('VGIT', 'Vanguard 중기 국채 ETF (VGIT)', '연금형 ETF', p * 0.45);
-            }
-            if (l > 0) {
-                add('VTI', 'Vanguard 미국 전체 주식 ETF (VTI)', '장기 ETF', l * 0.7);
-                add('VXUS', 'Vanguard 미국 외 선진국 ETF (VXUS)', '장기 ETF', l * 0.3);
-            }
-            if (m > 0) {
-                add('AOM', 'iShares 중립형 자산배분 ETF (AOM)', '중기 ETF', m);
-            }
-            if (sh > 0) {
-                add('SGOV', 'iShares 초단기 국채 ETF (SGOV)', '단기 ETF', sh);
-            }
-            return Object.values(acc)
-                .map((row) => ({ ...row, weightPct: (row.weight * 100).toFixed(1) }))
-                .sort((a, b) => b.weight - a.weight);
+            // 성향별 가중: 연금형→BND/VGIT, 장기→VTI/VXUS, 중기→골고루, 단기→SGOV
+            const raw = [
+                0.42 * p + 0.18 * m + 0.04 * l + 0.03 * sh,
+                0.33 * p + 0.14 * m + 0.05 * sh,
+                0.52 * l + 0.32 * m + 0.06 * p + 0.04 * sh,
+                0.24 * l + 0.22 * m + 0.06 * p,
+                0.58 * sh + 0.08 * m + 0.04 * l + 0.02 * p,
+            ];
+            const rw = raw.map((w) => Math.max(0.0001, w));
+            const t = rw.reduce((a, b) => a + b, 0);
+            return INVEST_ETF_FIVE.map((meta, i) => ({
+                symbol: meta.symbol,
+                nameKo: meta.nameKo,
+                bucket: meta.bucket,
+                descKo: meta.descKo,
+                kind: 'ETF',
+                weight: rw[i] / t,
+                weightPct: ((rw[i] / t) * 100).toFixed(1),
+            }));
         };
 
         /** 만 원 단위: 복리 예상·목표 현재가치·연도별 경로 (연 단위 복리) */
@@ -2310,7 +2340,7 @@
                                     {(invEtfRows.length > 0 || invEtfError) && (
                                         <div className="bg-paper-50 rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
                                             <div className="px-5 py-4 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
-                                                <h3 className="text-sm font-black text-stone-800">추천 ETF 목록 · 시세 (참고)</h3>
+                                                <h3 className="text-sm font-black text-stone-800">추천 ETF 5종 · 시세 (참고)</h3>
                                                 {invLastFetchAt && <span className="text-[10px] text-stone-400">조회: {invLastFetchAt.toLocaleString('ko-KR')}</span>}
                                             </div>
                                             {invEtfError && (
@@ -2320,32 +2350,36 @@
                                                 <table className="w-full text-sm">
                                                     <thead>
                                                         <tr className="bg-stone-100 text-slate-700 text-left text-xs">
-                                                            <th className="px-4 py-3 font-black">ETF 구분</th>
-                                                            <th className="px-4 py-3 font-black">ETF명</th>
-                                                            <th className="px-4 py-3 font-black">티커</th>
-                                                            <th className="px-4 py-3 font-black">비중</th>
-                                                            <th className="px-4 py-3 font-black">가격</th>
-                                                            <th className="px-4 py-3 font-black">변동</th>
+                                                            <th className="px-4 py-3 font-black w-[7rem]">구분</th>
+                                                            <th className="px-4 py-3 font-black min-w-[10rem]">ETF명 · 티커</th>
+                                                            <th className="px-4 py-3 font-black min-w-[14rem]">상품 설명</th>
+                                                            <th className="px-4 py-3 font-black whitespace-nowrap">비중</th>
+                                                            <th className="px-4 py-3 font-black whitespace-nowrap">가격(USD)</th>
+                                                            <th className="px-4 py-3 font-black whitespace-nowrap">변동</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {invEtfRows.map((row) => (
-                                                            <tr key={row.symbol} className="border-t border-stone-100 hover:bg-slate-50/90">
+                                                            <tr key={row.symbol} className="border-t border-stone-100 hover:bg-slate-50/90 align-top">
                                                                 <td className="px-4 py-3 text-xs text-slate-700 font-semibold whitespace-nowrap">{row.bucket}</td>
                                                                 <td className="px-4 py-3">
                                                                     <p className="font-bold text-slate-900">{row.nameKo}</p>
-                                                                    <p className="text-[10px] text-slate-500">{row.nameEn}</p>
+                                                                    <p className="text-[11px] font-mono font-black text-teal-700 mt-0.5">{row.symbol}</p>
+                                                                    {row.nameEn && <p className="text-[10px] text-slate-500 mt-0.5">{row.nameEn}</p>}
                                                                 </td>
-                                                                <td className="px-4 py-3 font-mono font-bold text-teal-700">{row.symbol}</td>
-                                                                <td className="px-4 py-3 font-black text-slate-800">{row.weightPct}%</td>
-                                                                <td className="px-4 py-3 text-slate-800">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency}` : '—'}</td>
-                                                                <td className={`px-4 py-3 font-bold ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                <td className="px-4 py-3 text-[11px] text-slate-600 leading-relaxed">{row.descKo || '—'}</td>
+                                                                <td className="px-4 py-3 font-black text-slate-800 whitespace-nowrap">{row.weightPct}%</td>
+                                                                <td className="px-4 py-3 text-slate-800 whitespace-nowrap">{row.price != null ? `${Number(row.price).toFixed(2)} ${row.currency || ''}` : '—'}</td>
+                                                                <td className={`px-4 py-3 font-bold whitespace-nowrap ${row.chgPct == null ? 'text-slate-400' : row.chgPct >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                                                     {row.chgPct != null ? `${row.chgPct >= 0 ? '+' : ''}${row.chgPct.toFixed(2)}%` : '—'}
                                                                 </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
+                                                <p className="px-5 py-3 text-[11px] text-slate-500 leading-relaxed border-t border-stone-100 bg-slate-50/50">
+                                                    추천 종목은 모두 <span className="font-bold text-slate-700">미국 상장 ETF 5종</span>으로 고정되며, 비중만 투자 성향(연금·장기·중기·단기) 비율에 따라 달라집니다. 세금·환율·수수료는 반영되지 않습니다.
+                                                </p>
                                             </div>
                                         </div>
                                     )}
