@@ -646,8 +646,14 @@
             const [selectedEvent, setSelectedEvent] = useState(null); 
 
             const [inputWeight, setInputWeight] = useState("");
-            const [viewDate, setViewDate] = useState(new Date(2026, 2, 1)); 
-            const [schoolViewDate, setSchoolViewDate] = useState(new Date(2026, 2, 1));
+            const [viewDate, setViewDate] = useState(() => {
+                const n = new Date();
+                return new Date(n.getFullYear(), n.getMonth(), 1);
+            });
+            const [schoolViewDate, setSchoolViewDate] = useState(() => {
+                const n = new Date();
+                return new Date(n.getFullYear(), n.getMonth(), 1);
+            });
             const [selectedDate, setSelectedDate] = useState(null);
             const [showEventModal, setShowEventModal] = useState(false);
             const [newEventTitle, setNewEventTitle] = useState("");
@@ -1634,6 +1640,11 @@
                 recognition.start();
             };
 
+            const todayYmd = (() => {
+                const n = new Date();
+                return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+            })();
+
             const menuItems = [
                 { id: 'home', icon: Home, label: '홈' },
                 { id: 'calendar', icon: CalendarIcon, label: '공용 일정' },
@@ -2352,10 +2363,17 @@
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm self-start">
-                                            <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-200 rounded-lg text-stone-600"><ChevronLeft/></button>
+                                        <div className="flex items-center gap-2 md:gap-3 bg-paper-50 p-2 rounded-2xl border border-stone-200 shadow-sm self-start flex-wrap">
+                                            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-200 rounded-lg text-stone-600"><ChevronLeft/></button>
                                             <span className="font-bold text-sm min-w-[100px] text-center text-stone-800">{viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월</span>
-                                            <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-200 rounded-lg rotate-180 text-stone-600"><ChevronLeft/></button>
+                                            <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-200 rounded-lg rotate-180 text-stone-600"><ChevronLeft/></button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { const n = new Date(); setViewDate(new Date(n.getFullYear(), n.getMonth(), 1)); }}
+                                                className="text-[11px] font-black px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200"
+                                            >
+                                                오늘
+                                            </button>
                                         </div>
                                     </div>
                                     <div className="bg-paper-50 rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
@@ -2378,13 +2396,14 @@
                                                     const end = new Date(dragStart <= dragEnd ? dragEnd : dragStart);
                                                     isSelected = current >= start && current <= end;
                                                 }
+                                                const isTodayCell = Boolean(d.fullDate && d.fullDate === todayYmd);
                                                 return (
                                                 <div 
                                                     key={i} 
                                                     data-date={d.fullDate}
-                                                    className={`min-h-[80px] md:min-h-[120px] border-r border-b border-stone-200 p-1 md:p-2 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
+                                                    className={`min-h-[80px] md:min-h-[120px] border-r border-b border-stone-200 p-1 md:p-2 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-100/30' : 'hover:bg-stone-100/50'} ${isTodayCell ? 'ring-2 ring-amber-400 ring-inset bg-amber-50/70 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]' : ''} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
                                                 >
-                                                    <span className={`text-xs font-bold pl-1 md:pl-0 ${i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
+                                                    <span className={`text-xs font-bold pl-1 md:pl-0 ${isTodayCell ? 'inline-flex items-center justify-center min-w-[1.35rem] h-6 rounded-full bg-amber-500 text-white shadow-sm' : i%7===0?'text-rose-500':i%7===6?'text-blue-500':'text-stone-500'}`}>{d.day}</span>
                                                     <div className="mt-1 space-y-1">
                                                         {calendarEvents.filter(e => e.date === d.fullDate && (!e.type || e.type === 'general')).map(e => (
                                                             <div key={e.id} onClick={(ev) => { ev.stopPropagation(); setSelectedEvent(e); }} className="text-[9px] md:text-[10px] bg-stone-200 hover:bg-stone-300 text-stone-800 p-1 md:p-1.5 rounded font-bold truncate flex justify-between group shadow-sm border border-stone-300 cursor-pointer transition-colors" title={e.memo ? `${e.time||''} ${e.memo}` : e.title}>
@@ -2438,10 +2457,17 @@
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto shrink-0">
-                                                    <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
+                                                <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-stone-200 shadow-sm self-start md:self-auto shrink-0 flex-wrap">
+                                                    <button type="button" onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()-1, 1))} className="p-1 hover:bg-stone-100 rounded-lg text-stone-600"><ChevronLeft size={16}/></button>
                                                     <span className="font-bold text-sm min-w-[80px] text-center text-stone-800">{schoolViewDate.getFullYear()}년 {schoolViewDate.getMonth() + 1}월</span>
-                                                    <button onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-100 rounded-lg rotate-180 text-stone-600"><ChevronLeft size={16}/></button>
+                                                    <button type="button" onClick={() => setSchoolViewDate(new Date(schoolViewDate.getFullYear(), schoolViewDate.getMonth()+1, 1))} className="p-1 hover:bg-stone-100 rounded-lg rotate-180 text-stone-600"><ChevronLeft size={16}/></button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { const n = new Date(); setSchoolViewDate(new Date(n.getFullYear(), n.getMonth(), 1)); }}
+                                                        className="text-[10px] font-black px-2 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200"
+                                                    >
+                                                        오늘
+                                                    </button>
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-7 bg-white border-b border-stone-100 font-black text-[10px] text-stone-400 uppercase tracking-widest py-2 shrink-0">
@@ -2463,13 +2489,14 @@
                                                         const end = new Date(dragStart <= dragEnd ? dragEnd : dragStart);
                                                         isSelected = current >= start && current <= end;
                                                     }
+                                                    const isTodayCell = Boolean(d.fullDate && d.fullDate === todayYmd);
                                                     return (
                                                     <div 
                                                         key={i} 
                                                         data-date={d.fullDate}
-                                                        className={`min-h-[60px] md:min-h-[80px] border-r border-b border-stone-100 p-1 md:p-1.5 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
+                                                        className={`min-h-[60px] md:min-h-[80px] border-r border-b border-stone-100 p-1 md:p-1.5 cursor-pointer transition-colors select-none ${!d.day ? 'bg-stone-50/80' : 'bg-white hover:bg-stone-100/50'} ${isTodayCell ? 'ring-2 ring-amber-400 ring-inset bg-amber-50/80 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]' : ''} ${isSelected ? 'bg-indigo-500/20' : ''} ${pressingDate === d.fullDate ? 'bg-indigo-100 scale-[0.98]' : ''}`}
                                                     >
-                                                        <span className={`text-[10px] font-bold pl-1 ${i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
+                                                        <span className={`text-[10px] font-bold pl-1 ${isTodayCell ? 'inline-flex items-center justify-center min-w-[1.2rem] h-5 rounded-full bg-amber-500 text-white shadow-sm' : i%7===0?'text-rose-400':i%7===6?'text-blue-400':'text-stone-500'}`}>{d.day}</span>
                                                         <div className="mt-1 flex flex-col gap-1">
                                                             {calendarEvents.filter(e => e.date === d.fullDate && e.type === 'school' && e.owner === currentUserMode).map(e => {
                                                                 let bgClass = "bg-stone-100 text-stone-700 border-stone-200";
