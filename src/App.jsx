@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 import {
     Home,
@@ -25,7 +25,6 @@ import {
     Check,
     ImagePlus,
     Download,
-    Lock,
     FileText,
     Pencil,
     Camera,
@@ -472,16 +471,17 @@ import {
         };
 
 export default function App() {
-            // Auth & Security States (로컬스토리지 활용으로 자동 로그인)
-            const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('isAuth') === 'true');
-            const [loginSelectedUser, setLoginSelectedUser] = useState(() => localStorage.getItem('loginUser') || null);
+            // Auth & Security States (Google 계정 기준으로 자동 로그인)
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loginSelectedUser, setLoginSelectedUser] = useState(null);
             const [pinCode, setPinCode] = useState("");
+            const [authLoading, setAuthLoading] = useState(true);
             const [userPins, setUserPins] = useState({ jaeyoon: null, uijeong: null });
 
             // Navigation & Mode
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('home');
-            const [currentUserMode, setCurrentUserMode] = useState(() => localStorage.getItem('loginUser') || 'uijeong'); 
+            const [currentUserMode, setCurrentUserMode] = useState(() => localStorage.getItem('loginUser') || 'google');
             const [isMenuOpen, setIsMenuOpen] = useState(true);
 
             // Touch Swipe States (모바일 개선)
@@ -616,6 +616,12 @@ export default function App() {
             const [pfDataErr, setPfDataErr] = useState(null);
             const [pfLastFetchAt, setPfLastFetchAt] = useState(null);
 
+            // Google 계정별 Gemini 도구 State
+            const [aiPrompt, setAiPrompt] = useState('');
+            const [aiAnswer, setAiAnswer] = useState('');
+            const [aiLoading, setAiLoading] = useState(false);
+            const [aiError, setAiError] = useState(null);
+
             // 단기 목표 프로젝트 (만 원 단위)
             const [shortTermGoals, setShortTermGoals] = useState([]);
             const [sgTitle, setSgTitle] = useState('');
@@ -627,7 +633,7 @@ export default function App() {
             const todayDate = new Date().getDate();
             const todayChore = CHORE_MASTER_LIST.find(c => c.id === todayDate);
 
-            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'invest', 'portfolioSim', 'shortGoals', 'teacher', 'siha'];
+            const tabOrder = ['home', 'calendar', 'chores', 'ledger', 'aiSearch', 'invest', 'portfolioSim', 'shortGoals', 'teacher', 'siha'];
 
             // 모바일 스와이프 핸들러 (캘린더 영역 예외 처리 추가)
             const handleTouchStart = (e) => {
@@ -668,17 +674,21 @@ export default function App() {
 
             // Firebase Auth Setup
             useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (error) { console.error("Auth Error:", error); }
-                };
-                initAuth();
-                const unsubscribe = onAuthStateChanged(auth, setUser);
+                const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+                    setUser(firebaseUser);
+                    setAuthLoading(false);
+                    if (firebaseUser) {
+                        localStorage.setItem('isAuth', 'true');
+                        localStorage.setItem('loginUser', firebaseUser.uid);
+                        setCurrentUserMode(firebaseUser.uid);
+                        setIsAuthenticated(true);
+                    } else {
+                        localStorage.removeItem('isAuth');
+                        localStorage.removeItem('loginUser');
+                        setCurrentUserMode('google');
+                        setIsAuthenticated(false);
+                    }
+                });
                 return () => unsubscribe();
             }, []);
 
@@ -892,41 +902,85 @@ export default function App() {
                 }
             };
 
-            const handleLoginSubmit = async () => {
-                if (!pinCode) return;
-                const currentPin = userPins[loginSelectedUser];
-                if (!currentPin) {
-                    try {
-                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'appSettings', 'pins_v2'), {
-                            [loginSelectedUser]: pinCode
-                        }, { merge: true });
-                        
-                        localStorage.setItem('isAuth', 'true');
-                        localStorage.setItem('loginUser', loginSelectedUser);
-                        setCurrentUserMode(loginSelectedUser);
-                        setIsAuthenticated(true);
-                        setPinCode("");
-                    } catch (err) { console.error(err); }
-                } else {
-                    if (pinCode === currentPin) {
-                        localStorage.setItem('isAuth', 'true');
-                        localStorage.setItem('loginUser', loginSelectedUser);
-                        setCurrentUserMode(loginSelectedUser);
-                        setIsAuthenticated(true);
-                        setPinCode("");
-                    } else {
-                        alert("비밀번호가 일치하지 않습니다.");
-                        setPinCode("");
+            const getCurrentAuthorName = () => {
+                if (user?.displayName) return user.displayName;
+                if (user?.email) return user.email.split('@')[0];
+                return currentUserMode === 'uijeong' ? '살뜰 의정' : currentUserMode === 'jaeyoon' ? '알뜰 재윤' : 'Google 사용자';
+            };
+
+            const getGeminiStorageKey = () => `gemini_api_key_${user?.uid || 'guest'}`;
+
+            const getUserGeminiApiKey = () => {
+                const storageKey = getGeminiStorageKey();
+                let apiKey = localStorage.getItem(storageKey);
+                if (!apiKey && user?.uid) {
+                    // 기존 공용 키를 쓰던 사용자는 최초 1회만 현재 Google 계정 키로 이전합니다.
+                    const legacyKey = localStorage.getItem('gemini_api_key');
+                    if (legacyKey) {
+                        apiKey = legacyKey;
+                        localStorage.setItem(storageKey, legacyKey);
+                        localStorage.removeItem('gemini_api_key');
                     }
+                }
+                if (!apiKey) {
+                    apiKey = window.prompt("현재 Google 계정에서 사용할 Gemini API 키를 입력해주세요.\n입력한 키는 이 브라우저의 현재 계정에만 저장됩니다.");
+                    if (!apiKey) return null;
+                    localStorage.setItem(storageKey, apiKey.trim());
+                }
+                return apiKey.trim();
+            };
+
+            const resetUserGeminiApiKey = () => {
+                localStorage.removeItem(getGeminiStorageKey());
+                localStorage.removeItem('gemini_api_key');
+            };
+
+            const callGemini = async (payload) => {
+                const apiKey = getUserGeminiApiKey();
+                if (!apiKey) throw new Error('Gemini API 키가 없습니다.');
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    if (response.status === 400 || response.status === 403 || response.status === 404) {
+                        resetUserGeminiApiKey();
+                    }
+                    const errData = await response.text();
+                    throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
+                }
+                return response.json();
+            };
+
+            const handleGoogleLogin = async () => {
+                try {
+                    setAuthLoading(true);
+                    const provider = new GoogleAuthProvider();
+                    provider.setCustomParameters({ prompt: 'select_account' });
+                    await signInWithPopup(auth, provider);
+                } catch (err) {
+                    console.error(err);
+                    alert("Google 로그인 중 오류가 발생했습니다: " + err.message);
+                    setAuthLoading(false);
                 }
             };
 
-            const handleLogout = () => {
+            const handleLogout = async () => {
                 localStorage.removeItem('isAuth');
                 localStorage.removeItem('loginUser');
                 setIsAuthenticated(false);
                 setLoginSelectedUser(null);
                 setPinCode("");
+                setAiAnswer("");
+                setAiError(null);
+                try {
+                    await signOut(auth);
+                } catch (err) {
+                    console.error(err);
+                    alert("로그아웃 중 오류가 발생했습니다: " + err.message);
+                }
             };
 
             const handleImageUpload = (e) => {
@@ -1144,7 +1198,7 @@ export default function App() {
                     date: new Date().toISOString().split('T')[0], 
                     title: newMemoryText.substring(0, 15), 
                     content: newMemoryText, 
-                    author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤', 
+                    author: getCurrentAuthorName(), 
                     image: uploadedImageBase64 || "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80", 
                     tags: ["일상"], 
                     createdAt: serverTimestamp() 
@@ -1198,7 +1252,7 @@ export default function App() {
                     time: newEventTime, 
                     memo: newEventMemo, 
                     type: eventType, 
-                    author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                    author: getCurrentAuthorName(),
                     owner: currentUserMode, 
                     createdAt: serverTimestamp() 
                 };
@@ -1323,21 +1377,6 @@ export default function App() {
                             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                             const base64Data = dataUrl.split(',')[1];
                             
-                            // 👇 깃허브 유출 방지를 위해 팝업창으로 입력받아 안전하게 기기에만 저장하는 방식
-                            let apiKey = localStorage.getItem('gemini_api_key');
-                            if (!apiKey) {
-                                apiKey = window.prompt("보안을 위해 Gemini API 키를 직접 입력해주세요.\n(최초 1회만 입력하면 현재 기기에 안전하게 자동 저장됩니다.)");
-                                if (!apiKey) {
-                                    alert("API 키가 없으면 일정을 스캔할 수 없습니다.");
-                                    setIsScanning(false);
-                                    e.target.value = "";
-                                    return;
-                                }
-                                localStorage.setItem('gemini_api_key', apiKey.trim());
-                            }
-                            
-                            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                            
                             const promptText = `주어진 이미지에서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요.`;
 
                             const payload = {
@@ -1373,23 +1412,7 @@ export default function App() {
                                 }
                             };
 
-                            const response = await fetch(url, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload)
-                            });
-
-                            if (!response.ok) {
-                                // 👇 404 에러(잘못된 키/모델) 발생 시에도 브라우저에 저장된 키를 강제 삭제
-                                if (response.status === 400 || response.status === 403 || response.status === 404) {
-                                    localStorage.removeItem('gemini_api_key');
-                                    alert("API 키가 올바르지 않거나 만료되었습니다.\n확인을 누르시고 다시 스캔 버튼을 눌러 '새 API 키'를 정확히 입력해주세요.");
-                                }
-                                const errData = await response.text();
-                                throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
-                            }
-
-                            const result = await response.json();
+                            const result = await callGemini(payload);
                             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                             if (!text) throw new Error("AI가 아무런 결과를 반환하지 않았습니다.");
                             
@@ -1445,20 +1468,6 @@ export default function App() {
                     setIsScanning(true); // AI 분석 중 로딩 표시 재사용
                     
                     try {
-                        // 👇 음성 인식 부분도 팝업창으로 입력받아 안전하게 기기에만 저장하는 방식
-                        let apiKey = localStorage.getItem('gemini_api_key');
-                        if (!apiKey) {
-                            apiKey = window.prompt("보안을 위해 Gemini API 키를 직접 입력해주세요.\n(최초 1회만 입력하면 현재 기기에 안전하게 자동 저장됩니다.)");
-                            if (!apiKey) {
-                                alert("API 키가 없으면 일정을 등록할 수 없습니다.");
-                                setIsScanning(false);
-                                return;
-                            }
-                            localStorage.setItem('gemini_api_key', apiKey.trim());
-                        }
-                        
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                        
                         const promptText = `사용자의 음성 기록을 분석해서 일정을 추출하세요. 기준 연/월: ${targetType === 'school' ? schoolViewDate.getFullYear() : viewDate.getFullYear()}년 ${targetType === 'school' ? schoolViewDate.getMonth() + 1 : viewDate.getMonth() + 1}월. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 무조건 ${targetType === 'school' ? "'school_general', 'deadline', 'field_trip', 'lecture' 중 하나만" : "'general'만"} 작성하세요. 음성 기록: "${transcript}"`;
 
                         const payload = {
@@ -1488,18 +1497,7 @@ export default function App() {
                             }
                         };
 
-                        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                        if (!response.ok) {
-                            // 👇 음성 인식 쪽도 동일하게 404 조건 추가
-                            if (response.status === 400 || response.status === 403 || response.status === 404) {
-                                localStorage.removeItem('gemini_api_key');
-                                alert("API 키가 올바르지 않거나 만료되었습니다.\n확인을 누르시고 다시 음성 버튼을 눌러 '새 API 키'를 정확히 입력해주세요.");
-                            }
-                            const errData = await response.text();
-                            throw new Error(`API 통신 에러 (${response.status}): ${errData.substring(0, 150)}`);
-                        }
-                        
-                        const result = await response.json();
+                        const result = await callGemini(payload);
                         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
                         const parsedData = JSON.parse(text);
                         const events = parsedData.events || [];
@@ -1533,6 +1531,114 @@ export default function App() {
                 recognition.start();
             };
 
+            const buildAiHomeContext = () => ({
+                today: todayYmd,
+                user: {
+                    name: getCurrentAuthorName(),
+                    email: user?.email || '',
+                },
+                calendarEvents: calendarEvents
+                    .slice()
+                    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+                    .slice(0, 120)
+                    .map(({ title, date, time, memo, type, category, author }) => ({ title, date, time, memo, type, category, author })),
+                chores: CHORE_MASTER_LIST.map((item) => ({ day: item.id, task: item.task, done: Boolean(monthlyChores[item.id]) })),
+                ledger: {
+                    stats: ledgerStats,
+                    items: ledgerItems.slice(0, 80).map(({ category, title, amount }) => ({ category, title, amount })),
+                },
+                teacher: {
+                    todos: teacherTodos.slice(0, 50).map(({ text, done, date }) => ({ text, done, date })),
+                    meetingMinutes: meetingMinutes.slice(0, 20).map(({ date, content }) => ({ date, content: String(content || '').slice(0, 500) })),
+                },
+                shortTermGoals: shortTermGoals.slice(0, 30).map(({ title, targetMan, seedMan, monthly, author }) => ({ title, targetMan, seedMan, monthly, author })),
+                familyDiary: sihaMemories.slice(0, 30).map(({ date, title, content, author }) => ({ date, title, content: String(content || '').slice(0, 500), author })),
+            });
+
+            const runAiHomeSearch = async () => {
+                if (!aiPrompt.trim()) {
+                    alert('검색하거나 물어볼 내용을 입력해 주세요.');
+                    return;
+                }
+                setAiLoading(true);
+                setAiError(null);
+                setAiAnswer('');
+                try {
+                    const payload = {
+                        contents: [{
+                            role: "user",
+                            parts: [{
+                                text: `너는 우리집 홈노트의 한국어 AI 비서입니다. 아래 홈노트 데이터를 바탕으로 사용자의 질문에 답하세요. 일정, 집안일, 가계부, 교무수첩, 가족 일기에서 관련 내용을 찾아 요약하고, 확실하지 않은 내용은 추측하지 말고 부족하다고 말하세요.\n\n[홈노트 데이터]\n${JSON.stringify(buildAiHomeContext())}\n\n[사용자 질문]\n${aiPrompt.trim()}`
+                            }]
+                        }]
+                    };
+                    const result = await callGemini(payload);
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    setAiAnswer(text || 'AI가 답변을 반환하지 않았습니다.');
+                } catch (err) {
+                    console.error(err);
+                    setAiError(err.message);
+                    alert("AI 검색 중 오류가 발생했습니다: " + err.message);
+                } finally {
+                    setAiLoading(false);
+                }
+            };
+
+            const runAiScheduleDraft = async () => {
+                if (!aiPrompt.trim()) {
+                    alert('일정으로 만들 내용을 입력해 주세요.');
+                    return;
+                }
+                setAiLoading(true);
+                setAiError(null);
+                try {
+                    const promptText = `사용자 문장에서 등록할 일정을 추출하세요. 오늘 날짜는 ${todayYmd}입니다. 날짜가 명확하지 않으면 가까운 미래의 합리적인 날짜로 해석하되 memo에 해석 근거를 적으세요. 날짜는 YYYY-MM-DD 형식으로 작성하세요. 카테고리는 'general'만 사용하세요. 사용자 문장: "${aiPrompt.trim()}"`;
+                    const payload = {
+                        contents: [{ role: "user", parts: [{ text: promptText }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    events: {
+                                        type: "ARRAY",
+                                        items: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                title: { type: "STRING" },
+                                                date: { type: "STRING" },
+                                                time: { type: "STRING" },
+                                                memo: { type: "STRING" },
+                                                category: { type: "STRING" }
+                                            },
+                                            required: ["title", "date", "time", "memo", "category"]
+                                        }
+                                    }
+                                },
+                                required: ["events"]
+                            }
+                        }
+                    };
+                    const result = await callGemini(payload);
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const parsedData = JSON.parse(text);
+                    const events = parsedData.events || [];
+                    if (events.length === 0) {
+                        alert("일정으로 등록할 내용을 찾지 못했습니다.");
+                        return;
+                    }
+                    setScannedEvents(events);
+                    setScannedEventType('general');
+                    setSelectedScannedIndices(events.map((_, i) => i));
+                } catch (err) {
+                    console.error(err);
+                    setAiError(err.message);
+                    alert("AI 일정 생성 중 오류가 발생했습니다: " + err.message);
+                } finally {
+                    setAiLoading(false);
+                }
+            };
+
             const todayYmd = (() => {
                 const n = new Date();
                 return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
@@ -1543,6 +1649,7 @@ export default function App() {
                 { id: 'calendar', icon: CalendarIcon, label: '공용 일정' },
                 { id: 'chores', icon: ClipboardCheck, label: '집안일' },
                 { id: 'ledger', icon: Wallet, label: '가계부' },
+                { id: 'aiSearch', icon: Search, label: 'AI 검색' },
                 { id: 'invest', icon: PieChart, label: 'AI 버핏' },
                 { id: 'portfolioSim', icon: Layers, label: '포트폴리오 시뮬' },
                 { id: 'shortGoals', icon: TargetIcon, label: '단기 목표' },
@@ -1785,7 +1892,7 @@ export default function App() {
                         seedMan: parseFloat(String(sgSeed).replace(/,/g, '')) || 0,
                         monthly: {},
                         createdAt: serverTimestamp(),
-                        author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                        author: getCurrentAuthorName(),
                     });
                     setSgTitle('');
                     setSgTarget('');
@@ -1838,42 +1945,22 @@ export default function App() {
                     <div className="flex h-[100dvh] bg-paper-100 items-center justify-center p-4">
                         <div className="bg-paper-50 p-6 md:p-10 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-stone-200">
                             <div className="w-16 h-16 bg-stone-700 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md"><Home size={32}/></div>
-                            <h1 className="text-2xl md:text-3xl font-black mb-8 text-paper-800 tracking-tight">우리집 홈노트</h1>
-                            
-                            {!loginSelectedUser ? (
-                                <div className="space-y-4">
-                                    <p className="text-stone-500 font-bold mb-4">접속할 계정을 선택하세요.</p>
-                                    <button onClick={() => setLoginSelectedUser('uijeong')} className="w-full py-4 px-6 bg-white border border-stone-200 rounded-2xl flex items-center gap-4 hover:border-stone-400 hover:shadow-md transition-all">
-                                        <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-black">U</div>
-                                        <div className="text-left"><p className="font-bold text-stone-800">살뜰 의정</p><p className="text-xs text-stone-400">삼봉초등학교</p></div>
-                                    </button>
-                                    <button onClick={() => setLoginSelectedUser('jaeyoon')} className="w-full py-4 px-6 bg-white border border-stone-200 rounded-2xl flex items-center gap-4 hover:border-stone-400 hover:shadow-md transition-all">
-                                        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black">J</div>
-                                        <div className="text-left"><p className="font-bold text-stone-800">알뜰 재윤</p><p className="text-xs text-stone-400">성연초등학교</p></div>
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-6 animate-in fade-in zoom-in duration-300">
-                                    <button onClick={() => setLoginSelectedUser(null)} className="text-sm text-stone-400 hover:text-stone-600 flex items-center justify-center mx-auto gap-1"><ChevronLeft size={16}/> 뒤로가기</button>
-                                    <div className="w-16 h-16 rounded-full bg-stone-200 text-stone-700 flex items-center justify-center mx-auto font-black text-2xl mb-2">
-                                        {loginSelectedUser === 'uijeong' ? 'U' : 'J'}
-                                    </div>
-                                    <h2 className="text-xl font-bold text-stone-800 mb-6">{loginSelectedUser === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}</h2>
-                                    <div className="relative">
-                                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
-                                        <input 
-                                            type="password" 
-                                            value={pinCode} 
-                                            onChange={(e) => setPinCode(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && handleLoginSubmit()}
-                                            placeholder={userPins[loginSelectedUser] ? "비밀번호 4자리 입력" : "초기 비밀번호 4자리 설정"} 
-                                            className="w-full bg-slate-100 border border-slate-400 rounded-2xl pl-12 pr-4 py-4 text-center tracking-[0.5em] font-black text-slate-900 placeholder:text-slate-500 focus:ring-2 focus:ring-slate-500 outline-none"
-                                            maxLength={4}
-                                        />
-                                    </div>
-                                    <button onClick={handleLoginSubmit} className="w-full py-4 bg-stone-800 text-white rounded-2xl font-black hover:bg-stone-900 transition-colors shadow-lg shadow-stone-200">입장하기</button>
-                                </div>
-                            )}
+                            <h1 className="text-2xl md:text-3xl font-black mb-3 text-paper-800 tracking-tight">우리집 홈노트</h1>
+                            <p className="text-sm text-stone-500 font-bold leading-relaxed mb-8">
+                                Google 계정으로 로그인하면 계정별 Gemini API 키를 따로 저장해 일정 등록과 홈노트 검색을 사용할 수 있습니다.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleGoogleLogin}
+                                disabled={authLoading}
+                                className="w-full py-4 px-6 bg-white border border-stone-200 rounded-2xl flex items-center justify-center gap-3 hover:border-stone-400 hover:shadow-md transition-all disabled:opacity-60"
+                            >
+                                <span className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-black text-lg">G</span>
+                                <span className="font-black text-stone-800">{authLoading ? '로그인 확인 중...' : 'Google 아이디로 로그인'}</span>
+                            </button>
+                            <p className="mt-5 text-[11px] text-stone-400 leading-relaxed">
+                                Firebase 콘솔에서 Google 로그인 제공업체와 현재 배포 도메인을 허용해야 팝업 로그인이 정상 작동합니다.
+                            </p>
                         </div>
                     </div>
                 );
@@ -1898,13 +1985,13 @@ export default function App() {
                         <div className="p-4 border-t border-stone-200">
                             <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 bg-paper-100 rounded-xl hover:bg-stone-200 transition-colors border border-stone-200">
                                 <div className="w-8 h-8 rounded-full bg-stone-300 flex items-center justify-center text-stone-700 font-bold">
-                                    {currentUserMode === 'uijeong' ? 'U' : 'J'}
+                                    {(getCurrentAuthorName()[0] || 'G').toUpperCase()}
                                 </div>
                                 {isMenuOpen && (
                                     <div className="text-left">
                                         <p className="text-[10px] text-stone-500 font-bold uppercase tracking-widest">Logged In</p>
                                         <p className="text-sm font-semibold truncate text-stone-700">
-                                            {currentUserMode === 'uijeong' ? '살뜰 의정 (삼봉초)' : '알뜰 재윤 (성연초)'}
+                                            {getCurrentAuthorName()}
                                         </p>
                                     </div>
                                 )}
@@ -1934,7 +2021,7 @@ export default function App() {
                                 <div className="max-w-5xl mx-auto space-y-6">
                                     <section className="bg-stone-800 rounded-3xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
                                         <div className="absolute top-[-20px] right-[-20px] text-white opacity-5"><Calculator size={200}/></div>
-                                        <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter">안녕하세요, {currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤'}! 👋</h1>
+                                        <h1 className="text-2xl md:text-3xl font-black mb-2 tracking-tighter">안녕하세요, {getCurrentAuthorName()}! 👋</h1>
                                         <p className="opacity-90 text-sm md:text-lg text-stone-200">이번 달 현금흐름 요약: <span className="font-bold underline decoration-stone-400 decoration-4 text-white">월 소득 {ledgerStats.incReg}만 원</span></p>
                                         <p className="mt-4 text-xs md:text-sm opacity-90 font-medium flex items-center gap-2 text-stone-300">
                                            <ClipboardCheck size={16}/> 오늘의 집안일: {todayChore ? todayChore.task : "오늘의 정비"}
@@ -1978,6 +2065,14 @@ export default function App() {
                                                     desc: '소득/지출 요약',
                                                     grad: 'from-emerald-50 to-slate-100',
                                                     accent: 'text-emerald-700'
+                                                },
+                                                {
+                                                    id: 'aiSearch',
+                                                    icon: Search,
+                                                    label: 'AI 검색',
+                                                    desc: '일정·기록 검색/등록',
+                                                    grad: 'from-violet-50 to-slate-100',
+                                                    accent: 'text-violet-600'
                                                 },
                                                 {
                                                     id: 'invest',
@@ -2326,7 +2421,7 @@ export default function App() {
 
                                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-2 shrink-0 gap-2">
                                         <h1 className="text-xl md:text-2xl font-black text-stone-800">
-                                            {currentUserMode === 'uijeong' ? '삼봉초 교무수첩' : '성연초 6학년 학급 운영'}
+                                            {getCurrentAuthorName()} 교무수첩
                                         </h1>
                                         <span className="px-4 py-1 bg-stone-200 text-stone-800 rounded-full text-xs font-bold self-start md:self-auto">2026학년도</span>
                                     </div>
@@ -2537,6 +2632,72 @@ export default function App() {
                                             </div>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Google 계정별 Gemini 홈노트 검색/일정 도구 */}
+                            {activeTab === 'aiSearch' && (
+                                <div className="max-w-5xl mx-auto space-y-6">
+                                    <section className="bg-stone-800 rounded-3xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
+                                        <div className="absolute top-[-20px] right-[-20px] text-white opacity-5"><Search size={180}/></div>
+                                        <p className="text-xs font-black uppercase tracking-[0.25em] text-violet-200 mb-2">Google + Gemini</p>
+                                        <h1 className="text-2xl md:text-3xl font-black tracking-tight mb-2">홈노트 AI 검색</h1>
+                                        <p className="text-sm md:text-base text-stone-200 leading-relaxed max-w-2xl">
+                                            {getCurrentAuthorName()}님의 Google 계정에 연결된 Gemini API 키로 일정, 집안일, 가계부, 교무수첩, 가족 일기를 검색하거나 자연어 일정을 만들 수 있습니다.
+                                        </p>
+                                    </section>
+
+                                    <section className="bg-paper-50 p-5 md:p-6 rounded-3xl border border-stone-200 shadow-sm">
+                                        <div className="flex flex-col gap-3">
+                                            <label className="text-sm font-black text-stone-700">검색하거나 일정으로 만들 내용</label>
+                                            <textarea
+                                                value={aiPrompt}
+                                                onChange={(e) => setAiPrompt(e.target.value)}
+                                                className="w-full min-h-[140px] bg-white border border-stone-300 rounded-2xl p-4 text-sm outline-none focus:ring-2 focus:ring-violet-300 text-stone-800 resize-none"
+                                                placeholder="예: 다음 주 일정 요약해줘 / 이번 달 집안일 완료 현황 알려줘 / 5월 10일 오후 2시에 치과 예약 일정 등록해줘"
+                                            />
+                                            <div className="flex flex-col sm:flex-row gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={runAiHomeSearch}
+                                                    disabled={aiLoading}
+                                                    className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-black hover:bg-violet-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    <Search size={18}/> 홈노트 검색/요약
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={runAiScheduleDraft}
+                                                    disabled={aiLoading}
+                                                    className="flex-1 py-3 bg-stone-800 text-white rounded-xl font-black hover:bg-stone-900 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    <CalendarIcon size={18}/> 일정으로 만들기
+                                                </button>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        resetUserGeminiApiKey();
+                                                        alert('현재 Google 계정의 Gemini API 키를 삭제했습니다. 다음 AI 실행 때 새 키를 입력합니다.');
+                                                    }}
+                                                    className="px-3 py-2 bg-white border border-stone-200 text-stone-500 rounded-xl text-xs font-bold hover:bg-stone-100"
+                                                >
+                                                    내 Gemini API 키 다시 입력
+                                                </button>
+                                                <span className="text-[11px] text-stone-400">API 키는 서버가 아니라 이 브라우저의 현재 Google 계정 저장소에만 보관됩니다.</span>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    {(aiLoading || aiAnswer || aiError) && (
+                                        <section className="bg-white p-5 md:p-6 rounded-3xl border border-stone-200 shadow-sm">
+                                            <h3 className="text-base font-black text-stone-800 mb-3">AI 답변</h3>
+                                            {aiLoading && <p className="text-sm font-bold text-violet-600">Gemini가 홈노트를 분석하는 중입니다...</p>}
+                                            {aiError && <p className="text-sm font-bold text-rose-600 whitespace-pre-wrap">{aiError}</p>}
+                                            {aiAnswer && <p className="text-sm md:text-base text-stone-700 leading-relaxed whitespace-pre-wrap">{aiAnswer}</p>}
+                                        </section>
+                                    )}
                                 </div>
                             )}
 
@@ -3205,7 +3366,7 @@ export default function App() {
                                                             memo: ev.memo || "",
                                                             category: ev.category || (scannedEventType === 'school' ? "school_general" : "general"),
                                                             type: scannedEventType,
-                                                            author: currentUserMode === 'uijeong' ? '살뜰 의정' : '알뜰 재윤',
+                                                            author: getCurrentAuthorName(),
                                                             owner: currentUserMode,
                                                             createdAt: serverTimestamp()
                                                         });
