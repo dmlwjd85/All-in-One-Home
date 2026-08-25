@@ -1,0 +1,30 @@
+{
+  "name": "all-in-one-home",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "homepage": "https://dmlwjd85.github.io/All-in-One-Home/",
+  "author": "dmlwjd85 <dmlwjd85@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dmlwjd85/All-in-One-Home.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "firebase": "^11.6.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "vite": "^6.0.3"
+  }
+}

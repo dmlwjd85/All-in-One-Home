@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    color-scheme: light;
+    --tap: 44px;
+}
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    overscroll-behavior-y: none;
+    min-height: 100dvh;
+}
+
+#root {
+    min-height: 100dvh;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+    outline: 3px solid #0f766e;
+    outline-offset: 2px;
+}
+
+.skip-link {
+    position: absolute;
+    left: 0.75rem;
+    top: -3rem;
+    z-index: 100;
+    border-radius: 0.75rem;
+    background: #1a1612;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    font-weight: 800;
+}
+
+.skip-link:focus {
+    top: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #a8a29e;
+    border-radius: 999px;
+}
+
+.field {
+    @apply w-full min-h-tap rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-base text-ink-900 placeholder:text-stone-500;
+}
+
+.btn {
+    @apply inline-flex min-h-tap min-w-tap items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-extrabold transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+    @apply btn bg-teal-800 text-white hover:bg-teal-900;
+}
+
+.btn-secondary {
+    @apply btn bg-white text-ink-800 border border-stone-300 hover:bg-stone-50;
+}
+
+.btn-danger {
+    @apply btn bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100;
+}
+
+.card {
+    @apply rounded-3xl border border-stone-200 bg-white shadow-sm;
+}
