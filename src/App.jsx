@@ -27,15 +27,27 @@ export default function App() {
     const signedIn = Boolean(user);
 
     useEffect(() => {
+        let cancelled = false;
         const unsub = onAuthStateChanged(auth, (u) => {
+            if (cancelled) return;
             setUser(u);
             setAuthReady(true);
             if (u) {
                 setGuest(false);
                 localStorage.removeItem('homenote_guest');
             }
+        }, (err) => {
+            console.error(err);
+            if (!cancelled) setAuthReady(true);
         });
-        return () => unsub();
+        const fallback = window.setTimeout(() => {
+            if (!cancelled) setAuthReady(true);
+        }, 2500);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(fallback);
+            unsub();
+        };
     }, []);
 
     const enabled = signedIn;
