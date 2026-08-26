@@ -1,17 +1,27 @@
 import { useMemo, useState } from 'react';
-import { Heart, ImagePlus, Trash2 } from 'lucide-react';
+import { Heart, ImagePlus, Pencil, Trash2 } from 'lucide-react';
 import { EmptyState, Field, Modal, SearchBox } from '../components/ui.jsx';
-import { addItem, removeItem } from '../lib/store.js';
+import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { compressImage, todayYmd } from '../lib/utils.js';
 
 const TAGS = ['일상', '성장', '여행', '학교', '기념일', '건강', '기타'];
+
+const emptyDraft = () => ({
+    id: null,
+    date: todayYmd(),
+    title: '',
+    content: '',
+    tag: '일상',
+    image: '',
+    visibility: 'family',
+});
 
 export default function DiaryPage({ entries, signedIn, author, onChanged, onToast }) {
     const [q, setQ] = useState('');
     const [tag, setTag] = useState('all');
     const [show, setShow] = useState(false);
     const [view, setView] = useState(null);
-    const [draft, setDraft] = useState({ date: todayYmd(), title: '', content: '', tag: '일상', image: '', visibility: 'family' });
+    const [draft, setDraft] = useState(emptyDraft);
 
     const list = useMemo(() => {
         const n = q.trim().toLowerCase();
@@ -33,24 +43,54 @@ export default function DiaryPage({ entries, signedIn, author, onChanged, onToas
         e.target.value = '';
     };
 
+    const openCreate = () => {
+        setView(null);
+        setDraft(emptyDraft());
+        setShow(true);
+    };
+
+    const openEdit = (entry) => {
+        setView(null);
+        setDraft({
+            id: entry.id,
+            date: entry.date || todayYmd(),
+            title: entry.title || '',
+            content: entry.content || '',
+            tag: TAGS.includes(entry.tag) ? entry.tag : '기타',
+            image: entry.image || '',
+            visibility: entry.visibility === 'private' ? 'private' : 'family',
+        });
+        setShow(true);
+    };
+
     const save = async () => {
         if (!draft.title.trim() && !draft.content.trim()) {
             onToast('제목이나 본문을 적어 주세요.');
             return;
         }
-        await addItem('familyDiary', {
+        const payload = {
             date: draft.date,
             title: draft.title.trim() || draft.content.trim().slice(0, 18),
             content: draft.content.trim(),
             tag: draft.tag,
-            image: draft.image,
+            image: draft.image || '',
             visibility: draft.visibility,
-            author,
-        }, signedIn);
-        setShow(false);
-        setDraft({ date: todayYmd(), title: '', content: '', tag: '일상', image: '', visibility: 'family' });
-        onChanged();
-        onToast('가족 기록을 남겼습니다.');
+        };
+        try {
+            if (draft.id) {
+                await patchItem('familyDiary', draft.id, payload, signedIn);
+                onToast('일상을 수정했습니다.');
+            } else {
+                await addItem('familyDiary', { ...payload, author }, signedIn);
+                onToast('가족 기록을 남겼습니다.');
+            }
+            setShow(false);
+            setDraft(emptyDraft());
+            onChanged();
+        } catch (err) {
+            console.error(err);
+            onToast('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
     };
 
     return (
@@ -63,7 +103,7 @@ export default function DiaryPage({ entries, signedIn, author, onChanged, onToas
 
             <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1"><SearchBox value={q} onChange={setQ} placeholder="제목·본문·작성자 검색" /></div>
-                <button type="button" className="btn-primary" onClick={() => setShow(true)}><Heart size={18} /> 기록하기</button>
+                <button type="button" className="btn-primary" onClick={openCreate}><Heart size={18} /> 기록하기</button>
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="태그 필터">
@@ -93,7 +133,7 @@ export default function DiaryPage({ entries, signedIn, author, onChanged, onToas
             )}
 
             {show && (
-                <Modal title="가족 기록" onClose={() => setShow(false)} wide>
+                <Modal title={draft.id ? '일상 수정' : '가족 기록'} onClose={() => { setShow(false); setDraft(emptyDraft()); }} wide>
                     <Field label="날짜"><input type="date" className="field" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></Field>
                     <Field label="제목"><input className="field" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="오늘의 한 줄" /></Field>
                     <Field label="이야기">
@@ -110,12 +150,17 @@ export default function DiaryPage({ entries, signedIn, author, onChanged, onToas
                             <option value="private">나만 보기</option>
                         </select>
                     </Field>
-                    <label className="btn-secondary w-full mb-4 cursor-pointer">
-                        <ImagePlus size={18} /> 사진 넣기
-                        <input type="file" accept="image/*" className="sr-only" onChange={onFile} />
-                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                        <label className="btn-secondary flex-1 cursor-pointer">
+                            <ImagePlus size={18} /> {draft.image ? '사진 바꾸기' : '사진 넣기'}
+                            <input type="file" accept="image/*" className="sr-only" onChange={onFile} />
+                        </label>
+                        {draft.image && (
+                            <button type="button" className="btn-secondary flex-1" onClick={() => setDraft({ ...draft, image: '' })}>사진 빼기</button>
+                        )}
+                    </div>
                     {draft.image && <img src={draft.image} alt="첨부 미리보기" className="w-full max-h-48 object-contain rounded-2xl mb-4 bg-stone-100" />}
-                    <button type="button" className="btn-primary w-full" onClick={save}>저장</button>
+                    <button type="button" className="btn-primary w-full" onClick={save}>{draft.id ? '수정 저장' : '저장'}</button>
                 </Modal>
             )}
 
@@ -124,12 +169,17 @@ export default function DiaryPage({ entries, signedIn, author, onChanged, onToas
                     <p className="text-sm text-stone-600 mb-3">{view.date} · {view.tag} · {view.author}</p>
                     {view.image && <img src={view.image} alt="" className="w-full max-h-[50vh] object-contain rounded-2xl bg-stone-100 mb-4" />}
                     <p className="font-serif text-lg whitespace-pre-wrap leading-relaxed">{view.content}</p>
-                    <button type="button" className="btn-danger w-full mt-6" onClick={async () => {
-                        if (!confirm('이 기록을 삭제할까요?')) return;
-                        await removeItem('familyDiary', view.id, signedIn);
-                        setView(null);
-                        onChanged();
-                    }}><Trash2 size={16} /> 삭제</button>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-6">
+                        <button type="button" className="btn-secondary flex-1" onClick={() => openEdit(view)}>
+                            <Pencil size={16} /> 수정
+                        </button>
+                        <button type="button" className="btn-danger flex-1" onClick={async () => {
+                            if (!confirm('이 기록을 삭제할까요?')) return;
+                            await removeItem('familyDiary', view.id, signedIn);
+                            setView(null);
+                            onChanged();
+                        }}><Trash2 size={16} /> 삭제</button>
+                    </div>
                 </Modal>
             )}
         </div>
