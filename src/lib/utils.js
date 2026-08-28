@@ -57,7 +57,7 @@ export const downloadText = (filename, text, mime = 'application/json') => {
 export const WEEKDAYS = ['월', '화', '수', '목', '금'];
 export const PERIODS = [1, 2, 3, 4, 5, 6];
 
-export const SUBJECTS = ['국어', '수학', '사회', '과학', '영어', '음악', '미술', '체육', '실과', '창체', '아침활동', '기타'];
+export const SUBJECTS = ['국어', '수학', '사회', '과학', '영어', '도덕', '음악', '미술', '체육', '연극', '실과', '창체', '아침활동', '기타'];
 
 export const LEDGER_INCOME = [
     { id: 'salary', label: '급여' },
@@ -72,6 +72,8 @@ export const LEDGER_EXPENSE = [
     { id: 'transport', label: '교통' },
     { id: 'edu', label: '교육' },
     { id: 'health', label: '의료' },
+    { id: 'insure', label: '보험' },
+    { id: 'telecom', label: '통신' },
     { id: 'culture', label: '문화/여가' },
     { id: 'save', label: '저축/투자' },
     { id: 'etc', label: '기타' },

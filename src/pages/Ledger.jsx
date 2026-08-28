@@ -1,22 +1,25 @@
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { EmptyState, Field, Modal, SearchBox } from '../components/ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { LEDGER_EXPENSE, LEDGER_INCOME, catLabel, formatWon, parseAmount, thisMonth, todayYmd } from '../lib/utils.js';
+
+const emptyDraft = () => ({
+    id: null,
+    type: 'expense',
+    category: 'food',
+    amount: '',
+    memo: '',
+    date: todayYmd(),
+    recurring: false,
+});
 
 export default function LedgerPage({ items, budgets, signedIn, author, onChanged, onToast }) {
     const [month, setMonth] = useState(thisMonth());
     const [q, setQ] = useState('');
     const [showAdd, setShowAdd] = useState(false);
     const [showBudget, setShowBudget] = useState(false);
-    const [draft, setDraft] = useState({
-        type: 'expense',
-        category: 'food',
-        amount: '',
-        memo: '',
-        date: todayYmd(),
-        recurring: false,
-    });
+    const [draft, setDraft] = useState(emptyDraft);
 
     const monthItems = useMemo(() => {
         const needle = q.trim().toLowerCase();
@@ -49,25 +52,61 @@ export default function LedgerPage({ items, budgets, signedIn, author, onChanged
     const dayNow = month === thisMonth() ? Number(todayYmd().slice(-2)) : daysInMonth;
     const pace = dayNow / daysInMonth;
 
+    const openCreate = () => {
+        setDraft(emptyDraft());
+        setShowAdd(true);
+    };
+
+    const openEdit = (row) => {
+        const type = row.type === 'income' ? 'income' : 'expense';
+        const cats = type === 'income' ? LEDGER_INCOME : LEDGER_EXPENSE;
+        setDraft({
+            id: row.id,
+            type,
+            category: cats.some((c) => c.id === row.category) ? row.category : cats[0].id,
+            amount: String(row.amount ?? ''),
+            memo: row.memo || '',
+            date: row.date || todayYmd(),
+            recurring: Boolean(row.recurring),
+        });
+        setShowAdd(true);
+    };
+
+    const setDraftType = (type) => {
+        const cats = type === 'income' ? LEDGER_INCOME : LEDGER_EXPENSE;
+        const category = cats.some((c) => c.id === draft.category) ? draft.category : cats[0].id;
+        setDraft({ ...draft, type, category });
+    };
+
     const saveTx = async () => {
         const amount = parseAmount(draft.amount);
         if (amount <= 0) {
             onToast('금액을 입력해 주세요.');
             return;
         }
-        await addItem('ledgerTx', {
+        const payload = {
             type: draft.type,
             category: draft.category,
             amount,
             memo: draft.memo.trim(),
             date: draft.date,
             recurring: draft.recurring,
-            author,
-        }, signedIn);
-        setShowAdd(false);
-        setDraft({ type: 'expense', category: 'food', amount: '', memo: '', date: todayYmd(), recurring: false });
-        onChanged();
-        onToast('내역을 저장했습니다.');
+        };
+        try {
+            if (draft.id) {
+                await patchItem('ledgerTx', draft.id, payload, signedIn);
+                onToast('내역을 수정했습니다.');
+            } else {
+                await addItem('ledgerTx', { ...payload, author }, signedIn);
+                onToast('내역을 저장했습니다.');
+            }
+            setShowAdd(false);
+            setDraft(emptyDraft());
+            onChanged();
+        } catch (err) {
+            console.error(err);
+            onToast('저장에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
     };
 
     const saveBudget = async (category, raw) => {
@@ -111,7 +150,7 @@ export default function LedgerPage({ items, budgets, signedIn, author, onChanged
             </section>
 
             <div className="flex flex-col sm:flex-row gap-2">
-                <button type="button" className="btn-primary flex-1" onClick={() => setShowAdd(true)}><Plus size={18} /> 수입·지출 추가</button>
+                <button type="button" className="btn-primary flex-1" onClick={openCreate}><Plus size={18} /> 수입·지출 추가</button>
                 <button type="button" className="btn-secondary flex-1" onClick={() => setShowBudget(true)}>카테고리 예산</button>
             </div>
 
@@ -158,11 +197,16 @@ export default function LedgerPage({ items, budgets, signedIn, author, onChanged
                                     <p className={`font-black ${row.type === 'income' ? 'text-teal-800' : 'text-rose-800'}`}>
                                         {row.type === 'income' ? '+' : '-'}{formatWon(row.amount)}
                                     </p>
-                                    <button type="button" className="text-sm text-stone-500 mt-1 underline" onClick={async () => {
-                                        if (!confirm('이 내역을 삭제할까요?')) return;
-                                        await removeItem('ledgerTx', row.id, signedIn);
-                                        onChanged();
-                                    }}><Trash2 size={14} className="inline" /> 삭제</button>
+                                    <div className="flex justify-end gap-3 mt-1">
+                                        <button type="button" className="text-sm text-stone-600 underline" onClick={() => openEdit(row)}>
+                                            <Pencil size={14} className="inline" /> 수정
+                                        </button>
+                                        <button type="button" className="text-sm text-stone-500 underline" onClick={async () => {
+                                            if (!confirm('이 내역을 삭제할까요?')) return;
+                                            await removeItem('ledgerTx', row.id, signedIn);
+                                            onChanged();
+                                        }}><Trash2 size={14} className="inline" /> 삭제</button>
+                                    </div>
                                 </div>
                             </li>
                         ))}
@@ -171,12 +215,12 @@ export default function LedgerPage({ items, budgets, signedIn, author, onChanged
             </section>
 
             {showAdd && (
-                <Modal title="수입·지출 추가" onClose={() => setShowAdd(false)}>
+                <Modal title={draft.id ? '수입·지출 수정' : '수입·지출 추가'} onClose={() => { setShowAdd(false); setDraft(emptyDraft()); }}>
                     <fieldset className="mb-3">
                         <legend className="text-sm font-extrabold mb-2">구분</legend>
                         <div className="flex gap-2">
-                            <button type="button" className={draft.type === 'expense' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} onClick={() => setDraft({ ...draft, type: 'expense', category: 'food' })}>지출</button>
-                            <button type="button" className={draft.type === 'income' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} onClick={() => setDraft({ ...draft, type: 'income', category: 'salary' })}>수입</button>
+                            <button type="button" className={draft.type === 'expense' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} onClick={() => setDraftType('expense')}>지출</button>
+                            <button type="button" className={draft.type === 'income' ? 'btn-primary flex-1' : 'btn-secondary flex-1'} onClick={() => setDraftType('income')}>수입</button>
                         </div>
                     </fieldset>
                     <Field label="날짜">
@@ -199,7 +243,7 @@ export default function LedgerPage({ items, budgets, signedIn, author, onChanged
                         <input type="checkbox" checked={draft.recurring} onChange={(e) => setDraft({ ...draft, recurring: e.target.checked })} />
                         <span className="font-bold">매달 반복되는 고정 항목</span>
                     </label>
-                    <button type="button" className="btn-primary w-full" onClick={saveTx}>저장</button>
+                    <button type="button" className="btn-primary w-full" onClick={saveTx}>{draft.id ? '수정 저장' : '저장'}</button>
                 </Modal>
             )}
 
