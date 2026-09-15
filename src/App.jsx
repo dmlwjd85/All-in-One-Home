@@ -151,10 +151,10 @@ export default function App() {
     }
 
     return (
-        <div className="min-h-[100dvh] flex bg-ink-50">
+        <div className="min-h-[100dvh] flex paper-app">
             <a href="#main" className="skip-link">본문으로 건너뛰기</a>
 
-            <nav aria-label="주요 메뉴" className="hidden md:flex w-64 shrink-0 flex-col border-r border-stone-200 bg-white">
+            <nav aria-label="주요 메뉴" className="hidden md:flex w-64 shrink-0 flex-col border-r-8 border-[#6b3a22] bg-[#f3e6cc] shadow-[inset_-8px_0_12px_-10px_rgba(80,40,10,0.35)]">
                 <div className="p-5">
                     <p className="text-xs font-extrabold tracking-widest text-stone-500">HOME NOTE</p>
                     <p className="text-xl font-black mt-1">우리집 홈노트</p>
@@ -181,7 +181,7 @@ export default function App() {
             </nav>
 
             <div className="flex-1 flex flex-col min-w-0">
-                <header className="h-16 shrink-0 border-b border-stone-200 bg-white px-4 md:px-8 flex items-center justify-between">
+                <header className="h-16 shrink-0 border-b border-amber-900/20 bg-[#f7f0e1] px-4 md:px-8 flex items-center justify-between">
                     <h1 className="text-xl md:text-2xl font-black">{NAV.find((n) => n.id === tab)?.label}</h1>
                     <button type="button" className="btn-secondary md:hidden" onClick={logout} aria-label="로그아웃"><LogOut size={18} /></button>
                 </header>
@@ -234,7 +234,7 @@ export default function App() {
                 </main>
             </div>
 
-            <nav aria-label="모바일 주요 메뉴" className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-stone-200 pb-[env(safe-area-inset-bottom)]">
+            <nav aria-label="모바일 주요 메뉴" className="md:hidden fixed bottom-0 inset-x-0 bg-[#f7f0e1] border-t-4 border-[#6b3a22] pb-[env(safe-area-inset-bottom)]">
                 <ul className="grid grid-cols-4">
                     {NAV.map((item) => (
                         <li key={item.id}>

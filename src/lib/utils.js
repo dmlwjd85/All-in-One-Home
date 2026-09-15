@@ -55,7 +55,61 @@ export const downloadText = (filename, text, mime = 'application/json') => {
 };
 
 export const WEEKDAYS = ['월', '화', '수', '목', '금'];
+export const WEEKDAYS_FULL = ['월', '화', '수', '목', '금', '토', '일'];
 export const PERIODS = [1, 2, 3, 4, 5, 6];
+
+export const toYmd = (d) => {
+    const x = d instanceof Date ? d : new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+
+export const fromYmd = (s) => {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+};
+
+export const addDaysYmd = (s, n) => {
+    const d = fromYmd(s);
+    d.setDate(d.getDate() + n);
+    return toYmd(d);
+};
+
+/** 월요일 시작 주 */
+export const startOfWeekMon = (s) => {
+    const d = fromYmd(s);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return toYmd(d);
+};
+
+export const shiftMonth = (ym, delta) => {
+    const [y, m] = String(ym).split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/** 월간 달력 칸 (월요일 시작, 앞뒤 빈 칸 포함) */
+export const monthCells = (ym) => {
+    const [y, m] = String(ym).split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    const startPad = (first.getDay() + 6) % 7;
+    const days = new Date(y, m, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < startPad; i++) {
+        const d = new Date(y, m - 1, 1 - (startPad - i));
+        cells.push({ ymd: toYmd(d), inMonth: false, day: d.getDate() });
+    }
+    for (let day = 1; day <= days; day++) {
+        cells.push({ ymd: `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`, inMonth: true, day });
+    }
+    while (cells.length % 7 !== 0) {
+        const last = fromYmd(cells[cells.length - 1].ymd);
+        last.setDate(last.getDate() + 1);
+        cells.push({ ymd: toYmd(last), inMonth: false, day: last.getDate() });
+    }
+    return cells;
+};
 
 export const SUBJECTS = ['국어', '수학', '사회', '과학', '영어', '도덕', '음악', '미술', '체육', '연극', '실과', '창체', '아침활동', '기타'];
 
