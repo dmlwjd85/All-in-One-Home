@@ -181,12 +181,16 @@ export default function App() {
             </nav>
 
             <div className="flex-1 flex flex-col min-w-0">
-                <header className="h-16 shrink-0 border-b border-amber-900/20 bg-[#f7f0e1] px-4 md:px-8 flex items-center justify-between">
+                <header className={`h-16 shrink-0 border-b border-amber-900/20 bg-[#f7f0e1] flex items-center justify-between ${tab === 'teacher' ? 'px-3 md:px-4' : 'px-4 md:px-8'}`}>
                     <h1 className="text-xl md:text-2xl font-black">{NAV.find((n) => n.id === tab)?.label}</h1>
                     <button type="button" className="btn-secondary md:hidden" onClick={logout} aria-label="로그아웃"><LogOut size={18} /></button>
                 </header>
 
-                <main id="main" className="flex-1 overflow-y-auto p-4 md:p-8 pb-28 md:pb-10" tabIndex={-1}>
+                <main
+                    id="main"
+                    className={`flex-1 overflow-y-auto pb-28 md:pb-8 ${tab === 'teacher' ? 'p-2 md:p-3' : 'p-4 md:p-8 md:pb-10'}`}
+                    tabIndex={-1}
+                >
                     {tab === 'home' && (
                         <HomePage
                             author={author}
