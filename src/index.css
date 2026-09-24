@@ -88,15 +88,15 @@ body {
     @apply rounded-3xl border border-stone-200 bg-white shadow-sm;
 }
 
-/* 책상 위 따뜻한 바탕. 노트북이 올려진 느낌이 나도록 결만 살림 */
+/* 책상 위 따뜻한 바탕. 노트북 용지와 살짝 구분되도록 결만 살림 */
 .paper-app {
-    background-color: #d8c6a4;
+    background-color: #c9b48a;
     background-image:
-        radial-gradient(ellipse at 14% -8%, rgba(255, 244, 214, 0.42), transparent 46%),
-        radial-gradient(ellipse at 100% 110%, rgba(70, 42, 16, 0.12), transparent 44%),
+        radial-gradient(ellipse at 14% -8%, rgba(255, 236, 196, 0.28), transparent 46%),
+        radial-gradient(ellipse at 100% 110%, rgba(70, 42, 16, 0.16), transparent 44%),
         repeating-linear-gradient(
             135deg,
-            rgba(110, 80, 42, 0.035) 0 1px,
+            rgba(96, 68, 32, 0.05) 0 1px,
             transparent 1px 6px
         );
 }
@@ -107,25 +107,25 @@ body {
     position: relative;
     isolation: isolate;
     width: 100%;
-    background-color: #f4ead4;
+    background-color: #f3e6cc;
     background-image:
         /* 오른쪽 용지 끝 두께감 — 폭을 거의 빼앗지 않음 */
-        linear-gradient(270deg, rgba(86, 56, 20, 0.08), transparent 12px),
+        linear-gradient(270deg, rgba(86, 56, 20, 0.1), transparent 14px),
         /* 제본 골 음영 */
-        linear-gradient(90deg, rgba(68, 34, 10, 0.14) 0, rgba(68, 34, 10, 0.045) 11px, transparent 26px),
+        linear-gradient(90deg, rgba(68, 34, 10, 0.16) 0, rgba(68, 34, 10, 0.05) 12px, transparent 28px),
         /* 위쪽 빛 */
-        linear-gradient(180deg, rgba(255, 252, 244, 0.5), transparent 56px),
+        linear-gradient(180deg, rgba(255, 252, 244, 0.38), transparent 52px),
         /* 빨간 마진선: 용지 시작 직후. 본문을 안쪽으로 밀어 넣지 않음 */
-        linear-gradient(90deg, transparent 0 8px, rgba(164, 44, 44, 0.46) 8px 9.25px, transparent 9.25px),
+        linear-gradient(90deg, transparent 0 8px, rgba(176, 38, 38, 0.58) 8px 9.5px, transparent 9.5px),
         /* 가로 줄눈 */
         repeating-linear-gradient(
             transparent 0 25px,
-            rgba(62, 96, 142, 0.14) 25px 26px
+            rgba(52, 86, 136, 0.22) 25px 26px
         ),
         /* 거친 종이 결 */
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.11'/%3E%3C/svg%3E"),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E"),
         /* 더 고운 섬유 결 */
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='0.045'/%3E%3C/svg%3E");
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='0.055'/%3E%3C/svg%3E");
     background-size: auto, auto, auto, auto, auto, 160px 160px, 220px 220px;
     border: 1px solid #c2aa7a;
     border-left-width: var(--notebook-spine);
@@ -181,9 +181,9 @@ body {
     pointer-events: none;
     border-radius: inherit;
     background:
-        radial-gradient(ellipse at 0% 0%, rgba(255, 255, 255, 0.24), transparent 34%),
-        radial-gradient(ellipse at 100% 100%, rgba(86, 54, 20, 0.07), transparent 38%);
-    box-shadow: inset -1px 0 0 rgba(255, 250, 238, 0.38);
+        radial-gradient(ellipse at 0% 0%, rgba(255, 255, 255, 0.14), transparent 30%),
+        radial-gradient(ellipse at 100% 100%, rgba(86, 54, 20, 0.08), transparent 38%);
+    box-shadow: inset -1px 0 0 rgba(255, 250, 238, 0.32);
 }
 
 .notebook-page {
