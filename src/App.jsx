@@ -188,7 +188,7 @@ export default function App() {
 
                 <main
                     id="main"
-                    className={`flex-1 overflow-y-auto pb-28 md:pb-8 ${tab === 'teacher' ? 'p-2 md:p-3' : 'p-4 md:p-8 md:pb-10'}`}
+                    className={`flex-1 overflow-y-auto ${tab === 'teacher' ? 'p-2 pb-28 md:p-3 md:pb-8' : 'p-4 pb-28 md:p-8 md:pb-10'}`}
                     tabIndex={-1}
                 >
                     {tab === 'home' && (
