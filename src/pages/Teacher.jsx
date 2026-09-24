@@ -355,7 +355,7 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
 
     return (
         <div className="notebook-shell notebook-page space-y-4">
-            <section className="pr-2">
+            <section>
                 <p className="text-sm font-bold text-amber-900/70">초등 교무일지</p>
                 <h2 className="text-2xl md:text-3xl font-black mt-1 text-ink-900">수업·상담·출결을 한 권에</h2>
                 <p className="mt-1 text-stone-700">오늘 수업 {todayLessons.length}건 · 남은 할 일 {openTodos.length}건</p>

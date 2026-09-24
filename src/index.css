@@ -88,53 +88,128 @@ body {
     @apply rounded-3xl border border-stone-200 bg-white shadow-sm;
 }
 
+/* 책상 위 따뜻한 바탕. 노트북 용지와 살짝 구분되도록 결만 살림 */
 .paper-app {
-    background-color: #e8dcc8;
+    background-color: #c9b48a;
     background-image:
-        radial-gradient(ellipse at 20% 0%, rgba(255, 248, 230, 0.55), transparent 55%),
-        repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.035) 0 1px, transparent 1px 3px);
+        radial-gradient(ellipse at 14% -8%, rgba(255, 236, 196, 0.28), transparent 46%),
+        radial-gradient(ellipse at 100% 110%, rgba(70, 42, 16, 0.16), transparent 44%),
+        repeating-linear-gradient(
+            135deg,
+            rgba(96, 68, 32, 0.05) 0 1px,
+            transparent 1px 6px
+        );
 }
 
+/* 실제 고급 노트처럼 보이게 하되, 좌우 장식은 얇게 유지해 본문 폭을 넓힘 */
 .notebook-shell {
+    --notebook-spine: 11px;
     position: relative;
-    background-color: #f7f0e1;
+    isolation: isolate;
+    width: 100%;
+    background-color: #f3e6cc;
     background-image:
-        linear-gradient(90deg, rgba(180, 40, 40, 0.12) 0 1.5px, transparent 1.5px),
-        repeating-linear-gradient(transparent 0 27px, rgba(70, 110, 160, 0.13) 27px 28px),
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
-    background-size: auto, auto, 180px 180px;
-    border: 1px solid #c9b089;
-    border-left: 22px solid #6b3a22;
-    border-radius: 6px 22px 22px 10px;
+        /* 오른쪽 용지 끝 두께감 — 폭을 거의 빼앗지 않음 */
+        linear-gradient(270deg, rgba(86, 56, 20, 0.1), transparent 14px),
+        /* 제본 골 음영 */
+        linear-gradient(90deg, rgba(68, 34, 10, 0.16) 0, rgba(68, 34, 10, 0.05) 12px, transparent 28px),
+        /* 위쪽 빛 */
+        linear-gradient(180deg, rgba(255, 252, 244, 0.38), transparent 52px),
+        /* 빨간 마진선: 용지 시작 직후. 본문을 안쪽으로 밀어 넣지 않음 */
+        linear-gradient(90deg, transparent 0 8px, rgba(176, 38, 38, 0.58) 8px 9.5px, transparent 9.5px),
+        /* 가로 줄눈 */
+        repeating-linear-gradient(
+            transparent 0 25px,
+            rgba(52, 86, 136, 0.22) 25px 26px
+        ),
+        /* 거친 종이 결 */
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E"),
+        /* 더 고운 섬유 결 */
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='0.055'/%3E%3C/svg%3E");
+    background-size: auto, auto, auto, auto, auto, 160px 160px, 220px 220px;
+    border: 1px solid #c2aa7a;
+    border-left-width: var(--notebook-spine);
+    border-left-style: solid;
+    border-left-color: #3c2214;
+    border-radius: 2px 8px 8px 3px;
     box-shadow:
-        inset 16px 0 18px -14px rgba(60, 28, 10, 0.45),
-        inset 0 1px 0 rgba(255, 252, 245, 0.8),
-        10px 10px 0 0 #d7c19a,
-        18px 18px 0 0 #c4aa7c,
-        0 22px 36px rgba(70, 45, 20, 0.22);
+        inset 7px 0 8px -7px rgba(46, 18, 6, 0.38),
+        inset 0 1px 0 rgba(255, 252, 244, 0.72),
+        inset 0 -12px 18px -16px rgba(78, 48, 16, 0.1),
+        /* 얇은 속지 가장자리 — 예전 18px 오프셋 적층 그림자는 오른쪽을 낭비함 */
+        1px 0 0 #eadcc0,
+        2px 1px 0 #d8c49a,
+        3px 2px 0 #c6b080,
+        0 8px 22px rgba(56, 34, 12, 0.18);
 }
 
+/* 가죽/천 등뼈 + 실 스티치. 클릭은 통과시킴 */
 .notebook-shell::before {
     content: '';
     position: absolute;
-    left: -22px;
-    top: 18%;
-    width: 22px;
-    height: 64%;
+    left: calc(-1 * var(--notebook-spine));
+    top: 0;
+    bottom: 0;
+    width: var(--notebook-spine);
+    pointer-events: none;
+    border-radius: 2px 0 0 3px;
     background:
         repeating-linear-gradient(
             180deg,
-            transparent 0 22px,
-            rgba(255, 255, 255, 0.18) 22px 24px,
-            transparent 24px 46px,
-            rgba(0, 0, 0, 0.18) 46px 48px
+            transparent 0 15px,
+            rgba(255, 228, 190, 0.3) 15px 16.5px,
+            transparent 16.5px 30px,
+            rgba(16, 6, 0, 0.32) 30px 31.5px
+        ),
+        radial-gradient(circle at 50% 10px, rgba(18, 6, 0, 0.42) 1.15px, transparent 1.55px),
+        linear-gradient(
+            90deg,
+            #26140c 0%,
+            #5a3320 36%,
+            #a06a40 50%,
+            #4e2c18 66%,
+            #24130c 100%
         );
+    background-size: auto, 100% 42px, auto;
+}
+
+/* 모서리 빛·마모. 본문 위를 덮지만 이벤트를 가로채지 않음 */
+.notebook-shell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
     pointer-events: none;
+    border-radius: inherit;
+    background:
+        radial-gradient(ellipse at 0% 0%, rgba(255, 255, 255, 0.14), transparent 30%),
+        radial-gradient(ellipse at 100% 100%, rgba(86, 54, 20, 0.08), transparent 38%);
+    box-shadow: inset -1px 0 0 rgba(255, 250, 238, 0.32);
 }
 
 .notebook-page {
     position: relative;
-    padding: 1.1rem 1.15rem 1.25rem 1.35rem;
+    z-index: 1;
+    padding: 0.75rem 0.65rem 0.95rem 0.8rem;
+}
+
+@media (min-width: 768px) {
+    .notebook-shell {
+        --notebook-spine: 12px;
+    }
+
+    .notebook-page {
+        padding: 0.9rem 0.85rem 1.05rem 0.95rem;
+    }
+}
+
+@media (max-width: 639px) {
+    .notebook-shell {
+        --notebook-spine: 9px;
+    }
+
+    .notebook-page {
+        padding: 0.7rem 0.55rem 0.9rem 0.7rem;
+    }
 }
 
 .icon-tab {
