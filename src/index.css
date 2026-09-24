@@ -222,6 +222,14 @@ body {
     background: rgba(255, 252, 245, 0.55);
 }
 
+.cal-cell-holiday {
+    background: rgba(255, 228, 230, 0.72);
+}
+
+.cal-cell-memorial {
+    background: rgba(255, 243, 220, 0.8);
+}
+
 .hub-tile {
     @apply flex flex-col items-center justify-center gap-2 min-h-[6.5rem] rounded-2xl border border-amber-900/20 bg-[#fffaf0]/80 shadow-sm font-black;
 }
