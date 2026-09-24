@@ -32,6 +32,7 @@ import {
     thisMonth,
     todayYmd,
 } from '../lib/utils.js';
+import { holidayCaption, holidaysOn, LUNAR_YEAR_MAX, LUNAR_YEAR_MIN } from '../lib/holidays.js';
 
 const KINDS = {
     lesson: { id: 'lesson', tab: 'lesson', label: '수업일지', Icon: BookOpen, cls: 'text-indigo-800 bg-indigo-100' },
@@ -255,6 +256,33 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
         </div>
     );
 
+    const dateTone = (ymd, isHoliday) => {
+        if (isHoliday || fromYmd(ymd).getDay() === 0) return 'text-rose-700';
+        if (fromYmd(ymd).getDay() === 6) return 'text-sky-800';
+        return '';
+    };
+
+    const renderHolidayMark = (ymd, mini = false) => {
+        const cap = holidayCaption(ymd);
+        if (!cap) return null;
+        if (mini) {
+            return (
+                <span
+                    className={`block w-1.5 h-1.5 rounded-full mt-0.5 mx-auto ${cap.isHoliday ? 'bg-rose-600' : 'bg-amber-600'}`}
+                    title={cap.title}
+                />
+            );
+        }
+        return (
+            <span
+                className={`block text-[9px] leading-tight font-extrabold truncate ${cap.isHoliday ? 'text-rose-700' : 'text-amber-800/90'}`}
+                title={cap.title}
+            >
+                {cap.primary.short}
+            </span>
+        );
+    };
+
     const monthGrid = (targetYm, mini = false) => {
         const cells = monthCells(targetYm);
         return (
@@ -265,11 +293,15 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
                 <div className="grid grid-cols-7">
                     {cells.map((c) => {
                         const isToday = c.ymd === todayYmd();
+                        const cap = holidayCaption(c.ymd);
+                        const isHoliday = !!cap?.isHoliday;
+                        const isMemorial = !!cap?.isMemorial;
                         return (
                             <button
                                 key={c.ymd}
                                 type="button"
-                                className={`cal-cell text-left p-1 ${mini ? 'min-h-[2.4rem]' : ''} ${c.inMonth ? '' : 'opacity-40'} ${isToday ? 'ring-2 ring-amber-800/50' : ''}`}
+                                title={cap?.title || undefined}
+                                className={`cal-cell text-left p-1 ${mini ? 'min-h-[2.4rem]' : ''} ${c.inMonth ? '' : 'opacity-40'} ${isToday ? 'ring-2 ring-amber-800/50' : ''} ${isHoliday && c.inMonth ? 'cal-cell-holiday' : ''} ${isMemorial && c.inMonth && !isHoliday ? 'cal-cell-memorial' : ''}`}
                                 onClick={() => {
                                     if (mini) {
                                         setCursor(c.ymd);
@@ -279,7 +311,8 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
                                     setPickDate(c.ymd);
                                 }}
                             >
-                                <span className={`text-xs font-black ${c.ymd.slice(-2) && fromYmd(c.ymd).getDay() === 0 ? 'text-rose-700' : ''}`}>{c.day}</span>
+                                <span className={`text-xs font-black ${dateTone(c.ymd, isHoliday)}`}>{c.day}</span>
+                                {renderHolidayMark(c.ymd, mini)}
                                 {!mini && renderIcons(c.ymd, true)}
                                 {mini && kindsOn(c.ymd).length > 0 && <span className="block w-1.5 h-1.5 rounded-full bg-amber-800 mt-0.5 mx-auto" />}
                             </button>
@@ -411,7 +444,10 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
                         {Object.values(KINDS).map((k) => (
                             <span key={k.id} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${k.cls}`}><k.Icon size={12} /> {k.label}</span>
                         ))}
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-rose-800 bg-rose-100">공휴일</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-amber-900 bg-amber-100">기념일</span>
                     </div>
+                    <p className="text-[11px] text-stone-500">설날·추석·부처님오신날은 {LUNAR_YEAR_MIN}–{LUNAR_YEAR_MAX}년 한국 음력(월력요항) 기준입니다. 공휴일은 빨간 글씨, 기념일은 갈색으로 구분합니다.</p>
                     {calView === 'year' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {Array.from({ length: 12 }, (_, i) => {
@@ -428,16 +464,39 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
                     {calView === 'month' && monthGrid(ym, false)}
                     {calView === 'week' && (
                         <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
-                            {weekDays.map((ymd) => (
-                                <button key={ymd} type="button" className={`cal-cell p-2 text-left ${ymd === todayYmd() ? 'ring-2 ring-amber-800/50' : ''}`} onClick={() => setPickDate(ymd)}>
-                                    <p className="text-xs font-black">{WEEKDAYS_FULL[(fromYmd(ymd).getDay() + 6) % 7]} {ymd.slice(8)}</p>
-                                    {renderIcons(ymd)}
-                                </button>
-                            ))}
+                            {weekDays.map((ymd) => {
+                                const cap = holidayCaption(ymd);
+                                const isHoliday = !!cap?.isHoliday;
+                                return (
+                                    <button
+                                        key={ymd}
+                                        type="button"
+                                        title={cap?.title || undefined}
+                                        className={`cal-cell p-2 text-left ${ymd === todayYmd() ? 'ring-2 ring-amber-800/50' : ''} ${isHoliday ? 'cal-cell-holiday' : ''} ${cap?.isMemorial ? 'cal-cell-memorial' : ''}`}
+                                        onClick={() => setPickDate(ymd)}
+                                    >
+                                        <p className={`text-xs font-black ${dateTone(ymd, isHoliday)}`}>{WEEKDAYS_FULL[(fromYmd(ymd).getDay() + 6) % 7]} {ymd.slice(8)}</p>
+                                        {cap && <p className={`text-[10px] font-extrabold ${isHoliday ? 'text-rose-700' : 'text-amber-800'}`}>{cap.primary.short}</p>}
+                                        {renderIcons(ymd)}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                     {calView === 'day' && (
                         <div className="space-y-2">
+                            {holidaysOn(cursor).length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                    {holidaysOn(cursor).map((h) => (
+                                        <span
+                                            key={`${h.kind}-${h.id}-${h.name}`}
+                                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-extrabold ${h.kind === 'holiday' ? 'text-rose-800 bg-rose-100' : 'text-amber-900 bg-amber-100'}`}
+                                        >
+                                            {h.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                             <button type="button" className="btn-primary" onClick={() => setPickDate(cursor)}><Plus size={16} /> 이 날짜에 기록 추가</button>
                             {dayEvents.length === 0 ? <EmptyState title="이 날 기록이 없습니다" hint="날짜칸을 누르면 할 일·회의록·출결 등을 바로 적을 수 있습니다." /> : (
                                 <ul className="space-y-2">
@@ -680,6 +739,16 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
 
             {pickDate && (
                 <Modal title={`${pickDate} 기록하기`} onClose={() => setPickDate(null)}>
+                    {holidaysOn(pickDate).length > 0 && (
+                        <p className="text-sm font-extrabold mb-2">
+                            {holidaysOn(pickDate).map((h) => (
+                                <span key={`${h.kind}-${h.id}-${h.name}`} className={h.kind === 'holiday' ? 'text-rose-700' : 'text-amber-800'}>
+                                    {h.name}
+                                    {' '}
+                                </span>
+                            ))}
+                        </p>
+                    )}
                     <p className="text-sm text-stone-600 mb-3">이 날짜에 남길 업무를 고르면 해당 탭으로 이동합니다.</p>
                     <div className="grid grid-cols-2 gap-2">
                         {Object.values(KINDS).map((k) => (
