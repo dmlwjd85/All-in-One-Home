@@ -22,6 +22,7 @@ export default function App() {
     const [authReady, setAuthReady] = useState(false);
     const [guest, setGuest] = useState(() => localStorage.getItem('homenote_guest') === '1');
     const [tab, setTab] = useState('home');
+    const [teacherTab, setTeacherTab] = useState('ssugeok');
     const [toast, setToast] = useState('');
     const [rev, setRev] = useState(0);
     const signedIn = Boolean(user);
@@ -61,6 +62,10 @@ export default function App() {
     const roster = useSharedList('classRoster', enabled, rev);
     const timetableList = useSharedList('teacherTimetable', enabled, rev);
     const diaryAll = useSharedList('familyDiary', enabled, rev);
+    const inbox = useSharedList('ssugeokInbox', enabled, rev);
+    const studentNotes = useSharedList('studentNotes', enabled, rev);
+    const counselNotes = useSharedList('counselNotes', enabled, rev);
+    const plans = useSharedList('teacherPlans', enabled, rev);
 
     const author = user?.displayName || user?.email?.split('@')[0] || '우리 가족';
     const timetable = useMemo(() => {
@@ -118,6 +123,10 @@ export default function App() {
             roster: roster.items,
             timetable,
             diary: diaryAll.items,
+            inbox: inbox.items,
+            studentNotes: studentNotes.items,
+            counselNotes: counselNotes.items,
+            plans: plans.items,
         };
         downloadText(`홈노트-백업-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
         notify('백업 파일을 내려받았습니다.');
@@ -166,7 +175,10 @@ export default function App() {
                                 type="button"
                                 aria-current={tab === item.id ? 'page' : undefined}
                                 className={`w-full min-h-tap rounded-2xl px-3 flex items-center gap-3 font-extrabold ${tab === item.id ? 'bg-ink-900 text-white' : 'hover:bg-stone-100'}`}
-                                onClick={() => setTab(item.id)}
+                                onClick={() => {
+                                    setTab(item.id);
+                                    if (item.id === 'teacher') setTeacherTab('ssugeok');
+                                }}
                             >
                                 <item.icon size={20} aria-hidden="true" /> {item.label}
                             </button>
@@ -197,8 +209,12 @@ export default function App() {
                             ledger={ledger.items}
                             lessons={lessons.items}
                             todos={todos.items}
+                            inbox={inbox.items}
                             diary={diary}
-                            onGo={setTab}
+                            onGo={(id, sub) => {
+                                setTab(id);
+                                if (id === 'teacher') setTeacherTab(sub || 'ssugeok');
+                            }}
                         />
                     )}
                     {tab === 'ledger' && (
@@ -220,8 +236,13 @@ export default function App() {
                             attendance={attendance.items}
                             roster={roster.items}
                             timetable={timetable}
+                            inbox={inbox.items}
+                            studentNotes={studentNotes.items}
+                            counselNotes={counselNotes.items}
+                            plans={plans.items}
                             signedIn={signedIn}
                             author={author}
+                            startTab={teacherTab}
                             onChanged={bump}
                             onToast={notify}
                         />
@@ -246,7 +267,10 @@ export default function App() {
                                 type="button"
                                 aria-current={tab === item.id ? 'page' : undefined}
                                 className={`w-full min-h-12 py-2 flex flex-col items-center justify-center text-xs font-extrabold ${tab === item.id ? 'text-teal-800' : 'text-stone-500'}`}
-                                onClick={() => setTab(item.id)}
+                                onClick={() => {
+                                    setTab(item.id);
+                                    if (item.id === 'teacher') setTeacherTab('ssugeok');
+                                }}
                             >
                                 <item.icon size={22} aria-hidden="true" />
                                 {item.label}

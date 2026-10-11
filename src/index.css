@@ -233,3 +233,23 @@ body {
 .hub-tile {
     @apply flex flex-col items-center justify-center gap-2 min-h-[6.5rem] rounded-2xl border border-amber-900/20 bg-[#fffaf0]/80 shadow-sm font-black;
 }
+
+/* 쓰것 카드: 세로 스크롤은 살리고, 가로로 밀어 날려보냅니다. */
+.flick-card {
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 0.18s ease;
+}
+
+.flick-card-dragging {
+    transition: none;
+    cursor: grabbing;
+    touch-action: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flick-card {
+        transition: none;
+    }
+}
