@@ -1,7 +1,7 @@
 import { addItem, removeItem } from './store.js';
 import { ATTEND_STATUS, startOfWeekMon, todayYmd } from './utils.js';
 
-/** 쓰것 빠른 분류 힌트. 빈 값은 직접 입력. */
+/** 쓱적 빠른 분류 힌트. 빈 값은 직접 입력. */
 export const SSUGEOK_HINTS = ['생각', '일', '할일'];
 
 /** 날려보내기 목적지. 왼쪽/오른쪽 스와이프 묶음과 맞춥니다. */
@@ -9,8 +9,19 @@ export const SSUGEOK_DESTS = [
     { id: 'student', label: '학생', short: '학생', hint: '학생 기록에 붙이기', side: 'left', cls: 'text-indigo-900 bg-indigo-100' },
     { id: 'attend', label: '출결', short: '출결', hint: '학생·날짜 출결 메모', side: 'left', cls: 'text-amber-900 bg-amber-100' },
     { id: 'counsel', label: '상담·누가', short: '상담', hint: '상담·관찰 기록', side: 'left', cls: 'text-rose-900 bg-rose-100' },
-    { id: 'plan', label: '주간·오늘', short: '주간', hint: '오늘·이번 주 계획', side: 'right', cls: 'text-sky-900 bg-sky-100' },
+    { id: 'plan', label: '오늘·주간', short: '주간', hint: '오늘·이번 주 계획', side: 'right', cls: 'text-sky-900 bg-sky-100' },
     { id: 'task', label: '업무', short: '업무', hint: '할 일 목록으로', side: 'right', cls: 'text-emerald-900 bg-emerald-100' },
+];
+
+/** 다이어리 화면. 받은함이 기본이고 달력은 보조 보기입니다. */
+export const SSUGEOK_VIEWS = [
+    { id: 'inbox', label: '쓱적', short: '쓱적' },
+    { id: 'student', label: '학생', short: '학생' },
+    { id: 'attend', label: '출결', short: '출결' },
+    { id: 'counsel', label: '상담', short: '상담' },
+    { id: 'plan', label: '오늘·주간', short: '주간' },
+    { id: 'task', label: '업무', short: '업무' },
+    { id: 'cal', label: '달력', short: '달력' },
 ];
 
 export const destById = (id) => SSUGEOK_DESTS.find((d) => d.id === id);
@@ -50,7 +61,7 @@ export async function ensureRosterName(name, roster, signedIn) {
 }
 
 /**
- * 쓰것 한 건을 목적지로 옮긴 뒤 받은함에서 지웁니다.
+ * 쓱적 한 건을 목적지로 옮긴 뒤 받은함에서 지웁니다.
  * 기존 출결·할 일 컬렉션을 재사용하고, 없는 목적지는 전용 컬렉션에 둡니다.
  */
 export async function sendSsugeokItem({ destId, item, extras, roster, signedIn, author }) {
