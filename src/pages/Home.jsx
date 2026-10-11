@@ -1,7 +1,7 @@
-import { BookOpen, Heart, Home, Wallet } from 'lucide-react';
+import { BookOpen, Heart, Home, PenLine, Wallet } from 'lucide-react';
 import { formatWon, thisMonth, todayYmd } from '../lib/utils.js';
 
-export default function HomePage({ author, ledger, lessons, todos, diary, onGo }) {
+export default function HomePage({ author, ledger, lessons, todos, inbox = [], diary, onGo }) {
     const month = thisMonth();
     const monthTx = ledger.filter((r) => String(r.date || '').startsWith(month));
     const income = monthTx.filter((r) => r.type === 'income').reduce((a, r) => a + (Number(r.amount) || 0), 0);
@@ -10,7 +10,16 @@ export default function HomePage({ author, ledger, lessons, todos, diary, onGo }
     const openTodos = todos.filter((t) => !t.done);
     const recentDiary = diary.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
 
+    const pendingInbox = inbox.filter((row) => row.text).length;
     const cards = [
+        {
+            id: 'teacher',
+            sub: 'ssugeok',
+            icon: PenLine,
+            title: '쓰것',
+            desc: pendingInbox ? `쌓인 생각 ${pendingInbox}건 · 날려보내기` : '생각·일·할 일을 쏟아 넣고 제자리로 날려보내세요',
+            tone: 'from-amber-50 to-white',
+        },
         {
             id: 'ledger',
             icon: Wallet,
@@ -20,6 +29,7 @@ export default function HomePage({ author, ledger, lessons, todos, diary, onGo }
         },
         {
             id: 'teacher',
+            sub: 'home',
             icon: BookOpen,
             title: '교무일지',
             desc: `오늘 수업 ${todayLessons.length} · 할 일 ${openTodos.length}`,
@@ -46,7 +56,7 @@ export default function HomePage({ author, ledger, lessons, todos, diary, onGo }
                 <h2 id="menu-heading" className="font-black text-lg mb-3">바로가기</h2>
                 <div className="grid gap-3">
                     {cards.map((c) => (
-                        <button key={c.id} type="button" onClick={() => onGo(c.id)} className={`card p-5 text-left bg-gradient-to-br ${c.tone} min-h-[5.5rem]`}>
+                        <button key={`${c.id}-${c.sub || 'main'}`} type="button" onClick={() => onGo(c.id, c.sub)} className={`card p-5 text-left bg-gradient-to-br ${c.tone} min-h-[5.5rem]`}>
                             <div className="flex items-center gap-4">
                                 <span className="w-12 h-12 rounded-2xl bg-white border border-stone-200 flex items-center justify-center text-ink-800"><c.icon size={22} aria-hidden="true" /></span>
                                 <span>
@@ -63,6 +73,7 @@ export default function HomePage({ author, ledger, lessons, todos, diary, onGo }
                 <h2 className="font-black text-lg mb-2 flex items-center gap-2"><Home size={18} /> 오늘 할 일 요약</h2>
                 <ul className="list-disc pl-5 space-y-1 text-stone-700">
                     <li>가계부는 금액만 넣어도 월 요약이 바로 바뀝니다.</li>
+                    <li>쓰것에 생각과 할 일을 먼저 쏟아 넣은 뒤, 카드를 밀어 학생·출결·상담·주간·업무로 나눕니다.</li>
                     <li>수업일지는 차시·목표·평가를 남겨 두면 다음 학년에도 검색할 수 있습니다.</li>
                     <li>가족 기록은 사진과 한 줄만으로도 타임라인에 쌓입니다.</li>
                 </ul>

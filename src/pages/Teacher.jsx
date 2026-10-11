@@ -1,20 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     BookOpen,
     CalendarDays,
+    CalendarRange,
     CheckSquare,
     ChevronLeft,
     ChevronRight,
     ClipboardCheck,
     FileText,
     LayoutGrid,
+    MessageCircle,
     Pencil,
+    PenLine,
     Phone,
     Plus,
     Table,
     Trash2,
+    Users,
 } from 'lucide-react';
 import { EmptyState, Field, Modal, SearchBox } from '../components/ui.jsx';
+import SsugeokHub from '../components/SsugeokHub.jsx';
 import { addItem, patchItem, removeItem, upsertDoc } from '../lib/store.js';
 import {
     ATTEND_STATUS,
@@ -43,6 +48,7 @@ const KINDS = {
 };
 
 const TABS = [
+    { id: 'ssugeok', label: '쓰것', Icon: PenLine },
     { id: 'home', label: '홈', Icon: LayoutGrid },
     { id: 'cal', label: '달력', Icon: CalendarDays },
     { id: 'lesson', label: '수업', Icon: BookOpen },
@@ -52,6 +58,13 @@ const TABS = [
     { id: 'time', label: '시간표', Icon: Table },
 ];
 
+/** 쓰것에서 갈라지는 가벼운 목적지. 탭이 아니라 쓰것 화면 안에서 엽니다. */
+const SSUGEOK_HUB_TILES = [
+    { id: 'student', label: '학생', Icon: Users },
+    { id: 'counsel', label: '상담', Icon: MessageCircle },
+    { id: 'plan', label: '주간', Icon: CalendarRange },
+];
+
 const emptyLesson = (date = todayYmd()) => ({ date, subject: '국어', period: 1, title: '', goal: '', activity: '', eval: '', note: '' });
 const emptyMeet = (date = todayYmd()) => ({ id: null, date, title: '', content: '', actions: '' });
 const emptyContact = (date = todayYmd()) => ({ date, student: '', type: '전화', summary: '', follow: '' });
@@ -59,8 +72,30 @@ const emptyAttend = (date = todayYmd()) => ({ date, student: '', status: '출석
 
 const actionLines = (text) => String(text || '').split(/\n|·|;/).map((s) => s.trim()).filter(Boolean);
 
-export default function TeacherPage({ lessons, todos, meets, contacts, attendance, roster, timetable, signedIn, author, onChanged, onToast }) {
-    const [tab, setTab] = useState('home');
+export default function TeacherPage({
+    lessons,
+    todos,
+    meets,
+    contacts,
+    attendance,
+    roster,
+    timetable,
+    inbox = [],
+    studentNotes = [],
+    counselNotes = [],
+    plans = [],
+    signedIn,
+    author,
+    startTab = 'ssugeok',
+    onChanged,
+    onToast,
+}) {
+    const [tab, setTab] = useState(startTab || 'ssugeok');
+    const [ssugeokView, setSsugeokView] = useState('inbox');
+
+    useEffect(() => {
+        if (startTab) setTab(startTab);
+    }, [startTab]);
     const [q, setQ] = useState('');
     const [modal, setModal] = useState(null);
     const [detail, setDetail] = useState(null);
@@ -391,7 +426,7 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
             <section>
                 <p className="text-sm font-bold text-amber-900/70">초등 교무일지</p>
                 <h2 className="text-2xl md:text-3xl font-black mt-1 text-ink-900">수업·상담·출결을 한 권에</h2>
-                <p className="mt-1 text-stone-700">오늘 수업 {todayLessons.length}건 · 남은 할 일 {openTodos.length}건</p>
+                <p className="mt-1 text-stone-700">쓰것 {inbox.length}건 · 오늘 수업 {todayLessons.length}건 · 남은 할 일 {openTodos.length}건</p>
             </section>
 
             <div role="tablist" aria-label="교무일지 메뉴" className="flex gap-1 overflow-x-auto pb-1">
@@ -412,10 +447,42 @@ export default function TeacherPage({ lessons, todos, meets, contacts, attendanc
                 ))}
             </div>
 
+            {tab === 'ssugeok' && (
+                <SsugeokHub
+                    inbox={inbox}
+                    studentNotes={studentNotes}
+                    counselNotes={counselNotes}
+                    plans={plans}
+                    todos={todos}
+                    attendance={attendance}
+                    roster={roster}
+                    signedIn={signedIn}
+                    author={author}
+                    view={ssugeokView}
+                    onView={setSsugeokView}
+                    onChanged={onChanged}
+                    onToast={onToast}
+                    onGoTab={setTab}
+                />
+            )}
+
             {tab === 'home' && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {TABS.filter((t) => t.id !== 'home').map((t) => (
-                        <button key={t.id} type="button" className="hub-tile" onClick={() => setTab(t.id)}>
+                        <button key={t.id} type="button" className="hub-tile" onClick={() => { if (t.id === 'ssugeok') setSsugeokView('inbox'); setTab(t.id); }}>
+                            <span className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center border border-amber-900/20">
+                                <t.Icon size={24} aria-hidden="true" />
+                            </span>
+                            {t.label}
+                        </button>
+                    ))}
+                    {SSUGEOK_HUB_TILES.map((t) => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            className="hub-tile"
+                            onClick={() => { setSsugeokView(t.id); setTab('ssugeok'); }}
+                        >
                             <span className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center border border-amber-900/20">
                                 <t.Icon size={24} aria-hidden="true" />
                             </span>
