@@ -2,10 +2,12 @@
 export function reportSaveFailure({ message, retry }) {
     console.error(message);
     if (typeof window === 'undefined') return;
-    window.dispatchEvent(new CustomEvent('nb-save-failed', {
-        detail: {
-            message: message || '저장하지 못했습니다.',
-            retry,
-        },
-    }));
+    const detail = {
+        message: message || '저장하지 못했습니다.',
+        retry,
+    };
+    // 쪽 칸 저장은 setState 갱신 중에 실패할 수 있어, 알림은 그 렌더가 끝난 뒤에 띄웁니다.
+    queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent('nb-save-failed', { detail }));
+    });
 }

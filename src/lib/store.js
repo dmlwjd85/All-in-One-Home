@@ -29,9 +29,11 @@ async function cloudWrite(action, retry) {
 }
 
 function localWrite(ok, retry) {
-    if (ok) return true;
+    if (ok) return;
     reportSaveFailure({ message: LOCAL_SAVE_ERROR, retry });
-    return false;
+    const err = new Error(LOCAL_SAVE_ERROR);
+    err.code = 'local-save-failed';
+    throw err;
 }
 
 function cloudUid(name, signedIn) {
