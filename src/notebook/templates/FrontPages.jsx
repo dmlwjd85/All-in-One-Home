@@ -19,6 +19,8 @@ export function CoverPage({ fields, setField, onGo }) {
                     }
                 }}
                 aria-label="홈으로 (2쪽)"
+                data-hit="body:표지"
+                data-to={2}
             >
                 <p className="nb-cover-kicker">초등 담임 전용</p>
                 <h2 className="nb-cover-title">2026학년도 교무수첩</h2>
@@ -165,14 +167,24 @@ const HOWTO = {
     },
 };
 
-export function HowtoPage({ page }) {
+export function HowtoPage({ page, pageRec, pages, onGo }) {
     const rec = HOWTO[page] || HOWTO[5];
+    const extras = partitionLinks(pageRec).body;
     return (
         <div>
             <TitleBar title={rec.title} hint={rec.hint} />
             <ol className="nb-howto">
                 {rec.body.map((line) => <li key={line}>{line}</li>)}
             </ol>
+            {extras.length > 0 && (
+                <div className="nb-tagrow">
+                    {extras.map((l, i) => (
+                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip" hit={`body:${linkText(l, pages, page)}`}>
+                            {linkText(l, pages, page)}
+                        </GoBtn>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
