@@ -1,15 +1,29 @@
-import { CellGrid, GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
-import { destLabel } from '../labels.js';
+import { GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
+import { linkText } from '../labels.js';
+import { partitionLinks } from '../linkParts.js';
 
-export function CoverPage({ fields, setField }) {
+export function CoverPage({ fields, setField, onGo }) {
+    const goHome = () => onGo?.(2);
     return (
         <div className="nb-cover">
-            <div className="nb-cover-card">
+            <div
+                className="nb-cover-card"
+                role="link"
+                tabIndex={0}
+                onClick={goHome}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        goHome();
+                    }
+                }}
+                aria-label="홈으로 (2쪽)"
+            >
                 <p className="nb-cover-kicker">초등 담임 전용</p>
                 <h2 className="nb-cover-title">2026학년도 교무수첩</h2>
                 <p className="nb-cover-range">2026. 3. 1 ~ 2027. 2. 28</p>
                 <p className="nb-cover-stars" aria-hidden="true">★ ★ ★</p>
-                <div className="nb-cover-fields">
+                <div className="nb-cover-fields" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                     <label>학교 <Ink value={fields.school} onChange={(v) => setField('school', v)} placeholder="학교 이름" /></label>
                     <label>학년 · 반 <Ink value={fields.klass} onChange={(v) => setField('klass', v)} placeholder="예: 3학년 2반" /></label>
                     <label>선생님 <Ink value={fields.teacher} onChange={(v) => setField('teacher', v)} placeholder="성함" /></label>
@@ -20,19 +34,12 @@ export function CoverPage({ fields, setField }) {
     );
 }
 
-const HOME_FALLBACK = {
-    231: '출결',
-    256: '상담',
-    350: '단원',
-    405: '기한 있는 일',
-    417: '회의록',
-    469: '예산',
-};
-
-export function HomePage({ pageRec, pages, fields, setField, onGo }) {
-    const cards = (pageRec.links || []).filter((l) => l.rect[3] - l.rect[1] > 40 && l.rect[2] - l.rect[0] > 140);
-    const months = (pageRec.links || []).filter((l) => l.to >= 34 && l.to <= 45);
-    const bottom = (pageRec.links || []).filter((l) => l.rect[1] >= 560 && !(l.to >= 34 && l.to <= 45));
+export function HomePage({ page, pageRec, pages, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
+    const cards = body.filter((l) => l.rect[3] - l.rect[1] > 40 && l.rect[2] - l.rect[0] > 140 && l.rect[1] < 500);
+    const months = body.filter((l) => l.to >= 34 && l.to <= 45);
+    const bottom = body.filter((l) => l.rect[1] >= 560 && !(l.to >= 34 && l.to <= 45));
+    const text = (l) => linkText(l, pages, page);
     return (
         <div className="nb-home">
             <TitleBar kicker="홈" title="자주 가는 곳 모음" hint="버튼을 누르면 PDF와 같은 쪽으로 가요" />
@@ -40,23 +47,23 @@ export function HomePage({ pageRec, pages, fields, setField, onGo }) {
                 <span>올해 우리 반 한 줄 목표</span>
                 <Ink value={fields.goal} onChange={(v) => setField('goal', v)} placeholder="한 줄로 적어 두세요" />
             </label>
-            <CellGrid cols={4} className="nb-home-cards">
-                {cards.filter((l) => l.rect[1] < 500).map((l) => (
+            <div className="nb-linkgrid cols-4 nb-home-cards">
+                {cards.map((l) => (
                     <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo} className="chip">
-                        {l.label || HOME_FALLBACK[l.to] || destLabel(l.to, pages)}
+                        {text(l)}
                     </GoBtn>
                 ))}
-            </CellGrid>
+            </div>
             <p className="nb-kicker">달력 바로 가기</p>
             <div className="nb-monthrow">
                 {months.map((l) => (
-                    <GoBtn key={l.to} to={l.to} onGo={onGo}>{l.label || destLabel(l.to, pages)}</GoBtn>
+                    <GoBtn key={l.to} to={l.to} onGo={onGo}>{text(l)}</GoBtn>
                 ))}
             </div>
             <div className="nb-home-bottom">
                 {bottom.map((l) => (
-                    <GoBtn key={l.to} to={l.to} onGo={onGo} className="chip">
-                        {l.label || destLabel(l.to, pages)}
+                    <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo} className="chip">
+                        {text(l)}
                     </GoBtn>
                 ))}
             </div>

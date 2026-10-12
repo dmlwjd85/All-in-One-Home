@@ -1,8 +1,5 @@
-import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight } from './labels.js';
-import LinkOverlay from './LinkOverlay.jsx';
-
-const PAGE_W = 1180;
-const PAGE_H = 820;
+import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
+import { partitionLinks } from './linkParts.js';
 
 export default function NotebookShell({
     page,
@@ -14,9 +11,10 @@ export default function NotebookShell({
 }) {
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
+    const { header } = partitionLinks(pageRec);
 
     return (
-        <div className="nb-page" style={{ width: PAGE_W, height: PAGE_H }} data-page={page}>
+        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page}>
             {showChrome && (
                 <nav className="nb-left" aria-label="구역 탭">
                     {LEFT_TABS.map((tab) => (
@@ -33,6 +31,32 @@ export default function NotebookShell({
                 </nav>
             )}
 
+            <div className="nb-main">
+                {header.length > 0 && (
+                    <nav className="nb-topnav" aria-label="쪽 이동">
+                        {header.map((link) => (
+                            <button
+                                key={`${link.to}-${link.rect[0]}`}
+                                type="button"
+                                className={`nb-topbtn ${link.to === page ? 'is-on' : ''}`}
+                                onClick={() => onGo(link.to)}
+                                aria-current={link.to === page ? 'page' : undefined}
+                                aria-label={`${navLabel(link.to, pages, page)} (${link.to}쪽)`}
+                            >
+                                {navLabel(link.to, pages, page)}
+                            </button>
+                        ))}
+                    </nav>
+                )}
+                <div className="nb-body">
+                    {children}
+                </div>
+                <footer className="nb-foot">
+                    {showChrome && <p className="nb-folio">p.{page}</p>}
+                    <p className="nb-copy">ⓒJ쌤</p>
+                </footer>
+            </div>
+
             {showChrome && (
                 <nav className="nb-right" aria-label="달 · 스티커 탭">
                     {RIGHT_TABS.map((tab) => (
@@ -48,17 +72,6 @@ export default function NotebookShell({
                     ))}
                 </nav>
             )}
-
-            <div className="nb-body">
-                {children}
-            </div>
-
-            <LinkOverlay page={page} pageRec={pageRec} pages={pages} onGo={onGo} />
-
-            {showChrome && (
-                <p className="nb-folio">p.{page}</p>
-            )}
-            <p className="nb-copy">ⓒJ쌤</p>
         </div>
     );
 }

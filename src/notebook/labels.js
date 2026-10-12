@@ -92,6 +92,101 @@ export function topNavLabel(link, pageNo) {
     return destLabel(link.to);
 }
 
+const TYPE_LABEL = {
+    cover: '표지',
+    home: '홈',
+    prep: '새 학년 준비',
+    howto: '사용법',
+    'tag-legend': '태그 범례',
+    'tag-index': '태그',
+    'year-cal': '연간 달력',
+    academic: '학사일정',
+    month: '달력',
+    'week-toc': '주간 목차',
+    week: '주간',
+    'special-toc': '특별한 하루',
+    'special-day': '특별한 하루',
+    'class-toc': '학급',
+    timetable: '시간표',
+    'class-rules': '우리 반 약속',
+    roles: '1인 1역',
+    seating: '자리 배치',
+    roster: '명렬표',
+    survey: '기초조사',
+    health: '건강',
+    'student-card': '학생 카드',
+    'student-who': '누가기록',
+    'quick-note': '짧은 기록',
+    'attend-toc': '출결',
+    attend: '출결',
+    'counsel-toc': '상담',
+    counsel: '상담',
+    parent: '보호자 상담',
+    'consult-time': '상담 시간',
+    incident: '생활 · 사고',
+    'lesson-toc': '수업',
+    progress: '진도표',
+    'eval-area': '평가 영역',
+    unit: '단원',
+    checklist: '체크리스트',
+    score: '점수 체크',
+    'work-toc': '업무',
+    deadline: '기한 있는 일',
+    todo: '업무 할 일',
+    meeting: '회의록',
+    notice: '전달 사항',
+    'budget-toc': '예산',
+    'budget-item': '예산 사업',
+    'budget-misc': '예산',
+    'year-prep': '2027 준비',
+    'ssugeok-toc': '쓱적 · 메모',
+    ssugeok: '쓱적',
+    memo: '메모',
+    'notebook-toc': '공책',
+    'notebook-paper': '공책',
+    'board-toc': '칠판',
+    chalkboard: '칠판',
+    whiteboard: '화이트보드',
+    'grid-board': '모눈',
+    'sticker-toc': '스티커',
+    'sticker-sheet': '스티커',
+};
+
+/** 헤더·바로가기 버튼에 쓰는 짧은 이름. 옆 쪽이면 다음/이전. */
+export function navLabel(to, pages, pageNo) {
+    if (pageNo && to === pageNo + 1) return '다음';
+    if (pageNo && to === pageNo - 1) return '이전';
+    if (DEST_LABEL[to]) return DEST_LABEL[to];
+    const dest = pages?.[to - 1];
+    if (!dest) return `${to}쪽`;
+    if (dest.type === 'attend') {
+        const half = dest.extra?.half === '17-32' ? '17~32번' : '1~16번';
+        const mon = dest.extra?.month ? `${dest.extra.month}월 ` : '';
+        return `출결 ${mon}${half}`;
+    }
+    if (dest.type === 'month' && dest.extra?.month) return `${dest.extra.month}월`;
+    if (dest.type === 'week' && dest.extra?.week) return `${dest.extra.week}주차`;
+    const title = String(dest.title || '').replace(/\s+/g, ' ').trim();
+    const usable = title && title.length <= 18 && !/누르면|충분|적고|인쇄|체크하면|옮겨/.test(title);
+    if (usable) return title;
+    const base = TYPE_LABEL[dest.type] || `${to}쪽`;
+    const n = dest.extra?.student;
+    if (n && (dest.type === 'student-card' || dest.type === 'student-who' || dest.type === 'counsel' || dest.type === 'parent')) {
+        return `${base} ${n}번`;
+    }
+    if (dest.type === 'ssugeok' && dest.extra?.slot) return `쓱적 ${dest.extra.slot}`;
+    if (dest.type === 'meeting' && dest.extra?.slot) return `회의록 ${dest.extra.slot}`;
+    return base;
+}
+
+/** 본문 버튼 글자. PDF에서 읽은 짧은 라벨을 우선합니다. */
+export function linkText(link, pages, pageNo) {
+    const raw = String(link?.label || '').replace(/\s+/g, ' ').trim();
+    if (raw.startsWith('#')) return raw.split(/\s/)[0];
+    if (raw && raw.length <= 24) return raw;
+    return navLabel(link.to, pages, pageNo);
+}
+
 export const LEFT_TABS = [
     { label: '홈', to: 2 },
     { label: '쓱적', to: 496 },

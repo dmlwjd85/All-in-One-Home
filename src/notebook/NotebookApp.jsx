@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Download, LogOut, PenLine } from 'lucide-react';
 import notebook from './data/notebook.json';
 import { usePageFields } from './fieldStore.js';
@@ -9,8 +9,6 @@ import SsugeokInbox from '../components/SsugeokInbox.jsx';
 import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
 
-const PAGE_W = notebook.pageW;
-const PAGE_H = notebook.pageH;
 const MAX = notebook.pageCount;
 
 function readHash() {
@@ -38,7 +36,6 @@ export default function NotebookApp({
     onToast,
 }) {
     const [page, setPage] = useState(readHash);
-    const [scale, setScale] = useState(1);
     const [hub, setHub] = useState(null);
     const { fields, setField } = usePageFields(page, signedIn);
     const pageRec = notebook.pages[page - 1];
@@ -64,18 +61,6 @@ export default function NotebookApp({
     }, []);
 
     useEffect(() => {
-        const fit = () => {
-            const bar = 48;
-            const w = Math.max(320, window.innerWidth - 16);
-            const h = Math.max(240, window.innerHeight - bar - 16);
-            setScale(Math.min(w / PAGE_W, h / PAGE_H));
-        };
-        fit();
-        window.addEventListener('resize', fit);
-        return () => window.removeEventListener('resize', fit);
-    }, []);
-
-    useEffect(() => {
         const onKey = (e) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
             if (e.key === 'ArrowRight' || e.key === 'PageDown') {
@@ -92,11 +77,6 @@ export default function NotebookApp({
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [go, page]);
-
-    const stageStyle = useMemo(() => ({
-        width: PAGE_W * scale,
-        height: PAGE_H * scale,
-    }), [scale]);
 
     return (
         <div className="nb-app">
@@ -120,32 +100,28 @@ export default function NotebookApp({
             </header>
 
             <div className="nb-stage-wrap">
-                <div className="nb-stage" style={stageStyle}>
-                    <div className="nb-scale" style={{ transform: `scale(${scale})`, width: PAGE_W, height: PAGE_H }}>
-                        <NotebookShell
-                            page={page}
-                            pageRec={pageRec}
-                            pages={notebook.pages}
-                            onGo={go}
-                            showChrome={showChrome}
-                        >
-                            <PageBody
-                                page={page}
-                                pageRec={pageRec}
-                                extra={pageRec.extra || {}}
-                                pages={notebook.pages}
-                                onGo={go}
-                                fields={fields}
-                                setField={setField}
-                                signedIn={signedIn}
-                                author={author}
-                                onChanged={onChanged}
-                                onToast={onToast}
-                                onOpenHub={() => setHub('inbox')}
-                            />
-                        </NotebookShell>
-                    </div>
-                </div>
+                <NotebookShell
+                    page={page}
+                    pageRec={pageRec}
+                    pages={notebook.pages}
+                    onGo={go}
+                    showChrome={showChrome}
+                >
+                    <PageBody
+                        page={page}
+                        pageRec={pageRec}
+                        extra={pageRec.extra || {}}
+                        pages={notebook.pages}
+                        onGo={go}
+                        fields={fields}
+                        setField={setField}
+                        signedIn={signedIn}
+                        author={author}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                        onOpenHub={() => setHub('inbox')}
+                    />
+                </NotebookShell>
             </div>
 
             {hub && (

@@ -1,9 +1,11 @@
 /* 2026 교무수첩 PDF 크롬·용지. 좌표는 1180×820 원본과 같게 둡니다. */
 
 .nb-app {
+    height: 100dvh;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     background: #e8dcc8;
     color: #4a3f3a;
     font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', Pretendard, sans-serif;
@@ -61,23 +63,18 @@
 
 .nb-stage-wrap {
     flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: auto;
-    padding: 8px;
-}
-
-.nb-stage {
-    position: relative;
-}
-
-.nb-scale {
-    transform-origin: top left;
+    padding: 10px 12px 12px;
 }
 
 .nb-page {
-    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     background: #fbf7f1;
     color: #4a3f3a;
     box-shadow: 0 10px 28px rgba(56, 34, 12, 0.18);
@@ -86,15 +83,24 @@
     border-radius: 4px;
 }
 
-.nb-left,
-.nb-right {
-    position: absolute;
-    top: 16px;
-    bottom: 21px;
-    width: 40px;
+.nb-page.has-chrome {
+    grid-template-columns: 58px minmax(0, 1fr) 58px;
+}
+
+.nb-main {
+    min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+}
+
+.nb-left,
+.nb-right {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
     z-index: 4;
 }
 
@@ -139,75 +145,146 @@
     color: #fffaf3;
 }
 
-.nb-body {
-    position: absolute;
-    left: 48px;
-    right: 48px;
-    top: 72px;
-    bottom: 28px;
-    z-index: 3;
-    overflow: auto;
-    padding-right: 4px;
-    /* 빈 곳은 아래 링크 핫스팟이 받게, 입력칸만 클릭을 받습니다. */
-    pointer-events: none;
-}
-.nb-body input,
-.nb-body textarea,
-.nb-body select,
-.nb-body button,
-.nb-body label,
-.nb-body a {
-    pointer-events: auto;
+.nb-topnav {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px 0;
 }
 
-.nb-page[data-page='1'] .nb-body {
-    left: 40px;
-    right: 40px;
-    top: 36px;
-    bottom: 24px;
-}
-
-.nb-folio {
-    position: absolute;
-    left: 52px;
-    bottom: 8px;
-    font-size: 11px;
-    color: #8a7566;
-    z-index: 3;
-}
-
-.nb-copy {
-    position: absolute;
-    right: 52px;
-    bottom: 6px;
-    font-size: 9px;
-    color: #8a7566;
-    z-index: 3;
-}
-
-.nb-links {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.nb-hotspot {
-    position: absolute;
-    pointer-events: auto;
-    background: transparent;
+.nb-topbtn {
+    min-height: 34px;
+    padding: 0 12px;
     border: 0;
-    padding: 0;
+    border-radius: 999px;
+    background: #efe6dc;
+    color: #4a3f3a;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 13px;
     cursor: pointer;
 }
 
-.nb-hotspot:hover {
-    background: rgba(194, 70, 79, 0.08);
+.nb-topbtn.is-on {
+    background: #c2464f;
+    color: #fffaf3;
 }
 
-.nb-hotspot:focus-visible {
-    outline: 2px solid #0f766e;
-    outline-offset: -2px;
+.nb-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 8px 16px 8px;
+    z-index: 3;
+}
+
+.nb-page.is-cover .nb-body {
+    padding: 12px 16px 0;
+}
+
+.nb-foot {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+    padding: 0 14px 4px;
+}
+
+.nb-folio,
+.nb-copy {
+    font-size: 11px;
+    color: #8a7566;
+}
+
+.nb-fill {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.nb-linkgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 8px;
+    align-content: start;
+}
+
+.nb-linkgrid.cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.nb-linkgrid.dense {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+.nb-linkgrid.dense .nb-gobtn.chip {
+    min-height: 40px;
+}
+
+.nb-weektoc {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.nb-specialgrid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    flex: 1;
+    align-content: stretch;
+    grid-auto-rows: minmax(44px, 1fr);
+}
+
+.nb-daylink,
+.nb-dayhead {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.nb-daylink {
+    align-self: stretch;
+    min-height: 32px;
+    padding: 2px 6px;
+    font-size: 14px;
+    text-align: left;
+}
+
+.nb-dayhead {
+    width: 100%;
+    min-height: 28px;
+}
+
+.nb-daylink:hover,
+.nb-dayhead:hover,
+.nb-monthlink:hover,
+.nb-topbtn:hover {
+    background: rgba(194, 70, 79, 0.14);
+}
+.nb-tagchip:hover {
+    outline: 2px solid #c2464f;
+}
+
+.nb-monthlink {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    border: 1px solid rgba(74, 63, 58, 0.12);
+    border-radius: 12px;
+    background: #fff;
+    padding: 4px 6px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    font: inherit;
 }
 
 .nb-titlebar { margin-bottom: 8px; }
@@ -290,6 +367,23 @@
     gap: 6px;
     margin-top: 8px;
 }
+.nb-home {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.nb-home-cards {
+    flex: 1;
+    min-height: 0;
+    align-content: stretch;
+    grid-auto-rows: minmax(56px, 1fr);
+}
+.nb-home-cards .nb-gobtn.chip {
+    min-height: 64px;
+    height: 100%;
+}
 
 .nb-monthchip {
     min-width: 56px;
@@ -320,11 +414,16 @@
 }
 
 .nb-cover-card {
-    width: min(640px, 86%);
+    width: min(720px, 78%);
     background: #fff;
     border-radius: 24px;
     padding: 36px 48px 28px;
     box-shadow: 0 8px 0 #ead9c8;
+    cursor: pointer;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: center;
 }
 
 .nb-cover-kicker {
@@ -374,9 +473,12 @@
 .nb-inline .nb-ink { flex: 1; }
 
 .nb-yeargrid {
+    flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 6px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
 }
 .nb-minimonth { font-size: 10px; }
 .nb-minimonth-title { font-weight: 800; text-align: center; }
@@ -396,8 +498,13 @@
 .nb-minimonth-grid .hol, .nb-month-cell.hol { color: #c2464f; }
 .nb-minimonth-grid .out, .nb-month-cell.out { opacity: 0.25; }
 
+.nb-month-grid {
+    flex: 1;
+    min-height: 280px;
+    grid-auto-rows: minmax(64px, 1fr);
+}
 .nb-month-cell {
-    min-height: 72px;
+    min-height: 64px;
     border: 1px solid rgba(74, 63, 58, 0.12);
     padding: 2px 4px;
     display: flex;
@@ -411,8 +518,18 @@
 .nb-acad-row { display: grid; grid-template-columns: 48px 1fr 1fr; gap: 8px; align-items: center; }
 .nb-acad-hol { font-size: 12px; color: #c2464f; }
 
-.nb-week-days { display: grid; grid-template-columns: repeat(5, 1fr) 0.9fr; gap: 6px; }
-.nb-week-col, .nb-week-side { min-width: 0; }
+.nb-week-days { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(150px, 0.9fr); gap: 8px; }
+.nb-week-col, .nb-week-side {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+.nb-week-col > .nb-ink-area:last-of-type,
+.nb-week-side > .nb-ink-area:last-of-type {
+    flex: 1;
+    min-height: 72px;
+}
 .nb-week-col h3, .nb-week-side h3 {
     font-weight: 800;
     text-align: center;
@@ -469,6 +586,11 @@
     border-radius: 999px;
     font-weight: 800;
     font-size: 13px;
+    border: 0;
+    cursor: pointer;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
 }
 .nb-tagchip small { font-weight: 400; font-size: 10px; }
 .nb-ssugeok-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px; }
@@ -525,7 +647,7 @@
 }
 .nb-attend-head { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
 .nb-lined { display: grid; gap: 2px; }
-.nb-numchip, .nb-monthchip { pointer-events: none; }
+.nb-monthchip { pointer-events: none; }
 .nb-gobtn {
     pointer-events: auto;
     cursor: pointer;
@@ -539,11 +661,21 @@
     font-weight: 800;
     box-shadow: 0 0 0 1px #ead9c8;
 }
+.nb-linkgrid .nb-gobtn.chip,
+.nb-home-cards .nb-gobtn.chip {
+    width: 100%;
+}
 .nb-gobtn.chip {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 48px;
+}
+.nb-gobtn.text {
+    background: transparent;
+    box-shadow: none;
+    min-height: 32px;
+    padding: 2px 4px;
 }
 .nb-gobtn.who {
     background: #e4daf6;
@@ -560,7 +692,19 @@
     padding: 2px 6px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
+    .nb-page.has-chrome { grid-template-columns: 48px minmax(0, 1fr) 48px; }
+    .nb-weektoc { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .nb-specialgrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .nb-linkgrid.cols-4 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 800px) {
+    .nb-page.has-chrome { grid-template-columns: 40px minmax(0, 1fr) 40px; }
+    .nb-tab { font-size: 10px; }
+    .nb-yeargrid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
+    .nb-week-days { grid-template-columns: 1fr; }
+    .nb-linkgrid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .nb-toolbar-user, .nb-toolhide { display: none; }
     .nb-pagetitle { font-size: 20px; }
 }

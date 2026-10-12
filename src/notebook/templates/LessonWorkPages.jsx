@@ -1,4 +1,5 @@
-import { Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
+import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
+import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { TocCards } from './ClassStudentPages.jsx';
 
 export { TocCards };
@@ -43,14 +44,22 @@ export function EvalAreaPage({ fields, setField }) {
     );
 }
 
-export function UnitPage({ extra, fields, setField }) {
+export function UnitPage({ pageRec, extra, fields, setField, onGo }) {
+    const nums = numberedLinks(partitionLinks(pageRec).body);
     return (
         <div>
-            <TitleBar title={`단원 ${extra.slot || ''}`} />
+            <TitleBar title={`단원 ${extra.slot || ''}`} hint="번호를 누르면 그 학생 누가기록으로 가요" />
             <div className="nb-inline">
                 <Ink value={fields.subject} onChange={(v) => setField('subject', v)} placeholder="교과" />
                 <Ink value={fields.unit} onChange={(v) => setField('unit', v)} placeholder="단원" />
             </div>
+            {nums.length > 0 && (
+                <div className="nb-numticks">
+                    {nums.map((l) => (
+                        <GoBtn key={l.label} to={l.to} onGo={onGo} className="num" aria={`${l.label}번 누가기록`}>{l.label}</GoBtn>
+                    ))}
+                </div>
+            )}
             <Ink multiline rows={8} value={fields.plan} onChange={(v) => setField('plan', v)} placeholder="목표 · 활동 · 평가" />
         </div>
     );
@@ -76,24 +85,28 @@ export function ChecklistPage({ extra, fields, setField }) {
     );
 }
 
-export function ScorePage({ page, fields, setField }) {
-    const start = page % 2 === 0 ? 17 : 1;
+export function ScorePage({ pageRec, fields, setField, onGo }) {
+    const items = numberedLinks(partitionLinks(pageRec).body);
+    const mid = Math.ceil(items.length / 2) || 8;
+    const left = items.slice(0, mid);
+    const right = items.slice(mid);
+    const first = left[0]?.label || '1';
+    const last = (right[right.length - 1] || left[left.length - 1])?.label || '16';
     return (
         <div>
-            <TitleBar title={`점수 체크 · ${start}~${start + 15}번`} />
+            <TitleBar title={`점수 체크 · ${first}~${last}번`} hint="번호를 누르면 학생 카드로 가요" />
             <Ink value={fields.title} onChange={(v) => setField('title', v)} placeholder="평가명" />
             <table className="nb-table compact">
                 <thead><tr><th>번호</th><th>점수</th><th>번호</th><th>점수</th></tr></thead>
                 <tbody>
-                    {Array.from({ length: 8 }, (_, i) => {
-                        const a = start + i;
-                        const b = start + i + 8;
+                    {left.map((a, i) => {
+                        const b = right[i];
                         return (
-                            <tr key={i}>
-                                <th>{a}</th>
-                                <td><Ink value={fields[`s${a}`]} onChange={(v) => setField(`s${a}`, v)} /></td>
-                                <th>{b}</th>
-                                <td><Ink value={fields[`s${b}`]} onChange={(v) => setField(`s${b}`, v)} /></td>
+                            <tr key={a.label}>
+                                <th><GoBtn to={a.to} onGo={onGo} className="num" aria={`${a.label}번 학생 카드`}>{a.label}</GoBtn></th>
+                                <td><Ink value={fields[`s${a.label}`]} onChange={(v) => setField(`s${a.label}`, v)} /></td>
+                                <th>{b ? <GoBtn to={b.to} onGo={onGo} className="num" aria={`${b.label}번 학생 카드`}>{b.label}</GoBtn> : null}</th>
+                                <td>{b ? <Ink value={fields[`s${b.label}`]} onChange={(v) => setField(`s${b.label}`, v)} /> : null}</td>
                             </tr>
                         );
                     })}
@@ -137,10 +150,14 @@ export function TodoSheetPage({ extra, fields, setField }) {
     );
 }
 
-export function MeetingPage({ extra, fields, setField }) {
+export function MeetingPage({ page, pageRec, pages, extra, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
-            <TitleBar title={`회의록 ${extra.slot || ''}`} />
+        <div className="nb-fill">
+            <TitleBar title={`회의록 ${extra.slot || ''}`} hint={body.length ? '번호를 누르면 그 회의록으로 가요' : undefined} />
+            {body.length > 0 && (
+                <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="dense" />
+            )}
             <div className="nb-inline">
                 <span>No.</span>
                 <Ink value={fields.no} onChange={(v) => setField('no', v)} placeholder="번호" />
