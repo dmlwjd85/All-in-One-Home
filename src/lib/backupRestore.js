@@ -6,7 +6,7 @@ import { clearAllPageFields, notifyPage, writePageFields } from './fieldLocal.js
 import { runBatchOps } from './firestoreBatch.js';
 import { userCol, userDoc } from './firestorePaths.js';
 import { writeLocalList, writeLocalObject } from './localData.js';
-import { ensureMigrationMarker, ensureUserData } from './migrateUser.js';
+import { ensureUserData } from './migrateUser.js';
 import { asDocBody, asDocId } from './plain.js';
 import { isLocalOnlyPage } from './sensitive.js';
 import { mergeSensitiveNotes, writeSensitiveNotes } from './sensitiveLocal.js';
@@ -111,13 +111,6 @@ export async function applyBackup(data, { signedIn = false } = {}) {
         }
     }
 
-    if (uid) {
-        try {
-            await ensureMigrationMarker(uid, 'json-backup');
-        } catch (err) {
-            console.error(err);
-        }
-    }
 }
 
 function dedupe(items) {

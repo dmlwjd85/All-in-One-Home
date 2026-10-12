@@ -15,14 +15,7 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
-    // 예전 공유 경로 artifacts/{appId}/public/data/{collection}/{docId}.
-    // 문서에 소유자 필드가 없어서, 로그인한 사용자가 자신의 users/{uid} 로
-    // 한 번 복사하려면 이 경로의 읽기가 필요합니다. 그보다 좁히면 클라이언트 이전이 불가능합니다.
-    // 쓰기와 삭제는 허용하지 않습니다. 앱은 이 경로를 고치거나 지우지 않습니다.
-    // 이전이 끝나면 콘솔에서 문서를 직접 지우고, 이 allow read 도 빼세요.
-    match /artifacts/{appId}/public/data/{collection}/{docId} {
-      allow read: if signedIn();
-      allow create, update, delete: if false;
-    }
+    // 예전 공유 경로 artifacts/{appId}/public/data 는 클라이언트에 열지 않습니다.
+    // 복사는 서비스 계정으로 scripts/migrate-legacy.mjs 만 수행합니다.
   }
 }

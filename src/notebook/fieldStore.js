@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readPageFields, writePageFields } from '../lib/fieldLocal.js';
+import { reportSaveFailure } from '../lib/saveNotice.js';
 import { upsertDoc } from '../lib/store.js';
 import { isLocalOnlyPage } from '../lib/sensitive.js';
 
@@ -37,7 +38,19 @@ export function usePageFields(page, signedIn) {
     }, [page]);
 
     const persist = useCallback((next) => {
-        writePageFields(page, next, { notify: false });
+        const saved = writePageFields(page, next, { notify: false });
+        if (!saved) {
+            reportSaveFailure({
+                message: '이 기기에 저장하지 못했습니다.',
+                retry: async () => {
+                    const again = writePageFields(page, next, { notify: false });
+                    if (!again) throw new Error('로컬 저장 실패');
+                    if (signedIn && !isLocalOnlyPage(page)) {
+                        await upsertDoc('notebookFields', `p${page}`, { fields: next, page }, signedIn);
+                    }
+                },
+            });
+        }
         window.clearTimeout(timer.current);
         timer.current = window.setTimeout(() => {
             if (!signedIn || isLocalOnlyPage(page)) return;

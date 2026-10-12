@@ -22,8 +22,10 @@ export function writePageFields(page, fields, { notify = true } = {}) {
         localStorage.setItem(pageKey(page), JSON.stringify(next));
     } catch (err) {
         console.warn('쪽 저장 실패', err);
+        return false;
     }
     if (notify) notifyPage(page);
+    return true;
 }
 
 export function notifyPage(page) {

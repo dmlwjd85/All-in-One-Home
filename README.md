@@ -47,24 +47,29 @@ VITE_BASE=./ npm run build
 
 Google 로그인을 쓰려면 Firebase Authentication에서 Google 제공업체를 켜고, 승인된 도메인에 `localhost`와 `dmlwjd85.github.io`를 넣어야 합니다.
 
-계정별 보안 규칙은 `firestore.rules`에 있습니다. 배포 프로젝트는 `.firebaserc`의 `sambong-world-2026`입니다.
+계정별 보안 규칙은 `firestore.rules`에 있습니다. 클라이언트는 `users/{uid}` 만 열고, 예전 `public/data` 는 읽지도 쓰지도 못합니다. 배포 프로젝트는 `.firebaserc`의 `sambong-world-2026`입니다.
 
 ```bash
 npx firebase deploy --only firestore:rules
 ```
 
-규칙을 배포하기 전에는 예전 공유 경로를 계정 공간으로 복사하지 못합니다. 앱은 그때 이 기기 기록으로 계속 동작하고, 배포 후 다시 로그인하면 복사를 이어갑니다.
+### 예전 공유 데이터 복사
 
-### 예전 공유 데이터 정리
+앱은 예전 경로를 읽지 않습니다. 프로젝트 소유자가 서비스 계정으로 한 번 복사합니다. 스크립트는 원본을 지우지 않습니다.
 
-앱은 `artifacts/home-note-app/public/data` 를 지우지 않습니다. 로그인 읽기만 열어 둔 이유는, 문서에 소유자가 없어 클라이언트 이전에는 그 읽기가 필요하기 때문입니다.
+1. Firebase 콘솔에서 서비스 계정 키 JSON을 받습니다.
+2. Authentication에서 기록을 받을 계정의 UID를 확인합니다.
+3. 먼저 건수만 보고, 그다음 복사합니다.
 
-1. 규칙을 배포합니다.
-2. 기록을 이어갈 계정으로 한 번씩 로그인합니다. `artifacts/home-note-app/users/{uid}/_meta/legacyImport` 가 생기면 그 계정으로의 복사는 끝난 것입니다.
-3. Firebase 콘솔에서 `artifacts/home-note-app/public/data` 아래 문서를 확인한 뒤, 더 이상 필요 없으면 콘솔에서 직접 삭제합니다.
-4. 삭제한 뒤에는 `firestore.rules`의 예전 경로 `allow read`를 빼는 것을 권합니다. 그 읽기를 남겨 두면 로그인한 다른 계정도 예전 공유 문서를 읽을 수 있습니다. 새 계정은 그 문서를 지우기 전에 로그인하면 같은 스냅샷을 자기 공간으로 복사합니다.
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/절대경로/service-account.json
+node scripts/migrate-legacy.mjs --uid 대상UID --dry-run
+node scripts/migrate-legacy.mjs --uid 대상UID
+```
 
-규칙 테스트:
+그 계정으로 로그인하면 상담·건강·민원·학폭 문서는 이 기기로 내려가고 계정 클라우드에서는 지워집니다. 예전 `artifacts/home-note-app/public/data` 가 더 이상 필요 없으면 콘솔에서 직접 삭제합니다.
+
+규칙·이전 테스트:
 
 ```bash
 npm run test:rules

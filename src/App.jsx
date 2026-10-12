@@ -16,6 +16,8 @@ export default function App() {
     const [authReady, setAuthReady] = useState(false);
     const [guest, setGuest] = useState(() => localStorage.getItem('homenote_guest') === '1');
     const [toast, setToast] = useState('');
+    const [saveRetry, setSaveRetry] = useState(null);
+    const saveRetryRef = useRef(null);
     const [rev, setRev] = useState(0);
     const [restore, setRestore] = useState(null);
     const [restoring, setRestoring] = useState(false);
@@ -69,9 +71,42 @@ export default function App() {
     const author = user?.displayName || user?.email?.split('@')[0] || '선생님';
 
     const notify = (msg) => {
+        setSaveRetry(null);
+        saveRetryRef.current = null;
         setToast(msg);
         window.clearTimeout(notify._t);
         notify._t = window.setTimeout(() => setToast(''), 2800);
+    };
+
+    useEffect(() => {
+        const onFail = (event) => {
+            const retry = event.detail?.retry || null;
+            saveRetryRef.current = retry;
+            setSaveRetry(() => retry);
+            setToast(event.detail?.message || '저장하지 못했습니다.');
+            window.clearTimeout(notify._t);
+            notify._t = window.setTimeout(() => {
+                setToast('');
+                setSaveRetry(null);
+                saveRetryRef.current = null;
+            }, 12000);
+        };
+        window.addEventListener('nb-save-failed', onFail);
+        return () => window.removeEventListener('nb-save-failed', onFail);
+    }, []);
+
+    const runSaveRetry = async () => {
+        const retry = saveRetryRef.current;
+        if (!retry) return;
+        saveRetryRef.current = null;
+        setSaveRetry(null);
+        setToast('다시 저장하는 중입니다…');
+        try {
+            await retry();
+            notify('다시 저장했습니다.');
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const bump = () => setRev((n) => n + 1);
@@ -182,7 +217,7 @@ export default function App() {
                         Google 로그인을 쓰면 이 계정의 기록만 다른 기기와 맞춥니다. 건강·민원·학폭·상담은 로그인해도 이 기기에만 남습니다. Firebase 콘솔에 배포 도메인(github.io)이 허용되어 있어야 합니다.
                     </p>
                 </div>
-                <Toast message={toast} />
+                <Toast message={toast} actionLabel={saveRetry ? '다시 시도' : ''} onAction={saveRetry ? runSaveRetry : null} />
             </main>
         );
     }
@@ -247,7 +282,7 @@ export default function App() {
                     </div>
                 </Modal>
             )}
-            <Toast message={toast} />
+            <Toast message={toast} actionLabel={saveRetry ? '다시 시도' : ''} onAction={saveRetry ? runSaveRetry : null} />
         </>
     );
 }

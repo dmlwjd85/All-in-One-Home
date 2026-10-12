@@ -20,8 +20,10 @@ export function writeLocalList(name, items) {
         localStorage.setItem(localKey(name), JSON.stringify(items));
     } catch (err) {
         console.warn('로컬 저장 실패', err);
+        return false;
     }
     notify(name, 'nb-shared-list');
+    return true;
 }
 
 export function readLocalObject(name) {
@@ -40,8 +42,10 @@ export function writeLocalObject(name, data) {
         localStorage.setItem(localKey(name), JSON.stringify(data ?? {}));
     } catch (err) {
         console.warn('로컬 저장 실패', err);
+        return false;
     }
     notify(name, 'nb-shared-record');
+    return true;
 }
 
 /** 같은 id 는 기기에 이미 있는 내용을 유지하고, 없는 id 만 앞에 붙입니다. */

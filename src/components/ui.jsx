@@ -40,11 +40,16 @@ export function Field({ label, children, hint }) {
     );
 }
 
-export function Toast({ message }) {
+export function Toast({ message, actionLabel, onAction }) {
     if (!message) return null;
     return (
-        <div role="status" aria-live="polite" className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-bold max-w-[90vw]">
-            {message}
+        <div role="status" aria-live="polite" className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-bold max-w-[90vw] flex items-center gap-3">
+            <span>{message}</span>
+            {onAction && (
+                <button type="button" className="underline whitespace-nowrap" onClick={onAction}>
+                    {actionLabel || '다시 시도'}
+                </button>
+            )}
         </div>
     );
 }
