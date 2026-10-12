@@ -1,20 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
-import {
-    Briefcase,
-    CalendarRange,
-    ClipboardCheck,
-    Inbox,
-    MessageCircle,
-    Pencil,
-    PenLine,
-    Send,
-    Trash2,
-    Users,
-} from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Inbox, Pencil, PenLine, Send, Trash2 } from 'lucide-react';
 import { EmptyState, Field, Modal } from './ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import {
     destById,
+    dest조사,
     destsOn,
     guessAttendStatus,
     guessStudent,
@@ -23,16 +13,7 @@ import {
     SSUGEOK_HINTS,
     suggestedDest,
 } from '../lib/ssugeok.js';
-import { ATTEND_STATUS, startOfWeekMon, todayYmd } from '../lib/utils.js';
-
-const VIEW_META = {
-    inbox: { id: 'inbox', label: '받은함', Icon: Inbox },
-    student: { id: 'student', label: '학생', Icon: Users },
-    attend: { id: 'attend', label: '출결', Icon: ClipboardCheck },
-    counsel: { id: 'counsel', label: '상담', Icon: MessageCircle },
-    plan: { id: 'plan', label: '주간', Icon: CalendarRange },
-    task: { id: 'task', label: '업무', Icon: Briefcase },
-};
+import { ATTEND_STATUS, todayYmd } from '../lib/utils.js';
 
 const emptySend = (item, destId, names) => ({
     destId,
@@ -45,21 +26,14 @@ const emptySend = (item, destId, names) => ({
     newStudent: '',
 });
 
-export default function SsugeokHub({
+export default function SsugeokInbox({
     inbox,
-    studentNotes,
-    counselNotes,
-    plans,
-    todos,
-    attendance,
     roster,
     signedIn,
     author,
-    view,
-    onView,
     onChanged,
     onToast,
-    onGoTab,
+    onView,
 }) {
     const names = roster.map((r) => r.name).filter(Boolean);
     const [draft, setDraft] = useState('');
@@ -76,13 +50,13 @@ export default function SsugeokHub({
     const addDraft = async () => {
         const text = draft.trim();
         if (!text) {
-            onToast('쓰것에 넣을 내용을 적어 주세요.');
+            onToast('쓱적에 넣을 내용을 적어 주세요.');
             return;
         }
         await addItem('ssugeokInbox', { text, typeHint, author }, signedIn);
         setDraft('');
         onChanged();
-        onToast('쓰것에 넣었습니다. 옆으로 날려보내 보세요.');
+        onToast('쓱적에 넣었습니다. 옆으로 날려보내 보세요.');
     };
 
     const saveEdit = async () => {
@@ -95,11 +69,11 @@ export default function SsugeokHub({
         await patchItem('ssugeokInbox', editing.id, { text, typeHint: editing.typeHint || '' }, signedIn);
         setEditing(null);
         onChanged();
-        onToast('쓰것을 고쳤습니다.');
+        onToast('쓱적을 고쳤습니다.');
     };
 
     const removeInbox = async (item) => {
-        if (!confirm('이 쓰것을 삭제할까요?')) return;
+        if (!confirm('이 쓱적을 삭제할까요?')) return;
         await removeItem('ssugeokInbox', item.id, signedIn);
         onChanged();
     };
@@ -130,7 +104,7 @@ export default function SsugeokHub({
             });
             setSend(null);
             onChanged();
-            onToast(`${dest.label}(으)로 날려보냈습니다.`);
+            onToast(`${dest.label}${dest조사(dest.label)} 날려보냈습니다.`);
             onView(dest.id);
         } catch (err) {
             console.error(err);
@@ -138,139 +112,80 @@ export default function SsugeokHub({
         }
     };
 
-    const destItems = useMemo(() => {
-        if (view === 'student') {
-            return studentNotes.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(a.student).localeCompare(String(b.student)));
-        }
-        if (view === 'attend') {
-            return attendance
-                .filter((row) => row.fromSsugeok)
-                .slice()
-                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        }
-        if (view === 'counsel') {
-            return counselNotes.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        }
-        if (view === 'plan') {
-            const week = startOfWeekMon(todayYmd());
-            return plans
-                .filter((p) => p.kind === 'today' ? p.date === todayYmd() : p.weekStart === week || p.date === todayYmd())
-                .concat(plans.filter((p) => !(p.kind === 'today' ? p.date === todayYmd() : p.weekStart === week || p.date === todayYmd())))
-                .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        }
-        if (view === 'task') {
-            return todos.filter((t) => t.fromSsugeok || t.source === 'ssugeok').sort((a, b) => String(b.date).localeCompare(String(a.date)));
-        }
-        return [];
-    }, [view, studentNotes, attendance, counselNotes, plans, todos]);
-
     return (
         <div className="space-y-3">
-            <div className="flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="쓰것 받은함과 보낸 곳">
-                {Object.values(VIEW_META).map((v) => (
-                    <button
-                        key={v.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={view === v.id}
-                        className={`icon-tab shrink-0 ${view === v.id ? 'bg-amber-900 text-white border-amber-900' : 'bg-[#fffaf0] border-amber-900/20 text-ink-800'}`}
-                        onClick={() => onView(v.id)}
-                    >
-                        <v.Icon size={18} aria-hidden="true" />
-                        <span>{v.label}</span>
-                    </button>
-                ))}
-            </div>
-
-            {view === 'inbox' && (
-                <>
-                    <section className="card p-4 space-y-3 bg-[#fffaf0]/85">
-                        <div className="flex items-center gap-2">
-                            <span className="w-10 h-10 rounded-2xl bg-amber-900 text-[#fffaf0] flex items-center justify-center">
-                                <PenLine size={18} aria-hidden="true" />
-                            </span>
-                            <div>
-                                <h3 className="font-black text-lg leading-tight">쓰것에 쏟아 넣기</h3>
-                                <p className="text-xs text-stone-600">생각·있었던 일·할 일을 먼저 적고, 나중에 제자리로 날려보냅니다.</p>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1" role="group" aria-label="쓰것 종류">
-                            {SSUGEOK_HINTS.map((h) => (
-                                <button
-                                    key={h}
-                                    type="button"
-                                    className={`min-h-tap px-3 rounded-xl font-extrabold border ${hint === h ? 'bg-amber-900 text-white border-amber-900' : 'bg-white border-amber-900/20'}`}
-                                    onClick={() => setHint(h)}
-                                >
-                                    {h}
-                                </button>
-                            ))}
-                            <button
-                                type="button"
-                                className={`min-h-tap px-3 rounded-xl font-extrabold border ${hint === '' ? 'bg-amber-900 text-white border-amber-900' : 'bg-white border-amber-900/20'}`}
-                                onClick={() => setHint('')}
-                            >
-                                직접
-                            </button>
-                        </div>
-                        {hint === '' && (
-                            <input
-                                className="field"
-                                value={customHint}
-                                onChange={(e) => setCustomHint(e.target.value)}
-                                placeholder="예: 관찰, 가정연락, 준비물"
-                                aria-label="직접 적은 종류"
-                            />
-                        )}
-                        <textarea
-                            className="field min-h-28"
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addDraft();
-                            }}
-                            placeholder="오늘 있었던 일, 떠오른 생각, 해야 할 일을 그냥 적으세요"
-                            aria-label="쓰것 내용"
-                        />
-                        <button type="button" className="btn-primary w-full" onClick={addDraft}>
-                            <Inbox size={18} /> 쓰것에 넣기
+            <section className="card p-4 md:p-5 space-y-3 bg-[#fffaf0]/85">
+                <div className="flex items-center gap-3">
+                    <span className="w-11 h-11 rounded-2xl bg-amber-900 text-[#fffaf0] flex items-center justify-center">
+                        <PenLine size={20} aria-hidden="true" />
+                    </span>
+                    <div>
+                        <h2 className="font-black text-xl leading-tight">쓱적에 쏟아 넣기</h2>
+                        <p className="text-sm text-stone-600">생각·있었던 일·할 일을 먼저 적고, 카드를 밀어 제자리로 나눕니다.</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-1" role="group" aria-label="쓱적 종류">
+                    {SSUGEOK_HINTS.map((h) => (
+                        <button
+                            key={h}
+                            type="button"
+                            className={`min-h-tap px-3 rounded-xl font-extrabold border ${hint === h ? 'bg-amber-900 text-white border-amber-900' : 'bg-white border-amber-900/20'}`}
+                            onClick={() => setHint(h)}
+                        >
+                            {h}
                         </button>
-                    </section>
-
-                    {pending.length === 0 ? (
-                        <EmptyState title="쓰것이 비어 있습니다" hint="위에 한 줄을 적으면 받은함에 쌓입니다. 카드를 좌우로 밀어 학생·출결·상담·주간·업무로 날려보내세요." />
-                    ) : (
-                        <ul className="space-y-3">
-                            {pending.map((item) => (
-                                <li key={item.id}>
-                                    <FlickCard
-                                        item={item}
-                                        onFlick={(side) => {
-                                            setFlickItem(item);
-                                            setFlickSide(side);
-                                        }}
-                                        onSend={(destId) => openSend(item, destId)}
-                                        onEdit={() => setEditing({ ...item, typeHint: item.typeHint || '' })}
-                                        onDelete={() => removeInbox(item)}
-                                    />
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </>
-            )}
-
-            {view !== 'inbox' && (
-                <DestinationView
-                    view={view}
-                    items={destItems}
-                    names={names}
-                    signedIn={signedIn}
-                    onChanged={onChanged}
-                    onGoTab={onGoTab}
-                    onBack={() => onView('inbox')}
+                    ))}
+                    <button
+                        type="button"
+                        className={`min-h-tap px-3 rounded-xl font-extrabold border ${hint === '' ? 'bg-amber-900 text-white border-amber-900' : 'bg-white border-amber-900/20'}`}
+                        onClick={() => setHint('')}
+                    >
+                        직접
+                    </button>
+                </div>
+                {hint === '' && (
+                    <input
+                        className="field"
+                        value={customHint}
+                        onChange={(e) => setCustomHint(e.target.value)}
+                        placeholder="예: 관찰, 가정연락, 준비물"
+                        aria-label="직접 적은 종류"
+                    />
+                )}
+                <textarea
+                    className="field min-h-32 text-lg"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addDraft();
+                    }}
+                    placeholder="오늘 있었던 일, 떠오른 생각, 해야 할 일을 그냥 적으세요"
+                    aria-label="쓱적 내용"
                 />
+                <button type="button" className="btn-primary w-full" onClick={addDraft}>
+                    <Inbox size={18} /> 쓱적에 넣기
+                </button>
+            </section>
+
+            {pending.length === 0 ? (
+                <EmptyState title="쓱적이 비어 있습니다" hint="위에 한 줄을 적으면 받은함에 쌓입니다. 카드를 좌우로 밀어 학생·출결·상담·주간·업무로 날려보내세요." />
+            ) : (
+                <ul className="space-y-3">
+                    {pending.map((item) => (
+                        <li key={item.id}>
+                            <FlickCard
+                                item={item}
+                                onFlick={(side) => {
+                                    setFlickItem(item);
+                                    setFlickSide(side);
+                                }}
+                                onSend={(destId) => openSend(item, destId)}
+                                onEdit={() => setEditing({ ...item, typeHint: item.typeHint || '' })}
+                                onDelete={() => removeInbox(item)}
+                            />
+                        </li>
+                    ))}
+                </ul>
             )}
 
             {flickSide && flickItem && (
@@ -296,7 +211,7 @@ export default function SsugeokHub({
             )}
 
             {editing && (
-                <Modal title="쓰것 고치기" onClose={() => setEditing(null)}>
+                <Modal title="쓱적 고치기" onClose={() => setEditing(null)}>
                     <Field label="종류">
                         <input className="field" value={editing.typeHint} onChange={(e) => setEditing({ ...editing, typeHint: e.target.value })} placeholder="생각 / 일 / 할일" />
                     </Field>
@@ -411,7 +326,7 @@ function SendSheet({ send, names, onChange, onClose, onConfirm }) {
     const needsStudent = dest?.id === 'student' || dest?.id === 'attend' || dest?.id === 'counsel';
 
     return (
-        <Modal title={`${dest?.label || '목적지'}로 날려보내기`} onClose={onClose}>
+        <Modal title={`${dest?.label || '목적지'}${dest조사(dest?.label)} 날려보내기`} onClose={onClose}>
             <p className="text-sm whitespace-pre-wrap bg-amber-50 border border-amber-900/15 rounded-2xl p-3 mb-3">{send.item.text}</p>
             {needsStudent && (
                 <>
@@ -483,89 +398,5 @@ function SendSheet({ send, names, onChange, onClose, onConfirm }) {
                 <Send size={18} /> {dest?.label}로 보내기
             </button>
         </Modal>
-    );
-}
-
-function DestinationView({ view, items, names, signedIn, onChanged, onGoTab, onBack }) {
-    const meta = VIEW_META[view];
-    const title = meta?.label || '보낸 곳';
-
-    const removeDest = async (item) => {
-        const col = view === 'student'
-            ? 'studentNotes'
-            : view === 'attend'
-                ? 'teacherAttend'
-                : view === 'counsel'
-                    ? 'counselNotes'
-                    : view === 'plan'
-                        ? 'teacherPlans'
-                        : 'teacherTodos';
-        if (!confirm('이 기록을 삭제할까요?')) return;
-        await removeItem(col, item.id, signedIn);
-        onChanged();
-    };
-
-    const groupedStudents = useMemo(() => {
-        if (view !== 'student') return [];
-        const map = {};
-        items.forEach((row) => {
-            const key = row.student || '이름 없음';
-            if (!map[key]) map[key] = [];
-            map[key].push(row);
-        });
-        return Object.entries(map).sort(([a], [b]) => a.localeCompare(b, 'ko'));
-    }, [view, items]);
-
-    return (
-        <section className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-black text-lg">{title}에 날아온 기록</h3>
-                <div className="flex gap-2">
-                    {view === 'attend' && <button type="button" className="btn-secondary" onClick={() => onGoTab('attend')}>출결 탭</button>}
-                    {view === 'task' && <button type="button" className="btn-secondary" onClick={() => onGoTab('todo')}>할 일 탭</button>}
-                    <button type="button" className="btn-secondary" onClick={onBack}>받은함</button>
-                </div>
-            </div>
-            {view === 'student' && names.length === 0 && items.length === 0 && (
-                <p className="text-sm text-stone-600">아직 명단이 없습니다. 쓰것을 학생에게 보낼 때 이름을 적으면 최소 명단이 만들어집니다.</p>
-            )}
-            {items.length === 0 ? (
-                <EmptyState title={`${title}에 보낸 기록이 없습니다`} hint="받은함에서 카드를 밀어 이곳으로 날려보내 보세요." />
-            ) : view === 'student' ? (
-                <div className="space-y-3">
-                    {groupedStudents.map(([student, rows]) => (
-                        <section key={student} className="card p-4 bg-[#fffaf0]/85">
-                            <h4 className="font-black">{student}</h4>
-                            <ul className="mt-2 space-y-2">
-                                {rows.map((row) => (
-                                    <li key={row.id} className="flex justify-between gap-3">
-                                        <span>
-                                            <span className="block text-xs font-bold text-stone-500">{row.date}</span>
-                                            <span className="whitespace-pre-wrap">{row.text}</span>
-                                        </span>
-                                        <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={() => removeDest(row)}>삭제</button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-                    ))}
-                </div>
-            ) : (
-                <ul className="space-y-2">
-                    {items.map((row) => (
-                        <li key={row.id} className="card p-4 bg-[#fffaf0]/85">
-                            <p className="text-xs font-bold text-stone-500">
-                                {row.date}
-                                {row.student ? ` · ${row.student}` : ''}
-                                {row.status ? ` · ${row.status}` : ''}
-                                {row.kind === 'week' ? ' · 이번 주' : row.kind === 'today' ? ' · 오늘' : row.kind ? ` · ${row.kind}` : ''}
-                            </p>
-                            <p className={`font-black mt-1 whitespace-pre-wrap ${row.done ? 'line-through text-stone-500' : ''}`}>{row.text || row.note}</p>
-                            <button type="button" className="text-sm text-rose-700 underline mt-2 min-h-tap" onClick={() => removeDest(row)}>삭제</button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </section>
     );
 }
