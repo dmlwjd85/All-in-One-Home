@@ -189,7 +189,7 @@ export function linkText(link, pages, pageNo) {
 
 export const LEFT_TABS = [
     { label: '홈', to: 2 },
-    { label: '쓱적', to: 496 },
+    { label: '쓰', to: 496 },
     { label: '연간', to: 32 },
     { label: '주간', to: 46 },
     { label: '하루', to: 99 },

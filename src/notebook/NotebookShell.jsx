@@ -26,6 +26,8 @@ export default function NotebookShell({
                             className={`nb-tab tone-${toneForPage(tab.to, pages)} ${leftOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={leftOn === tab.to ? 'page' : undefined}
+                            data-hit={`left:${tab.label}`}
+                            data-to={tab.to}
                         >
                             {tab.label}
                         </button>
@@ -44,6 +46,8 @@ export default function NotebookShell({
                                 onClick={() => onGo(link.to)}
                                 aria-current={link.to === page ? 'page' : undefined}
                                 aria-label={`${navLabel(link.to, pages, page)} (${link.to}쪽)`}
+                                data-hit={`top:${navLabel(link.to, pages, page)}`}
+                                data-to={link.to}
                             >
                                 {navLabel(link.to, pages, page)}
                             </button>
@@ -68,6 +72,8 @@ export default function NotebookShell({
                             className={`nb-tab ${rightOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={rightOn === tab.to ? 'page' : undefined}
+                            data-hit={`right:${tab.label}`}
+                            data-to={tab.to}
                         >
                             {tab.label}
                         </button>

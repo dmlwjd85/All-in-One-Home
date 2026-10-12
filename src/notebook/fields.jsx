@@ -55,13 +55,15 @@ export function CellGrid({ children, cols = 4, className = '' }) {
     );
 }
 
-export function GoBtn({ to, onGo, className = '', children, aria }) {
+export function GoBtn({ to, onGo, className = '', children, aria, hit }) {
     return (
         <button
             type="button"
             className={`nb-gobtn ${className}`}
             onClick={(e) => { e.stopPropagation(); onGo?.(to); }}
             aria-label={aria || `${children} ${to}쪽`}
+            data-hit={hit || `body:${typeof children === 'string' ? children : to}`}
+            data-to={to}
         >
             {children}
         </button>
