@@ -1,6 +1,8 @@
 import { GoBtn, Ink, LinedBlock, LinkedChip, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { partitionLinks } from '../linkParts.js';
+import SemesterSetup from '../SemesterSetup.jsx';
+import { useRosterNames } from '../fieldStore.js';
 import { TONE_LABEL, TONE_MARK } from '../tones.js';
 
 export function CoverPage({ fields, setField, onGo }) {
@@ -82,7 +84,9 @@ const PREP_ITEMS = [
     ['첫 주 챙길 것', ['자리 배치 정하기', '비상 연락 방법 안내', '급식·하교 동선 알려 주기']],
 ];
 
-export function PrepPage({ page, fields, setField }) {
+export function PrepPage({ page, fields, setField, onGo }) {
+    const rosterNames = useRosterNames();
+    const rosterCount = rosterNames.filter(Boolean).length;
     if (page === 4) {
         return (
             <div>
@@ -103,6 +107,7 @@ export function PrepPage({ page, fields, setField }) {
     return (
         <div>
             <TitleBar kicker="2026학년도 새 학년 준비" title="2026년 2월 · 인수인계와 첫 주 준비" />
+            <SemesterSetup fields={fields} setField={setField} onGo={onGo} rosterCount={rosterCount} />
             <div className="nb-prep-grid">
                 {PREP_ITEMS.map(([head, items]) => (
                     <section key={head} className="nb-panel">

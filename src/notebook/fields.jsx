@@ -4,17 +4,20 @@ import { TONE_MARK, toneForPage } from './tones.js';
 /** PDF 줄칸처럼 보이게 한 입력. 마우스·키보드로 바로 씁니다. */
 
 export function Ink({ value, onChange, className = '', placeholder = '', multiline = false, rows = 2, type = 'text', aria }) {
+    const label = aria || placeholder || '입력';
     const common = {
         className: `nb-ink ${multiline ? 'nb-ink-area' : ''} ${className}`,
         value: value ?? '',
         onChange: (e) => onChange(e.target.value),
         placeholder,
-        'aria-label': aria || placeholder || '입력',
+        'aria-label': label,
     };
-    if (multiline) {
-        return <textarea {...common} rows={rows} />;
-    }
-    return <input type={type} {...common} />;
+    return (
+        <span className="nb-field">
+            <span className="nb-field-label">{label}</span>
+            {multiline ? <textarea {...common} rows={rows} /> : <input type={type} {...common} />}
+        </span>
+    );
 }
 
 export function Tick({ checked, onChange, label }) {
@@ -27,13 +30,17 @@ export function Tick({ checked, onChange, label }) {
 }
 
 export function Pick({ value, onChange, options, aria }) {
+    const label = aria || '선택';
     return (
-        <select className="nb-ink nb-ink-select" value={value ?? ''} onChange={(e) => onChange(e.target.value)} aria-label={aria}>
-            <option value="">선택</option>
-            {options.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-            ))}
-        </select>
+        <span className="nb-field">
+            <span className="nb-field-label">{label}</span>
+            <select className="nb-ink nb-ink-select" value={value ?? ''} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+                <option value="">선택</option>
+                {options.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                ))}
+            </select>
+        </span>
     );
 }
 

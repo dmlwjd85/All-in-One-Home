@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 export function IconBtn({ label, onClick, children, className = '' }) {
     return (
         <button type="button" aria-label={label} title={label} onClick={onClick} className={`btn-secondary ${className}`}>
@@ -17,9 +19,52 @@ export function EmptyState({ title, hint }) {
 }
 
 export function Modal({ title, onClose, children, wide = false }) {
+    const ref = useRef(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    useEffect(() => {
+        const root = ref.current;
+        const previous = document.activeElement;
+        const focusables = () => [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+            .filter((el) => !el.disabled && el.getAttribute('aria-hidden') !== 'true');
+        focusables()[0]?.focus();
+        const onKey = (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onCloseRef.current?.();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const list = focusables();
+            if (!list.length) return;
+            const first = list[0];
+            const last = list[list.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            if (previous instanceof HTMLElement) previous.focus();
+        };
+    }, []);
+
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-900/55" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-            <div className={`bg-ink-50 sm:rounded-3xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92dvh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-stone-200`}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-900/55" role="presentation" onClick={() => onCloseRef.current?.()}>
+            <div
+                ref={ref}
+                className={`bg-ink-50 sm:rounded-3xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92dvh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-stone-200`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-title"
+                onClick={(event) => event.stopPropagation()}
+            >
                 <div className="flex items-start justify-between gap-3 mb-4">
                     <h2 id="modal-title" className="text-xl font-black text-ink-900">{title}</h2>
                     <button type="button" className="btn-secondary px-3" onClick={onClose} aria-label="닫기">닫기</button>
@@ -40,11 +85,16 @@ export function Field({ label, children, hint }) {
     );
 }
 
-export function Toast({ message }) {
+export function Toast({ message, actionLabel, onAction }) {
     if (!message) return null;
     return (
-        <div role="status" aria-live="polite" className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-bold max-w-[90vw]">
-            {message}
+        <div role="status" aria-live="polite" className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-bold max-w-[90vw] flex items-center gap-3">
+            <span>{message}</span>
+            {actionLabel && onAction ? (
+                <button type="button" className="min-h-tap min-w-tap rounded-xl bg-white text-ink-900 px-3 py-2" onClick={onAction}>
+                    {actionLabel}
+                </button>
+            ) : null}
         </div>
     );
 }

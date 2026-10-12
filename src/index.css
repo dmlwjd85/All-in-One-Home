@@ -13,7 +13,7 @@ html {
 }
 
 body {
-    font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
     overscroll-behavior-y: none;
     min-height: 100dvh;
 }

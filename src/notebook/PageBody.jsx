@@ -27,6 +27,7 @@ import {
 import {
     BudgetItemPage,
     BudgetMiscPage,
+    BudgetOverview,
     ChecklistPage,
     DeadlinePage,
     EvalAreaPage,
@@ -51,6 +52,8 @@ import {
     TagLegendPage,
 } from './templates/WritePages.jsx';
 import PageTrail from './PageTrail.jsx';
+import LocalOnlyBadge from './LocalOnlyBadge.jsx';
+import { isLocalOnlyPage } from './localPages.js';
 
 function renderPage(props) {
     const { pageRec } = props;
@@ -113,7 +116,14 @@ function renderPage(props) {
         case 'todo': return <TodoSheetPage {...props} />;
         case 'meeting': return <MeetingPage {...props} />;
         case 'notice': return <NoticePage {...props} />;
-        case 'budget-toc': return <TocCards title="예산" hint="사업명을 누르면 그 사업 쪽으로 가요" {...props} />;
+        case 'budget-toc': return (
+            <TocCards
+                title="예산"
+                hint="사업명을 누르면 그 사업 쪽으로 가요. 합계는 470–483쪽 예산·집행을 더합니다."
+                lead={<BudgetOverview onGo={props.onGo} />}
+                {...props}
+            />
+        );
         case 'budget-item': return <BudgetItemPage {...props} />;
         case 'budget-misc': return <BudgetMiscPage {...props} />;
         case 'year-prep': return <LinedForm title="2027학년도 준비 · 인수인계" n={14} {...props} />;
@@ -137,9 +147,13 @@ function renderPage(props) {
 export default function PageBody(props) {
     const inner = renderPage(props);
     const type = props.pageRec.type;
-    if (type === 'cover' || type === 'ssugeok') return inner;
+    const localOnly = isLocalOnlyPage(props.page);
+    if (type === 'cover' || type === 'ssugeok') {
+        return localOnly ? (<><LocalOnlyBadge />{inner}</>) : inner;
+    }
     return (
         <>
+            {localOnly && <LocalOnlyBadge />}
             <PageTrail
                 page={props.page}
                 fields={props.fields}

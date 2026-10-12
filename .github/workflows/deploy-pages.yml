@@ -30,6 +30,8 @@ jobs:
           npm install
           npm run check:links
           npm run check:hits
+          npm run check:storage
+          npm run check:quality
           npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

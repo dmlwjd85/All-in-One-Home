@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
 import DdayBoard, { UpcomingStrip } from '../DdayBoard.jsx';
 import SubmissionBoard from '../SubmissionBoard.jsx';
+import { sumBudget } from '../budget.js';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
+import { formatWon, parseAmount } from '../../lib/utils.js';
 import { TocCards } from './ClassStudentPages.jsx';
 
 export { TocCards };
@@ -220,16 +223,50 @@ export function NoticePage({ page, fields, setField, submissionSheets, signedIn,
     );
 }
 
+export function BudgetOverview({ onGo }) {
+    const [sum, setSum] = useState(() => sumBudget());
+    useEffect(() => {
+        const refresh = (event) => {
+            const page = Number(event.detail?.page);
+            if (page !== 0 && (page < 470 || page > 483)) return;
+            setSum(sumBudget());
+        };
+        window.addEventListener('nb-page-fields', refresh);
+        return () => window.removeEventListener('nb-page-fields', refresh);
+    }, []);
+    return (
+        <section className="nb-budget" aria-label="예산 합계">
+            <p className="nb-budget-total">예산 {formatWon(sum.budget)} · 집행 {formatWon(sum.used)} · 남음 {formatWon(sum.left)}</p>
+            <table className="nb-table compact">
+                <thead><tr><th>사업</th><th>예산</th><th>집행</th><th>남음</th></tr></thead>
+                <tbody>
+                    {sum.rows.map((row) => (
+                        <tr key={row.page}>
+                            <th><GoBtn to={row.page} onGo={onGo} aria={row.name}>{row.name}</GoBtn></th>
+                            <td>{formatWon(row.budget)}</td>
+                            <td>{formatWon(row.used)}</td>
+                            <td>{formatWon(row.left)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </section>
+    );
+}
+
 export function BudgetItemPage({ extra, fields, setField }) {
+    const budget = parseAmount(fields.budget);
+    const used = parseAmount(fields.used);
     return (
         <div>
-            <TitleBar title={`사업 ${extra.slot || ''}`} />
-            <Ink value={fields.name} onChange={(v) => setField('name', v)} placeholder="사업명" />
+            <TitleBar title={`사업 ${extra.slot || ''}`} hint={`이 사업 남음 ${formatWon(budget - used)} · 전체 합계는 468쪽`} />
+            <Ink value={fields.name} onChange={(v) => setField('name', v)} placeholder="사업명" aria="사업명" />
             <div className="nb-inline">
-                <Ink value={fields.budget} onChange={(v) => setField('budget', v)} placeholder="예산" />
-                <Ink value={fields.used} onChange={(v) => setField('used', v)} placeholder="집행" />
+                <Ink value={fields.budget} onChange={(v) => setField('budget', v)} placeholder="예산" aria="예산" />
+                <Ink value={fields.used} onChange={(v) => setField('used', v)} placeholder="집행" aria="집행" />
             </div>
-            <Ink multiline rows={8} value={fields.note} onChange={(v) => setField('note', v)} placeholder="품의 · 집행 메모" />
+            <p className="nb-budget-left">남음 {formatWon(budget - used)}</p>
+            <Ink multiline rows={8} value={fields.note} onChange={(v) => setField('note', v)} placeholder="품의 · 집행 메모" aria="품의 집행 메모" />
         </div>
     );
 }

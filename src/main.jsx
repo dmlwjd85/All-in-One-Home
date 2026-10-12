@@ -4,6 +4,15 @@ import App from './App.jsx';
 import './index.css';
 import './notebook/notebook.css';
 
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        const base = import.meta.env.BASE_URL || './';
+        navigator.serviceWorker.register(`${base}sw.js`).catch((err) => {
+            console.warn('서비스 워커 등록 실패', err);
+        });
+    });
+}
+
 const rootEl = document.getElementById('root');
 
 try {

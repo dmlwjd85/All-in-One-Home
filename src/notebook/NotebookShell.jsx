@@ -9,6 +9,7 @@ export default function NotebookShell({
     onGo,
     children,
     showChrome,
+    style,
 }) {
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
@@ -16,7 +17,7 @@ export default function NotebookShell({
     const tone = toneForType(pageRec?.type);
 
     return (
-        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone}>
+        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone} style={style}>
             {showChrome && (
                 <nav className="nb-left" aria-label="구역 탭">
                     {LEFT_TABS.map((tab) => (

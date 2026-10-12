@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
+import { downloadText } from '../../lib/utils.js';
 import { ATTEND_STATUS } from '../../lib/utils.js';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Pick, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
-import { readPageFields } from '../fieldStore.js';
+import { linkRosterValue, readPageFields, useRosterNames } from '../fieldStore.js';
+import { buildStudentExport } from '../studentExport.js';
 import { quietStudents, whoPage } from '../ssugeokModel.js';
 
 export function TocCards({ title, hint, page, pageRec, pages, onGo, lead }) {
@@ -105,12 +107,35 @@ function quietNumbers(notes) {
     return quietStudents(notes, pageNotesByStudent);
 }
 
-export function RosterPage({ fields, setField, onGo, ssugeokNotes }) {
+function StudentExportButton({ n, rosterName, onToast }) {
+    return (
+        <button
+            type="button"
+            className="nb-export-student"
+            onClick={() => {
+                const payload = buildStudentExport(n, rosterName);
+                downloadText(`학생-${n}-누가기록-상담.json`, JSON.stringify(payload, null, 2));
+                onToast?.(`${n}번 누가기록·상담 파일을 내려받았습니다.`);
+            }}
+        >
+            누가기록·상담 내보내기
+        </button>
+    );
+}
+
+export function RosterPage({ fields, setField, onGo, ssugeokNotes, signedIn }) {
     const quiet = useMemo(() => quietNumbers(ssugeokNotes || []), [ssugeokNotes]);
     const shown = quiet.slice(0, 16);
+    const named = Array.from({ length: 32 }, (_, i) => fields[`name${i + 1}`]).filter(Boolean).length;
+    const setRoster = (n, key, value) => {
+        const previous = fields[`${key}${n}`] || '';
+        setField(`${key}${n}`, value);
+        linkRosterValue(n, key, value, previous, signedIn);
+    };
     return (
         <div>
             <TitleBar title="명렬표" hint="번호를 누르면 학생 카드, '누가'를 누르면 누가기록이에요" />
+            <p className="nb-roster-link">이름 {named}/32 · 적는 즉시 학생 카드와 출결 번호 옆에 이어집니다. 새 학기 준비는 3쪽입니다.</p>
             {shown.length > 0 && (
                 <div className="nb-quiet">
                     <span>최근 3주 누가기록이 없어요</span>
@@ -130,9 +155,9 @@ export function RosterPage({ fields, setField, onGo, ssugeokNotes }) {
                                 return (
                                     <tr key={n}>
                                         <th><GoBtn to={157 + n * 2} onGo={onGo} className="num" aria={`${n}번 학생 카드`}>{n}</GoBtn></th>
-                                        <td><Ink value={fields[`name${n}`]} onChange={(v) => setField(`name${n}`, v)} aria={`${n}번 이름`} /></td>
-                                        <td><Ink value={fields[`sex${n}`]} onChange={(v) => setField(`sex${n}`, v)} aria={`${n}번 성별`} /></td>
-                                        <td><Ink value={fields[`birth${n}`]} onChange={(v) => setField(`birth${n}`, v)} aria={`${n}번 생년월일`} /></td>
+                                        <td><Ink value={fields[`name${n}`]} onChange={(v) => setRoster(n, 'name', v)} aria={`${n}번 이름`} /></td>
+                                        <td><Ink value={fields[`sex${n}`]} onChange={(v) => setRoster(n, 'sex', v)} aria={`${n}번 성별`} /></td>
+                                        <td><Ink value={fields[`birth${n}`]} onChange={(v) => setRoster(n, 'birth', v)} aria={`${n}번 생년월일`} /></td>
                                         <td><Ink value={fields[`note${n}`]} onChange={(v) => setField(`note${n}`, v)} aria={`${n}번 비고`} /></td>
                                         <td><GoBtn to={158 + n * 2} onGo={onGo} className="who" aria={`${n}번 누가기록`}>누가</GoBtn></td>
                                     </tr>
@@ -160,9 +185,9 @@ export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
                         return (
                             <tr key={n}>
                                 <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
-                                <td><Ink value={fields[`g${n}`]} onChange={(v) => setField(`g${n}`, v)} /></td>
-                                <td><Ink value={fields[`p${n}`]} onChange={(v) => setField(`p${n}`, v)} /></td>
-                                <td><Ink value={fields[`a${n}`]} onChange={(v) => setField(`a${n}`, v)} /></td>
+                                <td><Ink value={fields[`g${n}`]} onChange={(v) => setField(`g${n}`, v)} aria={`${n}번 보호자`} /></td>
+                                <td><Ink value={fields[`p${n}`]} onChange={(v) => setField(`p${n}`, v)} aria={`${n}번 연락처`} /></td>
+                                <td><Ink value={fields[`a${n}`]} onChange={(v) => setField(`a${n}`, v)} aria={`${n}번 주소`} /></td>
                             </tr>
                         );
                     })}
@@ -186,9 +211,9 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
                         return (
                             <tr key={n}>
                                 <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
-                                <td><Ink value={fields[`h${n}`]} onChange={(v) => setField(`h${n}`, v)} /></td>
-                                <td><Tick checked={fields[`m${n}`]} onChange={(v) => setField(`m${n}`, v)} /></td>
-                                <td><Ink value={fields[`n${n}`]} onChange={(v) => setField(`n${n}`, v)} /></td>
+                                <td><Ink value={fields[`h${n}`]} onChange={(v) => setField(`h${n}`, v)} aria={`${n}번 알레르기`} /></td>
+                                <td><Tick checked={fields[`m${n}`]} onChange={(v) => setField(`m${n}`, v)} label={`${n}번 분리 급식`} /></td>
+                                <td><Ink value={fields[`n${n}`]} onChange={(v) => setField(`n${n}`, v)} aria={`${n}번 건강 메모`} /></td>
                             </tr>
                         );
                     })}
@@ -203,11 +228,15 @@ function NumLink({ n, to, onGo }) {
     return <GoBtn to={to} onGo={onGo} className="num" aria={`${n}번`}>{n}</GoBtn>;
 }
 
-export function StudentCardPage({ page, pageRec, pages, extra, fields, setField, onGo }) {
+export function StudentCardPage({ page, pageRec, pages, extra, fields, setField, onGo, onToast }) {
     const n = extra.student || 1;
+    const rosterNames = useRosterNames();
+    const rosterName = rosterNames[n] || '';
+    const shownName = fields.name || rosterName;
     return (
         <div>
-            <TitleBar title={`학생 카드 · ${n}번`} />
+            <TitleBar title={`학생 카드 · ${n}번${shownName ? ` ${shownName}` : ''}`} hint={rosterName ? '이름은 명렬표에서 이어집니다.' : '이름은 명렬표 154쪽에 적어도 됩니다.'} />
+            <StudentExportButton n={n} rosterName={rosterName || fields.name || ''} onToast={onToast} />
             <div className="nb-scard">
                 <div className="nb-scard-top">
                     <div className="nb-photo">사진</div>
@@ -233,20 +262,22 @@ export function StudentCardPage({ page, pageRec, pages, extra, fields, setField,
     );
 }
 
-export function WhoRecordPage({ extra, fields, setField }) {
+export function WhoRecordPage({ extra, fields, setField, onToast }) {
     const n = extra.student || 1;
+    const rosterNames = useRosterNames();
     return (
         <div>
-            <TitleBar title={`${n}번 누가기록`} hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
+            <TitleBar title={`${n}번 누가기록${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
+            <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
             <table className="nb-table compact">
                 <thead><tr><th>날짜</th><th>영역</th><th>내용</th><th>NEIS</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
                         <tr key={i}>
-                            <td><Ink type="date" value={fields[`d${i}`]} onChange={(v) => setField(`d${i}`, v)} /></td>
-                            <td><Pick value={fields[`a${i}`]} onChange={(v) => setField(`a${i}`, v)} options={['행', '교', '창']} aria="영역" /></td>
-                            <td><Ink value={fields[`t${i}`]} onChange={(v) => setField(`t${i}`, v)} /></td>
-                            <td><Tick checked={fields[`n${i}`]} onChange={(v) => setField(`n${i}`, v)} /></td>
+                            <td><Ink type="date" value={fields[`d${i}`]} onChange={(v) => setField(`d${i}`, v)} aria={`${i + 1}행 날짜`} /></td>
+                            <td><Pick value={fields[`a${i}`]} onChange={(v) => setField(`a${i}`, v)} options={['행', '교', '창']} aria={`${i + 1}행 영역`} /></td>
+                            <td><Ink value={fields[`t${i}`]} onChange={(v) => setField(`t${i}`, v)} aria={`${i + 1}행 내용`} /></td>
+                            <td><Tick checked={fields[`n${i}`]} onChange={(v) => setField(`n${i}`, v)} label={`${i + 1}행 NEIS`} /></td>
                         </tr>
                     ))}
                 </tbody>
@@ -278,10 +309,11 @@ export function QuickNotePage({ fields, setField }) {
 
 export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
     const start = extra.half === '17-32' ? 17 : 1;
+    const rosterNames = useRosterNames();
     const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
         <div>
-            <TitleBar title="출석부" hint={`월말 출석부 대조 확인 · ${extra.half || '1-16'}`} />
+            <TitleBar title="출석부" hint={`월말 출석부 대조 확인 · ${extra.half || '1-16'} · 이름은 명렬표에서 옵니다`} />
             <div className="nb-attend-head">
                 <label>월 <Ink value={fields.month} onChange={(v) => setField('month', v)} placeholder="월" /></label>
                 <Tick checked={fields.checked} onChange={(v) => setField('checked', v)} label="월말 출석부 대조 확인" />
@@ -298,7 +330,10 @@ export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
+                                <th>
+                                    <NumLink n={n} to={byNum.get(n)} onGo={onGo} />
+                                    {rosterNames[n] ? <span className="nb-roster-name">{rosterNames[n]}</span> : null}
+                                </th>
                                 {Array.from({ length: 10 }, (_, w) => (
                                     <td key={w}>
                                         <Pick value={fields[`s${n}_${w}`]} onChange={(v) => setField(`s${n}_${w}`, v)} options={ATTEND_STATUS} aria={`${n}번 ${w + 1}주`} />
@@ -313,13 +348,15 @@ export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
     );
 }
 
-export function CounselPage({ extra, fields, setField, kind }) {
+export function CounselPage({ extra, fields, setField, kind, onToast }) {
     const n = extra.student || 1;
+    const rosterNames = useRosterNames();
     const title = kind === 'parent' ? `보호자 상담 · ${n}번` : `상담 · ${n}번`;
     const hint = kind === 'parent' ? '보호자 말씀은 들은 그대로 적어 둬요' : '그날 바로, 짧게 적어도 충분해요';
     return (
         <div>
-            <TitleBar title={title} hint={hint} />
+            <TitleBar title={`${title}${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint={hint} />
+            <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
             {Array.from({ length: 4 }, (_, i) => (
                 <section key={i} className="nb-panel">
                     <div className="nb-inline">

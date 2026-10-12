@@ -1,0 +1,32 @@
+/* 글꼴은 이 사이트와 함께 제공합니다. Pretendard 1.3.9, 학교안심 둥근미소·그림일기. */
+@font-face {
+    font-family: 'Pretendard Variable';
+    font-style: normal;
+    font-weight: 45 920;
+    font-display: swap;
+    src: url('./PretendardVariable.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: Pretendard;
+    font-style: normal;
+    font-weight: 45 920;
+    font-display: swap;
+    src: url('./PretendardVariable.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Hakgyoansim Dunggeunmiso';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./HakgyoansimDunggeunmiso-R.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Hakgyoansim Geurimilgi';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./HakgyoansimGeurimilgi.woff2') format('woff2');
+}

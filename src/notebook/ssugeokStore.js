@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
+import { reportSaveFailure } from '../lib/saveNotice.js';
 import { appendPageTrail } from './fieldStore.js';
 import {
     isSensitiveText,
@@ -27,6 +28,11 @@ function writeSensitive(notes) {
         localStorage.setItem(SENSITIVE_KEY, JSON.stringify(notes));
     } catch (err) {
         console.warn('민감 메모 저장 실패', err);
+        reportSaveFailure({
+            message: '이 기기에 저장하지 못했습니다. 다시 시도해 주세요.',
+            retry: () => writeSensitive(notes),
+        });
+        return;
     }
     window.dispatchEvent(new CustomEvent('nb-ssugeok-sensitive'));
 }
