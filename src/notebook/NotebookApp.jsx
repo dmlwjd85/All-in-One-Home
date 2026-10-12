@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, LogOut, PenLine } from 'lucide-react';
+import { Download, LogOut, PenLine, Upload } from 'lucide-react';
 import notebook from './data/notebook.json';
 import { usePageFields } from './fieldStore.js';
 import NotebookShell from './NotebookShell.jsx';
@@ -27,6 +27,7 @@ export default function NotebookApp({
     signedIn,
     onLogout,
     onExport,
+    onImport,
     inbox,
     studentNotes,
     counselNotes,
@@ -113,6 +114,10 @@ export default function NotebookApp({
                         <Download size={16} />
                         <span className="nb-toolhide">내보내기</span>
                     </button>
+                    <button type="button" className="btn-secondary nb-toolbtn" onClick={onImport} aria-label="백업 가져오기">
+                        <Upload size={16} />
+                        <span className="nb-toolhide">가져오기</span>
+                    </button>
                     <button type="button" className="btn-secondary nb-toolbtn" onClick={onLogout} aria-label={user ? '로그아웃' : '나가기'}>
                         <LogOut size={16} />
                         <span className="nb-toolhide">{user ? '로그아웃' : '나가기'}</span>
@@ -163,7 +168,7 @@ export default function NotebookApp({
             {hub && (
                 <Modal title="쓱적 허브 · 날려보내기" onClose={() => setHub(null)} wide>
                     <p className="text-sm text-stone-600 mb-3">
-                        PDF 쓰 쪽의 줄 메모는 그대로 두고, 받은함 카드를 학생·출결·상담·주간·업무로 나눕니다. 수첩 탭·링크는 닫아도 유지됩니다.
+                        PDF 쓰 쪽의 줄 메모는 그대로 두고, 받은함 카드를 학생·출결·상담·주간·업무로 나눕니다. 건강·민원·학폭·상담은 이 기기에만 남습니다.
                     </p>
                     <div className="flex gap-1 overflow-x-auto pb-2 mb-3">
                         {SSUGEOK_VIEWS.filter((v) => v.id !== 'cal').map((t) => (
@@ -179,7 +184,7 @@ export default function NotebookApp({
                     </div>
                     {hub === 'inbox' ? (
                         <SsugeokInbox
-                            inbox={inbox}
+                            inbox={ssugeokNotes}
                             roster={roster}
                             signedIn={signedIn}
                             author={author}

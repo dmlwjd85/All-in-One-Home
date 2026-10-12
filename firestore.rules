@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // 계정별 기록. artifacts/{appId}/users/{uid}/{collection}/{docId}
+    // 요청한 계정의 uid 와 경로의 uid 가 같을 때만 읽고 쓸 수 있습니다.
+    match /artifacts/{appId}/users/{uid}/{collection}/{docId} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // 예전 공유 경로 artifacts/{appId}/public/data 는 클라이언트에 열지 않습니다.
+    // 복사는 서비스 계정으로 scripts/migrate-legacy.mjs 만 수행합니다.
+  }
+}

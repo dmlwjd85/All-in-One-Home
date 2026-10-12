@@ -1,8 +1,7 @@
+import { isSensitiveNote, isSensitiveText } from '../lib/sensitive.js';
 import { TAGS } from './labels.js';
 
-/** 건강·민원·학폭은 클라우드로 올리지 않습니다. */
-const SENSITIVE_RE = /건강|보건|알레르기|투약|복약|분리\s*급식|민원|학폭|학교폭력/;
-const SENSITIVE_TAGS = new Set(['보건', '건강', '학폭', '민원', '알레르기']);
+export { isSensitiveText };
 
 export function whoPage(studentNo) {
     return 158 + Number(studentNo) * 2;
@@ -14,11 +13,6 @@ export function counselPage(studentNo) {
 
 export function parentPage(studentNo) {
     return 288 + Number(studentNo);
-}
-
-export function isSensitiveText(text, tags = []) {
-    if (SENSITIVE_RE.test(String(text || ''))) return true;
-    return tags.some((tag) => SENSITIVE_TAGS.has(tag));
 }
 
 function pad(n) {
@@ -150,7 +144,7 @@ export function presentNote(note) {
     const tags = Array.isArray(note?.tags) && note.tags.length ? note.tags : parsed.tags;
     const studentNo = note?.studentNo ?? parsed.studentNo;
     const detectedDate = note?.detectedDate ?? parsed.detectedDate;
-    const sensitive = Boolean(note?.sensitive) || isSensitiveText(note?.text, tags);
+    const sensitive = isSensitiveNote({ ...note, tags, text: note?.text });
     const parsedFull = { tags, studentNo, detectedDate, sensitive };
     const suggestion = note?.suggestion?.destId
         ? note.suggestion

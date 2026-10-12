@@ -177,7 +177,7 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
         <div>
-            <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} />
+            <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} hint="이 쪽은 기기에만 남아요" />
             <table className="nb-table compact">
                 <thead><tr><th>번호</th><th>알레르기 · 복약</th><th>분리 급식</th><th>메모</th></tr></thead>
                 <tbody>
@@ -316,7 +316,9 @@ export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
 export function CounselPage({ extra, fields, setField, kind }) {
     const n = extra.student || 1;
     const title = kind === 'parent' ? `보호자 상담 · ${n}번` : `상담 · ${n}번`;
-    const hint = kind === 'parent' ? '보호자 말씀은 들은 그대로 적어 둬요' : '그날 바로, 짧게 적어도 충분해요';
+    const hint = kind === 'parent'
+        ? '보호자 말씀은 들은 그대로 적어 둬요. 이 쪽은 기기에만 남아요.'
+        : '그날 바로, 짧게 적어도 충분해요. 이 쪽은 기기에만 남아요.';
     return (
         <div>
             <TitleBar title={title} hint={hint} />
@@ -336,7 +338,7 @@ export function CounselPage({ extra, fields, setField, kind }) {
 export function ConsultTimePage({ fields, setField }) {
     return (
         <div>
-            <TitleBar title="상담 시간" hint="신청 받은 시간을 칸에 적어요" />
+            <TitleBar title="상담 시간" hint="신청 받은 시간을 칸에 적어요. 이 쪽은 기기에만 남아요." />
             <table className="nb-table">
                 <thead><tr><th></th>{['월', '화', '수', '목', '금'].map((d) => <th key={d}>{d}</th>)}</tr></thead>
                 <tbody>
@@ -357,7 +359,7 @@ export function ConsultTimePage({ fields, setField }) {
 export function IncidentPage({ fields, setField }) {
     return (
         <div>
-            <TitleBar title="생활 · 사고 기록" hint="본 사실과 한 조치만 적어요" />
+            <TitleBar title="생활 · 사고 기록" hint="본 사실과 한 조치만 적어요. 이 쪽은 기기에만 남아요." />
             {Array.from({ length: 3 }, (_, i) => (
                 <section key={i} className="nb-panel">
                     <div className="nb-inline">

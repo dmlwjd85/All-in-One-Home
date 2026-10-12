@@ -253,7 +253,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
         <section className="space-y-3">
             <Header
                 title="상담·누가"
-                hint="쓱적으로 날아온 상담과 누가기록을 모읍니다."
+                hint="상담·누가 기록은 이 기기에만 저장되고 클라우드로 올라가지 않습니다."
                 actions={<button type="button" className="btn-primary" onClick={() => setModal(true)}><Plus size={16} /> 기록</button>}
             />
             <div className="flex gap-1" role="group" aria-label="상담 종류">
@@ -301,6 +301,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
                         if (!form.student.trim() || !form.text.trim()) return onToast('학생과 내용을 입력해 주세요.');
                         await ensureRosterName(form.student, roster, signedIn);
                         await addItem('counselNotes', { ...form, student: form.student.trim(), text: form.text.trim(), author }, signedIn);
+                        onToast?.('상담 기록은 이 기기에만 저장했습니다.');
                         setModal(false);
                         setForm({ student: '', text: '', date: todayYmd(), kind: '상담' });
                         onChanged();
