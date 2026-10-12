@@ -6,6 +6,7 @@ import { Toast } from './components/ui.jsx';
 import { useSharedList } from './lib/store.js';
 import { downloadText } from './lib/utils.js';
 import NotebookApp from './notebook/NotebookApp.jsx';
+import { SENSITIVE_KEY } from './notebook/ssugeokStore.js';
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -105,6 +106,13 @@ export default function App() {
             contacts: contacts.items,
             timetable: timetableList.items,
             diary: diaryAll.items,
+            ssugeokSensitive: (() => {
+                try {
+                    return JSON.parse(localStorage.getItem(SENSITIVE_KEY) || '[]');
+                } catch {
+                    return [];
+                }
+            })(),
             notebookFields: Object.fromEntries(
                 Array.from({ length: 580 }, (_, i) => {
                     try {

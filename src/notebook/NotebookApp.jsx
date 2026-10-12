@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, LogOut, PenLine } from 'lucide-react';
 import notebook from './data/notebook.json';
 import { usePageFields } from './fieldStore.js';
@@ -8,6 +8,8 @@ import { Modal } from '../components/ui.jsx';
 import SsugeokInbox from '../components/SsugeokInbox.jsx';
 import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
+import CaptureFab from './CaptureFab.jsx';
+import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
 
 const MAX = notebook.pageCount;
 
@@ -37,6 +39,9 @@ export default function NotebookApp({
 }) {
     const [page, setPage] = useState(readHash);
     const [hub, setHub] = useState(null);
+    const [focusId, setFocusId] = useState(null);
+    const sensitiveNotes = useSensitiveNotes();
+    const ssugeokNotes = useMemo(() => mergeNotes(inbox, sensitiveNotes), [inbox, sensitiveNotes]);
     const { fields, setField } = usePageFields(page, signedIn);
     const pageRec = notebook.pages[page - 1];
     const showChrome = page !== 1;
@@ -59,6 +64,19 @@ export default function NotebookApp({
             window.removeEventListener('popstate', onPop);
         };
     }, []);
+
+    const openNote = useCallback((id) => {
+        setFocusId(id);
+        go(496);
+    }, [go]);
+
+    useEffect(() => {
+        let stop = false;
+        quarantineSensitive(inbox, signedIn).then((moved) => {
+            if (!stop && moved) onChanged?.();
+        });
+        return () => { stop = true; };
+    }, [inbox, signedIn, onChanged]);
 
     useEffect(() => {
         const onKey = (e) => {
@@ -120,9 +138,21 @@ export default function NotebookApp({
                         onChanged={onChanged}
                         onToast={onToast}
                         onOpenHub={() => setHub('inbox')}
+                        ssugeokNotes={ssugeokNotes}
+                        sensitiveNotes={sensitiveNotes}
+                        focusId={focusId}
+                        onOpenNote={openNote}
                     />
                 </NotebookShell>
             </div>
+
+            <CaptureFab
+                author={author}
+                signedIn={signedIn}
+                fromPage={page}
+                onChanged={onChanged}
+                onToast={onToast}
+            />
 
             {hub && (
                 <Modal title="쓱적 허브 · 날려보내기" onClose={() => setHub(null)} wide>

@@ -1,6 +1,7 @@
-import { GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
+import { GoBtn, Ink, LinedBlock, LinkedChip, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { partitionLinks } from '../linkParts.js';
+import { TONE_LABEL, TONE_MARK } from '../tones.js';
 
 export function CoverPage({ fields, setField, onGo }) {
     const goHome = () => onGo?.(2);
@@ -43,28 +44,29 @@ export function HomePage({ page, pageRec, pages, fields, setField, onGo }) {
     return (
         <div className="nb-home">
             <TitleBar kicker="홈" title="자주 가는 곳 모음" hint="버튼을 누르면 PDF와 같은 쪽으로 가요" />
+            <ul className="nb-legend">
+                {['peach', 'mint', 'lavender', 'butter'].map((tone) => (
+                    <li key={tone} className={`tone-${tone}`}>{TONE_MARK[tone]} {TONE_LABEL[tone]}</li>
+                ))}
+            </ul>
             <label className="nb-goal">
                 <span>올해 우리 반 한 줄 목표</span>
                 <Ink value={fields.goal} onChange={(v) => setField('goal', v)} placeholder="한 줄로 적어 두세요" />
             </label>
             <div className="nb-linkgrid cols-4 nb-home-cards">
                 {cards.map((l) => (
-                    <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo} className="chip">
-                        {text(l)}
-                    </GoBtn>
+                    <LinkedChip key={`${l.to}-${l.rect[0]}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
                 ))}
             </div>
             <p className="nb-kicker">달력 바로 가기</p>
             <div className="nb-monthrow">
                 {months.map((l) => (
-                    <GoBtn key={l.to} to={l.to} onGo={onGo}>{text(l)}</GoBtn>
+                    <GoBtn key={l.to} to={l.to} onGo={onGo} className="tone-peach" aria={text(l)}>{text(l)}</GoBtn>
                 ))}
             </div>
             <div className="nb-home-bottom">
                 {bottom.map((l) => (
-                    <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo} className="chip">
-                        {text(l)}
-                    </GoBtn>
+                    <LinkedChip key={`${l.to}-${l.rect[0]}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
                 ))}
             </div>
         </div>
@@ -135,9 +137,9 @@ const HOWTO = {
         hint: '링크 · 쪽 추가 · 스티커 — 웹에서는 칸에 바로 타이핑하면 됩니다',
         body: [
             '이 웹 수첩은 GoodNotes 전용이 아닙니다. 마우스와 키보드로 칸을 채울 수 있어요.',
-            '왼쪽 맨 위 \'홈\' 탭 바로 아래 \'쓰\' 탭이 쓱적입니다. 한 줄에 한 건, 붙임 메모에는 한 장에 하나씩 적어요.',
-            '쓱적 쪽에서 \'받은함으로 나누기\'를 누르면 학생·출결·상담·주간·업무로 카드를 날려보낼 수 있어요.',
-            '로그인하면 Firebase에 동기화되고, 이 기기에서만 쓰면 localStorage에 남습니다.',
+            '왼쪽 \'쓱적\' 탭에서 한 줄 적고 Enter. @12 #행발 처럼 적으면 그 아이 누가기록으로 제안해요.',
+            '건강·민원·학폭이 들어간 줄은 이 기기에만 남고, 다른 기기와 맞추지 않아요.',
+            '로그인하면 나머지 기록은 Firebase에 동기화되고, 이 기기에서만 쓰면 localStorage에 남습니다.',
         ],
     },
     7: {

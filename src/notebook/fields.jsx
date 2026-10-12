@@ -1,4 +1,5 @@
 import { linkText } from './labels.js';
+import { TONE_MARK, toneForPage } from './tones.js';
 
 /** PDF 줄칸처럼 보이게 한 입력. 마우스·키보드로 바로 씁니다. */
 
@@ -67,13 +68,22 @@ export function GoBtn({ to, onGo, className = '', children, aria }) {
     );
 }
 
+export function LinkedChip({ link, pages, pageNo, onGo }) {
+    const tone = toneForPage(link.to, pages);
+    const label = linkText(link, pages, pageNo);
+    return (
+        <GoBtn to={link.to} onGo={onGo} className={`chip tone-${tone}`} aria={label}>
+            <span className="nb-mark" aria-hidden="true">{TONE_MARK[tone]}</span>
+            <span>{label}</span>
+        </GoBtn>
+    );
+}
+
 export function LinkGrid({ links, pages, pageNo, onGo, className = '' }) {
     return (
         <div className={`nb-linkgrid ${className}`}>
             {(links || []).map((link, i) => (
-                <GoBtn key={`${link.to}-${link.rect?.[0] ?? 0}-${i}`} to={link.to} onGo={onGo} className="chip">
-                    {linkText(link, pages, pageNo)}
-                </GoBtn>
+                <LinkedChip key={`${link.to}-${link.rect?.[0] ?? 0}-${i}`} link={link} pages={pages} pageNo={pageNo} onGo={onGo} />
             ))}
         </div>
     );

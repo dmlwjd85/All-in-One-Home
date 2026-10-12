@@ -1,7 +1,8 @@
-import { addItem } from '../../lib/store.js';
-import { GoBtn, Ink, LinkGrid, TitleBar } from '../fields.jsx';
-import { linkText, TAGS } from '../labels.js';
+import { Ink, LinkGrid, LinkedChip, TitleBar } from '../fields.jsx';
+import { TAGS } from '../labels.js';
 import { partitionLinks } from '../linkParts.js';
+import SsugeokBoard from '../SsugeokBoard.jsx';
+import { captureNote } from '../ssugeokStore.js';
 
 export function TagLegendPage({ onGo }) {
     const groups = [...new Set(TAGS.map((t) => t.group))];
@@ -52,49 +53,73 @@ export function TagIndexPage({ extra, fields, setField }) {
     );
 }
 
-export function SsugeokPage({ page, pageRec, extra, fields, setField, signedIn, author, onChanged, onToast, onOpenHub, onGo, pages }) {
+export function SsugeokPage({
+    page,
+    pageRec,
+    extra,
+    fields,
+    setField,
+    signedIn,
+    author,
+    onChanged,
+    onToast,
+    onOpenHub,
+    onGo,
+    pages,
+    ssugeokNotes,
+    focusId,
+}) {
+    const legacyLines = Array.from({ length: 14 }, (_, i) => i).filter((i) => String(fields[`ln${i}`] || '').trim());
+    const legacyStickies = [0, 1, 2, 3].filter((i) => String(fields[`st${i}`] || '').trim());
+    const keepLegacy = legacyLines.length > 0 || legacyStickies.length > 0;
     const sendLine = async (i) => {
         const text = String(fields[`ln${i}`] || '').trim();
         if (!text) {
-            onToast('빈 줄은 보낼 수 없습니다.');
+            onToast('빈 줄은 목록에 넣을 수 없어요.');
             return;
         }
-        await addItem('ssugeokInbox', { text, typeHint: '생각', author, fromPage: 495 + (extra.slot || 1) }, signedIn);
+        await captureNote({ text, author, fromPage: page, signedIn });
         onChanged?.();
-        onToast('받은함으로 보냈습니다. 허브에서 날려보내 보세요.');
+        onToast('목록에 남겼어요. 줄에 적어 둔 글은 그대로예요.');
     };
     return (
-        <div className="nb-ssugeok">
-            <TitleBar title={`쓱적 ${extra.slot || 1}`} hint="일단, '쓱' 적어 두세요. 한 줄에 한 건씩." />
-            <div className="nb-ssugeok-grid">
-                <section>
-                    <p className="nb-kicker">줄 메모</p>
-                    {Array.from({ length: 14 }, (_, i) => (
+        <div className="nb-ssugeok nb-fill">
+            <TitleBar title={`쓱적 ${extra.slot || 1}`} hint="먼저 적고, 나중에 나눕니다. 한 줄에 한 건." />
+            <SsugeokBoard
+                notes={ssugeokNotes || []}
+                signedIn={signedIn}
+                author={author}
+                fromPage={page}
+                onChanged={onChanged}
+                onToast={onToast}
+                onGo={onGo}
+                focusId={focusId}
+            />
+            <div className="nb-tagrow nb-ssu-links">
+                {partitionLinks(pageRec).body.map((l, i) => (
+                    <LinkedChip key={`${l.to}-${i}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
+                ))}
+            </div>
+            {keepLegacy && (
+                <details className="nb-legacy">
+                    <summary>이전에 적어 둔 줄</summary>
+                    {legacyLines.map((i) => (
                         <div key={i} className="nb-ssu-line">
                             <span>{i + 1}</span>
                             <Ink value={fields[`ln${i}`]} onChange={(v) => setField(`ln${i}`, v)} placeholder="한 줄" aria={`줄 ${i + 1}`} />
-                            <button type="button" className="nb-mini" onClick={() => sendLine(i)}>받은함</button>
+                            <button type="button" className="nb-mini" onClick={() => sendLine(i)}>목록에 남기기</button>
                         </div>
                     ))}
-                </section>
-                <section>
-                    <p className="nb-kicker">붙임 메모</p>
-                    <div className="nb-stickies">
-                        {[0, 1, 2, 3].map((i) => (
-                            <Ink key={i} multiline rows={4} className="nb-sticky" value={fields[`st${i}`]} onChange={(v) => setField(`st${i}`, v)} placeholder="한 장에 하나" />
-                        ))}
-                    </div>
-                    <p className="nb-kicker">바로가기</p>
-                    <div className="nb-tagrow">
-                        {partitionLinks(pageRec).body.map((l, i) => (
-                            <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
-                                {linkText(l, pages, page)}
-                            </GoBtn>
-                        ))}
-                    </div>
-                    <button type="button" className="nb-hubbtn" onClick={onOpenHub}>받은함 · 날려보내기 (쓱적 허브)</button>
-                </section>
-            </div>
+                    {legacyStickies.length > 0 && (
+                        <div className="nb-stickies">
+                            {legacyStickies.map((i) => (
+                                <Ink key={i} multiline rows={3} className="nb-sticky" value={fields[`st${i}`]} onChange={(v) => setField(`st${i}`, v)} placeholder="붙임 메모" />
+                            ))}
+                        </div>
+                    )}
+                </details>
+            )}
+            <button type="button" className="nb-hubbtn" onClick={onOpenHub}>예전 분류 허브</button>
         </div>
     );
 }

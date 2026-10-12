@@ -1,5 +1,6 @@
 import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
 import { partitionLinks } from './linkParts.js';
+import { toneForPage, toneForType } from './tones.js';
 
 export default function NotebookShell({
     page,
@@ -12,16 +13,17 @@ export default function NotebookShell({
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
     const { header } = partitionLinks(pageRec);
+    const tone = toneForType(pageRec?.type);
 
     return (
-        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page}>
+        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone}>
             {showChrome && (
                 <nav className="nb-left" aria-label="구역 탭">
                     {LEFT_TABS.map((tab) => (
                         <button
                             key={tab.label}
                             type="button"
-                            className={`nb-tab ${leftOn === tab.to ? 'is-on' : ''}`}
+                            className={`nb-tab tone-${toneForPage(tab.to, pages)} ${leftOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={leftOn === tab.to ? 'page' : undefined}
                         >

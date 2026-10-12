@@ -49,8 +49,9 @@ import {
     TagIndexPage,
     TagLegendPage,
 } from './templates/WritePages.jsx';
+import PageTrail from './PageTrail.jsx';
 
-export default function PageBody(props) {
+function renderPage(props) {
     const { pageRec } = props;
     const type = pageRec.type;
     const title = pageRec.title;
@@ -117,4 +118,21 @@ export default function PageBody(props) {
         default:
             return <GenericToc title={title} hint="이 쪽의 링크는 위에 그대로 연결되어 있어요" {...props} />;
     }
+}
+
+export default function PageBody(props) {
+    const inner = renderPage(props);
+    const type = props.pageRec.type;
+    if (type === 'cover' || type === 'ssugeok') return inner;
+    return (
+        <>
+            <PageTrail
+                page={props.page}
+                fields={props.fields}
+                sensitiveNotes={props.sensitiveNotes}
+                onOpenNote={props.onOpenNote}
+            />
+            {inner}
+        </>
+    );
 }

@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
 import { ATTEND_STATUS } from '../../lib/utils.js';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Pick, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
+import { readPageFields } from '../fieldStore.js';
+import { quietStudents, whoPage } from '../ssugeokModel.js';
 
 export function TocCards({ title, hint, page, pageRec, pages, onGo }) {
     const { body } = partitionLinks(pageRec);
@@ -85,10 +88,37 @@ export function SeatingPage({ page, fields, setField }) {
     );
 }
 
-export function RosterPage({ fields, setField, onGo }) {
+function quietNumbers(notes) {
+    const pageNotesByStudent = {};
+    for (let n = 1; n <= 32; n += 1) {
+        const pageFields = readPageFields(whoPage(n));
+        const list = [];
+        for (let i = 0; i < 12; i += 1) {
+            if (pageFields[`d${i}`]) list.push({ date: pageFields[`d${i}`], sortedAt: pageFields[`d${i}`] });
+        }
+        for (const item of pageFields.ssugeokNotes || []) {
+            if (!item?.sensitive) list.push(item);
+        }
+        if (list.length) pageNotesByStudent[n] = list;
+    }
+    return quietStudents(notes, pageNotesByStudent);
+}
+
+export function RosterPage({ fields, setField, onGo, ssugeokNotes }) {
+    const quiet = useMemo(() => quietNumbers(ssugeokNotes || []), [ssugeokNotes]);
+    const shown = quiet.slice(0, 16);
     return (
         <div>
             <TitleBar title="명렬표" hint="번호를 누르면 학생 카드, '누가'를 누르면 누가기록이에요" />
+            {shown.length > 0 && (
+                <div className="nb-quiet">
+                    <span>최근 3주 누가기록이 없어요</span>
+                    {shown.map((n) => (
+                        <button key={n} type="button" onClick={() => onGo(whoPage(n))}>{n}</button>
+                    ))}
+                    {quiet.length > shown.length && <span>외 {quiet.length - shown.length}명</span>}
+                </div>
+            )}
             <div className="nb-roster">
                 {[0, 16].map((off) => (
                     <table key={off} className="nb-table compact">
