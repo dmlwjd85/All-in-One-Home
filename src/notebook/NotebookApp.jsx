@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, LogOut, PenLine } from 'lucide-react';
 import notebook from './data/notebook.json';
 import { usePageFields } from './fieldStore.js';
-import { PAGE_H, PAGE_W } from './layout.js';
 import NotebookShell from './NotebookShell.jsx';
 import PageBody from './PageBody.jsx';
 import { Modal } from '../components/ui.jsx';
 import SsugeokInbox from '../components/SsugeokInbox.jsx';
 import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
+import CaptureFab from './CaptureFab.jsx';
+import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
 
 const MAX = notebook.pageCount;
 
@@ -35,10 +36,15 @@ export default function NotebookApp({
     roster,
     onChanged,
     onToast,
+    ddayCards,
+    submissionSheets,
+    praiseBoard,
 }) {
     const [page, setPage] = useState(readHash);
-    const [scale, setScale] = useState(1);
     const [hub, setHub] = useState(null);
+    const [focusId, setFocusId] = useState(null);
+    const sensitiveNotes = useSensitiveNotes();
+    const ssugeokNotes = useMemo(() => mergeNotes(inbox, sensitiveNotes), [inbox, sensitiveNotes]);
     const { fields, setField } = usePageFields(page, signedIn);
     const pageRec = notebook.pages[page - 1];
     const showChrome = page !== 1;
@@ -62,17 +68,18 @@ export default function NotebookApp({
         };
     }, []);
 
+    const openNote = useCallback((id) => {
+        setFocusId(id);
+        go(496);
+    }, [go]);
+
     useEffect(() => {
-        const fit = () => {
-            const bar = 48;
-            const w = Math.max(320, window.innerWidth - 16);
-            const h = Math.max(240, window.innerHeight - bar - 16);
-            setScale(Math.min(w / PAGE_W, h / PAGE_H));
-        };
-        fit();
-        window.addEventListener('resize', fit);
-        return () => window.removeEventListener('resize', fit);
-    }, []);
+        let stop = false;
+        quarantineSensitive(inbox, signedIn).then((moved) => {
+            if (!stop && moved) onChanged?.();
+        });
+        return () => { stop = true; };
+    }, [inbox, signedIn, onChanged]);
 
     useEffect(() => {
         const onKey = (e) => {
@@ -91,11 +98,6 @@ export default function NotebookApp({
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [go, page]);
-
-    const stageStyle = useMemo(() => ({
-        width: PAGE_W * scale,
-        height: PAGE_H * scale,
-    }), [scale]);
 
     return (
         <div className="nb-app">
@@ -119,33 +121,44 @@ export default function NotebookApp({
             </header>
 
             <div className="nb-stage-wrap">
-                <div className="nb-stage" style={stageStyle}>
-                    <div className="nb-scale" style={{ transform: `scale(${scale})`, width: PAGE_W, height: PAGE_H }}>
-                        <NotebookShell
-                            page={page}
-                            pageRec={pageRec}
-                            pages={notebook.pages}
-                            onGo={go}
-                            showChrome={showChrome}
-                        >
-                            <PageBody
-                                page={page}
-                                pageRec={pageRec}
-                                extra={pageRec.extra || {}}
-                                pages={notebook.pages}
-                                onGo={go}
-                                fields={fields}
-                                setField={setField}
-                                signedIn={signedIn}
-                                author={author}
-                                onChanged={onChanged}
-                                onToast={onToast}
-                                onOpenHub={() => setHub('inbox')}
-                            />
-                        </NotebookShell>
-                    </div>
-                </div>
+                <NotebookShell
+                    page={page}
+                    pageRec={pageRec}
+                    pages={notebook.pages}
+                    onGo={go}
+                    showChrome={showChrome}
+                >
+                    <PageBody
+                        page={page}
+                        pageRec={pageRec}
+                        extra={pageRec.extra || {}}
+                        pages={notebook.pages}
+                        onGo={go}
+                        fields={fields}
+                        setField={setField}
+                        signedIn={signedIn}
+                        author={author}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                        onOpenHub={() => setHub('inbox')}
+                        ssugeokNotes={ssugeokNotes}
+                        sensitiveNotes={sensitiveNotes}
+                        focusId={focusId}
+                        onOpenNote={openNote}
+                        ddayCards={ddayCards}
+                        submissionSheets={submissionSheets}
+                        praiseBoard={praiseBoard}
+                    />
+                </NotebookShell>
             </div>
+
+            <CaptureFab
+                author={author}
+                signedIn={signedIn}
+                fromPage={page}
+                onChanged={onChanged}
+                onToast={onToast}
+            />
 
             {hub && (
                 <Modal title="쓱적 허브 · 날려보내기" onClose={() => setHub(null)} wide>

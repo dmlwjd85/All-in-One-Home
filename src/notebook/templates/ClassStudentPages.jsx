@@ -1,20 +1,18 @@
+import { useMemo } from 'react';
 import { ATTEND_STATUS } from '../../lib/utils.js';
-import { CellGrid, GoBtn, Ink, LinedBlock, Pick, ShortcutRow, Tick, TitleBar } from '../fields.jsx';
-import { destLabel } from '../labels.js';
-import { bodyLinks, destForStudentNumber, studentCardPage, studentWhoPage } from '../nav.js';
+import { GoBtn, Ink, LinedBlock, LinkGrid, Pick, Tick, TitleBar } from '../fields.jsx';
+import { linkText } from '../labels.js';
+import { numberedLinks, partitionLinks } from '../linkParts.js';
+import { readPageFields } from '../fieldStore.js';
+import { quietStudents, whoPage } from '../ssugeokModel.js';
 
-export function TocCards({ title, hint, pageRec, pages, onGo }) {
-    const links = bodyLinks(pageRec);
+export function TocCards({ title, hint, page, pageRec, pages, onGo, lead }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
+        <div className="nb-fill">
             <TitleBar title={title} hint={hint} />
-            <CellGrid cols={4}>
-                {links.map((l, i) => (
-                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
-                        {l.label || destLabel(l.to, pages)}
-                    </GoBtn>
-                ))}
-            </CellGrid>
+            {lead}
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
         </div>
     );
 }
@@ -91,10 +89,37 @@ export function SeatingPage({ page, fields, setField }) {
     );
 }
 
-export function RosterPage({ fields, setField, onGo }) {
+function quietNumbers(notes) {
+    const pageNotesByStudent = {};
+    for (let n = 1; n <= 32; n += 1) {
+        const pageFields = readPageFields(whoPage(n));
+        const list = [];
+        for (let i = 0; i < 12; i += 1) {
+            if (pageFields[`d${i}`]) list.push({ date: pageFields[`d${i}`], sortedAt: pageFields[`d${i}`] });
+        }
+        for (const item of pageFields.ssugeokNotes || []) {
+            if (!item?.sensitive) list.push(item);
+        }
+        if (list.length) pageNotesByStudent[n] = list;
+    }
+    return quietStudents(notes, pageNotesByStudent);
+}
+
+export function RosterPage({ fields, setField, onGo, ssugeokNotes }) {
+    const quiet = useMemo(() => quietNumbers(ssugeokNotes || []), [ssugeokNotes]);
+    const shown = quiet.slice(0, 16);
     return (
         <div>
             <TitleBar title="명렬표" hint="번호를 누르면 학생 카드, '누가'를 누르면 누가기록이에요" />
+            {shown.length > 0 && (
+                <div className="nb-quiet">
+                    <span>최근 3주 누가기록이 없어요</span>
+                    {shown.map((n) => (
+                        <button key={n} type="button" onClick={() => onGo(whoPage(n))}>{n}</button>
+                    ))}
+                    {quiet.length > shown.length && <span>외 {quiet.length - shown.length}명</span>}
+                </div>
+            )}
             <div className="nb-roster">
                 {[0, 16].map((off) => (
                     <table key={off} className="nb-table compact">
@@ -104,12 +129,12 @@ export function RosterPage({ fields, setField, onGo }) {
                                 const n = off + i + 1;
                                 return (
                                     <tr key={n}>
-                                        <th><GoBtn to={studentCardPage(n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
+                                        <th><GoBtn to={157 + n * 2} onGo={onGo} className="num" aria={`${n}번 학생 카드`}>{n}</GoBtn></th>
                                         <td><Ink value={fields[`name${n}`]} onChange={(v) => setField(`name${n}`, v)} aria={`${n}번 이름`} /></td>
                                         <td><Ink value={fields[`sex${n}`]} onChange={(v) => setField(`sex${n}`, v)} aria={`${n}번 성별`} /></td>
                                         <td><Ink value={fields[`birth${n}`]} onChange={(v) => setField(`birth${n}`, v)} aria={`${n}번 생년월일`} /></td>
                                         <td><Ink value={fields[`note${n}`]} onChange={(v) => setField(`note${n}`, v)} aria={`${n}번 비고`} /></td>
-                                        <td><GoBtn to={studentWhoPage(n)} onGo={onGo} className="who" aria={`${n}번 누가기록`} hit={`body:누가${n}`}>누가</GoBtn></td>
+                                        <td><GoBtn to={158 + n * 2} onGo={onGo} className="who" aria={`${n}번 누가기록`}>누가</GoBtn></td>
                                     </tr>
                                 );
                             })}
@@ -123,7 +148,7 @@ export function RosterPage({ fields, setField, onGo }) {
 
 export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 155 ? 1 : 17;
-    const links = bodyLinks(pageRec);
+    const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
         <div>
             <TitleBar title={page === 155 ? '기초조사 1 · 1~16번' : '기초조사 2 · 17~32번'} />
@@ -134,7 +159,7 @@ export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
+                                <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
                                 <td><Ink value={fields[`g${n}`]} onChange={(v) => setField(`g${n}`, v)} /></td>
                                 <td><Ink value={fields[`p${n}`]} onChange={(v) => setField(`p${n}`, v)} /></td>
                                 <td><Ink value={fields[`a${n}`]} onChange={(v) => setField(`a${n}`, v)} /></td>
@@ -149,7 +174,7 @@ export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
 
 export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 157 ? 1 : 17;
-    const links = bodyLinks(pageRec);
+    const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
         <div>
             <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} />
@@ -160,7 +185,7 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
+                                <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
                                 <td><Ink value={fields[`h${n}`]} onChange={(v) => setField(`h${n}`, v)} /></td>
                                 <td><Tick checked={fields[`m${n}`]} onChange={(v) => setField(`m${n}`, v)} /></td>
                                 <td><Ink value={fields[`n${n}`]} onChange={(v) => setField(`n${n}`, v)} /></td>
@@ -173,12 +198,16 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     );
 }
 
-export function StudentCardPage({ extra, pageRec, pages, fields, setField, onGo }) {
+function NumLink({ n, to, onGo }) {
+    if (!to) return n;
+    return <GoBtn to={to} onGo={onGo} className="num" aria={`${n}번`}>{n}</GoBtn>;
+}
+
+export function StudentCardPage({ page, pageRec, pages, extra, fields, setField, onGo }) {
     const n = extra.student || 1;
     return (
         <div>
             <TitleBar title={`학생 카드 · ${n}번`} />
-            <ShortcutRow links={bodyLinks(pageRec)} pages={pages} onGo={onGo} />
             <div className="nb-scard">
                 <div className="nb-scard-top">
                     <div className="nb-photo">사진</div>
@@ -193,6 +222,12 @@ export function StudentCardPage({ extra, pageRec, pages, fields, setField, onGo 
                 <label>학습 특성 · 기초학력<Ink multiline rows={2} value={fields.learn} onChange={(v) => setField('learn', v)} /></label>
                 <label>좋아하는 것 · 잘하는 것<Ink multiline rows={2} value={fields.like} onChange={(v) => setField('like', v)} /></label>
                 <label>지도 계획 · 칭찬할 점<Ink multiline rows={2} value={fields.plan} onChange={(v) => setField('plan', v)} /></label>
+                <p className="nb-kicker">바로가기</p>
+                <div className="nb-tagrow">
+                    {partitionLinks(pageRec).body.map((l, i) => (
+                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo}>{linkText(l, pages, page)}</GoBtn>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -241,9 +276,9 @@ export function QuickNotePage({ fields, setField }) {
     );
 }
 
-export function AttendPage({ extra, pageRec, fields, setField, onGo }) {
+export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
     const start = extra.half === '17-32' ? 17 : 1;
-    const links = bodyLinks(pageRec);
+    const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
         <div>
             <TitleBar title="출석부" hint={`월말 출석부 대조 확인 · ${extra.half || '1-16'}`} />
@@ -263,7 +298,7 @@ export function AttendPage({ extra, pageRec, fields, setField, onGo }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
+                                <th><NumLink n={n} to={byNum.get(n)} onGo={onGo} /></th>
                                 {Array.from({ length: 10 }, (_, w) => (
                                     <td key={w}>
                                         <Pick value={fields[`s${n}_${w}`]} onChange={(v) => setField(`s${n}_${w}`, v)} options={ATTEND_STATUS} aria={`${n}번 ${w + 1}주`} />

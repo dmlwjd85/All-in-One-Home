@@ -1,16 +1,24 @@
-import { CellGrid, GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
-import { destLabel } from '../labels.js';
-import { bodyLinks } from '../nav.js';
+import { GoBtn, Ink, LinedBlock, LinkedChip, Tick, TitleBar } from '../fields.jsx';
+import { linkText } from '../labels.js';
+import { partitionLinks } from '../linkParts.js';
+import { TONE_LABEL, TONE_MARK } from '../tones.js';
 
 export function CoverPage({ fields, setField, onGo }) {
+    const goHome = () => onGo?.(2);
     return (
         <div className="nb-cover">
             <div
                 className="nb-cover-card"
                 role="link"
                 tabIndex={0}
-                onClick={() => onGo?.(2)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onGo?.(2); } }}
+                onClick={goHome}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        goHome();
+                    }
+                }}
+                aria-label="홈으로 (2쪽)"
                 data-hit="body:표지"
                 data-to={2}
             >
@@ -18,10 +26,10 @@ export function CoverPage({ fields, setField, onGo }) {
                 <h2 className="nb-cover-title">2026학년도 교무수첩</h2>
                 <p className="nb-cover-range">2026. 3. 1 ~ 2027. 2. 28</p>
                 <p className="nb-cover-stars" aria-hidden="true">★ ★ ★</p>
-                <div className="nb-cover-fields">
-                    <label onClick={(e) => e.stopPropagation()}>학교 <Ink value={fields.school} onChange={(v) => setField('school', v)} placeholder="학교 이름" /></label>
-                    <label onClick={(e) => e.stopPropagation()}>학년 · 반 <Ink value={fields.klass} onChange={(v) => setField('klass', v)} placeholder="예: 3학년 2반" /></label>
-                    <label onClick={(e) => e.stopPropagation()}>선생님 <Ink value={fields.teacher} onChange={(v) => setField('teacher', v)} placeholder="성함" /></label>
+                <div className="nb-cover-fields" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                    <label>학교 <Ink value={fields.school} onChange={(v) => setField('school', v)} placeholder="학교 이름" /></label>
+                    <label>학년 · 반 <Ink value={fields.klass} onChange={(v) => setField('klass', v)} placeholder="예: 3학년 2반" /></label>
+                    <label>선생님 <Ink value={fields.teacher} onChange={(v) => setField('teacher', v)} placeholder="성함" /></label>
                 </div>
                 <p className="nb-hint">표지를 누르면 홈으로 가요</p>
             </div>
@@ -29,45 +37,38 @@ export function CoverPage({ fields, setField, onGo }) {
     );
 }
 
-const HOME_FALLBACK = {
-    231: '출결',
-    256: '상담',
-    350: '단원',
-    405: '기한 있는 일',
-    417: '회의록',
-    469: '예산',
-};
-
-export function HomePage({ pageRec, pages, fields, setField, onGo }) {
-    const links = bodyLinks(pageRec);
-    const cards = links.filter((l) => l.rect[3] - l.rect[1] > 40 && l.rect[2] - l.rect[0] > 140);
-    const months = links.filter((l) => l.to >= 34 && l.to <= 45);
-    const bottom = links.filter((l) => l.rect[1] >= 560 && !(l.to >= 34 && l.to <= 45));
+export function HomePage({ page, pageRec, pages, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
+    const cards = body.filter((l) => l.rect[3] - l.rect[1] > 40 && l.rect[2] - l.rect[0] > 140 && l.rect[1] < 500);
+    const months = body.filter((l) => l.to >= 34 && l.to <= 45);
+    const bottom = body.filter((l) => l.rect[1] >= 560 && !(l.to >= 34 && l.to <= 45));
+    const text = (l) => linkText(l, pages, page);
     return (
         <div className="nb-home">
             <TitleBar kicker="홈" title="자주 가는 곳 모음" hint="버튼을 누르면 PDF와 같은 쪽으로 가요" />
+            <ul className="nb-legend">
+                {['peach', 'mint', 'lavender', 'butter'].map((tone) => (
+                    <li key={tone} className={`tone-${tone}`}>{TONE_MARK[tone]} {TONE_LABEL[tone]}</li>
+                ))}
+            </ul>
             <label className="nb-goal">
                 <span>올해 우리 반 한 줄 목표</span>
                 <Ink value={fields.goal} onChange={(v) => setField('goal', v)} placeholder="한 줄로 적어 두세요" />
             </label>
-            <CellGrid cols={4} className="nb-home-cards">
-                {cards.filter((l) => l.rect[1] < 500).map((l) => (
-                    <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo} className="chip">
-                        {l.label || HOME_FALLBACK[l.to] || destLabel(l.to, pages)}
-                    </GoBtn>
+            <div className="nb-linkgrid cols-4 nb-home-cards">
+                {cards.map((l) => (
+                    <LinkedChip key={`${l.to}-${l.rect[0]}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
                 ))}
-            </CellGrid>
+            </div>
             <p className="nb-kicker">달력 바로 가기</p>
             <div className="nb-monthrow">
                 {months.map((l) => (
-                    <GoBtn key={l.to} to={l.to} onGo={onGo}>{l.label || destLabel(l.to, pages)}</GoBtn>
+                    <GoBtn key={l.to} to={l.to} onGo={onGo} className="tone-peach" aria={text(l)}>{text(l)}</GoBtn>
                 ))}
             </div>
             <div className="nb-home-bottom">
                 {bottom.map((l) => (
-                    <GoBtn key={l.to} to={l.to} onGo={onGo} className="chip">
-                        {l.label || destLabel(l.to, pages)}
-                    </GoBtn>
+                    <LinkedChip key={`${l.to}-${l.rect[0]}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
                 ))}
             </div>
         </div>
@@ -138,9 +139,9 @@ const HOWTO = {
         hint: '링크 · 쪽 추가 · 스티커 — 웹에서는 칸에 바로 타이핑하면 됩니다',
         body: [
             '이 웹 수첩은 GoodNotes 전용이 아닙니다. 마우스와 키보드로 칸을 채울 수 있어요.',
-            '왼쪽 맨 위 \'홈\' 탭 바로 아래 \'쓰\' 탭이 쓱적입니다. 한 줄에 한 건, 붙임 메모에는 한 장에 하나씩 적어요.',
-            '쓱적 쪽에서 \'받은함으로 나누기\'를 누르면 학생·출결·상담·주간·업무로 카드를 날려보낼 수 있어요.',
-            '로그인하면 Firebase에 동기화되고, 이 기기에서만 쓰면 localStorage에 남습니다.',
+            '왼쪽 \'쓱적\' 탭에서 한 줄 적고 Enter. @12 #행발 처럼 적으면 그 아이 누가기록으로 제안해요.',
+            '건강·민원·학폭이 들어간 줄은 이 기기에만 남고, 다른 기기와 맞추지 않아요.',
+            '로그인하면 나머지 기록은 Firebase에 동기화되고, 이 기기에서만 쓰면 localStorage에 남습니다.',
         ],
     },
     7: {
@@ -168,18 +169,22 @@ const HOWTO = {
 
 export function HowtoPage({ page, pageRec, pages, onGo }) {
     const rec = HOWTO[page] || HOWTO[5];
-    const extras = bodyLinks(pageRec);
+    const extras = partitionLinks(pageRec).body;
     return (
         <div>
             <TitleBar title={rec.title} hint={rec.hint} />
             <ol className="nb-howto">
                 {rec.body.map((line) => <li key={line}>{line}</li>)}
             </ol>
-            {extras.map((l, i) => (
-                <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
-                    {l.label || destLabel(l.to, pages)}
-                </GoBtn>
-            ))}
+            {extras.length > 0 && (
+                <div className="nb-tagrow">
+                    {extras.map((l, i) => (
+                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip" hit={`body:${linkText(l, pages, page)}`}>
+                            {linkText(l, pages, page)}
+                        </GoBtn>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

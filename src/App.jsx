@@ -3,9 +3,10 @@ import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from
 import { PenLine } from 'lucide-react';
 import { auth } from './firebase';
 import { Toast } from './components/ui.jsx';
-import { useSharedList } from './lib/store.js';
+import { useSharedList, useSharedRecord } from './lib/store.js';
 import { downloadText } from './lib/utils.js';
 import NotebookApp from './notebook/NotebookApp.jsx';
+import { SENSITIVE_KEY } from './notebook/ssugeokStore.js';
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -55,6 +56,9 @@ export default function App() {
     const contacts = useSharedList('teacherContacts', enabled, rev);
     const timetableList = useSharedList('teacherTimetable', enabled, rev);
     const diaryAll = useSharedList('familyDiary', enabled, rev);
+    const ddayCards = useSharedList('ddayCards', enabled, rev);
+    const submissionSheets = useSharedList('submissionSheets', enabled, rev);
+    const praiseBoard = useSharedRecord('praiseBoard', enabled, rev);
 
     const author = user?.displayName || user?.email?.split('@')[0] || '선생님';
 
@@ -105,6 +109,16 @@ export default function App() {
             contacts: contacts.items,
             timetable: timetableList.items,
             diary: diaryAll.items,
+            ddayCards: ddayCards.items,
+            submissionSheets: submissionSheets.items,
+            praiseBoard,
+            ssugeokSensitive: (() => {
+                try {
+                    return JSON.parse(localStorage.getItem(SENSITIVE_KEY) || '[]');
+                } catch {
+                    return [];
+                }
+            })(),
             notebookFields: Object.fromEntries(
                 Array.from({ length: 580 }, (_, i) => {
                     try {
@@ -168,6 +182,9 @@ export default function App() {
                     roster={roster.items}
                     onChanged={bump}
                     onToast={notify}
+                    ddayCards={ddayCards.items}
+                    submissionSheets={submissionSheets.items}
+                    praiseBoard={praiseBoard}
                 />
             </main>
             <Toast message={toast} />

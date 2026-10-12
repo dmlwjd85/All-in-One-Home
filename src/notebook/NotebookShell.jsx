@@ -1,6 +1,6 @@
-import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight } from './labels.js';
-import { PAGE_H, PAGE_W, layoutVars } from './layout.js';
-import { chromeTopLabel, topLinks } from './nav.js';
+import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
+import { partitionLinks } from './linkParts.js';
+import { toneForPage, toneForType } from './tones.js';
 
 export default function NotebookShell({
     page,
@@ -12,21 +12,18 @@ export default function NotebookShell({
 }) {
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
-    const top = showChrome ? topLinks(pageRec) : [];
+    const { header } = partitionLinks(pageRec);
+    const tone = toneForType(pageRec?.type);
 
     return (
-        <div
-            className="nb-page"
-            style={{ width: PAGE_W, height: PAGE_H, ...layoutVars() }}
-            data-page={page}
-        >
+        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone}>
             {showChrome && (
                 <nav className="nb-left" aria-label="구역 탭">
                     {LEFT_TABS.map((tab) => (
                         <button
                             key={tab.label}
                             type="button"
-                            className={`nb-tab ${leftOn === tab.to ? 'is-on' : ''}`}
+                            className={`nb-tab tone-${toneForPage(tab.to, pages)} ${leftOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={leftOn === tab.to ? 'page' : undefined}
                             data-hit={`left:${tab.label}`}
@@ -37,6 +34,34 @@ export default function NotebookShell({
                     ))}
                 </nav>
             )}
+
+            <div className="nb-main">
+                {header.length > 0 && (
+                    <nav className="nb-topnav" aria-label="쪽 이동">
+                        {header.map((link) => (
+                            <button
+                                key={`${link.to}-${link.rect[0]}`}
+                                type="button"
+                                className={`nb-topbtn ${link.to === page ? 'is-on' : ''}`}
+                                onClick={() => onGo(link.to)}
+                                aria-current={link.to === page ? 'page' : undefined}
+                                aria-label={`${navLabel(link.to, pages, page)} (${link.to}쪽)`}
+                                data-hit={`top:${navLabel(link.to, pages, page)}`}
+                                data-to={link.to}
+                            >
+                                {navLabel(link.to, pages, page)}
+                            </button>
+                        ))}
+                    </nav>
+                )}
+                <div className="nb-body">
+                    {children}
+                </div>
+                <footer className="nb-foot">
+                    {showChrome && <p className="nb-folio">p.{page}</p>}
+                    <p className="nb-copy">ⓒJ쌤</p>
+                </footer>
+            </div>
 
             {showChrome && (
                 <nav className="nb-right" aria-label="달 · 스티커 탭">
@@ -55,37 +80,6 @@ export default function NotebookShell({
                     ))}
                 </nav>
             )}
-
-            {showChrome && top.length > 0 && (
-                <nav className="nb-topnav" aria-label="이전 · 목차 · 다음">
-                    {top.map((link, i) => {
-                        const label = chromeTopLabel(link, page, pages);
-                        return (
-                            <button
-                                key={`top-${link.to}-${i}`}
-                                type="button"
-                                className="nb-topbtn"
-                                onClick={() => onGo(link.to)}
-                                aria-label={`${label} (${link.to}쪽)`}
-                                title={`${label} · ${link.to}쪽`}
-                                data-hit={`top:${label}`}
-                                data-to={link.to}
-                            >
-                                {label}
-                            </button>
-                        );
-                    })}
-                </nav>
-            )}
-
-            <div className="nb-body">
-                {children}
-            </div>
-
-            {showChrome && (
-                <p className="nb-folio">p.{page}</p>
-            )}
-            <p className="nb-copy">ⓒJ쌤</p>
         </div>
     );
 }

@@ -1,8 +1,10 @@
 import { holidayCaption } from '../../lib/holidays.js';
 import { monthCells } from '../../lib/utils.js';
-import { CellGrid, GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
-import { destLabel } from '../labels.js';
-import { bodyLinks, monthAttendLinks, monthPage, weekPageForDay } from '../nav.js';
+import { calendarMarks, daysUntil, ddayBadge } from '../boardsModel.js';
+import { allDeadlines } from '../DdayBoard.jsx';
+import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
+import { linkText } from '../labels.js';
+import { monthDayMap, partitionLinks } from '../linkParts.js';
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const MONTHS_26 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -21,15 +23,12 @@ const ACADEMIC = [
     ['2월', '2.6 설 연휴 · 2.7 설날 · 2.8 설 연휴 · 2.9 대체'],
 ];
 
-function MiniMonth({ year, month, onGo }) {
+function MiniMonth({ year, month }) {
     const ym = `${year}-${String(month).padStart(2, '0')}`;
     const cells = monthCells(ym);
-    const to = monthPage(month, year);
     return (
         <div className="nb-minimonth">
-            <GoBtn to={to} onGo={onGo} className="chip" hit={`body:${month}월`}>
-                {year === 2026 ? '' : '2027 '}{month}월
-            </GoBtn>
+            <p className="nb-minimonth-title">{year === 2026 ? '' : '2027 '}{month}월</p>
             <div className="nb-minimonth-dow">{WEEKDAYS.map((d) => <span key={d}>{d}</span>)}</div>
             <div className="nb-minimonth-grid">
                 {cells.map((c) => {
@@ -45,60 +44,100 @@ function MiniMonth({ year, month, onGo }) {
     );
 }
 
-export function YearCalPage({ onGo }) {
+export function YearCalPage({ pageRec, pages, onGo }) {
+    const { body } = partitionLinks(pageRec);
+    const toByMonth = new Map();
+    for (const link of body) {
+        const dest = pages?.[link.to - 1];
+        if (dest?.type === 'month' && dest.extra?.month) {
+            toByMonth.set(`${dest.extra.year}-${dest.extra.month}`, link.to);
+        }
+    }
+    const months = [
+        ...MONTHS_26.map((m) => ({ year: 2026, month: m })),
+        { year: 2027, month: 1 },
+        { year: 2027, month: 2 },
+    ];
     return (
-        <div>
-            <TitleBar title="2026학년도 연간 달력" hint="달 이름을 누르면 그 달 달력으로 가요" />
+        <div className="nb-fill">
+            <TitleBar title="2026학년도 연간 달력" hint="달력을 누르면 그 달로 가요" />
             <div className="nb-yeargrid">
-                {MONTHS_26.map((m) => <MiniMonth key={m} year={2026} month={m} onGo={onGo} />)}
-                <MiniMonth year={2027} month={1} onGo={onGo} />
-                <MiniMonth year={2027} month={2} onGo={onGo} />
+                {months.map(({ year, month }) => {
+                    const to = toByMonth.get(`${year}-${month}`);
+                    const label = `${year === 2027 ? '2027 ' : ''}${month}월`;
+                    return (
+                        <button
+                            key={`${year}-${month}`}
+                            type="button"
+                            className="nb-monthlink"
+                            onClick={() => to && onGo(to)}
+                            disabled={!to}
+                            aria-label={`${label} 달력 (${to || ''}쪽)`}
+                        >
+                            <MiniMonth year={year} month={month} />
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
 }
 
-export function AcademicPage({ fields, setField, onGo }) {
-    const months = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2];
+export function AcademicPage({ pageRec, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
-            <TitleBar title="학사일정" hint="공휴일만 미리 적어 뒀어요. 우리 학교 일정은 직접 채워요" />
+        <div className="nb-fill">
+            <TitleBar title="학사일정" hint="달 이름을 누르면 그 달 달력으로 가요. 공휴일만 미리 적어 뒀어요." />
             <div className="nb-acad">
-                {ACADEMIC.map(([mon, hol], i) => (
-                    <div key={mon} className="nb-acad-row">
-                        <GoBtn to={monthPage(months[i], months[i] <= 2 ? 2027 : 2026)} onGo={onGo} hit={`body:${mon}`}>{mon}</GoBtn>
-                        <span className="nb-acad-hol">{hol}</span>
-                        <Ink value={fields[`a${i}`]} onChange={(v) => setField(`a${i}`, v)} placeholder="학교 일정" />
-                    </div>
-                ))}
+                {ACADEMIC.map(([mon, hol], i) => {
+                    const link = body[i];
+                    return (
+                        <div key={mon} className="nb-acad-row">
+                            {link ? (
+                                <GoBtn to={link.to} onGo={onGo} className="text" aria={`${mon} 달력`}>{mon}</GoBtn>
+                            ) : <strong>{mon}</strong>}
+                            <span className="nb-acad-hol">{hol}</span>
+                            <Ink value={fields[`a${i}`]} onChange={(v) => setField(`a${i}`, v)} placeholder="학교 일정" />
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
 }
 
-export function MonthPage({ extra, pageRec, pages, fields, setField, onGo }) {
+export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo, ddayCards }) {
     const year = extra.year || 2026;
     const month = extra.month || 3;
     const ym = `${year}-${String(month).padStart(2, '0')}`;
     const cells = monthCells(ym);
-    const links = bodyLinks(pageRec);
-    const attend = monthAttendLinks(links);
+    const { body } = partitionLinks(pageRec);
+    const { days, extras } = monthDayMap(body);
+    const deadlines = allDeadlines(ddayCards);
     return (
-        <div>
-            <TitleBar kicker={`${year}년`} title={`${month}월`} hint="날짜 위쪽을 누르면 그 주로 가요" />
+        <div className="nb-fill">
+            <TitleBar kicker={`${year}년`} title={`${month}월`} hint="날짜를 누르면 그 주 주간 쪽으로 가요" />
             <div className="nb-month-dow">{WEEKDAYS.map((d) => <span key={d}>{d}</span>)}</div>
             <div className="nb-month-grid">
                 {cells.map((c) => {
                     const cap = c.inMonth ? holidayCaption(c.ymd) : null;
-                    const weekTo = c.inMonth ? weekPageForDay(links, c.day) : null;
+                    const to = c.inMonth ? days.get(c.day) : null;
+                    const marks = c.inMonth ? calendarMarks(c.ymd, deadlines) : [];
+                    const badge = marks[0] ? ddayBadge(daysUntil(marks[0].deadline)) : null;
+                    const hot = badge && (badge.kind === 'day' || badge.kind === 'soon') ? `${badge.text} ` : '';
                     return (
                         <div key={c.ymd} className={`nb-month-cell ${c.inMonth ? '' : 'out'} ${cap?.isHoliday ? 'hol' : ''}`}>
-                            {c.inMonth && weekTo ? (
-                                <GoBtn to={weekTo} onGo={onGo} className="num" hit={`body:${month}/${c.day}`}>{c.day}</GoBtn>
-                            ) : (
-                                <span className="d">{c.inMonth ? c.day : ''}</span>
-                            )}
+                            {to ? (
+                                <button type="button" className="nb-daylink" onClick={() => onGo(to)} aria-label={`${month}월 ${c.day}일, ${to}쪽`}>
+                                    {c.day}
+                                </button>
+                            ) : <span className="d">{c.inMonth ? c.day : ''}</span>}
                             {cap && <span className="cap">{cap.primary.short}</span>}
+                            {marks.length > 0 && (
+                                <button type="button" className={`nb-dday-mark is-${badge?.kind || 'later'}`} onClick={() => onGo(405)}>
+                                    {hot}{marks[0].title}{marks.length > 1 ? ` +${marks.length - 1}` : ''}
+                                </button>
+                            )}
                             {c.inMonth && (
                                 <Ink
                                     value={fields[`d${c.day}`]}
@@ -111,12 +150,10 @@ export function MonthPage({ extra, pageRec, pages, fields, setField, onGo }) {
                     );
                 })}
             </div>
-            {attend.length > 0 && (
-                <div className="nb-home-bottom">
-                    {attend.map((l, i) => (
-                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo}>
-                            {l.label || destLabel(l.to, pages)}
-                        </GoBtn>
+            {extras.length > 0 && (
+                <div className="nb-monthrow">
+                    {extras.map((l) => (
+                        <GoBtn key={`${l.to}-${l.rect[0]}`} to={l.to} onGo={onGo}>{linkText(l, pages, page)}</GoBtn>
                     ))}
                 </div>
             )}
@@ -125,18 +162,12 @@ export function MonthPage({ extra, pageRec, pages, fields, setField, onGo }) {
     );
 }
 
-export function WeekTocPage({ pageRec, pages, onGo }) {
-    const links = bodyLinks(pageRec);
+export function WeekTocPage({ page, pageRec, pages, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
+        <div className="nb-fill">
             <TitleBar title="주간 목차" hint="달 이름을 누르면 월간, 주를 누르면 그 주로 가요" />
-            <CellGrid cols={6}>
-                {links.map((l, i) => (
-                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
-                        {l.label || destLabel(l.to, pages)}
-                    </GoBtn>
-                ))}
-            </CellGrid>
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="nb-weektoc" />
         </div>
     );
 }
@@ -145,22 +176,31 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
 const DAY_TINT = ['#fde2e4', '#ffe8cc', '#fff3bf', '#d8f3dc', '#cce3de'];
 
-export function WeekPage({ extra, pageRec, fields, setField, onGo }) {
-    const dayLinks = bodyLinks(pageRec);
+export function WeekPage({ pageRec, extra, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
+    const dayLinks = [...body].sort((a, b) => a.rect[0] - b.rect[0]);
+    const head = (i, label, tint) => {
+        const link = dayLinks[i];
+        return (
+            <h3 style={{ background: tint }}>
+                {link ? (
+                    <button type="button" className="nb-dayhead" onClick={() => onGo(link.to)} aria-label={`${label}, ${link.to}쪽`}>
+                        {label}
+                    </button>
+                ) : label}
+            </h3>
+        );
+    };
     return (
-        <div className="nb-week">
+        <div className="nb-week nb-fill">
             <TitleBar
                 title={`${extra.week || ''}주차`}
-                hint={extra.range || ''}
+                hint={extra.range || '요일을 누르면 특별한 하루 일과로 가요'}
             />
             <div className="nb-week-days">
                 {DAY_KEYS.map((key, i) => (
                     <section key={key} className="nb-week-col">
-                        <h3 style={{ background: DAY_TINT[i] }}>
-                            {dayLinks[i] ? (
-                                <GoBtn to={dayLinks[i].to} onGo={onGo} hit={`body:${DAY_KO[i]}`}>{DAY_KO[i]}</GoBtn>
-                            ) : DAY_KO[i]}
-                        </h3>
+                        {head(i, DAY_KO[i], DAY_TINT[i])}
                         {[1, 2, 3, 4, 5, 6].map((p) => (
                             <label key={p} className="nb-period">
                                 <span>{p}</span>
@@ -180,18 +220,8 @@ export function WeekPage({ extra, pageRec, fields, setField, onGo }) {
                 ))}
                 <section className="nb-week-side">
                     <div className="nb-split" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                        <div className="nb-panel">
-                            <p className="nb-kicker">
-                                {dayLinks[5] ? <GoBtn to={dayLinks[5].to} onGo={onGo} hit="body:토">토</GoBtn> : '토'}
-                            </p>
-                            <Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} />
-                        </div>
-                        <div className="nb-panel">
-                            <p className="nb-kicker">
-                                {dayLinks[6] ? <GoBtn to={dayLinks[6].to} onGo={onGo} hit="body:일">일</GoBtn> : '일'}
-                            </p>
-                            <Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} />
-                        </div>
+                        <div className="nb-panel">{head(5, '토', '#e7eef8')}<Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} /></div>
+                        <div className="nb-panel">{head(6, '일', '#fde8ef')}<Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} /></div>
                     </div>
                     <p className="nb-kicker">주간학습안내</p>
                     <Ink multiline rows={3} value={fields.guide} onChange={(v) => setField('guide', v)} placeholder="공부할 내용 · 준비물" />
@@ -205,18 +235,12 @@ export function WeekPage({ extra, pageRec, fields, setField, onGo }) {
     );
 }
 
-export function SpecialTocPage({ pageRec, pages, onGo }) {
-    const links = bodyLinks(pageRec);
+export function SpecialTocPage({ page, pageRec, pages, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
+        <div className="nb-fill">
             <TitleBar title="특별한 하루 일과" hint="평소와 다른 날의 하루 일과를 적어요. 번호를 누르면 그 쪽이에요." />
-            <CellGrid cols={10}>
-                {links.map((l, i) => (
-                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="num" hit={`body:${l.label || i + 1}`}>
-                        {l.label || destLabel(l.to, pages)}
-                    </GoBtn>
-                ))}
-            </CellGrid>
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="nb-specialgrid" />
         </div>
     );
 }

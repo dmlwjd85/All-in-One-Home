@@ -1,7 +1,7 @@
-import { shortcutLabel } from './nav.js';
+import { linkText } from './labels.js';
+import { TONE_MARK, toneForPage } from './tones.js';
 
 /** PDF 줄칸처럼 보이게 한 입력. 마우스·키보드로 바로 씁니다. */
-
 
 export function Ink({ value, onChange, className = '', placeholder = '', multiline = false, rows = 2, type = 'text', aria }) {
     const common = {
@@ -70,15 +70,22 @@ export function GoBtn({ to, onGo, className = '', children, aria, hit }) {
     );
 }
 
-/** 본문 바로가기 줄. 보이는 버튼이 곧 히트 영역입니다. */
-export function ShortcutRow({ links, pages, onGo, className = '' }) {
-    if (!links?.length) return null;
+export function LinkedChip({ link, pages, pageNo, onGo }) {
+    const tone = toneForPage(link.to, pages);
+    const label = linkText(link, pages, pageNo);
     return (
-        <div className={`nb-home-bottom ${className}`}>
-            {links.map((l, i) => (
-                <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} hit={`body:${shortcutLabel(l, pages)}`}>
-                    {shortcutLabel(l, pages)}
-                </GoBtn>
+        <GoBtn to={link.to} onGo={onGo} className={`chip tone-${tone}`} aria={label}>
+            <span className="nb-mark" aria-hidden="true">{TONE_MARK[tone]}</span>
+            <span>{label}</span>
+        </GoBtn>
+    );
+}
+
+export function LinkGrid({ links, pages, pageNo, onGo, className = '' }) {
+    return (
+        <div className={`nb-linkgrid ${className}`}>
+            {(links || []).map((link, i) => (
+                <LinkedChip key={`${link.to}-${link.rect?.[0] ?? 0}-${i}`} link={link} pages={pages} pageNo={pageNo} onGo={onGo} />
             ))}
         </div>
     );

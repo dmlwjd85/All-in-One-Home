@@ -1,21 +1,30 @@
-import { addItem } from '../../lib/store.js';
-import { CellGrid, GoBtn, Ink, TitleBar } from '../fields.jsx';
-import { destLabel, TAGS } from '../labels.js';
-import { bodyLinks } from '../nav.js';
+import { Ink, LinkGrid, LinkedChip, TitleBar } from '../fields.jsx';
+import { TAGS } from '../labels.js';
+import { partitionLinks } from '../linkParts.js';
+import PraiseBoard from '../PraiseBoard.jsx';
+import SsugeokBoard from '../SsugeokBoard.jsx';
+import { captureNote } from '../ssugeokStore.js';
 
 export function TagLegendPage({ onGo }) {
     const groups = [...new Set(TAGS.map((t) => t.group))];
     return (
-        <div>
+        <div className="nb-fill">
             <TitleBar title="태그 범례" hint="쪽 위 # 칸에 태그를 적어 표시해요. 칩을 누르면 그 태그 색인 쪽으로 가요" />
             {groups.map((g) => (
                 <section key={g} className="nb-taggroup">
                     <h3>{g}</h3>
                     <div className="nb-tagrow">
                         {TAGS.filter((t) => t.group === g).map((t) => (
-                            <GoBtn key={t.id} to={t.page} onGo={onGo} className="plain" hit={`body:#${t.id}`}>
-                                <span className="nb-tagchip" style={{ background: t.color }}>#{t.id}<small>{t.hint}</small></span>
-                            </GoBtn>
+                            <button
+                                key={t.id}
+                                type="button"
+                                className="nb-tagchip"
+                                style={{ background: t.color }}
+                                onClick={() => onGo(t.page)}
+                                aria-label={`#${t.id} ${t.hint} (${t.page}쪽)`}
+                            >
+                                #{t.id}<small>{t.hint}</small>
+                            </button>
                         ))}
                     </div>
                 </section>
@@ -45,49 +54,73 @@ export function TagIndexPage({ extra, fields, setField }) {
     );
 }
 
-export function SsugeokPage({ extra, pageRec, pages, fields, setField, signedIn, author, onChanged, onToast, onOpenHub, onGo }) {
+export function SsugeokPage({
+    page,
+    pageRec,
+    extra,
+    fields,
+    setField,
+    signedIn,
+    author,
+    onChanged,
+    onToast,
+    onOpenHub,
+    onGo,
+    pages,
+    ssugeokNotes,
+    focusId,
+}) {
+    const legacyLines = Array.from({ length: 14 }, (_, i) => i).filter((i) => String(fields[`ln${i}`] || '').trim());
+    const legacyStickies = [0, 1, 2, 3].filter((i) => String(fields[`st${i}`] || '').trim());
+    const keepLegacy = legacyLines.length > 0 || legacyStickies.length > 0;
     const sendLine = async (i) => {
         const text = String(fields[`ln${i}`] || '').trim();
         if (!text) {
-            onToast('빈 줄은 보낼 수 없습니다.');
+            onToast('빈 줄은 목록에 넣을 수 없어요.');
             return;
         }
-        await addItem('ssugeokInbox', { text, typeHint: '생각', author, fromPage: 495 + (extra.slot || 1) }, signedIn);
+        await captureNote({ text, author, fromPage: page, signedIn });
         onChanged?.();
-        onToast('받은함으로 보냈습니다. 허브에서 날려보내 보세요.');
+        onToast('목록에 남겼어요. 줄에 적어 둔 글은 그대로예요.');
     };
     return (
-        <div className="nb-ssugeok">
-            <TitleBar title={`쓱적 ${extra.slot || 1}`} hint="일단, '쓱' 적어 두세요. 한 줄에 한 건씩." />
-            <div className="nb-ssugeok-grid">
-                <section>
-                    <p className="nb-kicker">줄 메모</p>
-                    {Array.from({ length: 14 }, (_, i) => (
+        <div className="nb-ssugeok nb-fill">
+            <TitleBar title={`쓱적 ${extra.slot || 1}`} hint="먼저 적고, 나중에 나눕니다. 한 줄에 한 건." />
+            <SsugeokBoard
+                notes={ssugeokNotes || []}
+                signedIn={signedIn}
+                author={author}
+                fromPage={page}
+                onChanged={onChanged}
+                onToast={onToast}
+                onGo={onGo}
+                focusId={focusId}
+            />
+            <div className="nb-tagrow nb-ssu-links">
+                {partitionLinks(pageRec).body.map((l, i) => (
+                    <LinkedChip key={`${l.to}-${i}`} link={l} pages={pages} pageNo={page} onGo={onGo} />
+                ))}
+            </div>
+            {keepLegacy && (
+                <details className="nb-legacy">
+                    <summary>이전에 적어 둔 줄</summary>
+                    {legacyLines.map((i) => (
                         <div key={i} className="nb-ssu-line">
                             <span>{i + 1}</span>
                             <Ink value={fields[`ln${i}`]} onChange={(v) => setField(`ln${i}`, v)} placeholder="한 줄" aria={`줄 ${i + 1}`} />
-                            <button type="button" className="nb-mini" onClick={() => sendLine(i)}>받은함</button>
+                            <button type="button" className="nb-mini" onClick={() => sendLine(i)}>목록에 남기기</button>
                         </div>
                     ))}
-                </section>
-                <section>
-                    <p className="nb-kicker">붙임 메모</p>
-                    <div className="nb-stickies">
-                        {[0, 1, 2, 3].map((i) => (
-                            <Ink key={i} multiline rows={4} className="nb-sticky" value={fields[`st${i}`]} onChange={(v) => setField(`st${i}`, v)} placeholder="한 장에 하나" />
-                        ))}
-                    </div>
-                    <p className="nb-kicker">바로가기</p>
-                    <div className="nb-tagrow">
-                        {bodyLinks(pageRec).map((l, i) => (
-                            <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip slim">
-                                {l.label || destLabel(l.to, pages)}
-                            </GoBtn>
-                        ))}
-                    </div>
-                    <button type="button" className="nb-hubbtn" onClick={onOpenHub}>받은함 · 날려보내기 (쓱적 허브)</button>
-                </section>
-            </div>
+                    {legacyStickies.length > 0 && (
+                        <div className="nb-stickies">
+                            {legacyStickies.map((i) => (
+                                <Ink key={i} multiline rows={3} className="nb-sticky" value={fields[`st${i}`]} onChange={(v) => setField(`st${i}`, v)} placeholder="붙임 메모" />
+                            ))}
+                        </div>
+                    )}
+                </details>
+            )}
+            <button type="button" className="nb-hubbtn" onClick={onOpenHub}>예전 분류 허브</button>
         </div>
     );
 }
@@ -133,15 +166,14 @@ export function BoardPage({ page, fields, setField }) {
     );
 }
 
-export function StickerTocPage({ pageRec, pages, onGo }) {
+export function StickerTocPage({ page, pageRec, pages, onGo, praiseBoard, signedIn, onChanged, onToast }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
-            <TitleBar title="스티커" hint="보고 고르는 쪽이에요. 붙일 땐 PNG 묶음을 써요. 시트 이름을 누르면 그 쪽으로 가요" />
-            <CellGrid cols={3}>
-                {bodyLinks(pageRec).map((l, i) => (
-                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
-                ))}
-            </CellGrid>
+        <div className="nb-fill">
+            <TitleBar title="칭찬 스티커" hint="번호를 누르면 스티커가 하나 늘어요. 목표를 채우면 잠깐 축하해요" />
+            <PraiseBoard board={praiseBoard} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+            <p className="nb-kicker">스티커 시트</p>
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="nb-sticker-links" />
         </div>
     );
 }
@@ -174,15 +206,12 @@ export function StickerSheetPage({ page, fields, setField }) {
     );
 }
 
-export function GenericToc({ title, hint, pageRec, pages, onGo }) {
+export function GenericToc({ title, hint, page, pageRec, pages, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
+        <div className="nb-fill">
             <TitleBar title={title} hint={hint} />
-            <CellGrid cols={4}>
-                {bodyLinks(pageRec).map((l, i) => (
-                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
-                ))}
-            </CellGrid>
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
         </div>
     );
 }

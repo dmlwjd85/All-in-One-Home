@@ -1,5 +1,7 @@
-import { GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
-import { bodyLinks, destForStudentNumber } from '../nav.js';
+import DdayBoard, { UpcomingStrip } from '../DdayBoard.jsx';
+import SubmissionBoard from '../SubmissionBoard.jsx';
+import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
+import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { TocCards } from './ClassStudentPages.jsx';
 
 export { TocCards };
@@ -44,21 +46,19 @@ export function EvalAreaPage({ fields, setField }) {
     );
 }
 
-export function UnitPage({ extra, pageRec, fields, setField, onGo }) {
-    const nums = bodyLinks(pageRec);
+export function UnitPage({ pageRec, extra, fields, setField, onGo }) {
+    const nums = numberedLinks(partitionLinks(pageRec).body);
     return (
         <div>
-            <TitleBar title={`단원 ${extra.slot || ''}`} />
+            <TitleBar title={`단원 ${extra.slot || ''}`} hint="번호를 누르면 그 학생 누가기록으로 가요" />
             <div className="nb-inline">
                 <Ink value={fields.subject} onChange={(v) => setField('subject', v)} placeholder="교과" />
                 <Ink value={fields.unit} onChange={(v) => setField('unit', v)} placeholder="단원" />
             </div>
             {nums.length > 0 && (
                 <div className="nb-numticks">
-                    {nums.map((l, i) => (
-                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="num" hit={`body:${l.label || i + 1}`}>
-                            {l.label || i + 1}
-                        </GoBtn>
+                    {nums.map((l) => (
+                        <GoBtn key={l.label} to={l.to} onGo={onGo} className="num" aria={`${l.label}번 누가기록`}>{l.label}</GoBtn>
                     ))}
                 </div>
             )}
@@ -87,25 +87,28 @@ export function ChecklistPage({ extra, fields, setField }) {
     );
 }
 
-export function ScorePage({ page, pageRec, fields, setField, onGo }) {
-    const start = page % 2 === 0 ? 17 : 1;
-    const links = bodyLinks(pageRec);
+export function ScorePage({ pageRec, fields, setField, onGo }) {
+    const items = numberedLinks(partitionLinks(pageRec).body);
+    const mid = Math.ceil(items.length / 2) || 8;
+    const left = items.slice(0, mid);
+    const right = items.slice(mid);
+    const first = left[0]?.label || '1';
+    const last = (right[right.length - 1] || left[left.length - 1])?.label || '16';
     return (
         <div>
-            <TitleBar title={`점수 체크 · ${start}~${start + 15}번`} />
+            <TitleBar title={`점수 체크 · ${first}~${last}번`} hint="번호를 누르면 학생 카드로 가요" />
             <Ink value={fields.title} onChange={(v) => setField('title', v)} placeholder="평가명" />
             <table className="nb-table compact">
                 <thead><tr><th>번호</th><th>점수</th><th>번호</th><th>점수</th></tr></thead>
                 <tbody>
-                    {Array.from({ length: 8 }, (_, i) => {
-                        const a = start + i;
-                        const b = start + i + 8;
+                    {left.map((a, i) => {
+                        const b = right[i];
                         return (
-                            <tr key={i}>
-                                <th><GoBtn to={destForStudentNumber(links, a)} onGo={onGo} className="num" hit={`body:${a}`}>{a}</GoBtn></th>
-                                <td><Ink value={fields[`s${a}`]} onChange={(v) => setField(`s${a}`, v)} /></td>
-                                <th><GoBtn to={destForStudentNumber(links, b)} onGo={onGo} className="num" hit={`body:${b}`}>{b}</GoBtn></th>
-                                <td><Ink value={fields[`s${b}`]} onChange={(v) => setField(`s${b}`, v)} /></td>
+                            <tr key={a.label}>
+                                <th><GoBtn to={a.to} onGo={onGo} className="num" aria={`${a.label}번 학생 카드`}>{a.label}</GoBtn></th>
+                                <td><Ink value={fields[`s${a.label}`]} onChange={(v) => setField(`s${a.label}`, v)} /></td>
+                                <th>{b ? <GoBtn to={b.to} onGo={onGo} className="num" aria={`${b.label}번 학생 카드`}>{b.label}</GoBtn> : null}</th>
+                                <td>{b ? <Ink value={fields[`s${b.label}`]} onChange={(v) => setField(`s${b.label}`, v)} /> : null}</td>
                             </tr>
                         );
                     })}
@@ -115,10 +118,8 @@ export function ScorePage({ page, pageRec, fields, setField, onGo }) {
     );
 }
 
-export function DeadlinePage({ extra, fields, setField }) {
+function DeadlineLines({ fields, setField }) {
     return (
-        <div>
-            <TitleBar title={`기한 있는 일 ${extra.slot || ''}`} hint="주간 할 일과 따로, 기한 있는 일만" />
             <table className="nb-table compact">
                 <thead><tr><th>기한</th><th>내용</th><th>완료</th></tr></thead>
                 <tbody>
@@ -131,14 +132,39 @@ export function DeadlinePage({ extra, fields, setField }) {
                     ))}
                 </tbody>
             </table>
+    );
+}
+
+export function DeadlinePage({ extra, fields, setField, ddayCards, signedIn, onChanged, onToast, onGo }) {
+    const hasLines = Array.from({ length: 12 }, (_, i) => fields[`d${i}`] || fields[`t${i}`]).some(Boolean);
+    if (Number(extra.slot) === 1) {
+        return (
+            <div className="nb-fill">
+                <TitleBar title="기한 있는 일" hint="공문번호와 기한을 올리면 D-3, D-day가 붙고 달력에도 보여요" />
+                <DdayBoard cards={ddayCards} signedIn={signedIn} onChanged={onChanged} onToast={onToast} onGo={onGo} />
+                {hasLines && (
+                    <details className="nb-legacy">
+                        <summary>줄로 적어 둔 기한</summary>
+                        <DeadlineLines fields={fields} setField={setField} />
+                    </details>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div>
+            <TitleBar title={`기한 있는 일 ${extra.slot || ''}`} hint="주간 할 일과 따로, 기한 있는 일만" />
+            <UpcomingStrip cards={ddayCards} onGo={onGo} />
+            <DeadlineLines fields={fields} setField={setField} />
         </div>
     );
 }
 
-export function TodoSheetPage({ extra, fields, setField }) {
+export function TodoSheetPage({ extra, fields, setField, ddayCards, onGo }) {
     return (
         <div>
             <TitleBar title={`업무 할 일 ${extra.slot || ''}`} />
+            <UpcomingStrip cards={ddayCards} onGo={onGo} />
             {Array.from({ length: 12 }, (_, i) => (
                 <div key={i} className="nb-inline">
                     <Tick checked={fields[`c${i}`]} onChange={(v) => setField(`c${i}`, v)} />
@@ -149,25 +175,14 @@ export function TodoSheetPage({ extra, fields, setField }) {
     );
 }
 
-export function MeetingPage({ extra, pageRec, fields, setField, onGo }) {
-    const toc = bodyLinks(pageRec);
-    if (toc.length > 0) {
-        return (
-            <div>
-                <TitleBar title="회의록 목차" hint="번호를 누르면 그 회의 쪽이에요" />
-                <div className="nb-cellgrid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-                    {toc.map((l, i) => (
-                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
-                            {l.label || `${i + 1}`}
-                        </GoBtn>
-                    ))}
-                </div>
-            </div>
-        );
-    }
+export function MeetingPage({ page, pageRec, pages, extra, fields, setField, onGo }) {
+    const { body } = partitionLinks(pageRec);
     return (
-        <div>
-            <TitleBar title={`회의록 ${extra.slot || ''}`} />
+        <div className="nb-fill">
+            <TitleBar title={`회의록 ${extra.slot || ''}`} hint={body.length ? '번호를 누르면 그 회의록으로 가요' : undefined} />
+            {body.length > 0 && (
+                <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="dense" />
+            )}
             <div className="nb-inline">
                 <span>No.</span>
                 <Ink value={fields.no} onChange={(v) => setField('no', v)} placeholder="번호" />
@@ -180,11 +195,27 @@ export function MeetingPage({ extra, pageRec, fields, setField, onGo }) {
     );
 }
 
-export function NoticePage({ fields, setField }) {
+export function NoticePage({ page, fields, setField, submissionSheets, signedIn, onChanged, onToast, onGo }) {
+    const hasLines = Array.from({ length: 14 }, (_, i) => fields[`n${i}`]).some(Boolean);
+    if (page !== 458) {
+        return (
+            <div>
+                <TitleBar title="전달 사항" hint="전달 사항만 빠르게" />
+                <GoBtn to={458} onGo={onGo} className="tone-mint">제출물 체크표</GoBtn>
+                <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+            </div>
+        );
+    }
     return (
-        <div>
-            <TitleBar title="전달 사항" hint="전달 사항만 빠르게" />
-            <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+        <div className="nb-fill">
+            <TitleBar title="제출물 체크" hint="번호를 한 번 누르면 냄, 다시 누르면 아직이에요. 이름은 명렬표에서 옵니다" />
+            <SubmissionBoard sheets={submissionSheets} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+            {hasLines && (
+                <details className="nb-legacy">
+                    <summary>적어 둔 전달</summary>
+                    <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+                </details>
+            )}
         </div>
     );
 }
