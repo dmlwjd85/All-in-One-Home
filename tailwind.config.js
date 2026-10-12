@@ -14,8 +14,8 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['"Pretendard Variable"', 'Pretendard', '"Noto Sans KR"', 'system-ui', 'sans-serif'],
-                serif: ['"Nanum Myeongjo"', 'Georgia', 'serif'],
+                sans: ['NanumSquareRound', '"Hakgyoansim Dunggeunmiso"', '"Pretendard Variable"', 'Pretendard', '"Noto Sans KR"', 'system-ui', 'sans-serif'],
+                serif: ['"Hakgyoansim Geurimilgi"', '"Nanum Myeongjo"', 'Georgia', 'serif'],
             },
             minHeight: {
                 tap: '44px',
