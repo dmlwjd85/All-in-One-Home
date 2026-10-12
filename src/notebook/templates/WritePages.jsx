@@ -1,5 +1,5 @@
 import { addItem } from '../../lib/store.js';
-import { CellGrid, Ink, TitleBar } from '../fields.jsx';
+import { CellGrid, GoBtn, Ink, TitleBar } from '../fields.jsx';
 import { destLabel, TAGS } from '../labels.js';
 
 export function TagLegendPage() {
@@ -128,13 +128,13 @@ export function BoardPage({ page, fields, setField }) {
     );
 }
 
-export function StickerTocPage({ pageRec, pages }) {
+export function StickerTocPage({ pageRec, pages, onGo }) {
     return (
         <div>
             <TitleBar title="스티커" hint="보고 고르는 쪽이에요. 붙일 땐 PNG 묶음을 써요. 시트 이름을 누르면 그 쪽으로 가요" />
             <CellGrid cols={3}>
                 {(pageRec.links || []).map((l, i) => (
-                    <div key={`${l.to}-${i}`} className="nb-cardchip">{l.label || destLabel(l.to, pages)}</div>
+                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
                 ))}
             </CellGrid>
         </div>
@@ -169,13 +169,13 @@ export function StickerSheetPage({ page, fields, setField }) {
     );
 }
 
-export function GenericToc({ title, hint, pageRec, pages }) {
+export function GenericToc({ title, hint, pageRec, pages, onGo }) {
     return (
         <div>
             <TitleBar title={title} hint={hint} />
             <CellGrid cols={4}>
                 {(pageRec.links || []).map((l, i) => (
-                    <div key={`${l.to}-${i}`} className="nb-cardchip">{l.label || destLabel(l.to, pages)}</div>
+                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
                 ))}
             </CellGrid>
         </div>

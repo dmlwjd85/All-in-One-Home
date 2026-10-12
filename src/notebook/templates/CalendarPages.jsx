@@ -1,6 +1,6 @@
 import { holidayCaption } from '../../lib/holidays.js';
 import { monthCells } from '../../lib/utils.js';
-import { CellGrid, Ink, LinedBlock, TitleBar } from '../fields.jsx';
+import { CellGrid, GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
 import { destLabel } from '../labels.js';
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
@@ -104,16 +104,16 @@ export function MonthPage({ extra, fields, setField }) {
     );
 }
 
-export function WeekTocPage({ pageRec, pages }) {
+export function WeekTocPage({ pageRec, pages, onGo }) {
     const links = pageRec.links || [];
     return (
         <div>
             <TitleBar title="주간 목차" hint="달 이름을 누르면 월간, 주를 누르면 그 주로 가요" />
             <CellGrid cols={6}>
                 {links.map((l, i) => (
-                    <div key={`${l.to}-${i}`} className="nb-cardchip">
+                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
                         {l.label || destLabel(l.to, pages)}
-                    </div>
+                    </GoBtn>
                 ))}
             </CellGrid>
         </div>
@@ -122,6 +122,7 @@ export function WeekTocPage({ pageRec, pages }) {
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
+const DAY_TINT = ['#fde2e4', '#ffe8cc', '#fff3bf', '#d8f3dc', '#cce3de'];
 
 export function WeekPage({ extra, fields, setField }) {
     return (
@@ -133,29 +134,35 @@ export function WeekPage({ extra, fields, setField }) {
             <div className="nb-week-days">
                 {DAY_KEYS.map((key, i) => (
                     <section key={key} className="nb-week-col">
-                        <h3>{DAY_KO[i]}</h3>
+                        <h3 style={{ background: DAY_TINT[i] }}>{DAY_KO[i]}</h3>
                         {[1, 2, 3, 4, 5, 6].map((p) => (
                             <label key={p} className="nb-period">
                                 <span>{p}</span>
-                                <Ink value={fields[`${key}_p${p}`]} onChange={(v) => setField(`${key}_p${p}`, v)} placeholder="전담" aria={`${DAY_KO[i]} ${p}교시`} />
+                                <Tick checked={fields[`${key}_j${p}`]} onChange={(v) => setField(`${key}_j${p}`, v)} label="전담" />
+                                <Ink value={fields[`${key}_p${p}`]} onChange={(v) => setField(`${key}_p${p}`, v)} aria={`${DAY_KO[i]} ${p}교시`} />
                             </label>
                         ))}
-                        {['알림장', '전달', '준비물', '숙제', '가정통신'].map((lab) => (
-                            <Ink key={lab} value={fields[`${key}_${lab}`]} onChange={(v) => setField(`${key}_${lab}`, v)} placeholder={lab} />
-                        ))}
+                        <div className="nb-panel">
+                            <p className="nb-kicker">알림장 초안</p>
+                            {['전달', '준비물', '숙제'].map((lab) => (
+                                <Ink key={lab} value={fields[`${key}_${lab}`]} onChange={(v) => setField(`${key}_${lab}`, v)} placeholder={lab} />
+                            ))}
+                            <Tick checked={fields[`${key}_letter`]} onChange={(v) => setField(`${key}_letter`, v)} label="가정통신문 발송" />
+                        </div>
                         <Ink multiline rows={2} value={fields[`${key}_memo`]} onChange={(v) => setField(`${key}_memo`, v)} placeholder="메모" />
                     </section>
                 ))}
                 <section className="nb-week-side">
-                    <h3>토 · 일</h3>
-                    <Ink value={fields.sat} onChange={(v) => setField('sat', v)} placeholder="토" />
-                    <Ink value={fields.sun} onChange={(v) => setField('sun', v)} placeholder="일" />
+                    <div className="nb-split" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                        <div className="nb-panel"><p className="nb-kicker">토</p><Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} /></div>
+                        <div className="nb-panel"><p className="nb-kicker">일</p><Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} /></div>
+                    </div>
                     <p className="nb-kicker">주간학습안내</p>
-                    <Ink multiline rows={4} value={fields.guide} onChange={(v) => setField('guide', v)} placeholder="공부할 내용 · 준비물" />
+                    <Ink multiline rows={3} value={fields.guide} onChange={(v) => setField('guide', v)} placeholder="공부할 내용 · 준비물" />
                     <p className="nb-kicker">이번 주 할 일</p>
                     <LinedBlock n={5} get={(k) => fields[k]} set={setField} prefix="todo" placeholder="할 일" />
-                    <p className="nb-kicker">쓱적 정리</p>
-                    <Ink multiline rows={3} value={fields.ssugeok} onChange={(v) => setField('ssugeok', v)} placeholder="옮길 메모" />
+                    <Tick checked={fields.ssugeokDone} onChange={(v) => setField('ssugeokDone', v)} label="쓱적 정리" />
+                    <Ink multiline rows={2} value={fields.ssugeok} onChange={(v) => setField('ssugeok', v)} placeholder="옮길 메모" />
                 </section>
             </div>
         </div>

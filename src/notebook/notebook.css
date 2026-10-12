@@ -4,10 +4,7 @@
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    background: #c9b48a;
-    background-image:
-        radial-gradient(ellipse at 14% -8%, rgba(255, 236, 196, 0.28), transparent 46%),
-        repeating-linear-gradient(135deg, rgba(96, 68, 32, 0.05) 0 1px, transparent 1px 6px);
+    background: #e8dcc8;
     color: #4a3f3a;
     font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', Pretendard, sans-serif;
 }
@@ -81,13 +78,12 @@
 
 .nb-page {
     position: relative;
-    background: #fffaf3;
+    background: #fbf7f1;
     color: #4a3f3a;
-    box-shadow:
-        0 10px 28px rgba(56, 34, 12, 0.22),
-        inset 0 1px 0 rgba(255, 252, 244, 0.8);
-    border: 1px solid #d8c4a0;
+    box-shadow: 0 10px 28px rgba(56, 34, 12, 0.18);
+    border: 1px solid #eadcc8;
     overflow: hidden;
+    border-radius: 4px;
 }
 
 .nb-left,
@@ -109,25 +105,37 @@
     flex: 1;
     border: 0;
     background: #efe6dc;
-    color: #4a3f3a;
-    font-family: 'Hakgyoansim Dunggeunmiso', 'NanumSquareRound', sans-serif;
-    font-weight: 700;
+    color: #6b5a4e;
+    font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', sans-serif;
+    font-weight: 800;
     font-size: 11px;
     letter-spacing: -0.04em;
-    writing-mode: horizontal-tb;
-    border-radius: 0 8px 8px 0;
-    box-shadow: inset 0 0 0 1px rgba(74, 63, 58, 0.12);
+    border-radius: 0 10px 10px 0;
     cursor: pointer;
     padding: 0 2px;
 }
 
 .nb-right .nb-tab {
-    border-radius: 8px 0 0 8px;
+    border-radius: 10px 0 0 10px;
 }
+
+.nb-right .nb-tab:nth-child(1) { background: #f6c1c6; }
+.nb-right .nb-tab:nth-child(2) { background: #f8d39a; }
+.nb-right .nb-tab:nth-child(3) { background: #f6e08a; }
+.nb-right .nb-tab:nth-child(4) { background: #c8e6b3; }
+.nb-right .nb-tab:nth-child(5) { background: #b7e4d6; }
+.nb-right .nb-tab:nth-child(6) { background: #b9d4f6; }
+.nb-right .nb-tab:nth-child(7) { background: #cbb8f0; }
+.nb-right .nb-tab:nth-child(8) { background: #f0c3e4; }
+.nb-right .nb-tab:nth-child(9) { background: #f5c6a8; }
+.nb-right .nb-tab:nth-child(10) { background: #e8d5a0; }
+.nb-right .nb-tab:nth-child(11) { background: #c8e0c0; }
+.nb-right .nb-tab:nth-child(12) { background: #d0c4f0; }
+.nb-right .nb-tab:nth-child(13) { background: #fff; box-shadow: inset 0 0 0 2px #c2464f; color: #c2464f; }
 
 .nb-tab.is-on,
 .nb-tab[aria-current='page'] {
-    background: #c2464f;
+    background: #c2464f !important;
     color: #fffaf3;
 }
 
@@ -259,17 +267,19 @@
 }
 
 .nb-cardchip {
-    min-height: 48px;
+    min-height: 56px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 6px 8px;
-    background: #efe6dc;
-    border: 1px solid rgba(74, 63, 58, 0.16);
-    border-radius: 8px;
+    justify-content: flex-start;
+    gap: 10px;
+    text-align: left;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #ead9c8;
+    border-radius: 14px;
     font-weight: 800;
     font-size: 14px;
+    box-shadow: 0 1px 0 rgba(74, 63, 58, 0.04);
 }
 
 .nb-cardchip.slim { min-height: 36px; font-size: 13px; }
@@ -304,21 +314,49 @@
     justify-content: center;
     text-align: center;
     gap: 10px;
+    background:
+        linear-gradient(#fbf7f1, #fbf7f1) center/100% calc(100% - 28px) no-repeat,
+        repeating-linear-gradient(90deg, #f6c1c6 0 40px, #f8d39a 40px 80px, #f6e08a 80px 120px, #c8e6b3 120px 160px, #b9d4f6 160px 200px, #cbb8f0 200px 240px, #f0c3e4 240px 280px);
 }
 
-.nb-cover-kicker { font-size: 18px; font-weight: 800; color: #c2464f; }
-.nb-cover-title {
-    font-family: 'Hakgyoansim Dunggeunmiso', sans-serif;
-    font-size: 48px;
-    font-weight: 700;
+.nb-cover-card {
+    width: min(640px, 86%);
+    background: #fff;
+    border-radius: 24px;
+    padding: 36px 48px 28px;
+    box-shadow: 0 8px 0 #ead9c8;
 }
-.nb-cover-range { font-size: 20px; }
+
+.nb-cover-kicker {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    background: #c2464f;
+    border-radius: 999px;
+    padding: 4px 12px;
+}
+.nb-cover-title {
+    font-family: 'Hakgyoansim Dunggeunmiso', 'NanumSquareRound', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    margin: 12px 0 6px;
+}
+.nb-cover-range { font-size: 16px; color: #8a7566; }
+.nb-cover-stars { letter-spacing: 6px; font-size: 14px; margin: 4px 0 16px; }
 .nb-cover-fields {
-    width: min(420px, 90%);
+    width: min(380px, 90%);
+    margin: 0 auto;
     text-align: left;
     display: grid;
-    gap: 8px;
-    margin-top: 16px;
+    gap: 10px;
+}
+.nb-cover-fields label {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    align-items: center;
+    font-weight: 800;
+    pointer-events: auto;
 }
 
 .nb-howto { padding-left: 1.2rem; display: grid; gap: 6px; font-size: 15px; }
@@ -375,7 +413,13 @@
 
 .nb-week-days { display: grid; grid-template-columns: repeat(5, 1fr) 0.9fr; gap: 6px; }
 .nb-week-col, .nb-week-side { min-width: 0; }
-.nb-week-col h3, .nb-week-side h3 { font-weight: 800; text-align: center; }
+.nb-week-col h3, .nb-week-side h3 {
+    font-weight: 800;
+    text-align: center;
+    border-radius: 10px 10px 0 0;
+    padding: 4px 0;
+    margin-bottom: 4px;
+}
 .nb-period { display: flex; gap: 4px; align-items: center; }
 .nb-period span { width: 14px; font-size: 11px; font-weight: 800; color: #8a7566; }
 
@@ -481,7 +525,40 @@
 }
 .nb-attend-head { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
 .nb-lined { display: grid; gap: 2px; }
-.nb-numchip, .nb-cardchip, .nb-monthchip { pointer-events: none; }
+.nb-numchip, .nb-monthchip { pointer-events: none; }
+.nb-gobtn {
+    pointer-events: auto;
+    cursor: pointer;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    font-weight: 800;
+    box-shadow: 0 0 0 1px #ead9c8;
+}
+.nb-gobtn.chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+}
+.nb-gobtn.who {
+    background: #e4daf6;
+    min-height: 28px;
+    min-width: 44px;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+.nb-gobtn.num {
+    background: #fde2e4;
+    min-height: 28px;
+    min-width: 32px;
+    border-radius: 999px;
+    padding: 2px 6px;
+}
 
 @media (max-width: 720px) {
     .nb-toolbar-user, .nb-toolhide { display: none; }

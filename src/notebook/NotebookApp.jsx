@@ -134,6 +134,7 @@ export default function NotebookApp({
                                 pageRec={pageRec}
                                 extra={pageRec.extra || {}}
                                 pages={notebook.pages}
+                                onGo={go}
                                 fields={fields}
                                 setField={setField}
                                 signedIn={signedIn}

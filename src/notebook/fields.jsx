@@ -52,6 +52,19 @@ export function CellGrid({ children, cols = 4, className = '' }) {
     );
 }
 
+export function GoBtn({ to, onGo, className = '', children, aria }) {
+    return (
+        <button
+            type="button"
+            className={`nb-gobtn ${className}`}
+            onClick={(e) => { e.stopPropagation(); onGo?.(to); }}
+            aria-label={aria || `${children} ${to}쪽`}
+        >
+            {children}
+        </button>
+    );
+}
+
 export function LinedBlock({ n = 8, get, set, prefix, placeholder = '' }) {
     return (
         <div className="nb-lined">

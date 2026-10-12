@@ -1,16 +1,16 @@
 import { ATTEND_STATUS } from '../../lib/utils.js';
-import { CellGrid, Ink, LinedBlock, Pick, Tick, TitleBar } from '../fields.jsx';
+import { CellGrid, GoBtn, Ink, LinedBlock, Pick, Tick, TitleBar } from '../fields.jsx';
 import { destLabel } from '../labels.js';
 
-export function TocCards({ title, hint, pageRec, pages }) {
+export function TocCards({ title, hint, pageRec, pages, onGo }) {
     return (
         <div>
             <TitleBar title={title} hint={hint} />
             <CellGrid cols={4}>
                 {(pageRec.links || []).map((l, i) => (
-                    <div key={`${l.to}-${i}`} className="nb-cardchip">
+                    <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
                         {l.label || destLabel(l.to, pages)}
-                    </div>
+                    </GoBtn>
                 ))}
             </CellGrid>
         </div>
@@ -89,24 +89,25 @@ export function SeatingPage({ page, fields, setField }) {
     );
 }
 
-export function RosterPage({ fields, setField }) {
+export function RosterPage({ fields, setField, onGo }) {
     return (
         <div>
             <TitleBar title="명렬표" hint="번호를 누르면 학생 카드, '누가'를 누르면 누가기록이에요" />
             <div className="nb-roster">
                 {[0, 16].map((off) => (
                     <table key={off} className="nb-table compact">
-                        <thead><tr><th>번호</th><th>이름</th><th>성별</th><th>생년월일</th><th>비고</th></tr></thead>
+                        <thead><tr><th>번호</th><th>이름</th><th>성별</th><th>생년월일</th><th>비고</th><th>누가</th></tr></thead>
                         <tbody>
                             {Array.from({ length: 16 }, (_, i) => {
                                 const n = off + i + 1;
                                 return (
                                     <tr key={n}>
-                                        <th>{n}</th>
+                                        <th><GoBtn to={157 + n * 2} onGo={onGo} className="num" aria={`${n}번 학생 카드`}>{n}</GoBtn></th>
                                         <td><Ink value={fields[`name${n}`]} onChange={(v) => setField(`name${n}`, v)} aria={`${n}번 이름`} /></td>
                                         <td><Ink value={fields[`sex${n}`]} onChange={(v) => setField(`sex${n}`, v)} aria={`${n}번 성별`} /></td>
                                         <td><Ink value={fields[`birth${n}`]} onChange={(v) => setField(`birth${n}`, v)} aria={`${n}번 생년월일`} /></td>
                                         <td><Ink value={fields[`note${n}`]} onChange={(v) => setField(`note${n}`, v)} aria={`${n}번 비고`} /></td>
+                                        <td><GoBtn to={158 + n * 2} onGo={onGo} className="who" aria={`${n}번 누가기록`}>누가</GoBtn></td>
                                     </tr>
                                 );
                             })}
