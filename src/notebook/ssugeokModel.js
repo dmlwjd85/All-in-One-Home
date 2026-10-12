@@ -107,6 +107,23 @@ export function suggestDestination(text, parsed) {
     if (/진도|수업|단원/.test(text) || tags.includes('수업') || tags.includes('평가')) return pack('progress', parsed, '수업');
     if (/할\s*일|업무/.test(text)) return pack('todo', parsed, '할 일');
     if (/행사|체험|특별한\s*하루/.test(text) || tags.includes('행사')) return pack('special', parsed, '특별한 하루');
+    const sensitiveTag = /민원/.test(text) ? '민원'
+        : /학폭|학교폭력/.test(text) ? '학폭'
+            : /보건|알레르기|투약|복약|건강/.test(text) ? '보건'
+                : '';
+    if (sensitiveTag) {
+        const known = TAGS.find((t) => t.id === sensitiveTag);
+        if (known) {
+            return {
+                destId: 'tag',
+                page: known.page,
+                label: `#${sensitiveTag}`,
+                tone: 'butter',
+                reason: '이 기기에만 두는 기록',
+                needsStudent: false,
+            };
+        }
+    }
     for (const tag of tags) {
         const known = TAGS.find((t) => t.id === tag);
         if (known) {

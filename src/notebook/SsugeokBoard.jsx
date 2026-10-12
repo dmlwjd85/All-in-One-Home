@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readPageFields } from './fieldStore.js';
 import {
     destinationFor,
@@ -86,11 +86,13 @@ export default function SsugeokBoard({
     };
     const shown = notes.filter((n) => n.status === filter);
 
+    const notesRef = useRef(notes);
+    notesRef.current = notes;
     useEffect(() => {
         if (!focusId) return;
-        const note = notes.find((n) => n.id === focusId);
+        const note = notesRef.current.find((n) => n.id === focusId);
         if (note) setFilter(note.status);
-    }, [focusId, notes]);
+    }, [focusId]);
 
     useEffect(() => {
         if (!focusId) return;

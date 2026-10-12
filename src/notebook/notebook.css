@@ -781,9 +781,10 @@
 .nb-ssu-filters button[aria-selected="true"] { background: #4a3f3a; color: #fffaf3; box-shadow: none; }
 .nb-quiet {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     align-items: center;
+    overflow-x: auto;
     font-size: 12px;
     color: #6b5a4e;
 }
