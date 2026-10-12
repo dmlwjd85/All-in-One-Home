@@ -19,13 +19,34 @@ function walk(dir, acc = []) {
     return acc;
 }
 
+function hasRef(ref) {
+    try {
+        execSync(`git rev-parse --verify --quiet ${ref}^{commit}`, { cwd: root, stdio: 'ignore' });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** PR 체크아웃에는 로컬 main이 없습니다. origin/main과 비교합니다. */
+function mainRef() {
+    if (!hasRef('refs/remotes/origin/main')) {
+        execSync('git fetch --no-tags origin main', { cwd: root, stdio: 'inherit' });
+    }
+    if (!hasRef('refs/remotes/origin/main')) {
+        throw new Error('origin/main 을 찾지 못했습니다. git fetch origin main 이 필요합니다.');
+    }
+    return 'origin/main';
+}
+
 function gitFiles() {
-    const list = execSync('git ls-tree -r --name-only main', { cwd: root, encoding: 'utf8' })
+    const ref = mainRef();
+    const list = execSync(`git ls-tree -r --name-only ${ref}`, { cwd: root, encoding: 'utf8' })
         .split('\n')
         .filter((name) => name.startsWith('src/') && /\.(js|jsx)$/.test(name));
     const map = {};
     for (const name of list) {
-        map[name] = execSync(`git show main:${name}`, { cwd: root, encoding: 'utf8' });
+        map[name] = execSync(`git show ${ref}:${name}`, { cwd: root, encoding: 'utf8' });
     }
     return map;
 }
