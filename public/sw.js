@@ -1,6 +1,6 @@
 /* GitHub Pages 하위 경로에서도 동작하도록, 워커 파일 위치를 기준으로 범위를 잡습니다.
    프리캐시 목록은 빌드가 dist/precache-manifest.js 로 넣습니다. */
-const CACHE = 'homenote-shell-v4';
+const CACHE = 'homenote-shell-v5';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts('./precache-manifest.js');

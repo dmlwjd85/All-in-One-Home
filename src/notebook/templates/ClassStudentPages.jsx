@@ -6,7 +6,7 @@ import { TocCards } from '../TocCards.jsx';
 import { linkText } from '../labels.js';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { linkRosterValue, readPageFields, useRosterNames } from '../fieldStore.js';
-import { buildStudentExport } from '../studentExport.js';
+import { buildStudentExport, printStudentExport } from '../studentExport.js';
 import { quietStudents, whoPage } from '../ssugeokModel.js';
 
 export function TimetablePage({ extra, fields, setField, page }) {
@@ -14,7 +14,7 @@ export function TimetablePage({ extra, fields, setField, page }) {
     return (
         <div>
             <TitleBar title={page === 141 ? '1학기 시간표' : page === 142 ? '1학기 전담 · 특별실 시간표' : page === 143 ? '2학기 시간표' : '2학기 전담 · 특별실 시간표'} />
-            <table className="nb-table">
+            <table className="nb-table nb-table-text">
                 <thead>
                     <tr>
                         <th>교시</th>
@@ -51,7 +51,7 @@ export function RolesPage({ page, fields, setField }) {
     return (
         <div>
             <TitleBar title={page === 146 ? '1인 1역 1' : '1인 1역 2'} hint="역할과 번호를 적어 두세요" />
-            <table className="nb-table">
+            <table className="nb-table nb-table-text">
                 <thead><tr><th>역할</th><th>번호</th><th>이름</th><th>메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -99,6 +99,7 @@ function quietNumbers(notes) {
 
 function StudentExportButton({ n, rosterName, onToast }) {
     return (
+        <div className="nb-export-row">
         <button
             type="button"
             className="nb-export-student"
@@ -111,6 +112,19 @@ function StudentExportButton({ n, rosterName, onToast }) {
         >
             이 학생 누가기록·상담 내보내기
         </button>
+        <button
+            type="button"
+            className="nb-export-student nb-export-print"
+            data-action="print-student"
+            onClick={() => {
+                const payload = buildStudentExport(n, rosterName);
+                const opened = printStudentExport(payload);
+                if (!opened) onToast?.('인쇄 창이 막혀 있습니다. 브라우저에서 팝업을 허용해 주세요.');
+            }}
+        >
+            이 학생 기록 인쇄
+        </button>
+        </div>
     );
 }
 
@@ -123,9 +137,21 @@ export function RosterPage({ fields, setField, onGo, ssugeokNotes, signedIn }) {
         setField(`${key}${n}`, value);
         linkRosterValue(n, key, value, previous, signedIn);
     };
+    const jumpTo = (n) => {
+        const row = document.getElementById(`roster-${n}`);
+        row?.scrollIntoView({ block: 'center', inline: 'nearest' });
+        row?.querySelector('input')?.focus({ preventScroll: true });
+    };
     return (
-        <div>
+        <div className="nb-roster-page">
             <TitleBar title="명렬표" hint="번호를 누르면 학생 카드, '누가'를 누르면 누가기록이에요" />
+            <div className="nb-roster-jump" role="navigation" aria-label="번호로 이동">
+                {Array.from({ length: 32 }, (_, i) => (
+                    <button key={i + 1} type="button" onClick={() => jumpTo(i + 1)} aria-label={`${i + 1}번 줄로 이동`}>
+                        {i + 1}
+                    </button>
+                ))}
+            </div>
             <p className="nb-roster-link">이름 {named}/32 · 적는 즉시 학생 카드와 출결 번호 옆에 이어집니다. 새 학기 준비는 3쪽입니다.</p>
             {shown.length > 0 && (
                 <div className="nb-quiet">
@@ -138,13 +164,13 @@ export function RosterPage({ fields, setField, onGo, ssugeokNotes, signedIn }) {
             )}
             <div className="nb-roster">
                 {[0, 16].map((off) => (
-                    <table key={off} className="nb-table compact">
+                    <table key={off} className="nb-table nb-table-text compact">
                         <thead><tr><th>번호</th><th>이름</th><th>성별</th><th>생년월일</th><th>비고</th><th>누가</th></tr></thead>
                         <tbody>
                             {Array.from({ length: 16 }, (_, i) => {
                                 const n = off + i + 1;
                                 return (
-                                    <tr key={n}>
+                                    <tr key={n} id={`roster-${n}`}>
                                         <th><GoBtn to={157 + n * 2} onGo={onGo} className="num" aria={`${n}번 학생 카드`}>{n}</GoBtn></th>
                                         <td><Ink value={fields[`name${n}`]} onChange={(v) => setRoster(n, 'name', v)} aria={`${n}번 이름`} /></td>
                                         <td><Ink value={fields[`sex${n}`]} onChange={(v) => setRoster(n, 'sex', v)} aria={`${n}번 성별`} /></td>
@@ -168,7 +194,7 @@ export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
     return (
         <div>
             <TitleBar title={page === 155 ? '기초조사 1 · 1~16번' : '기초조사 2 · 17~32번'} />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>보호자</th><th>연락처</th><th>주소 · 메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 16 }, (_, i) => {
@@ -194,7 +220,7 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     return (
         <div>
             <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>알레르기 · 복약</th><th>분리 급식</th><th>메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 16 }, (_, i) => {
@@ -260,7 +286,7 @@ export function WhoRecordPage({ extra, fields, setField, onToast }) {
         <div>
             <TitleBar title={`${n}번 누가기록${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
             <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>날짜</th><th>영역</th><th>내용</th><th>NEIS</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -281,7 +307,7 @@ export function QuickNotePage({ fields, setField }) {
     return (
         <div>
             <TitleBar title="짧은 기록" hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>날짜</th><th>번호</th><th>내용</th><th>옮김</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 14 }, (_, i) => (
@@ -309,7 +335,7 @@ export function AttendPage({ pageRec, extra, fields, setField, onGo }) {
                 <label>월 <Ink value={fields.month} onChange={(v) => setField('month', v)} placeholder="월" /></label>
                 <Tick checked={fields.checked} onChange={(v) => setField('checked', v)} label="월말 출석부 대조 확인" />
             </div>
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead>
                     <tr>
                         <th>번호</th>
@@ -365,7 +391,7 @@ export function ConsultTimePage({ fields, setField }) {
     return (
         <div>
             <TitleBar title="상담 시간" hint="신청 받은 시간을 칸에 적어요" />
-            <table className="nb-table">
+            <table className="nb-table nb-table-text">
                 <thead><tr><th></th>{['월', '화', '수', '목', '금'].map((d) => <th key={d}>{d}</th>)}</tr></thead>
                 <tbody>
                     {['1교시 전', '점심', '방과후', '저녁'].map((slot, r) => (

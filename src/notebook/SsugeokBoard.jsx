@@ -170,9 +170,9 @@ export default function SsugeokBoard({
                     placeholder="@12 #행발 오늘 발표를 또렷하게"
                     aria-label="쓱적 입력"
                 />
-                <button type="submit">적기</button>
+                <button type="submit" aria-describedby="ssu-save-help">적기</button>
             </form>
-            <p className="nb-hint">Enter로 저장 · 어디서나 Alt+S · @번호 #행발 처럼 적으면 누가기록으로 제안해요</p>
+            <p id="ssu-save-help" className="nb-hint">적기는 이 줄을 목록에 남깁니다. Enter로도 저장되고, 누르는 동안 버튼이 내려갑니다. 어디서나 Alt+S · @번호 #행발 처럼 적으면 누가기록으로 제안해요.</p>
 
             <div className="nb-ssu-filters" role="tablist" aria-label="메모 상태">
                 {FILTERS.map(([id, label]) => (

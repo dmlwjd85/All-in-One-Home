@@ -4,6 +4,16 @@ export const todayYmd = () => {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
 };
 
+/** 한국 표준시 달력 날짜. 파일 이름에 UTC 날짜를 쓰면 오전 9시 전에 전날이 됩니다. */
+export function seoulYmd(date = new Date()) {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(date);
+}
+
 /** 이번 달 YYYY-MM */
 export const thisMonth = () => todayYmd().slice(0, 7);
 

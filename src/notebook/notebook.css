@@ -35,7 +35,8 @@
     min-width: 0;
 }
 
-.nb-toolbar-page {
+.nb-toolbar-page,
+.nb-toolbar-num {
     font-weight: 400;
     font-size: 13px;
     color: #3d312b;
@@ -43,6 +44,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.nb-toolbar-num { flex: 0 0 auto; overflow: visible; }
 
 .nb-toolbar-actions {
     display: flex;
@@ -151,9 +153,13 @@
 .nb-right .nb-tab:nth-child(13) { background: #fff; box-shadow: inset 0 0 0 2px #c2464f; color: #c2464f; }
 
 .nb-tab.is-on,
-.nb-tab[aria-current='page'] {
-    background: #c2464f !important;
-    color: #fffaf3;
+.nb-tab[aria-current='page'],
+.nb-left .nb-tab.is-on,
+.nb-right .nb-tab.is-on,
+.nb-left .nb-tab[aria-current='page'],
+.nb-right .nb-tab[aria-current='page'] {
+    background: #8e2433 !important;
+    color: #fffaf3 !important;
 }
 
 .nb-topnav {
@@ -323,10 +329,13 @@
     margin-bottom: 8px;
     padding-top: 8px;
 }
+.nb-titlebar:not(:has(.nb-kicker)) {
+    padding-top: 22px;
+}
 .nb-titlebar::before {
     content: '';
     position: absolute;
-    top: 0;
+    top: 2px;
     left: 10px;
     width: 46px;
     height: 12px;
@@ -334,6 +343,7 @@
     background: repeating-linear-gradient(90deg, #f7c1cf 0 7px, rgba(255, 255, 255, 0.7) 7px 9px);
     transform: rotate(-3deg);
     pointer-events: none;
+    z-index: 0;
 }
 .nb-kicker {
     font-size: 12px;
@@ -342,10 +352,12 @@
     margin: 6px 0 4px;
 }
 .nb-pagetitle {
+    position: relative;
+    z-index: 1;
     font-family: 'Hakgyoansim Dunggeunmiso', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: 26px;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1.2;
 }
 .nb-hint { font-size: 12px; color: #3d312b; margin-top: 2px; }
 
@@ -419,16 +431,28 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 12px;
+}
+.nb-home > .nb-kicker {
+    margin-top: 8px;
 }
 .nb-home-cards {
-    flex: 1;
+    flex: 0 1 auto;
     min-height: 0;
-    align-content: stretch;
-    grid-auto-rows: minmax(56px, 1fr);
+    align-content: start;
+    grid-auto-rows: auto;
+    overflow: visible;
+}
+.nb-home > .nb-titlebar,
+.nb-home > .nb-legend,
+.nb-home > .nb-goal,
+.nb-home > .nb-kicker,
+.nb-home > .nb-monthrow,
+.nb-home > .nb-home-bottom {
+    flex-shrink: 0;
 }
 .nb-home-cards .nb-gobtn.chip {
-    min-height: 64px;
+    min-height: 44px;
     height: 100%;
 }
 
@@ -602,13 +626,40 @@
 .nb-period { display: flex; gap: 4px; align-items: center; }
 .nb-period span { width: 14px; font-size: 11px; font-weight: 800; color: #534338; }
 
-.nb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.nb-table,
+.nb-table-text { width: 100%; border-collapse: collapse; font-size: 14px; }
 .nb-table th, .nb-table td {
     border: 1px solid rgba(74, 63, 58, 0.16);
     padding: 2px 4px;
 }
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.nb-roster-jump {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+    margin: 0 0 6px;
+}
+.nb-roster-jump button {
+    flex: 0 0 auto;
+    min-width: 32px;
+    min-height: 32px;
+    border: 0;
+    border-radius: 999px;
+    background: #fde2e4;
+    color: #4a3f3a;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.nb-roster-jump button:active,
+.nb-sticker:active,
+.nb-ssu-capture button:active,
+.nb-hubbtn:active {
+    transform: translateY(1px);
+}
 .nb-boardbar {
     text-align: center;
     background: #2d4a38;
@@ -718,6 +769,11 @@
     border-radius: 999px;
     font-weight: 800;
     cursor: pointer;
+}
+.nb-sticker[aria-pressed='true'] {
+    background: #8e2433;
+    color: #fffaf3;
+    box-shadow: inset 0 0 0 2px #5c1422;
 }
 .nb-attend-head { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
 .nb-lined { display: grid; gap: 2px; }
@@ -902,13 +958,19 @@
 .nb-trail-text { flex: 1; min-width: 8rem; }
 .nb-fab {
     position: fixed;
-    right: 84px;
-    bottom: 18px;
+    /* 오른쪽 탭(스티커) 왼쪽에 둡니다. 용지가 가운데일 때도 탭을 가리지 않습니다. */
+    right: calc((100vw - min(100vw - 16px, (100dvh - 72px) * 16 / 9)) / 2 + 96px);
+    bottom: 28px;
     z-index: 30;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
+    pointer-events: none;
+}
+.nb-fab-btn,
+.nb-fab-pop {
+    pointer-events: auto;
 }
 .nb-fab-pop {
     width: min(420px, calc(100vw - 120px));
@@ -953,6 +1015,73 @@
     .nb-table .nb-tick {
         min-height: 44px;
     }
+    /* 명렬 16줄은 44px이면 768 높이에 스크롤 안에만 남습니다. 남은 높이를 16칸이 나눠 갖습니다. */
+    .nb-body:has(.nb-roster-page) {
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-width: auto;
+    }
+    .nb-body:has(.nb-roster-page)::-webkit-scrollbar { width: 10px; }
+    .nb-body:has(.nb-roster-page)::-webkit-scrollbar-thumb {
+        background: #8e2433;
+        border-radius: 999px;
+    }
+    .nb-roster-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-roster {
+        flex: 1 1 auto;
+        min-height: 0;
+        gap: 6px;
+    }
+    .nb-roster .nb-table {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+    .nb-roster .nb-table thead,
+    .nb-roster .nb-table tbody { display: block; min-height: 0; }
+    .nb-roster .nb-table thead { flex: 0 0 auto; }
+    .nb-roster .nb-table tbody {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-rows: repeat(16, minmax(22px, 1fr));
+    }
+    .nb-roster .nb-table tr {
+        display: grid;
+        grid-template-columns: 2.2rem minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 1.1fr) minmax(0, 1fr) 2.8rem;
+        min-height: 0;
+        align-items: stretch;
+    }
+    .nb-roster .nb-table th,
+    .nb-roster .nb-table td {
+        height: auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 2px;
+        overflow: hidden;
+    }
+    .nb-roster .nb-table .nb-ink,
+    .nb-roster .nb-table .nb-gobtn,
+    .nb-roster .nb-table .nb-tick {
+        min-height: 22px;
+        height: 100%;
+        font-size: 14px;
+        line-height: 1.15;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    .nb-roster-page .nb-titlebar { margin-bottom: 2px; padding-top: 16px; }
+    .nb-roster-page .nb-pagetitle { font-size: 20px; line-height: 1.1; }
+    .nb-roster-page .nb-hint,
+    .nb-roster-page .nb-roster-link { margin: 0 0 2px; font-size: 12px; }
 }
 
 @media (max-width: 1100px) {
@@ -964,7 +1093,7 @@
 
 @media (max-width: 800px) {
     .nb-page.has-chrome { grid-template-columns: 56px minmax(0, 1fr) 56px; }
-    .nb-tab { font-size: 10px; }
+    .nb-tab { font-size: 12px; }
     .nb-yeargrid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
     .nb-week-days { grid-template-columns: 1fr; }
     .nb-linkgrid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1225,6 +1354,12 @@
     font-size: 12px;
     font-weight: 800;
 }
+.nb-export-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
 .nb-export-student {
     position: sticky;
     top: 0;
@@ -1331,10 +1466,41 @@
     min-height: 44px;
     border-radius: 12px;
     padding: 0 12px;
+    font-size: 13px;
+}
+.nb-app.is-phone .nb-folio,
+.nb-app.is-phone .nb-copy,
+.nb-app.is-phone .nb-hint,
+.nb-app.is-phone .nb-kicker,
+.nb-app.is-phone small,
+.nb-app.is-phone .nb-minimonth,
+.nb-app.is-phone .nb-minimonth-dow span,
+.nb-app.is-phone .nb-minimonth-grid span,
+.nb-app.is-phone .nb-month-dow span,
+.nb-app.is-phone .nb-month-cell .cap,
+.nb-app.is-phone .nb-month-cell .d,
+.nb-app.is-phone .nb-period span,
+.nb-app.is-phone .nb-mini,
+.nb-app.is-phone .nb-dday-badge,
+.nb-app.is-phone .nb-dday-mark,
+.nb-app.is-phone .nb-ssu-line span,
+.nb-app.is-phone .nb-tagchip small,
+.nb-app.is-phone .nb-praise-card small,
+.nb-app.is-phone .nb-submit-grid small,
+.nb-app.is-phone .nb-legend li,
+.nb-app.is-phone .nb-acad-hol {
+    font-size: 12px;
 }
 .nb-app.is-phone .nb-toolbar {
     flex-wrap: nowrap;
-    gap: 6px;
+    gap: 4px;
+    padding: 0 6px;
+}
+.nb-app.is-phone .nb-toolbar-actions { gap: 4px; flex: 0 0 auto; }
+.nb-app.is-phone .nb-toolbtn {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
 }
 .nb-app.is-phone .nb-toolbar-brand {
     flex: 1 1 auto;
@@ -1342,48 +1508,72 @@
     overflow: hidden;
     flex-wrap: nowrap;
 }
+.nb-app.is-phone .nb-toolbar-brand svg { flex: 0 0 auto; }
 .nb-brand-name,
 .nb-app.is-phone .nb-brand-name {
     white-space: nowrap;
 }
 .nb-app.is-phone .nb-brand-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
+    min-width: max-content;
+    overflow: visible;
+    text-overflow: clip;
+    font-size: 15px;
 }
 .nb-app.is-phone .nb-toolbar-page {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-width: 0;
 }
+.nb-app.is-phone .nb-toolbar-num {
+    flex: 0 0 auto;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.nb-tabbar { display: contents; }
 .nb-tab-hint { display: none; }
+.nb-app.is-phone .nb-tabbar {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    min-width: 0;
+}
 .nb-app.is-phone .nb-left,
 .nb-app.is-phone .nb-right {
     position: relative;
-    mask-image: linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 36px), transparent);
+    flex: 1 1 auto;
+    min-width: 0;
+    mask-image: linear-gradient(to right, transparent 0, #000 8px, #000 calc(100% - 14px), transparent);
 }
 .nb-app.is-phone .nb-tab-hint {
     display: flex;
     align-items: center;
-    position: sticky;
-    right: 0;
-    z-index: 2;
+    position: static;
     flex: 0 0 auto;
     min-height: 44px;
-    padding: 0 8px 0 14px;
+    padding: 0 8px;
     font-size: 12px;
     font-weight: 800;
-    color: #c2464f;
-    background: linear-gradient(90deg, rgba(251, 247, 241, 0), #fbf7f1 35%);
+    color: #8e2433;
+    background: transparent;
     pointer-events: none;
 }
+.nb-app.is-phone .nb-tab-hint.is-gone { display: none; }
 .nb-app.is-phone .nb-body {
     overflow: visible;
-    padding-bottom: 128px;
+    padding-bottom: calc(34px + 12px + 16px);
+}
+.nb-app.is-phone .nb-fab.is-away {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
 }
 .nb-app.is-phone .nb-ink,
 .nb-app.is-phone .nb-field {
-    scroll-margin-bottom: 128px;
+    scroll-margin-bottom: calc(34px + 12px + 16px);
+}
+.nb-app.is-phone .nb-roster-jump button {
+    min-width: 44px;
+    min-height: 44px;
 }
 .nb-app.is-phone .nb-gobtn.num {
     width: 44px;

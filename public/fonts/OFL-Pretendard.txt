@@ -1,5 +1,5 @@
 이 디렉터리의 Pretendard-Regular.woff2(굵기 400)와 Pretendard-Bold.woff2(굵기 700)는
-Pretendard 1.3.9 가변 글꼴에서 한글 음절·한글 자모·라틴·일반 문장부호만 남긴 서브셋입니다.
+Pretendard 1.3.9에서 KS X 1001 한글 2,350자와 ASCII만 남긴 서브셋입니다.
 
 Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
 with Reserved Font Name Pretendard.

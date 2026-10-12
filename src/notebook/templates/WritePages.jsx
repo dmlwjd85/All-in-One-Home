@@ -39,7 +39,7 @@ export function TagIndexPage({ extra, fields, setField }) {
     return (
         <div>
             <TitleBar title={extra.tag || '#태그'} hint="색인 · 날짜 · 쪽 · 학생 · 내용" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>날짜</th><th>쪽</th><th>학생</th><th>내용</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 14 }, (_, i) => (
@@ -121,7 +121,8 @@ export function SsugeokPage({
                     )}
                 </details>
             )}
-            <button type="button" className="nb-hubbtn" onClick={onOpenHub}>예전 분류 허브</button>
+            <p id="ssu-hub-help" className="nb-hint">예전 분류 허브는 이전 화면에서 메모를 나눕니다. 누르는 동안 버튼이 내려갑니다.</p>
+            <button type="button" className="nb-hubbtn" aria-describedby="ssu-hub-help" onClick={onOpenHub}>예전 분류 허브</button>
         </div>
     );
 }
@@ -212,17 +213,30 @@ const STICKERS = [
     '출결', '보건', '안전', '예산', '월', '화', '수', '목', '금',
 ];
 
+function stickerTokens(value) {
+    return String(value || '').split(/\s+/).filter(Boolean);
+}
+
 export function StickerSheetPage({ page, fields, setField }) {
+    const picked = stickerTokens(fields.picked);
+    const toggle = (word) => {
+        const next = stickerTokens(fields.picked);
+        const at = next.indexOf(word);
+        if (at >= 0) next.splice(at, 1);
+        else next.push(word);
+        setField('picked', next.join(' '));
+    };
     return (
         <div>
-            <TitleBar title={`스티커 시트 p.${page}`} hint="눌러 고른 뒤, 필요한 쪽에 글자 스티커처럼 옮겨 적어요" />
+            <TitleBar title={`스티커 시트 p.${page}`} hint="누르면 선택되고 다시 누르면 해제됩니다. 요일·분류 스티커는 색이 바뀝니다." />
             <div className="nb-sticker-sheet">
                 {STICKERS.map((s) => (
                     <button
                         key={s}
                         type="button"
                         className="nb-sticker"
-                        onClick={() => setField('picked', `${fields.picked ? `${fields.picked} ` : ''}${s}`)}
+                        aria-pressed={picked.includes(s)}
+                        onClick={() => toggle(s)}
                     >
                         {s}
                     </button>

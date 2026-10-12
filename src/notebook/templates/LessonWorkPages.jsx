@@ -11,7 +11,7 @@ export function ProgressPage({ extra, fields, setField }) {
     return (
         <div>
             <TitleBar title={`진도표 ${extra.slot || ''}`} hint="단원과 차시를 적어 가요" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>월일</th><th>교과</th><th>단원 · 차시</th><th>비고</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 14 }, (_, i) => (
@@ -31,7 +31,7 @@ export function EvalAreaPage({ fields, setField }) {
     return (
         <div>
             <TitleBar title="평가 영역" />
-            <table className="nb-table">
+            <table className="nb-table nb-table-text">
                 <thead><tr><th>영역</th><th>기준</th><th>메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 10 }, (_, i) => (
@@ -99,7 +99,7 @@ export function ScorePage({ pageRec, fields, setField, onGo }) {
         <div>
             <TitleBar title={`점수 체크 · ${first}~${last}번`} hint="번호를 누르면 학생 카드로 가요" />
             <Ink value={fields.title} onChange={(v) => setField('title', v)} placeholder="평가명" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>점수</th><th>번호</th><th>점수</th></tr></thead>
                 <tbody>
                     {left.map((a, i) => {
@@ -121,7 +121,7 @@ export function ScorePage({ pageRec, fields, setField, onGo }) {
 
 function DeadlineLines({ fields, setField }) {
     return (
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>기한</th><th>내용</th><th>완료</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -235,7 +235,7 @@ export function BudgetOverview({ onGo }) {
     return (
         <section className="nb-budget" aria-label="예산 합계">
             <p className="nb-budget-total">예산 {formatWon(sum.budget)} · 집행 {formatWon(sum.used)} · 남음 {formatWon(sum.left)}</p>
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>사업</th><th>예산</th><th>집행</th><th>남음</th></tr></thead>
                 <tbody>
                     {sum.rows.map((row) => (

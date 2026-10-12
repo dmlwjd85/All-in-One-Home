@@ -5,7 +5,7 @@ import { Modal, Toast } from './components/ui.jsx';
 import { applyBackupLocal, BACKUP_LABELS, buildExportPayload, validateBackup } from './lib/backup.js';
 import { reportSaveFailure } from './lib/saveNotice.js';
 import { pushBackupCloud, useSharedList, useSharedRecord } from './lib/store.js';
-import { downloadText } from './lib/utils.js';
+import { downloadText, seoulYmd } from './lib/utils.js';
 import NotebookApp from './notebook/NotebookApp.jsx';
 
 export default function App() {
@@ -147,7 +147,7 @@ export default function App() {
             submissionSheets: submissionSheets.items,
             praiseBoard,
         });
-        downloadText(`교무수첩-백업-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
+        downloadText(`교무수첩-백업-${seoulYmd()}.json`, JSON.stringify(payload, null, 2));
         notify('백업 파일을 내려받았습니다.');
     };
 

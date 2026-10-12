@@ -1,6 +1,25 @@
+import { useState } from 'react';
 import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
 import { partitionLinks } from './linkParts.js';
 import { toneForPage, toneForType } from './tones.js';
+
+function TabBar({ side, label, children }) {
+    const [showHint, setShowHint] = useState(true);
+    return (
+        <div className={`nb-tabbar nb-tabbar-${side}`}>
+            <nav
+                className={side === 'left' ? 'nb-left' : 'nb-right'}
+                aria-label={label}
+                onScroll={(e) => {
+                    if (e.currentTarget.scrollLeft > 8) setShowHint(false);
+                }}
+            >
+                {children}
+            </nav>
+            <span className={`nb-tab-hint ${showHint ? '' : 'is-gone'}`}>옆으로</span>
+        </div>
+    );
+}
 
 export default function NotebookShell({
     page,
@@ -19,7 +38,7 @@ export default function NotebookShell({
     return (
         <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone} style={style}>
             {showChrome && (
-                <nav className="nb-left" aria-label="구역 탭">
+                <TabBar side="left" label="구역 탭">
                     {LEFT_TABS.map((tab) => (
                         <button
                             key={tab.label}
@@ -33,8 +52,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
-                    <span className="nb-tab-hint">옆으로</span>
-                </nav>
+                </TabBar>
             )}
 
             <div className="nb-main">
@@ -66,7 +84,7 @@ export default function NotebookShell({
             </div>
 
             {showChrome && (
-                <nav className="nb-right" aria-label="달 · 스티커 탭">
+                <TabBar side="right" label="달 · 스티커 탭">
                     {RIGHT_TABS.map((tab) => (
                         <button
                             key={tab.label}
@@ -80,8 +98,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
-                    <span className="nb-tab-hint">옆으로</span>
-                </nav>
+                </TabBar>
             )}
         </div>
     );

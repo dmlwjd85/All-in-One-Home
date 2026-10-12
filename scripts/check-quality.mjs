@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { applyBackupLocal, BACKUP_LISTS, BACKUP_RECORD, mergeById, mergePlain, validateBackup } from '../src/lib/backup.js';
 import { paperFace } from '../src/notebook/labels.js';
+import { seoulYmd } from '../src/lib/utils.js';
 import { fitCanvas, PAGE_H } from '../src/notebook/layout.js';
 import { monthPage } from '../src/notebook/nav.js';
 import { isLocalOnlyPage } from '../src/notebook/localPages.js';
@@ -70,6 +71,12 @@ const mergedRows = mergeById(
 ok(mergedRows.length === 3 && mergedRows[0].text === '백업' && mergedRows[1].text === '남김' && mergedRows[2].text === '추가', '목록 합치기');
 ok(mergePlain({ goal: '사이좋게', extra: '유지' }, { goal: '새 목표' }).extra === '유지', '칸 합치기');
 ok(paperFace('월').title === '월간 노트' && paperFace('월').title.length > 1, '월 제목');
+for (const name of ['Pretendard-Regular.woff2', 'Pretendard-Bold.woff2']) {
+    const size = statSync(new URL(`../public/fonts/${name}`, import.meta.url)).size;
+    ok(size >= 80 * 1024 && size <= 220 * 1024, `${name} 크기 ${size}`);
+}
+ok(seoulYmd(new Date('2026-03-01T23:30:00.000Z')) === '2026-03-02', '한국 날짜는 UTC 전날이 아님');
+ok(seoulYmd(new Date('2026-03-01T00:30:00.000Z')) === '2026-03-01', '한국 오전은 같은 날');
 ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').title === '무지 노트 2', '무지 제목');
 
 {

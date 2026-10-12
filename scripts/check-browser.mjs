@@ -177,12 +177,37 @@ export async function runBrowserQuality() {
             await go(page, 468);
         }
 
+        await go(page, 154);
+        const tablePx = await page.$eval('.nb-table-text', (el) => parseFloat(getComputedStyle(el).fontSize));
+        if (!(tablePx >= 14)) browserErrors.push(`표 글자 ${tablePx}px`);
+        const jumpCount = await page.$$eval('.nb-roster-jump button', (els) => els.length);
+        if (jumpCount !== 32) browserErrors.push(`명렬 번호 이동 ${jumpCount}개`);
+
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await go(page, 2);
         const brand = await page.$eval('.nb-brand-name', (el) => getComputedStyle(el).whiteSpace);
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
-        const hint = await page.$eval('.nb-left .nb-tab-hint', (el) => getComputedStyle(el).display);
+        const hint = await page.$eval('.nb-tab-hint', (el) => getComputedStyle(el).display);
         if (hint === 'none') browserErrors.push('구역 탭 스크롤 힌트가 없음');
+        const hintOverlap = await page.evaluate(() => {
+            const hintEl = document.querySelector('.nb-tabbar-left .nb-tab-hint');
+            const nav = document.querySelector('.nb-left');
+            const student = [...document.querySelectorAll('.nb-left .nb-tab')].find((el) => el.textContent.trim() === '학생');
+            if (!hintEl || !nav || !student) return true;
+            const a = hintEl.getBoundingClientRect();
+            const b = student.getBoundingClientRect();
+            const box = nav.getBoundingClientRect();
+            const left = Math.max(b.left, box.left);
+            const right = Math.min(b.right, box.right);
+            const top = Math.max(b.top, box.top);
+            const bottom = Math.min(b.bottom, box.bottom);
+            if (right - left < 1 || bottom - top < 1) return false;
+            return !(a.right <= left || right <= a.left || a.bottom <= top || bottom <= a.top);
+        });
+        if (hintOverlap) browserErrors.push('옆으로 힌트가 학생 탭과 겹침');
+        await go(page, 569);
+        const stickerPressed = await page.$eval('.nb-sticker', (el) => el.hasAttribute('aria-pressed'));
+        if (!stickerPressed) browserErrors.push('스티커 버튼에 누름 상태가 없음');
 
         await go(page, 159);
         const exportBtn = await page.$('[data-action="export-student"]');

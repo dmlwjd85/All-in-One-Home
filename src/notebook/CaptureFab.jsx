@@ -4,7 +4,23 @@ import { captureNote } from './ssugeokStore.js';
 export default function CaptureFab({ author, signedIn, fromPage, onChanged, onToast }) {
     const [open, setOpen] = useState(false);
     const [text, setText] = useState('');
+    const [scrolling, setScrolling] = useState(false);
     const inputRef = useRef(null);
+
+    useEffect(() => {
+        let timer = 0;
+        const onScroll = () => {
+            if (!window.matchMedia('(max-width: 700px)').matches) return;
+            setScrolling(true);
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => setScrolling(false), 700);
+        };
+        document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+        return () => {
+            document.removeEventListener('scroll', onScroll, { capture: true });
+            window.clearTimeout(timer);
+        };
+    }, []);
 
     useEffect(() => {
         const onKey = (e) => {
@@ -35,7 +51,7 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
     };
 
     return (
-        <div className="nb-fab">
+        <div className={`nb-fab ${scrolling ? 'is-away' : ''}`}>
             {open && (
                 <form
                     className="nb-fab-pop"
