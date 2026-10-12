@@ -93,6 +93,168 @@ async function inspect(page) {
     });
 }
 
+async function geometryHits(page) {
+    return page.evaluate(() => {
+        document.querySelectorAll('.nb-body, .nb-stage-wrap').forEach((el) => {
+            el.scrollTop = 0;
+        });
+        const hits = [];
+        const slop = 2;
+        const visibleBox = (el) => {
+            if (!el) return null;
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return null;
+            const rect = el.getBoundingClientRect();
+            if (rect.width < 1 || rect.height < 1) return null;
+            return rect;
+        };
+        const overlaps = (a, b) => Boolean(a && b) && !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5);
+        const inside = (box, host) => box.top >= host.top - slop && box.bottom <= host.bottom + slop && box.left >= host.left - slop && box.right <= host.right + slop;
+        const labelOf = (el) => (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '컨트롤').trim().replace(/\s+/g, ' ').slice(0, 18);
+        const num = document.querySelector('.nb-toolbar-num');
+        const numBox = visibleBox(num);
+        const numText = (num?.textContent || '').trim();
+        const wide = window.innerWidth >= 700;
+        const numOk = wide ? /^p\.\d+\/580$/.test(numText) : /^p\.\d+$/.test(numText);
+        if (!numOk) hits.push(`쪽번호 문구 ${numText}`);
+        if (num && num.scrollWidth > num.clientWidth + 1) hits.push(`쪽번호 잘림 ${numText}`);
+        if (numBox && (numBox.left < -1 || numBox.right > window.innerWidth + 1)) hits.push('쪽번호가 화면 밖');
+        if (numBox) {
+            for (const x of [numBox.left + 1, (numBox.left + numBox.right) / 2, numBox.right - 1]) {
+                const hit = document.elementFromPoint(x, (numBox.top + numBox.bottom) / 2);
+                if (hit && hit !== num && !num.contains(hit)) hits.push(`쪽번호가 가려짐 ${numText}`);
+            }
+        }
+        for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
+            if (overlaps(numBox, visibleBox(btn))) hits.push(`쪽번호·버튼 ${btn.getAttribute('aria-label') || btn.textContent.trim()}`);
+        }
+        const pageEl = document.querySelector('.nb-page');
+        const paper = visibleBox(pageEl);
+        const title = document.querySelector('.nb-pagetitle');
+        const bar = title?.closest('.nb-titlebar');
+        if (title && bar) {
+            const before = getComputedStyle(bar, '::before');
+            const titleBox = title.getBoundingClientRect();
+            const barBox = bar.getBoundingClientRect();
+            if (before.content !== 'none' && before.position === 'absolute') {
+                const tapeBottom = barBox.top + (parseFloat(before.top) || 0) + (parseFloat(before.height) || 0);
+                if (titleBox.top < tapeBottom - 1) hits.push('제목 장식이 제목과 겹침');
+            } else if (before.position === 'relative' || before.position === 'static') {
+                const tapeH = parseFloat(before.height) || 0;
+                if (tapeH > 0 && titleBox.top < barBox.top + tapeH - 1) hits.push('제목 장식이 제목과 겹침');
+            }
+        }
+        for (const tabbar of document.querySelectorAll('.nb-tabbar')) {
+            const hint = tabbar.querySelector('.nb-tab-hint');
+            const hintBox = visibleBox(hint);
+            const nav = tabbar.querySelector('.nb-left, .nb-right');
+            const navBox = visibleBox(nav);
+            if (hint && hint.scrollWidth > hint.clientWidth + 1) hits.push('힌트 잘림');
+            if (hintBox && hintBox.top < window.innerHeight && hintBox.bottom > 0 && (hintBox.right > window.innerWidth + 1 || hintBox.left < -1)) {
+                hits.push('힌트가 화면 밖');
+            }
+            for (const tab of tabbar.querySelectorAll('.nb-tab')) {
+                const tabBox = visibleBox(tab);
+                if (overlaps(hintBox, tabBox)) {
+                    hits.push(`힌트·탭 ${tab.textContent.trim()}`);
+                    break;
+                }
+            }
+            const current = tabbar.querySelector('.nb-tab[aria-current="page"]');
+            const currentBox = visibleBox(current);
+            if (currentBox && navBox && !inside(currentBox, navBox)) hits.push(`선택탭 잘림 ${current.textContent.trim()}`);
+            if (currentBox && paper && !inside(currentBox, paper)) hits.push(`선택탭이 용지 밖 ${current.textContent.trim()}`);
+        }
+        const jump = document.querySelector('.nb-roster-jump');
+        if (jump && paper) {
+            if (jump.scrollWidth > jump.clientWidth + 1) hits.push('번호 칩이 가로로 스크롤됨');
+            for (const chip of jump.querySelectorAll('button')) {
+                const chipBox = visibleBox(chip);
+                if (!chipBox) {
+                    hits.push(`번호 칩 안 보임 ${chip.textContent.trim()}`);
+                    break;
+                }
+                if (!inside(chipBox, paper)) {
+                    hits.push(`번호 칩 잘림 ${chip.textContent.trim()}`);
+                    break;
+                }
+            }
+        }
+        const fab = document.querySelector('.nb-fab-btn');
+        const fabBox = visibleBox(fab);
+        if (fabBox && paper && wide && overlaps(fabBox, paper)) hits.push('쓱적이 용지 안');
+        if (fabBox) {
+            const stage = document.querySelector('.nb-stage-wrap')?.getBoundingClientRect();
+            const nodes = document.querySelectorAll('.nb-body button, .nb-body input, .nb-body select, .nb-body textarea, .nb-body a, .nb-tab');
+            for (const el of nodes) {
+                if (el.classList.contains('sr-only')) continue;
+                const elBox = visibleBox(el);
+                if (!elBox) continue;
+                if (elBox.bottom < 0 || elBox.top > window.innerHeight || elBox.right < 0 || elBox.left > window.innerWidth) continue;
+                if (!overlaps(fabBox, elBox)) continue;
+                if (stage) {
+                    const top = Math.max(fabBox.top, elBox.top, stage.top);
+                    const bottom = Math.min(fabBox.bottom, elBox.bottom, stage.bottom);
+                    const left = Math.max(fabBox.left, elBox.left, stage.left);
+                    const right = Math.min(fabBox.right, elBox.right, stage.right);
+                    if (bottom - top < 1 || right - left < 1) continue;
+                }
+                hits.push(`쓱적·${labelOf(el)}`);
+                break;
+            }
+        }
+        if (pageEl && paper) {
+            const controls = pageEl.querySelectorAll('button, input, select, textarea, a');
+            let clipped = 0;
+            for (const el of controls) {
+                if (el.closest('.nb-fab') || el.classList.contains('sr-only')) continue;
+                if (el.classList.contains('nb-tab') && el.getAttribute('aria-current') !== 'page') continue;
+                const box = visibleBox(el);
+                if (!box) continue;
+                if (inside(box, paper)) continue;
+                const ix = Math.min(box.right, paper.right) - Math.max(box.left, paper.left);
+                const iy = Math.min(box.bottom, paper.bottom) - Math.max(box.top, paper.top);
+                const partial = ix > 1 && iy > 1;
+                let scrollable = false;
+                if (!partial) {
+                    let node = el.parentElement;
+                    while (node && node !== pageEl.parentElement) {
+                        const style = getComputedStyle(node);
+                        const host = node.getBoundingClientRect();
+                        const hostInPage = inside(host, paper);
+                        const scrollY = (style.overflowY === 'auto' || style.overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 1;
+                        const scrollX = (style.overflowX === 'auto' || style.overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 1;
+                        const vertical = box.top < paper.top - slop || box.bottom > paper.bottom + slop;
+                        const horizontal = box.left < paper.left - slop || box.right > paper.right + slop;
+                        if (hostInPage && ((vertical && scrollY && box.height <= node.clientHeight + slop) || (horizontal && scrollX && box.width <= node.clientWidth + slop))) {
+                            const revealsY = !vertical || (scrollY && box.height <= node.clientHeight + slop);
+                            const revealsX = !horizontal || (scrollX && box.width <= node.clientWidth + slop);
+                            if (revealsY && revealsX) {
+                                scrollable = true;
+                                break;
+                            }
+                        }
+                        node = node.parentElement;
+                    }
+                }
+                if (partial || !scrollable) {
+                    clipped += 1;
+                    if (clipped <= 2) hits.push(`잘린 버튼 ${labelOf(el)}`);
+                }
+            }
+            if (clipped > 2) hits.push(`잘린 버튼 ${clipped}개`);
+        }
+        if (window.innerWidth >= 1367) {
+            const table = document.querySelector('.nb-table-text');
+            if (table) {
+                const px = parseFloat(getComputedStyle(table).fontSize);
+                if (!(px >= 14)) hits.push(`표 글자 ${px}px`);
+            }
+        }
+        return hits;
+    });
+}
+
 export async function runBrowserQuality() {
     const dist = resolve(root, 'dist/index.html');
     if (!existsSync(dist)) throw new Error('dist가 없습니다. npm run build 뒤에 브라우저 검사를 실행하세요.');
@@ -145,6 +307,8 @@ export async function runBrowserQuality() {
             if (info.overflow) overflowPages.push(n);
             if (info.textLength <= 4 || info.title.length <= 1) empty.push(`${n}:${info.title || info.textLength}`);
             if (info.missed.length) unreachable.push(`${n}:${info.missed.slice(0, 4).join(',')}`);
+            const phoneHits = await geometryHits(page);
+            if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
             const first = await page.$('.nb-body [data-to]');
             if (first) {
                 const dest = Number(await page.evaluate((el) => el.getAttribute('data-to'), first));
@@ -158,6 +322,15 @@ export async function runBrowserQuality() {
         if (overflowPages.length) browserErrors.push(`390px 가로 넘침 ${overflowPages.slice(0, 12).join(',')}`);
         if (unreachable.length) browserErrors.push(`390px 닿지 않는 본문 링크 ${unreachable.slice(0, 8).join(' | ')}`);
 
+        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [360, 780, '360']]) {
+            await page.setViewport({ width, height, deviceScaleFactor: 1 });
+            await page.waitForFunction((isPhone) => document.querySelector('.nb-app')?.classList.contains('is-phone') === isPhone, {}, width <= 700);
+            for (let n = 1; n <= 580; n += 1) {
+                await go(page, n);
+                const hits = await geometryHits(page);
+                if (hits.length) browserErrors.push(`${label} p${n} ${hits.slice(0, 4).join(', ')}`);
+            }
+        }
         await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
         await go(page, 468);
         const budget = await inspect(page);
@@ -189,22 +362,6 @@ export async function runBrowserQuality() {
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
         const hint = await page.$eval('.nb-tab-hint', (el) => getComputedStyle(el).display);
         if (hint === 'none') browserErrors.push('구역 탭 스크롤 힌트가 없음');
-        const hintOverlap = await page.evaluate(() => {
-            const hintEl = document.querySelector('.nb-tabbar-left .nb-tab-hint');
-            const nav = document.querySelector('.nb-left');
-            const student = [...document.querySelectorAll('.nb-left .nb-tab')].find((el) => el.textContent.trim() === '학생');
-            if (!hintEl || !nav || !student) return true;
-            const a = hintEl.getBoundingClientRect();
-            const b = student.getBoundingClientRect();
-            const box = nav.getBoundingClientRect();
-            const left = Math.max(b.left, box.left);
-            const right = Math.min(b.right, box.right);
-            const top = Math.max(b.top, box.top);
-            const bottom = Math.min(b.bottom, box.bottom);
-            if (right - left < 1 || bottom - top < 1) return false;
-            return !(a.right <= left || right <= a.left || a.bottom <= top || bottom <= a.top);
-        });
-        if (hintOverlap) browserErrors.push('옆으로 힌트가 학생 탭과 겹침');
         await go(page, 569);
         const stickerPressed = await page.$eval('.nb-sticker', (el) => el.hasAttribute('aria-pressed'));
         if (!stickerPressed) browserErrors.push('스티커 버튼에 누름 상태가 없음');

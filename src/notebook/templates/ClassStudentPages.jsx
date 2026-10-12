@@ -51,7 +51,7 @@ export function RolesPage({ page, fields, setField }) {
     return (
         <div>
             <TitleBar title={page === 146 ? '1인 1역 1' : '1인 1역 2'} hint="역할과 번호를 적어 두세요" />
-            <table className="nb-table nb-table-text">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>역할</th><th>번호</th><th>이름</th><th>메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -104,25 +104,27 @@ function StudentExportButton({ n, rosterName, onToast }) {
             type="button"
             className="nb-export-student"
             data-action="export-student"
+            aria-label="이 학생 누가기록·상담 내보내기"
             onClick={() => {
                 const payload = buildStudentExport(n, rosterName);
                 downloadText(`학생-${n}-누가기록-상담.json`, JSON.stringify(payload, null, 2));
                 onToast?.(`${n}번 누가기록·상담 파일을 내려받았습니다.`);
             }}
         >
-            이 학생 누가기록·상담 내보내기
+            내보내기
         </button>
         <button
             type="button"
             className="nb-export-student nb-export-print"
             data-action="print-student"
+            aria-label="이 학생 기록 인쇄"
             onClick={() => {
                 const payload = buildStudentExport(n, rosterName);
                 const opened = printStudentExport(payload);
                 if (!opened) onToast?.('인쇄 창이 막혀 있습니다. 브라우저에서 팝업을 허용해 주세요.');
             }}
         >
-            이 학생 기록 인쇄
+            인쇄
         </button>
         </div>
     );
@@ -192,7 +194,7 @@ export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 155 ? 1 : 17;
     const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
-        <div>
+        <div className="nb-compact-rows">
             <TitleBar title={page === 155 ? '기초조사 1 · 1~16번' : '기초조사 2 · 17~32번'} />
             <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>보호자</th><th>연락처</th><th>주소 · 메모</th></tr></thead>
@@ -218,7 +220,7 @@ export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 157 ? 1 : 17;
     const byNum = new Map(numberedLinks(partitionLinks(pageRec).body).map((l) => [Number(l.label), l.to]));
     return (
-        <div>
+        <div className="nb-compact-rows">
             <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} />
             <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>알레르기 · 복약</th><th>분리 급식</th><th>메모</th></tr></thead>
@@ -251,9 +253,11 @@ export function StudentCardPage({ page, pageRec, pages, extra, fields, setField,
     const rosterName = rosterNames[n] || '';
     const shownName = fields.name || rosterName;
     return (
-        <div>
-            <TitleBar title={`학생 카드 · ${n}번${shownName ? ` ${shownName}` : ''}`} hint={rosterName ? '이름은 명렬표에서 이어집니다.' : '이름은 명렬표 154쪽에 적어도 됩니다.'} />
-            <StudentExportButton n={n} rosterName={rosterName || fields.name || ''} onToast={onToast} />
+        <div className="nb-card-page">
+            <div className="nb-card-head">
+                <TitleBar title={`학생 카드 · ${n}번${shownName ? ` ${shownName}` : ''}`} hint={rosterName ? '이름은 명렬표에서 이어집니다.' : '이름은 명렬표 154쪽에 적어도 됩니다.'} />
+                <StudentExportButton n={n} rosterName={rosterName || fields.name || ''} onToast={onToast} />
+            </div>
             <div className="nb-scard">
                 <div className="nb-scard-top">
                     <div className="nb-photo">사진</div>
@@ -284,8 +288,10 @@ export function WhoRecordPage({ extra, fields, setField, onToast }) {
     const rosterNames = useRosterNames();
     return (
         <div>
-            <TitleBar title={`${n}번 누가기록${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
-            <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
+            <div className="nb-card-head">
+                <TitleBar title={`${n}번 누가기록${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint="짧게 적고, 생기부나 누가기록에 옮기면 체크해요" />
+                <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
+            </div>
             <table className="nb-table nb-table-text compact">
                 <thead><tr><th>날짜</th><th>영역</th><th>내용</th><th>NEIS</th></tr></thead>
                 <tbody>
@@ -371,9 +377,11 @@ export function CounselPage({ extra, fields, setField, kind, onToast }) {
     const title = kind === 'parent' ? `보호자 상담 · ${n}번` : `상담 · ${n}번`;
     const hint = kind === 'parent' ? '보호자 말씀은 들은 그대로 적어 둬요' : '그날 바로, 짧게 적어도 충분해요';
     return (
-        <div>
-            <TitleBar title={`${title}${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint={hint} />
-            <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
+        <div className="nb-counsel-page">
+            <div className="nb-card-head">
+                <TitleBar title={`${title}${rosterNames[n] ? ` · ${rosterNames[n]}` : ''}`} hint={hint} />
+                <StudentExportButton n={n} rosterName={rosterNames[n] || ''} onToast={onToast} />
+            </div>
             {Array.from({ length: 4 }, (_, i) => (
                 <section key={i} className="nb-panel">
                     <div className="nb-inline">

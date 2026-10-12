@@ -173,8 +173,8 @@ export default function NotebookApp({
                     <PenLine size={16} aria-hidden="true" />
                     <span className="nb-brand-name">2026 교무수첩</span>
                     <span className="nb-toolbar-page">{stub?.title}</span>
-                    <span className="nb-toolbar-num">p.{page}/{MAX}</span>
                 </p>
+                <span className="nb-toolbar-num" aria-label={`${page}쪽, 전체 ${MAX}쪽`}>{phone ? `p.${page}` : `p.${page}/${MAX}`}</span>
                 <div className="nb-toolbar-actions">
                     <span className="nb-toolbar-user">{author}{guest ? ' · 이 기기' : ''}</span>
                     <button type="button" className="btn-secondary nb-toolbtn" onClick={() => setSearchOpen(true)} aria-label="수첩 찾기" aria-keyshortcuts="Control+K">

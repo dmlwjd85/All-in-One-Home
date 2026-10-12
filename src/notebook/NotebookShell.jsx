@@ -1,22 +1,23 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
 import { partitionLinks } from './linkParts.js';
 import { toneForPage, toneForType } from './tones.js';
 
-function TabBar({ side, label, children }) {
-    const [showHint, setShowHint] = useState(true);
+function TabBar({ side, label, activeTo, children }) {
+    const navRef = useRef(null);
+    useLayoutEffect(() => {
+        const nav = navRef.current;
+        const current = nav?.querySelector('[aria-current="page"]');
+        if (!nav || !current) return;
+        const target = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+        nav.scrollLeft = Math.max(0, target);
+    }, [activeTo]);
     return (
         <div className={`nb-tabbar nb-tabbar-${side}`}>
-            <nav
-                className={side === 'left' ? 'nb-left' : 'nb-right'}
-                aria-label={label}
-                onScroll={(e) => {
-                    if (e.currentTarget.scrollLeft > 8) setShowHint(false);
-                }}
-            >
+            <nav ref={navRef} className={side === 'left' ? 'nb-left' : 'nb-right'} aria-label={label}>
                 {children}
             </nav>
-            <span className={`nb-tab-hint ${showHint ? '' : 'is-gone'}`}>옆으로</span>
+            <span className="nb-tab-hint" aria-hidden="true" />
         </div>
     );
 }
@@ -38,7 +39,7 @@ export default function NotebookShell({
     return (
         <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone} style={style}>
             {showChrome && (
-                <TabBar side="left" label="구역 탭">
+                <TabBar side="left" label="구역 탭" activeTo={leftOn}>
                     {LEFT_TABS.map((tab) => (
                         <button
                             key={tab.label}
@@ -84,7 +85,7 @@ export default function NotebookShell({
             </div>
 
             {showChrome && (
-                <TabBar side="right" label="달 · 스티커 탭">
+                <TabBar side="right" label="달 · 스티커 탭" activeTo={rightOn}>
                     {RIGHT_TABS.map((tab) => (
                         <button
                             key={tab.label}

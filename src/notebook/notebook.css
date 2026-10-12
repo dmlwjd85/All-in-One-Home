@@ -41,10 +41,17 @@
     font-size: 13px;
     color: #3d312b;
     white-space: nowrap;
+}
+.nb-toolbar-page {
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
-.nb-toolbar-num { flex: 0 0 auto; overflow: visible; }
+.nb-toolbar-num {
+    flex: 0 0 auto;
+    overflow: visible;
+    font-variant-numeric: tabular-nums;
+}
 
 .nb-toolbar-actions {
     display: flex;
@@ -74,11 +81,12 @@
     justify-content: center;
     overflow: hidden;
     padding: 8px;
+    container-type: size;
 }
 
 .nb-page {
     flex: 0 0 auto;
-    width: min(100%, calc((100dvh - 72px) * 16 / 9));
+    width: min(100cqw, calc(100cqh * 16 / 9), calc((100dvh - 72px) * 16 / 9));
     max-width: 100%;
     max-height: 100%;
     aspect-ratio: 16 / 9;
@@ -327,23 +335,20 @@
 .nb-titlebar {
     position: relative;
     margin-bottom: 8px;
-    padding-top: 8px;
-}
-.nb-titlebar:not(:has(.nb-kicker)) {
-    padding-top: 22px;
+    padding-top: 0;
 }
 .nb-titlebar::before {
     content: '';
-    position: absolute;
-    top: 2px;
-    left: 10px;
+    position: relative;
+    display: block;
     width: 46px;
     height: 12px;
+    margin: 0 0 6px 10px;
     border-radius: 2px;
     background: repeating-linear-gradient(90deg, #f7c1cf 0 7px, rgba(255, 255, 255, 0.7) 7px 9px);
     transform: rotate(-3deg);
+    transform-origin: left center;
     pointer-events: none;
-    z-index: 0;
 }
 .nb-kicker {
     font-size: 12px;
@@ -635,22 +640,23 @@
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .nb-roster-jump {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
     gap: 4px;
-    overflow-x: auto;
+    overflow: visible;
     margin: 0 0 6px;
 }
 .nb-roster-jump button {
-    flex: 0 0 auto;
-    min-width: 32px;
-    min-height: 32px;
+    min-width: 0;
+    width: 100%;
+    min-height: 28px;
+    padding: 0 1px;
     border: 0;
     border-radius: 999px;
     background: #fde2e4;
     color: #4a3f3a;
     font: inherit;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 800;
     cursor: pointer;
 }
@@ -862,6 +868,7 @@
 .nb-ssu-capture input,
 .nb-fab-pop input {
     flex: 1;
+    min-width: 0;
     min-height: 40px;
     border: 0;
     border-radius: 999px;
@@ -958,9 +965,9 @@
 .nb-trail-text { flex: 1; min-width: 8rem; }
 .nb-fab {
     position: fixed;
-    /* 오른쪽 탭(스티커) 왼쪽에 둡니다. 용지가 가운데일 때도 탭을 가리지 않습니다. */
-    right: calc((100vw - min(100vw - 16px, (100dvh - 72px) * 16 / 9)) / 2 + 96px);
-    bottom: 28px;
+    /* 용지 오른쪽 여백에 둡니다. 본문 칸과 오른쪽 탭을 가리지 않습니다. */
+    right: 4px;
+    bottom: 24px;
     z-index: 30;
     display: flex;
     flex-direction: column;
@@ -971,6 +978,17 @@
 .nb-fab-btn,
 .nb-fab-pop {
     pointer-events: auto;
+}
+.nb-fab-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
 }
 .nb-fab-pop {
     width: min(420px, calc(100vw - 120px));
@@ -1015,13 +1033,90 @@
     .nb-table .nb-tick {
         min-height: 44px;
     }
-    /* 명렬 16줄은 44px이면 768 높이에 스크롤 안에만 남습니다. 남은 높이를 16칸이 나눠 갖습니다. */
+    /* 16줄 표는 44px이면 768 높이 용지 밖으로 잘립니다. */
+    .nb-compact-rows .nb-table th,
+    .nb-compact-rows .nb-table td,
+    .nb-table.compact th,
+    .nb-table.compact td {
+        height: auto;
+    }
+    .nb-compact-rows .nb-table .nb-ink,
+    .nb-compact-rows .nb-table .nb-gobtn,
+    .nb-compact-rows .nb-table .nb-tick,
+    .nb-table.compact .nb-ink,
+    .nb-table.compact .nb-gobtn,
+    .nb-table.compact .nb-tick {
+        min-height: 22px;
+        height: auto;
+        font-size: 14px;
+    }
+    .nb-body:has(.nb-attend-head) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .nb-body:has(.nb-attend-head) > div:has(.nb-attend-head) {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-attend-head { flex: 0 0 auto; margin-bottom: 4px; }
+    .nb-body:has(.nb-attend-head) .nb-table {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-body:has(.nb-attend-head) .nb-table thead,
+    .nb-body:has(.nb-attend-head) .nb-table tbody { display: block; min-height: 0; }
+    .nb-body:has(.nb-attend-head) .nb-table thead { flex: 0 0 auto; }
+    .nb-body:has(.nb-attend-head) .nb-table tbody {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-rows: repeat(16, minmax(0, 1fr));
+    }
+    .nb-body:has(.nb-attend-head) .nb-table tr {
+        display: grid;
+        grid-template-columns: 2.8rem repeat(10, minmax(0, 1fr));
+        min-height: 0;
+    }
+    .nb-body:has(.nb-attend-head) .nb-table th,
+    .nb-body:has(.nb-attend-head) .nb-table td {
+        height: auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        padding: 0 1px;
+    }
+    .nb-body:has(.nb-attend-head) .nb-table .nb-ink,
+    .nb-body:has(.nb-attend-head) .nb-table .nb-gobtn,
+    .nb-body:has(.nb-attend-head) .nb-table .nb-tick {
+        min-height: 0;
+        height: 22px;
+        font-size: 12px;
+    }
+    .nb-setup .nb-titlebar::before { display: none; }
+    .nb-setup .nb-pagetitle { font-size: 18px; }
+    .nb-setup .nb-kicker,
+    .nb-setup .nb-hint,
+    .nb-setup-count { margin: 0; }
+    .nb-body .nb-setup-list { gap: 0; margin-bottom: 4px; }
+    .nb-setup-list .nb-gobtn { min-height: 28px; padding: 2px 8px; }
+    .nb-setup-list .nb-tick,
+    .nb-prep-grid .nb-tick { min-height: 20px; font-size: 12px; }
+    .nb-prep-grid { gap: 4px; }
+    .nb-prep-grid .nb-panel { padding: 4px 6px; margin: 0; }
+    .nb-prep-grid .nb-panel h3 { margin: 0; font-size: 13px; }
     .nb-body:has(.nb-roster-page) {
         display: flex;
         flex-direction: column;
         overflow-x: hidden;
         overflow-y: auto;
         scrollbar-width: auto;
+        padding-bottom: 8px;
     }
     .nb-body:has(.nb-roster-page)::-webkit-scrollbar { width: 10px; }
     .nb-body:has(.nb-roster-page)::-webkit-scrollbar-thumb {
@@ -1078,7 +1173,7 @@
         padding-top: 0;
         padding-bottom: 0;
     }
-    .nb-roster-page .nb-titlebar { margin-bottom: 2px; padding-top: 16px; }
+    .nb-roster-page .nb-titlebar { margin-bottom: 2px; padding-top: 0; }
     .nb-roster-page .nb-pagetitle { font-size: 20px; line-height: 1.1; }
     .nb-roster-page .nb-hint,
     .nb-roster-page .nb-roster-link { margin: 0 0 2px; font-size: 12px; }
@@ -1375,6 +1470,92 @@
     font-weight: 800;
     cursor: pointer;
 }
+.nb-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.nb-card-head .nb-titlebar {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0;
+}
+.nb-card-head .nb-export-row {
+    flex: 0 0 auto;
+    margin: 14px 0 0;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: stretch;
+}
+.nb-card-head .nb-export-student {
+    position: static;
+    top: auto;
+    z-index: auto;
+    min-height: 36px;
+    margin: 0;
+    white-space: nowrap;
+    padding: 0 12px;
+}
+@media (min-width: 701px) {
+    .nb-body:has(.nb-card-page) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .nb-card-page {
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-card-page .nb-scard {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-card-page .nb-scard > label {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-card-page .nb-scard .nb-ink-area {
+        flex: 1 1 auto;
+        min-height: 28px;
+    }
+    .nb-card-page .nb-tagrow,
+    .nb-card-page .nb-kicker,
+    .nb-card-page .nb-scard-top {
+        flex: 0 0 auto;
+    }
+    .nb-body:has(.nb-counsel-page),
+    .nb-body:has(.nb-monthpaper) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .nb-counsel-page,
+    .nb-monthpaper {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-counsel-page .nb-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 4px;
+    }
+    .nb-counsel-page .nb-ink-area,
+    .nb-monthpaper .nb-ink-area {
+        flex: 1 1 auto;
+        min-height: 32px;
+    }
+}
 .nb-setup-list {
     list-style: none;
     margin: 0 0 12px;
@@ -1432,13 +1613,16 @@
 }
 
 .nb-app.is-phone {
-    height: auto;
-    min-height: 100dvh;
-    overflow: auto;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
 }
 .nb-app.is-phone .nb-stage-wrap {
     display: block;
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
     padding: 0;
 }
 .nb-app.is-phone .nb-page {
@@ -1514,26 +1698,29 @@
     white-space: nowrap;
 }
 .nb-app.is-phone .nb-brand-name {
-    flex: 0 0 auto;
-    min-width: max-content;
-    overflow: visible;
-    text-overflow: clip;
-    font-size: 15px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
 }
 .nb-app.is-phone .nb-toolbar-page {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 34%;
 }
 .nb-app.is-phone .nb-toolbar-num {
     flex: 0 0 auto;
     font-size: 12px;
     white-space: nowrap;
+    overflow: visible;
+    z-index: 2;
 }
 .nb-tabbar { display: contents; }
 .nb-tab-hint { display: none; }
 .nb-app.is-phone .nb-tabbar {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: stretch;
     min-width: 0;
 }
@@ -1542,25 +1729,45 @@
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
-    mask-image: linear-gradient(to right, transparent 0, #000 8px, #000 calc(100% - 14px), transparent);
 }
 .nb-app.is-phone .nb-tab-hint {
     display: flex;
     align-items: center;
+    justify-content: center;
     position: static;
-    flex: 0 0 auto;
-    min-height: 44px;
-    padding: 0 8px;
-    font-size: 12px;
-    font-weight: 800;
-    color: #8e2433;
-    background: transparent;
+    flex: 0 0 14px;
+    width: 100%;
+    height: 14px;
+    min-height: 14px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(244, 231, 218, 0), #f4e7da 72%);
     pointer-events: none;
 }
-.nb-app.is-phone .nb-tab-hint.is-gone { display: none; }
+.nb-app.is-phone .nb-tab-hint::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid #8e2433;
+    border-bottom: 2px solid #8e2433;
+    transform: rotate(45deg);
+    margin-top: -5px;
+}
+.nb-app.is-phone .nb-card-head {
+    flex-direction: column;
+    align-items: stretch;
+}
+.nb-app.is-phone .nb-card-head .nb-export-row {
+    flex-direction: row;
+    margin: 0 0 8px;
+}
+.nb-app.is-phone .nb-export-student {
+    min-height: 44px;
+}
 .nb-app.is-phone .nb-body {
     overflow: visible;
-    padding-bottom: calc(34px + 12px + 16px);
+    padding-bottom: 16px;
 }
 .nb-app.is-phone .nb-fab.is-away {
     opacity: 0;
@@ -1571,8 +1778,11 @@
 .nb-app.is-phone .nb-field {
     scroll-margin-bottom: calc(34px + 12px + 16px);
 }
+.nb-app.is-phone .nb-roster-jump {
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+}
 .nb-app.is-phone .nb-roster-jump button {
-    min-width: 44px;
+    min-width: 0;
     min-height: 44px;
 }
 .nb-app.is-phone .nb-gobtn.num {
@@ -1631,7 +1841,13 @@
 .nb-app.is-phone .nb-scard-meta,
 .nb-app.is-phone .nb-week-days,
 .nb-app.is-phone .nb-scard-top { display: block; }
-.nb-app.is-phone .nb-fab { right: 12px; bottom: 12px; }
+.nb-app.is-phone .nb-fab {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    flex: 0 0 auto;
+    margin: 0 12px 8px auto;
+}
 
 @media print {
     .nb-toolbar,
