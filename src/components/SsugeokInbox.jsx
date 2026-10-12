@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 import { Inbox, Pencil, PenLine, Send, Trash2 } from 'lucide-react';
 import { EmptyState, Field, Modal } from './ui.jsx';
+import { isSensitiveText } from '../notebook/ssugeokModel.js';
+import { keepOnDevice } from '../notebook/ssugeokStore.js';
+import { removeSensitiveNote } from '../lib/sensitiveLocal.js';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import {
     destById,
@@ -53,6 +56,13 @@ export default function SsugeokInbox({
             onToast('쓱적에 넣을 내용을 적어 주세요.');
             return;
         }
+        if (isSensitiveText(text)) {
+            keepOnDevice({ text, typeHint, author, status: 'inbox' });
+            setDraft('');
+            onChanged();
+            onToast('건강·민원·학폭·상담 내용은 이 기기에만 적었어요.');
+            return;
+        }
         await addItem('ssugeokInbox', { text, typeHint, author }, signedIn);
         setDraft('');
         onChanged();
@@ -66,6 +76,20 @@ export default function SsugeokInbox({
             onToast('내용을 비울 수 없습니다.');
             return;
         }
+        if (editing.sensitive || isSensitiveText(text)) {
+            keepOnDevice({ ...editing, text, typeHint: editing.typeHint || '', sensitive: true });
+            if (!editing.sensitive && editing.id && !String(editing.id).startsWith('local-')) {
+                try {
+                    await removeItem('ssugeokInbox', editing.id, signedIn);
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+            setEditing(null);
+            onChanged();
+            onToast('건강·민원·학폭·상담 내용은 이 기기에만 적었어요.');
+            return;
+        }
         await patchItem('ssugeokInbox', editing.id, { text, typeHint: editing.typeHint || '' }, signedIn);
         setEditing(null);
         onChanged();
@@ -74,6 +98,11 @@ export default function SsugeokInbox({
 
     const removeInbox = async (item) => {
         if (!confirm('이 쓱적을 삭제할까요?')) return;
+        if (item.sensitive) {
+            removeSensitiveNote(item.id);
+            onChanged();
+            return;
+        }
         await removeItem('ssugeokInbox', item.id, signedIn);
         onChanged();
     };
@@ -296,7 +325,7 @@ function FlickCard({ item, onFlick, onSend, onEdit, onDelete }) {
                 onPointerCancel={reset}
             >
                 <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-extrabold text-amber-900/70">{item.typeHint || '메모'}</p>
+                    <p className="text-xs font-extrabold text-amber-900/70">{item.typeHint || '메모'}{item.sensitive ? ' · 이 기기만' : ''}</p>
                     <div className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
                         <button type="button" className="min-h-tap min-w-tap text-stone-600" aria-label="고치기" onClick={onEdit}><Pencil size={16} /></button>
                         <button type="button" className="min-h-tap min-w-tap text-rose-700" aria-label="삭제" onClick={onDelete}><Trash2 size={16} /></button>

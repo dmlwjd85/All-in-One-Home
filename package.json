@@ -14,7 +14,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:links": "node scripts/check-link-coverage.mjs",
-    "check:hits": "node scripts/check-hit-targets.mjs"
+    "check:hits": "node scripts/check-hit-targets.mjs",
+    "test:unit": "node --test tests/backup.unit.test.mjs tests/sensitive.unit.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-homenote \"node --test tests/firestore.rules.test.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",
@@ -23,8 +25,10 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "firebase-tools": "^14.27.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "vite": "^6.0.3"

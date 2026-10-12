@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { PenLine } from 'lucide-react';
 import { auth } from './firebase';
-import { Toast } from './components/ui.jsx';
+import { Modal, Toast } from './components/ui.jsx';
+import { applyBackup } from './lib/backupRestore.js';
+import { buildBackupPayload, parseBackup } from './lib/backupFormat.js';
+import { readAllPageFields } from './lib/fieldLocal.js';
 import { useSharedList, useSharedRecord } from './lib/store.js';
+import { readSensitiveNotes } from './lib/sensitiveLocal.js';
 import { downloadText } from './lib/utils.js';
 import NotebookApp from './notebook/NotebookApp.jsx';
-import { SENSITIVE_KEY } from './notebook/ssugeokStore.js';
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -14,6 +17,9 @@ export default function App() {
     const [guest, setGuest] = useState(() => localStorage.getItem('homenote_guest') === '1');
     const [toast, setToast] = useState('');
     const [rev, setRev] = useState(0);
+    const [restore, setRestore] = useState(null);
+    const [restoring, setRestoring] = useState(false);
+    const importRef = useRef(null);
     const signedIn = Boolean(user);
 
     useEffect(() => {
@@ -93,8 +99,7 @@ export default function App() {
     };
 
     const exportAll = () => {
-        const payload = {
-            exportedAt: new Date().toISOString(),
+        const payload = buildBackupPayload({
             inbox: inbox.items,
             studentNotes: studentNotes.items,
             counselNotes: counselNotes.items,
@@ -112,26 +117,46 @@ export default function App() {
             ddayCards: ddayCards.items,
             submissionSheets: submissionSheets.items,
             praiseBoard,
-            ssugeokSensitive: (() => {
-                try {
-                    return JSON.parse(localStorage.getItem(SENSITIVE_KEY) || '[]');
-                } catch {
-                    return [];
-                }
-            })(),
-            notebookFields: Object.fromEntries(
-                Array.from({ length: 580 }, (_, i) => {
-                    try {
-                        const raw = localStorage.getItem(`homenote_v2_notebookFields_p${i + 1}`);
-                        return raw ? [i + 1, JSON.parse(raw)] : null;
-                    } catch {
-                        return null;
-                    }
-                }).filter(Boolean)
-            ),
-        };
+            ssugeokSensitive: readSensitiveNotes(),
+            notebookFields: readAllPageFields(),
+        });
         downloadText(`교무수첩-백업-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
         notify('백업 파일을 내려받았습니다.');
+    };
+
+    const pickImport = () => importRef.current?.click();
+
+    const onImportFile = async (event) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        try {
+            const parsed = parseBackup(await file.text());
+            if (!parsed.ok) {
+                notify(parsed.error);
+                return;
+            }
+            setRestore(parsed);
+        } catch (err) {
+            console.error(err);
+            notify('백업 파일을 읽지 못했습니다.');
+        }
+    };
+
+    const confirmRestore = async () => {
+        if (!restore?.data || restoring) return;
+        setRestoring(true);
+        try {
+            await applyBackup(restore.data, { signedIn });
+            setRestore(null);
+            bump();
+            notify('백업을 가져왔습니다. 건강·민원·학폭·상담은 이 기기에만 두었습니다.');
+        } catch (err) {
+            console.error(err);
+            notify('백업을 가져오지 못했습니다.');
+        } finally {
+            setRestoring(false);
+        }
     };
 
     if (!authReady) {
@@ -154,7 +179,7 @@ export default function App() {
                     <button type="button" className="btn-primary w-full mt-6" onClick={loginGoogle}>Google 계정으로 로그인</button>
                     <button type="button" className="btn-secondary w-full mt-2" onClick={enterGuest}>이 기기에서만 사용</button>
                     <p className="mt-4 text-xs text-stone-500 leading-relaxed">
-                        Google 로그인을 쓰면 여러 기기에 기록이 동기화됩니다. Firebase 콘솔에 배포 도메인(github.io)이 허용되어 있어야 합니다.
+                        Google 로그인을 쓰면 이 계정의 기록만 다른 기기와 맞춥니다. 건강·민원·학폭·상담은 로그인해도 이 기기에만 남습니다. Firebase 콘솔에 배포 도메인(github.io)이 허용되어 있어야 합니다.
                     </p>
                 </div>
                 <Toast message={toast} />
@@ -173,6 +198,7 @@ export default function App() {
                     signedIn={signedIn}
                     onLogout={logout}
                     onExport={exportAll}
+                    onImport={pickImport}
                     inbox={inbox.items}
                     studentNotes={studentNotes.items}
                     counselNotes={counselNotes.items}
@@ -187,6 +213,40 @@ export default function App() {
                     praiseBoard={praiseBoard}
                 />
             </main>
+            <input
+                ref={importRef}
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                aria-label="백업 파일 선택"
+                onChange={onImportFile}
+            />
+            {restore && (
+                <Modal title="백업 가져오기" onClose={() => { if (!restoring) setRestore(null); }}>
+                    <p className="text-sm text-stone-600 leading-relaxed">
+                        아래 항목만 현재 기록을 지우고 파일 내용으로 바꿉니다.
+                        {restore.exportedAt ? ` 보낸 시각 ${restore.exportedAt.slice(0, 16).replace('T', ' ')}.` : ''}
+                    </p>
+                    <ul className="my-4 space-y-1 text-sm">
+                        {restore.preview.map((row) => (
+                            <li key={row.key} className="flex justify-between gap-3">
+                                <span>{row.label}{row.deviceOnly ? ' · 이 기기만' : ''}</span>
+                                <strong>{row.count}건</strong>
+                            </li>
+                        ))}
+                    </ul>
+                    <p className="text-sm text-stone-600 leading-relaxed">
+                        건강·민원·학폭·상담은 클라우드에 올리지 않고 이 기기에만 덮어씁니다.
+                        로그인 중이면 나머지 기록은 내 계정에도 같이 바뀝니다.
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                        <button type="button" className="btn-secondary flex-1" disabled={restoring} onClick={() => setRestore(null)}>취소</button>
+                        <button type="button" className="btn-primary flex-1" disabled={restoring} onClick={confirmRestore}>
+                            {restoring ? '가져오는 중…' : '덮어쓰고 가져오기'}
+                        </button>
+                    </div>
+                </Modal>
+            )}
             <Toast message={toast} />
         </>
     );

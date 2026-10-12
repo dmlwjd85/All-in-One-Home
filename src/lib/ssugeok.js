@@ -1,3 +1,5 @@
+import { isSensitiveNote } from './sensitive.js';
+import { removeSensitiveNote } from './sensitiveLocal.js';
 import { addItem, removeItem } from './store.js';
 import { ATTEND_STATUS, startOfWeekMon, todayYmd } from './utils.js';
 
@@ -78,6 +80,9 @@ export async function sendSsugeokItem({ destId, item, extras, roster, signedIn, 
     if (!text) throw new Error('내용이 없습니다.');
     const dest = destById(destId);
     if (!dest) throw new Error('목적지를 찾을 수 없습니다.');
+    if (isSensitiveNote(item) && destId !== 'counsel') {
+        throw new Error('건강·민원·학폭·상담 내용은 이 기기에만 둡니다.');
+    }
 
     const date = extras?.date || todayYmd();
     const student = String(extras?.student || '').trim();
@@ -130,6 +135,17 @@ export async function sendSsugeokItem({ destId, item, extras, roster, signedIn, 
         }, signedIn);
     }
 
-    if (item.id) await removeItem('ssugeokInbox', item.id, signedIn);
+    if (item?.sensitive || isSensitiveNote(item)) {
+        removeSensitiveNote(item.id);
+        if (item.id && !String(item.id).startsWith('local-')) {
+            try {
+                await removeItem('ssugeokInbox', item.id, signedIn);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    } else if (item.id) {
+        await removeItem('ssugeokInbox', item.id, signedIn);
+    }
     return dest;
 }

@@ -31,7 +31,7 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
         setText('');
         setOpen(false);
         onChanged?.();
-        onToast?.(note.sensitive ? '건강·민원 내용은 이 기기에만 적었어요.' : '쓱적에 남겼어요.');
+        onToast?.(note.sensitive ? '건강·민원·학폭·상담 내용은 이 기기에만 적었어요.' : '쓱적에 남겼어요.');
     };
 
     return (

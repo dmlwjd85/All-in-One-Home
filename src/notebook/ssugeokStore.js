@@ -1,34 +1,36 @@
 import { useEffect, useState } from 'react';
+import { isSensitiveNote } from '../lib/sensitive.js';
+import { readSensitiveNotes, writeSensitiveNotes } from '../lib/sensitiveLocal.js';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { appendPageTrail } from './fieldStore.js';
 import {
-    isSensitiveText,
     parseNote,
     presentNote,
     suggestDestination,
 } from './ssugeokModel.js';
 
-export const SENSITIVE_KEY = 'homenote_v2_ssugeokSensitive';
+export { SENSITIVE_KEY, readSensitiveNotes } from '../lib/sensitiveLocal.js';
 
 const quarantined = new Set();
 
-export function readSensitiveNotes() {
-    try {
-        const raw = localStorage.getItem(SENSITIVE_KEY);
-        const list = raw ? JSON.parse(raw) : [];
-        return Array.isArray(list) ? list : [];
-    } catch {
-        return [];
-    }
+function writeSensitive(notes) {
+    writeSensitiveNotes(notes);
 }
 
-function writeSensitive(notes) {
-    try {
-        localStorage.setItem(SENSITIVE_KEY, JSON.stringify(notes));
-    } catch (err) {
-        console.warn('민감 메모 저장 실패', err);
-    }
-    window.dispatchEvent(new CustomEvent('nb-ssugeok-sensitive'));
+export function keepOnDevice(note) {
+    const id = note?.id || `local-sens-${Date.now()}`;
+    const next = {
+        ...note,
+        id,
+        sensitive: true,
+        createdAt: note?.createdAt || new Date().toISOString(),
+    };
+    const notes = readSensitiveNotes();
+    const idx = notes.findIndex((row) => row.id === id);
+    if (idx >= 0) notes[idx] = { ...notes[idx], ...next, sensitive: true };
+    else notes.unshift(next);
+    writeSensitive(notes);
+    return next;
 }
 
 export function useSensitiveNotes() {
@@ -52,7 +54,7 @@ export function mergeNotes(inbox, sensitive) {
         if (!note || hidden.has(note.id)) continue;
         const parsed = parseNote(note.text || '');
         const tags = note.tags?.length ? note.tags : parsed.tags;
-        if (note.sensitive || isSensitiveText(note.text, tags)) continue;
+        if (isSensitiveNote({ ...note, tags })) continue;
         cloud.push(note);
     }
     return [...(sensitive || []), ...cloud]
@@ -104,10 +106,17 @@ export async function sortNote(note, suggestion, signedIn) {
         detectedDate: note.detectedDate ?? null,
         sensitive: Boolean(note.sensitive),
     };
-    if (note.sensitive) {
-        writeSensitive(readSensitiveNotes().map((row) => (
-            row.id === note.id ? { ...row, ...patch, sensitive: true } : row
-        )));
+    if (isSensitiveNote({ ...note, ...patch })) {
+        keepOnDevice({ ...note, ...patch, sensitive: true });
+        if (note.id && !String(note.id).startsWith('local-')) {
+            try {
+                await removeItem('ssugeokInbox', note.id, signedIn);
+            } catch (err) {
+                console.error(err);
+            }
+        } else if (!signedIn && note.id) {
+            await removeItem('ssugeokInbox', note.id, false);
+        }
         return placement;
     }
     await appendPageTrail(suggestion.page, {
@@ -135,13 +144,13 @@ export async function archiveNotes(notes, signedIn) {
     }
 }
 
-/** 이미 클라우드 받은함에 있는 건강·민원 메모는 이 기기로 옮기고 클라우드에서는 지웁니다. */
+/** 클라우드 받은함의 건강·민원·학폭·상담 메모는 이 기기로 옮기고, 계정 복사본만 지웁니다. */
 export async function quarantineSensitive(inbox, signedIn) {
     const leaked = (inbox || []).filter((note) => {
         if (!note?.id || quarantined.has(note.id)) return false;
         const parsed = parseNote(note.text || '');
         const tags = note.tags?.length ? note.tags : parsed.tags;
-        return Boolean(note.sensitive) || isSensitiveText(note.text, tags);
+        return isSensitiveNote({ ...note, tags });
     });
     if (!leaked.length) return 0;
     const next = readSensitiveNotes();
