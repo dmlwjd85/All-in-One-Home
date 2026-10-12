@@ -31,6 +31,21 @@ export function tabStackHeight(count) {
     return (inner - gaps) / Math.max(1, count);
 }
 
+/** 화면 안에 들어가는 가장 큰 16:9 크기. 가로·세로를 넘기지 않습니다. */
+export function fitCanvas(availW, availH) {
+    const w = Math.max(0, Number(availW) || 0);
+    const h = Math.max(0, Number(availH) || 0);
+    if (w < 1 || h < 1) return { width: 0, height: 0 };
+    const ratio = 16 / 9;
+    let width = w;
+    let height = width / ratio;
+    if (height > h) {
+        height = h;
+        width = height * ratio;
+    }
+    return { width: Math.round(width), height: Math.round(height) };
+}
+
 export function layoutVars() {
     return {
         '--nb-page-w': `${PAGE_W}px`,

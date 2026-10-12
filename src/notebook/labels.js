@@ -152,6 +152,28 @@ const TYPE_LABEL = {
     'sticker-sheet': '스티커',
 };
 
+/** 공책 용지 이름 → 화면에 보일 제목. PDF 원문 '월'처럼 한 글자인 이름은 풀어 씁니다. */
+export function paperFace(raw) {
+    const name = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (name === '월') {
+        return {
+            title: '월간 노트',
+            hint: '한 달의 주를 나눠 적는 공책입니다.',
+            face: 'month',
+        };
+    }
+    const blank = name.match(/^무지\s*(.*)$/);
+    if (blank) {
+        const n = (blank[1] || '').trim();
+        return {
+            title: n ? `무지 노트 ${n}` : '무지 노트',
+            hint: '줄이 없는 공책입니다. 빈칸에 자유롭게 적어요.',
+            face: 'plain',
+        };
+    }
+    return { title: name || '공책', hint: '이 공책에 바로 적어요.', face: 'sheet' };
+}
+
 /** 헤더·바로가기 버튼에 쓰는 짧은 이름. 옆 쪽이면 다음/이전. */
 export function navLabel(to, pages, pageNo) {
     if (pageNo && to === pageNo + 1) return '다음';
@@ -167,7 +189,8 @@ export function navLabel(to, pages, pageNo) {
     if (dest.type === 'month' && dest.extra?.month) return `${dest.extra.month}월`;
     if (dest.type === 'week' && dest.extra?.week) return `${dest.extra.week}주차`;
     const title = String(dest.title || '').replace(/\s+/g, ' ').trim();
-    const usable = title && title.length <= 18 && !/누르면|충분|적고|인쇄|체크하면|옮겨/.test(title);
+    if (dest.type === 'notebook-paper') return paperFace(dest.extra?.paper || title).title;
+    const usable = title && title.length >= 2 && title.length <= 18 && !/누르면|충분|적고|인쇄|체크하면|옮겨/.test(title);
     if (usable) return title;
     const base = TYPE_LABEL[dest.type] || `${to}쪽`;
     const n = dest.extra?.student;

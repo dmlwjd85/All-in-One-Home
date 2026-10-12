@@ -1,44 +1,73 @@
 import { useEffect, useState } from 'react';
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { PenLine } from 'lucide-react';
-import { auth } from './firebase';
-import { Toast } from './components/ui.jsx';
-import { useSharedList, useSharedRecord } from './lib/store.js';
-import { downloadText } from './lib/utils.js';
+import { loadFirebase } from './firebase.js';
+import { Modal, Toast } from './components/ui.jsx';
+import { applyBackupLocal, BACKUP_LABELS, buildExportPayload, validateBackup } from './lib/backup.js';
+import { reportSaveFailure } from './lib/saveNotice.js';
+import { pushBackupCloud, useSharedList, useSharedRecord } from './lib/store.js';
+import { downloadText, seoulYmd } from './lib/utils.js';
 import NotebookApp from './notebook/NotebookApp.jsx';
-import { SENSITIVE_KEY } from './notebook/ssugeokStore.js';
 
 export default function App() {
     const [user, setUser] = useState(null);
     const [authReady, setAuthReady] = useState(false);
     const [guest, setGuest] = useState(() => localStorage.getItem('homenote_guest') === '1');
-    const [toast, setToast] = useState('');
+    const [toast, setToast] = useState(null);
     const [rev, setRev] = useState(0);
+    const [importPreview, setImportPreview] = useState(null);
+    const [importing, setImporting] = useState(false);
     const signedIn = Boolean(user);
 
     useEffect(() => {
-        let cancelled = false;
-        const unsub = onAuthStateChanged(auth, (u) => {
-            if (cancelled) return;
-            setUser(u);
+        const onFail = (event) => {
+            const detail = event.detail || {};
+            setToast({
+                message: detail.message || '저장하지 못했습니다. 다시 시도해 주세요.',
+                actionLabel: detail.retry ? '다시 시도' : '',
+                onAction: detail.retry || null,
+            });
+            window.clearTimeout(onFail._t);
+            onFail._t = window.setTimeout(() => setToast(null), 6000);
+        };
+        window.addEventListener('nb-save-failed', onFail);
+        return () => window.removeEventListener('nb-save-failed', onFail);
+    }, []);
+
+    useEffect(() => {
+        if (guest) {
             setAuthReady(true);
-            if (u) {
-                setGuest(false);
-                localStorage.removeItem('homenote_guest');
-            }
-        }, (err) => {
-            console.error(err);
-            if (!cancelled) setAuthReady(true);
-        });
+            return undefined;
+        }
+        let cancelled = false;
+        let unsub = () => {};
         const fallback = window.setTimeout(() => {
             if (!cancelled) setAuthReady(true);
         }, 2500);
+        loadFirebase().then(async ({ auth }) => {
+            const { onAuthStateChanged } = await import('firebase/auth');
+            if (cancelled) return;
+            unsub = onAuthStateChanged(auth, (u) => {
+                if (cancelled) return;
+                setUser(u);
+                setAuthReady(true);
+                if (u) {
+                    setGuest(false);
+                    localStorage.removeItem('homenote_guest');
+                }
+            }, (err) => {
+                console.error(err);
+                if (!cancelled) setAuthReady(true);
+            });
+        }).catch((err) => {
+            console.error(err);
+            if (!cancelled) setAuthReady(true);
+        });
         return () => {
             cancelled = true;
             window.clearTimeout(fallback);
             unsub();
         };
-    }, []);
+    }, [guest]);
 
     const enabled = signedIn;
     const todos = useSharedList('teacherTodos', enabled, rev);
@@ -63,15 +92,17 @@ export default function App() {
     const author = user?.displayName || user?.email?.split('@')[0] || '선생님';
 
     const notify = (msg) => {
-        setToast(msg);
+        setToast({ message: msg });
         window.clearTimeout(notify._t);
-        notify._t = window.setTimeout(() => setToast(''), 2800);
+        notify._t = window.setTimeout(() => setToast(null), 2800);
     };
 
     const bump = () => setRev((n) => n + 1);
 
     const loginGoogle = async () => {
         try {
+            const { auth } = await loadFirebase();
+            const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
             await signInWithPopup(auth, provider);
@@ -89,12 +120,15 @@ export default function App() {
     const logout = async () => {
         localStorage.removeItem('homenote_guest');
         setGuest(false);
-        if (user) await signOut(auth);
+        if (user) {
+            const { auth } = await loadFirebase();
+            const { signOut } = await import('firebase/auth');
+            await signOut(auth);
+        }
     };
 
     const exportAll = () => {
-        const payload = {
-            exportedAt: new Date().toISOString(),
+        const payload = buildExportPayload({
             inbox: inbox.items,
             studentNotes: studentNotes.items,
             counselNotes: counselNotes.items,
@@ -112,26 +146,39 @@ export default function App() {
             ddayCards: ddayCards.items,
             submissionSheets: submissionSheets.items,
             praiseBoard,
-            ssugeokSensitive: (() => {
-                try {
-                    return JSON.parse(localStorage.getItem(SENSITIVE_KEY) || '[]');
-                } catch {
-                    return [];
-                }
-            })(),
-            notebookFields: Object.fromEntries(
-                Array.from({ length: 580 }, (_, i) => {
-                    try {
-                        const raw = localStorage.getItem(`homenote_v2_notebookFields_p${i + 1}`);
-                        return raw ? [i + 1, JSON.parse(raw)] : null;
-                    } catch {
-                        return null;
-                    }
-                }).filter(Boolean)
-            ),
-        };
-        downloadText(`교무수첩-백업-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2));
+        });
+        downloadText(`교무수첩-백업-${seoulYmd()}.json`, JSON.stringify(payload, null, 2));
         notify('백업 파일을 내려받았습니다.');
+    };
+
+    const reviewImport = (text) => {
+        const result = validateBackup(text);
+        if (!result.ok) {
+            notify(result.errors.slice(0, 2).join(' '));
+            return;
+        }
+        setImportPreview(result);
+    };
+
+    const confirmImport = async (mode = 'overwrite') => {
+        const data = importPreview?.data;
+        if (!data) return;
+        setImporting(true);
+        try {
+            if (signedIn) await pushBackupCloud(data);
+            applyBackupLocal(data, { mode });
+            setImportPreview(null);
+            bump();
+            notify(mode === 'merge' ? '백업을 기존 기록과 합쳤습니다.' : '백업으로 덮어썼습니다.');
+        } catch (err) {
+            console.error(err);
+            reportSaveFailure({
+                message: '가져오기에 실패했습니다. 다시 시도해 주세요.',
+                retry: () => confirmImport(mode),
+            });
+        } finally {
+            setImporting(false);
+        }
     };
 
     if (!authReady) {
@@ -157,10 +204,29 @@ export default function App() {
                         Google 로그인을 쓰면 여러 기기에 기록이 동기화됩니다. Firebase 콘솔에 배포 도메인(github.io)이 허용되어 있어야 합니다.
                     </p>
                 </div>
-                <Toast message={toast} />
+                <Toast message={toast?.message} actionLabel={toast?.actionLabel} onAction={toast?.onAction} />
             </main>
         );
     }
+
+    const importModal = importPreview ? (
+        <Modal title="백업 가져오기" onClose={() => { if (!importing) setImportPreview(null); }}>
+            <p className="text-sm text-stone-700 leading-relaxed">덮어쓰기는 백업에 들어 있는 항목 전체를 이 기기 기록으로 바꿉니다. 합치기는 같은 id와 같은 칸만 백업 값으로 고치고, 이 기기에만 있는 기록은 남깁니다.</p>
+            {signedIn && (
+                <p className="text-sm text-stone-700 leading-relaxed mt-2">로그인 중이면 같은 경로의 클라우드 문서도 갱신합니다. 백업에 없는 클라우드 문서는 지우지 않습니다. 건강·민원·학폭 쪽은 클라우드로 올리지 않습니다.</p>
+            )}
+            <ul className="mt-3 text-sm leading-relaxed">
+                {Object.entries(importPreview.counts).filter(([, count]) => count > 0).map(([key, count]) => (
+                    <li key={key}>{BACKUP_LABELS[key] || key} {count}</li>
+                ))}
+            </ul>
+            <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary" disabled={importing} onClick={() => confirmImport('overwrite')}>{importing ? '가져오는 중' : '덮어쓰기'}</button>
+                <button type="button" className="btn-secondary" disabled={importing} onClick={() => confirmImport('merge')}>합치기</button>
+                <button type="button" className="btn-secondary" disabled={importing} onClick={() => setImportPreview(null)}>취소</button>
+            </div>
+        </Modal>
+    ) : null;
 
     return (
         <>
@@ -173,6 +239,7 @@ export default function App() {
                     signedIn={signedIn}
                     onLogout={logout}
                     onExport={exportAll}
+                    onImportText={reviewImport}
                     inbox={inbox.items}
                     studentNotes={studentNotes.items}
                     counselNotes={counselNotes.items}
@@ -187,7 +254,8 @@ export default function App() {
                     praiseBoard={praiseBoard}
                 />
             </main>
-            <Toast message={toast} />
+            <Toast message={toast?.message} actionLabel={toast?.actionLabel} onAction={toast?.onAction} />
+            {importModal}
         </>
     );
 }

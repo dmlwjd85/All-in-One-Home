@@ -1,6 +1,26 @@
+import { useLayoutEffect, useRef } from 'react';
 import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight, navLabel } from './labels.js';
 import { partitionLinks } from './linkParts.js';
 import { toneForPage, toneForType } from './tones.js';
+
+function TabBar({ side, label, activeTo, children }) {
+    const navRef = useRef(null);
+    useLayoutEffect(() => {
+        const nav = navRef.current;
+        const current = nav?.querySelector('[aria-current="page"]');
+        if (!nav || !current) return;
+        const target = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+        nav.scrollLeft = Math.max(0, target);
+    }, [activeTo]);
+    return (
+        <div className={`nb-tabbar nb-tabbar-${side}`}>
+            <nav ref={navRef} className={side === 'left' ? 'nb-left' : 'nb-right'} aria-label={label}>
+                {children}
+            </nav>
+            <span className="nb-tab-hint" aria-hidden="true" />
+        </div>
+    );
+}
 
 export default function NotebookShell({
     page,
@@ -9,6 +29,7 @@ export default function NotebookShell({
     onGo,
     children,
     showChrome,
+    style,
 }) {
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
@@ -16,9 +37,9 @@ export default function NotebookShell({
     const tone = toneForType(pageRec?.type);
 
     return (
-        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone}>
+        <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone} style={style}>
             {showChrome && (
-                <nav className="nb-left" aria-label="구역 탭">
+                <TabBar side="left" label="구역 탭" activeTo={leftOn}>
                     {LEFT_TABS.map((tab) => (
                         <button
                             key={tab.label}
@@ -32,7 +53,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
-                </nav>
+                </TabBar>
             )}
 
             <div className="nb-main">
@@ -64,7 +85,7 @@ export default function NotebookShell({
             </div>
 
             {showChrome && (
-                <nav className="nb-right" aria-label="달 · 스티커 탭">
+                <TabBar side="right" label="달 · 스티커 탭" activeTo={rightOn}>
                     {RIGHT_TABS.map((tab) => (
                         <button
                             key={tab.label}
@@ -78,7 +99,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
-                </nav>
+                </TabBar>
             )}
         </div>
     );

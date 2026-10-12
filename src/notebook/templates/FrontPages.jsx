@@ -1,6 +1,8 @@
 import { GoBtn, Ink, LinedBlock, LinkedChip, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { partitionLinks } from '../linkParts.js';
+import SemesterSetup from '../SemesterSetup.jsx';
+import { useRosterNames } from '../fieldStore.js';
 import { TONE_LABEL, TONE_MARK } from '../tones.js';
 
 export function CoverPage({ fields, setField, onGo }) {
@@ -30,6 +32,18 @@ export function CoverPage({ fields, setField, onGo }) {
                     <label>학교 <Ink value={fields.school} onChange={(v) => setField('school', v)} placeholder="학교 이름" /></label>
                     <label>학년 · 반 <Ink value={fields.klass} onChange={(v) => setField('klass', v)} placeholder="예: 3학년 2반" /></label>
                     <label>선생님 <Ink value={fields.teacher} onChange={(v) => setField('teacher', v)} placeholder="성함" /></label>
+                    <button
+                        type="button"
+                        className="nb-cover-setup"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onGo?.(3);
+                        }}
+                        data-to={3}
+                        data-hit="body:새 학기 설정"
+                    >
+                        새 학기 설정 체크리스트
+                    </button>
                 </div>
                 <p className="nb-hint">표지를 누르면 홈으로 가요</p>
             </div>
@@ -82,7 +96,9 @@ const PREP_ITEMS = [
     ['첫 주 챙길 것', ['자리 배치 정하기', '비상 연락 방법 안내', '급식·하교 동선 알려 주기']],
 ];
 
-export function PrepPage({ page, fields, setField }) {
+export function PrepPage({ page, fields, setField, onGo }) {
+    const rosterNames = useRosterNames();
+    const rosterCount = rosterNames.filter(Boolean).length;
     if (page === 4) {
         return (
             <div>
@@ -103,6 +119,7 @@ export function PrepPage({ page, fields, setField }) {
     return (
         <div>
             <TitleBar kicker="2026학년도 새 학년 준비" title="2026년 2월 · 인수인계와 첫 주 준비" />
+            <SemesterSetup fields={fields} setField={setField} onGo={onGo} rosterCount={rosterCount} />
             <div className="nb-prep-grid">
                 {PREP_ITEMS.map(([head, items]) => (
                     <section key={head} className="nb-panel">
@@ -187,4 +204,14 @@ export function HowtoPage({ page, pageRec, pages, onGo }) {
             )}
         </div>
     );
+}
+
+export function FrontGroup(props) {
+    switch (props.pageRec.type) {
+        case 'cover': return <CoverPage {...props} />;
+        case 'home': return <HomePage {...props} />;
+        case 'prep': return <PrepPage {...props} />;
+        case 'howto': return <HowtoPage {...props} />;
+        default: return null;
+    }
 }

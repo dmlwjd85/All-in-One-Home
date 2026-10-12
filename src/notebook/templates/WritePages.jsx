@@ -1,5 +1,6 @@
 import { Ink, LinkGrid, LinkedChip, TitleBar } from '../fields.jsx';
-import { TAGS } from '../labels.js';
+import { TAGS, paperFace } from '../labels.js';
+import { TocCards } from '../TocCards.jsx';
 import { partitionLinks } from '../linkParts.js';
 import PraiseBoard from '../PraiseBoard.jsx';
 import SsugeokBoard from '../SsugeokBoard.jsx';
@@ -38,7 +39,7 @@ export function TagIndexPage({ extra, fields, setField }) {
     return (
         <div>
             <TitleBar title={extra.tag || '#태그'} hint="색인 · 날짜 · 쪽 · 학생 · 내용" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>날짜</th><th>쪽</th><th>학생</th><th>내용</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 14 }, (_, i) => (
@@ -120,7 +121,8 @@ export function SsugeokPage({
                     )}
                 </details>
             )}
-            <button type="button" className="nb-hubbtn" onClick={onOpenHub}>예전 분류 허브</button>
+            <p id="ssu-hub-help" className="nb-hint">예전 분류 허브는 이전 화면에서 메모를 나눕니다. 누르는 동안 버튼이 내려갑니다.</p>
+            <button type="button" className="nb-hubbtn" aria-describedby="ssu-hub-help" onClick={onOpenHub}>예전 분류 허브</button>
         </div>
     );
 }
@@ -136,21 +138,48 @@ export function MemoPage({ extra, fields, setField }) {
 }
 
 export function NotebookPaperPage({ extra, fields, setField }) {
-    const title = extra.paper || '공책';
-    const cls = /오선/.test(title) ? 'staff'
-        : /받아쓰기|원고지/.test(title) ? 'square'
-        : /깍두기|모눈|점/.test(title) ? 'grid'
-        : /영어/.test(title) ? 'english'
-        : /일기|코넬|배움|알림|독서/.test(title) ? 'lined'
-        : /무지/.test(title) ? 'plain'
+    const raw = extra.paper || '공책';
+    const face = paperFace(raw);
+    const cls = face.face === 'plain' ? 'plain'
+        : /오선/.test(raw) ? 'staff'
+        : /받아쓰기|원고지/.test(raw) ? 'square'
+        : /깍두기|모눈|점/.test(raw) ? 'grid'
+        : /영어/.test(raw) ? 'english'
+        : /일기|코넬|배움|알림|독서/.test(raw) ? 'lined'
         : 'lined';
     return (
-        <div>
-            <TitleBar title={title} />
-            {/그림일기/.test(title) && (
-                <div className="nb-drawbox">그림</div>
+        <div className={face.face === 'month' ? 'nb-monthpaper' : undefined}>
+            <TitleBar title={face.title} hint={face.hint} />
+            {face.face === 'month' && (
+                <div className="nb-monthpaper-weeks">
+                    {['1주', '2주', '3주', '4주', '5주'].map((label, i) => (
+                        <label key={label} className="nb-monthpaper-row">
+                            <span>{label}</span>
+                            <Ink
+                                multiline
+                                rows={2}
+                                value={fields[`w${i}`]}
+                                onChange={(v) => setField(`w${i}`, v)}
+                                placeholder={`${label}에 적을 일과 메모`}
+                                aria={`${label} 기록`}
+                            />
+                        </label>
+                    ))}
+                </div>
             )}
-            <Ink multiline rows={14} className={`nb-paper-${cls}`} value={fields.body} onChange={(v) => setField('body', v)} placeholder="여기에 적어요" />
+            {/그림일기/.test(raw) && (
+                <div className="nb-drawbox">그림 칸</div>
+            )}
+            <p className="nb-kicker">{face.face === 'month' ? '한 달 메모' : '공책'}</p>
+            <Ink
+                multiline
+                rows={face.face === 'plain' ? 16 : 12}
+                className={`nb-paper-${cls}`}
+                value={fields.body}
+                onChange={(v) => setField('body', v)}
+                placeholder="여기에 적어요"
+                aria="공책 본문"
+            />
         </div>
     );
 }
@@ -184,17 +213,30 @@ const STICKERS = [
     '출결', '보건', '안전', '예산', '월', '화', '수', '목', '금',
 ];
 
+function stickerTokens(value) {
+    return String(value || '').split(/\s+/).filter(Boolean);
+}
+
 export function StickerSheetPage({ page, fields, setField }) {
+    const picked = stickerTokens(fields.picked);
+    const toggle = (word) => {
+        const next = stickerTokens(fields.picked);
+        const at = next.indexOf(word);
+        if (at >= 0) next.splice(at, 1);
+        else next.push(word);
+        setField('picked', next.join(' '));
+    };
     return (
         <div>
-            <TitleBar title={`스티커 시트 p.${page}`} hint="눌러 고른 뒤, 필요한 쪽에 글자 스티커처럼 옮겨 적어요" />
+            <TitleBar title={`스티커 시트 p.${page}`} hint="누르면 선택되고 다시 누르면 해제됩니다. 요일·분류 스티커는 색이 바뀝니다." />
             <div className="nb-sticker-sheet">
                 {STICKERS.map((s) => (
                     <button
                         key={s}
                         type="button"
                         className="nb-sticker"
-                        onClick={() => setField('picked', `${fields.picked ? `${fields.picked} ` : ''}${s}`)}
+                        aria-pressed={picked.includes(s)}
+                        onClick={() => toggle(s)}
                     >
                         {s}
                     </button>
@@ -214,4 +256,27 @@ export function GenericToc({ title, hint, page, pageRec, pages, onGo }) {
             <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
         </div>
     );
+}
+
+export function WriteGroup(props) {
+    const type = props.pageRec.type;
+    const title = props.pageRec.title;
+    switch (type) {
+        case 'tag-legend': return <TagLegendPage {...props} />;
+        case 'tag-index': return <TagIndexPage {...props} />;
+        case 'ssugeok-toc': return <TocCards title="쓱적·메모 목차" hint="쓱적 · 모눈 · 점 · 무지 다섯 장씩" {...props} />;
+        case 'ssugeok': return <SsugeokPage {...props} />;
+        case 'memo': return <MemoPage {...props} />;
+        case 'notebook-toc': return <TocCards title="공책 목차" hint="이름을 누르면 1쪽, 숫자를 누르면 그 쪽으로 가요" {...props} />;
+        case 'notebook-paper': return <NotebookPaperPage {...props} />;
+        case 'board-toc': return <TocCards title="칠판 · 화이트보드 · 모눈" {...props} />;
+        case 'chalkboard':
+        case 'whiteboard':
+        case 'grid-board':
+            return <BoardPage {...props} />;
+        case 'sticker-toc': return <StickerTocPage {...props} />;
+        case 'sticker-sheet': return <StickerSheetPage {...props} />;
+        default:
+            return <GenericToc title={title} hint="이 쪽의 링크는 위에 그대로 연결되어 있어요" {...props} />;
+    }
 }

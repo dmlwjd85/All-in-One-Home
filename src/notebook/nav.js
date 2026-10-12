@@ -17,12 +17,13 @@ export function studentWhoPage(n) {
 
 export function monthPage(month, year = 2026) {
     const m = Number(month);
+    if (!Number.isInteger(m) || m < 1 || m > 12) return null;
     if (year === 2027 && m === 1) return 44;
     if (year === 2027 && m === 2) return 45;
     if (m >= 3 && m <= 12) return 31 + m;
     if (m === 1) return 44;
     if (m === 2) return 45;
-    return 34;
+    return null;
 }
 
 export function isTopLink(link) {

@@ -1,16 +1,17 @@
+import { useEffect, useState } from 'react';
 import DdayBoard, { UpcomingStrip } from '../DdayBoard.jsx';
 import SubmissionBoard from '../SubmissionBoard.jsx';
+import { sumBudget } from '../budget.js';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
-import { TocCards } from './ClassStudentPages.jsx';
-
-export { TocCards };
+import { formatWon, parseAmount } from '../../lib/utils.js';
+import { TocCards } from '../TocCards.jsx';
 
 export function ProgressPage({ extra, fields, setField }) {
     return (
         <div>
             <TitleBar title={`진도표 ${extra.slot || ''}`} hint="단원과 차시를 적어 가요" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>월일</th><th>교과</th><th>단원 · 차시</th><th>비고</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 14 }, (_, i) => (
@@ -30,7 +31,7 @@ export function EvalAreaPage({ fields, setField }) {
     return (
         <div>
             <TitleBar title="평가 영역" />
-            <table className="nb-table">
+            <table className="nb-table nb-table-text">
                 <thead><tr><th>영역</th><th>기준</th><th>메모</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 10 }, (_, i) => (
@@ -98,7 +99,7 @@ export function ScorePage({ pageRec, fields, setField, onGo }) {
         <div>
             <TitleBar title={`점수 체크 · ${first}~${last}번`} hint="번호를 누르면 학생 카드로 가요" />
             <Ink value={fields.title} onChange={(v) => setField('title', v)} placeholder="평가명" />
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>번호</th><th>점수</th><th>번호</th><th>점수</th></tr></thead>
                 <tbody>
                     {left.map((a, i) => {
@@ -120,7 +121,7 @@ export function ScorePage({ pageRec, fields, setField, onGo }) {
 
 function DeadlineLines({ fields, setField }) {
     return (
-            <table className="nb-table compact">
+            <table className="nb-table nb-table-text compact">
                 <thead><tr><th>기한</th><th>내용</th><th>완료</th></tr></thead>
                 <tbody>
                     {Array.from({ length: 12 }, (_, i) => (
@@ -220,16 +221,50 @@ export function NoticePage({ page, fields, setField, submissionSheets, signedIn,
     );
 }
 
+export function BudgetOverview({ onGo }) {
+    const [sum, setSum] = useState(() => sumBudget());
+    useEffect(() => {
+        const refresh = (event) => {
+            const page = Number(event.detail?.page);
+            if (page !== 0 && (page < 470 || page > 483)) return;
+            setSum(sumBudget());
+        };
+        window.addEventListener('nb-page-fields', refresh);
+        return () => window.removeEventListener('nb-page-fields', refresh);
+    }, []);
+    return (
+        <section className="nb-budget" aria-label="예산 합계">
+            <p className="nb-budget-total">예산 {formatWon(sum.budget)} · 집행 {formatWon(sum.used)} · 남음 {formatWon(sum.left)}</p>
+            <table className="nb-table nb-table-text compact">
+                <thead><tr><th>사업</th><th>예산</th><th>집행</th><th>남음</th></tr></thead>
+                <tbody>
+                    {sum.rows.map((row) => (
+                        <tr key={row.page}>
+                            <th><GoBtn to={row.page} onGo={onGo} className="text" aria={row.name}>{row.name}</GoBtn></th>
+                            <td>{formatWon(row.budget)}</td>
+                            <td>{formatWon(row.used)}</td>
+                            <td>{formatWon(row.left)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </section>
+    );
+}
+
 export function BudgetItemPage({ extra, fields, setField }) {
+    const budget = parseAmount(fields.budget);
+    const used = parseAmount(fields.used);
     return (
         <div>
-            <TitleBar title={`사업 ${extra.slot || ''}`} />
-            <Ink value={fields.name} onChange={(v) => setField('name', v)} placeholder="사업명" />
+            <TitleBar title={`사업 ${extra.slot || ''}`} hint={`이 사업 남음 ${formatWon(budget - used)} · 전체 합계는 468쪽`} />
+            <Ink value={fields.name} onChange={(v) => setField('name', v)} placeholder="사업명" aria="사업명" />
             <div className="nb-inline">
-                <Ink value={fields.budget} onChange={(v) => setField('budget', v)} placeholder="예산" />
-                <Ink value={fields.used} onChange={(v) => setField('used', v)} placeholder="집행" />
+                <Ink value={fields.budget} onChange={(v) => setField('budget', v)} placeholder="예산" aria="예산" />
+                <Ink value={fields.used} onChange={(v) => setField('used', v)} placeholder="집행" aria="집행" />
             </div>
-            <Ink multiline rows={8} value={fields.note} onChange={(v) => setField('note', v)} placeholder="품의 · 집행 메모" />
+            <p className="nb-budget-left">남음 {formatWon(budget - used)}</p>
+            <Ink multiline rows={8} value={fields.note} onChange={(v) => setField('note', v)} placeholder="품의 · 집행 메모" aria="품의 집행 메모" />
         </div>
     );
 }
@@ -259,4 +294,46 @@ export function BudgetMiscPage({ page, fields, setField }) {
             )}
         </div>
     );
+}
+
+export function LessonGroup(props) {
+    const type = props.pageRec.type;
+    switch (type) {
+        case 'lesson-toc': return <TocCards title="수업 목차" hint="진도표 · 단원 · 체크리스트 · 점수" {...props} />;
+        case 'progress': return <ProgressPage {...props} />;
+        case 'eval-area': return <EvalAreaPage {...props} />;
+        case 'unit': return <UnitPage {...props} />;
+        case 'checklist': return <ChecklistPage {...props} />;
+        case 'score': return <ScorePage {...props} />;
+        case 'work-toc': return (
+            <TocCards
+                title="업무 목차"
+                hint="기한 보드, 제출물 체크, 칭찬 스티커"
+                lead={(
+                    <div className="nb-monthrow">
+                        <GoBtn to={405} onGo={props.onGo} className="tone-lavender">기한 보드</GoBtn>
+                        <GoBtn to={458} onGo={props.onGo} className="tone-mint">제출물 체크</GoBtn>
+                        <GoBtn to={563} onGo={props.onGo} className="tone-butter">칭찬 스티커</GoBtn>
+                    </div>
+                )}
+                {...props}
+            />
+        );
+        case 'deadline': return <DeadlinePage {...props} />;
+        case 'todo': return <TodoSheetPage {...props} />;
+        case 'meeting': return <MeetingPage {...props} />;
+        case 'notice': return <NoticePage {...props} />;
+        case 'budget-toc': return (
+            <TocCards
+                title="예산"
+                hint="사업명을 누르면 그 사업 쪽으로 가요. 합계는 470–483쪽 예산·집행을 더합니다."
+                lead={<BudgetOverview onGo={props.onGo} />}
+                scrollLinks
+                {...props}
+            />
+        );
+        case 'budget-item': return <BudgetItemPage {...props} />;
+        case 'budget-misc': return <BudgetMiscPage {...props} />;
+        default: return null;
+    }
 }

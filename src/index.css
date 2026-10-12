@@ -13,7 +13,7 @@ html {
 }
 
 body {
-    font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
     overscroll-behavior-y: none;
     min-height: 100dvh;
 }
@@ -30,10 +30,11 @@ body {
 }
 
 .skip-link {
-    position: absolute;
+    position: fixed;
     left: 0.75rem;
-    top: -3rem;
+    top: 0;
     z-index: 100;
+    transform: translateY(-120%);
     border-radius: 0.75rem;
     background: #1a1612;
     color: #fff;
@@ -41,8 +42,10 @@ body {
     font-weight: 800;
 }
 
-.skip-link:focus {
+.skip-link:focus,
+.skip-link:focus-visible {
     top: 0.75rem;
+    transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

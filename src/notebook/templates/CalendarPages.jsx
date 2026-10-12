@@ -267,3 +267,16 @@ export function SpecialDayPage({ extra, fields, setField }) {
         </div>
     );
 }
+
+export function CalendarGroup(props) {
+    switch (props.pageRec.type) {
+        case 'year-cal': return <YearCalPage {...props} />;
+        case 'academic': return <AcademicPage {...props} />;
+        case 'month': return <MonthPage {...props} />;
+        case 'week-toc': return <WeekTocPage {...props} />;
+        case 'week': return <WeekPage {...props} />;
+        case 'special-toc': return <SpecialTocPage {...props} />;
+        case 'special-day': return <SpecialDayPage {...props} />;
+        default: return null;
+    }
+}

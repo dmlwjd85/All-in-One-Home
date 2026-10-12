@@ -1,0 +1,50 @@
+/* 글꼴은 이 사이트와 함께 제공합니다.
+   Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다.
+   학교안심 둥근미소·그림일기. */
+@font-face {
+    font-family: 'Pretendard Variable';
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+    src: url('./Pretendard-Regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Pretendard Variable';
+    font-style: normal;
+    font-weight: 501 900;
+    font-display: swap;
+    src: url('./Pretendard-Bold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: Pretendard;
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+    src: url('./Pretendard-Regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: Pretendard;
+    font-style: normal;
+    font-weight: 501 900;
+    font-display: swap;
+    src: url('./Pretendard-Bold.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Hakgyoansim Dunggeunmiso';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./HakgyoansimDunggeunmiso-R.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Hakgyoansim Geurimilgi';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./HakgyoansimGeurimilgi.woff2') format('woff2');
+}
