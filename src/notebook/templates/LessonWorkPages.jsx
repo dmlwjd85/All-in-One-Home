@@ -1,4 +1,5 @@
-import { Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
+import { GoBtn, Ink, LinedBlock, Tick, TitleBar } from '../fields.jsx';
+import { bodyLinks, destForStudentNumber } from '../nav.js';
 import { TocCards } from './ClassStudentPages.jsx';
 
 export { TocCards };
@@ -43,7 +44,8 @@ export function EvalAreaPage({ fields, setField }) {
     );
 }
 
-export function UnitPage({ extra, fields, setField }) {
+export function UnitPage({ extra, pageRec, fields, setField, onGo }) {
+    const nums = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title={`단원 ${extra.slot || ''}`} />
@@ -51,6 +53,15 @@ export function UnitPage({ extra, fields, setField }) {
                 <Ink value={fields.subject} onChange={(v) => setField('subject', v)} placeholder="교과" />
                 <Ink value={fields.unit} onChange={(v) => setField('unit', v)} placeholder="단원" />
             </div>
+            {nums.length > 0 && (
+                <div className="nb-numticks">
+                    {nums.map((l, i) => (
+                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="num" hit={`body:${l.label || i + 1}`}>
+                            {l.label || i + 1}
+                        </GoBtn>
+                    ))}
+                </div>
+            )}
             <Ink multiline rows={8} value={fields.plan} onChange={(v) => setField('plan', v)} placeholder="목표 · 활동 · 평가" />
         </div>
     );
@@ -76,8 +87,9 @@ export function ChecklistPage({ extra, fields, setField }) {
     );
 }
 
-export function ScorePage({ page, fields, setField }) {
+export function ScorePage({ page, pageRec, fields, setField, onGo }) {
     const start = page % 2 === 0 ? 17 : 1;
+    const links = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title={`점수 체크 · ${start}~${start + 15}번`} />
@@ -90,9 +102,9 @@ export function ScorePage({ page, fields, setField }) {
                         const b = start + i + 8;
                         return (
                             <tr key={i}>
-                                <th>{a}</th>
+                                <th><GoBtn to={destForStudentNumber(links, a)} onGo={onGo} className="num" hit={`body:${a}`}>{a}</GoBtn></th>
                                 <td><Ink value={fields[`s${a}`]} onChange={(v) => setField(`s${a}`, v)} /></td>
-                                <th>{b}</th>
+                                <th><GoBtn to={destForStudentNumber(links, b)} onGo={onGo} className="num" hit={`body:${b}`}>{b}</GoBtn></th>
                                 <td><Ink value={fields[`s${b}`]} onChange={(v) => setField(`s${b}`, v)} /></td>
                             </tr>
                         );
@@ -137,7 +149,22 @@ export function TodoSheetPage({ extra, fields, setField }) {
     );
 }
 
-export function MeetingPage({ extra, fields, setField }) {
+export function MeetingPage({ extra, pageRec, fields, setField, onGo }) {
+    const toc = bodyLinks(pageRec);
+    if (toc.length > 0) {
+        return (
+            <div>
+                <TitleBar title="회의록 목차" hint="번호를 누르면 그 회의 쪽이에요" />
+                <div className="nb-cellgrid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+                    {toc.map((l, i) => (
+                        <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
+                            {l.label || `${i + 1}`}
+                        </GoBtn>
+                    ))}
+                </div>
+            </div>
+        );
+    }
     return (
         <div>
             <TitleBar title={`회의록 ${extra.slot || ''}`} />

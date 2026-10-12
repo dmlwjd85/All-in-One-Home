@@ -28,6 +28,8 @@ jobs:
           VITE_BASE: ./
         run: |
           npm install
+          npm run check:links
+          npm run check:hits
           npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

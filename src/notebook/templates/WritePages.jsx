@@ -1,8 +1,9 @@
 import { addItem } from '../../lib/store.js';
 import { CellGrid, GoBtn, Ink, TitleBar } from '../fields.jsx';
 import { destLabel, TAGS } from '../labels.js';
+import { bodyLinks } from '../nav.js';
 
-export function TagLegendPage() {
+export function TagLegendPage({ onGo }) {
     const groups = [...new Set(TAGS.map((t) => t.group))];
     return (
         <div>
@@ -12,7 +13,9 @@ export function TagLegendPage() {
                     <h3>{g}</h3>
                     <div className="nb-tagrow">
                         {TAGS.filter((t) => t.group === g).map((t) => (
-                            <span key={t.id} className="nb-tagchip" style={{ background: t.color }}>#{t.id}<small>{t.hint}</small></span>
+                            <GoBtn key={t.id} to={t.page} onGo={onGo} className="plain" hit={`body:#${t.id}`}>
+                                <span className="nb-tagchip" style={{ background: t.color }}>#{t.id}<small>{t.hint}</small></span>
+                            </GoBtn>
                         ))}
                     </div>
                 </section>
@@ -42,7 +45,7 @@ export function TagIndexPage({ extra, fields, setField }) {
     );
 }
 
-export function SsugeokPage({ extra, fields, setField, signedIn, author, onChanged, onToast, onOpenHub }) {
+export function SsugeokPage({ extra, pageRec, pages, fields, setField, signedIn, author, onChanged, onToast, onOpenHub, onGo }) {
     const sendLine = async (i) => {
         const text = String(fields[`ln${i}`] || '').trim();
         if (!text) {
@@ -76,8 +79,10 @@ export function SsugeokPage({ extra, fields, setField, signedIn, author, onChang
                     </div>
                     <p className="nb-kicker">바로가기</p>
                     <div className="nb-tagrow">
-                        {['누가기록', '업무 할 일', '진도표', '학생카드'].map((lab) => (
-                            <span key={lab} className="nb-cardchip slim">{lab}</span>
+                        {bodyLinks(pageRec).map((l, i) => (
+                            <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip slim">
+                                {l.label || destLabel(l.to, pages)}
+                            </GoBtn>
                         ))}
                     </div>
                     <button type="button" className="nb-hubbtn" onClick={onOpenHub}>받은함 · 날려보내기 (쓱적 허브)</button>
@@ -133,7 +138,7 @@ export function StickerTocPage({ pageRec, pages, onGo }) {
         <div>
             <TitleBar title="스티커" hint="보고 고르는 쪽이에요. 붙일 땐 PNG 묶음을 써요. 시트 이름을 누르면 그 쪽으로 가요" />
             <CellGrid cols={3}>
-                {(pageRec.links || []).map((l, i) => (
+                {bodyLinks(pageRec).map((l, i) => (
                     <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
                 ))}
             </CellGrid>
@@ -174,7 +179,7 @@ export function GenericToc({ title, hint, pageRec, pages, onGo }) {
         <div>
             <TitleBar title={title} hint={hint} />
             <CellGrid cols={4}>
-                {(pageRec.links || []).map((l, i) => (
+                {bodyLinks(pageRec).map((l, i) => (
                     <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">{l.label || destLabel(l.to, pages)}</GoBtn>
                 ))}
             </CellGrid>

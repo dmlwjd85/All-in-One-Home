@@ -1,13 +1,15 @@
 import { ATTEND_STATUS } from '../../lib/utils.js';
-import { CellGrid, GoBtn, Ink, LinedBlock, Pick, Tick, TitleBar } from '../fields.jsx';
+import { CellGrid, GoBtn, Ink, LinedBlock, Pick, ShortcutRow, Tick, TitleBar } from '../fields.jsx';
 import { destLabel } from '../labels.js';
+import { bodyLinks, destForStudentNumber, studentCardPage, studentWhoPage } from '../nav.js';
 
 export function TocCards({ title, hint, pageRec, pages, onGo }) {
+    const links = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title={title} hint={hint} />
             <CellGrid cols={4}>
-                {(pageRec.links || []).map((l, i) => (
+                {links.map((l, i) => (
                     <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} className="chip">
                         {l.label || destLabel(l.to, pages)}
                     </GoBtn>
@@ -102,12 +104,12 @@ export function RosterPage({ fields, setField, onGo }) {
                                 const n = off + i + 1;
                                 return (
                                     <tr key={n}>
-                                        <th><GoBtn to={157 + n * 2} onGo={onGo} className="num" aria={`${n}번 학생 카드`}>{n}</GoBtn></th>
+                                        <th><GoBtn to={studentCardPage(n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
                                         <td><Ink value={fields[`name${n}`]} onChange={(v) => setField(`name${n}`, v)} aria={`${n}번 이름`} /></td>
                                         <td><Ink value={fields[`sex${n}`]} onChange={(v) => setField(`sex${n}`, v)} aria={`${n}번 성별`} /></td>
                                         <td><Ink value={fields[`birth${n}`]} onChange={(v) => setField(`birth${n}`, v)} aria={`${n}번 생년월일`} /></td>
                                         <td><Ink value={fields[`note${n}`]} onChange={(v) => setField(`note${n}`, v)} aria={`${n}번 비고`} /></td>
-                                        <td><GoBtn to={158 + n * 2} onGo={onGo} className="who" aria={`${n}번 누가기록`}>누가</GoBtn></td>
+                                        <td><GoBtn to={studentWhoPage(n)} onGo={onGo} className="who" aria={`${n}번 누가기록`} hit={`body:누가${n}`}>누가</GoBtn></td>
                                     </tr>
                                 );
                             })}
@@ -119,8 +121,9 @@ export function RosterPage({ fields, setField, onGo }) {
     );
 }
 
-export function SurveyPage({ page, fields, setField }) {
+export function SurveyPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 155 ? 1 : 17;
+    const links = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title={page === 155 ? '기초조사 1 · 1~16번' : '기초조사 2 · 17~32번'} />
@@ -131,7 +134,7 @@ export function SurveyPage({ page, fields, setField }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th>{n}</th>
+                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
                                 <td><Ink value={fields[`g${n}`]} onChange={(v) => setField(`g${n}`, v)} /></td>
                                 <td><Ink value={fields[`p${n}`]} onChange={(v) => setField(`p${n}`, v)} /></td>
                                 <td><Ink value={fields[`a${n}`]} onChange={(v) => setField(`a${n}`, v)} /></td>
@@ -144,8 +147,9 @@ export function SurveyPage({ page, fields, setField }) {
     );
 }
 
-export function HealthPage({ page, fields, setField }) {
+export function HealthPage({ page, pageRec, fields, setField, onGo }) {
     const start = page === 157 ? 1 : 17;
+    const links = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title={page === 157 ? '건강 · 특이사항 1 · 1~16번' : '건강 · 특이사항 2 · 17~32번'} />
@@ -156,7 +160,7 @@ export function HealthPage({ page, fields, setField }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th>{n}</th>
+                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
                                 <td><Ink value={fields[`h${n}`]} onChange={(v) => setField(`h${n}`, v)} /></td>
                                 <td><Tick checked={fields[`m${n}`]} onChange={(v) => setField(`m${n}`, v)} /></td>
                                 <td><Ink value={fields[`n${n}`]} onChange={(v) => setField(`n${n}`, v)} /></td>
@@ -169,11 +173,12 @@ export function HealthPage({ page, fields, setField }) {
     );
 }
 
-export function StudentCardPage({ extra, fields, setField }) {
+export function StudentCardPage({ extra, pageRec, pages, fields, setField, onGo }) {
     const n = extra.student || 1;
     return (
         <div>
             <TitleBar title={`학생 카드 · ${n}번`} />
+            <ShortcutRow links={bodyLinks(pageRec)} pages={pages} onGo={onGo} />
             <div className="nb-scard">
                 <div className="nb-scard-top">
                     <div className="nb-photo">사진</div>
@@ -236,8 +241,9 @@ export function QuickNotePage({ fields, setField }) {
     );
 }
 
-export function AttendPage({ extra, fields, setField }) {
+export function AttendPage({ extra, pageRec, fields, setField, onGo }) {
     const start = extra.half === '17-32' ? 17 : 1;
+    const links = bodyLinks(pageRec);
     return (
         <div>
             <TitleBar title="출석부" hint={`월말 출석부 대조 확인 · ${extra.half || '1-16'}`} />
@@ -257,7 +263,7 @@ export function AttendPage({ extra, fields, setField }) {
                         const n = start + i;
                         return (
                             <tr key={n}>
-                                <th>{n}</th>
+                                <th><GoBtn to={destForStudentNumber(links, n)} onGo={onGo} className="num" aria={`${n}번 학생 카드`} hit={`body:${n}`}>{n}</GoBtn></th>
                                 {Array.from({ length: 10 }, (_, w) => (
                                     <td key={w}>
                                         <Pick value={fields[`s${n}_${w}`]} onChange={(v) => setField(`s${n}_${w}`, v)} options={ATTEND_STATUS} aria={`${n}번 ${w + 1}주`} />

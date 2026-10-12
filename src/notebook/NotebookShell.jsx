@@ -1,8 +1,6 @@
 import { LEFT_TABS, RIGHT_TABS, activeLeft, activeRight } from './labels.js';
-import LinkOverlay from './LinkOverlay.jsx';
-
-const PAGE_W = 1180;
-const PAGE_H = 820;
+import { PAGE_H, PAGE_W, layoutVars } from './layout.js';
+import { chromeTopLabel, topLinks } from './nav.js';
 
 export default function NotebookShell({
     page,
@@ -14,9 +12,14 @@ export default function NotebookShell({
 }) {
     const leftOn = activeLeft(page);
     const rightOn = activeRight(page);
+    const top = showChrome ? topLinks(pageRec) : [];
 
     return (
-        <div className="nb-page" style={{ width: PAGE_W, height: PAGE_H }} data-page={page}>
+        <div
+            className="nb-page"
+            style={{ width: PAGE_W, height: PAGE_H, ...layoutVars() }}
+            data-page={page}
+        >
             {showChrome && (
                 <nav className="nb-left" aria-label="구역 탭">
                     {LEFT_TABS.map((tab) => (
@@ -26,6 +29,8 @@ export default function NotebookShell({
                             className={`nb-tab ${leftOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={leftOn === tab.to ? 'page' : undefined}
+                            data-hit={`left:${tab.label}`}
+                            data-to={tab.to}
                         >
                             {tab.label}
                         </button>
@@ -42,6 +47,8 @@ export default function NotebookShell({
                             className={`nb-tab ${rightOn === tab.to ? 'is-on' : ''}`}
                             onClick={() => onGo(tab.to)}
                             aria-current={rightOn === tab.to ? 'page' : undefined}
+                            data-hit={`right:${tab.label}`}
+                            data-to={tab.to}
                         >
                             {tab.label}
                         </button>
@@ -49,11 +56,31 @@ export default function NotebookShell({
                 </nav>
             )}
 
+            {showChrome && top.length > 0 && (
+                <nav className="nb-topnav" aria-label="이전 · 목차 · 다음">
+                    {top.map((link, i) => {
+                        const label = chromeTopLabel(link, page, pages);
+                        return (
+                            <button
+                                key={`top-${link.to}-${i}`}
+                                type="button"
+                                className="nb-topbtn"
+                                onClick={() => onGo(link.to)}
+                                aria-label={`${label} (${link.to}쪽)`}
+                                title={`${label} · ${link.to}쪽`}
+                                data-hit={`top:${label}`}
+                                data-to={link.to}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </nav>
+            )}
+
             <div className="nb-body">
                 {children}
             </div>
-
-            <LinkOverlay page={page} pageRec={pageRec} pages={pages} onGo={onGo} />
 
             {showChrome && (
                 <p className="nb-folio">p.{page}</p>
