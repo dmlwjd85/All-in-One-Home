@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
-const port = 4175;
+const port = Number(process.env.PREVIEW_PORT || 4175);
 const base = `http://127.0.0.1:${port}/`;
 
 function chromePath() {
@@ -18,24 +18,32 @@ function chromePath() {
     return candidates.find((path) => existsSync(path)) || '';
 }
 
-function waitForPreview(child) {
-    return new Promise((resolveReady, reject) => {
-        let log = '';
-        const timer = setTimeout(() => reject(new Error(`preview 시작 실패\n${log}`)), 30000);
-        const onData = (chunk) => {
-            log += chunk.toString();
-            if (log.includes('Local:') || log.includes(`:${port}`)) {
-                clearTimeout(timer);
-                resolveReady();
-            }
-        };
-        child.stdout.on('data', onData);
-        child.stderr.on('data', onData);
-        child.on('exit', (code) => {
-            clearTimeout(timer);
-            reject(new Error(`preview 종료 ${code}\n${log}`));
-        });
-    });
+function stripAnsi(text) {
+    return text.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+/** Vite 로그의 Local: 은 색 코드로 갈라집니다. HTTP로 60초까지 기다립니다. */
+async function waitForPreview(child) {
+    let log = '';
+    const onData = (chunk) => { log += chunk.toString(); };
+    child.stdout?.on('data', onData);
+    child.stderr?.on('data', onData);
+    let exitCode = null;
+    child.on('exit', (code) => { exitCode = code ?? 0; });
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+        if (exitCode != null) {
+            throw new Error(`preview 종료 ${exitCode}\n${stripAnsi(log)}`);
+        }
+        try {
+            const res = await fetch(base, { signal: AbortSignal.timeout(1500) });
+            if (res.status < 500) return;
+        } catch {
+            /* 아직 포트가 안 열렸습니다. */
+        }
+        await delay(300);
+    }
+    throw new Error(`preview 시작 실패\n${stripAnsi(log)}`);
 }
 
 async function go(page, n) {
@@ -210,8 +218,9 @@ async function geometryHits(page) {
                 const nav = el.closest('.nb-left, .nb-right');
                 if (el.classList.contains('nb-tab') && nav) {
                     const navStyle = getComputedStyle(nav);
-                    const horizontal = (navStyle.overflowX === 'auto' || navStyle.overflowX === 'scroll') && nav.scrollWidth > nav.clientWidth + 1;
-                    if (horizontal) return false;
+                    const row = navStyle.flexDirection === 'row' || navStyle.flexDirection === 'row-reverse';
+                    const scrollX = navStyle.overflowX === 'auto' || navStyle.overflowX === 'scroll' || navStyle.overflowX === 'overlay';
+                    if (row && scrollX) return false;
                 }
                 return true;
             });
