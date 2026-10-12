@@ -16,7 +16,8 @@
     "check:links": "node scripts/check-link-coverage.mjs",
     "check:hits": "node scripts/check-hit-targets.mjs",
     "check:storage": "node scripts/check-storage-paths.mjs",
-    "check:quality": "node scripts/check-quality.mjs"
+    "check:quality": "node scripts/check-quality.mjs",
+    "check:browser": "node scripts/check-quality.mjs --browser"
   },
   "dependencies": {
     "firebase": "^11.6.0",
@@ -28,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
+    "puppeteer-core": "^25.13.0",
     "tailwindcss": "^3.4.15",
     "vite": "^6.0.3"
   }

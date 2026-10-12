@@ -123,7 +123,7 @@
     border: 0;
     background: #efe6dc;
     color: #3d312b;
-    font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', sans-serif;
+    font-family: 'Pretendard Variable', Pretendard, 'Hakgyoansim Dunggeunmiso', sans-serif;
     font-weight: 800;
     font-size: 13px;
     letter-spacing: -0.04em;
@@ -217,6 +217,26 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: auto;
+}
+
+.nb-fill > .nb-linkgrid {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.nb-toc-scroll > .nb-budget {
+    flex: 0 1 auto;
+    max-height: 42%;
+    min-height: 0;
+    overflow: auto;
+}
+
+.nb-toc-links {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 .nb-linkgrid {
@@ -322,7 +342,7 @@
     margin: 6px 0 4px;
 }
 .nb-pagetitle {
-    font-family: 'Hakgyoansim Dunggeunmiso', 'NanumSquareRound', sans-serif;
+    font-family: 'Hakgyoansim Dunggeunmiso', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: 26px;
     font-weight: 700;
     line-height: 1.15;
@@ -336,7 +356,7 @@
     border-bottom: 1px solid rgba(74, 63, 58, 0.28);
     background: transparent;
     color: #4a3f3a;
-    font-family: 'Hakgyoansim Geurimilgi', 'NanumSquareRound', cursive, sans-serif;
+    font-family: 'Hakgyoansim Geurimilgi', 'Pretendard Variable', Pretendard, cursive, sans-serif;
     font-size: 15px;
     padding: 2px 4px;
     position: relative;
@@ -463,7 +483,7 @@
     padding: 4px 12px;
 }
 .nb-cover-title {
-    font-family: 'Hakgyoansim Dunggeunmiso', 'NanumSquareRound', sans-serif;
+    font-family: 'Hakgyoansim Dunggeunmiso', 'Pretendard Variable', Pretendard, sans-serif;
     font-size: 42px;
     font-weight: 700;
     margin: 12px 0 6px;
@@ -476,6 +496,21 @@
     text-align: left;
     display: grid;
     gap: 10px;
+}
+.nb-cover-setup {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    margin-top: 4px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 999px;
+    background: #c2464f;
+    color: #fffaf3;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
 }
 .nb-cover-fields label {
     display: grid;
@@ -567,7 +602,7 @@
 .nb-period { display: flex; gap: 4px; align-items: center; }
 .nb-period span { width: 14px; font-size: 11px; font-weight: 800; color: #534338; }
 
-.nb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.nb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .nb-table th, .nb-table td {
     border: 1px solid rgba(74, 63, 58, 0.16);
     padding: 2px 4px;
@@ -655,7 +690,19 @@
 .nb-paper-staff { background-image: repeating-linear-gradient(transparent 0 8px, rgba(74, 63, 58, 0.25) 8px 9px, transparent 9px 12px, rgba(74, 63, 58, 0.25) 12px 13px, transparent 13px 16px, rgba(74, 63, 58, 0.25) 16px 17px, transparent 17px 20px, rgba(74, 63, 58, 0.25) 20px 21px, transparent 21px 36px); }
 .nb-paper-square { background-image: linear-gradient(rgba(194, 70, 79, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(194, 70, 79, 0.2) 1px, transparent 1px); background-size: 28px 28px; }
 .nb-paper-english { background-image: repeating-linear-gradient(transparent 0 10px, rgba(52, 86, 136, 0.2) 10px 11px, transparent 11px 22px, rgba(52, 86, 136, 0.12) 22px 23px); }
-.nb-paper-plain { background: #fffaf3; }
+.nb-paper-plain {
+    min-height: 240px;
+    background: #fffaf3;
+    box-shadow: inset 0 0 0 1px rgba(74, 63, 58, 0.16);
+}
+.nb-monthpaper-weeks { display: grid; gap: 6px; margin-bottom: 8px; }
+.nb-monthpaper-row {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+}
+.nb-monthpaper-row > span { font-weight: 800; padding-top: 8px; }
 .nb-drawbox { height: 160px; border: 1px solid rgba(74, 63, 58, 0.2); margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: #534338; }
 .nb-board { min-height: 420px; }
 .nb-board-chalk { background: #2d4a38; color: #f3f7e8; }
@@ -894,6 +941,18 @@
     min-width: 32px;
     border-radius: 999px;
     padding: 2px 6px;
+}
+
+@media (min-width: 701px) and (max-width: 1366px) {
+    .nb-table th,
+    .nb-table td {
+        height: 44px;
+    }
+    .nb-table .nb-ink,
+    .nb-table .nb-gobtn,
+    .nb-table .nb-tick {
+        min-height: 44px;
+    }
 }
 
 @media (max-width: 1100px) {
@@ -1167,13 +1226,16 @@
     font-weight: 800;
 }
 .nb-export-student {
+    position: sticky;
+    top: 0;
+    z-index: 5;
     min-height: 44px;
     margin: 0 0 8px;
     border: 0;
     border-radius: 999px;
-    padding: 0 12px;
-    background: #efe6dc;
-    color: #3d312b;
+    padding: 0 14px;
+    background: #c2464f;
+    color: #fffaf3;
     font: inherit;
     font-weight: 800;
     cursor: pointer;
@@ -1270,7 +1332,70 @@
     border-radius: 12px;
     padding: 0 12px;
 }
-.nb-app.is-phone .nb-body { overflow: visible; }
+.nb-app.is-phone .nb-toolbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+}
+.nb-app.is-phone .nb-toolbar-brand {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    flex-wrap: nowrap;
+}
+.nb-brand-name,
+.nb-app.is-phone .nb-brand-name {
+    white-space: nowrap;
+}
+.nb-app.is-phone .nb-brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 0 1 auto;
+}
+.nb-app.is-phone .nb-toolbar-page {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.nb-tab-hint { display: none; }
+.nb-app.is-phone .nb-left,
+.nb-app.is-phone .nb-right {
+    position: relative;
+    mask-image: linear-gradient(to right, transparent 0, #000 10px, #000 calc(100% - 36px), transparent);
+}
+.nb-app.is-phone .nb-tab-hint {
+    display: flex;
+    align-items: center;
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 8px 0 14px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #c2464f;
+    background: linear-gradient(90deg, rgba(251, 247, 241, 0), #fbf7f1 35%);
+    pointer-events: none;
+}
+.nb-app.is-phone .nb-body {
+    overflow: visible;
+    padding-bottom: 128px;
+}
+.nb-app.is-phone .nb-ink,
+.nb-app.is-phone .nb-field {
+    scroll-margin-bottom: 128px;
+}
+.nb-app.is-phone .nb-gobtn.num {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+}
 .nb-app.is-phone .nb-field {
     display: flex;
     flex-direction: column;

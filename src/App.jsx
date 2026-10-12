@@ -160,21 +160,21 @@ export default function App() {
         setImportPreview(result);
     };
 
-    const confirmImport = async () => {
+    const confirmImport = async (mode = 'overwrite') => {
         const data = importPreview?.data;
         if (!data) return;
         setImporting(true);
         try {
             if (signedIn) await pushBackupCloud(data);
-            applyBackupLocal(data);
+            applyBackupLocal(data, { mode });
             setImportPreview(null);
             bump();
-            notify('백업을 가져왔습니다.');
+            notify(mode === 'merge' ? '백업을 기존 기록과 합쳤습니다.' : '백업으로 덮어썼습니다.');
         } catch (err) {
             console.error(err);
             reportSaveFailure({
                 message: '가져오기에 실패했습니다. 다시 시도해 주세요.',
-                retry: () => confirmImport(),
+                retry: () => confirmImport(mode),
             });
         } finally {
             setImporting(false);
@@ -211,7 +211,7 @@ export default function App() {
 
     const importModal = importPreview ? (
         <Modal title="백업 가져오기" onClose={() => { if (!importing) setImportPreview(null); }}>
-            <p className="text-sm text-stone-700 leading-relaxed">백업에 들어 있는 기록만 이 기기 기록 위에 덮어씁니다. 백업에 없는 항목은 그대로 둡니다.</p>
+            <p className="text-sm text-stone-700 leading-relaxed">덮어쓰기는 백업에 들어 있는 항목 전체를 이 기기 기록으로 바꿉니다. 합치기는 같은 id와 같은 칸만 백업 값으로 고치고, 이 기기에만 있는 기록은 남깁니다.</p>
             {signedIn && (
                 <p className="text-sm text-stone-700 leading-relaxed mt-2">로그인 중이면 같은 경로의 클라우드 문서도 갱신합니다. 백업에 없는 클라우드 문서는 지우지 않습니다. 건강·민원·학폭 쪽은 클라우드로 올리지 않습니다.</p>
             )}
@@ -220,8 +220,9 @@ export default function App() {
                     <li key={key}>{BACKUP_LABELS[key] || key} {count}</li>
                 ))}
             </ul>
-            <div className="mt-4 flex gap-2">
-                <button type="button" className="btn-primary" disabled={importing} onClick={confirmImport}>{importing ? '가져오는 중' : '덮어쓰기'}</button>
+            <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary" disabled={importing} onClick={() => confirmImport('overwrite')}>{importing ? '가져오는 중' : '덮어쓰기'}</button>
+                <button type="button" className="btn-secondary" disabled={importing} onClick={() => confirmImport('merge')}>합치기</button>
                 <button type="button" className="btn-secondary" disabled={importing} onClick={() => setImportPreview(null)}>취소</button>
             </div>
         </Modal>

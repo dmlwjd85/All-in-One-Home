@@ -33,6 +33,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
+                    <span className="nb-tab-hint">옆으로</span>
                 </nav>
             )}
 
@@ -79,6 +80,7 @@ export default function NotebookShell({
                             {tab.label}
                         </button>
                     ))}
+                    <span className="nb-tab-hint">옆으로</span>
                 </nav>
             )}
         </div>

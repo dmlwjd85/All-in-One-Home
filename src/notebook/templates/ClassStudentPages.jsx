@@ -1,23 +1,13 @@
 import { useMemo } from 'react';
 import { downloadText } from '../../lib/utils.js';
 import { ATTEND_STATUS } from '../../lib/utils.js';
-import { GoBtn, Ink, LinedBlock, LinkGrid, Pick, Tick, TitleBar } from '../fields.jsx';
+import { GoBtn, Ink, LinedBlock, Pick, Tick, TitleBar } from '../fields.jsx';
+import { TocCards } from '../TocCards.jsx';
 import { linkText } from '../labels.js';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { linkRosterValue, readPageFields, useRosterNames } from '../fieldStore.js';
 import { buildStudentExport } from '../studentExport.js';
 import { quietStudents, whoPage } from '../ssugeokModel.js';
-
-export function TocCards({ title, hint, page, pageRec, pages, onGo, lead }) {
-    const { body } = partitionLinks(pageRec);
-    return (
-        <div className="nb-fill">
-            <TitleBar title={title} hint={hint} />
-            {lead}
-            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
-        </div>
-    );
-}
 
 export function TimetablePage({ extra, fields, setField, page }) {
     const days = ['월', '화', '수', '목', '금'];
@@ -112,13 +102,14 @@ function StudentExportButton({ n, rosterName, onToast }) {
         <button
             type="button"
             className="nb-export-student"
+            data-action="export-student"
             onClick={() => {
                 const payload = buildStudentExport(n, rosterName);
                 downloadText(`학생-${n}-누가기록-상담.json`, JSON.stringify(payload, null, 2));
                 onToast?.(`${n}번 누가기록·상담 파일을 내려받았습니다.`);
             }}
         >
-            누가기록·상담 내보내기
+            이 학생 누가기록·상담 내보내기
         </button>
     );
 }
@@ -389,6 +380,32 @@ export function ConsultTimePage({ fields, setField }) {
             </table>
         </div>
     );
+}
+
+export function ClassGroup(props) {
+    const type = props.pageRec.type;
+    switch (type) {
+        case 'class-toc': return <TocCards title="학급 목차" hint="시간표 · 전담·특별실 · 자리 · 1인 1역 · 학급 약속" {...props} />;
+        case 'timetable': return <TimetablePage {...props} />;
+        case 'class-rules': return <LinedForm title="우리 반 약속" n={14} {...props} />;
+        case 'roles': return <RolesPage {...props} />;
+        case 'seating': return <SeatingPage {...props} />;
+        case 'roster': return <RosterPage {...props} />;
+        case 'survey': return <SurveyPage {...props} />;
+        case 'health': return <HealthPage {...props} />;
+        case 'student-card': return <StudentCardPage {...props} />;
+        case 'student-who': return <WhoRecordPage {...props} />;
+        case 'quick-note': return <QuickNotePage {...props} />;
+        case 'attend-toc': return <TocCards title="출결 목차" hint="달마다 1~16번, 17~32번 두 쪽이에요" {...props} />;
+        case 'attend': return <AttendPage {...props} />;
+        case 'counsel-toc': return <TocCards title="상담 목차" hint="번호를 누르면 그 학생 쪽이에요" {...props} />;
+        case 'counsel': return <CounselPage kind="counsel" {...props} />;
+        case 'parent': return <CounselPage kind="parent" {...props} />;
+        case 'consult-time': return <ConsultTimePage {...props} />;
+        case 'incident': return <IncidentPage {...props} />;
+        case 'year-prep': return <LinedForm title="2027학년도 준비 · 인수인계" n={14} {...props} />;
+        default: return null;
+    }
 }
 
 export function IncidentPage({ fields, setField }) {

@@ -5,9 +5,7 @@ import { sumBudget } from '../budget.js';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { formatWon, parseAmount } from '../../lib/utils.js';
-import { TocCards } from './ClassStudentPages.jsx';
-
-export { TocCards };
+import { TocCards } from '../TocCards.jsx';
 
 export function ProgressPage({ extra, fields, setField }) {
     return (
@@ -242,7 +240,7 @@ export function BudgetOverview({ onGo }) {
                 <tbody>
                     {sum.rows.map((row) => (
                         <tr key={row.page}>
-                            <th><GoBtn to={row.page} onGo={onGo} aria={row.name}>{row.name}</GoBtn></th>
+                            <th><GoBtn to={row.page} onGo={onGo} className="text" aria={row.name}>{row.name}</GoBtn></th>
                             <td>{formatWon(row.budget)}</td>
                             <td>{formatWon(row.used)}</td>
                             <td>{formatWon(row.left)}</td>
@@ -296,4 +294,46 @@ export function BudgetMiscPage({ page, fields, setField }) {
             )}
         </div>
     );
+}
+
+export function LessonGroup(props) {
+    const type = props.pageRec.type;
+    switch (type) {
+        case 'lesson-toc': return <TocCards title="수업 목차" hint="진도표 · 단원 · 체크리스트 · 점수" {...props} />;
+        case 'progress': return <ProgressPage {...props} />;
+        case 'eval-area': return <EvalAreaPage {...props} />;
+        case 'unit': return <UnitPage {...props} />;
+        case 'checklist': return <ChecklistPage {...props} />;
+        case 'score': return <ScorePage {...props} />;
+        case 'work-toc': return (
+            <TocCards
+                title="업무 목차"
+                hint="기한 보드, 제출물 체크, 칭찬 스티커"
+                lead={(
+                    <div className="nb-monthrow">
+                        <GoBtn to={405} onGo={props.onGo} className="tone-lavender">기한 보드</GoBtn>
+                        <GoBtn to={458} onGo={props.onGo} className="tone-mint">제출물 체크</GoBtn>
+                        <GoBtn to={563} onGo={props.onGo} className="tone-butter">칭찬 스티커</GoBtn>
+                    </div>
+                )}
+                {...props}
+            />
+        );
+        case 'deadline': return <DeadlinePage {...props} />;
+        case 'todo': return <TodoSheetPage {...props} />;
+        case 'meeting': return <MeetingPage {...props} />;
+        case 'notice': return <NoticePage {...props} />;
+        case 'budget-toc': return (
+            <TocCards
+                title="예산"
+                hint="사업명을 누르면 그 사업 쪽으로 가요. 합계는 470–483쪽 예산·집행을 더합니다."
+                lead={<BudgetOverview onGo={props.onGo} />}
+                scrollLinks
+                {...props}
+            />
+        );
+        case 'budget-item': return <BudgetItemPage {...props} />;
+        case 'budget-misc': return <BudgetMiscPage {...props} />;
+        default: return null;
+    }
 }

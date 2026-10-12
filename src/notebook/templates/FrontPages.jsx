@@ -32,6 +32,18 @@ export function CoverPage({ fields, setField, onGo }) {
                     <label>학교 <Ink value={fields.school} onChange={(v) => setField('school', v)} placeholder="학교 이름" /></label>
                     <label>학년 · 반 <Ink value={fields.klass} onChange={(v) => setField('klass', v)} placeholder="예: 3학년 2반" /></label>
                     <label>선생님 <Ink value={fields.teacher} onChange={(v) => setField('teacher', v)} placeholder="성함" /></label>
+                    <button
+                        type="button"
+                        className="nb-cover-setup"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onGo?.(3);
+                        }}
+                        data-to={3}
+                        data-hit="body:새 학기 설정"
+                    >
+                        새 학기 설정 체크리스트
+                    </button>
                 </div>
                 <p className="nb-hint">표지를 누르면 홈으로 가요</p>
             </div>
@@ -192,4 +204,14 @@ export function HowtoPage({ page, pageRec, pages, onGo }) {
             )}
         </div>
     );
+}
+
+export function FrontGroup(props) {
+    switch (props.pageRec.type) {
+        case 'cover': return <CoverPage {...props} />;
+        case 'home': return <HomePage {...props} />;
+        case 'prep': return <PrepPage {...props} />;
+        case 'howto': return <HowtoPage {...props} />;
+        default: return null;
+    }
 }

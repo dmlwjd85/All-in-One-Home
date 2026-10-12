@@ -64,7 +64,7 @@ export function validateBackup(text) {
     try {
         data = JSON.parse(text);
     } catch {
-        return { ok: false, errors: ['JSON 형식이 아닙니다.'], counts: {}, data: null };
+        return { ok: false, errors: ['JSON 형식이 아닙니다. 올바른 백업 파일인지 확인해 주세요.'], counts: {}, data: null };
     }
     if (!isPlain(data)) {
         return { ok: false, errors: ['백업은 객체여야 합니다.'], counts: {}, data: null };
@@ -158,23 +158,57 @@ export function buildExportPayload(parts) {
     };
 }
 
-/** 백업에 들어 있는 키만 이 기기에 덮어씁니다. */
-export function applyBackupLocal(data) {
+/** 같은 id는 백업 값이 이기고, 이 기기에만 있는 id는 남깁니다. */
+export function mergeById(localRows, incomingRows) {
+    const merged = [];
+    const index = new Map();
+    for (const row of Array.isArray(localRows) ? localRows : []) {
+        if (!isPlain(row)) continue;
+        merged.push({ ...row });
+        if (row.id != null && row.id !== '') index.set(String(row.id), merged.length - 1);
+    }
+    for (const row of Array.isArray(incomingRows) ? incomingRows : []) {
+        if (!isPlain(row)) continue;
+        const id = row.id != null && row.id !== '' ? String(row.id) : '';
+        if (id && index.has(id)) merged[index.get(id)] = { ...merged[index.get(id)], ...row };
+        else {
+            merged.push({ ...row });
+            if (id) index.set(id, merged.length - 1);
+        }
+    }
+    return merged;
+}
+
+export function mergePlain(local, incoming) {
+    return { ...(isPlain(local) ? local : {}), ...(isPlain(incoming) ? incoming : {}) };
+}
+
+/**
+ * 백업에 들어 있는 키만 이 기기에 반영합니다.
+ * overwrite는 그 키 전체를 바꾸고, merge는 id·칸 단위로 합칩니다.
+ */
+export function applyBackupLocal(data, options = {}) {
+    const merge = options.mode === 'merge';
     for (const [key, name] of Object.entries(BACKUP_LISTS)) {
         if (!Array.isArray(data[key])) continue;
-        localStorage.setItem(storageKey(name), JSON.stringify(data[key]));
+        const next = merge ? mergeById(readJson(storageKey(name), []), data[key]) : data[key];
+        localStorage.setItem(storageKey(name), JSON.stringify(next));
     }
     if (isPlain(data[BACKUP_RECORD])) {
-        localStorage.setItem(storageKey(BACKUP_RECORD), JSON.stringify(data[BACKUP_RECORD]));
+        const next = merge ? mergePlain(readJson(storageKey(BACKUP_RECORD), {}), data[BACKUP_RECORD]) : data[BACKUP_RECORD];
+        localStorage.setItem(storageKey(BACKUP_RECORD), JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('nb-shared-record', { detail: { name: BACKUP_RECORD } }));
     }
     if (Array.isArray(data.ssugeokSensitive)) {
-        localStorage.setItem(storageKey('ssugeokSensitive'), JSON.stringify(data.ssugeokSensitive));
+        const next = merge ? mergeById(readJson(storageKey('ssugeokSensitive'), []), data.ssugeokSensitive) : data.ssugeokSensitive;
+        localStorage.setItem(storageKey('ssugeokSensitive'), JSON.stringify(next));
         window.dispatchEvent(new CustomEvent('nb-ssugeok-sensitive'));
     }
     if (isPlain(data.notebookFields)) {
         for (const [page, fields] of Object.entries(data.notebookFields)) {
-            localStorage.setItem(`homenote_v2_notebookFields_p${page}`, JSON.stringify(fields));
+            const storage = `homenote_v2_notebookFields_p${page}`;
+            const next = merge ? mergePlain(readJson(storage, {}), fields) : fields;
+            localStorage.setItem(storage, JSON.stringify(next));
         }
     }
     window.dispatchEvent(new CustomEvent('nb-page-fields', { detail: { page: 0 } }));

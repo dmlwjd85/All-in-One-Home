@@ -171,7 +171,7 @@ export default function NotebookApp({
             <header className="nb-toolbar">
                 <p className="nb-toolbar-brand">
                     <PenLine size={16} aria-hidden="true" />
-                    <span>2026 교무수첩</span>
+                    <span className="nb-brand-name">2026 교무수첩</span>
                     <span className="nb-toolbar-page">{stub?.title} · p.{page}/{MAX}</span>
                 </p>
                 <div className="nb-toolbar-actions">

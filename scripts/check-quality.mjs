@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { BACKUP_LISTS, BACKUP_RECORD, validateBackup } from '../src/lib/backup.js';
+import { applyBackupLocal, BACKUP_LISTS, BACKUP_RECORD, mergeById, mergePlain, validateBackup } from '../src/lib/backup.js';
+import { paperFace } from '../src/notebook/labels.js';
 import { fitCanvas, PAGE_H } from '../src/notebook/layout.js';
 import { monthPage } from '../src/notebook/nav.js';
 import { isLocalOnlyPage } from '../src/notebook/localPages.js';
@@ -50,7 +51,8 @@ const good = validateBackup(JSON.stringify({
 }));
 ok(good.ok && good.counts.inbox === 1 && good.counts.notebookFields === 1, `정상 백업 ${good.errors}`);
 ok(!validateBackup('[]').ok, '배열 거부');
-ok(!validateBackup('{').ok, '깨진 JSON');
+const broken = validateBackup('{');
+ok(!broken.ok && /JSON/.test(broken.errors.join(' ')), `깨진 JSON 안내 ${broken.errors}`);
 ok(!validateBackup(JSON.stringify({ inbox: { bad: true } })).ok, '목록 형식');
 ok(!validateBackup(JSON.stringify({ notebookFields: { 999: {} } })).ok, '쪽 범위');
 ok(!validateBackup('x'.repeat(8 * 1024 * 1024 + 1)).ok, '용량');
@@ -61,8 +63,47 @@ const records = [...app.matchAll(/useSharedRecord\(\s*'([^']+)'/g)].map((m) => m
 ok(JSON.stringify(lists) === JSON.stringify(Object.values(BACKUP_LISTS).sort()), '백업 목록 이름이 화면 컬렉션과 같음');
 ok(records.length === 1 && records[0] === BACKUP_RECORD, '칭찬 보드 이름');
 
+const mergedRows = mergeById(
+    [{ id: 'a', text: '기존' }, { id: 'b', text: '남김' }],
+    [{ id: 'a', text: '백업' }, { id: 'c', text: '추가' }],
+);
+ok(mergedRows.length === 3 && mergedRows[0].text === '백업' && mergedRows[1].text === '남김' && mergedRows[2].text === '추가', '목록 합치기');
+ok(mergePlain({ goal: '사이좋게', extra: '유지' }, { goal: '새 목표' }).extra === '유지', '칸 합치기');
+ok(paperFace('월').title === '월간 노트' && paperFace('월').title.length > 1, '월 제목');
+ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').title === '무지 노트 2', '무지 제목');
+
+{
+    const mem = new Map();
+    globalThis.localStorage = {
+        getItem: (key) => (mem.has(key) ? mem.get(key) : null),
+        setItem: (key, value) => mem.set(key, String(value)),
+        removeItem: (key) => mem.delete(key),
+    };
+    globalThis.CustomEvent = class CustomEvent {
+        constructor(type, init) { this.type = type; this.detail = init?.detail; }
+    };
+    globalThis.window = { dispatchEvent() {} };
+    localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify([{ id: 'local', text: '기기' }]));
+    localStorage.setItem('homenote_v2_notebookFields_p2', JSON.stringify({ goal: '사이좋게', keep: '남김' }));
+    applyBackupLocal({
+        inbox: [{ id: 'local', text: '백업' }, { id: 'new', text: '추가' }],
+        notebookFields: { 2: { goal: '새 목표' } },
+    }, { mode: 'merge' });
+    const inbox = JSON.parse(localStorage.getItem('homenote_v2_ssugeokInbox'));
+    const page = JSON.parse(localStorage.getItem('homenote_v2_notebookFields_p2'));
+    ok(inbox.length === 2 && inbox[0].text === '백업' && page.keep === '남김' && page.goal === '새 목표', '합치기 저장');
+    applyBackupLocal({ inbox: [{ id: 'only', text: '덮음' }] }, { mode: 'overwrite' });
+    const overwritten = JSON.parse(localStorage.getItem('homenote_v2_ssugeokInbox'));
+    ok(overwritten.length === 1 && overwritten[0].id === 'only', '덮어쓰기 저장');
+}
+
 if (errors.length) {
     console.error(errors.join('\n'));
     process.exit(1);
 }
 console.log('quality 검사 통과');
+
+if (process.argv.includes('--browser')) {
+    const { runBrowserQuality } = await import('./check-browser.mjs');
+    await runBrowserQuality();
+}
