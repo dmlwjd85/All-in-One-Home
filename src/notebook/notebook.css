@@ -695,9 +695,12 @@
 }
 .nb-gobtn.chip.tone-peach,
 .nb-monthrow .nb-gobtn.tone-peach { background: #ffe4d4; box-shadow: 0 0 0 1px #f3c2ae; }
-.nb-gobtn.chip.tone-mint { background: #ddf6e8; box-shadow: 0 0 0 1px #b7e4cb; }
-.nb-gobtn.chip.tone-lavender { background: #f0e7fb; box-shadow: 0 0 0 1px #d5c6ee; }
-.nb-gobtn.chip.tone-butter { background: #fff3c9; box-shadow: 0 0 0 1px #ead48a; }
+.nb-gobtn.chip.tone-mint,
+.nb-monthrow .nb-gobtn.tone-mint { background: #ddf6e8; box-shadow: 0 0 0 1px #b7e4cb; }
+.nb-gobtn.chip.tone-lavender,
+.nb-monthrow .nb-gobtn.tone-lavender { background: #f0e7fb; box-shadow: 0 0 0 1px #d5c6ee; }
+.nb-gobtn.chip.tone-butter,
+.nb-monthrow .nb-gobtn.tone-butter { background: #fff3c9; box-shadow: 0 0 0 1px #ead48a; }
 .nb-gobtn.chip.tone-sand { background: #fffaf4; }
 .nb-mark { flex: 0 0 auto; }
 
@@ -900,4 +903,213 @@
     .nb-linkgrid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .nb-toolbar-user, .nb-toolhide { display: none; }
     .nb-pagetitle { font-size: 20px; }
+    .nb-kanban { grid-template-columns: 1fr; }
+}
+
+.nb-dday-form,
+.nb-dday-strip,
+.nb-submit-tabs,
+.nb-submit-copy,
+.nb-dday-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.nb-dday-form input,
+.nb-praise-head input {
+    min-height: 36px;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 0 0 1px #ead9c8;
+    padding: 0 12px;
+    font: inherit;
+}
+.nb-dday-form button,
+.nb-dday-actions button,
+.nb-dday-strip button,
+.nb-submit-tabs button,
+.nb-submit-copy button,
+.nb-praise-minus {
+    border: 0;
+    border-radius: 999px;
+    min-height: 32px;
+    padding: 0 10px;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    background: #fff;
+    box-shadow: 0 0 0 1px #ead9c8;
+}
+.nb-dday-form button[type="submit"] { background: #5b4580; color: #fffaf3; box-shadow: none; }
+.nb-kanban {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+.nb-kanban section {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    padding: 8px;
+    background: #f7f3fc;
+}
+.nb-kanban .is-doing { background: #fff1e8; }
+.nb-kanban .is-done { background: #eef8f2; }
+.nb-kanban h3 { margin: 0 0 6px; font-size: 13px; }
+.nb-kanban ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    display: grid;
+    gap: 6px;
+    align-content: start;
+}
+.nb-dday-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 8px;
+}
+.nb-dday-card p { margin: 0; }
+.nb-dday-no { font-size: 12px; color: #5b4580; margin-right: 4px; }
+.nb-dday-badge {
+    display: inline-block;
+    margin-right: 4px;
+    border-radius: 999px;
+    padding: 0 6px;
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 800;
+}
+.nb-dday-badge.is-day,
+.nb-dday-mark.is-day { background: #c2464f; color: #fffaf3; }
+.nb-dday-badge.is-soon,
+.nb-dday-mark.is-soon { background: #ffe4d4; color: #8a4b32; }
+.nb-dday-mark {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 4px;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    background: #f0e7fb;
+    color: #5b4580;
+}
+.nb-submit { min-height: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.nb-submit-tabs button.is-on { background: #1f6b4a; color: #fff; box-shadow: none; }
+.nb-submit-grid {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 6px;
+    align-content: start;
+}
+.nb-submit-grid button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 0 0 1px #b7e4cb;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.nb-submit-grid button.is-on { background: #1f6b4a; color: #fff; }
+.nb-submit-grid small { font-size: 10px; }
+.nb-submit-copy p {
+    flex: 1;
+    margin: 0;
+    min-width: 12rem;
+    background: #fff;
+    border-radius: 12px;
+    padding: 6px 10px;
+}
+.nb-praise { position: relative; display: grid; gap: 6px; }
+.nb-praise-head { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; }
+.nb-praise-head label { font-size: 12px; font-weight: 800; display: flex; gap: 6px; align-items: center; }
+.nb-praise-head input { width: 4.5rem; }
+.nb-praise-head .nb-hint { grid-column: 1 / -1; margin: 0; }
+.nb-thermo {
+    height: 16px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px #ead48a;
+    overflow: hidden;
+}
+.nb-thermo span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #ffe4d4, #f0a0ad);
+    border-radius: inherit;
+}
+.nb-praise-grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 6px;
+}
+.nb-praise-card { position: relative; }
+.nb-praise-card > button {
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: 12px;
+    background: #fff8e4;
+    box-shadow: 0 0 0 1px #ead48a;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.nb-praise-card.is-done > button { background: #fff3c9; box-shadow: 0 0 0 2px #e0a040; }
+.nb-praise-card small { font-size: 10px; }
+.nb-praise-minus {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-height: 22px;
+    min-width: 22px;
+    padding: 0;
+}
+.nb-burst {
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    margin: 0;
+    background: #c2464f;
+    color: #fffaf3;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 800;
+    animation: nb-pop 1.1s ease forwards;
+    pointer-events: none;
+}
+@keyframes nb-pop {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+    25% { opacity: 1; transform: translateX(-50%) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+.nb-sticker-links { flex: 1; min-height: 72px; overflow: auto; align-content: start; }
+
+@media (max-width: 800px) {
+    .nb-kanban { grid-template-columns: 1fr; }
+    .nb-submit-grid,
+    .nb-praise-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

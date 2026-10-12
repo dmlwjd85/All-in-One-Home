@@ -1,3 +1,5 @@
+import DdayBoard, { UpcomingStrip } from '../DdayBoard.jsx';
+import SubmissionBoard from '../SubmissionBoard.jsx';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { TocCards } from './ClassStudentPages.jsx';
@@ -116,10 +118,8 @@ export function ScorePage({ pageRec, fields, setField, onGo }) {
     );
 }
 
-export function DeadlinePage({ extra, fields, setField }) {
+function DeadlineLines({ fields, setField }) {
     return (
-        <div>
-            <TitleBar title={`기한 있는 일 ${extra.slot || ''}`} hint="주간 할 일과 따로, 기한 있는 일만" />
             <table className="nb-table compact">
                 <thead><tr><th>기한</th><th>내용</th><th>완료</th></tr></thead>
                 <tbody>
@@ -132,14 +132,39 @@ export function DeadlinePage({ extra, fields, setField }) {
                     ))}
                 </tbody>
             </table>
+    );
+}
+
+export function DeadlinePage({ extra, fields, setField, ddayCards, signedIn, onChanged, onToast, onGo }) {
+    const hasLines = Array.from({ length: 12 }, (_, i) => fields[`d${i}`] || fields[`t${i}`]).some(Boolean);
+    if (Number(extra.slot) === 1) {
+        return (
+            <div className="nb-fill">
+                <TitleBar title="기한 있는 일" hint="공문번호와 기한을 올리면 D-3, D-day가 붙고 달력에도 보여요" />
+                <DdayBoard cards={ddayCards} signedIn={signedIn} onChanged={onChanged} onToast={onToast} onGo={onGo} />
+                {hasLines && (
+                    <details className="nb-legacy">
+                        <summary>줄로 적어 둔 기한</summary>
+                        <DeadlineLines fields={fields} setField={setField} />
+                    </details>
+                )}
+            </div>
+        );
+    }
+    return (
+        <div>
+            <TitleBar title={`기한 있는 일 ${extra.slot || ''}`} hint="주간 할 일과 따로, 기한 있는 일만" />
+            <UpcomingStrip cards={ddayCards} onGo={onGo} />
+            <DeadlineLines fields={fields} setField={setField} />
         </div>
     );
 }
 
-export function TodoSheetPage({ extra, fields, setField }) {
+export function TodoSheetPage({ extra, fields, setField, ddayCards, onGo }) {
     return (
         <div>
             <TitleBar title={`업무 할 일 ${extra.slot || ''}`} />
+            <UpcomingStrip cards={ddayCards} onGo={onGo} />
             {Array.from({ length: 12 }, (_, i) => (
                 <div key={i} className="nb-inline">
                     <Tick checked={fields[`c${i}`]} onChange={(v) => setField(`c${i}`, v)} />
@@ -170,11 +195,27 @@ export function MeetingPage({ page, pageRec, pages, extra, fields, setField, onG
     );
 }
 
-export function NoticePage({ fields, setField }) {
+export function NoticePage({ page, fields, setField, submissionSheets, signedIn, onChanged, onToast, onGo }) {
+    const hasLines = Array.from({ length: 14 }, (_, i) => fields[`n${i}`]).some(Boolean);
+    if (page !== 458) {
+        return (
+            <div>
+                <TitleBar title="전달 사항" hint="전달 사항만 빠르게" />
+                <GoBtn to={458} onGo={onGo} className="tone-mint">제출물 체크표</GoBtn>
+                <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+            </div>
+        );
+    }
     return (
-        <div>
-            <TitleBar title="전달 사항" hint="전달 사항만 빠르게" />
-            <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+        <div className="nb-fill">
+            <TitleBar title="제출물 체크" hint="번호를 한 번 누르면 냄, 다시 누르면 아직이에요. 이름은 명렬표에서 옵니다" />
+            <SubmissionBoard sheets={submissionSheets} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+            {hasLines && (
+                <details className="nb-legacy">
+                    <summary>적어 둔 전달</summary>
+                    <LinedBlock n={14} get={(k) => fields[k]} set={setField} prefix="n" placeholder="전달" />
+                </details>
+            )}
         </div>
     );
 }

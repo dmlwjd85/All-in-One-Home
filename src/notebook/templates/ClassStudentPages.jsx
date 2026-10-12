@@ -6,11 +6,12 @@ import { numberedLinks, partitionLinks } from '../linkParts.js';
 import { readPageFields } from '../fieldStore.js';
 import { quietStudents, whoPage } from '../ssugeokModel.js';
 
-export function TocCards({ title, hint, page, pageRec, pages, onGo }) {
+export function TocCards({ title, hint, page, pageRec, pages, onGo, lead }) {
     const { body } = partitionLinks(pageRec);
     return (
         <div className="nb-fill">
             <TitleBar title={title} hint={hint} />
+            {lead}
             <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
         </div>
     );

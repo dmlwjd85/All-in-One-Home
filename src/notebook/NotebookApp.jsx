@@ -36,6 +36,9 @@ export default function NotebookApp({
     roster,
     onChanged,
     onToast,
+    ddayCards,
+    submissionSheets,
+    praiseBoard,
 }) {
     const [page, setPage] = useState(readHash);
     const [hub, setHub] = useState(null);
@@ -142,6 +145,9 @@ export default function NotebookApp({
                         sensitiveNotes={sensitiveNotes}
                         focusId={focusId}
                         onOpenNote={openNote}
+                        ddayCards={ddayCards}
+                        submissionSheets={submissionSheets}
+                        praiseBoard={praiseBoard}
                     />
                 </NotebookShell>
             </div>

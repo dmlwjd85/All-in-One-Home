@@ -1,6 +1,7 @@
 import { Ink, LinkGrid, LinkedChip, TitleBar } from '../fields.jsx';
 import { TAGS } from '../labels.js';
 import { partitionLinks } from '../linkParts.js';
+import PraiseBoard from '../PraiseBoard.jsx';
 import SsugeokBoard from '../SsugeokBoard.jsx';
 import { captureNote } from '../ssugeokStore.js';
 
@@ -165,12 +166,14 @@ export function BoardPage({ page, fields, setField }) {
     );
 }
 
-export function StickerTocPage({ page, pageRec, pages, onGo }) {
+export function StickerTocPage({ page, pageRec, pages, onGo, praiseBoard, signedIn, onChanged, onToast }) {
     const { body } = partitionLinks(pageRec);
     return (
         <div className="nb-fill">
-            <TitleBar title="스티커" hint="보고 고르는 쪽이에요. 붙일 땐 PNG 묶음을 써요. 시트 이름을 누르면 그 쪽으로 가요" />
-            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} />
+            <TitleBar title="칭찬 스티커" hint="번호를 누르면 스티커가 하나 늘어요. 목표를 채우면 잠깐 축하해요" />
+            <PraiseBoard board={praiseBoard} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+            <p className="nb-kicker">스티커 시트</p>
+            <LinkGrid links={body} pages={pages} pageNo={page} onGo={onGo} className="nb-sticker-links" />
         </div>
     );
 }

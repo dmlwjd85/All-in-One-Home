@@ -1,5 +1,7 @@
 import { holidayCaption } from '../../lib/holidays.js';
 import { monthCells } from '../../lib/utils.js';
+import { calendarMarks, daysUntil, ddayBadge } from '../boardsModel.js';
+import { allDeadlines } from '../DdayBoard.jsx';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { monthDayMap, partitionLinks } from '../linkParts.js';
@@ -104,13 +106,14 @@ export function AcademicPage({ pageRec, fields, setField, onGo }) {
     );
 }
 
-export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo }) {
+export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo, ddayCards }) {
     const year = extra.year || 2026;
     const month = extra.month || 3;
     const ym = `${year}-${String(month).padStart(2, '0')}`;
     const cells = monthCells(ym);
     const { body } = partitionLinks(pageRec);
     const { days, extras } = monthDayMap(body);
+    const deadlines = allDeadlines(ddayCards);
     return (
         <div className="nb-fill">
             <TitleBar kicker={`${year}년`} title={`${month}월`} hint="날짜를 누르면 그 주 주간 쪽으로 가요" />
@@ -119,6 +122,9 @@ export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo 
                 {cells.map((c) => {
                     const cap = c.inMonth ? holidayCaption(c.ymd) : null;
                     const to = c.inMonth ? days.get(c.day) : null;
+                    const marks = c.inMonth ? calendarMarks(c.ymd, deadlines) : [];
+                    const badge = marks[0] ? ddayBadge(daysUntil(marks[0].deadline)) : null;
+                    const hot = badge && (badge.kind === 'day' || badge.kind === 'soon') ? `${badge.text} ` : '';
                     return (
                         <div key={c.ymd} className={`nb-month-cell ${c.inMonth ? '' : 'out'} ${cap?.isHoliday ? 'hol' : ''}`}>
                             {to ? (
@@ -127,6 +133,11 @@ export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo 
                                 </button>
                             ) : <span className="d">{c.inMonth ? c.day : ''}</span>}
                             {cap && <span className="cap">{cap.primary.short}</span>}
+                            {marks.length > 0 && (
+                                <button type="button" className={`nb-dday-mark is-${badge?.kind || 'later'}`} onClick={() => onGo(405)}>
+                                    {hot}{marks[0].title}{marks.length > 1 ? ` +${marks.length - 1}` : ''}
+                                </button>
+                            )}
                             {c.inMonth && (
                                 <Ink
                                     value={fields[`d${c.day}`]}

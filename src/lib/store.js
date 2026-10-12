@@ -92,6 +92,75 @@ export async function removeItem(name, id, signedIn) {
     writeLocal(name, readLocal(name).filter((row) => row.id !== id));
 }
 
+const readObject = (name) => {
+    try {
+        const raw = localStorage.getItem(localKey(name));
+        if (!raw) return {};
+        const data = JSON.parse(raw);
+        return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+    } catch {
+        return {};
+    }
+};
+
+const writeObject = (name, data) => {
+    try {
+        localStorage.setItem(localKey(name), JSON.stringify(data));
+    } catch (err) {
+        console.warn('로컬 저장 실패', err);
+    }
+};
+
+/** 로그인 시 Firestore 문서 하나, 손님은 localStorage 객체입니다. */
+export function useSharedRecord(name, enabled, revision = 0) {
+    const [record, setRecord] = useState(() => readObject(name));
+
+    useEffect(() => {
+        const reload = () => setRecord(readObject(name));
+        const onLocal = (event) => {
+            if (event.detail?.name === name) reload();
+        };
+        window.addEventListener('nb-shared-record', onLocal);
+        let unsub = () => {};
+        if (!enabled) reload();
+        else {
+            unsub = onSnapshot(
+                doc(db, 'artifacts', appId, 'public', 'data', name, 'board'),
+                (snap) => {
+                    if (!snap.exists()) {
+                        setRecord(readObject(name));
+                        return;
+                    }
+                    const next = snap.data() || {};
+                    setRecord(next);
+                    writeObject(name, next);
+                },
+                (err) => {
+                    console.error(err);
+                    setRecord(readObject(name));
+                }
+            );
+        }
+        return () => {
+            window.removeEventListener('nb-shared-record', onLocal);
+            unsub();
+        };
+    }, [name, enabled, revision]);
+
+    return record;
+}
+
+export async function saveRecord(name, data, signedIn) {
+    const next = { ...data };
+    writeObject(name, next);
+    window.dispatchEvent(new CustomEvent('nb-shared-record', { detail: { name } }));
+    if (!signedIn) return;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', name, 'board'), {
+        ...next,
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
 export async function upsertDoc(name, id, data, signedIn) {
     if (signedIn) {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', name, id), { ...data, updatedAt: serverTimestamp() }, { merge: true });

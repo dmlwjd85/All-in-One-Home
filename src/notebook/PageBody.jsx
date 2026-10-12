@@ -38,6 +38,7 @@ import {
     UnitPage,
 } from './templates/LessonWorkPages.jsx';
 import { CoverPage, HomePage, HowtoPage, PrepPage } from './templates/FrontPages.jsx';
+import { GoBtn } from './fields.jsx';
 import {
     BoardPage,
     GenericToc,
@@ -94,7 +95,20 @@ function renderPage(props) {
         case 'unit': return <UnitPage {...props} />;
         case 'checklist': return <ChecklistPage {...props} />;
         case 'score': return <ScorePage {...props} />;
-        case 'work-toc': return <TocCards title="업무 목차" {...props} />;
+        case 'work-toc': return (
+            <TocCards
+                title="업무 목차"
+                hint="기한 보드, 제출물 체크, 칭찬 스티커"
+                lead={(
+                    <div className="nb-monthrow">
+                        <GoBtn to={405} onGo={props.onGo} className="tone-lavender">기한 보드</GoBtn>
+                        <GoBtn to={458} onGo={props.onGo} className="tone-mint">제출물 체크</GoBtn>
+                        <GoBtn to={563} onGo={props.onGo} className="tone-butter">칭찬 스티커</GoBtn>
+                    </div>
+                )}
+                {...props}
+            />
+        );
         case 'deadline': return <DeadlinePage {...props} />;
         case 'todo': return <TodoSheetPage {...props} />;
         case 'meeting': return <MeetingPage {...props} />;
