@@ -966,7 +966,7 @@
 .nb-fab {
     position: fixed;
     /* 용지 오른쪽 여백에 둡니다. 본문 칸과 오른쪽 탭을 가리지 않습니다. */
-    right: 4px;
+    right: 6px;
     bottom: 24px;
     z-index: 30;
     display: flex;
@@ -980,10 +980,10 @@
     pointer-events: auto;
 }
 .nb-fab-btn {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -1023,7 +1023,46 @@
     padding: 2px 6px;
 }
 
-@media (min-width: 701px) and (max-width: 1366px) {
+@media (min-width: 701px) and (max-width: 1100px) {
+    /* 1024×768 용지는 16:9로 두면 명렬 44px 줄이 잘립니다. 용지를 내용만큼 늘리고 오른쪽 여백에 쓱적을 둡니다. */
+    .nb-stage-wrap {
+        justify-content: flex-start;
+        align-items: flex-start;
+        overflow: auto;
+        padding-right: 56px;
+    }
+    .nb-page {
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        aspect-ratio: auto !important;
+        min-height: 720px;
+    }
+    .nb-main,
+    .nb-body,
+    .nb-fill {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+    .nb-body { flex: 0 0 auto; }
+    .nb-left,
+    .nb-right {
+        min-height: auto;
+        overflow: visible;
+    }
+    .nb-tab {
+        flex: 1 1 44px;
+        min-height: 44px;
+    }
+    .nb-table .nb-ink,
+    .nb-table .nb-gobtn,
+    .nb-table .nb-tick {
+        min-height: 44px;
+    }
+}
+
+@media (min-width: 1101px) and (max-width: 1366px) {
     .nb-table th,
     .nb-table td {
         height: 44px;
@@ -1177,6 +1216,131 @@
     .nb-roster-page .nb-pagetitle { font-size: 20px; line-height: 1.1; }
     .nb-roster-page .nb-hint,
     .nb-roster-page .nb-roster-link { margin: 0 0 2px; font-size: 12px; }
+    .nb-linkgrid {
+        gap: 4px;
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    }
+    .nb-linkgrid .nb-gobtn.chip {
+        min-height: 32px;
+        padding: 2px 6px;
+        font-size: 13px;
+    }
+    .nb-weektoc { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    .nb-toc-scroll > .nb-budget {
+        max-height: none;
+        overflow: visible;
+        flex: 0 0 auto;
+    }
+    .nb-budget .nb-table th,
+    .nb-budget .nb-table td {
+        height: auto;
+        padding: 1px 3px;
+    }
+    .nb-budget .nb-table .nb-gobtn {
+        min-height: 24px;
+        height: auto;
+        padding: 0 4px;
+    }
+    .nb-body:has(.nb-compact-rows) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .nb-compact-rows {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-compact-rows .nb-table {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-compact-rows .nb-table thead,
+    .nb-compact-rows .nb-table tbody { display: block; min-height: 0; }
+    .nb-compact-rows .nb-table thead { flex: 0 0 auto; }
+    .nb-compact-rows .nb-table tbody {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-rows: repeat(16, minmax(0, 1fr));
+    }
+    .nb-compact-rows .nb-table tr {
+        display: grid;
+        grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr);
+        min-height: 0;
+    }
+    .nb-compact-rows .nb-table th,
+    .nb-compact-rows .nb-table td {
+        height: auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        padding: 0 2px;
+    }
+    .nb-compact-rows .nb-table .nb-ink,
+    .nb-compact-rows .nb-table .nb-gobtn,
+    .nb-compact-rows .nb-table .nb-tick {
+        min-height: 0;
+        height: 22px;
+    }
+    .nb-body:has(.nb-special-grid) {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .nb-body:has(.nb-special-grid) > div {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-special-head {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .nb-special-grid {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+    }
+    .nb-body:has(.nb-special-grid) > div > .nb-field:has(.nb-ink-area) {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .nb-body:has(.nb-special-grid) .nb-ink-area {
+        flex: 1 1 auto;
+        height: 48px;
+        min-height: 48px;
+    }
+    .nb-toc-scroll {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        column-gap: 10px;
+        align-items: start;
+    }
+    .nb-toc-scroll > .nb-titlebar { grid-column: 1 / -1; }
+    .nb-toc-scroll > .nb-budget {
+        max-height: none;
+        overflow: visible;
+        align-self: stretch;
+    }
+    .nb-toc-links {
+        min-height: 0;
+        overflow: visible;
+        align-self: stretch;
+    }
+    .nb-toc-links .nb-linkgrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 1100px) {
@@ -1496,7 +1660,15 @@
     white-space: nowrap;
     padding: 0 12px;
 }
-@media (min-width: 701px) {
+@media (min-width: 1367px) {
+    .nb-toc-scroll > .nb-budget {
+        max-height: none;
+        overflow: visible;
+        flex: 0 0 auto;
+    }
+}
+
+@media (min-width: 1101px) {
     .nb-body:has(.nb-card-page) {
         display: flex;
         flex-direction: column;
@@ -1709,6 +1881,9 @@
     min-width: 0;
     max-width: 34%;
 }
+@media (max-width: 380px) {
+    .nb-toolbar-page { display: none; }
+}
 .nb-app.is-phone .nb-toolbar-num {
     flex: 0 0 auto;
     font-size: 12px;
@@ -1847,6 +2022,12 @@
     bottom: auto;
     flex: 0 0 auto;
     margin: 0 12px 8px auto;
+}
+.nb-app.is-phone .nb-fab-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
 }
 
 @media print {
