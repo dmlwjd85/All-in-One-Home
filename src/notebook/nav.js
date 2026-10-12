@@ -116,6 +116,18 @@ export function destForStudentNumber(links, n, fallback = 'card') {
     return fallback === 'who' ? studentWhoPage(n) : studentCardPage(n);
 }
 
+const SHORTCUT_ALIAS = {
+    ...TOP_ALIAS,
+    157: '건강',
+    160: '누가',
+    223: '짧은기록',
+    257: '상담',
+    289: '보호자',
+    350: '단원',
+};
+
 export function shortcutLabel(link, pages) {
-    return link.label || destLabel(link.to, pages);
+    if (link.label) return link.label;
+    if (SHORTCUT_ALIAS[link.to]) return SHORTCUT_ALIAS[link.to];
+    return destLabel(link.to, pages);
 }

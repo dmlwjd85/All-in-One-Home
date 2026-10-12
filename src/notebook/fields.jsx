@@ -1,4 +1,4 @@
-import { destLabel } from './labels.js';
+import { shortcutLabel } from './nav.js';
 
 /** PDF 줄칸처럼 보이게 한 입력. 마우스·키보드로 바로 씁니다. */
 
@@ -76,8 +76,8 @@ export function ShortcutRow({ links, pages, onGo, className = '' }) {
     return (
         <div className={`nb-home-bottom ${className}`}>
             {links.map((l, i) => (
-                <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} hit={`body:${l.label || destLabel(l.to, pages)}`}>
-                    {l.label || destLabel(l.to, pages)}
+                <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} hit={`body:${shortcutLabel(l, pages)}`}>
+                    {shortcutLabel(l, pages)}
                 </GoBtn>
             ))}
         </div>
