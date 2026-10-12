@@ -1,4 +1,4 @@
-/* 2026 교무수첩 PDF 크롬·용지. 좌표는 1180×820 원본과 같게 둡니다. */
+/* 2026 교무수첩 웹 크롬·용지. 탭·히트 영역은 layout.js 수치를 따릅니다. */
 
 .nb-app {
     min-height: 100dvh;
@@ -89,12 +89,12 @@
 .nb-left,
 .nb-right {
     position: absolute;
-    top: 16px;
-    bottom: 21px;
-    width: 40px;
+    top: var(--nb-tab-top, 16px);
+    bottom: var(--nb-tab-bottom, 24px);
+    width: var(--nb-tab-w, 80px);
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: var(--nb-tab-gap, 6px);
     z-index: 4;
 }
 
@@ -103,16 +103,51 @@
 
 .nb-tab {
     flex: 1;
+    min-height: 44px;
     border: 0;
     background: #efe6dc;
     color: #6b5a4e;
     font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', sans-serif;
     font-weight: 800;
-    font-size: 11px;
-    letter-spacing: -0.04em;
-    border-radius: 0 10px 10px 0;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+    border-radius: 0 14px 14px 0;
     cursor: pointer;
-    padding: 0 2px;
+    padding: 0 8px;
+}
+
+.nb-topnav {
+    position: absolute;
+    left: var(--nb-body-left, 92px);
+    right: var(--nb-body-right, 92px);
+    top: 10px;
+    height: var(--nb-topnav-h, 52px);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.nb-topbtn {
+    pointer-events: auto;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: #efe6dc;
+    color: #4a3f3a;
+    font-family: 'NanumSquareRound', 'Hakgyoansim Dunggeunmiso', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(74, 63, 58, 0.12);
+}
+
+.nb-topbtn:hover {
+    background: #e4d4c4;
 }
 
 .nb-right .nb-tab {
@@ -141,23 +176,13 @@
 
 .nb-body {
     position: absolute;
-    left: 48px;
-    right: 48px;
-    top: 72px;
-    bottom: 28px;
+    left: var(--nb-body-left, 92px);
+    right: var(--nb-body-right, 92px);
+    top: var(--nb-body-top, 70px);
+    bottom: var(--nb-body-bottom, 28px);
     z-index: 3;
     overflow: auto;
     padding-right: 4px;
-    /* 빈 곳은 아래 링크 핫스팟이 받게, 입력칸만 클릭을 받습니다. */
-    pointer-events: none;
-}
-.nb-body input,
-.nb-body textarea,
-.nb-body select,
-.nb-body button,
-.nb-body label,
-.nb-body a {
-    pointer-events: auto;
 }
 
 .nb-page[data-page='1'] .nb-body {
@@ -169,7 +194,7 @@
 
 .nb-folio {
     position: absolute;
-    left: 52px;
+    left: calc(var(--nb-body-left, 92px) + 4px);
     bottom: 8px;
     font-size: 11px;
     color: #8a7566;
@@ -178,36 +203,11 @@
 
 .nb-copy {
     position: absolute;
-    right: 52px;
+    right: calc(var(--nb-body-right, 92px) + 4px);
     bottom: 6px;
     font-size: 9px;
     color: #8a7566;
     z-index: 3;
-}
-
-.nb-links {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.nb-hotspot {
-    position: absolute;
-    pointer-events: auto;
-    background: transparent;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-}
-
-.nb-hotspot:hover {
-    background: rgba(194, 70, 79, 0.08);
-}
-
-.nb-hotspot:focus-visible {
-    outline: 2px solid #0f766e;
-    outline-offset: -2px;
 }
 
 .nb-titlebar { margin-bottom: 8px; }
@@ -325,6 +325,11 @@
     border-radius: 24px;
     padding: 36px 48px 28px;
     box-shadow: 0 8px 0 #ead9c8;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    text-align: center;
 }
 
 .nb-cover-kicker {
@@ -525,7 +530,7 @@
 }
 .nb-attend-head { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
 .nb-lined { display: grid; gap: 2px; }
-.nb-numchip, .nb-monthchip { pointer-events: none; }
+.nb-monthchip { pointer-events: auto; }
 .nb-gobtn {
     pointer-events: auto;
     cursor: pointer;
@@ -558,6 +563,32 @@
     min-width: 32px;
     border-radius: 999px;
     padding: 2px 6px;
+}
+.nb-gobtn.plain {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    min-height: 44px;
+}
+.nb-week-col h3 .nb-gobtn,
+.nb-week-side .nb-kicker .nb-gobtn {
+    background: transparent;
+    box-shadow: none;
+    min-height: 36px;
+    width: 100%;
+}
+.nb-minimonth .nb-gobtn {
+    width: 100%;
+    min-height: 36px;
+    margin-bottom: 4px;
+    font-size: 13px;
+}
+.nb-acad-row .nb-gobtn {
+    min-height: 36px;
+}
+.nb-month-cell .nb-gobtn.num {
+    align-self: flex-start;
+    font-size: 13px;
 }
 
 @media (max-width: 720px) {

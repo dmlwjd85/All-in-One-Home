@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, LogOut, PenLine } from 'lucide-react';
 import notebook from './data/notebook.json';
 import { usePageFields } from './fieldStore.js';
+import { PAGE_H, PAGE_W } from './layout.js';
 import NotebookShell from './NotebookShell.jsx';
 import PageBody from './PageBody.jsx';
 import { Modal } from '../components/ui.jsx';
@@ -9,8 +10,6 @@ import SsugeokInbox from '../components/SsugeokInbox.jsx';
 import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
 
-const PAGE_W = notebook.pageW;
-const PAGE_H = notebook.pageH;
 const MAX = notebook.pageCount;
 
 function readHash() {

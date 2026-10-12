@@ -1,4 +1,7 @@
+import { destLabel } from './labels.js';
+
 /** PDF 줄칸처럼 보이게 한 입력. 마우스·키보드로 바로 씁니다. */
+
 
 export function Ink({ value, onChange, className = '', placeholder = '', multiline = false, rows = 2, type = 'text', aria }) {
     const common = {
@@ -52,16 +55,32 @@ export function CellGrid({ children, cols = 4, className = '' }) {
     );
 }
 
-export function GoBtn({ to, onGo, className = '', children, aria }) {
+export function GoBtn({ to, onGo, className = '', children, aria, hit }) {
     return (
         <button
             type="button"
             className={`nb-gobtn ${className}`}
             onClick={(e) => { e.stopPropagation(); onGo?.(to); }}
             aria-label={aria || `${children} ${to}쪽`}
+            data-hit={hit || `body:${typeof children === 'string' ? children : to}`}
+            data-to={to}
         >
             {children}
         </button>
+    );
+}
+
+/** 본문 바로가기 줄. 보이는 버튼이 곧 히트 영역입니다. */
+export function ShortcutRow({ links, pages, onGo, className = '' }) {
+    if (!links?.length) return null;
+    return (
+        <div className={`nb-home-bottom ${className}`}>
+            {links.map((l, i) => (
+                <GoBtn key={`${l.to}-${i}`} to={l.to} onGo={onGo} hit={`body:${l.label || destLabel(l.to, pages)}`}>
+                    {l.label || destLabel(l.to, pages)}
+                </GoBtn>
+            ))}
+        </div>
     );
 }
 
