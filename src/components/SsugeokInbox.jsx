@@ -4,6 +4,7 @@ import { EmptyState, Field, Modal } from './ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import {
     destById,
+    dest조사,
     destsOn,
     guessAttendStatus,
     guessStudent,
@@ -103,7 +104,7 @@ export default function SsugeokInbox({
             });
             setSend(null);
             onChanged();
-            onToast(`${dest.label}(으)로 날려보냈습니다.`);
+            onToast(`${dest.label}${dest조사(dest.label)} 날려보냈습니다.`);
             onView(dest.id);
         } catch (err) {
             console.error(err);
@@ -325,7 +326,7 @@ function SendSheet({ send, names, onChange, onClose, onConfirm }) {
     const needsStudent = dest?.id === 'student' || dest?.id === 'attend' || dest?.id === 'counsel';
 
     return (
-        <Modal title={`${dest?.label || '목적지'}로 날려보내기`} onClose={onClose}>
+        <Modal title={`${dest?.label || '목적지'}${dest조사(dest?.label)} 날려보내기`} onClose={onClose}>
             <p className="text-sm whitespace-pre-wrap bg-amber-50 border border-amber-900/15 rounded-2xl p-3 mb-3">{send.item.text}</p>
             {needsStudent && (
                 <>

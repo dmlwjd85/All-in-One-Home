@@ -28,6 +28,15 @@ export const destById = (id) => SSUGEOK_DESTS.find((d) => d.id === id);
 
 export const destsOn = (side) => SSUGEOK_DESTS.filter((d) => d.side === side);
 
+/** 목적지 이름 뒤 조사. 받침 없거나 ㄹ이면 로, 그 외는 으로. */
+export function dest조사(label) {
+    const ch = String(label || '').slice(-1);
+    const code = ch.charCodeAt(0);
+    if (code < 0xac00 || code > 0xd7a3) return '으로';
+    const jong = (code - 0xac00) % 28;
+    return jong === 0 || jong === 8 ? '로' : '으로';
+}
+
 /** 힌트에 따른 추천 목적지. 자동 전송하지 않고 강조만 합니다. */
 export function suggestedDest(typeHint) {
     const h = String(typeHint || '').trim();
