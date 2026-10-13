@@ -251,6 +251,12 @@
     flex: 0 0 auto;
 }
 
+.nb-nav-spacer {
+    flex: 0 0 auto;
+    width: 0;
+    height: 1px;
+}
+
 .nb-navbtn {
     flex: 0 0 auto;
     height: 32px;
@@ -314,6 +320,14 @@
     flex-basis: 0;
     padding: 0;
     overflow: hidden;
+}
+
+.nb-appnav.is-overflow .nb-nav-chev:disabled {
+    visibility: visible;
+    opacity: 0.38;
+    width: 28px;
+    flex-basis: 28px;
+    cursor: default;
 }
 
 .nb-nav-lead {
@@ -2110,6 +2124,12 @@
     width: 0;
     min-width: 0;
     flex-basis: 0;
+}
+.nb-app.is-phone .nb-appnav.is-overflow .nb-nav-chev:disabled {
+    visibility: visible;
+    width: 44px;
+    min-width: 44px;
+    flex-basis: 44px;
 }
 .nb-app.is-phone .nb-tabbar,
 .nb-app.is-phone .nb-left,

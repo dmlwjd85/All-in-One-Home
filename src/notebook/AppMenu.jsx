@@ -111,6 +111,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
     const [open, setOpen] = useState(false);
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
+    const [overflow, setOverflow] = useState(false);
     const scrollRef = useRef(null);
     const followRef = useRef(true);
     const active = menuKeyForPage(page);
@@ -123,30 +124,30 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
         const nav = scrollRef.current;
         if (!nav) return undefined;
         let framing = false;
-        let lock = 0;
+        let fromUs = false;
         followRef.current = true;
         const buttonList = () => [...nav.querySelectorAll('.nb-navbtn')];
         const clearSpread = () => {
             for (const btn of buttonList()) btn.style.marginRight = '';
         };
-        const hold = () => {
-            lock += 1;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    lock = Math.max(0, lock - 1);
-                });
-            });
+        const contentMax = () => {
+            const buttons = buttonList();
+            const last = buttons[buttons.length - 1];
+            if (!last) return 0;
+            return Math.max(0, last.offsetLeft + last.offsetWidth - nav.clientWidth);
         };
         const edges = () => {
-            const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+            const max = contentMax();
             const nextPrev = nav.scrollLeft > 2;
             const nextNext = max > 2 && nav.scrollLeft < max - 2;
             setCanPrev((prev) => (prev === nextPrev ? prev : nextPrev));
             setCanNext((prev) => (prev === nextNext ? prev : nextNext));
         };
         const snapTo = (prefer) => {
-            const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
-            const preferC = Math.max(0, Math.min(max, prefer));
+            const buttons = buttonList();
+            const last = buttons[buttons.length - 1];
+            const limit = last ? Math.max(0, last.offsetLeft + last.offsetWidth - nav.clientWidth) : 0;
+            const preferC = Math.max(0, Math.min(limit, prefer));
             const current = nav.querySelector('[aria-current="page"]');
             const client = nav.clientWidth;
             const fits = (left) => {
@@ -155,20 +156,20 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
                 const end = start + current.offsetWidth;
                 return start >= left - 1 && end <= left + client + 1;
             };
+            const starts = [0, ...buttons.map((btn) => btn.offsetLeft)];
             let best = null;
             let bestDist = Infinity;
-            const consider = (left) => {
-                const s = Math.max(0, Math.min(max, left));
-                if (!fits(s)) return;
-                const dist = Math.abs(s - preferC);
+            for (const left of starts) {
+                if (left < -1 || left > limit + 1 || !fits(left)) continue;
+                const dist = Math.abs(left - preferC);
                 if (dist < bestDist - 0.01) {
-                    best = s;
+                    best = left;
                     bestDist = dist;
                 }
-            };
-            consider(0);
-            for (const btn of buttonList()) consider(btn.offsetLeft);
-            return best ?? preferC;
+            }
+            if (best != null) return best;
+            const later = starts.filter((left) => left > limit && fits(left)).sort((a, b) => a - b);
+            return later[0] ?? preferC;
         };
         const spread = () => {
             clearSpread();
@@ -190,24 +191,51 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             if (!partial || full.length < 1) return;
             const need = right - partial.offsetLeft;
             if (need <= 0.5) return;
-            const slots = Math.max(1, full.length - 1);
-            const each = need / slots;
-            const receivers = full.length === 1 ? full : full.slice(0, -1);
+            const current = nav.querySelector('[aria-current="page"]');
+            const anchor = current ? current.offsetLeft : 0;
+            const receivers = full.filter((btn) => btn.offsetLeft >= anchor - 1);
+            if (!receivers.length) return;
+            const each = need / receivers.length;
             for (const btn of receivers) btn.style.marginRight = `${each}px`;
+        };
+        const reserveChevrons = () => {
+            const host = nav.parentElement;
+            if (!host) return;
+            const last = buttonList()[buttonList().length - 1];
+            const end = last ? last.offsetLeft + last.offsetWidth : 0;
+            const fitsNow = end <= nav.clientWidth + 2;
+            if (!fitsNow) {
+                if (!host.classList.contains('is-overflow')) {
+                    host.classList.add('is-overflow');
+                    setOverflow(true);
+                }
+                return;
+            }
+            if (!host.classList.contains('is-overflow')) return;
+            host.classList.remove('is-overflow');
+            setOverflow(false);
+            if (end > nav.clientWidth + 2) {
+                host.classList.add('is-overflow');
+                setOverflow(true);
+            }
         };
         const center = () => {
             if (framing) return;
             framing = true;
             try {
                 clearSpread();
+                reserveChevrons();
+                const spacer = nav.querySelector('.nb-nav-spacer');
+                if (spacer) spacer.style.width = `${nav.clientWidth}px`;
                 if (followRef.current) {
                     const current = nav.querySelector('[aria-current="page"]');
                     if (current) {
-                        const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
                         const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
-                        const next = snapTo(Math.max(0, Math.min(max, ideal)));
-                        hold();
-                        if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
+                        const next = snapTo(ideal);
+                        if (Math.abs(nav.scrollLeft - next) > 1) {
+                            fromUs = true;
+                            nav.scrollLeft = next;
+                        }
                     }
                 }
                 spread();
@@ -217,7 +245,8 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             }
         };
         const onScroll = () => {
-            if (lock > 0 || framing) {
+            if (fromUs || framing) {
+                fromUs = false;
                 edges();
                 return;
             }
@@ -252,14 +281,16 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
         if (!nav) return;
         followRef.current = false;
         const chunk = Math.round(nav.clientWidth * 0.7);
-        const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+        const buttons = [...nav.querySelectorAll('.nb-navbtn')];
+        const last = buttons[buttons.length - 1];
+        const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - nav.clientWidth) : 0;
         nav.scrollLeft = Math.max(0, Math.min(max, nav.scrollLeft + dir * chunk));
     };
 
     let lastGroup = '';
 
     return (
-        <nav className="nb-appnav" aria-label="수첩 메뉴">
+        <nav className={`nb-appnav${overflow ? ' is-overflow' : ''}`} aria-label="수첩 메뉴">
             <button
                 type="button"
                 className="nb-navbtn nb-nav-all"
@@ -317,6 +348,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
                         </span>
                     );
                 })}
+                <span className="nb-nav-spacer" aria-hidden="true" />
             </div>
             <button
                 type="button"

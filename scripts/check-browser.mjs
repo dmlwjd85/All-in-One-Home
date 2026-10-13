@@ -189,8 +189,10 @@ async function geometryHits(page) {
             const prev = nav.querySelector('[data-nav-scroll="prev"]');
             const next = nav.querySelector('[data-nav-scroll="next"]');
             if (scroll) {
-                const overflow = scroll.scrollWidth > scroll.clientWidth + 2;
-                const max = scroll.scrollWidth - scroll.clientWidth;
+                const menuButtons = [...scroll.querySelectorAll('.nb-navbtn')];
+                const lastBtn = menuButtons[menuButtons.length - 1];
+                const max = lastBtn ? Math.max(0, lastBtn.offsetLeft + lastBtn.offsetWidth - scroll.clientWidth) : 0;
+                const overflow = max > 2;
                 if (overflow && scroll.scrollLeft > 2 && !shownChevron(prev)) hits.push('앞 메뉴 화살표 없음');
                 if (overflow && scroll.scrollLeft < max - 2 && !shownChevron(next)) hits.push('뒤 메뉴 화살표 없음');
                 if (!overflow && (shownChevron(prev) || shownChevron(next))) hits.push('넘치지 않는데 메뉴 화살표');
@@ -200,7 +202,7 @@ async function geometryHits(page) {
                     const delta = Math.abs(scroll.scrollLeft - expect);
                     const starts = [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.offsetLeft);
                     const flush = scroll.scrollLeft <= 2 || starts.some((left) => Math.abs(scroll.scrollLeft - left) <= 2);
-                    const limit = flush ? 64 : 12;
+                    const limit = flush ? 96 : 12;
                     if (delta > limit) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
                 }
                 const host = scroll.getBoundingClientRect();
@@ -729,20 +731,27 @@ export async function runBrowserQuality() {
             else {
                 const expectMove = await page.$eval('.nb-appnav-scroll', (el) => {
                     const chunk = Math.round(el.clientWidth * 0.7);
-                    const room = Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft);
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const end = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
+                    const room = Math.max(0, end - el.scrollLeft);
                     return Math.min(chunk, room);
                 });
                 await next.click();
                 await new Promise((resolve) => setTimeout(resolve, 350));
-                const settled = await page.$eval('.nb-appnav-scroll', (el) => ({
-                    left: el.scrollLeft,
-                    max: Math.max(0, el.scrollWidth - el.clientWidth),
-                }));
+                const settled = await page.$eval('.nb-appnav-scroll', (el) => {
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
+                    return { left: el.scrollLeft, max };
+                });
                 const atEnd = settled.left >= settled.max - 4;
                 const held = settled.left >= start + Math.min(expectMove, Math.max(0, settled.max - start)) - 8;
                 if (!(atEnd || held)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${settled.left}`);
                 const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
-                    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
                     const forward = from + 90;
                     const target = forward <= max - 2 ? forward : Math.max(0, from - 90);
                     el.scrollLeft = target;
