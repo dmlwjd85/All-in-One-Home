@@ -639,7 +639,7 @@ async function geometryHits(page) {
             seenFloater.add(el);
             floaters.push(el);
         };
-        for (const el of document.querySelectorAll('.nb-app *')) {
+        for (const el of document.querySelectorAll('body *')) {
             const pos = getComputedStyle(el).position;
             if (pos === 'fixed' || pos === 'sticky') addFloater(el);
         }
@@ -1120,6 +1120,7 @@ export async function runBrowserQuality() {
                 await page.waitForFunction(() => /없는 주소/.test(document.querySelector('[role="status"]')?.textContent || ''), { timeout: 4000 });
             }
         }
+        await page.waitForFunction(() => !document.querySelector('[role="status"]'), { timeout: 5000 });
 
         await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
@@ -1183,8 +1184,9 @@ export async function runBrowserQuality() {
                     }
                 }
                 const who = document.querySelector('#roster-17 .nb-gobtn.who');
+                who?.scrollIntoView({ block: 'center', inline: 'center' });
                 const box = who?.getBoundingClientRect();
-                const hit = box ? document.elementFromPoint(box.left + box.width / 2, Math.min(box.top + box.height / 2, window.innerHeight - 2)) : null;
+                const hit = box ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
                 if (!who || !hit || (hit !== who && !who.contains(hit))) bad.push('누가 가림');
                 return bad;
             }, SAMPLE_BIRTH, SAMPLE_NOTE_LONG);
