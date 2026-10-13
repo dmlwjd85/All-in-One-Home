@@ -101,15 +101,56 @@ async function inspect(page) {
     });
 }
 
-async function setRosterName(page, value) {
-    const input = await page.$('#roster-1 input');
-    if (!input) return;
-    await page.evaluate((next) => {
-        const field = document.querySelector('#roster-1 input');
-        const proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        proto.set.call(field, next);
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-    }, value);
+const SAMPLE_NAME = '선우하늘별';
+const SAMPLE_SEX = '남학생';
+const SAMPLE_NOTE = '비고란';
+
+async function writeFields(page, pageNo, fields) {
+    await page.evaluate((num, patch) => {
+        const key = `homenote_v2_notebookFields_p${num}`;
+        const prev = JSON.parse(localStorage.getItem(key) || '{}');
+        localStorage.setItem(key, JSON.stringify({ ...prev, ...patch }));
+        window.dispatchEvent(new CustomEvent('nb-page-fields', { detail: { page: num } }));
+    }, pageNo, fields);
+}
+
+function rosterPatch(name, sex, note) {
+    const patch = {};
+    for (let n = 1; n <= 32; n += 1) {
+        patch[`name${n}`] = name;
+        patch[`sex${n}`] = sex;
+        patch[`note${n}`] = note;
+    }
+    return patch;
+}
+
+async function prepareClipSamples(page, n) {
+    if (n === 154) {
+        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, SAMPLE_SEX, SAMPLE_NOTE));
+        await page.waitForFunction((name) => document.querySelector('#roster-1 input')?.value === name, {}, SAMPLE_NAME);
+    }
+    if (n >= 148 && n <= 153) {
+        const patch = {};
+        for (let i = 0; i < 36; i += 1) patch[`s${i}`] = SAMPLE_NAME;
+        await writeFields(page, n, patch);
+        await page.waitForFunction((name) => document.querySelector('.nb-seats input')?.value === name, {}, SAMPLE_NAME);
+    }
+    if (n >= 232 && n <= 255) {
+        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, '', ''));
+        await page.waitForFunction((name) => {
+            const shown = document.querySelector('.nb-roster-name');
+            return shown && shown.textContent.trim() === name;
+        }, {}, SAMPLE_NAME);
+    }
+}
+
+async function clearClipSamples(page, n) {
+    if (n === 154 || (n >= 232 && n <= 255)) await writeFields(page, 154, rosterPatch('', '', ''));
+    if (n >= 148 && n <= 153) {
+        const patch = {};
+        for (let i = 0; i < 36; i += 1) patch[`s${i}`] = '';
+        await writeFields(page, n, patch);
+    }
 }
 
 async function geometryHits(page) {
@@ -453,7 +494,12 @@ async function geometryHits(page) {
             else if (el.tagName !== 'TEXTAREA') {
                 if (el.value) samples.push(el.value);
                 if (el.placeholder) samples.push(el.placeholder);
-                if (/번 이름$/.test(el.getAttribute('aria-label') || '')) samples.push('학생이름김');
+                const aria = el.getAttribute('aria-label') || '';
+                if (/번 이름$/.test(aria) || /^자리 /.test(aria)) {
+                    samples.push('선우하늘별');
+                    samples.push('학생이름김');
+                }
+                if (/번 성별$/.test(aria) || /번 비고$/.test(aria)) samples.push('남학생');
             }
             const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
             let avail = el.clientWidth - pad;
@@ -462,6 +508,45 @@ async function geometryHits(page) {
             for (const text of new Set(samples)) {
                 if (text && textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
             }
+        }
+        const cutByAncestor = (el) => {
+            const box = el.getBoundingClientRect();
+            if (box.width < 1 || box.height < 1) return false;
+            let node = el.parentElement;
+            while (node && node !== document.body) {
+                const cs = getComputedStyle(node);
+                const clipX = cs.overflowX === 'hidden' || cs.overflowX === 'clip';
+                const clipY = cs.overflowY === 'hidden' || cs.overflowY === 'clip';
+                if (clipX || clipY) {
+                    const host = node.getBoundingClientRect();
+                    if (clipX && (box.left < host.left - 1 || box.right > host.right + 1)) return true;
+                    if (clipY && (box.top < host.top - 1 || box.bottom > host.bottom + 1)) return true;
+                }
+                node = node.parentElement;
+            }
+            return false;
+        };
+        const coveredBy = (el) => {
+            const box = el.getBoundingClientRect();
+            const stage = document.querySelector('.nb-stage-wrap')?.getBoundingClientRect();
+            const host = stage || { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight };
+            const left = Math.max(box.left, host.left, 0);
+            const right = Math.min(box.right, host.right, window.innerWidth);
+            const top = Math.max(box.top, host.top, 0);
+            const bottom = Math.min(box.bottom, host.bottom, window.innerHeight);
+            if (right - left < 4 || bottom - top < 4) return '';
+            const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+            if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return '';
+            return (hit.getAttribute('aria-label') || hit.className || hit.textContent || '요소').toString().trim().replace(/\s+/g, ' ').slice(0, 18);
+        };
+        for (const el of document.querySelectorAll('.nb-roster .nb-ink, .nb-seats .nb-ink, .nb-roster-name, .nb-week-due-item')) {
+            if (!visibleBox(el)) continue;
+            if (el.scrollWidth > el.clientWidth + 1 || cutByAncestor(el)) {
+                const sample = (el.value || el.textContent || '').trim().slice(0, 18);
+                hits.push(`글자 잘림 ${sample}`);
+            }
+            const cover = coveredBy(el);
+            if (cover) hits.push(`가림 ${cover}`);
         }
         for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
             const box = visibleBox(el);
@@ -569,9 +654,9 @@ export async function runBrowserQuality() {
             if (info.overflow) overflowPages.push(n);
             if (info.textLength <= 4 || info.title.length <= 1) empty.push(`${n}:${info.title || info.textLength}`);
             if (info.missed.length) unreachable.push(`${n}:${info.missed.slice(0, 4).join(',')}`);
-            if (n === 154) await setRosterName(page, '학생이름김');
+            await prepareClipSamples(page, n);
             const phoneHits = await geometryHits(page);
-            if (n === 154) await setRosterName(page, '');
+            await clearClipSamples(page, n);
             if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
             const first = await page.$('.nb-body [data-to]');
             if (first) {
@@ -601,9 +686,9 @@ export async function runBrowserQuality() {
             }, {}, width);
             for (let n = 1; n <= 580; n += 1) {
                 await go(page, n);
-                if (n === 154) await setRosterName(page, '학생이름김');
+                await prepareClipSamples(page, n);
                 const hits = await geometryHits(page);
-                if (n === 154) await setRosterName(page, '');
+                await clearClipSamples(page, n);
                 if (hits.length) browserErrors.push(`${label} p${n} ${hits.slice(0, 4).join(', ')}`);
             }
         }
@@ -907,6 +992,54 @@ export async function runBrowserQuality() {
                 browserErrors.push(`${width} 명렬표 위치 ${band.titleTop} ${band.title}`);
             }
         }
+
+        await page.evaluate(() => {
+            localStorage.setItem('homenote_v2_ddayCards', JSON.stringify([
+                { id: 'due-card', docNo: '12', title: '공문마감', deadline: '2026-05-06', status: 'todo' },
+            ]));
+            localStorage.setItem('homenote_v2_notebookFields_p405', JSON.stringify({
+                t0: '줄마감',
+                d0: '2026-05-08',
+                c0: false,
+                t1: '다른주',
+                d1: '2026-05-20',
+                c1: false,
+            }));
+        });
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForSelector('[data-page]', { timeout: 20000 });
+        await page.evaluate(() => { location.hash = '#/week/10'; });
+        await page.waitForFunction(() => {
+            const due = document.querySelector('[data-page="56"] .nb-week-due');
+            const text = due?.innerText || '';
+            return text.includes('기한') && text.includes('마감') && text.includes('공문마감') && text.includes('줄마감') && !text.includes('다른주');
+        }, { timeout: 20000 });
+        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [900, 900, '900'], [390, 844, '390'], [360, 780, '360']]) {
+            await page.setViewport({ width, height, deviceScaleFactor: 1 });
+            await page.waitForFunction((viewW) => {
+                const isPhone = viewW <= 700;
+                const app = document.querySelector('.nb-app');
+                if (!app || app.classList.contains('is-phone') !== isPhone) return false;
+                return Boolean(document.querySelector('[data-page="56"] .nb-week-due'));
+            }, {}, width);
+            const dueText = await page.$eval('.nb-week-due', (el) => el.innerText);
+            if (!dueText.includes('공문마감') || !dueText.includes('줄마감') || !dueText.includes('마감')) {
+                browserErrors.push(`${label} 주간 기한 문구 ${dueText.replace(/\s+/g, ' ').slice(0, 40)}`);
+            }
+            const dueHits = await geometryHits(page);
+            if (dueHits.length) browserErrors.push(`${label} 주간 기한 ${dueHits.slice(0, 4).join(', ')}`);
+            const missed = await inspect(page);
+            if (missed.missed.some((item) => item.startsWith('405'))) {
+                browserErrors.push(`${label} 주간 기한 링크 ${missed.missed.filter((item) => item.startsWith('405')).join(',')}`);
+            }
+        }
+        await page.evaluate(() => { location.hash = '#/week/11'; });
+        await page.waitForFunction(() => Number(document.querySelector('.nb-page')?.dataset.page) === 57);
+        const leaked = await page.evaluate(() => {
+            const text = document.querySelector('.nb-body')?.innerText || '';
+            return text.includes('공문마감') || text.includes('줄마감');
+        });
+        if (leaked) browserErrors.push('다른 주에 이번 주 기한이 보임');
 
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);

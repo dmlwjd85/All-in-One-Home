@@ -19,6 +19,17 @@ export function calendarMarks(ymd, items) {
     return (items || []).filter((item) => item.deadline === ymd && item.status !== 'done');
 }
 
+/** 주간 범위에 들어오는 기한. 저장은 하지 않고, 이미 있는 카드·줄만 고릅니다. */
+export function deadlinesInRange(items, start, end) {
+    if (!start || !end) return [];
+    return (items || [])
+        .filter((item) => {
+            const ymd = String(item?.deadline || '');
+            return /^\d{4}-\d{2}-\d{2}$/.test(ymd) && ymd >= start && ymd <= end;
+        })
+        .sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)) || String(a.title || '').localeCompare(String(b.title || ''), 'ko'));
+}
+
 export function missingNumbers(submitted, size = 32) {
     const have = new Set(submitted || []);
     const missing = [];
