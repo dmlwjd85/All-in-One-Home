@@ -873,6 +873,13 @@
 }
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.nb-roster .nb-table td:nth-child(2) .nb-ink { min-width: 5em; }
+.nb-roster .nb-table th:nth-child(3),
+.nb-roster .nb-table td:nth-child(3),
+.nb-roster .nb-table th:nth-child(5),
+.nb-roster .nb-table td:nth-child(5) { min-width: 2.8em; }
+.nb-roster .nb-table th:nth-child(4),
+.nb-roster .nb-table td:nth-child(4) { min-width: 4.2em; }
 .nb-roster-jump {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
@@ -1430,7 +1437,7 @@
     }
     .nb-roster .nb-table tr {
         display: grid;
-        grid-template-columns: 2.2rem minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 1.1fr) minmax(0, 1fr) 2.8rem;
+        grid-template-columns: 2.2rem minmax(6em, 1.6fr) minmax(2.2em, 0.7fr) minmax(0, 1.1fr) minmax(2.2em, 1fr) 2.8rem;
         min-height: 0;
         align-items: stretch;
     }

@@ -101,6 +101,17 @@ async function inspect(page) {
     });
 }
 
+async function setRosterName(page, value) {
+    const input = await page.$('#roster-1 input');
+    if (!input) return;
+    await page.evaluate((next) => {
+        const field = document.querySelector('#roster-1 input');
+        const proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        proto.set.call(field, next);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
+}
+
 async function geometryHits(page) {
     return page.evaluate(() => {
         document.querySelectorAll('.nb-body, .nb-stage-wrap').forEach((el) => {
@@ -436,17 +447,21 @@ async function geometryHits(page) {
             if (!box) continue;
             if (el.type === 'file' || el.type === 'hidden') continue;
             const cs = getComputedStyle(el);
-            let text = '';
-            if (el.tagName === 'SELECT') text = el.options[el.selectedIndex]?.text || '';
-            else if (el.type === 'checkbox' || el.type === 'radio') text = el.value || 'on';
-            else if (el.tagName === 'TEXTAREA') text = '';
-            else text = el.value || el.placeholder || '';
-            if (!text) continue;
+            const samples = [];
+            if (el.tagName === 'SELECT') samples.push(el.options[el.selectedIndex]?.text || '');
+            else if (el.type === 'checkbox' || el.type === 'radio') samples.push(el.value || 'on');
+            else if (el.tagName !== 'TEXTAREA') {
+                if (el.value) samples.push(el.value);
+                if (el.placeholder) samples.push(el.placeholder);
+                if (/번 이름$/.test(el.getAttribute('aria-label') || '')) samples.push('학생이름김');
+            }
             const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
             let avail = el.clientWidth - pad;
             const appearance = cs.appearance || cs.webkitAppearance || '';
             if (el.tagName === 'SELECT' && appearance !== 'none') avail -= 16;
-            if (textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
+            for (const text of new Set(samples)) {
+                if (text && textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
+            }
         }
         for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
             const box = visibleBox(el);
@@ -554,7 +569,9 @@ export async function runBrowserQuality() {
             if (info.overflow) overflowPages.push(n);
             if (info.textLength <= 4 || info.title.length <= 1) empty.push(`${n}:${info.title || info.textLength}`);
             if (info.missed.length) unreachable.push(`${n}:${info.missed.slice(0, 4).join(',')}`);
+            if (n === 154) await setRosterName(page, '학생이름김');
             const phoneHits = await geometryHits(page);
+            if (n === 154) await setRosterName(page, '');
             if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
             const first = await page.$('.nb-body [data-to]');
             if (first) {
@@ -584,7 +601,9 @@ export async function runBrowserQuality() {
             }, {}, width);
             for (let n = 1; n <= 580; n += 1) {
                 await go(page, n);
+                if (n === 154) await setRosterName(page, '학생이름김');
                 const hits = await geometryHits(page);
+                if (n === 154) await setRosterName(page, '');
                 if (hits.length) browserErrors.push(`${label} p${n} ${hits.slice(0, 4).join(', ')}`);
             }
         }
