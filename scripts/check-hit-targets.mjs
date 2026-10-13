@@ -32,8 +32,9 @@ const chromeRight = notebook.chrome.right;
 ok(LEFT_TABS.length === chromeLeft.length, `왼쪽 탭 수 ${LEFT_TABS.length} ≠ ${chromeLeft.length}`);
 ok(RIGHT_TABS.length === chromeRight.length, `오른쪽 탭 수 ${RIGHT_TABS.length} ≠ ${chromeRight.length}`);
 LEFT_TABS.forEach((tab, i) => {
+    const shown = chromeLeft[i].label === '쓰' ? '쓱적' : chromeLeft[i].label;
     ok(tab.to === chromeLeft[i].to, `왼쪽 ${tab.label}: ${tab.to} ≠ PDF ${chromeLeft[i].label}:${chromeLeft[i].to}`);
-    ok(tab.label === chromeLeft[i].label, `왼쪽 라벨 ${tab.label} ≠ ${chromeLeft[i].label}`);
+    ok(tab.label === shown, `왼쪽 라벨 ${tab.label} ≠ ${shown}`);
 });
 RIGHT_TABS.forEach((tab, i) => {
     ok(tab.to === chromeRight[i].to, `오른쪽 ${tab.label}: ${tab.to} ≠ PDF ${chromeRight[i].to}`);

@@ -122,37 +122,106 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
     useLayoutEffect(() => {
         const nav = scrollRef.current;
         if (!nav) return undefined;
-        let centering = false;
+        let framing = false;
+        let lock = 0;
         followRef.current = true;
+        const buttonList = () => [...nav.querySelectorAll('.nb-navbtn')];
+        const clearSpread = () => {
+            for (const btn of buttonList()) btn.style.marginRight = '';
+        };
+        const hold = () => {
+            lock += 1;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    lock = Math.max(0, lock - 1);
+                });
+            });
+        };
         const edges = () => {
-            const host = nav.getBoundingClientRect();
-            for (const btn of nav.querySelectorAll('.nb-navbtn')) {
-                const box = btn.getBoundingClientRect();
-                const visible = Math.min(box.right, host.right) - Math.max(box.left, host.left);
-                const full = visible >= box.width - 0.5;
-                const currentBtn = btn.getAttribute('aria-current') === 'page';
-                btn.classList.toggle('is-clip', !currentBtn && !full && visible > 0.5);
-            }
             const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
             const nextPrev = nav.scrollLeft > 2;
             const nextNext = max > 2 && nav.scrollLeft < max - 2;
             setCanPrev((prev) => (prev === nextPrev ? prev : nextPrev));
             setCanNext((prev) => (prev === nextNext ? prev : nextNext));
         };
-        const center = () => {
+        const snapTo = (prefer) => {
+            const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+            const preferC = Math.max(0, Math.min(max, prefer));
             const current = nav.querySelector('[aria-current="page"]');
-            if (current) {
-                const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
-                const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
-                const next = Math.max(0, Math.min(max, ideal));
-                centering = true;
-                if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
-                centering = false;
+            const client = nav.clientWidth;
+            const fits = (left) => {
+                if (!current) return true;
+                const start = current.offsetLeft;
+                const end = start + current.offsetWidth;
+                return start >= left - 1 && end <= left + client + 1;
+            };
+            let best = null;
+            let bestDist = Infinity;
+            const consider = (left) => {
+                const s = Math.max(0, Math.min(max, left));
+                if (!fits(s)) return;
+                const dist = Math.abs(s - preferC);
+                if (dist < bestDist - 0.01) {
+                    best = s;
+                    bestDist = dist;
+                }
+            };
+            consider(0);
+            for (const btn of buttonList()) consider(btn.offsetLeft);
+            return best ?? preferC;
+        };
+        const spread = () => {
+            clearSpread();
+            const start = nav.scrollLeft;
+            const right = start + nav.clientWidth;
+            const full = [];
+            let partial = null;
+            for (const btn of buttonList()) {
+                const a = btn.offsetLeft;
+                const b = a + btn.offsetWidth;
+                if (b <= start + 0.5) continue;
+                if (a >= right - 0.5) break;
+                if (a >= start - 1 && b <= right + 1) full.push(btn);
+                else {
+                    partial = btn;
+                    break;
+                }
             }
-            edges();
+            if (!partial || full.length < 1) return;
+            const need = right - partial.offsetLeft;
+            if (need <= 0.5) return;
+            const slots = Math.max(1, full.length - 1);
+            const each = need / slots;
+            const receivers = full.length === 1 ? full : full.slice(0, -1);
+            for (const btn of receivers) btn.style.marginRight = `${each}px`;
+        };
+        const center = () => {
+            if (framing) return;
+            framing = true;
+            try {
+                clearSpread();
+                if (followRef.current) {
+                    const current = nav.querySelector('[aria-current="page"]');
+                    if (current) {
+                        const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+                        const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+                        const next = snapTo(Math.max(0, Math.min(max, ideal)));
+                        hold();
+                        if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
+                    }
+                }
+                spread();
+                edges();
+            } finally {
+                framing = false;
+            }
         };
         const onScroll = () => {
-            if (!centering) followRef.current = false;
+            if (lock > 0 || framing) {
+                edges();
+                return;
+            }
+            followRef.current = false;
             edges();
         };
         const onResize = () => {
@@ -169,6 +238,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             cancelAnimationFrame(later);
             nav.removeEventListener('scroll', onScroll);
             observer.disconnect();
+            clearSpread();
         };
     }, [page, active]);
 

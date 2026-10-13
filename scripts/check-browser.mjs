@@ -197,8 +197,30 @@ async function geometryHits(page) {
                 if (current) {
                     const ideal = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2;
                     const expect = Math.max(0, Math.min(Math.max(0, max), ideal));
-                    if (Math.abs(scroll.scrollLeft - expect) > 12) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
+                    const delta = Math.abs(scroll.scrollLeft - expect);
+                    const starts = [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.offsetLeft);
+                    const flush = scroll.scrollLeft <= 2 || starts.some((left) => Math.abs(scroll.scrollLeft - left) <= 2);
+                    const limit = flush ? 64 : 12;
+                    if (delta > limit) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
                 }
+                const host = scroll.getBoundingClientRect();
+                const slots = [...scroll.querySelectorAll('.nb-navbtn, .nb-nav-gap')];
+                for (const el of slots) {
+                    const hidden = getComputedStyle(el).visibility === 'hidden';
+                    if (!hidden) continue;
+                    const box = el.getBoundingClientRect();
+                    const iw = Math.min(box.right, host.right) - Math.max(box.left, host.left);
+                    if (iw > 2) hits.push(`메뉴 빈칸 ${(el.textContent || '').trim() || '구분'}`);
+                }
+                let lead = null;
+                for (const el of slots) {
+                    if (getComputedStyle(el).visibility === 'hidden') continue;
+                    const box = el.getBoundingClientRect();
+                    if (box.right <= host.left + 1) continue;
+                    lead = box;
+                    break;
+                }
+                if (lead && lead.left > host.left + 4) hits.push(`메뉴 앞 빈칸 ${Math.round(lead.left - host.left)}`);
                 for (const btn of scroll.querySelectorAll('.nb-navbtn')) {
                     const style = getComputedStyle(btn);
                     if (style.visibility === 'hidden' || style.display === 'none') continue;
@@ -400,6 +422,80 @@ async function geometryHits(page) {
                 if (!(px >= 14)) hits.push(`표 글자 ${px}px`);
             }
         }
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const textWidth = (el, text) => {
+            const cs = getComputedStyle(el);
+            ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return ctx.measureText(text).width;
+        };
+        for (const el of document.querySelectorAll('input, textarea, select')) {
+            const box = visibleBox(el);
+            if (!box) continue;
+            if (el.type === 'file' || el.type === 'hidden') continue;
+            const cs = getComputedStyle(el);
+            let text = '';
+            if (el.tagName === 'SELECT') text = el.options[el.selectedIndex]?.text || '';
+            else if (el.type === 'checkbox' || el.type === 'radio') text = el.value || 'on';
+            else if (el.tagName === 'TEXTAREA') text = '';
+            else text = el.value || el.placeholder || '';
+            if (!text) continue;
+            const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            let avail = el.clientWidth - pad;
+            const appearance = cs.appearance || cs.webkitAppearance || '';
+            if (el.tagName === 'SELECT' && appearance !== 'none') avail -= 16;
+            if (textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
+        }
+        for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
+            const box = visibleBox(el);
+            if (!box) continue;
+            const cs = getComputedStyle(el);
+            if (el.scrollWidth > el.clientWidth + 1) {
+                const sample = el.textContent.trim().slice(0, 18);
+                hits.push(cs.textOverflow === 'ellipsis' ? `말줄임 ${sample}` : `글자 잘림 ${sample}`);
+            }
+        }
+        const coverTitle = document.querySelector('.nb-cover-title');
+        if (coverTitle && visibleBox(coverTitle)) {
+            const cs = getComputedStyle(coverTitle);
+            if (cs.wordBreak !== 'keep-all') hits.push('표지 제목 어절');
+            const node = coverTitle.firstChild;
+            const words = coverTitle.textContent.trim().split(/\s+/).filter(Boolean);
+            if (node && node.nodeType === 3 && words.length) {
+                const range = document.createRange();
+                const lines = [];
+                let buf = '';
+                let lastTop = null;
+                for (let i = 0; i < node.textContent.length; i += 1) {
+                    range.setStart(node, i);
+                    range.setEnd(node, i + 1);
+                    const rect = range.getClientRects()[0];
+                    if (!rect) continue;
+                    if (lastTop != null && Math.abs(rect.top - lastTop) > 2) {
+                        lines.push(buf);
+                        buf = '';
+                    }
+                    buf += node.textContent[i];
+                    lastTop = rect.top;
+                }
+                if (buf) lines.push(buf);
+                const rest = words.slice();
+                for (const line of lines) {
+                    for (const part of line.trim().split(/\s+/).filter(Boolean)) {
+                        if (rest[0] !== part) {
+                            hits.push(`표지 제목 단어 잘림 ${part}`);
+                            rest.length = 0;
+                            break;
+                        }
+                        rest.shift();
+                    }
+                }
+            }
+        }
+        const writeTab = document.querySelector('.nb-left .nb-tab[data-to="496"]');
+        if (writeTab && visibleBox(writeTab) && writeTab.textContent.trim() !== '쓱적') {
+            hits.push(`쓱적 탭 ${writeTab.textContent.trim()}`);
+        }
         return hits;
     });
 }
@@ -471,8 +567,8 @@ export async function runBrowserQuality() {
         if (overflowPages.length) browserErrors.push(`390px 가로 넘침 ${overflowPages.slice(0, 12).join(',')}`);
         if (unreachable.length) browserErrors.push(`390px 닿지 않는 본문 링크 ${unreachable.slice(0, 8).join(' | ')}`);
 
-        // 1920 데스크톱, 1366 노트북, 1024 태블릿, 360 휴대폰. 390은 위쪽 전체 순회.
-        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [360, 780, '360']]) {
+        // 390은 위쪽 전체 순회. 나머지는 입력·선택·말줄임·탭 잘림을 같은 검사로 본다.
+        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [1023, 900, '1023'], [900, 900, '900'], [800, 900, '800'], [768, 900, '768'], [720, 900, '720'], [360, 780, '360']]) {
             await page.setViewport({ width, height, deviceScaleFactor: 1 });
             await page.waitForFunction((viewW) => {
                 const isPhone = viewW <= 700;
