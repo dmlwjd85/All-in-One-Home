@@ -1,0 +1,100 @@
+# 기능 대응
+
+`docs/feature-inventory.md`의 항목이 이번 메뉴·화면 개편 뒤에도 같은 자리에서 동작하는지 적는다. 저장 키와 Firestore 경로는 바꾸지 않았다.
+
+검증: `npm run check:links`, `check:hits`, `check:storage`, `check:quality`, `check:browser`(390·1920·1366·1024·360). 브라우저 검사는 580쪽을 모두 열고, 메뉴의 현재 위치·브랜드 글자·겹침을 함께 본다. 아래 표의 「확인」은 그 검사와 프로덕션 미리보기에서 대표 쪽을 연 결과다.
+
+## 시작 · 계정
+
+| 목록 | 지금 위치 | 확인 |
+| --- | --- | --- |
+| 준비 중 문구 | `App.jsx` 첫 화면 | 코드 유지 |
+| Google 로그인, 이 기기에서만 사용 | 로그인 게이트. 카드만 따뜻한 색으로 다듬음 | 버튼 문구 유지 |
+| `homenote_guest` | 같음 | `check:storage` |
+| 저장 실패 토스트, 다시 시도 | `nb-save-failed` | 코드 유지 |
+| 백업 모달 덮어쓰기·합치기·취소 | 가져오기 뒤 모달 | 잘못된 JSON 토스트는 `check:browser` |
+| 본문으로 건너뛰기 | `#main` | 코드 유지 |
+
+## 크롬
+
+| 목록 | 지금 위치 | 확인 |
+| --- | --- | --- |
+| 브랜드, 쪽번호 `p.쪽/580`·휴대폰 `p.쪽` | 도구막대. 1400px 아래에서는 막대의 긴 쪽 제목을 숨기고, 쪽 안 제목은 남김 | `check:browser` 쪽번호·브랜드 잘림 |
+| 찾기, 내보내기, 가져오기, 로그아웃/나가기 | 도구막대. `전체` 메뉴에도 찾기 | Ctrl/Cmd+K, 파일 입력 유지 |
+| 왼쪽 14탭, 오른쪽 달·스티커 탭, 현재 탭 표시 | 용지 안 그대로. 켜진 색만 메뉴와 같은 코랄 | `check:hits`, 선택 탭 잘림 검사 |
+| 상단 이전·다음·바로가기 | `.nb-topnav` | 본문 `data-to` 히트 검사 |
+| 바닥 `p.쪽`, `ⓒJ쌤` | `.nb-foot` | 코드 유지 |
+| 방향키·Home | `NotebookApp` | 코드 유지 |
+| 쓱적 플로팅(Alt+S), 적기, 닫기 | `.nb-fab` | 용지와 겹치지 않는지 검사 |
+| 찾기 대화상자 | 도구막대·전체 메뉴 | 코드 유지 |
+| 다시 불러오기 | 구역 로드 실패 때 | 코드 유지 |
+| 인쇄에서 도구막대 숨김 | 메뉴도 막대 안에 있어 함께 숨음 | `check:browser` 인쇄 |
+
+## 항상 보이는 메뉴 (추가)
+
+쪽 기능은 빼지 않고, 어디로든 1–2번에 가게 메뉴만 더했다.
+
+| 메뉴 | 주소 | 쪽 |
+| --- | --- | --- |
+| 표지 | `#/cover` | 1 |
+| 홈 | `#/home` | 2 |
+| 연간 | `#/year` | 32 |
+| 월간 | `#/month/해/달` | 34–45. 주간 쪽에서는 그 주가 속한 달 |
+| 주간 | `#/weeks`, 각 주 `#/week/주차` | 46, 47–98 |
+| 학사 | `#/schedule` | 33 |
+| 하루 | `#/days`, `#/day/번호` | 99, 100–139 |
+| 학급·학생·출결·상담·수업·업무 | `#/class` `#/students` `#/attend` `#/counsel` `#/lesson` `#/work` | 140, 154, 231, 256, 335, 404 |
+| 쓱적·공책·칠판·스티커·태그 | `#/write` `#/notebook` `#/board` `#/stickers` `#/tags` | 496, 516, 559, 563, 9 |
+| 전체 → 새 학기, 사용법, 달 12개, 기한, 예산, 찾기 | `#/prep` `#/guide` `#/deadlines` `#/budget` 등 | 3, 5, 405, 468 |
+| 날짜 | `#/date/해-달-날` | 그 주 주간 쪽. 월간 날짜 버튼 |
+| 예전 주소 | `#p쪽`, `#/p/쪽` | 같은 쪽 |
+
+지금 구역은 `aria-current="page"`. 뒤로 가기는 `pushState`라 직전 해시로 돌아간다. `check:browser`가 연간→월간→주간→학사→하루, 4월 날짜, 주간에서 월간, 전체에서 예산을 누른 뒤 뒤로 가기를 확인한다.
+
+## 쪽 유형
+
+유형별 입력·버튼은 템플릿을 그대로 둔다. 이동만 `go()`가 이름 있는 해시로 쌓는다.
+
+| 유형 | 쪽 | 그대로인 조작 |
+| --- | --- | --- |
+| cover | 1 | 학교·학년·반·선생님, 표지→홈, 새 학기 설정 체크리스트 |
+| home | 2 | 한 줄 목표, 큰 바로가기, 달 12개 |
+| prep | 3–4 | 첫날 할 말, 메모, 준비 체크, 새 학기 7단계 |
+| howto | 5–8 | 사용법 칸, 바로가기 |
+| tag-legend / tag-index | 9–31 | 태그 버튼, 색인 표. 19–22는 이 기기만 |
+| year-cal | 32 | 달력 12개 → 월간 주소 |
+| academic | 33 | 학교 일정, 달 이름 → 그 달 |
+| month | 34–45 | 날짜 메모, 날짜 → `#/date/…`, D-day → 405 |
+| week-toc / week | 46–98 | 주 링크, 교시·전담·토일·할 일·쓱적 정리, 요일 머리 → 하루 |
+| special-toc / special-day | 99–139 | 하루 목록, 날짜·요일·날씨·행사·교시·메모 |
+| class-toc, timetable, class-rules, roles, seating | 140–153 | 목차 카드, 시간표, 약속, 역할, 자리 |
+| roster | 154 | 이름·성별·생일·비고, 1–32 줄 이동, 누가 번호 |
+| survey, health | 155–158 | 보호자·연락처·주소, 알레르기·분리 급식. 157–158 배지 |
+| student-card / student-who | 159– | 카드 칸, 내보내기, 인쇄, 누가 행(날짜·영역·NEIS) |
+| quick-note | 223–230 | 날짜·번호·내용·체크 |
+| attend-toc / attend | 231–255 | 목차, 월, 월말 대조, 출결 선택 |
+| counsel-toc / counsel / parent / consult-time / incident | 256–334 | 상담·보호자 회차, 상담 시간, 생활·사고. 323–334 이 기기만 |
+| lesson-toc, progress, eval-area, unit, checklist, score | 335–403 | 목차, 진도, 평가 영역, 단원, 체크, 점수 |
+| work-toc, deadline, todo | 404–416 | 목차, 공문번호·제목·기한 올리기, 할 일/진행/완료, 지우기, 줄로 적어 둔 기한, 업무 할 일 |
+| meeting, notice | 417–467 | 회의록, 제출물 칸 추가·번호 토글·알림장 복사·칸 지우기 |
+| budget-toc / budget-item / budget-misc / year-prep | 468–494 | 합계, 사업명·예산·집행, 줄 메모, 인수인계 |
+| ssugeok-toc / ssugeok | 495–500 | 적기, 필터, 옮길 곳, 보관, 쪽 열기, 예전 분류 허브, 예전 줄 |
+| memo, notebook-toc, notebook-paper | 501–558 | 모눈·점·무지, 공책 목차, 월간 노트·무지 노트 |
+| board-toc, chalkboard, whiteboard, grid-board | 559–562 | 판서 |
+| sticker-toc, sticker-sheet | 563–580 | 칭찬 목표, 스티커 더하기·빼기, 온도계, 시트 토글 |
+
+## 쓱적 허브
+
+496쪽 `예전 분류 허브`. 탭 쓱적·학생·출결·상담·주간·업무. 민감 문장은 `homenote_v2_ssugeokSensitive`. 타임라인 `원문`은 496쪽으로. `SsugeokDiary.jsx`는 예전과 같이 화면에 연결하지 않는다.
+
+## 저장
+
+| 목록 | 경로 | 확인 |
+| --- | --- | --- |
+| 쪽 칸 | `homenote_v2_notebookFields_p{쪽}`, Firestore `notebookFields/p{쪽}` | `check:storage`, `check:quality` 합치기 |
+| 목록 16종 | `homenote_v2_{이름}`, `artifacts/{appId}/public/data/{이름}` | `check:storage` 가 `origin/main`과 같은지 비교 |
+| 칭찬 | `praiseBoard` / 문서 `board` | 같음 |
+| 민감 쓱적·로컬 전용 쪽 | 클라우드로 올리지 않음 | 19–22, 157–158, 323–334 |
+| 내보내기·가져오기 | 같은 JSON 키, 덮어쓰기·합치기 | `check:quality` |
+
+사용자별 `users` 경로와 `firestore.rules`는 없다.
