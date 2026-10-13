@@ -551,6 +551,77 @@ async function geometryHits(page) {
             const cover = coveredBy(el);
             if (cover) hits.push(`가림 ${cover}`);
         }
+        const clippedTextBox = (rect, start) => {
+            let top = rect.top;
+            let left = rect.left;
+            let right = rect.right;
+            let bottom = rect.bottom;
+            let node = start;
+            while (node && node !== document.documentElement) {
+                const cs = getComputedStyle(node);
+                const clipX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowX === 'clip';
+                const clipY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowY === 'clip';
+                if (clipX || clipY) {
+                    const host = node.getBoundingClientRect();
+                    if (clipX) {
+                        left = Math.max(left, host.left);
+                        right = Math.min(right, host.right);
+                    }
+                    if (clipY) {
+                        top = Math.max(top, host.top);
+                        bottom = Math.min(bottom, host.bottom);
+                    }
+                }
+                node = node.parentElement;
+            }
+            left = Math.max(left, 0);
+            top = Math.max(top, 0);
+            right = Math.min(right, window.innerWidth);
+            bottom = Math.min(bottom, window.innerHeight);
+            if (right - left < 2 || bottom - top < 2) return null;
+            return { left, top, right, bottom };
+        };
+        const pageRoot = document.querySelector('.nb-page');
+        if (pageRoot) {
+            const fields = [...pageRoot.querySelectorAll('input, textarea, select')];
+            const walker = document.createTreeWalker(pageRoot, NodeFilter.SHOW_TEXT);
+            let textNode = walker.nextNode();
+            while (textNode) {
+                const raw = textNode.textContent.replace(/\s+/g, ' ').trim();
+                const parent = textNode.parentElement;
+                if (raw && parent && !parent.closest('.sr-only, .nb-field-label')) {
+                    const pcs = getComputedStyle(parent);
+                    if (pcs.display !== 'none' && pcs.visibility !== 'hidden' && Number(pcs.opacity) !== 0) {
+                        const range = document.createRange();
+                        range.selectNodeContents(textNode);
+                        let covered = false;
+                        for (const rect of range.getClientRects()) {
+                            if (covered || rect.width < 2 || rect.height < 2) continue;
+                            for (const field of fields) {
+                                if (field.contains(textNode)) continue;
+                                const box = field.getBoundingClientRect();
+                                const overlapW = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
+                                const overlapH = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+                                if (overlapW > 3 && overlapH > 3 && overlapH > rect.height * 0.4) {
+                                    hits.push(`글자 가림 ${raw.slice(0, 18)}`);
+                                    covered = true;
+                                    break;
+                                }
+                            }
+                            if (covered) continue;
+                            const visible = clippedTextBox(rect, parent);
+                            if (!visible) continue;
+                            const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
+                            if (hit && !hit.contains(textNode)) {
+                                hits.push(`글자 가림 ${raw.slice(0, 18)}`);
+                                covered = true;
+                            }
+                        }
+                    }
+                }
+                textNode = walker.nextNode();
+            }
+        }
         for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
             const box = visibleBox(el);
             if (!box) continue;
