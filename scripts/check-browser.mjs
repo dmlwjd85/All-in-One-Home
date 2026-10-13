@@ -558,7 +558,7 @@ export async function runBrowserQuality() {
             if (first) {
                 const dest = Number(await page.evaluate((el) => el.getAttribute('data-to'), first));
                 if (dest && dest !== n && dest >= 1 && dest <= 580) {
-                    await first.click();
+                    await first.click({ offset: { x: 10, y: 10 } });
                     await page.waitForFunction((num) => document.querySelector(`[data-page="${num}"]`), { timeout: 8000 }, dest);
                 }
             }
