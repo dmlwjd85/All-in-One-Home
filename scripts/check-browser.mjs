@@ -765,6 +765,86 @@ async function geometryHits(page) {
     });
 }
 
+async function checkCapturePopup(page, browserErrors) {
+    await go(page, 53);
+    for (const width of [320, 360, 390, 700]) {
+        await page.setViewport({ width, height: 780, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone') && document.querySelector('[data-page="53"]'));
+        const sample = `포털확인${width}`;
+        await page.evaluate(() => {
+            const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+            const items = raw ? JSON.parse(raw) : [];
+            localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items.filter((item) => !String(item.text || '').startsWith('포털확인'))));
+        });
+        await page.click('.nb-appnav .nb-fab-btn');
+        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
+        const hit = await page.evaluate(() => {
+            const pop = document.querySelector('.nb-fab-pop');
+            const button = document.querySelector('.nb-appnav .nb-fab-btn');
+            const input = pop?.querySelector('input');
+            const save = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '적기');
+            const close = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '닫기');
+            const onTop = (el) => {
+                if (!el) return '없음';
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) return '크기';
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                if (x < 1 || y < 1 || x > window.innerWidth - 1 || y > window.innerHeight - 1) return '화면 밖';
+                const target = document.elementFromPoint(x, y);
+                if (target === el || (target && el.contains(target))) return '';
+                return (target?.getAttribute('aria-label') || target?.className || target?.textContent || '다른 요소').toString().trim().replace(/\s+/g, ' ').slice(0, 24);
+            };
+            return {
+                inMenu: Boolean(button?.closest('.nb-appnav')),
+                popOutside: Boolean(pop && pop.parentElement === document.body && !pop.closest('.nb-appnav, .nb-stage-wrap')),
+                input: onTop(input),
+                save: onTop(save),
+                close: onTop(close),
+            };
+        });
+        if (!hit.inMenu) browserErrors.push(`${width} 쓱적 버튼이 메뉴 밖`);
+        if (!hit.popOutside) browserErrors.push(`${width} 쓱적 팝업이 메뉴 안`);
+        if (hit.input) browserErrors.push(`${width} 쓱적 입력 가림 ${hit.input}`);
+        if (hit.save) browserErrors.push(`${width} 쓱적 적기 가림 ${hit.save}`);
+        if (hit.close) browserErrors.push(`${width} 쓱적 닫기 가림 ${hit.close}`);
+        await page.click('#nb-fab-input');
+        const focused = await page.evaluate(() => document.activeElement?.id === 'nb-fab-input');
+        if (!focused) browserErrors.push(`${width} 쓱적 입력 포커스`);
+        await page.type('#nb-fab-input', sample);
+        await page.click('.nb-fab-pop button[type="submit"]');
+        try {
+            await page.waitForFunction((text) => {
+                if (document.querySelector('.nb-fab-pop')) return false;
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                return JSON.parse(raw).some((item) => item.text === text);
+            }, { timeout: 4000 }, sample);
+        } catch {
+            browserErrors.push(`${width} 쓱적 적기 실패`);
+        }
+        await page.click('.nb-appnav .nb-fab-btn');
+        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
+        await page.click('.nb-fab-pop button[type="button"]');
+        try {
+            await page.waitForFunction(() => !document.querySelector('.nb-fab-pop'), { timeout: 2000 });
+        } catch {
+            browserErrors.push(`${width} 쓱적 닫기 실패`);
+        }
+        const kept = await page.evaluate((text) => {
+            const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+            return JSON.parse(raw).filter((item) => item.text === text).length;
+        }, sample);
+        if (kept !== 1) browserErrors.push(`${width} 쓱적 저장 ${kept}`);
+    }
+    await page.evaluate(() => {
+        const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+        if (!raw) return;
+        const items = JSON.parse(raw).filter((item) => !String(item.text || '').startsWith('포털확인'));
+        localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items));
+    });
+    await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
+}
+
 export async function runBrowserQuality() {
     const dist = resolve(root, 'dist/index.html');
     if (!existsSync(dist)) throw new Error('dist가 없습니다. npm run build 뒤에 브라우저 검사를 실행하세요.');
@@ -1245,6 +1325,8 @@ export async function runBrowserQuality() {
             return text.includes('공문마감') || text.includes('줄마감');
         });
         if (leaked) browserErrors.push('다른 주에 이번 주 기한이 보임');
+
+        await checkCapturePopup(page, browserErrors);
 
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);
