@@ -116,6 +116,23 @@ async function geometryHits(page) {
             if (rect.width < 1 || rect.height < 1) return null;
             return rect;
         };
+        const lumOf = (rgb) => {
+            const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (!m) return null;
+            const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                const s = c / 255;
+                return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const contrastOf = (el) => {
+            if (!el) return null;
+            const cs = getComputedStyle(el);
+            const a = lumOf(cs.color);
+            const b = lumOf(cs.backgroundColor);
+            if (a == null || b == null) return null;
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        };
         const overlaps = (a, b) => Boolean(a && b) && !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5);
         const inside = (box, host) => box.top >= host.top - slop && box.bottom <= host.bottom + slop && box.left >= host.left - slop && box.right <= host.right + slop;
         const labelOf = (el) => (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '컨트롤').trim().replace(/\s+/g, ' ').slice(0, 18);
@@ -249,6 +266,11 @@ async function geometryHits(page) {
             const b = lum(cs.backgroundColor);
             const ratio = a == null || b == null ? 0 : (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
             if (!(ratio >= 4.5)) hits.push(`선택 탭 대비 ${ratio.toFixed(2)}`);
+        }
+        for (const tab of document.querySelectorAll('.nb-right .nb-tab')) {
+            if (!visibleBox(tab)) continue;
+            const ratio = contrastOf(tab);
+            if (!(ratio >= 4.5)) hits.push(`오른쪽 탭 대비 ${tab.textContent.trim()} ${ratio == null ? '없음' : ratio.toFixed(2)}`);
         }
         const pageEl = document.querySelector('.nb-page');
         const paper = visibleBox(pageEl);
@@ -495,7 +517,9 @@ export async function runBrowserQuality() {
         const brand = await page.$eval('.nb-brand-name', (el) => getComputedStyle(el).whiteSpace);
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
         const phoneBar = await page.$eval('.nb-appnav', (el) => el.getBoundingClientRect().height);
-        if (!(phoneBar <= 80)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
+        if (!(phoneBar <= 80 && phoneBar >= 48)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
+        const phoneHit = await page.$eval('.nb-appnav .nb-navbtn', (el) => el.getBoundingClientRect().height);
+        if (!(phoneHit >= 44)) browserErrors.push(`휴대폰 메뉴 터치 ${phoneHit}`);
         const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
         if (phoneTabs) browserErrors.push('휴대폰 구역 탭이 메뉴 줄과 따로 있음');
         await go(page, 569);
@@ -562,6 +586,39 @@ export async function runBrowserQuality() {
             await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
         }
 
+        await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/students'; });
+        await page.waitForSelector('[data-page="154"]');
+        for (const [width, label] of [[1024, '1024'], [390, '390'], [360, '360']]) {
+            await page.setViewport({ width, height: width === 1024 ? 768 : 844, deviceScaleFactor: 1 });
+            await page.waitForFunction((viewW) => {
+                const phone = viewW <= 700;
+                return document.querySelector('.nb-app')?.classList.contains('is-phone') === phone;
+            }, {}, width);
+            const start = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
+            if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
+            else {
+                await next.click();
+                await page.waitForFunction((from) => document.querySelector('.nb-appnav-scroll').scrollLeft >= from + 80, {}, start);
+                await new Promise((resolve) => setTimeout(resolve, 350));
+                const afterClick = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+                if (afterClick < start + 80) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${afterClick}`);
+                const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
+                    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+                    const forward = from + 90;
+                    const target = forward <= max - 2 ? forward : Math.max(0, from - 90);
+                    el.scrollLeft = target;
+                    return target;
+                }, afterClick);
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                const afterWheel = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+                if (Math.abs(wheelTarget - afterClick) < 40 || Math.abs(afterWheel - wheelTarget) > 8) {
+                    browserErrors.push(`${label} 휠 스크롤이 되돌아감 ${afterClick}→${afterWheel} (목표 ${wheelTarget})`);
+                }
+            }
+        }
+
         await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/home'; });
         await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
@@ -574,7 +631,7 @@ export async function runBrowserQuality() {
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
-        for (const [pin, hash, num] of [['timetable', '#/timetable', 141], ['cards', '#/cards', 159], ['budget', '#/budget', 468]]) {
+        for (const [pin, hash, num] of [['timetable', '#/timetable', 141], ['cards', '#/cards/1', 159], ['budget', '#/budget', 468]]) {
             await page.click(`[data-nav-pin="${pin}"]`);
             await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
         }
@@ -590,6 +647,8 @@ export async function runBrowserQuality() {
             ['#/day/41', '#/days', '99', true],
             ['#/date/2025-01-01', '#/weeks', '46', true],
             ['#/month/2026/2', '#/month/2027/2', '45', true],
+            ['#p999', '#/p/580', '580', true],
+            ['#/cards/2', '#/cards/2', '161', false],
         ];
         for (const [from, to, num, toast] of routeCases) {
             await page.evaluate((value) => { location.hash = value; }, from);

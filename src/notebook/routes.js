@@ -2,7 +2,7 @@
  * 쪽 번호 해시와 이름 있는 해시를 서로 바꿉니다.
  * `#p12` 는 예전 주소로 그대로 열립니다.
  */
-import { monthPage } from './nav.js';
+import { monthPage, studentCardPage } from './nav.js';
 
 export const VIEW_PAGES = {
     cover: 1,
@@ -169,8 +169,11 @@ export function resolveHash(hash, pages, max = 580) {
     let matched = raw.match(/^p(\d+)$/i) || raw.match(/^\/p\/(\d+)$/);
     if (matched) {
         const n = Number(matched[1]);
-        if (!Number.isInteger(n) || n < 1 || n > max) {
+        if (!Number.isInteger(n) || n < 1) {
             return { page: 1, canonical: cover(), exact: false, preserve: false };
+        }
+        if (n > max) {
+            return { page: max, canonical: canonicalHash(max, pages), exact: false, preserve: false };
         }
         return { page: n, canonical: canonicalHash(n, pages), exact: true, preserve: false };
     }
@@ -214,6 +217,16 @@ export function resolveHash(hash, pages, max = 580) {
         return { page: dest, canonical: `#/date/${matched[1]}`, exact: true, preserve: true };
     }
 
+    matched = raw.match(/^\/cards\/(\d+)$/);
+    if (matched) {
+        const n = Number(matched[1]);
+        const dest = studentCardPage(n);
+        const rec = pages?.[dest - 1];
+        const exact = Number.isInteger(n) && n >= 1 && n <= 32 && rec?.type === 'student-card' && Number(rec.extra?.student) === n;
+        if (!exact) return { page: VIEW_PAGES.cards, canonical: '#/cards', exact: false, preserve: false };
+        return { page: dest, canonical: `#/cards/${n}`, exact: true, preserve: false };
+    }
+
     const name = raw.replace(/^\//, '');
     if (Object.prototype.hasOwnProperty.call(VIEW_PAGES, name)) {
         return { page: VIEW_PAGES[name], canonical: `#/${name}`, exact: true, preserve: false };
@@ -228,6 +241,7 @@ export function canonicalHash(page, pages) {
     }
     if (rec?.type === 'week' && rec.extra?.week) return `#/week/${rec.extra.week}`;
     if (rec?.type === 'special-day' && rec.extra?.slot) return `#/day/${rec.extra.slot}`;
+    if (rec?.type === 'student-card' && rec.extra?.student) return `#/cards/${rec.extra.student}`;
     const named = Object.entries(VIEW_PAGES).find(([, n]) => n === page);
     if (named) return `#/${named[0]}`;
     return `#/p/${page}`;

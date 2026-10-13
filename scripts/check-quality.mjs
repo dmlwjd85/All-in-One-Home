@@ -136,6 +136,10 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
     ok(legacy.exact && legacy.page === 154 && legacy.canonical === '#/students', `예전 주소 표준 ${legacy.canonical}`);
     const missing = resolveHash('#p0', pages);
     ok(!missing.exact && missing.page === 1 && missing.canonical === '#/cover', '없는 쪽 번호');
+    const tooFar = resolveHash('#p999', pages);
+    ok(!tooFar.exact && tooFar.page === 580 && tooFar.canonical === '#/p/580', `큰 쪽 번호 ${tooFar.page} ${tooFar.canonical}`);
+    const card = resolveHash('#/cards/2', pages);
+    ok(card.exact && card.page === 161 && card.canonical === '#/cards/2' && canonicalHash(161, pages) === '#/cards/2', '2번 학생 카드');
     ok(!resolveHash('#/nonsense', pages).exact && resolveHash('#/zzz', pages).page === 1, '없는 이름');
     ok(!resolveHash('#/week/0', pages).exact && resolveHash('#/week/0', pages).canonical === '#/weeks', '없는 주');
     ok(!resolveHash('#/week/53', pages).exact && resolveHash('#/day/41', pages).canonical === '#/days', '없는 하루');
@@ -171,6 +175,19 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
         }
         return found;
     };
+    ok(!/\.nb-right \.nb-tab \{[^}]*saturate\(/.test(css), '오른쪽 달 탭이 회색 필터');
+    const rightText = ((css.match(/\.nb-right \.nb-tab \{[^}]*color:\s*(#[0-9a-fA-F]{6})/) || [])[1] || '').toLowerCase();
+    const monthRule = /\.nb-right \.nb-tab:nth-child\((\d+)\)\s*\{([^}]+)\}/g;
+    let monthHit;
+    let monthCount = 0;
+    while ((monthHit = monthRule.exec(css))) {
+        const bg = hexOf(monthHit[2]);
+        const own = ((monthHit[2].match(/color:\s*(#[0-9a-fA-F]{6})/) || [])[1] || rightText).toLowerCase();
+        const pair = bg && own ? (Math.max(rel(bg), rel(own)) + 0.05) / (Math.min(rel(bg), rel(own)) + 0.05) : 0;
+        ok(pair >= 4.5, `오른쪽 탭 ${monthHit[1]} 대비 ${pair.toFixed(2)} ${own} on ${bg}`);
+        monthCount += 1;
+    }
+    ok(monthCount === 13, `오른쪽 탭 색 ${monthCount}`);
     for (const needle of ['.nb-navbtn.is-on', '.nb-left .nb-tab.is-on']) {
         const colors = colorsFor(needle);
         const ratio = colors ? (Math.max(rel(colors.bg), rel(colors.fg)) + 0.05) / (Math.min(rel(colors.bg), rel(colors.fg)) + 0.05) : 0;

@@ -112,6 +112,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
     const scrollRef = useRef(null);
+    const followRef = useRef(true);
     const active = menuKeyForPage(page);
 
     useEffect(() => {
@@ -121,14 +122,9 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
     useLayoutEffect(() => {
         const nav = scrollRef.current;
         if (!nav) return undefined;
-        const fit = () => {
-            const current = nav.querySelector('[aria-current="page"]');
-            if (current) {
-                const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
-                const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
-                const next = Math.max(0, Math.min(max, ideal));
-                if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
-            }
+        let centering = false;
+        followRef.current = true;
+        const edges = () => {
             const host = nav.getBoundingClientRect();
             for (const btn of nav.querySelectorAll('.nb-navbtn')) {
                 const box = btn.getBoundingClientRect();
@@ -143,15 +139,35 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             setCanPrev((prev) => (prev === nextPrev ? prev : nextPrev));
             setCanNext((prev) => (prev === nextNext ? prev : nextNext));
         };
-        fit();
-        const later = requestAnimationFrame(fit);
-        nav.addEventListener('scroll', fit, { passive: true });
-        const observer = new ResizeObserver(fit);
+        const center = () => {
+            const current = nav.querySelector('[aria-current="page"]');
+            if (current) {
+                const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+                const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+                const next = Math.max(0, Math.min(max, ideal));
+                centering = true;
+                if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
+                centering = false;
+            }
+            edges();
+        };
+        const onScroll = () => {
+            if (!centering) followRef.current = false;
+            edges();
+        };
+        const onResize = () => {
+            if (followRef.current) center();
+            else edges();
+        };
+        center();
+        const later = requestAnimationFrame(() => onResize());
+        nav.addEventListener('scroll', onScroll, { passive: true });
+        const observer = new ResizeObserver(onResize);
         observer.observe(nav);
-        document.fonts?.ready?.then(fit);
+        document.fonts?.ready?.then(() => onResize());
         return () => {
             cancelAnimationFrame(later);
-            nav.removeEventListener('scroll', fit);
+            nav.removeEventListener('scroll', onScroll);
             observer.disconnect();
         };
     }, [page, active]);
@@ -164,7 +180,10 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
     const nudge = (dir) => {
         const nav = scrollRef.current;
         if (!nav) return;
-        nav.scrollBy({ left: dir * Math.max(120, nav.clientWidth * 0.6), behavior: 'smooth' });
+        followRef.current = false;
+        const chunk = Math.max(160, Math.round(nav.clientWidth * 0.7));
+        const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+        nav.scrollLeft = Math.max(0, Math.min(max, nav.scrollLeft + dir * chunk));
     };
 
     let lastGroup = '';
