@@ -873,16 +873,20 @@
 }
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-@media (min-width: 701px) and (max-width: 860px) {
+/* 두 열에 생년월일 10자와 비고 5자를 넣으면 1060px 아래에서 누가 버튼이 오른쪽 달 탭 아래로 들어갑니다. */
+@media (min-width: 701px) and (max-width: 1059px) {
     .nb-roster { grid-template-columns: 1fr; }
 }
 .nb-roster .nb-table td:nth-child(2) .nb-ink { min-width: 5em; }
 .nb-roster .nb-table th:nth-child(3),
-.nb-roster .nb-table td:nth-child(3),
-.nb-roster .nb-table th:nth-child(5),
-.nb-roster .nb-table td:nth-child(5) { min-width: 2.8em; }
+.nb-roster .nb-table td:nth-child(3) { min-width: 4.5em; }
+.nb-roster .nb-table td:nth-child(3) .nb-ink { min-width: 3.4em; }
 .nb-roster .nb-table th:nth-child(4),
-.nb-roster .nb-table td:nth-child(4) { min-width: 4.2em; }
+.nb-roster .nb-table td:nth-child(4),
+.nb-roster .nb-table td:nth-child(4) .nb-ink { min-width: 6.2em; }
+.nb-roster .nb-table th:nth-child(5),
+.nb-roster .nb-table td:nth-child(5),
+.nb-roster .nb-table td:nth-child(5) .nb-ink { min-width: 5.2em; }
 .nb-roster-jump {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
@@ -919,7 +923,10 @@
     margin-bottom: 8px;
     font-weight: 800;
 }
-.nb-seats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.nb-seats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 700px) {
+    .nb-seats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .nb-photo {
     width: 88px;
     height: 110px;
@@ -929,8 +936,21 @@
     justify-content: center;
     color: #534338;
 }
-.nb-scard-top { display: flex; gap: 12px; margin-bottom: 8px; }
-.nb-scard-meta { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.nb-scard { min-width: 0; max-width: 100%; }
+.nb-scard-top { display: flex; gap: 12px; margin-bottom: 8px; min-width: 0; max-width: 100%; }
+.nb-scard-meta { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; min-width: 0; }
+.nb-scard > label,
+.nb-scard-meta label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+}
+.nb-scard .nb-ink,
+.nb-scard .nb-field { min-width: 0; max-width: 100%; }
 .nb-numchip {
     min-height: 36px;
     display: flex;
@@ -1243,6 +1263,13 @@
     padding: 10px;
     box-shadow: 0 10px 28px rgba(90, 52, 48, 0.16);
 }
+.nb-fab-pop-layer {
+    position: fixed;
+    z-index: 80;
+    right: 8px;
+    width: min(420px, calc(100vw - 16px));
+    pointer-events: auto;
+}
 .nb-fab-pop label { font-size: 12px; font-weight: 800; }
 .nb-fab-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .nb-hubbtn { flex-shrink: 0; }
@@ -1313,6 +1340,11 @@
     }
 }
 
+@media (min-width: 1101px) {
+    /* 36px 쓱적과 오른쪽 스티커 탭이 붙지 않도록 여백을 남깁니다. */
+    .nb-stage-wrap { padding-right: 56px; }
+}
+
 @media (min-width: 1101px) and (max-width: 1366px) {
     .nb-table th,
     .nb-table td {
@@ -1369,7 +1401,7 @@
     }
     .nb-body:has(.nb-attend-head) .nb-table tr {
         display: grid;
-        grid-template-columns: 2.8rem repeat(10, minmax(0, 1fr));
+        grid-template-columns: minmax(7.6rem, 9rem) repeat(10, minmax(0, 1fr));
         min-height: 0;
     }
     .nb-body:has(.nb-attend-head) .nb-table th,
@@ -1380,6 +1412,14 @@
         align-items: center;
         overflow: hidden;
         padding: 0 1px;
+    }
+    .nb-body:has(.nb-attend-head) .nb-table th:first-child {
+        gap: 4px;
+        justify-content: flex-start;
+    }
+    .nb-body:has(.nb-attend-head) .nb-gobtn.num {
+        flex: 0 0 auto;
+        width: auto;
     }
     .nb-body:has(.nb-attend-head) .nb-table .nb-ink,
     .nb-body:has(.nb-attend-head) .nb-table .nb-gobtn,
@@ -1440,7 +1480,7 @@
     }
     .nb-roster .nb-table tr {
         display: grid;
-        grid-template-columns: 2.2rem minmax(6em, 1.6fr) minmax(2.2em, 0.7fr) minmax(0, 1.1fr) minmax(2.2em, 1fr) 2.8rem;
+        grid-template-columns: 2.2rem minmax(5em, 1.35fr) minmax(4.5em, 0.7fr) minmax(6.2em, 1fr) minmax(5.2em, 0.9fr) 2.8rem;
         min-height: 0;
         align-items: stretch;
     }
@@ -1865,8 +1905,61 @@
 }
 .nb-roster-name {
     display: block;
+    flex: 0 0 auto;
+    min-width: max-content;
+    white-space: nowrap;
     font-size: 12px;
     font-weight: 800;
+    line-height: 1.15;
+}
+.nb-week-due {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    margin: 0 0 4px;
+    max-width: 100%;
+    min-width: 0;
+}
+.nb-week-due .nb-kicker { margin: 0; }
+.nb-week-due-item {
+    max-width: 100%;
+    min-width: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #f0e7fb;
+    color: #3d312b;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.3;
+    padding: 2px 8px;
+    cursor: pointer;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.nb-week-due-item.is-done { opacity: 0.7; }
+@media (min-width: 1101px) {
+    /* 16:9 용지에서 기한 띠가 옆칸을 바닥 아래로 밀지 않게 높이를 고정합니다. */
+    .nb-week:has(.nb-week-due) {
+        overflow: hidden;
+    }
+    .nb-week:has(.nb-week-due) .nb-week-days {
+        grid-template-rows: minmax(0, 1fr);
+        overflow: hidden;
+    }
+    .nb-week:has(.nb-week-due) .nb-week-col,
+    .nb-week:has(.nb-week-due) .nb-week-side {
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+    /* .nb-field가 display:contents라 텍스트영역은 옆칸의 손자입니다. */
+    .nb-week:has(.nb-week-due) .nb-week-side > .nb-field:last-child > .nb-ink-area {
+        flex: 1 1 0;
+        min-height: 28px;
+        height: auto;
+    }
 }
 .nb-export-row {
     display: flex;
@@ -1947,11 +2040,29 @@
         min-height: 0;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
     }
     .nb-card-page .nb-scard .nb-ink-area {
         flex: 1 1 auto;
-        min-height: 28px;
+        min-height: 0;
     }
+    .nb-card-page .nb-scard-meta label {
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+    }
+    .nb-card-page .nb-scard-meta .nb-ink {
+        flex: 1 1 auto;
+        width: auto;
+    }
+    .nb-card-page .nb-photo {
+        width: 72px;
+        height: 96px;
+        flex: 0 0 auto;
+    }
+    .nb-card-page .nb-scard-top { margin-bottom: 4px; }
+    .nb-card-page .nb-card-head .nb-titlebar { margin-bottom: 0; }
+    .nb-card-page .nb-card-head .nb-export-row { margin-top: 4px; }
     .nb-card-page .nb-tagrow,
     .nb-card-page .nb-kicker,
     .nb-card-page .nb-scard-top {
@@ -2257,9 +2368,8 @@
     padding-bottom: 16px;
 }
 .nb-app.is-phone .nb-fab.is-away {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(8px);
+    opacity: 1;
+    transform: none;
 }
 .nb-app.is-phone .nb-ink,
 .nb-app.is-phone .nb-field {
@@ -2354,7 +2464,8 @@
     right: auto;
     bottom: auto;
     flex: 0 0 auto;
-    margin: 0 12px 8px auto;
+    margin: 0 0 0 4px;
+    z-index: 3;
 }
 .nb-app.is-phone .nb-fab-btn {
     width: 44px;
@@ -2367,6 +2478,7 @@
     .nb-toolbar,
     .nb-appnav,
     .nb-fab,
+    .nb-fab-pop-layer,
     .nb-left,
     .nb-right,
     .nb-local-badge,

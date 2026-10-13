@@ -101,18 +101,84 @@ async function inspect(page) {
     });
 }
 
-async function setRosterName(page, value) {
-    const input = await page.$('#roster-1 input');
-    if (!input) return;
-    await page.evaluate((next) => {
-        const field = document.querySelector('#roster-1 input');
-        const proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        proto.set.call(field, next);
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-    }, value);
+const SAMPLE_NAME = '선우하늘별';
+const SAMPLE_SEX = '남학생';
+const SAMPLE_NOTE = '비고란';
+const SAMPLE_NOTE_LONG = '비고다섯자';
+const SAMPLE_BIRTH = '2019.05.05';
+
+async function writeFields(page, pageNo, fields) {
+    await page.evaluate((num, patch) => {
+        const key = `homenote_v2_notebookFields_p${num}`;
+        const prev = JSON.parse(localStorage.getItem(key) || '{}');
+        localStorage.setItem(key, JSON.stringify({ ...prev, ...patch }));
+        window.dispatchEvent(new CustomEvent('nb-page-fields', { detail: { page: num } }));
+    }, pageNo, fields);
+}
+
+function rosterPatch(name, sex, note, birth = '') {
+    const patch = {};
+    for (let n = 1; n <= 32; n += 1) {
+        patch[`name${n}`] = name;
+        patch[`sex${n}`] = sex;
+        patch[`note${n}`] = note;
+        patch[`birth${n}`] = birth;
+    }
+    return patch;
+}
+
+async function prepareClipSamples(page, n) {
+    if (n === 154) {
+        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, SAMPLE_SEX, SAMPLE_NOTE_LONG, SAMPLE_BIRTH));
+        await page.waitForFunction((name, birth) => {
+            const row = document.querySelector('#roster-1');
+            return row?.querySelector('input')?.value === name
+                && row?.querySelector('[aria-label="1번 생년월일"]')?.value === birth;
+        }, {}, SAMPLE_NAME, SAMPLE_BIRTH);
+    }
+    if (n >= 148 && n <= 153) {
+        const patch = {};
+        for (let i = 0; i < 36; i += 1) patch[`s${i}`] = SAMPLE_NAME;
+        await writeFields(page, n, patch);
+        await page.waitForFunction((name) => document.querySelector('.nb-seats input')?.value === name, {}, SAMPLE_NAME);
+    }
+    if (n >= 232 && n <= 255) {
+        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, '', ''));
+        await page.waitForFunction((name) => {
+            const shown = document.querySelector('.nb-roster-name');
+            return shown && shown.textContent.trim() === name;
+        }, {}, SAMPLE_NAME);
+    }
+}
+
+async function clearClipSamples(page, n) {
+    if (n === 154 || (n >= 232 && n <= 255)) await writeFields(page, 154, rosterPatch('', '', ''));
+    if (n >= 148 && n <= 153) {
+        const patch = {};
+        for (let i = 0; i < 36; i += 1) patch[`s${i}`] = '';
+        await writeFields(page, n, patch);
+    }
+}
+
+async function settleChrome(page) {
+    await page.waitForFunction(() => {
+        if (document.fonts && document.fonts.status !== 'loaded') return false;
+        const nav = document.querySelector('.nb-appnav-scroll');
+        const current = nav?.querySelector('[aria-current="page"]');
+        if (!nav || !current) return false;
+        const host = nav.getBoundingClientRect();
+        const box = current.getBoundingClientRect();
+        return box.width > 2 && box.left >= host.left - 1 && box.right <= host.right + 1;
+    }, { timeout: 4000 }).catch(() => {});
+    await page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
 }
 
 async function geometryHits(page) {
+    await page.evaluate(async () => {
+        if (document.fonts?.ready) await document.fonts.ready;
+    });
     return page.evaluate(() => {
         document.querySelectorAll('.nb-body, .nb-stage-wrap').forEach((el) => {
             el.scrollTop = 0;
@@ -385,6 +451,16 @@ async function geometryHits(page) {
                 break;
             }
         }
+        if (fabBox && window.innerWidth >= 1101) {
+            const sticker = [...document.querySelectorAll('.nb-right .nb-tab')].find((el) => el.textContent.trim() === '스티커');
+            const stickerBox = visibleBox(sticker);
+            if (stickerBox) {
+                const dx = Math.max(0, Math.max(stickerBox.left - fabBox.right, fabBox.left - stickerBox.right));
+                const dy = Math.max(0, Math.max(stickerBox.top - fabBox.bottom, fabBox.top - stickerBox.bottom));
+                const dist = dx > 0 && dy > 0 ? Math.hypot(dx, dy) : Math.max(dx, dy);
+                if (dist < 16) hits.push(`쓱적·스티커 간격 ${Math.round(dist)}`);
+            }
+        }
         if (pageEl && paper) {
             const foot = visibleBox(document.querySelector('.nb-foot'));
             const controls = [...pageEl.querySelectorAll('button, input, select, textarea, a')].filter((el) => {
@@ -453,7 +529,17 @@ async function geometryHits(page) {
             else if (el.tagName !== 'TEXTAREA') {
                 if (el.value) samples.push(el.value);
                 if (el.placeholder) samples.push(el.placeholder);
-                if (/번 이름$/.test(el.getAttribute('aria-label') || '')) samples.push('학생이름김');
+                const aria = el.getAttribute('aria-label') || '';
+                if (/번 이름$/.test(aria) || /^자리 /.test(aria)) {
+                    samples.push('선우하늘별');
+                    samples.push('학생이름김');
+                }
+                if (/번 성별$/.test(aria)) samples.push('남학생');
+                if (/번 비고$/.test(aria)) {
+                    samples.push('남학생');
+                    samples.push('비고다섯자');
+                }
+                if (/번 생년월일$/.test(aria)) samples.push('2019.05.05');
             }
             const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
             let avail = el.clientWidth - pad;
@@ -461,6 +547,168 @@ async function geometryHits(page) {
             if (el.tagName === 'SELECT' && appearance !== 'none') avail -= 16;
             for (const text of new Set(samples)) {
                 if (text && textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
+            }
+        }
+        const cutByAncestor = (el) => {
+            const box = el.getBoundingClientRect();
+            if (box.width < 1 || box.height < 1) return false;
+            let node = el.parentElement;
+            while (node && node !== document.body) {
+                if (node.classList?.contains('nb-body') || node.classList?.contains('nb-main') || node.classList?.contains('nb-page') || node.classList?.contains('nb-stage-wrap') || node.classList?.contains('nb-app')) break;
+                const cs = getComputedStyle(node);
+                const clipX = cs.overflowX === 'hidden' || cs.overflowX === 'clip';
+                const clipY = cs.overflowY === 'hidden' || cs.overflowY === 'clip';
+                if (clipX || clipY) {
+                    const host = node.getBoundingClientRect();
+                    const seen = box.bottom > host.top + 1 && box.top < host.bottom - 1 && box.right > host.left + 1 && box.left < host.right - 1;
+                    const sticks = (clipX && (box.left < host.left - 1 || box.right > host.right + 1))
+                        || (clipY && (box.top < host.top - 1 || box.bottom > host.bottom + 1));
+                    if (seen && sticks) return true;
+                }
+                node = node.parentElement;
+            }
+            return false;
+        };
+        const coveredBy = (el) => {
+            const box = el.getBoundingClientRect();
+            const stage = document.querySelector('.nb-stage-wrap')?.getBoundingClientRect();
+            const host = stage || { top: 0, left: 0, right: window.innerWidth, bottom: window.innerHeight };
+            const left = Math.max(box.left, host.left, 0);
+            const right = Math.min(box.right, host.right, window.innerWidth);
+            const top = Math.max(box.top, host.top, 0);
+            const bottom = Math.min(box.bottom, host.bottom, window.innerHeight);
+            if (right - left < 4 || bottom - top < 4) return '';
+            const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+            if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return '';
+            return (hit.getAttribute('aria-label') || hit.className || hit.textContent || '요소').toString().trim().replace(/\s+/g, ' ').slice(0, 18);
+        };
+        for (const el of document.querySelectorAll('.nb-roster .nb-ink, .nb-seats .nb-ink, .nb-roster-name, .nb-week-due-item')) {
+            if (!visibleBox(el)) continue;
+            if (el.scrollWidth > el.clientWidth + 1 || cutByAncestor(el)) {
+                const sample = (el.value || el.textContent || '').trim().slice(0, 18);
+                hits.push(`글자 잘림 ${sample}`);
+            }
+            const cover = coveredBy(el);
+            if (cover) hits.push(`가림 ${cover}`);
+        }
+        const clippedTextBox = (rect, start) => {
+            let top = rect.top;
+            let left = rect.left;
+            let right = rect.right;
+            let bottom = rect.bottom;
+            let node = start;
+            while (node && node !== document.documentElement) {
+                const cs = getComputedStyle(node);
+                const clipX = cs.overflowX === 'hidden' || cs.overflowX === 'auto' || cs.overflowX === 'scroll' || cs.overflowX === 'clip';
+                const clipY = cs.overflowY === 'hidden' || cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflowY === 'clip';
+                if (clipX || clipY) {
+                    const host = node.getBoundingClientRect();
+                    if (clipX) {
+                        left = Math.max(left, host.left);
+                        right = Math.min(right, host.right);
+                    }
+                    if (clipY) {
+                        top = Math.max(top, host.top);
+                        bottom = Math.min(bottom, host.bottom);
+                    }
+                }
+                node = node.parentElement;
+            }
+            left = Math.max(left, 0);
+            top = Math.max(top, 0);
+            right = Math.min(right, window.innerWidth);
+            bottom = Math.min(bottom, window.innerHeight);
+            if (right - left < 2 || bottom - top < 2) return null;
+            return { left, top, right, bottom };
+        };
+        if (pageEl) {
+            for (const btn of pageEl.querySelectorAll('button')) {
+                if (btn.closest('.nb-fab, .sr-only') || btn.disabled) continue;
+                const rect = btn.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) continue;
+                const visible = clippedTextBox(rect, btn);
+                if (!visible) continue;
+                const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
+                if (hit && hit !== btn && !btn.contains(hit) && !hit.contains(btn)) hits.push(`버튼 가림 ${labelOf(btn)}`);
+            }
+        }
+        const floaters = [];
+        const seenFloater = new Set();
+        const addFloater = (el) => {
+            if (!el || seenFloater.has(el) || !visibleBox(el)) return;
+            seenFloater.add(el);
+            floaters.push(el);
+        };
+        for (const el of document.querySelectorAll('body *')) {
+            const pos = getComputedStyle(el).position;
+            if (pos === 'fixed' || pos === 'sticky') addFloater(el);
+        }
+        document.querySelectorAll('.nb-fab, .nb-fab-btn').forEach(addFloater);
+        if (floaters.length && pageEl) {
+            const covered = [];
+            const targets = pageEl.querySelectorAll('input, textarea, select, button, a, label, p, h1, h2, h3, li, .nb-kicker, .nb-pagetitle, .nb-field-label');
+            for (const el of targets) {
+                if (el.closest('.sr-only') || el.disabled) continue;
+                const box = el.getBoundingClientRect();
+                if (box.width < 2 || box.height < 2) continue;
+                for (const floater of floaters) {
+                    if (floater.contains(el) || el.contains(floater)) continue;
+                    const host = floater.getBoundingClientRect();
+                    const left = Math.max(box.left, host.left, 0);
+                    const right = Math.min(box.right, host.right, window.innerWidth);
+                    const top = Math.max(box.top, host.top, 0);
+                    const bottom = Math.min(box.bottom, host.bottom, window.innerHeight);
+                    if (right - left < 4 || bottom - top < 4) continue;
+                    const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+                    const onFloater = hit === floater || (hit && floater.contains(hit));
+                    const onContent = hit === el || (hit && el.contains(hit));
+                    if (!onFloater || onContent) continue;
+                    covered.push(`${labelOf(floater)}·${labelOf(el)}`);
+                    break;
+                }
+            }
+            covered.slice(0, 2).forEach((item) => hits.push(`고정 가림 ${item}`));
+            if (covered.length > 2) hits.push(`고정 가림 ${covered.length}개`);
+        }
+        const pageRoot = document.querySelector('.nb-page');
+        if (pageRoot) {
+            const fields = [...pageRoot.querySelectorAll('input, textarea, select')];
+            const walker = document.createTreeWalker(pageRoot, NodeFilter.SHOW_TEXT);
+            let textNode = walker.nextNode();
+            while (textNode) {
+                const raw = textNode.textContent.replace(/\s+/g, ' ').trim();
+                const parent = textNode.parentElement;
+                if (raw && parent && !parent.closest('.sr-only, .nb-field-label')) {
+                    const pcs = getComputedStyle(parent);
+                    if (pcs.display !== 'none' && pcs.visibility !== 'hidden' && Number(pcs.opacity) !== 0) {
+                        const range = document.createRange();
+                        range.selectNodeContents(textNode);
+                        let covered = false;
+                        for (const rect of range.getClientRects()) {
+                            if (covered || rect.width < 2 || rect.height < 2) continue;
+                            for (const field of fields) {
+                                if (field.contains(textNode)) continue;
+                                const box = field.getBoundingClientRect();
+                                const overlapW = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
+                                const overlapH = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+                                if (overlapW > 3 && overlapH > 3 && overlapH > rect.height * 0.4) {
+                                    hits.push(`글자 가림 ${raw.slice(0, 18)}`);
+                                    covered = true;
+                                    break;
+                                }
+                            }
+                            if (covered) continue;
+                            const visible = clippedTextBox(rect, parent);
+                            if (!visible) continue;
+                            const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
+                            if (hit && !hit.contains(textNode)) {
+                                hits.push(`글자 가림 ${raw.slice(0, 18)}`);
+                                covered = true;
+                            }
+                        }
+                    }
+                }
+                textNode = walker.nextNode();
             }
         }
         for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
@@ -517,6 +765,86 @@ async function geometryHits(page) {
     });
 }
 
+async function checkCapturePopup(page, browserErrors) {
+    await go(page, 53);
+    for (const width of [320, 360, 390, 700]) {
+        await page.setViewport({ width, height: 780, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone') && document.querySelector('[data-page="53"]'));
+        const sample = `포털확인${width}`;
+        await page.evaluate(() => {
+            const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+            const items = raw ? JSON.parse(raw) : [];
+            localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items.filter((item) => !String(item.text || '').startsWith('포털확인'))));
+        });
+        await page.click('.nb-appnav .nb-fab-btn');
+        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
+        const hit = await page.evaluate(() => {
+            const pop = document.querySelector('.nb-fab-pop');
+            const button = document.querySelector('.nb-appnav .nb-fab-btn');
+            const input = pop?.querySelector('input');
+            const save = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '적기');
+            const close = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '닫기');
+            const onTop = (el) => {
+                if (!el) return '없음';
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) return '크기';
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+                if (x < 1 || y < 1 || x > window.innerWidth - 1 || y > window.innerHeight - 1) return '화면 밖';
+                const target = document.elementFromPoint(x, y);
+                if (target === el || (target && el.contains(target))) return '';
+                return (target?.getAttribute('aria-label') || target?.className || target?.textContent || '다른 요소').toString().trim().replace(/\s+/g, ' ').slice(0, 24);
+            };
+            return {
+                inMenu: Boolean(button?.closest('.nb-appnav')),
+                popOutside: Boolean(pop && pop.parentElement === document.body && !pop.closest('.nb-appnav, .nb-stage-wrap')),
+                input: onTop(input),
+                save: onTop(save),
+                close: onTop(close),
+            };
+        });
+        if (!hit.inMenu) browserErrors.push(`${width} 쓱적 버튼이 메뉴 밖`);
+        if (!hit.popOutside) browserErrors.push(`${width} 쓱적 팝업이 메뉴 안`);
+        if (hit.input) browserErrors.push(`${width} 쓱적 입력 가림 ${hit.input}`);
+        if (hit.save) browserErrors.push(`${width} 쓱적 적기 가림 ${hit.save}`);
+        if (hit.close) browserErrors.push(`${width} 쓱적 닫기 가림 ${hit.close}`);
+        await page.click('#nb-fab-input');
+        const focused = await page.evaluate(() => document.activeElement?.id === 'nb-fab-input');
+        if (!focused) browserErrors.push(`${width} 쓱적 입력 포커스`);
+        await page.type('#nb-fab-input', sample);
+        await page.click('.nb-fab-pop button[type="submit"]');
+        try {
+            await page.waitForFunction((text) => {
+                if (document.querySelector('.nb-fab-pop')) return false;
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                return JSON.parse(raw).some((item) => item.text === text);
+            }, { timeout: 4000 }, sample);
+        } catch {
+            browserErrors.push(`${width} 쓱적 적기 실패`);
+        }
+        await page.click('.nb-appnav .nb-fab-btn');
+        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
+        await page.click('.nb-fab-pop button[type="button"]');
+        try {
+            await page.waitForFunction(() => !document.querySelector('.nb-fab-pop'), { timeout: 2000 });
+        } catch {
+            browserErrors.push(`${width} 쓱적 닫기 실패`);
+        }
+        const kept = await page.evaluate((text) => {
+            const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+            return JSON.parse(raw).filter((item) => item.text === text).length;
+        }, sample);
+        if (kept !== 1) browserErrors.push(`${width} 쓱적 저장 ${kept}`);
+    }
+    await page.evaluate(() => {
+        const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+        if (!raw) return;
+        const items = JSON.parse(raw).filter((item) => !String(item.text || '').startsWith('포털확인'));
+        localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items));
+    });
+    await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
+}
+
 export async function runBrowserQuality() {
     const dist = resolve(root, 'dist/index.html');
     if (!existsSync(dist)) throw new Error('dist가 없습니다. npm run build 뒤에 브라우저 검사를 실행하세요.');
@@ -563,15 +891,16 @@ export async function runBrowserQuality() {
         const empty = [];
         const overflowPages = [];
         const unreachable = [];
+        await settleChrome(page);
         for (let n = 1; n <= 580; n += 1) {
             await go(page, n);
             const info = await inspect(page);
             if (info.overflow) overflowPages.push(n);
             if (info.textLength <= 4 || info.title.length <= 1) empty.push(`${n}:${info.title || info.textLength}`);
             if (info.missed.length) unreachable.push(`${n}:${info.missed.slice(0, 4).join(',')}`);
-            if (n === 154) await setRosterName(page, '학생이름김');
+            await prepareClipSamples(page, n);
             const phoneHits = await geometryHits(page);
-            if (n === 154) await setRosterName(page, '');
+            await clearClipSamples(page, n);
             if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
             const first = await page.$('.nb-body [data-to]');
             if (first) {
@@ -599,11 +928,12 @@ export async function runBrowserQuality() {
                 if (viewW <= 1100) return paper.width <= viewW - 40;
                 return paper.width < viewW - 20 && paper.height > 640;
             }, {}, width);
+            await settleChrome(page);
             for (let n = 1; n <= 580; n += 1) {
                 await go(page, n);
-                if (n === 154) await setRosterName(page, '학생이름김');
+                await prepareClipSamples(page, n);
                 const hits = await geometryHits(page);
-                if (n === 154) await setRosterName(page, '');
+                await clearClipSamples(page, n);
                 if (hits.length) browserErrors.push(`${label} p${n} ${hits.slice(0, 4).join(', ')}`);
             }
         }
@@ -870,6 +1200,7 @@ export async function runBrowserQuality() {
                 await page.waitForFunction(() => /없는 주소/.test(document.querySelector('[role="status"]')?.textContent || ''), { timeout: 4000 });
             }
         }
+        await page.waitForFunction(() => !document.querySelector('[role="status"]'), { timeout: 5000 });
 
         await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
@@ -907,6 +1238,95 @@ export async function runBrowserQuality() {
                 browserErrors.push(`${width} 명렬표 위치 ${band.titleTop} ${band.title}`);
             }
         }
+
+        await go(page, 154);
+        await prepareClipSamples(page, 154);
+        for (const width of [861, 885, 900, 1023, 1024, 1060]) {
+            await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+            await page.waitForFunction((viewW) => !document.querySelector('.nb-app')?.classList.contains('is-phone') && document.querySelector('[data-page="154"]'), {}, width);
+            await settleChrome(page);
+            const rosterHits = await geometryHits(page);
+            if (rosterHits.length) browserErrors.push(`${width} 명렬 ${rosterHits.slice(0, 4).join(', ')}`);
+            const rosterFit = await page.evaluate((birth, note) => {
+                const bad = [];
+                const canvas = document.createElement('canvas').getContext('2d');
+                for (const [label, text] of [['생년월일', birth], ['비고', note]]) {
+                    const el = document.querySelector(`[aria-label="1번 ${label}"]`);
+                    if (!el || el.value !== text) {
+                        bad.push(`${label} 값`);
+                        continue;
+                    }
+                    const cs = getComputedStyle(el);
+                    canvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+                    if (canvas.measureText(text).width + pad > el.clientWidth + 1 || el.scrollWidth > el.clientWidth + 1) {
+                        bad.push(`${label} ${Math.round(el.clientWidth)}`);
+                    }
+                }
+                const who = document.querySelector('#roster-17 .nb-gobtn.who');
+                who?.scrollIntoView({ block: 'center', inline: 'center' });
+                const box = who?.getBoundingClientRect();
+                const hit = box ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
+                if (!who || !hit || (hit !== who && !who.contains(hit))) bad.push('누가 가림');
+                return bad;
+            }, SAMPLE_BIRTH, SAMPLE_NOTE_LONG);
+            if (rosterFit.length) browserErrors.push(`${width} 명렬 글자 ${rosterFit.join(', ')}`);
+        }
+        await clearClipSamples(page, 154);
+
+        await page.evaluate(() => {
+            localStorage.setItem('homenote_v2_ddayCards', JSON.stringify([
+                { id: 'due-card', docNo: '12', title: '공문마감', deadline: '2026-05-06', status: 'todo' },
+            ]));
+            localStorage.setItem('homenote_v2_notebookFields_p405', JSON.stringify({
+                t0: '줄마감',
+                d0: '2026-05-08',
+                c0: false,
+                t1: '다른주',
+                d1: '2026-05-20',
+                c1: false,
+            }));
+        });
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForSelector('[data-page]', { timeout: 20000 });
+        await page.evaluate(() => { location.hash = '#/week/10'; });
+        await page.waitForFunction(() => {
+            const due = document.querySelector('[data-page="56"] .nb-week-due');
+            const text = due?.innerText || '';
+            return text.includes('기한') && text.includes('마감') && text.includes('공문마감') && text.includes('줄마감') && !text.includes('다른주');
+        }, { timeout: 20000 });
+        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [900, 900, '900'], [390, 844, '390'], [360, 780, '360']]) {
+            await page.setViewport({ width, height, deviceScaleFactor: 1 });
+            await page.evaluate(() => { location.hash = '#/weeks'; });
+            await page.waitForSelector('[data-page="46"]');
+            await page.evaluate(() => { location.hash = '#/week/10'; });
+            await page.waitForFunction((viewW) => {
+                const isPhone = viewW <= 700;
+                const app = document.querySelector('.nb-app');
+                if (!app || app.classList.contains('is-phone') !== isPhone) return false;
+                return Boolean(document.querySelector('[data-page="56"] .nb-week-due'));
+            }, {}, width);
+            await settleChrome(page);
+            const dueText = await page.$eval('.nb-week-due', (el) => el.innerText);
+            if (!dueText.includes('공문마감') || !dueText.includes('줄마감') || !dueText.includes('마감')) {
+                browserErrors.push(`${label} 주간 기한 문구 ${dueText.replace(/\s+/g, ' ').slice(0, 40)}`);
+            }
+            const dueHits = await geometryHits(page);
+            if (dueHits.length) browserErrors.push(`${label} 주간 기한 ${dueHits.slice(0, 4).join(', ')}`);
+            const missed = await inspect(page);
+            if (missed.missed.some((item) => item.startsWith('405'))) {
+                browserErrors.push(`${label} 주간 기한 링크 ${missed.missed.filter((item) => item.startsWith('405')).join(',')}`);
+            }
+        }
+        await page.evaluate(() => { location.hash = '#/week/11'; });
+        await page.waitForFunction(() => Number(document.querySelector('.nb-page')?.dataset.page) === 57);
+        const leaked = await page.evaluate(() => {
+            const text = document.querySelector('.nb-body')?.innerText || '';
+            return text.includes('공문마감') || text.includes('줄마감');
+        });
+        if (leaked) browserErrors.push('다른 주에 이번 주 기한이 보임');
+
+        await checkCapturePopup(page, browserErrors);
 
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);

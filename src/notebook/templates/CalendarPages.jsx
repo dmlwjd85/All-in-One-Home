@@ -1,10 +1,11 @@
 import { holidayCaption } from '../../lib/holidays.js';
 import { monthCells } from '../../lib/utils.js';
-import { calendarMarks, daysUntil, ddayBadge } from '../boardsModel.js';
+import { calendarMarks, daysUntil, ddayBadge, deadlinesInRange } from '../boardsModel.js';
 import { allDeadlines } from '../DdayBoard.jsx';
 import { GoBtn, Ink, LinedBlock, LinkGrid, Tick, TitleBar } from '../fields.jsx';
 import { linkText } from '../labels.js';
 import { monthDayMap, partitionLinks } from '../linkParts.js';
+import { parseRange } from '../routes.js';
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const MONTHS_26 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -176,9 +177,11 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
 const DAY_TINT = ['#fde2e4', '#ffe8cc', '#fff3bf', '#d8f3dc', '#cce3de'];
 
-export function WeekPage({ pageRec, extra, fields, setField, onGo }) {
+export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) {
     const { body } = partitionLinks(pageRec);
     const dayLinks = [...body].sort((a, b) => a.rect[0] - b.rect[0]);
+    const span = parseRange(extra.range);
+    const due = deadlinesInRange(allDeadlines(ddayCards), span?.start, span?.end);
     const head = (i, label, tint) => {
         const link = dayLinks[i];
         return (
@@ -219,6 +222,23 @@ export function WeekPage({ pageRec, extra, fields, setField, onGo }) {
                     </section>
                 ))}
                 <section className="nb-week-side">
+                    {due.length > 0 && (
+                        <div className="nb-week-due" aria-label="이번 주 기한">
+                            <p className="nb-kicker">기한 · 마감</p>
+                            {due.map((item) => (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    className={`nb-week-due-item${item.status === 'done' ? ' is-done' : ''}`}
+                                    data-to={item.page || 405}
+                                    onClick={() => onGo(item.page || 405)}
+                                >
+                                    {String(item.deadline).slice(5).replace('-', '.')} {item.title}
+                                    {item.status === 'done' ? ' 완료' : ''}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="nb-split" style={{ gridTemplateColumns: '1fr 1fr' }}>
                         <div className="nb-panel">{head(5, '토', '#e7eef8')}<Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} /></div>
                         <div className="nb-panel">{head(6, '일', '#fde8ef')}<Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} /></div>

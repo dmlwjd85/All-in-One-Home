@@ -8,7 +8,8 @@ import { isLocalOnlyPage } from '../src/notebook/localPages.js';
 import { SECTION_RANGES, sectionForPage } from '../src/notebook/sections.js';
 import { sumBudget } from '../src/notebook/budget.js';
 import { monthDayMap } from '../src/notebook/linkParts.js';
-import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash, resolveHash } from '../src/notebook/routes.js';
+import { deadlinesInRange } from '../src/notebook/boardsModel.js';
+import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash, parseRange, resolveHash } from '../src/notebook/routes.js';
 
 const errors = [];
 const ok = (cond, msg) => { if (!cond) errors.push(msg); };
@@ -76,6 +77,17 @@ ok(paperFace('월').title === '월간 노트' && paperFace('월').title.length >
 for (const name of ['Pretendard-Regular.woff2', 'Pretendard-Bold.woff2']) {
     const size = statSync(new URL(`../public/fonts/${name}`, import.meta.url)).size;
     ok(size >= 80 * 1024 && size <= 220 * 1024, `${name} 크기 ${size}`);
+}
+{
+    const span = parseRange('2026. 5. 4 ~ 2026. 5. 10');
+    const due = deadlinesInRange([
+        { id: 'a', title: '공문마감', deadline: '2026-05-06', status: 'todo' },
+        { id: 'b', title: '다른주', deadline: '2026-05-20', status: 'todo' },
+        { id: 'c', title: '끝난일', deadline: '2026-05-08', status: 'done' },
+        { id: 'd', title: '날짜없음', deadline: '', status: 'todo' },
+    ], span?.start, span?.end);
+    ok(span?.start === '2026-05-04' && span?.end === '2026-05-10', `주간 범위 ${span?.start}`);
+    ok(due.map((item) => item.id).join(',') === 'a,c', `이번 주 기한 ${due.map((item) => item.id).join(',')}`);
 }
 ok(seoulYmd(new Date('2026-03-01T23:30:00.000Z')) === '2026-03-02', '한국 날짜는 UTC 전날이 아님');
 ok(seoulYmd(new Date('2026-03-01T00:30:00.000Z')) === '2026-03-01', '한국 오전은 같은 날');

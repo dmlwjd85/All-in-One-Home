@@ -107,7 +107,7 @@ function pinOn(key, page, pages) {
     return false;
 }
 
-export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal = 0 }) {
+export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal = 0, capture = null }) {
     const [open, setOpen] = useState(false);
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
@@ -250,22 +250,33 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
                 edges();
                 return;
             }
-            followRef.current = false;
             edges();
+        };
+        const markUserScroll = () => {
+            followRef.current = false;
         };
         const onResize = () => {
             if (followRef.current) center();
-            else edges();
+            else {
+                clearSpread();
+                reserveChevrons();
+                spread();
+                edges();
+            }
         };
         center();
         const later = requestAnimationFrame(() => onResize());
         nav.addEventListener('scroll', onScroll, { passive: true });
+        nav.addEventListener('wheel', markUserScroll, { passive: true });
+        nav.addEventListener('touchmove', markUserScroll, { passive: true });
         const observer = new ResizeObserver(onResize);
         observer.observe(nav);
         document.fonts?.ready?.then(() => onResize());
         return () => {
             cancelAnimationFrame(later);
             nav.removeEventListener('scroll', onScroll);
+            nav.removeEventListener('wheel', markUserScroll);
+            nav.removeEventListener('touchmove', markUserScroll);
             observer.disconnect();
             clearSpread();
         };
@@ -360,6 +371,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             >
                 ›
             </button>
+            {capture}
             {open && (
                 <Modal title="전체 메뉴" onClose={() => setOpen(false)} wide>
                     <p className="nb-nav-lead">

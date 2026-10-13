@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { captureNote } from './ssugeokStore.js';
 
 export default function CaptureFab({ author, signedIn, fromPage, onChanged, onToast }) {
     const [open, setOpen] = useState(false);
     const [text, setText] = useState('');
     const [scrolling, setScrolling] = useState(false);
+    const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+    const [layerTop, setLayerTop] = useState(96);
     const inputRef = useRef(null);
+    const anchorRef = useRef(null);
 
     useEffect(() => {
         let timer = 0;
@@ -38,6 +42,24 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
     }, []);
 
     useEffect(() => {
+        const mq = window.matchMedia('(max-width: 700px)');
+        const onChange = () => setPhone(mq.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!open || !phone) return undefined;
+        const place = () => {
+            const box = anchorRef.current?.getBoundingClientRect();
+            if (box) setLayerTop(box.bottom + 6);
+        };
+        place();
+        window.addEventListener('resize', place);
+        return () => window.removeEventListener('resize', place);
+    }, [open, phone]);
+
+    useEffect(() => {
         if (open) inputRef.current?.focus();
     }, [open]);
 
@@ -50,32 +72,36 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
         onToast?.(note.sensitive ? '건강·민원 내용은 이 기기에만 적었어요.' : '쓱적에 남겼어요.');
     };
 
+    const form = open ? (
+        <form
+            className={`nb-fab-pop${phone ? ' nb-fab-pop-layer' : ''}`}
+            style={phone ? { top: layerTop } : undefined}
+            onSubmit={(e) => {
+                e.preventDefault();
+                save();
+            }}
+        >
+            <label htmlFor="nb-fab-input">쓱 적기</label>
+            <input
+                id="nb-fab-input"
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="@12 #행발 오늘 발표를 또렷하게"
+                aria-label="쓱적 한 줄"
+            />
+            <div className="nb-fab-actions">
+                <button type="button" onClick={() => setOpen(false)}>닫기</button>
+                <button type="submit">적기</button>
+            </div>
+        </form>
+    ) : null;
+
     return (
         <div className={`nb-fab ${scrolling ? 'is-away' : ''}`}>
-            {open && (
-                <form
-                    className="nb-fab-pop"
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        save();
-                    }}
-                >
-                    <label htmlFor="nb-fab-input">쓱 적기</label>
-                    <input
-                        id="nb-fab-input"
-                        ref={inputRef}
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                        placeholder="@12 #행발 오늘 발표를 또렷하게"
-                        aria-label="쓱적 한 줄"
-                    />
-                    <div className="nb-fab-actions">
-                        <button type="button" onClick={() => setOpen(false)}>닫기</button>
-                        <button type="submit">적기</button>
-                    </div>
-                </form>
-            )}
+            {phone ? (form ? createPortal(form, document.body) : null) : form}
             <button
+                ref={anchorRef}
                 type="button"
                 className="nb-fab-btn"
                 onClick={() => setOpen((v) => !v)}

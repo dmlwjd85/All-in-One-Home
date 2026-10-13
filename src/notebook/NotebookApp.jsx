@@ -223,6 +223,15 @@ export default function NotebookApp({
                 onGo={go}
                 onOpenSearch={() => setSearchOpen(true)}
                 closeSignal={navEpoch}
+                capture={phone ? (
+                    <CaptureFab
+                        author={author}
+                        signedIn={signedIn}
+                        fromPage={page}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                    />
+                ) : null}
             />
 
             <div className="nb-stage-wrap" ref={stageRef}>
@@ -279,13 +288,15 @@ export default function NotebookApp({
                 </NotebookShell>
             </div>
 
-            <CaptureFab
-                author={author}
-                signedIn={signedIn}
-                fromPage={page}
-                onChanged={onChanged}
-                onToast={onToast}
-            />
+            {!phone && (
+                <CaptureFab
+                    author={author}
+                    signedIn={signedIn}
+                    fromPage={page}
+                    onChanged={onChanged}
+                    onToast={onToast}
+                />
+            )}
 
             {searchOpen && (
                 <SearchDialog pages={catalog.pages} onGo={go} onClose={() => setSearchOpen(false)} />
