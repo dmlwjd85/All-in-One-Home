@@ -514,13 +514,16 @@ async function geometryHits(page) {
             if (box.width < 1 || box.height < 1) return false;
             let node = el.parentElement;
             while (node && node !== document.body) {
+                if (node.classList?.contains('nb-body') || node.classList?.contains('nb-main') || node.classList?.contains('nb-page') || node.classList?.contains('nb-stage-wrap') || node.classList?.contains('nb-app')) break;
                 const cs = getComputedStyle(node);
                 const clipX = cs.overflowX === 'hidden' || cs.overflowX === 'clip';
                 const clipY = cs.overflowY === 'hidden' || cs.overflowY === 'clip';
                 if (clipX || clipY) {
                     const host = node.getBoundingClientRect();
-                    if (clipX && (box.left < host.left - 1 || box.right > host.right + 1)) return true;
-                    if (clipY && (box.top < host.top - 1 || box.bottom > host.bottom + 1)) return true;
+                    const seen = box.bottom > host.top + 1 && box.top < host.bottom - 1 && box.right > host.left + 1 && box.left < host.right - 1;
+                    const sticks = (clipX && (box.left < host.left - 1 || box.right > host.right + 1))
+                        || (clipY && (box.top < host.top - 1 || box.bottom > host.bottom + 1));
+                    if (seen && sticks) return true;
                 }
                 node = node.parentElement;
             }
@@ -1016,6 +1019,9 @@ export async function runBrowserQuality() {
         }, { timeout: 20000 });
         for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [900, 900, '900'], [390, 844, '390'], [360, 780, '360']]) {
             await page.setViewport({ width, height, deviceScaleFactor: 1 });
+            await page.evaluate(() => { location.hash = '#/weeks'; });
+            await page.waitForSelector('[data-page="46"]');
+            await page.evaluate(() => { location.hash = '#/week/10'; });
             await page.waitForFunction((viewW) => {
                 const isPhone = viewW <= 700;
                 const app = document.querySelector('.nb-app');

@@ -1897,6 +1897,7 @@
 .nb-week-due .nb-kicker { margin: 0; }
 .nb-week-due-item {
     max-width: 100%;
+    min-width: 0;
     border: 0;
     border-radius: 999px;
     background: #f0e7fb;
@@ -1911,8 +1912,27 @@
     overflow-wrap: anywhere;
 }
 .nb-week-due-item.is-done { opacity: 0.7; }
-.nb-week:has(.nb-week-due) .nb-week-side > .nb-ink-area:last-of-type {
-    min-height: 40px;
+@media (min-width: 1101px) {
+    /* 16:9 용지에서 기한 띠가 옆칸을 바닥 아래로 밀지 않게 높이를 고정합니다. */
+    .nb-week:has(.nb-week-due) {
+        overflow: hidden;
+    }
+    .nb-week:has(.nb-week-due) .nb-week-days {
+        grid-template-rows: minmax(0, 1fr);
+        overflow: hidden;
+    }
+    .nb-week:has(.nb-week-due) .nb-week-col,
+    .nb-week:has(.nb-week-due) .nb-week-side {
+        min-height: 0;
+        height: 100%;
+        overflow: hidden;
+    }
+    /* .nb-field가 display:contents라 텍스트영역은 옆칸의 손자입니다. */
+    .nb-week:has(.nb-week-due) .nb-week-side > .nb-field:last-child > .nb-ink-area {
+        flex: 1 1 0;
+        min-height: 28px;
+        height: auto;
+    }
 }
 .nb-export-row {
     display: flex;
