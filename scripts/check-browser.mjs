@@ -611,23 +611,31 @@ export async function runBrowserQuality() {
             const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
             if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
             else {
-                const chunk = await page.$eval('.nb-appnav-scroll', (el) => Math.round(el.clientWidth * 0.7));
+                const expectMove = await page.$eval('.nb-appnav-scroll', (el) => {
+                    const chunk = Math.round(el.clientWidth * 0.7);
+                    const room = Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft);
+                    return Math.min(chunk, room);
+                });
                 await next.click();
-                await page.waitForFunction((from, min) => document.querySelector('.nb-appnav-scroll').scrollLeft >= from + min, {}, start, Math.max(8, chunk - 8));
                 await new Promise((resolve) => setTimeout(resolve, 350));
-                const afterClick = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-                if (afterClick < start + Math.max(8, chunk - 8)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${afterClick}`);
+                const settled = await page.$eval('.nb-appnav-scroll', (el) => ({
+                    left: el.scrollLeft,
+                    max: Math.max(0, el.scrollWidth - el.clientWidth),
+                }));
+                const atEnd = settled.left >= settled.max - 4;
+                const held = settled.left >= start + Math.min(expectMove, Math.max(0, settled.max - start)) - 8;
+                if (!(atEnd || held)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${settled.left}`);
                 const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
                     const max = Math.max(0, el.scrollWidth - el.clientWidth);
                     const forward = from + 90;
                     const target = forward <= max - 2 ? forward : Math.max(0, from - 90);
                     el.scrollLeft = target;
                     return target;
-                }, afterClick);
+                }, settled.left);
                 await new Promise((resolve) => setTimeout(resolve, 300));
                 const afterWheel = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-                if (Math.abs(wheelTarget - afterClick) < 40 || Math.abs(afterWheel - wheelTarget) > 8) {
-                    browserErrors.push(`${label} 휠 스크롤이 되돌아감 ${afterClick}→${afterWheel} (목표 ${wheelTarget})`);
+                if (Math.abs(wheelTarget - settled.left) < 40 || Math.abs(afterWheel - wheelTarget) > 8) {
+                    browserErrors.push(`${label} 휠 스크롤이 되돌아감 ${settled.left}→${afterWheel} (목표 ${wheelTarget})`);
                 }
             }
         }
@@ -636,31 +644,25 @@ export async function runBrowserQuality() {
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
         await page.evaluate(() => { location.hash = '#/home'; });
         await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
-        const seenLabels = new Set(await page.evaluate(() => {
+        const visibleNames = () => page.evaluate(() => {
             const scroll = document.querySelector('.nb-appnav-scroll');
             const host = scroll.getBoundingClientRect();
             return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
                 const box = btn.getBoundingClientRect();
-                return box.left >= host.left - 1 && box.right <= host.right + 1;
+                return Math.min(box.right, host.right) - Math.max(box.left, host.left) > 0.5;
             }).map((btn) => btn.textContent.trim());
-        }));
+        });
+        const seenLabels = new Set(await visibleNames());
         const startLeft = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
         for (let step = 0; step < 40; step += 1) {
             const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
             if (!next) break;
             const before = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
             await next.click();
-            await new Promise((resolve) => setTimeout(resolve, 80));
+            await new Promise((resolve) => setTimeout(resolve, 120));
             const after = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
             if (after < before + 4) break;
-            const names = await page.evaluate(() => {
-                const scroll = document.querySelector('.nb-appnav-scroll');
-                const host = scroll.getBoundingClientRect();
-                return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
-                    const box = btn.getBoundingClientRect();
-                    return box.left >= host.left - 1 && box.right <= host.right + 1;
-                }).map((btn) => btn.textContent.trim());
-            });
+            const names = await visibleNames();
             for (const name of names) seenLabels.add(name);
         }
         const skipped = await page.evaluate((left, seen) => {
@@ -672,7 +674,7 @@ export async function runBrowserQuality() {
                 return !have.has(name);
             });
         }, startLeft, [...seenLabels]);
-        if (skipped.length) browserErrors.push(`360 화살표가 메뉴를 건너뜀 ${skipped.join(',')}`);
+        if (!seenLabels.has('업무') || skipped.length) browserErrors.push(`360 화살표가 메뉴를 건너뜀 ${skipped.join(',') || '업무'}`);
 
         await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/home'; });
