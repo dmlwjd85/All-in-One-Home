@@ -873,6 +873,9 @@
 }
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (min-width: 701px) and (max-width: 860px) {
+    .nb-roster { grid-template-columns: 1fr; }
+}
 .nb-roster .nb-table td:nth-child(2) .nb-ink { min-width: 5em; }
 .nb-roster .nb-table th:nth-child(3),
 .nb-roster .nb-table td:nth-child(3),
