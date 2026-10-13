@@ -101,6 +101,17 @@ async function inspect(page) {
     });
 }
 
+async function setRosterName(page, value) {
+    const input = await page.$('#roster-1 input');
+    if (!input) return;
+    await page.evaluate((next) => {
+        const field = document.querySelector('#roster-1 input');
+        const proto = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        proto.set.call(field, next);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
+}
+
 async function geometryHits(page) {
     return page.evaluate(() => {
         document.querySelectorAll('.nb-body, .nb-stage-wrap').forEach((el) => {
@@ -115,6 +126,23 @@ async function geometryHits(page) {
             const rect = el.getBoundingClientRect();
             if (rect.width < 1 || rect.height < 1) return null;
             return rect;
+        };
+        const lumOf = (rgb) => {
+            const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (!m) return null;
+            const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                const s = c / 255;
+                return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const contrastOf = (el) => {
+            if (!el) return null;
+            const cs = getComputedStyle(el);
+            const a = lumOf(cs.color);
+            const b = lumOf(cs.backgroundColor);
+            if (a == null || b == null) return null;
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
         };
         const overlaps = (a, b) => Boolean(a && b) && !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5);
         const inside = (box, host) => box.top >= host.top - slop && box.bottom <= host.bottom + slop && box.left >= host.left - slop && box.right <= host.right + slop;
@@ -135,6 +163,152 @@ async function geometryHits(page) {
         }
         for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
             if (overlaps(numBox, visibleBox(btn))) hits.push(`쪽번호·버튼 ${btn.getAttribute('aria-label') || btn.textContent.trim()}`);
+        }
+        const nav = document.querySelector('.nb-appnav');
+        const navBox = visibleBox(nav);
+        if (!nav || !navBox) hits.push('메뉴 없음');
+        else {
+            if (navBox.left < -1 || navBox.right > window.innerWidth + 1 || navBox.top < -1) hits.push('메뉴가 화면 밖');
+            if (overlaps(numBox, navBox)) hits.push('메뉴·쪽번호 겹침');
+            const brand = visibleBox(document.querySelector('.nb-toolbar-brand'));
+            if (overlaps(brand, navBox)) hits.push('메뉴·제목 겹침');
+            for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
+                if (overlaps(navBox, visibleBox(btn))) {
+                    hits.push(`메뉴·도구 ${btn.getAttribute('aria-label') || ''}`);
+                    break;
+                }
+            }
+            const currents = [...nav.querySelectorAll('[aria-current="page"]')];
+            if (currents.length !== 1) hits.push(`메뉴 현재위치 ${currents.length}`);
+            const current = currents[0];
+            const scroll = nav.querySelector('.nb-appnav-scroll');
+            const currentBox = visibleBox(current);
+            const scrollBox = visibleBox(scroll);
+            if (current && current.scrollWidth > current.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${current.textContent.trim()}`);
+            if (currentBox && scrollBox && !inside(currentBox, scrollBox)) hits.push(`메뉴 현재위치 잘림 ${current.textContent.trim()}`);
+            const brandName = document.querySelector('.nb-brand-name');
+            if (brandName && brandName.scrollWidth > brandName.clientWidth + 1) hits.push('브랜드 글자 잘림');
+            const allBtn = nav.querySelector('[data-nav="all"]');
+            const allBox = visibleBox(allBtn);
+            if (allBox && (allBox.left < -1 || allBox.right > window.innerWidth + 1)) hits.push('전체 메뉴가 화면 밖');
+            if (allBtn && allBtn.scrollWidth > allBtn.clientWidth + 1) hits.push('전체 글자 잘림');
+            const brandTop = document.querySelector('.nb-toolbar-brand')?.getBoundingClientRect();
+            const ownRow = !brandTop || Math.abs(brandTop.top - navBox.top) > 12;
+            if (ownRow && navBox.width < window.innerWidth - 4) hits.push(`메뉴 너비 ${Math.round(navBox.width)}`);
+            if (navBox.height > 80) hits.push(`메뉴 높이 ${Math.round(navBox.height)}`);
+            const shownChevron = (el) => el && getComputedStyle(el).visibility !== 'hidden' && !el.disabled;
+            const prev = nav.querySelector('[data-nav-scroll="prev"]');
+            const next = nav.querySelector('[data-nav-scroll="next"]');
+            if (scroll) {
+                const menuButtons = [...scroll.querySelectorAll('.nb-navbtn')];
+                const lastBtn = menuButtons[menuButtons.length - 1];
+                const max = lastBtn ? Math.max(0, lastBtn.offsetLeft + lastBtn.offsetWidth - scroll.clientWidth) : 0;
+                const overflow = max > 2;
+                if (overflow && scroll.scrollLeft > 2 && !shownChevron(prev)) hits.push('앞 메뉴 화살표 없음');
+                if (overflow && scroll.scrollLeft < max - 2 && !shownChevron(next)) hits.push('뒤 메뉴 화살표 없음');
+                if (!overflow && (shownChevron(prev) || shownChevron(next))) hits.push('넘치지 않는데 메뉴 화살표');
+                if (current) {
+                    const ideal = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2;
+                    const expect = Math.max(0, Math.min(Math.max(0, max), ideal));
+                    const delta = Math.abs(scroll.scrollLeft - expect);
+                    const starts = [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.offsetLeft);
+                    const flush = scroll.scrollLeft <= 2 || starts.some((left) => Math.abs(scroll.scrollLeft - left) <= 2);
+                    const limit = flush ? 96 : 12;
+                    if (delta > limit) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
+                }
+                const host = scroll.getBoundingClientRect();
+                const slots = [...scroll.querySelectorAll('.nb-navbtn, .nb-nav-gap')];
+                for (const el of slots) {
+                    const hidden = getComputedStyle(el).visibility === 'hidden';
+                    if (!hidden) continue;
+                    const box = el.getBoundingClientRect();
+                    const iw = Math.min(box.right, host.right) - Math.max(box.left, host.left);
+                    if (iw > 2) hits.push(`메뉴 빈칸 ${(el.textContent || '').trim() || '구분'}`);
+                }
+                let lead = null;
+                for (const el of slots) {
+                    if (getComputedStyle(el).visibility === 'hidden') continue;
+                    const box = el.getBoundingClientRect();
+                    if (box.right <= host.left + 1) continue;
+                    lead = box;
+                    break;
+                }
+                if (lead && lead.left > host.left + 4) hits.push(`메뉴 앞 빈칸 ${Math.round(lead.left - host.left)}`);
+                for (const btn of scroll.querySelectorAll('.nb-navbtn')) {
+                    const style = getComputedStyle(btn);
+                    if (style.visibility === 'hidden' || style.display === 'none') continue;
+                    const box = btn.getBoundingClientRect();
+                    const iw = Math.min(box.right, scrollBox.right) - Math.max(box.left, scrollBox.left);
+                    const full = scrollBox && iw >= box.width - 3;
+                    const none = !scrollBox || iw <= 2;
+                    if (!full && !none) hits.push(`메뉴 글자 중간 잘림 ${btn.textContent.trim()}`);
+                    if (btn.scrollWidth > btn.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${btn.textContent.trim()}`);
+                }
+            }
+            const pinsHidden = getComputedStyle(nav.querySelector('.nb-nav-pins') || nav).display === 'none';
+            if (!pinsHidden) {
+                for (const key of ['timetable', 'cards', 'budget']) {
+                    const pin = nav.querySelector(`[data-nav-pin="${key}"]`);
+                    const pinBox = visibleBox(pin);
+                    if (!pinBox) hits.push(`바로가기 없음 ${key}`);
+                    else if (pinBox.left < -1 || pinBox.right > window.innerWidth + 1) hits.push(`바로가기 화면 밖 ${key}`);
+                    else if (overlaps(allBox, pinBox)) hits.push(`바로가기·전체 겹침 ${key}`);
+                    if (pin && pin.scrollWidth > pin.clientWidth + 1) hits.push(`바로가기 글자 잘림 ${key}`);
+                }
+            }
+            const lum = (rgb) => {
+                const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (!m) return null;
+                const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                    const s = c / 255;
+                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                });
+                return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+            };
+            const contrast = (el) => {
+                if (!el) return null;
+                const cs = getComputedStyle(el);
+                const a = lum(cs.color);
+                const b = lum(cs.backgroundColor);
+                if (a == null || b == null) return null;
+                const hi = Math.max(a, b);
+                const lo = Math.min(a, b);
+                return (hi + 0.05) / (lo + 0.05);
+            };
+            const selected = nav.querySelector('.nb-navbtn.is-on');
+            const selectedRatio = contrast(selected);
+            if (selected && !(selectedRatio >= 4.5)) hits.push(`메뉴 선택 대비 ${selectedRatio?.toFixed?.(2) || selectedRatio}`);
+        }
+        if (document.querySelector('.nb-app.is-phone')) {
+            for (const el of document.querySelectorAll('.nb-tabbar, .nb-left, .nb-right, .nb-tab-hint')) {
+                const st = getComputedStyle(el);
+                if (st.display !== 'none' && st.visibility !== 'hidden') {
+                    hits.push('휴대폰 위쪽 탭이 메뉴와 따로 있음');
+                    break;
+                }
+            }
+        }
+        const deskTab = document.querySelector('.nb-tab.is-on');
+        if (deskTab && visibleBox(deskTab)) {
+            const cs = getComputedStyle(deskTab);
+            const lum = (rgb) => {
+                const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (!m) return null;
+                const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                    const s = c / 255;
+                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                });
+                return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+            };
+            const a = lum(cs.color);
+            const b = lum(cs.backgroundColor);
+            const ratio = a == null || b == null ? 0 : (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            if (!(ratio >= 4.5)) hits.push(`선택 탭 대비 ${ratio.toFixed(2)}`);
+        }
+        for (const tab of document.querySelectorAll('.nb-right .nb-tab')) {
+            if (!visibleBox(tab)) continue;
+            const ratio = contrastOf(tab);
+            if (!(ratio >= 6)) hits.push(`오른쪽 탭 대비 ${tab.textContent.trim()} ${ratio == null ? '없음' : ratio.toFixed(2)}`);
         }
         const pageEl = document.querySelector('.nb-page');
         const paper = visibleBox(pageEl);
@@ -261,6 +435,84 @@ async function geometryHits(page) {
                 if (!(px >= 14)) hits.push(`표 글자 ${px}px`);
             }
         }
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const textWidth = (el, text) => {
+            const cs = getComputedStyle(el);
+            ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+            return ctx.measureText(text).width;
+        };
+        for (const el of document.querySelectorAll('input, textarea, select')) {
+            const box = visibleBox(el);
+            if (!box) continue;
+            if (el.type === 'file' || el.type === 'hidden') continue;
+            const cs = getComputedStyle(el);
+            const samples = [];
+            if (el.tagName === 'SELECT') samples.push(el.options[el.selectedIndex]?.text || '');
+            else if (el.type === 'checkbox' || el.type === 'radio') samples.push(el.value || 'on');
+            else if (el.tagName !== 'TEXTAREA') {
+                if (el.value) samples.push(el.value);
+                if (el.placeholder) samples.push(el.placeholder);
+                if (/번 이름$/.test(el.getAttribute('aria-label') || '')) samples.push('학생이름김');
+            }
+            const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            let avail = el.clientWidth - pad;
+            const appearance = cs.appearance || cs.webkitAppearance || '';
+            if (el.tagName === 'SELECT' && appearance !== 'none') avail -= 16;
+            for (const text of new Set(samples)) {
+                if (text && textWidth(el, text) > avail + 1) hits.push(`입력 글자 잘림 ${text.slice(0, 18)}`);
+            }
+        }
+        for (const el of document.querySelectorAll('.nb-toolbar-page, .nb-toolbar-user, .nb-brand-name, .nb-tab, .nb-cover-title, .nb-pagetitle')) {
+            const box = visibleBox(el);
+            if (!box) continue;
+            const cs = getComputedStyle(el);
+            if (el.scrollWidth > el.clientWidth + 1) {
+                const sample = el.textContent.trim().slice(0, 18);
+                hits.push(cs.textOverflow === 'ellipsis' ? `말줄임 ${sample}` : `글자 잘림 ${sample}`);
+            }
+        }
+        const coverTitle = document.querySelector('.nb-cover-title');
+        if (coverTitle && visibleBox(coverTitle)) {
+            const cs = getComputedStyle(coverTitle);
+            if (cs.wordBreak !== 'keep-all') hits.push('표지 제목 어절');
+            const node = coverTitle.firstChild;
+            const words = coverTitle.textContent.trim().split(/\s+/).filter(Boolean);
+            if (node && node.nodeType === 3 && words.length) {
+                const range = document.createRange();
+                const lines = [];
+                let buf = '';
+                let lastTop = null;
+                for (let i = 0; i < node.textContent.length; i += 1) {
+                    range.setStart(node, i);
+                    range.setEnd(node, i + 1);
+                    const rect = range.getClientRects()[0];
+                    if (!rect) continue;
+                    if (lastTop != null && Math.abs(rect.top - lastTop) > 2) {
+                        lines.push(buf);
+                        buf = '';
+                    }
+                    buf += node.textContent[i];
+                    lastTop = rect.top;
+                }
+                if (buf) lines.push(buf);
+                const rest = words.slice();
+                for (const line of lines) {
+                    for (const part of line.trim().split(/\s+/).filter(Boolean)) {
+                        if (rest[0] !== part) {
+                            hits.push(`표지 제목 단어 잘림 ${part}`);
+                            rest.length = 0;
+                            break;
+                        }
+                        rest.shift();
+                    }
+                }
+            }
+        }
+        const writeTab = document.querySelector('.nb-left .nb-tab[data-to="496"]');
+        if (writeTab && visibleBox(writeTab) && writeTab.textContent.trim() !== '쓱적') {
+            hits.push(`쓱적 탭 ${writeTab.textContent.trim()}`);
+        }
         return hits;
     });
 }
@@ -317,13 +569,15 @@ export async function runBrowserQuality() {
             if (info.overflow) overflowPages.push(n);
             if (info.textLength <= 4 || info.title.length <= 1) empty.push(`${n}:${info.title || info.textLength}`);
             if (info.missed.length) unreachable.push(`${n}:${info.missed.slice(0, 4).join(',')}`);
+            if (n === 154) await setRosterName(page, '학생이름김');
             const phoneHits = await geometryHits(page);
+            if (n === 154) await setRosterName(page, '');
             if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
             const first = await page.$('.nb-body [data-to]');
             if (first) {
                 const dest = Number(await page.evaluate((el) => el.getAttribute('data-to'), first));
                 if (dest && dest !== n && dest >= 1 && dest <= 580) {
-                    await first.click();
+                    await first.click({ offset: { x: 10, y: 10 } });
                     await page.waitForFunction((num) => document.querySelector(`[data-page="${num}"]`), { timeout: 8000 }, dest);
                 }
             }
@@ -332,7 +586,8 @@ export async function runBrowserQuality() {
         if (overflowPages.length) browserErrors.push(`390px 가로 넘침 ${overflowPages.slice(0, 12).join(',')}`);
         if (unreachable.length) browserErrors.push(`390px 닿지 않는 본문 링크 ${unreachable.slice(0, 8).join(' | ')}`);
 
-        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [360, 780, '360']]) {
+        // 390은 위쪽 전체 순회. 나머지는 입력·선택·말줄임·탭 잘림을 같은 검사로 본다.
+        for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [1023, 900, '1023'], [900, 900, '900'], [800, 900, '800'], [768, 900, '768'], [720, 900, '720'], [360, 780, '360']]) {
             await page.setViewport({ width, height, deviceScaleFactor: 1 });
             await page.waitForFunction((viewW) => {
                 const isPhone = viewW <= 700;
@@ -346,7 +601,9 @@ export async function runBrowserQuality() {
             }, {}, width);
             for (let n = 1; n <= 580; n += 1) {
                 await go(page, n);
+                if (n === 154) await setRosterName(page, '학생이름김');
                 const hits = await geometryHits(page);
+                if (n === 154) await setRosterName(page, '');
                 if (hits.length) browserErrors.push(`${label} p${n} ${hits.slice(0, 4).join(', ')}`);
             }
         }
@@ -379,8 +636,25 @@ export async function runBrowserQuality() {
         await go(page, 2);
         const brand = await page.$eval('.nb-brand-name', (el) => getComputedStyle(el).whiteSpace);
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
-        const hint = await page.$eval('.nb-tab-hint', (el) => getComputedStyle(el).display);
-        if (hint === 'none') browserErrors.push('구역 탭 스크롤 힌트가 없음');
+        const phoneBar = await page.$eval('.nb-appnav', (el) => el.getBoundingClientRect().height);
+        if (!(phoneBar <= 80 && phoneBar >= 48)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
+        const phoneHits = await page.$$eval('.nb-appnav .nb-navbtn, .nb-appnav .nb-nav-chev', (els) => els.filter((el) => {
+            const style = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return !el.disabled && style.visibility !== 'hidden' && style.display !== 'none' && box.width >= 1 && box.height >= 1;
+        }).map((el) => {
+            const box = el.getBoundingClientRect();
+            return {
+                w: box.width,
+                h: box.height,
+                name: (el.textContent || el.getAttribute('aria-label') || '').trim(),
+            };
+        }));
+        for (const hit of phoneHits) {
+            if (!(hit.w >= 44 && hit.h >= 44)) browserErrors.push(`휴대폰 메뉴 터치 ${hit.name} ${Math.round(hit.w)}x${Math.round(hit.h)}`);
+        }
+        const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
+        if (phoneTabs) browserErrors.push('휴대폰 구역 탭이 메뉴 줄과 따로 있음');
         await go(page, 569);
         const stickerPressed = await page.$eval('.nb-sticker', (el) => el.hasAttribute('aria-pressed'));
         if (!stickerPressed) browserErrors.push('스티커 버튼에 누름 상태가 없음');
@@ -393,18 +667,259 @@ export async function runBrowserQuality() {
         const badge = await page.$eval('.nb-local-badge', (el) => el.innerText);
         if (!badge.includes('이 기기에만 저장')) browserErrors.push('157쪽 배지가 없음');
 
+        await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/year'; });
+        await page.waitForSelector('[data-page="32"]');
+        const yearOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
+        if (yearOn !== 'year') browserErrors.push(`연간 현재위치 ${yearOn}`);
+        await page.click('.nb-appnav [data-nav="month"]');
+        await page.waitForFunction(() => location.hash === '#/month/2026/3' && document.querySelector('[data-page="34"]'));
+        await page.click('.nb-appnav [data-nav="week"]');
+        await page.waitForFunction(() => location.hash === '#/weeks' && document.querySelector('[data-page="46"]'));
+        await page.click('.nb-appnav [data-nav="schedule"]');
+        await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
+        await page.click('.nb-appnav [data-nav="day"]');
+        await page.waitForFunction(() => location.hash === '#/days' && document.querySelector('[data-page="99"]'));
+        await page.goBack();
+        await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
+        await page.evaluate(() => { location.hash = '#/month/2026/4'; });
+        await page.waitForSelector('[data-page="35"]');
+        const monthOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
+        if (monthOn !== 'month') browserErrors.push(`4월 현재위치 ${monthOn}`);
+        const day = await page.$('[data-page="35"] .nb-daylink');
+        if (!day) browserErrors.push('4월 날짜 버튼이 없음');
+        else {
+            await day.click();
+            await page.waitForFunction(() => location.hash.startsWith('#/date/2026-04-'));
+            const landed = await page.$eval('.nb-page', (el) => el.dataset.page);
+            if (!(Number(landed) >= 47 && Number(landed) <= 98)) browserErrors.push(`날짜 이동이 주간이 아님 ${landed}`);
+            await page.goBack();
+            await page.waitForFunction(() => location.hash === '#/month/2026/4' && document.querySelector('[data-page="35"]'));
+        }
+        await page.evaluate(() => { location.hash = '#/week/10'; });
+        await page.waitForFunction(() => {
+            const n = Number(document.querySelector('.nb-page')?.dataset.page);
+            return n >= 47 && n <= 98;
+        });
+        await page.click('.nb-appnav [data-nav="month"]');
+        await page.waitForFunction(() => /^#\/month\/2026\//.test(location.hash));
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForSelector('[data-page="2"]');
+        const phoneNav = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
+        if (phoneNav === 'none') browserErrors.push('휴대폰에서 메뉴가 숨음');
+        await page.click('.nb-appnav [data-nav="all"]');
+        await page.waitForSelector('[role="dialog"]');
+        const chip = await page.evaluateHandle(() => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === '예산'));
+        const chipEl = chip.asElement();
+        if (!chipEl) browserErrors.push('전체 메뉴에 예산이 없음');
+        else {
+            await chipEl.click();
+            await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
+        }
+
+        await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/students'; });
+        await page.waitForSelector('[data-page="154"]');
+        for (const [width, label] of [[1024, '1024'], [390, '390'], [360, '360']]) {
+            await page.setViewport({ width, height: width === 1024 ? 768 : 844, deviceScaleFactor: 1 });
+            await page.waitForFunction((viewW) => {
+                const phone = viewW <= 700;
+                return document.querySelector('.nb-app')?.classList.contains('is-phone') === phone;
+            }, {}, width);
+            if (width === 1024) {
+                const menuH = await page.$eval('.nb-appnav-scroll .nb-navbtn', (el) => el.getBoundingClientRect().height);
+                if (!(menuH >= 44)) browserErrors.push(`1024 메뉴 높이 ${menuH}`);
+            }
+            if (width <= 390) {
+                const shown = await page.$eval('.nb-appnav-scroll', (scroll) => {
+                    const host = scroll.getBoundingClientRect();
+                    return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                        const style = getComputedStyle(btn);
+                        if (style.visibility === 'hidden' || style.display === 'none') return false;
+                        const box = btn.getBoundingClientRect();
+                        return box.left >= host.left - 1 && box.right <= host.right + 1;
+                    }).length;
+                });
+                if (shown < 3) browserErrors.push(`${label} 보이는 메뉴 ${shown}개`);
+            }
+            const start = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
+            if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
+            else {
+                const expectMove = await page.$eval('.nb-appnav-scroll', (el) => {
+                    const chunk = Math.round(el.clientWidth * 0.7);
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const end = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
+                    const room = Math.max(0, end - el.scrollLeft);
+                    return Math.min(chunk, room);
+                });
+                await next.click();
+                await new Promise((resolve) => setTimeout(resolve, 350));
+                const settled = await page.$eval('.nb-appnav-scroll', (el) => {
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
+                    return { left: el.scrollLeft, max };
+                });
+                const atEnd = settled.left >= settled.max - 4;
+                const held = settled.left >= start + Math.min(expectMove, Math.max(0, settled.max - start)) - 8;
+                if (!(atEnd || held)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${settled.left}`);
+                const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
+                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
+                    const last = buttons[buttons.length - 1];
+                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
+                    const forward = from + 90;
+                    const target = forward <= max - 2 ? forward : Math.max(0, from - 90);
+                    el.scrollLeft = target;
+                    return target;
+                }, settled.left);
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                const afterWheel = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+                if (Math.abs(wheelTarget - settled.left) < 40 || Math.abs(afterWheel - wheelTarget) > 8) {
+                    browserErrors.push(`${label} 휠 스크롤이 되돌아감 ${settled.left}→${afterWheel} (목표 ${wheelTarget})`);
+                }
+            }
+        }
+
+        await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
+        const visibleNames = () => page.evaluate(() => {
+            const scroll = document.querySelector('.nb-appnav-scroll');
+            const host = scroll.getBoundingClientRect();
+            return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                const box = btn.getBoundingClientRect();
+                return Math.min(box.right, host.right) - Math.max(box.left, host.left) > 0.5;
+            }).map((btn) => btn.textContent.trim());
+        });
+        const seenLabels = new Set(await visibleNames());
+        const startLeft = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+        for (let step = 0; step < 40; step += 1) {
+            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
+            if (!next) break;
+            const before = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            await next.click();
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            const after = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            if (after < before + 4) break;
+            const names = await visibleNames();
+            for (const name of names) seenLabels.add(name);
+        }
+        const skipped = await page.evaluate((left, seen) => {
+            const scroll = document.querySelector('.nb-appnav-scroll');
+            const have = new Set(seen);
+            return [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.textContent.trim()).filter((name, index, all) => {
+                const btn = scroll.querySelectorAll('.nb-navbtn')[index];
+                if (btn.offsetLeft + btn.offsetWidth <= left + 1) return false;
+                return !have.has(name);
+            });
+        }, startLeft, [...seenLabels]);
+        if (!seenLabels.has('업무') || skipped.length) browserErrors.push(`360 화살표가 메뉴를 건너뜀 ${skipped.join(',') || '업무'}`);
+
+        await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
+        await page.click('.nb-appnav [data-nav="students"]');
+        await page.waitForFunction(() => location.hash === '#/students' && document.querySelector('[data-page="154"]'));
+        await page.click('.nb-appnav [data-nav="all"]');
+        await page.waitForSelector('[role="dialog"]');
+        await page.goBack();
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]') && !document.querySelector('[role="dialog"]'));
+
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생카드', '#/cards/1', 159], ['예산', '#/budget', 468]]) {
+            await page.click('.nb-appnav [data-nav="all"]');
+            await page.waitForSelector('[role="dialog"]');
+            const chip = await page.evaluateHandle((name) => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === name), label);
+            const chipEl = chip.asElement();
+            if (!chipEl) browserErrors.push(`전체 메뉴에 ${label}이 없음`);
+            else {
+                await chipEl.click();
+                await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
+            }
+        }
+
+        const routeCases = [
+            ['#p154', '#/students', '154', false],
+            ['#/date/2026-04-13', '#/date/2026-04-13', '53', false],
+            ['#/nonsense', '#/cover', '1', true],
+            ['#/zzz', '#/cover', '1', true],
+            ['#p0', '#/cover', '1', true],
+            ['#/week/0', '#/weeks', '46', true],
+            ['#/week/53', '#/weeks', '46', true],
+            ['#/day/41', '#/days', '99', true],
+            ['#/date/2025-01-01', '#/weeks', '46', true],
+            ['#/month/2026/2', '#/month/2027/2', '45', true],
+            ['#p999', '#/p/580', '580', true],
+            ['#/cards/2', '#/cards/2', '161', false],
+            ['#/cards/abc', '#/cards', '159', true],
+            ['#/cards/-1', '#/cards', '159', true],
+            ['#/cards/2.5', '#/cards', '159', true],
+            ['#/cards/0', '#/cards', '159', true],
+            ['#/cards/33', '#/cards', '159', true],
+        ];
+        for (const [from, to, num, toast] of routeCases) {
+            await page.evaluate((value) => { location.hash = value; }, from);
+            await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, to, num);
+            if (toast) {
+                await page.waitForFunction(() => /없는 주소/.test(document.querySelector('[role="status"]')?.textContent || ''), { timeout: 4000 });
+            }
+        }
+
+        await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/week/7'; });
+        await page.waitForSelector('[data-page="53"]');
+        const period = await page.evaluate(() => {
+            const span = [...document.querySelectorAll('.nb-period .nb-tick span')].find((el) => el.textContent.includes('전담'));
+            if (!span) return '없음';
+            const lines = span.getClientRects().length;
+            if (lines !== 1) return `줄 ${lines}`;
+            if (span.scrollWidth > span.clientWidth + 1) return `너비 ${span.scrollWidth}>${span.clientWidth}`;
+            return 'ok';
+        });
+        if (period !== 'ok') browserErrors.push(`전담 줄바꿈 ${period}`);
+
+        for (const width of [720, 768, 800]) {
+            await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+            await page.waitForFunction(() => !document.querySelector('.nb-app')?.classList.contains('is-phone'));
+            await page.evaluate(() => { location.hash = '#p154'; });
+            await page.waitForSelector('[data-page="154"] .nb-pagetitle');
+            const band = await page.evaluate(() => {
+                const left = document.querySelector('.nb-left')?.getBoundingClientRect();
+                const title = document.querySelector('[data-page="154"] .nb-pagetitle')?.getBoundingClientRect();
+                return {
+                    tabW: left ? Math.round(left.width) : 0,
+                    tabH: left ? Math.round(left.height) : 0,
+                    titleTop: title ? Math.round(title.top) : 0,
+                    title: document.querySelector('[data-page="154"] .nb-pagetitle')?.textContent.trim() || '',
+                };
+            });
+            if (!(band.tabW >= 52 && band.tabW <= 60 && band.tabH > band.tabW * 4)) {
+                browserErrors.push(`${width} 탭 열 ${band.tabW}x${band.tabH}`);
+            }
+            if (!band.title.includes('명렬') || !(band.titleTop >= 140 && band.titleTop <= 210)) {
+                browserErrors.push(`${width} 명렬표 위치 ${band.titleTop} ${band.title}`);
+            }
+        }
+
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);
+        const navPrint = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
         await page.emulateMediaType('screen');
         if (toolbar !== 'none') browserErrors.push('인쇄에서 도구막대가 보임');
+        if (navPrint !== 'none') browserErrors.push('인쇄에서 메뉴가 보임');
 
         const badFile = resolve(root, 'scripts/check-browser.mjs');
         await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
         const input = await page.$('input[type="file"]');
         await input.uploadFile(badFile);
-        await page.waitForSelector('[role="status"]', { timeout: 5000 });
-        const toast = await page.$eval('[role="status"]', (el) => el.innerText);
-        if (!/JSON/.test(toast)) browserErrors.push(`잘못된 JSON 안내가 아님: ${toast}`);
+        await page.waitForFunction(() => /JSON/.test(document.querySelector('[role="status"]')?.innerText || ''), { timeout: 5000 });
     } finally {
         await browser?.close();
         try { process.kill(-preview.pid, 'SIGTERM'); } catch { preview.kill('SIGTERM'); }

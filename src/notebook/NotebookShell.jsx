@@ -29,6 +29,7 @@ export default function NotebookShell({
     onGo,
     children,
     showChrome,
+    phone,
     style,
 }) {
     const leftOn = activeLeft(page);
@@ -38,7 +39,7 @@ export default function NotebookShell({
 
     return (
         <div className={`nb-page ${showChrome ? 'has-chrome' : 'is-cover'}`} data-page={page} data-tone={tone} style={style}>
-            {showChrome && (
+            {showChrome && !phone && (
                 <TabBar side="left" label="구역 탭" activeTo={leftOn}>
                     {LEFT_TABS.map((tab) => (
                         <button
@@ -84,7 +85,7 @@ export default function NotebookShell({
                 </footer>
             </div>
 
-            {showChrome && (
+            {showChrome && !phone && (
                 <TabBar side="right" label="달 · 스티커 탭" activeTo={rightOn}>
                     {RIGHT_TABS.map((tab) => (
                         <button

@@ -13,14 +13,13 @@ import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
 import CaptureFab from './CaptureFab.jsx';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
+import AppMenu from './AppMenu.jsx';
+import { canonicalHash, pageFromHash, resolveHash } from './routes.js';
 
 const MAX = catalog.pageCount;
 
 function readHash() {
-    const m = String(location.hash || '').match(/p(\d+)/i);
-    const n = m ? Number(m[1]) : 1;
-    if (!Number.isFinite(n) || n < 1 || n > MAX) return 1;
-    return n;
+    return pageFromHash(location.hash, catalog.pages, MAX);
 }
 
 export default function NotebookApp({
@@ -45,6 +44,10 @@ export default function NotebookApp({
     praiseBoard,
 }) {
     const [page, setPage] = useState(readHash);
+    const [navEpoch, setNavEpoch] = useState(0);
+    const toastRef = useRef(onToast);
+    const noticedRef = useRef('');
+    toastRef.current = onToast;
     const [sectionPages, setSectionPages] = useState(null);
     const [sectionError, setSectionError] = useState('');
     const [hub, setHub] = useState(null);
@@ -62,11 +65,12 @@ export default function NotebookApp({
     const pageRec = (sectionPages || []).find((item) => item.n === page) || null;
     const showChrome = page !== 1;
 
-    const go = useCallback((n) => {
+    const go = useCallback((n, opts) => {
         const next = Math.min(MAX, Math.max(1, Number(n) || 1));
         setPage(next);
-        if (location.hash !== `#p${next}`) {
-            history.pushState({ page: next }, '', `#p${next}`);
+        const hash = opts?.hash || canonicalHash(next, catalog.pages);
+        if (location.hash !== hash) {
+            history.pushState({ page: next }, '', hash);
         }
     }, []);
 
@@ -103,16 +107,33 @@ export default function NotebookApp({
         return () => observer.disconnect();
     }, [phone]);
 
-    useEffect(() => {
-        const onHash = () => setPage(readHash());
-        const onPop = () => setPage(readHash());
-        window.addEventListener('hashchange', onHash);
-        window.addEventListener('popstate', onPop);
-        return () => {
-            window.removeEventListener('hashchange', onHash);
-            window.removeEventListener('popstate', onPop);
-        };
+    const applyLocation = useCallback(() => {
+        const resolved = resolveHash(location.hash, catalog.pages, MAX);
+        const seen = location.hash || '#';
+        setPage(resolved.page);
+        setNavEpoch((n) => n + 1);
+        if (!resolved.preserve && location.hash !== resolved.canonical) {
+            history.replaceState({ page: resolved.page }, '', resolved.canonical);
+        }
+        if (!resolved.exact) {
+            if (noticedRef.current !== seen) {
+                noticedRef.current = seen;
+                toastRef.current?.('없는 주소라서 가까운 쪽으로 옮겼어요.');
+            }
+        } else {
+            noticedRef.current = '';
+        }
     }, []);
+
+    useEffect(() => {
+        applyLocation();
+        window.addEventListener('hashchange', applyLocation);
+        window.addEventListener('popstate', applyLocation);
+        return () => {
+            window.removeEventListener('hashchange', applyLocation);
+            window.removeEventListener('popstate', applyLocation);
+        };
+    }, [applyLocation]);
 
     const openNote = useCallback((id) => {
         setFocusId(id);
@@ -196,6 +217,13 @@ export default function NotebookApp({
                     </button>
                 </div>
             </header>
+            <AppMenu
+                page={page}
+                pages={catalog.pages}
+                onGo={go}
+                onOpenSearch={() => setSearchOpen(true)}
+                closeSignal={navEpoch}
+            />
 
             <div className="nb-stage-wrap" ref={stageRef}>
                 <NotebookShell
@@ -204,6 +232,7 @@ export default function NotebookApp({
                     pages={catalog.pages}
                     onGo={go}
                     showChrome={showChrome}
+                    phone={phone}
                     style={canvasStyle}
                 >
                     {sectionError ? (
