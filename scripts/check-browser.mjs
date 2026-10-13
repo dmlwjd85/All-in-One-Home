@@ -761,6 +761,29 @@ export async function runBrowserQuality() {
         });
         if (period !== 'ok') browserErrors.push(`전담 줄바꿈 ${period}`);
 
+        for (const width of [720, 768, 800]) {
+            await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+            await page.waitForFunction(() => !document.querySelector('.nb-app')?.classList.contains('is-phone'));
+            await page.evaluate(() => { location.hash = '#p154'; });
+            await page.waitForSelector('[data-page="154"] .nb-pagetitle');
+            const band = await page.evaluate(() => {
+                const left = document.querySelector('.nb-left')?.getBoundingClientRect();
+                const title = document.querySelector('[data-page="154"] .nb-pagetitle')?.getBoundingClientRect();
+                return {
+                    tabW: left ? Math.round(left.width) : 0,
+                    tabH: left ? Math.round(left.height) : 0,
+                    titleTop: title ? Math.round(title.top) : 0,
+                    title: document.querySelector('[data-page="154"] .nb-pagetitle')?.textContent.trim() || '',
+                };
+            });
+            if (!(band.tabW >= 52 && band.tabW <= 60 && band.tabH > band.tabW * 4)) {
+                browserErrors.push(`${width} 탭 열 ${band.tabW}x${band.tabH}`);
+            }
+            if (!band.title.includes('명렬') || !(band.titleTop >= 140 && band.titleTop <= 210)) {
+                browserErrors.push(`${width} 명렬표 위치 ${band.titleTop} ${band.title}`);
+            }
+        }
+
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);
         const navPrint = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);

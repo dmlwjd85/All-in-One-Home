@@ -1550,9 +1550,7 @@
 }
 
 @media (max-width: 800px) {
-    .nb-page.has-chrome { grid-template-columns: minmax(0, 1fr); }
-    .nb-tabbar,
-    .nb-tab-hint { display: none; }
+    .nb-page.has-chrome { grid-template-columns: 56px minmax(0, 1fr) 56px; }
     .nb-tab { font-size: 12px; }
     .nb-yeargrid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: none; }
     .nb-week-days { grid-template-columns: 1fr; }
