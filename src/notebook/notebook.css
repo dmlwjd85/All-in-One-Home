@@ -1333,6 +1333,11 @@
     }
 }
 
+@media (min-width: 1101px) {
+    /* 36px 쓱적과 오른쪽 스티커 탭이 붙지 않도록 여백을 남깁니다. */
+    .nb-stage-wrap { padding-right: 56px; }
+}
+
 @media (min-width: 1101px) and (max-width: 1366px) {
     .nb-table th,
     .nb-table td {
@@ -2356,9 +2361,8 @@
     padding-bottom: 16px;
 }
 .nb-app.is-phone .nb-fab.is-away {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(8px);
+    opacity: 1;
+    transform: none;
 }
 .nb-app.is-phone .nb-ink,
 .nb-app.is-phone .nb-field {
@@ -2453,13 +2457,20 @@
     right: auto;
     bottom: auto;
     flex: 0 0 auto;
-    margin: 0 12px 8px auto;
+    margin: 0 0 0 4px;
+    z-index: 3;
 }
 .nb-app.is-phone .nb-fab-btn {
     width: 44px;
     height: 44px;
     min-width: 44px;
     min-height: 44px;
+}
+.nb-app.is-phone .nb-fab-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 40;
 }
 
 @media print {

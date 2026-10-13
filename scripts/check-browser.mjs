@@ -451,6 +451,16 @@ async function geometryHits(page) {
                 break;
             }
         }
+        if (fabBox && window.innerWidth >= 1101) {
+            const sticker = [...document.querySelectorAll('.nb-right .nb-tab')].find((el) => el.textContent.trim() === '스티커');
+            const stickerBox = visibleBox(sticker);
+            if (stickerBox) {
+                const dx = Math.max(0, Math.max(stickerBox.left - fabBox.right, fabBox.left - stickerBox.right));
+                const dy = Math.max(0, Math.max(stickerBox.top - fabBox.bottom, fabBox.top - stickerBox.bottom));
+                const dist = dx > 0 && dy > 0 ? Math.hypot(dx, dy) : Math.max(dx, dy);
+                if (dist < 16) hits.push(`쓱적·스티커 간격 ${Math.round(dist)}`);
+            }
+        }
         if (pageEl && paper) {
             const foot = visibleBox(document.querySelector('.nb-foot'));
             const controls = [...pageEl.querySelectorAll('button, input, select, textarea, a')].filter((el) => {
@@ -621,6 +631,44 @@ async function geometryHits(page) {
                 const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
                 if (hit && hit !== btn && !btn.contains(hit) && !hit.contains(btn)) hits.push(`버튼 가림 ${labelOf(btn)}`);
             }
+        }
+        const floaters = [];
+        const seenFloater = new Set();
+        const addFloater = (el) => {
+            if (!el || seenFloater.has(el) || !visibleBox(el)) return;
+            seenFloater.add(el);
+            floaters.push(el);
+        };
+        for (const el of document.querySelectorAll('.nb-app *')) {
+            const pos = getComputedStyle(el).position;
+            if (pos === 'fixed' || pos === 'sticky') addFloater(el);
+        }
+        document.querySelectorAll('.nb-fab, .nb-fab-btn').forEach(addFloater);
+        if (floaters.length && pageEl) {
+            const covered = [];
+            const targets = pageEl.querySelectorAll('input, textarea, select, button, a, label, p, h1, h2, h3, li, .nb-kicker, .nb-pagetitle, .nb-field-label');
+            for (const el of targets) {
+                if (el.closest('.sr-only') || el.disabled) continue;
+                const box = el.getBoundingClientRect();
+                if (box.width < 2 || box.height < 2) continue;
+                for (const floater of floaters) {
+                    if (floater.contains(el) || el.contains(floater)) continue;
+                    const host = floater.getBoundingClientRect();
+                    const left = Math.max(box.left, host.left, 0);
+                    const right = Math.min(box.right, host.right, window.innerWidth);
+                    const top = Math.max(box.top, host.top, 0);
+                    const bottom = Math.min(box.bottom, host.bottom, window.innerHeight);
+                    if (right - left < 4 || bottom - top < 4) continue;
+                    const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+                    const onFloater = hit === floater || (hit && floater.contains(hit));
+                    const onContent = hit === el || (hit && el.contains(hit));
+                    if (!onFloater || onContent) continue;
+                    covered.push(`${labelOf(floater)}·${labelOf(el)}`);
+                    break;
+                }
+            }
+            covered.slice(0, 2).forEach((item) => hits.push(`고정 가림 ${item}`));
+            if (covered.length > 2) hits.push(`고정 가림 ${covered.length}개`);
         }
         const pageRoot = document.querySelector('.nb-page');
         if (pageRoot) {

@@ -107,7 +107,7 @@ function pinOn(key, page, pages) {
     return false;
 }
 
-export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal = 0 }) {
+export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal = 0, capture = null }) {
     const [open, setOpen] = useState(false);
     const [canPrev, setCanPrev] = useState(false);
     const [canNext, setCanNext] = useState(false);
@@ -371,6 +371,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
             >
                 ›
             </button>
+            {capture}
             {open && (
                 <Modal title="전체 메뉴" onClose={() => setOpen(false)} wide>
                     <p className="nb-nav-lead">
