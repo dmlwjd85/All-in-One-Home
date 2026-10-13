@@ -165,7 +165,7 @@
 .nb-right .nb-tab:nth-child(10) { background: #e8d5a0; }
 .nb-right .nb-tab:nth-child(11) { background: #c8e0c0; }
 .nb-right .nb-tab:nth-child(12) { background: #d0c4f0; }
-.nb-right .nb-tab:nth-child(13) { background: #ffffff; box-shadow: inset 0 0 0 2px #c2464f; color: #c2464f; }
+.nb-right .nb-tab:nth-child(13) { background: #ffffff; box-shadow: inset 0 0 0 2px #8e2433; color: #8e2433; }
 
 .nb-navbtn.is-on,
 .nb-navbtn[aria-current='page'],
@@ -1558,6 +1558,7 @@
     .nb-week-days { grid-template-columns: 1fr; }
     .nb-linkgrid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .nb-toolbar-user, .nb-toolhide { display: none; }
+    .nb-nav-pins { display: none; }
     .nb-pagetitle { font-size: 20px; }
     .nb-kanban { grid-template-columns: 1fr; }
 }
@@ -2117,6 +2118,14 @@
 }
 @media (max-width: 1100px) {
     .nb-toolbar-page { display: none; }
+}
+@media (min-width: 801px) and (max-width: 1100px) {
+    .nb-appnav { height: 44px; min-height: 44px; }
+    .nb-navbtn,
+    .nb-nav-chev {
+        height: 44px;
+        min-height: 44px;
+    }
 }
 @media (max-height: 820px) and (min-width: 701px) {
     .nb-app {

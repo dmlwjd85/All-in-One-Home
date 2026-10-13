@@ -188,7 +188,7 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
         const bg = hexOf(monthHit[2]);
         const own = ((monthHit[2].match(/color:\s*(#[0-9a-fA-F]{6})/) || [])[1] || rightText).toLowerCase();
         const pair = bg && own ? (Math.max(rel(bg), rel(own)) + 0.05) / (Math.min(rel(bg), rel(own)) + 0.05) : 0;
-        ok(pair >= 4.5, `오른쪽 탭 ${monthHit[1]} 대비 ${pair.toFixed(2)} ${own} on ${bg}`);
+        ok(pair >= 6, `오른쪽 탭 ${monthHit[1]} 대비 ${pair.toFixed(2)} ${own} on ${bg}`);
         monthCount += 1;
     }
     ok(monthCount === 13, `오른쪽 탭 색 ${monthCount}`);

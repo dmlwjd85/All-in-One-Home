@@ -210,13 +210,16 @@ async function geometryHits(page) {
                     if (btn.scrollWidth > btn.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${btn.textContent.trim()}`);
                 }
             }
-            for (const key of ['timetable', 'cards', 'budget']) {
-                const pin = nav.querySelector(`[data-nav-pin="${key}"]`);
-                const pinBox = visibleBox(pin);
-                if (!pinBox) hits.push(`바로가기 없음 ${key}`);
-                else if (pinBox.left < -1 || pinBox.right > window.innerWidth + 1) hits.push(`바로가기 화면 밖 ${key}`);
-                else if (overlaps(allBox, pinBox)) hits.push(`바로가기·전체 겹침 ${key}`);
-                if (pin && pin.scrollWidth > pin.clientWidth + 1) hits.push(`바로가기 글자 잘림 ${key}`);
+            const pinsHidden = getComputedStyle(nav.querySelector('.nb-nav-pins') || nav).display === 'none';
+            if (!pinsHidden) {
+                for (const key of ['timetable', 'cards', 'budget']) {
+                    const pin = nav.querySelector(`[data-nav-pin="${key}"]`);
+                    const pinBox = visibleBox(pin);
+                    if (!pinBox) hits.push(`바로가기 없음 ${key}`);
+                    else if (pinBox.left < -1 || pinBox.right > window.innerWidth + 1) hits.push(`바로가기 화면 밖 ${key}`);
+                    else if (overlaps(allBox, pinBox)) hits.push(`바로가기·전체 겹침 ${key}`);
+                    if (pin && pin.scrollWidth > pin.clientWidth + 1) hits.push(`바로가기 글자 잘림 ${key}`);
+                }
             }
             const lum = (rgb) => {
                 const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
@@ -270,7 +273,7 @@ async function geometryHits(page) {
         for (const tab of document.querySelectorAll('.nb-right .nb-tab')) {
             if (!visibleBox(tab)) continue;
             const ratio = contrastOf(tab);
-            if (!(ratio >= 4.5)) hits.push(`오른쪽 탭 대비 ${tab.textContent.trim()} ${ratio == null ? '없음' : ratio.toFixed(2)}`);
+            if (!(ratio >= 6)) hits.push(`오른쪽 탭 대비 ${tab.textContent.trim()} ${ratio == null ? '없음' : ratio.toFixed(2)}`);
         }
         const pageEl = document.querySelector('.nb-page');
         const paper = visibleBox(pageEl);
@@ -520,7 +523,8 @@ export async function runBrowserQuality() {
         if (!(phoneBar <= 80 && phoneBar >= 48)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
         const phoneHits = await page.$$eval('.nb-appnav .nb-navbtn, .nb-appnav .nb-nav-chev', (els) => els.filter((el) => {
             const style = getComputedStyle(el);
-            return !el.disabled && style.visibility !== 'hidden' && style.display !== 'none';
+            const box = el.getBoundingClientRect();
+            return !el.disabled && style.visibility !== 'hidden' && style.display !== 'none' && box.width >= 1 && box.height >= 1;
         }).map((el) => {
             const box = el.getBoundingClientRect();
             return {
@@ -607,6 +611,22 @@ export async function runBrowserQuality() {
                 const phone = viewW <= 700;
                 return document.querySelector('.nb-app')?.classList.contains('is-phone') === phone;
             }, {}, width);
+            if (width === 1024) {
+                const menuH = await page.$eval('.nb-appnav-scroll .nb-navbtn', (el) => el.getBoundingClientRect().height);
+                if (!(menuH >= 44)) browserErrors.push(`1024 메뉴 높이 ${menuH}`);
+            }
+            if (width <= 390) {
+                const shown = await page.$eval('.nb-appnav-scroll', (scroll) => {
+                    const host = scroll.getBoundingClientRect();
+                    return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                        const style = getComputedStyle(btn);
+                        if (style.visibility === 'hidden' || style.display === 'none') return false;
+                        const box = btn.getBoundingClientRect();
+                        return box.left >= host.left - 1 && box.right <= host.right + 1;
+                    }).length;
+                });
+                if (shown < 3) browserErrors.push(`${label} 보이는 메뉴 ${shown}개`);
+            }
             const start = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
             const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
             if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
@@ -688,9 +708,16 @@ export async function runBrowserQuality() {
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
-        for (const [pin, hash, num] of [['timetable', '#/timetable', 141], ['cards', '#/cards/1', 159], ['budget', '#/budget', 468]]) {
-            await page.click(`[data-nav-pin="${pin}"]`);
-            await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
+        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생카드', '#/cards/1', 159], ['예산', '#/budget', 468]]) {
+            await page.click('.nb-appnav [data-nav="all"]');
+            await page.waitForSelector('[role="dialog"]');
+            const chip = await page.evaluateHandle((name) => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === name), label);
+            const chipEl = chip.asElement();
+            if (!chipEl) browserErrors.push(`전체 메뉴에 ${label}이 없음`);
+            else {
+                await chipEl.click();
+                await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
+            }
         }
 
         const routeCases = [
