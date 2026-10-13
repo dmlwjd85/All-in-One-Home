@@ -250,22 +250,33 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
                 edges();
                 return;
             }
-            followRef.current = false;
             edges();
+        };
+        const markUserScroll = () => {
+            followRef.current = false;
         };
         const onResize = () => {
             if (followRef.current) center();
-            else edges();
+            else {
+                clearSpread();
+                reserveChevrons();
+                spread();
+                edges();
+            }
         };
         center();
         const later = requestAnimationFrame(() => onResize());
         nav.addEventListener('scroll', onScroll, { passive: true });
+        nav.addEventListener('wheel', markUserScroll, { passive: true });
+        nav.addEventListener('touchmove', markUserScroll, { passive: true });
         const observer = new ResizeObserver(onResize);
         observer.observe(nav);
         document.fonts?.ready?.then(() => onResize());
         return () => {
             cancelAnimationFrame(later);
             nav.removeEventListener('scroll', onScroll);
+            nav.removeEventListener('wheel', markUserScroll);
+            nav.removeEventListener('touchmove', markUserScroll);
             observer.disconnect();
             clearSpread();
         };

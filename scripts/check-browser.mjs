@@ -104,6 +104,8 @@ async function inspect(page) {
 const SAMPLE_NAME = '선우하늘별';
 const SAMPLE_SEX = '남학생';
 const SAMPLE_NOTE = '비고란';
+const SAMPLE_NOTE_LONG = '비고다섯자';
+const SAMPLE_BIRTH = '2019.05.05';
 
 async function writeFields(page, pageNo, fields) {
     await page.evaluate((num, patch) => {
@@ -114,20 +116,25 @@ async function writeFields(page, pageNo, fields) {
     }, pageNo, fields);
 }
 
-function rosterPatch(name, sex, note) {
+function rosterPatch(name, sex, note, birth = '') {
     const patch = {};
     for (let n = 1; n <= 32; n += 1) {
         patch[`name${n}`] = name;
         patch[`sex${n}`] = sex;
         patch[`note${n}`] = note;
+        patch[`birth${n}`] = birth;
     }
     return patch;
 }
 
 async function prepareClipSamples(page, n) {
     if (n === 154) {
-        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, SAMPLE_SEX, SAMPLE_NOTE));
-        await page.waitForFunction((name) => document.querySelector('#roster-1 input')?.value === name, {}, SAMPLE_NAME);
+        await writeFields(page, 154, rosterPatch(SAMPLE_NAME, SAMPLE_SEX, SAMPLE_NOTE_LONG, SAMPLE_BIRTH));
+        await page.waitForFunction((name, birth) => {
+            const row = document.querySelector('#roster-1');
+            return row?.querySelector('input')?.value === name
+                && row?.querySelector('[aria-label="1번 생년월일"]')?.value === birth;
+        }, {}, SAMPLE_NAME, SAMPLE_BIRTH);
     }
     if (n >= 148 && n <= 153) {
         const patch = {};
@@ -153,7 +160,25 @@ async function clearClipSamples(page, n) {
     }
 }
 
+async function settleChrome(page) {
+    await page.waitForFunction(() => {
+        if (document.fonts && document.fonts.status !== 'loaded') return false;
+        const nav = document.querySelector('.nb-appnav-scroll');
+        const current = nav?.querySelector('[aria-current="page"]');
+        if (!nav || !current) return false;
+        const host = nav.getBoundingClientRect();
+        const box = current.getBoundingClientRect();
+        return box.width > 2 && box.left >= host.left - 1 && box.right <= host.right + 1;
+    }, { timeout: 4000 }).catch(() => {});
+    await page.evaluate(() => new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+}
+
 async function geometryHits(page) {
+    await page.evaluate(async () => {
+        if (document.fonts?.ready) await document.fonts.ready;
+    });
     return page.evaluate(() => {
         document.querySelectorAll('.nb-body, .nb-stage-wrap').forEach((el) => {
             el.scrollTop = 0;
@@ -499,7 +524,12 @@ async function geometryHits(page) {
                     samples.push('선우하늘별');
                     samples.push('학생이름김');
                 }
-                if (/번 성별$/.test(aria) || /번 비고$/.test(aria)) samples.push('남학생');
+                if (/번 성별$/.test(aria)) samples.push('남학생');
+                if (/번 비고$/.test(aria)) {
+                    samples.push('남학생');
+                    samples.push('비고다섯자');
+                }
+                if (/번 생년월일$/.test(aria)) samples.push('2019.05.05');
             }
             const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
             let avail = el.clientWidth - pad;
@@ -581,6 +611,17 @@ async function geometryHits(page) {
             if (right - left < 2 || bottom - top < 2) return null;
             return { left, top, right, bottom };
         };
+        if (pageEl) {
+            for (const btn of pageEl.querySelectorAll('button')) {
+                if (btn.closest('.nb-fab, .sr-only') || btn.disabled) continue;
+                const rect = btn.getBoundingClientRect();
+                if (rect.width < 2 || rect.height < 2) continue;
+                const visible = clippedTextBox(rect, btn);
+                if (!visible) continue;
+                const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
+                if (hit && hit !== btn && !btn.contains(hit) && !hit.contains(btn)) hits.push(`버튼 가림 ${labelOf(btn)}`);
+            }
+        }
         const pageRoot = document.querySelector('.nb-page');
         if (pageRoot) {
             const fields = [...pageRoot.querySelectorAll('input, textarea, select')];
@@ -722,6 +763,7 @@ export async function runBrowserQuality() {
         const empty = [];
         const overflowPages = [];
         const unreachable = [];
+        await settleChrome(page);
         for (let n = 1; n <= 580; n += 1) {
             await go(page, n);
             const info = await inspect(page);
@@ -758,6 +800,7 @@ export async function runBrowserQuality() {
                 if (viewW <= 1100) return paper.width <= viewW - 40;
                 return paper.width < viewW - 20 && paper.height > 640;
             }, {}, width);
+            await settleChrome(page);
             for (let n = 1; n <= 580; n += 1) {
                 await go(page, n);
                 await prepareClipSamples(page, n);
@@ -1067,6 +1110,40 @@ export async function runBrowserQuality() {
             }
         }
 
+        await go(page, 154);
+        await prepareClipSamples(page, 154);
+        for (const width of [861, 885, 900, 1023, 1024, 1060]) {
+            await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+            await page.waitForFunction((viewW) => !document.querySelector('.nb-app')?.classList.contains('is-phone') && document.querySelector('[data-page="154"]'), {}, width);
+            await settleChrome(page);
+            const rosterHits = await geometryHits(page);
+            if (rosterHits.length) browserErrors.push(`${width} 명렬 ${rosterHits.slice(0, 4).join(', ')}`);
+            const rosterFit = await page.evaluate((birth, note) => {
+                const bad = [];
+                const canvas = document.createElement('canvas').getContext('2d');
+                for (const [label, text] of [['생년월일', birth], ['비고', note]]) {
+                    const el = document.querySelector(`[aria-label="1번 ${label}"]`);
+                    if (!el || el.value !== text) {
+                        bad.push(`${label} 값`);
+                        continue;
+                    }
+                    const cs = getComputedStyle(el);
+                    canvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+                    if (canvas.measureText(text).width + pad > el.clientWidth + 1 || el.scrollWidth > el.clientWidth + 1) {
+                        bad.push(`${label} ${Math.round(el.clientWidth)}`);
+                    }
+                }
+                const who = document.querySelector('#roster-17 .nb-gobtn.who');
+                const box = who?.getBoundingClientRect();
+                const hit = box ? document.elementFromPoint(box.left + box.width / 2, Math.min(box.top + box.height / 2, window.innerHeight - 2)) : null;
+                if (!who || !hit || (hit !== who && !who.contains(hit))) bad.push('누가 가림');
+                return bad;
+            }, SAMPLE_BIRTH, SAMPLE_NOTE_LONG);
+            if (rosterFit.length) browserErrors.push(`${width} 명렬 글자 ${rosterFit.join(', ')}`);
+        }
+        await clearClipSamples(page, 154);
+
         await page.evaluate(() => {
             localStorage.setItem('homenote_v2_ddayCards', JSON.stringify([
                 { id: 'due-card', docNo: '12', title: '공문마감', deadline: '2026-05-06', status: 'todo' },
@@ -1099,6 +1176,7 @@ export async function runBrowserQuality() {
                 if (!app || app.classList.contains('is-phone') !== isPhone) return false;
                 return Boolean(document.querySelector('[data-page="56"] .nb-week-due'));
             }, {}, width);
+            await settleChrome(page);
             const dueText = await page.$eval('.nb-week-due', (el) => el.innerText);
             if (!dueText.includes('공문마감') || !dueText.includes('줄마감') || !dueText.includes('마감')) {
                 browserErrors.push(`${label} 주간 기한 문구 ${dueText.replace(/\s+/g, ' ').slice(0, 40)}`);

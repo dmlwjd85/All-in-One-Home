@@ -873,18 +873,20 @@
 }
 .nb-table.compact th, .nb-table.compact td { padding: 1px 3px; }
 .nb-roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-@media (min-width: 701px) and (max-width: 860px) {
+/* 두 열에 생년월일 10자와 비고 5자를 넣으면 1060px 아래에서 누가 버튼이 오른쪽 달 탭 아래로 들어갑니다. */
+@media (min-width: 701px) and (max-width: 1059px) {
     .nb-roster { grid-template-columns: 1fr; }
 }
-.nb-roster .nb-table td:nth-child(2) .nb-ink { min-width: 4.8em; }
+.nb-roster .nb-table td:nth-child(2) .nb-ink { min-width: 5em; }
 .nb-roster .nb-table th:nth-child(3),
-.nb-roster .nb-table td:nth-child(3),
-.nb-roster .nb-table th:nth-child(5),
-.nb-roster .nb-table td:nth-child(5) { min-width: 4.5em; }
-.nb-roster .nb-table td:nth-child(3) .nb-ink,
-.nb-roster .nb-table td:nth-child(5) .nb-ink { min-width: 3.4em; }
+.nb-roster .nb-table td:nth-child(3) { min-width: 4.5em; }
+.nb-roster .nb-table td:nth-child(3) .nb-ink { min-width: 3.4em; }
 .nb-roster .nb-table th:nth-child(4),
-.nb-roster .nb-table td:nth-child(4) { min-width: 3.2em; }
+.nb-roster .nb-table td:nth-child(4),
+.nb-roster .nb-table td:nth-child(4) .nb-ink { min-width: 6.2em; }
+.nb-roster .nb-table th:nth-child(5),
+.nb-roster .nb-table td:nth-child(5),
+.nb-roster .nb-table td:nth-child(5) .nb-ink { min-width: 5.2em; }
 .nb-roster-jump {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
@@ -1466,7 +1468,7 @@
     }
     .nb-roster .nb-table tr {
         display: grid;
-        grid-template-columns: 2.2rem minmax(4.8em, 1.35fr) minmax(4.5em, 0.85fr) minmax(3.2em, 0.9fr) minmax(4.5em, 0.85fr) 2.8rem;
+        grid-template-columns: 2.2rem minmax(5em, 1.35fr) minmax(4.5em, 0.7fr) minmax(6.2em, 1fr) minmax(5.2em, 0.9fr) 2.8rem;
         min-height: 0;
         align-items: stretch;
     }
