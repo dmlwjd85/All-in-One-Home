@@ -140,6 +140,10 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
     ok(!tooFar.exact && tooFar.page === 580 && tooFar.canonical === '#/p/580', `큰 쪽 번호 ${tooFar.page} ${tooFar.canonical}`);
     const card = resolveHash('#/cards/2', pages);
     ok(card.exact && card.page === 161 && card.canonical === '#/cards/2' && canonicalHash(161, pages) === '#/cards/2', '2번 학생 카드');
+    for (const bad of ['#/cards/abc', '#/cards/-1', '#/cards/2.5', '#/cards/0', '#/cards/33']) {
+        const missedCard = resolveHash(bad, pages);
+        ok(!missedCard.exact && missedCard.page === 159 && missedCard.canonical === '#/cards', `잘못된 학생 카드 ${bad} → ${missedCard.canonical} p${missedCard.page}`);
+    }
     ok(!resolveHash('#/nonsense', pages).exact && resolveHash('#/zzz', pages).page === 1, '없는 이름');
     ok(!resolveHash('#/week/0', pages).exact && resolveHash('#/week/0', pages).canonical === '#/weeks', '없는 주');
     ok(!resolveHash('#/week/53', pages).exact && resolveHash('#/day/41', pages).canonical === '#/days', '없는 하루');

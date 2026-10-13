@@ -109,15 +109,15 @@ export default function NotebookApp({
 
     const applyLocation = useCallback(() => {
         const resolved = resolveHash(location.hash, catalog.pages, MAX);
+        const seen = location.hash || '#';
         setPage(resolved.page);
         setNavEpoch((n) => n + 1);
         if (!resolved.preserve && location.hash !== resolved.canonical) {
             history.replaceState({ page: resolved.page }, '', resolved.canonical);
         }
         if (!resolved.exact) {
-            const key = location.hash || '#';
-            if (noticedRef.current !== key) {
-                noticedRef.current = key;
+            if (noticedRef.current !== seen) {
+                noticedRef.current = seen;
                 toastRef.current?.('없는 주소라서 가까운 쪽으로 옮겼어요.');
             }
         } else {

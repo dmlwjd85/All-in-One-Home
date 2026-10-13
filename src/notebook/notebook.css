@@ -2067,8 +2067,19 @@
 }
 .nb-app.is-phone .nb-appnav .nb-navbtn,
 .nb-app.is-phone .nb-appnav .nb-nav-chev {
+    box-sizing: border-box;
     height: 44px;
     min-height: 44px;
+    min-width: 44px;
+}
+.nb-app.is-phone .nb-appnav .nb-nav-chev {
+    width: 44px;
+    flex-basis: 44px;
+}
+.nb-app.is-phone .nb-appnav .nb-nav-chev:disabled {
+    width: 0;
+    min-width: 0;
+    flex-basis: 0;
 }
 .nb-app.is-phone .nb-tabbar,
 .nb-app.is-phone .nb-left,

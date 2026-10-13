@@ -217,12 +217,14 @@ export function resolveHash(hash, pages, max = 580) {
         return { page: dest, canonical: `#/date/${matched[1]}`, exact: true, preserve: true };
     }
 
-    matched = raw.match(/^\/cards\/(\d+)$/);
+    matched = raw.match(/^\/cards\/(.+)$/);
     if (matched) {
-        const n = Number(matched[1]);
-        const dest = studentCardPage(n);
+        const token = matched[1];
+        const n = Number(token);
+        const whole = /^[1-9]\d*$/.test(token);
+        const dest = whole ? studentCardPage(n) : 0;
         const rec = pages?.[dest - 1];
-        const exact = Number.isInteger(n) && n >= 1 && n <= 32 && rec?.type === 'student-card' && Number(rec.extra?.student) === n;
+        const exact = whole && n <= 32 && rec?.type === 'student-card' && Number(rec.extra?.student) === n;
         if (!exact) return { page: VIEW_PAGES.cards, canonical: '#/cards', exact: false, preserve: false };
         return { page: dest, canonical: `#/cards/${n}`, exact: true, preserve: false };
     }

@@ -518,8 +518,20 @@ export async function runBrowserQuality() {
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
         const phoneBar = await page.$eval('.nb-appnav', (el) => el.getBoundingClientRect().height);
         if (!(phoneBar <= 80 && phoneBar >= 48)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
-        const phoneHit = await page.$eval('.nb-appnav .nb-navbtn', (el) => el.getBoundingClientRect().height);
-        if (!(phoneHit >= 44)) browserErrors.push(`휴대폰 메뉴 터치 ${phoneHit}`);
+        const phoneHits = await page.$$eval('.nb-appnav .nb-navbtn, .nb-appnav .nb-nav-chev', (els) => els.filter((el) => {
+            const style = getComputedStyle(el);
+            return !el.disabled && style.visibility !== 'hidden' && style.display !== 'none';
+        }).map((el) => {
+            const box = el.getBoundingClientRect();
+            return {
+                w: box.width,
+                h: box.height,
+                name: (el.textContent || el.getAttribute('aria-label') || '').trim(),
+            };
+        }));
+        for (const hit of phoneHits) {
+            if (!(hit.w >= 44 && hit.h >= 44)) browserErrors.push(`휴대폰 메뉴 터치 ${hit.name} ${Math.round(hit.w)}x${Math.round(hit.h)}`);
+        }
         const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
         if (phoneTabs) browserErrors.push('휴대폰 구역 탭이 메뉴 줄과 따로 있음');
         await go(page, 569);
@@ -599,11 +611,12 @@ export async function runBrowserQuality() {
             const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
             if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
             else {
+                const chunk = await page.$eval('.nb-appnav-scroll', (el) => Math.round(el.clientWidth * 0.7));
                 await next.click();
-                await page.waitForFunction((from) => document.querySelector('.nb-appnav-scroll').scrollLeft >= from + 80, {}, start);
+                await page.waitForFunction((from, min) => document.querySelector('.nb-appnav-scroll').scrollLeft >= from + min, {}, start, Math.max(8, chunk - 8));
                 await new Promise((resolve) => setTimeout(resolve, 350));
                 const afterClick = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-                if (afterClick < start + 80) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${afterClick}`);
+                if (afterClick < start + Math.max(8, chunk - 8)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${afterClick}`);
                 const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
                     const max = Math.max(0, el.scrollWidth - el.clientWidth);
                     const forward = from + 90;
@@ -618,6 +631,48 @@ export async function runBrowserQuality() {
                 }
             }
         }
+
+        await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
+        const seenLabels = new Set(await page.evaluate(() => {
+            const scroll = document.querySelector('.nb-appnav-scroll');
+            const host = scroll.getBoundingClientRect();
+            return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                const box = btn.getBoundingClientRect();
+                return box.left >= host.left - 1 && box.right <= host.right + 1;
+            }).map((btn) => btn.textContent.trim());
+        }));
+        const startLeft = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+        for (let step = 0; step < 40; step += 1) {
+            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
+            if (!next) break;
+            const before = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            await next.click();
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            const after = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
+            if (after < before + 4) break;
+            const names = await page.evaluate(() => {
+                const scroll = document.querySelector('.nb-appnav-scroll');
+                const host = scroll.getBoundingClientRect();
+                return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                    const box = btn.getBoundingClientRect();
+                    return box.left >= host.left - 1 && box.right <= host.right + 1;
+                }).map((btn) => btn.textContent.trim());
+            });
+            for (const name of names) seenLabels.add(name);
+        }
+        const skipped = await page.evaluate((left, seen) => {
+            const scroll = document.querySelector('.nb-appnav-scroll');
+            const have = new Set(seen);
+            return [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.textContent.trim()).filter((name, index, all) => {
+                const btn = scroll.querySelectorAll('.nb-navbtn')[index];
+                if (btn.offsetLeft + btn.offsetWidth <= left + 1) return false;
+                return !have.has(name);
+            });
+        }, startLeft, [...seenLabels]);
+        if (skipped.length) browserErrors.push(`360 화살표가 메뉴를 건너뜀 ${skipped.join(',')}`);
 
         await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/home'; });
@@ -649,6 +704,11 @@ export async function runBrowserQuality() {
             ['#/month/2026/2', '#/month/2027/2', '45', true],
             ['#p999', '#/p/580', '580', true],
             ['#/cards/2', '#/cards/2', '161', false],
+            ['#/cards/abc', '#/cards', '159', true],
+            ['#/cards/-1', '#/cards', '159', true],
+            ['#/cards/2.5', '#/cards', '159', true],
+            ['#/cards/0', '#/cards', '159', true],
+            ['#/cards/33', '#/cards', '159', true],
         ];
         for (const [from, to, num, toast] of routeCases) {
             await page.evaluate((value) => { location.hash = value; }, from);

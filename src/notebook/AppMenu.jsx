@@ -181,7 +181,7 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal =
         const nav = scrollRef.current;
         if (!nav) return;
         followRef.current = false;
-        const chunk = Math.max(160, Math.round(nav.clientWidth * 0.7));
+        const chunk = Math.round(nav.clientWidth * 0.7);
         const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
         nav.scrollLeft = Math.max(0, Math.min(max, nav.scrollLeft + dir * chunk));
     };
