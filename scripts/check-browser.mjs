@@ -164,6 +164,91 @@ async function geometryHits(page) {
             const allBox = visibleBox(allBtn);
             if (allBox && (allBox.left < -1 || allBox.right > window.innerWidth + 1)) hits.push('전체 메뉴가 화면 밖');
             if (allBtn && allBtn.scrollWidth > allBtn.clientWidth + 1) hits.push('전체 글자 잘림');
+            const brandTop = document.querySelector('.nb-toolbar-brand')?.getBoundingClientRect();
+            const ownRow = !brandTop || Math.abs(brandTop.top - navBox.top) > 12;
+            if (ownRow && navBox.width < window.innerWidth - 4) hits.push(`메뉴 너비 ${Math.round(navBox.width)}`);
+            if (navBox.height > 80) hits.push(`메뉴 높이 ${Math.round(navBox.height)}`);
+            const shownChevron = (el) => el && getComputedStyle(el).visibility !== 'hidden' && !el.disabled;
+            const prev = nav.querySelector('[data-nav-scroll="prev"]');
+            const next = nav.querySelector('[data-nav-scroll="next"]');
+            if (scroll) {
+                const overflow = scroll.scrollWidth > scroll.clientWidth + 2;
+                const max = scroll.scrollWidth - scroll.clientWidth;
+                if (overflow && scroll.scrollLeft > 2 && !shownChevron(prev)) hits.push('앞 메뉴 화살표 없음');
+                if (overflow && scroll.scrollLeft < max - 2 && !shownChevron(next)) hits.push('뒤 메뉴 화살표 없음');
+                if (!overflow && (shownChevron(prev) || shownChevron(next))) hits.push('넘치지 않는데 메뉴 화살표');
+                if (current) {
+                    const ideal = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2;
+                    const expect = Math.max(0, Math.min(Math.max(0, max), ideal));
+                    if (Math.abs(scroll.scrollLeft - expect) > 12) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
+                }
+                for (const btn of scroll.querySelectorAll('.nb-navbtn')) {
+                    const style = getComputedStyle(btn);
+                    if (style.visibility === 'hidden' || style.display === 'none') continue;
+                    const box = btn.getBoundingClientRect();
+                    const iw = Math.min(box.right, scrollBox.right) - Math.max(box.left, scrollBox.left);
+                    const full = scrollBox && iw >= box.width - 3;
+                    const none = !scrollBox || iw <= 2;
+                    if (!full && !none) hits.push(`메뉴 글자 중간 잘림 ${btn.textContent.trim()}`);
+                    if (btn.scrollWidth > btn.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${btn.textContent.trim()}`);
+                }
+            }
+            for (const key of ['timetable', 'cards', 'budget']) {
+                const pin = nav.querySelector(`[data-nav-pin="${key}"]`);
+                const pinBox = visibleBox(pin);
+                if (!pinBox) hits.push(`바로가기 없음 ${key}`);
+                else if (pinBox.left < -1 || pinBox.right > window.innerWidth + 1) hits.push(`바로가기 화면 밖 ${key}`);
+                else if (overlaps(allBox, pinBox)) hits.push(`바로가기·전체 겹침 ${key}`);
+                if (pin && pin.scrollWidth > pin.clientWidth + 1) hits.push(`바로가기 글자 잘림 ${key}`);
+            }
+            const lum = (rgb) => {
+                const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (!m) return null;
+                const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                    const s = c / 255;
+                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                });
+                return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+            };
+            const contrast = (el) => {
+                if (!el) return null;
+                const cs = getComputedStyle(el);
+                const a = lum(cs.color);
+                const b = lum(cs.backgroundColor);
+                if (a == null || b == null) return null;
+                const hi = Math.max(a, b);
+                const lo = Math.min(a, b);
+                return (hi + 0.05) / (lo + 0.05);
+            };
+            const selected = nav.querySelector('.nb-navbtn.is-on');
+            const selectedRatio = contrast(selected);
+            if (selected && !(selectedRatio >= 4.5)) hits.push(`메뉴 선택 대비 ${selectedRatio?.toFixed?.(2) || selectedRatio}`);
+        }
+        if (document.querySelector('.nb-app.is-phone')) {
+            for (const el of document.querySelectorAll('.nb-tabbar, .nb-left, .nb-right, .nb-tab-hint')) {
+                const st = getComputedStyle(el);
+                if (st.display !== 'none' && st.visibility !== 'hidden') {
+                    hits.push('휴대폰 위쪽 탭이 메뉴와 따로 있음');
+                    break;
+                }
+            }
+        }
+        const deskTab = document.querySelector('.nb-tab.is-on');
+        if (deskTab && visibleBox(deskTab)) {
+            const cs = getComputedStyle(deskTab);
+            const lum = (rgb) => {
+                const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                if (!m) return null;
+                const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                    const s = c / 255;
+                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                });
+                return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+            };
+            const a = lum(cs.color);
+            const b = lum(cs.backgroundColor);
+            const ratio = a == null || b == null ? 0 : (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            if (!(ratio >= 4.5)) hits.push(`선택 탭 대비 ${ratio.toFixed(2)}`);
         }
         const pageEl = document.querySelector('.nb-page');
         const paper = visibleBox(pageEl);
@@ -409,8 +494,10 @@ export async function runBrowserQuality() {
         await go(page, 2);
         const brand = await page.$eval('.nb-brand-name', (el) => getComputedStyle(el).whiteSpace);
         if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
-        const hint = await page.$eval('.nb-tab-hint', (el) => getComputedStyle(el).display);
-        if (hint === 'none') browserErrors.push('구역 탭 스크롤 힌트가 없음');
+        const phoneBar = await page.$eval('.nb-appnav', (el) => el.getBoundingClientRect().height);
+        if (!(phoneBar <= 80)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
+        const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
+        if (phoneTabs) browserErrors.push('휴대폰 구역 탭이 메뉴 줄과 따로 있음');
         await go(page, 569);
         const stickerPressed = await page.$eval('.nb-sticker', (el) => el.hasAttribute('aria-pressed'));
         if (!stickerPressed) browserErrors.push('스티커 버튼에 누름 상태가 없음');
@@ -475,18 +562,69 @@ export async function runBrowserQuality() {
             await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
         }
 
+        await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
+        await page.click('.nb-appnav [data-nav="students"]');
+        await page.waitForFunction(() => location.hash === '#/students' && document.querySelector('[data-page="154"]'));
+        await page.click('.nb-appnav [data-nav="all"]');
+        await page.waitForSelector('[role="dialog"]');
+        await page.goBack();
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]') && !document.querySelector('[role="dialog"]'));
+
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        for (const [pin, hash, num] of [['timetable', '#/timetable', 141], ['cards', '#/cards', 159], ['budget', '#/budget', 468]]) {
+            await page.click(`[data-nav-pin="${pin}"]`);
+            await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
+        }
+
+        const routeCases = [
+            ['#p154', '#/students', '154', false],
+            ['#/date/2026-04-13', '#/date/2026-04-13', '53', false],
+            ['#/nonsense', '#/cover', '1', true],
+            ['#/zzz', '#/cover', '1', true],
+            ['#p0', '#/cover', '1', true],
+            ['#/week/0', '#/weeks', '46', true],
+            ['#/week/53', '#/weeks', '46', true],
+            ['#/day/41', '#/days', '99', true],
+            ['#/date/2025-01-01', '#/weeks', '46', true],
+            ['#/month/2026/2', '#/month/2027/2', '45', true],
+        ];
+        for (const [from, to, num, toast] of routeCases) {
+            await page.evaluate((value) => { location.hash = value; }, from);
+            await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, to, num);
+            if (toast) {
+                await page.waitForFunction(() => /없는 주소/.test(document.querySelector('[role="status"]')?.textContent || ''), { timeout: 4000 });
+            }
+        }
+
+        await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/week/7'; });
+        await page.waitForSelector('[data-page="53"]');
+        const period = await page.evaluate(() => {
+            const span = [...document.querySelectorAll('.nb-period .nb-tick span')].find((el) => el.textContent.includes('전담'));
+            if (!span) return '없음';
+            const lines = span.getClientRects().length;
+            if (lines !== 1) return `줄 ${lines}`;
+            if (span.scrollWidth > span.clientWidth + 1) return `너비 ${span.scrollWidth}>${span.clientWidth}`;
+            return 'ok';
+        });
+        if (period !== 'ok') browserErrors.push(`전담 줄바꿈 ${period}`);
+
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);
+        const navPrint = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
         await page.emulateMediaType('screen');
         if (toolbar !== 'none') browserErrors.push('인쇄에서 도구막대가 보임');
+        if (navPrint !== 'none') browserErrors.push('인쇄에서 메뉴가 보임');
 
         const badFile = resolve(root, 'scripts/check-browser.mjs');
         await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
         const input = await page.$('input[type="file"]');
         await input.uploadFile(badFile);
-        await page.waitForSelector('[role="status"]', { timeout: 5000 });
-        const toast = await page.$eval('[role="status"]', (el) => el.innerText);
-        if (!/JSON/.test(toast)) browserErrors.push(`잘못된 JSON 안내가 아님: ${toast}`);
+        await page.waitForFunction(() => /JSON/.test(document.querySelector('[role="status"]')?.innerText || ''), { timeout: 5000 });
     } finally {
         await browser?.close();
         try { process.kill(-preview.pid, 'SIGTERM'); } catch { preview.kill('SIGTERM'); }

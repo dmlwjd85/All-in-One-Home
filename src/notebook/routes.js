@@ -15,7 +15,9 @@ export const VIEW_PAGES = {
     weeks: 46,
     days: 99,
     class: 140,
+    timetable: 141,
     students: 154,
+    cards: 159,
     attend: 231,
     counsel: 256,
     lesson: 335,
@@ -154,10 +156,69 @@ export function menuDestination(key, page, pages) {
     return view ? VIEW_PAGES[view] : 2;
 }
 
-function clamp(n, max) {
-    const page = Number(n);
-    if (!Number.isFinite(page)) return 1;
-    return Math.min(max, Math.max(1, Math.trunc(page)));
+/**
+ * 해시를 쪽·표준 주소로 풉니다.
+ * exact: 주소가 그 쪽을 정확히 가리키면 true. 아니면 안내가 필요합니다.
+ * preserve: 맞는 날짜 주소는 주 번호로 바꾸지 않습니다.
+ */
+export function resolveHash(hash, pages, max = 580) {
+    const raw = String(hash || '').replace(/^#/, '');
+    const cover = () => canonicalHash(1, pages);
+    if (!raw) return { page: 1, canonical: cover(), exact: true, preserve: false };
+
+    let matched = raw.match(/^p(\d+)$/i) || raw.match(/^\/p\/(\d+)$/);
+    if (matched) {
+        const n = Number(matched[1]);
+        if (!Number.isInteger(n) || n < 1 || n > max) {
+            return { page: 1, canonical: cover(), exact: false, preserve: false };
+        }
+        return { page: n, canonical: canonicalHash(n, pages), exact: true, preserve: false };
+    }
+
+    matched = raw.match(/^\/month\/(\d{4})\/(\d{1,2})$/);
+    if (matched) {
+        const year = Number(matched[1]);
+        const month = Number(matched[2]);
+        const dest = monthPage(month, year);
+        if (!dest) return { page: VIEW_PAGES.year, canonical: '#/year', exact: false, preserve: false };
+        const rec = pages?.[dest - 1];
+        const exact = rec?.type === 'month' && Number(rec.extra?.year) === year && Number(rec.extra?.month) === month;
+        return {
+            page: dest,
+            canonical: exact ? `#/month/${year}/${month}` : canonicalHash(dest, pages),
+            exact,
+            preserve: false,
+        };
+    }
+
+    matched = raw.match(/^\/week\/(\d+)$/);
+    if (matched) {
+        const n = Number(matched[1]);
+        const byWeek = (pages || []).find((page) => page.type === 'week' && Number(page.extra?.week) === n);
+        if (!byWeek) return { page: VIEW_PAGES.weeks, canonical: '#/weeks', exact: false, preserve: false };
+        return { page: byWeek.n, canonical: `#/week/${n}`, exact: true, preserve: false };
+    }
+
+    matched = raw.match(/^\/day\/(\d+)$/);
+    if (matched) {
+        const n = Number(matched[1]);
+        const bySlot = (pages || []).find((page) => page.type === 'special-day' && Number(page.extra?.slot) === n);
+        if (!bySlot) return { page: VIEW_PAGES.days, canonical: '#/days', exact: false, preserve: false };
+        return { page: bySlot.n, canonical: `#/day/${n}`, exact: true, preserve: false };
+    }
+
+    matched = raw.match(/^\/date\/(\d{4}-\d{2}-\d{2})$/);
+    if (matched) {
+        const dest = weekPageForYmd(matched[1], pages);
+        if (!dest) return { page: VIEW_PAGES.weeks, canonical: '#/weeks', exact: false, preserve: false };
+        return { page: dest, canonical: `#/date/${matched[1]}`, exact: true, preserve: true };
+    }
+
+    const name = raw.replace(/^\//, '');
+    if (Object.prototype.hasOwnProperty.call(VIEW_PAGES, name)) {
+        return { page: VIEW_PAGES[name], canonical: `#/${name}`, exact: true, preserve: false };
+    }
+    return { page: 1, canonical: cover(), exact: false, preserve: false };
 }
 
 export function canonicalHash(page, pages) {
@@ -173,27 +234,5 @@ export function canonicalHash(page, pages) {
 }
 
 export function pageFromHash(hash, pages, max = 580) {
-    const raw = String(hash || '').replace(/^#/, '');
-    if (!raw) return 1;
-    let matched = raw.match(/^p(\d+)$/i) || raw.match(/^\/p\/(\d+)$/);
-    if (matched) return clamp(matched[1], max);
-    matched = raw.match(/^\/month\/(\d{4})\/(\d{1,2})$/);
-    if (matched) return monthPage(Number(matched[2]), Number(matched[1])) || VIEW_PAGES.year;
-    matched = raw.match(/^\/week\/(\d+)$/);
-    if (matched) {
-        const n = Number(matched[1]);
-        const byWeek = (pages || []).find((page) => page.type === 'week' && Number(page.extra?.week) === n);
-        return byWeek?.n || VIEW_PAGES.weeks;
-    }
-    matched = raw.match(/^\/day\/(\d+)$/);
-    if (matched) {
-        const n = Number(matched[1]);
-        const bySlot = (pages || []).find((page) => page.type === 'special-day' && Number(page.extra?.slot) === n);
-        return bySlot?.n || VIEW_PAGES.days;
-    }
-    matched = raw.match(/^\/date\/(\d{4}-\d{2}-\d{2})$/);
-    if (matched) return weekPageForYmd(matched[1], pages) || VIEW_PAGES.weeks;
-    const name = raw.replace(/^\//, '');
-    if (VIEW_PAGES[name]) return VIEW_PAGES[name];
-    return 1;
+    return resolveHash(hash, pages, max).page;
 }

@@ -14,7 +14,7 @@ import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
 import CaptureFab from './CaptureFab.jsx';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
 import AppMenu from './AppMenu.jsx';
-import { canonicalHash, pageFromHash } from './routes.js';
+import { canonicalHash, pageFromHash, resolveHash } from './routes.js';
 
 const MAX = catalog.pageCount;
 
@@ -44,6 +44,10 @@ export default function NotebookApp({
     praiseBoard,
 }) {
     const [page, setPage] = useState(readHash);
+    const [navEpoch, setNavEpoch] = useState(0);
+    const toastRef = useRef(onToast);
+    const noticedRef = useRef('');
+    toastRef.current = onToast;
     const [sectionPages, setSectionPages] = useState(null);
     const [sectionError, setSectionError] = useState('');
     const [hub, setHub] = useState(null);
@@ -67,12 +71,6 @@ export default function NotebookApp({
         const hash = opts?.hash || canonicalHash(next, catalog.pages);
         if (location.hash !== hash) {
             history.pushState({ page: next }, '', hash);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!location.hash) {
-            history.replaceState({ page: readHash() }, '', canonicalHash(readHash(), catalog.pages));
         }
     }, []);
 
@@ -109,16 +107,33 @@ export default function NotebookApp({
         return () => observer.disconnect();
     }, [phone]);
 
-    useEffect(() => {
-        const onHash = () => setPage(readHash());
-        const onPop = () => setPage(readHash());
-        window.addEventListener('hashchange', onHash);
-        window.addEventListener('popstate', onPop);
-        return () => {
-            window.removeEventListener('hashchange', onHash);
-            window.removeEventListener('popstate', onPop);
-        };
+    const applyLocation = useCallback(() => {
+        const resolved = resolveHash(location.hash, catalog.pages, MAX);
+        setPage(resolved.page);
+        setNavEpoch((n) => n + 1);
+        if (!resolved.preserve && location.hash !== resolved.canonical) {
+            history.replaceState({ page: resolved.page }, '', resolved.canonical);
+        }
+        if (!resolved.exact) {
+            const key = location.hash || '#';
+            if (noticedRef.current !== key) {
+                noticedRef.current = key;
+                toastRef.current?.('없는 주소라서 가까운 쪽으로 옮겼어요.');
+            }
+        } else {
+            noticedRef.current = '';
+        }
     }, []);
+
+    useEffect(() => {
+        applyLocation();
+        window.addEventListener('hashchange', applyLocation);
+        window.addEventListener('popstate', applyLocation);
+        return () => {
+            window.removeEventListener('hashchange', applyLocation);
+            window.removeEventListener('popstate', applyLocation);
+        };
+    }, [applyLocation]);
 
     const openNote = useCallback((id) => {
         setFocusId(id);
@@ -201,13 +216,14 @@ export default function NotebookApp({
                         <span className="nb-toolhide">{user ? '로그아웃' : '나가기'}</span>
                     </button>
                 </div>
-                <AppMenu
-                    page={page}
-                    pages={catalog.pages}
-                    onGo={go}
-                    onOpenSearch={() => setSearchOpen(true)}
-                />
             </header>
+            <AppMenu
+                page={page}
+                pages={catalog.pages}
+                onGo={go}
+                onOpenSearch={() => setSearchOpen(true)}
+                closeSignal={navEpoch}
+            />
 
             <div className="nb-stage-wrap" ref={stageRef}>
                 <NotebookShell
@@ -216,6 +232,7 @@ export default function NotebookApp({
                     pages={catalog.pages}
                     onGo={go}
                     showChrome={showChrome}
+                    phone={phone}
                     style={canvasStyle}
                 >
                     {sectionError ? (

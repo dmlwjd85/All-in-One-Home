@@ -8,7 +8,7 @@ import { isLocalOnlyPage } from '../src/notebook/localPages.js';
 import { SECTION_RANGES, sectionForPage } from '../src/notebook/sections.js';
 import { sumBudget } from '../src/notebook/budget.js';
 import { monthDayMap } from '../src/notebook/linkParts.js';
-import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash } from '../src/notebook/routes.js';
+import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash, resolveHash } from '../src/notebook/routes.js';
 
 const errors = [];
 const ok = (cond, msg) => { if (!cond) errors.push(msg); };
@@ -132,6 +132,50 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
     ok(pageFromHash('#/schedule', pages) === 33, '학사 주소');
     ok(pageFromHash('#/days', pages) === 99, '하루 목차 주소');
     ok(pageFromHash('', pages) === 1, '빈 주소는 표지');
+    const legacy = resolveHash('#p154', pages);
+    ok(legacy.exact && legacy.page === 154 && legacy.canonical === '#/students', `예전 주소 표준 ${legacy.canonical}`);
+    const missing = resolveHash('#p0', pages);
+    ok(!missing.exact && missing.page === 1 && missing.canonical === '#/cover', '없는 쪽 번호');
+    ok(!resolveHash('#/nonsense', pages).exact && resolveHash('#/zzz', pages).page === 1, '없는 이름');
+    ok(!resolveHash('#/week/0', pages).exact && resolveHash('#/week/0', pages).canonical === '#/weeks', '없는 주');
+    ok(!resolveHash('#/week/53', pages).exact && resolveHash('#/day/41', pages).canonical === '#/days', '없는 하루');
+    const shifted = resolveHash('#/month/2026/2', pages);
+    ok(!shifted.exact && shifted.page === 45 && shifted.canonical === '#/month/2027/2', `어긋난 달 ${shifted.canonical}`);
+    const kept = resolveHash('#/date/2026-04-13', pages);
+    ok(kept.exact && kept.preserve && kept.page === 53 && kept.canonical === '#/date/2026-04-13', '날짜 주소는 유지');
+    const far = resolveHash('#/date/2025-01-01', pages);
+    ok(!far.exact && !far.preserve && far.canonical === '#/weeks', '범위 밖 날짜');
+    const css = readFileSync(new URL('../src/notebook/notebook.css', import.meta.url), 'utf8');
+    const hexOf = (value) => {
+        const found = String(value || '').match(/#([0-9a-fA-F]{6})\b/);
+        return found ? `#${found[1].toLowerCase()}` : '';
+    };
+    const rel = (hex) => {
+        const n = Number.parseInt(hex.slice(1), 16);
+        const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+            const s = c / 255;
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+    };
+    const colorsFor = (needle) => {
+        const re = /([^{}]+)\{([^{}]+)\}/g;
+        let found = null;
+        let matched;
+        while ((matched = re.exec(css))) {
+            const parts = matched[1].split(',').map((part) => part.trim().replace(/\s+/g, ' '));
+            if (!parts.includes(needle)) continue;
+            const bg = hexOf((matched[2].match(/background:\s*([^;]+)/) || [])[1]);
+            const fg = hexOf((matched[2].match(/(^|[;])\s*color:\s*([^;]+)/) || [])[2]);
+            if (bg && fg) found = { bg, fg };
+        }
+        return found;
+    };
+    for (const needle of ['.nb-navbtn.is-on', '.nb-left .nb-tab.is-on']) {
+        const colors = colorsFor(needle);
+        const ratio = colors ? (Math.max(rel(colors.bg), rel(colors.fg)) + 0.05) / (Math.min(rel(colors.bg), rel(colors.fg)) + 0.05) : 0;
+        ok(ratio >= 4.5, `${needle} 대비 ${ratio.toFixed(2)} ${colors?.fg || ''} on ${colors?.bg || ''}`);
+    }
     const seen = new Set(Object.values(VIEW_PAGES));
     ok(seen.size === Object.keys(VIEW_PAGES).length, '이름 있는 주소가 같은 쪽을 가리킴');
     for (const page of notebook.pages) {

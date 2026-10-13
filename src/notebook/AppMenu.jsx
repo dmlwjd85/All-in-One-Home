@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
     BookMarked,
     BookOpen,
@@ -52,6 +52,12 @@ const MONTHS = [
     [2026, 9], [2026, 10], [2026, 11], [2026, 12], [2027, 1], [2027, 2],
 ];
 
+const PINS = [
+    { key: 'timetable', label: '시간표', page: VIEW_PAGES.timetable },
+    { key: 'cards', label: '학생카드', page: VIEW_PAGES.cards },
+    { key: 'budget', label: '예산', page: VIEW_PAGES.budget },
+];
+
 const MORE = [
     {
         title: '달력',
@@ -76,7 +82,9 @@ const MORE = [
             { label: '사용법', page: VIEW_PAGES.guide },
             { label: '태그', page: VIEW_PAGES.tags },
             { label: '학급', page: VIEW_PAGES.class },
+            { label: '시간표', page: VIEW_PAGES.timetable },
             { label: '학생', page: VIEW_PAGES.students },
+            { label: '학생카드', page: VIEW_PAGES.cards },
             { label: '출결', page: VIEW_PAGES.attend },
             { label: '상담', page: VIEW_PAGES.counsel },
             { label: '수업', page: VIEW_PAGES.lesson },
@@ -91,22 +99,72 @@ const MORE = [
     },
 ];
 
-export default function AppMenu({ page, pages, onGo, onOpenSearch }) {
+function pinOn(key, page, pages) {
+    const rec = pages?.[page - 1];
+    if (key === 'timetable') return rec?.type === 'timetable';
+    if (key === 'cards') return rec?.type === 'student-card';
+    if (key === 'budget') return rec?.type === 'budget-toc' || rec?.type === 'budget-item' || rec?.type === 'budget-misc';
+    return false;
+}
+
+export default function AppMenu({ page, pages, onGo, onOpenSearch, closeSignal = 0 }) {
     const [open, setOpen] = useState(false);
+    const [canPrev, setCanPrev] = useState(false);
+    const [canNext, setCanNext] = useState(false);
     const scrollRef = useRef(null);
     const active = menuKeyForPage(page);
 
+    useEffect(() => {
+        setOpen(false);
+    }, [closeSignal]);
+
     useLayoutEffect(() => {
         const nav = scrollRef.current;
-        const current = nav?.querySelector('[aria-current="page"]');
-        if (!nav || !current) return;
-        const target = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
-        nav.scrollLeft = Math.max(0, target);
+        if (!nav) return undefined;
+        const fit = () => {
+            const current = nav.querySelector('[aria-current="page"]');
+            if (current) {
+                const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+                const ideal = current.offsetLeft - (nav.clientWidth - current.offsetWidth) / 2;
+                const next = Math.max(0, Math.min(max, ideal));
+                if (Math.abs(nav.scrollLeft - next) > 1) nav.scrollLeft = next;
+            }
+            const host = nav.getBoundingClientRect();
+            for (const btn of nav.querySelectorAll('.nb-navbtn')) {
+                const box = btn.getBoundingClientRect();
+                const visible = Math.min(box.right, host.right) - Math.max(box.left, host.left);
+                const full = visible >= box.width - 0.5;
+                const currentBtn = btn.getAttribute('aria-current') === 'page';
+                btn.classList.toggle('is-clip', !currentBtn && !full && visible > 0.5);
+            }
+            const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+            const nextPrev = nav.scrollLeft > 2;
+            const nextNext = max > 2 && nav.scrollLeft < max - 2;
+            setCanPrev((prev) => (prev === nextPrev ? prev : nextPrev));
+            setCanNext((prev) => (prev === nextNext ? prev : nextNext));
+        };
+        fit();
+        const later = requestAnimationFrame(fit);
+        nav.addEventListener('scroll', fit, { passive: true });
+        const observer = new ResizeObserver(fit);
+        observer.observe(nav);
+        document.fonts?.ready?.then(fit);
+        return () => {
+            cancelAnimationFrame(later);
+            nav.removeEventListener('scroll', fit);
+            observer.disconnect();
+        };
     }, [page, active]);
 
     const goPage = (dest) => {
         setOpen(false);
         onGo?.(dest);
+    };
+
+    const nudge = (dir) => {
+        const nav = scrollRef.current;
+        if (!nav) return;
+        nav.scrollBy({ left: dir * Math.max(120, nav.clientWidth * 0.6), behavior: 'smooth' });
     };
 
     let lastGroup = '';
@@ -123,6 +181,29 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch }) {
             >
                 <LayoutGrid size={15} aria-hidden="true" />
                 전체
+            </button>
+            <div className="nb-nav-pins">
+                {PINS.map((item) => (
+                    <button
+                        key={item.key}
+                        type="button"
+                        className={`nb-navbtn nb-nav-pin ${pinOn(item.key, page, pages) ? 'is-on' : ''}`}
+                        data-nav-pin={item.key}
+                        onClick={() => goPage(item.page)}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+            </div>
+            <button
+                type="button"
+                className="nb-nav-chev"
+                data-nav-scroll="prev"
+                aria-label="앞쪽 메뉴"
+                disabled={!canPrev}
+                onClick={() => nudge(-1)}
+            >
+                ‹
             </button>
             <div className="nb-appnav-scroll" ref={scrollRef}>
                 {MENU_ITEMS.map((item) => {
@@ -148,6 +229,16 @@ export default function AppMenu({ page, pages, onGo, onOpenSearch }) {
                     );
                 })}
             </div>
+            <button
+                type="button"
+                className="nb-nav-chev"
+                data-nav-scroll="next"
+                aria-label="뒤쪽 메뉴"
+                disabled={!canNext}
+                onClick={() => nudge(1)}
+            >
+                ›
+            </button>
             {open && (
                 <Modal title="전체 메뉴" onClose={() => setOpen(false)} wide>
                     <p className="nb-nav-lead">
