@@ -7,6 +7,8 @@ import { monthPage } from '../src/notebook/nav.js';
 import { isLocalOnlyPage } from '../src/notebook/localPages.js';
 import { SECTION_RANGES, sectionForPage } from '../src/notebook/sections.js';
 import { sumBudget } from '../src/notebook/budget.js';
+import { monthDayMap } from '../src/notebook/linkParts.js';
+import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash } from '../src/notebook/routes.js';
 
 const errors = [];
 const ok = (cond, msg) => { if (!cond) errors.push(msg); };
@@ -102,6 +104,47 @@ ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').
     applyBackupLocal({ inbox: [{ id: 'only', text: '덮음' }] }, { mode: 'overwrite' });
     const overwritten = JSON.parse(localStorage.getItem('homenote_v2_ssugeokInbox'));
     ok(overwritten.length === 1 && overwritten[0].id === 'only', '덮어쓰기 저장');
+}
+
+{
+    const notebook = JSON.parse(readFileSync(new URL('../src/notebook/data/notebook.json', import.meta.url), 'utf8'));
+    const pages = notebook.pages.map((page) => ({
+        n: page.n,
+        type: page.type,
+        title: page.title,
+        extra: page.extra || {},
+    }));
+    const keys = new Set(MENU_ITEMS.map((item) => item.key));
+    ok(keys.size === MENU_ITEMS.length, '메뉴 키가 겹침');
+    for (let n = 1; n <= 580; n += 1) {
+        const hash = canonicalHash(n, pages);
+        const back = pageFromHash(hash, pages);
+        ok(back === n, `주소 왕복 ${n} ${hash} → ${back}`);
+        const legacy = pageFromHash(`#p${n}`, pages);
+        ok(legacy === n, `예전 주소 #p${n} → ${legacy}`);
+        const key = menuKeyForPage(n);
+        ok(keys.has(key), `메뉴 없는 쪽 ${n}`);
+    }
+    ok(pageFromHash('#/month/2026/4', pages) === 35, '4월 주소');
+    ok(pageFromHash('#/month/2027/1', pages) === 44, '2027 1월 주소');
+    ok(pageFromHash('#/year', pages) === 32, '연간 주소');
+    ok(pageFromHash('#/weeks', pages) === 46, '주간 목차 주소');
+    ok(pageFromHash('#/schedule', pages) === 33, '학사 주소');
+    ok(pageFromHash('#/days', pages) === 99, '하루 목차 주소');
+    ok(pageFromHash('', pages) === 1, '빈 주소는 표지');
+    const seen = new Set(Object.values(VIEW_PAGES));
+    ok(seen.size === Object.keys(VIEW_PAGES).length, '이름 있는 주소가 같은 쪽을 가리킴');
+    for (const page of notebook.pages) {
+        if (page.type !== 'month') continue;
+        const { days } = monthDayMap(page.links);
+        const year = page.extra.year;
+        const month = page.extra.month;
+        for (const [day, dest] of days) {
+            const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const via = pageFromHash(`#/date/${ymd}`, pages);
+            ok(via === dest, `날짜 ${ymd} ${via} ≠ ${dest}`);
+        }
+    }
 }
 
 if (errors.length) {

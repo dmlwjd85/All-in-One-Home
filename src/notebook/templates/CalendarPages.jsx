@@ -128,7 +128,7 @@ export function MonthPage({ page, pageRec, pages, extra, fields, setField, onGo,
                     return (
                         <div key={c.ymd} className={`nb-month-cell ${c.inMonth ? '' : 'out'} ${cap?.isHoliday ? 'hol' : ''}`}>
                             {to ? (
-                                <button type="button" className="nb-daylink" onClick={() => onGo(to)} aria-label={`${month}월 ${c.day}일, ${to}쪽`}>
+                                <button type="button" className="nb-daylink" onClick={() => onGo(to, { hash: `#/date/${c.ymd}` })} aria-label={`${month}월 ${c.day}일, ${to}쪽`}>
                                     {c.day}
                                 </button>
                             ) : <span className="d">{c.inMonth ? c.day : ''}</span>}

@@ -191,9 +191,9 @@ export default function App() {
 
     if (!signedIn && !guest) {
         return (
-            <main className="min-h-[100dvh] flex items-center justify-center p-4">
-                <div className="card max-w-md w-full p-7 text-center">
-                    <div className="w-14 h-14 mx-auto rounded-2xl bg-ink-900 text-white flex items-center justify-center mb-5"><PenLine size={28} /></div>
+            <main className="gate min-h-[100dvh] flex items-center justify-center p-4">
+                <div className="card gate-card max-w-md w-full p-7 text-center">
+                    <div className="gate-mark w-14 h-14 mx-auto rounded-2xl text-white flex items-center justify-center mb-5"><PenLine size={28} /></div>
                     <h1 className="text-3xl font-black">2026 교무수첩</h1>
                     <p className="mt-3 text-stone-600 leading-relaxed">
                         PDF 교무수첩과 같은 탭·링크로 움직이고, 칸은 마우스와 키보드로 채울 수 있습니다. 쓰 쪽에서는 쓱적 허브로 학생·출결·상담·주간·업무에 나눌 수 있습니다.

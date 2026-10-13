@@ -136,6 +136,35 @@ async function geometryHits(page) {
         for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
             if (overlaps(numBox, visibleBox(btn))) hits.push(`쪽번호·버튼 ${btn.getAttribute('aria-label') || btn.textContent.trim()}`);
         }
+        const nav = document.querySelector('.nb-appnav');
+        const navBox = visibleBox(nav);
+        if (!nav || !navBox) hits.push('메뉴 없음');
+        else {
+            if (navBox.left < -1 || navBox.right > window.innerWidth + 1 || navBox.top < -1) hits.push('메뉴가 화면 밖');
+            if (overlaps(numBox, navBox)) hits.push('메뉴·쪽번호 겹침');
+            const brand = visibleBox(document.querySelector('.nb-toolbar-brand'));
+            if (overlaps(brand, navBox)) hits.push('메뉴·제목 겹침');
+            for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
+                if (overlaps(navBox, visibleBox(btn))) {
+                    hits.push(`메뉴·도구 ${btn.getAttribute('aria-label') || ''}`);
+                    break;
+                }
+            }
+            const currents = [...nav.querySelectorAll('[aria-current="page"]')];
+            if (currents.length !== 1) hits.push(`메뉴 현재위치 ${currents.length}`);
+            const current = currents[0];
+            const scroll = nav.querySelector('.nb-appnav-scroll');
+            const currentBox = visibleBox(current);
+            const scrollBox = visibleBox(scroll);
+            if (current && current.scrollWidth > current.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${current.textContent.trim()}`);
+            if (currentBox && scrollBox && !inside(currentBox, scrollBox)) hits.push(`메뉴 현재위치 잘림 ${current.textContent.trim()}`);
+            const brandName = document.querySelector('.nb-brand-name');
+            if (brandName && brandName.scrollWidth > brandName.clientWidth + 1) hits.push('브랜드 글자 잘림');
+            const allBtn = nav.querySelector('[data-nav="all"]');
+            const allBox = visibleBox(allBtn);
+            if (allBox && (allBox.left < -1 || allBox.right > window.innerWidth + 1)) hits.push('전체 메뉴가 화면 밖');
+            if (allBtn && allBtn.scrollWidth > allBtn.clientWidth + 1) hits.push('전체 글자 잘림');
+        }
         const pageEl = document.querySelector('.nb-page');
         const paper = visibleBox(pageEl);
         const title = document.querySelector('.nb-pagetitle');
@@ -332,6 +361,7 @@ export async function runBrowserQuality() {
         if (overflowPages.length) browserErrors.push(`390px 가로 넘침 ${overflowPages.slice(0, 12).join(',')}`);
         if (unreachable.length) browserErrors.push(`390px 닿지 않는 본문 링크 ${unreachable.slice(0, 8).join(' | ')}`);
 
+        // 1920 데스크톱, 1366 노트북, 1024 태블릿, 360 휴대폰. 390은 위쪽 전체 순회.
         for (const [width, height, label] of [[1920, 1080, '1920'], [1366, 768, '1366'], [1024, 768, '1024'], [360, 780, '360']]) {
             await page.setViewport({ width, height, deviceScaleFactor: 1 });
             await page.waitForFunction((viewW) => {
@@ -392,6 +422,58 @@ export async function runBrowserQuality() {
         await go(page, 157);
         const badge = await page.$eval('.nb-local-badge', (el) => el.innerText);
         if (!badge.includes('이 기기에만 저장')) browserErrors.push('157쪽 배지가 없음');
+
+        await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
+        await page.evaluate(() => { location.hash = '#/year'; });
+        await page.waitForSelector('[data-page="32"]');
+        const yearOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
+        if (yearOn !== 'year') browserErrors.push(`연간 현재위치 ${yearOn}`);
+        await page.click('.nb-appnav [data-nav="month"]');
+        await page.waitForFunction(() => location.hash === '#/month/2026/3' && document.querySelector('[data-page="34"]'));
+        await page.click('.nb-appnav [data-nav="week"]');
+        await page.waitForFunction(() => location.hash === '#/weeks' && document.querySelector('[data-page="46"]'));
+        await page.click('.nb-appnav [data-nav="schedule"]');
+        await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
+        await page.click('.nb-appnav [data-nav="day"]');
+        await page.waitForFunction(() => location.hash === '#/days' && document.querySelector('[data-page="99"]'));
+        await page.goBack();
+        await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
+        await page.evaluate(() => { location.hash = '#/month/2026/4'; });
+        await page.waitForSelector('[data-page="35"]');
+        const monthOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
+        if (monthOn !== 'month') browserErrors.push(`4월 현재위치 ${monthOn}`);
+        const day = await page.$('[data-page="35"] .nb-daylink');
+        if (!day) browserErrors.push('4월 날짜 버튼이 없음');
+        else {
+            await day.click();
+            await page.waitForFunction(() => location.hash.startsWith('#/date/2026-04-'));
+            const landed = await page.$eval('.nb-page', (el) => el.dataset.page);
+            if (!(Number(landed) >= 47 && Number(landed) <= 98)) browserErrors.push(`날짜 이동이 주간이 아님 ${landed}`);
+            await page.goBack();
+            await page.waitForFunction(() => location.hash === '#/month/2026/4' && document.querySelector('[data-page="35"]'));
+        }
+        await page.evaluate(() => { location.hash = '#/week/10'; });
+        await page.waitForFunction(() => {
+            const n = Number(document.querySelector('.nb-page')?.dataset.page);
+            return n >= 47 && n <= 98;
+        });
+        await page.click('.nb-appnav [data-nav="month"]');
+        await page.waitForFunction(() => /^#\/month\/2026\//.test(location.hash));
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
+        await page.evaluate(() => { location.hash = '#/home'; });
+        await page.waitForSelector('[data-page="2"]');
+        const phoneNav = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
+        if (phoneNav === 'none') browserErrors.push('휴대폰에서 메뉴가 숨음');
+        await page.click('.nb-appnav [data-nav="all"]');
+        await page.waitForSelector('[role="dialog"]');
+        const chip = await page.evaluateHandle(() => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === '예산'));
+        const chipEl = chip.asElement();
+        if (!chipEl) browserErrors.push('전체 메뉴에 예산이 없음');
+        else {
+            await chipEl.click();
+            await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
+        }
 
         await page.emulateMediaType('print');
         const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);

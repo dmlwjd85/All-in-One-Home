@@ -13,14 +13,13 @@ import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
 import CaptureFab from './CaptureFab.jsx';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
+import AppMenu from './AppMenu.jsx';
+import { canonicalHash, pageFromHash } from './routes.js';
 
 const MAX = catalog.pageCount;
 
 function readHash() {
-    const m = String(location.hash || '').match(/p(\d+)/i);
-    const n = m ? Number(m[1]) : 1;
-    if (!Number.isFinite(n) || n < 1 || n > MAX) return 1;
-    return n;
+    return pageFromHash(location.hash, catalog.pages, MAX);
 }
 
 export default function NotebookApp({
@@ -62,11 +61,18 @@ export default function NotebookApp({
     const pageRec = (sectionPages || []).find((item) => item.n === page) || null;
     const showChrome = page !== 1;
 
-    const go = useCallback((n) => {
+    const go = useCallback((n, opts) => {
         const next = Math.min(MAX, Math.max(1, Number(n) || 1));
         setPage(next);
-        if (location.hash !== `#p${next}`) {
-            history.pushState({ page: next }, '', `#p${next}`);
+        const hash = opts?.hash || canonicalHash(next, catalog.pages);
+        if (location.hash !== hash) {
+            history.pushState({ page: next }, '', hash);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!location.hash) {
+            history.replaceState({ page: readHash() }, '', canonicalHash(readHash(), catalog.pages));
         }
     }, []);
 
@@ -195,6 +201,12 @@ export default function NotebookApp({
                         <span className="nb-toolhide">{user ? '로그아웃' : '나가기'}</span>
                     </button>
                 </div>
+                <AppMenu
+                    page={page}
+                    pages={catalog.pages}
+                    onGo={go}
+                    onOpenSearch={() => setSearchOpen(true)}
+                />
             </header>
 
             <div className="nb-stage-wrap" ref={stageRef}>
