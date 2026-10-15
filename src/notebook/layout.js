@@ -25,12 +25,6 @@ export const BODY_RIGHT = TAB_W + BODY_GUTTER;
 export const BODY_TOP = TOP_NAV_H + 18;
 export const BODY_BOTTOM = 28;
 
-export function tabStackHeight(count) {
-    const inner = PAGE_H - TAB_TOP - TAB_BOTTOM;
-    const gaps = TAB_GAP * Math.max(0, count - 1);
-    return (inner - gaps) / Math.max(1, count);
-}
-
 /** 화면 안에 들어가는 가장 큰 16:9 크기. 가로·세로를 넘기지 않습니다. */
 export function fitCanvas(availW, availH) {
     const w = Math.max(0, Number(availW) || 0);
@@ -44,20 +38,4 @@ export function fitCanvas(availW, availH) {
         width = height * ratio;
     }
     return { width: Math.round(width), height: Math.round(height) };
-}
-
-export function layoutVars() {
-    return {
-        '--nb-page-w': `${PAGE_W}px`,
-        '--nb-page-h': `${PAGE_H}px`,
-        '--nb-tab-w': `${TAB_W}px`,
-        '--nb-tab-gap': `${TAB_GAP}px`,
-        '--nb-tab-top': `${TAB_TOP}px`,
-        '--nb-tab-bottom': `${TAB_BOTTOM}px`,
-        '--nb-topnav-h': `${TOP_NAV_H}px`,
-        '--nb-body-left': `${BODY_LEFT}px`,
-        '--nb-body-right': `${BODY_RIGHT}px`,
-        '--nb-body-top': `${BODY_TOP}px`,
-        '--nb-body-bottom': `${BODY_BOTTOM}px`,
-    };
 }

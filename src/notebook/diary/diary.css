@@ -345,3 +345,48 @@
 @media (max-width: 700px) { .dy-app .dy-page.nb-page { margin: 12px 10px 110px; } }
 .dy-btn-primary, .dy-btn-ghost, .dy-btn-soft { white-space: nowrap; }
 .dy-app .nb-ssu-links { display: none; }
+
+/* 주간 쪽: 무지개 요일 머리 대신 살구 하나 */
+.dy-app .nb-dayhead {
+    background: var(--dy-acc-tint) !important; color: var(--dy-acc-ink) !important;
+    border: 0 !important; border-radius: 12px !important; font-family: var(--dy-head); font-weight: 700;
+    min-height: 40px; box-shadow: none !important;
+}
+.dy-app .nb-dayhead:hover { background: var(--dy-acc-tint2) !important; }
+.dy-app .nb-week-col, .dy-app .nb-week-side { background: transparent !important; border-color: var(--dy-line) !important; }
+.dy-app .nb-panel { background: #fdfbf8 !important; border: 1px solid var(--dy-line) !important; border-radius: 14px !important; }
+.dy-app .nb-week-side > * , .dy-app .nb-week-side section { background-color: transparent; }
+.dy-app .nb-kicker { color: var(--dy-acc-ink) !important; }
+.dy-app input[type='checkbox'] {
+    appearance: none; -webkit-appearance: none; flex: 0 0 auto;
+    width: 20px; height: 20px; margin: 0; border-radius: 6px; cursor: pointer;
+    border: 1.5px solid var(--dy-line2); background: #fff; display: inline-grid; place-items: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+.dy-app input[type='checkbox']:hover { border-color: var(--dy-acc); }
+.dy-app input[type='checkbox']:checked { background: var(--dy-acc); border-color: var(--dy-acc); }
+.dy-app input[type='checkbox']:checked::after {
+    content: ''; width: 6px; height: 11px; margin-top: -2px;
+    border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.dy-app .nb-ink, .dy-app .nb-ink-area { border-color: var(--dy-line) !important; }
+.dy-app .nb-ink-area, .dy-app textarea.nb-ink { background: #fdfbf8 !important; border-radius: 12px; }
+
+/* 모바일 월간: 7칸 대신 날짜별 한 줄 */
+@media (max-width: 700px) {
+    .dy-app .nb-month-dow { display: none !important; }
+    .dy-app .nb-month-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 6px !important; border: 0 !important; border-radius: 0; overflow: visible; }
+    .dy-app .nb-month-cell.out { display: none !important; }
+    .dy-app .nb-month-cell {
+        display: grid !important; grid-template-columns: 56px minmax(0, 1fr); align-items: center; column-gap: 10px;
+        min-height: 56px !important; height: auto !important; padding: 8px 12px !important;
+        border: 1px solid var(--dy-line) !important; border-radius: 14px; background: #fff;
+    }
+    .dy-app .nb-month-cell > :first-child { grid-row: 1 / span 3; font-size: 18px !important; font-family: var(--dy-head); }
+    .dy-app .nb-month-cell .nb-ink { width: 100%; font-size: 15px !important; }
+}
+.dy-app .nb-dayh { background: var(--dy-acc-tint); border-radius: 12px; margin: 0 0 6px; }
+.dy-app .nb-dayh .nb-dayhead { background: transparent !important; }
+.dy-app .nb-dayh.is-today { background: var(--dy-acc); box-shadow: 0 6px 14px rgba(229, 140, 111, 0.35); }
+.dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
+.dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
