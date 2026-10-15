@@ -888,7 +888,10 @@ async function checkNoteRevise(page, browserErrors) {
     });
     const noteOf = (text, scope) => page.evaluateHandle((sample, root) => {
         const host = root ? document.querySelector(root) : document;
-        return [...(host?.querySelectorAll('.dy-entry') || [])].find((el) => el.innerText.includes(sample)) || null;
+        return [...(host?.querySelectorAll('.dy-entry') || [])].find((el) => {
+            const field = el.querySelector('textarea');
+            return el.innerText.includes(sample) || field?.value === sample;
+        }) || null;
     }, text, scope);
     const clickIn = async (text, attr, scope) => {
         const handle = await noteOf(text, scope);
