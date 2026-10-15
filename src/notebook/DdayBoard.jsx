@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { readPageFields } from './fieldStore.js';
@@ -43,12 +43,41 @@ function formatKoDate(value) {
 }
 
 function KoDateField({ value, onChange }) {
-    const shown = formatKoDate(value);
+    const nativeRef = useRef(null);
+    const open = () => {
+        const el = nativeRef.current;
+        if (!el) return;
+        if (typeof el.showPicker === 'function') {
+            try { el.showPicker(); return; } catch { /* 브라우저가 막으면 포커스로 엽니다. */ }
+        }
+        el.focus();
+    };
     return (
-        <label className={`nb-ko-date${shown ? '' : ' is-empty'}`}>
-            <input type="date" lang="ko" value={value} onChange={(e) => onChange(e.target.value)} aria-label="기한" />
-            <span aria-hidden="true">{shown || '연도. 월. 일'}</span>
-        </label>
+        <span className="nb-ko-date">
+            <input
+                type="text"
+                readOnly
+                value={formatKoDate(value)}
+                placeholder="연도. 월. 일"
+                aria-label="기한"
+                onClick={open}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        open();
+                    }
+                }}
+            />
+            <input
+                ref={nativeRef}
+                className="nb-ko-date-native"
+                type="date"
+                tabIndex={-1}
+                aria-hidden="true"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+            />
+        </span>
     );
 }
 

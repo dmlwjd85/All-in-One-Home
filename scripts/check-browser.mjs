@@ -1889,8 +1889,9 @@ async function checkQaLayout(page, browserErrors) {
         });
         const submit = document.querySelector('.nb-dday-form button[type="submit"]');
         const bg = submit ? getComputedStyle(submit).backgroundColor : '';
-        const shown = document.querySelector('.nb-ko-date span')?.textContent || '';
-        const dateInput = document.querySelector('.nb-ko-date input');
+        const shownField = document.querySelector('.nb-ko-date input[type="text"]');
+        const shown = shownField?.value || shownField?.placeholder || '';
+        const dateInput = document.querySelector('.nb-ko-date-native');
         const opacity = dateInput ? getComputedStyle(dateInput).opacity : '';
         const english = /[A-Za-z]{2,}/.test(document.querySelector('.nb-dday')?.innerText || '');
         return { actions, bg, shown, opacity, english };
