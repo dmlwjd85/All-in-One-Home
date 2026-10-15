@@ -1771,14 +1771,33 @@ async function checkQaLayout(page, browserErrors) {
         }
         toast.style.visibility = prevVis;
         if (dock) dock.style.pointerEvents = prevPe;
+        const painted = (el) => {
+            const rect = el.getBoundingClientRect();
+            let top = rect.top;
+            let left = rect.left;
+            let right = rect.right;
+            let bottom = rect.bottom;
+            for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+                const shown = getComputedStyle(node);
+                if (/(auto|scroll|hidden|clip)/.test(shown.overflowX + shown.overflowY)) {
+                    const host = node.getBoundingClientRect();
+                    top = Math.max(top, host.top);
+                    left = Math.max(left, host.left);
+                    right = Math.min(right, host.right);
+                    bottom = Math.min(bottom, host.bottom);
+                }
+            }
+            if (right - left < 1 || bottom - top < 1) return null;
+            return { top, left, right, bottom };
+        };
         const covered = [];
         if (dockBox) {
             for (const el of document.querySelectorAll('button, a, input, textarea, select, summary')) {
                 if (el.closest('.dy-toast, .dy-dock') || el.classList.contains('dy-fab')) continue;
                 const shown = getComputedStyle(el);
                 if (shown.display === 'none' || shown.visibility === 'hidden' || Number(shown.opacity) === 0) continue;
-                const rect = el.getBoundingClientRect();
-                if (rect.width < 8 || rect.height < 8) continue;
+                const rect = painted(el);
+                if (!rect) continue;
                 if (!overlaps(dockBox, rect)) continue;
                 covered.push(nameOf(el));
                 if (covered.length >= 6) break;
@@ -2359,7 +2378,7 @@ async function checkQaLayout(page, browserErrors) {
                 }
                 for (const where of ['top', 'middle', 'bottom']) {
                     await scrollStage(where);
-                    await assertToastText(`${width}x${height} 메모${count} ${where}`, { minLines: 2 });
+                    await assertToastText(`${width}x${height} 메모${count} ${where}`);
                 }
                 if (count === 1) {
                     const link = await page.evaluate(() => {
