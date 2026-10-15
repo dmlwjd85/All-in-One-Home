@@ -530,7 +530,8 @@
 .dy-dock .dy-toast span {
     flex: 1 1 auto; white-space: normal; overflow: visible; text-overflow: clip; line-height: 22px;
 }
-.dy-dock { display: none; }
+.dy-dock { display: contents; }
+.dy-dock-slot { display: none; }
 .dy-app > .dy-dock { order: 2; }
 .dy-app > .dy-top { order: 0; }
 .dy-app > .dy-stage { order: 1; }
@@ -625,6 +626,11 @@
         height: 64px;
         display: flex;
         align-items: center;
+    }
+    .dy-app.is-phone > .dy-dock .dy-fab {
+        position: absolute;
+        right: 20px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
     }
     .dy-app.is-phone .dy-stage.nb-stage-wrap {
         margin-bottom: calc(var(--dy-dock-h) + env(safe-area-inset-bottom));
