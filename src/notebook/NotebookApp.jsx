@@ -15,6 +15,7 @@ import TodayBoard from './diary/TodayBoard.jsx';
 import QuickCapture from './diary/QuickCapture.jsx';
 import { monthOfPage } from './diary/DiaryTop.jsx';
 import { monthPageFor, shiftYm } from './diary/dates.js';
+import { captureShortcutHere } from './diary/shortcut.js';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
 import { canonicalHash, pageFromHash, resolveHash } from './routes.js';
 
@@ -292,10 +293,15 @@ export default function NotebookApp({
                 )}
             </div>
 
-            {phone && !quickOpen && (
-                <button type="button" className="dy-fab" onClick={() => setQuickOpen(true)} aria-label="쓱, 적 적기">
-                    <Pencil size={24} strokeWidth={1.8} />
-                </button>
+            {phone && (
+                <div className="dy-dock">
+                    <div className="dy-dock-slot" />
+                    {!quickOpen && (
+                        <button type="button" className="dy-fab" onClick={() => setQuickOpen(true)} aria-label="쓱, 적 적기">
+                            <Pencil size={24} strokeWidth={1.8} />
+                        </button>
+                    )}
+                </div>
             )}
 
             {quickOpen && <QuickCapture {...capProps} onClose={() => setQuickOpen(false)} />}
@@ -327,7 +333,7 @@ export default function NotebookApp({
                         </section>
                         <section>
                             <h3 className="dy-h3">단축키</h3>
-                            <p className="dy-muted">⌘K · Ctrl+K 쓱, 적 · ⌘/ 찾기 · 월간에서 ← → 달 넘기기</p>
+                            <p className="dy-muted">{captureShortcutHere()} 쓱, 적 · ⌘/ 찾기 · 월간에서 ← → 달 넘기기</p>
                         </section>
                     </div>
                 </Modal>

@@ -126,6 +126,7 @@ export default function DiaryTop({ page, pages, onGo, onSearch, onSettings, sign
                     </button>
                 </div>
                 <div className="dy-actions">
+                    <div className="dy-status-gap" aria-hidden="true" />
                     <button type="button" className="dy-icon" onClick={onSearch} aria-label="수첩 찾기">
                         <Search size={18} strokeWidth={1.8} />
                     </button>

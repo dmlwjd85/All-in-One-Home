@@ -7,12 +7,41 @@ export function daysUntil(ymd, now = new Date()) {
     return Math.round((target - today) / 86400000);
 }
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
 export function ddayBadge(diff) {
     if (diff === null || Number.isNaN(diff)) return null;
-    if (diff === 0) return { kind: 'day', text: 'D-day' };
-    if (diff > 0 && diff <= 3) return { kind: 'soon', text: `D-${diff}` };
-    if (diff < 0) return { kind: 'late', text: `D+${-diff}` };
-    return { kind: 'later', text: `D-${diff}` };
+    if (diff === 0) return { kind: 'day', text: '당일' };
+    if (diff > 0 && diff <= 3) return { kind: 'soon', text: `${diff}일 남음` };
+    if (diff < 0) return { kind: 'late', text: `${-diff}일 지남` };
+    return { kind: 'later', text: `${diff}일 남음` };
+}
+
+export function formatCardDate(ymd) {
+    if (!ymd) return '날짜 없음';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
+    const [year, month, day] = ymd.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return ymd;
+    return `${month}월 ${day}일 (${WEEKDAYS[date.getDay()]})`;
+}
+
+export function parseKoDate(text, now = new Date()) {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const build = (year, month, day) => {
+        if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+    let match = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (match) return build(Number(match[1]), Number(match[2]), Number(match[3]));
+    match = raw.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (match) return build(Number(match[1]), Number(match[2]), Number(match[3]));
+    match = raw.match(/^(\d{1,2})\s*월\s*(\d{1,2})/);
+    if (match) return build(now.getFullYear(), Number(match[1]), Number(match[2]));
+    return null;
 }
 
 export function calendarMarks(ymd, items) {

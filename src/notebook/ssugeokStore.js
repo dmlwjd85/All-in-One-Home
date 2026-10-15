@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { reportSaveFailure } from '../lib/saveNotice.js';
-import { appendPageTrail } from './fieldStore.js';
+import { appendPageTrail, dropPageTrail, patchPageTrail } from './fieldStore.js';
 import {
     isSensitiveText,
     parseNote,
@@ -139,6 +139,75 @@ export async function archiveNotes(notes, signedIn) {
         if (note.sensitive) continue;
         await patchItem('ssugeokInbox', note.id, { status: 'archived' }, signedIn);
     }
+}
+
+function notePatch(text) {
+    const parsed = parseNote(text);
+    return {
+        text,
+        typeHint: parsed.tags[0] || '',
+        tags: parsed.tags,
+        studentNo: parsed.studentNo,
+        detectedDate: parsed.detectedDate,
+        sensitive: parsed.sensitive,
+        suggestion: suggestDestination(text, parsed),
+        parsed,
+    };
+}
+
+/** 쓱, 적에 남긴 글을 그 자리에서 고칩니다. 민감 여부가 바뀌면 기존 보관 위치로 옮깁니다. */
+export async function reviseNote(note, text, signedIn) {
+    const trimmed = String(text || '').trim();
+    if (!trimmed || !note?.id) return null;
+    const { parsed, ...patch } = notePatch(trimmed);
+    const wasSensitive = Boolean(note.sensitive);
+    if (parsed.sensitive && wasSensitive) {
+        writeSensitive(readSensitiveNotes().map((row) => (
+            row.id === note.id ? { ...row, ...patch, sensitive: true } : row
+        )));
+    } else if (parsed.sensitive && !wasSensitive) {
+        writeSensitive([{ ...note, ...patch, sensitive: true }, ...readSensitiveNotes().filter((row) => row.id !== note.id)]);
+        await removeItem('ssugeokInbox', note.id, signedIn);
+        if (note.placement?.page) await dropPageTrail(note.placement.page, note.id, signedIn);
+    } else if (!parsed.sensitive && wasSensitive) {
+        writeSensitive(readSensitiveNotes().filter((row) => row.id !== note.id));
+        await addItem('ssugeokInbox', {
+            text: patch.text,
+            author: note.author || '',
+            fromPage: note.fromPage || 496,
+            typeHint: patch.typeHint,
+            status: note.status || 'inbox',
+            tags: patch.tags,
+            studentNo: patch.studentNo,
+            detectedDate: patch.detectedDate,
+            sensitive: false,
+            suggestion: patch.suggestion,
+            placement: note.placement || null,
+            createdAt: note.createdAt || new Date().toISOString(),
+        }, signedIn);
+        if (note.placement?.page) await dropPageTrail(note.placement.page, note.id, signedIn);
+    } else {
+        await patchItem('ssugeokInbox', note.id, { ...patch, sensitive: false }, signedIn);
+        if (note.placement?.page) {
+            const trail = {
+                text: trimmed,
+                tags: parsed.tags,
+                studentNo: parsed.studentNo || null,
+            };
+            const date = parsed.detectedDate || note.detectedDate;
+            if (date) trail.date = date;
+            await patchPageTrail(note.placement.page, note.id, trail, signedIn);
+        }
+    }
+    return { ...note, ...patch };
+}
+
+/** 쓱, 적 메모를 받은함과, 옮겨 둔 쪽의 사본에서 지웁니다. */
+export async function deleteNote(note, signedIn) {
+    if (!note?.id) return;
+    if (note.sensitive) writeSensitive(readSensitiveNotes().filter((row) => row.id !== note.id));
+    else await removeItem('ssugeokInbox', note.id, signedIn);
+    if (note.placement?.page) await dropPageTrail(note.placement.page, note.id, signedIn);
 }
 
 /** 이미 클라우드 받은함에 있는 건강·민원 메모는 이 기기로 옮기고 클라우드에서는 지웁니다. */

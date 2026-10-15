@@ -38,7 +38,7 @@ const CaptureBox = forwardRef(function CaptureBox({
                         save();
                     }
                 }}
-                placeholder={placeholder || '떠오른 것을 그냥 적어요.\n@12 #행발 발표를 또렷하게'}
+                placeholder={placeholder || '쓱, 적어 두세요.'}
                 aria-label="쓱, 적 메모"
                 rows={big ? 6 : 4}
             />

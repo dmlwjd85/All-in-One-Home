@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Users } from 'lucide-react';
-import { EmptyState, Field, Modal } from './ui.jsx';
+import { ConfirmDialog, EmptyState, Field, Modal } from './ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { ensureRosterName } from '../lib/ssugeok.js';
 import { ATTEND_STATUS, monthLabel, startOfWeekMon, thisMonth, todayYmd } from '../lib/utils.js';
@@ -21,6 +21,8 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
     const [modal, setModal] = useState(null);
     const [note, setNote] = useState({ student: '', text: '', date: todayYmd() });
     const [rosterText, setRosterText] = useState(names.join('\n'));
+    const [pending, setPending] = useState(null);
+    const [rosterAsk, setRosterAsk] = useState(false);
 
     const grouped = useMemo(() => {
         const n = q.trim();
@@ -97,11 +99,7 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
                                                 <span className="block text-xs font-bold text-stone-500">{row.date}</span>
                                                 <span className="whitespace-pre-wrap">{row.text}</span>
                                             </span>
-                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={async () => {
-                                                if (!confirm('이 기록을 삭제할까요?')) return;
-                                                await removeItem('studentNotes', row.id, signedIn);
-                                                onChanged();
-                                            }}>삭제</button>
+                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={() => setPending(row)}>삭제</button>
                                         </li>
                                     ))}
                                 </ul>
@@ -109,6 +107,20 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
                         </article>
                     ))}
                 </div>
+            )}
+
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('studentNotes', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
             )}
 
             {modal === 'note' && (
@@ -124,8 +136,20 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
                     <Field label="한 줄에 한 명" hint="출결·상담을 보낼 때 바로 고를 수 있습니다.">
                         <textarea className="field min-h-48" value={rosterText} onChange={(e) => setRosterText(e.target.value)} placeholder={'김민준\n이서연'} />
                     </Field>
-                    <button type="button" className="btn-primary w-full" onClick={saveRoster}>명단 저장</button>
+                    <button type="button" className="btn-primary w-full" onClick={() => (roster.length ? setRosterAsk(true) : saveRoster())}>명단 저장</button>
                 </Modal>
+            )}
+            {rosterAsk && (
+                <ConfirmDialog
+                    title="명단을 바꿀까요?"
+                    body="지금 명단을 지우고, 적은 이름으로 다시 둡니다."
+                    confirmLabel="바꾸기"
+                    onClose={() => setRosterAsk(false)}
+                    onConfirm={async () => {
+                        setRosterAsk(false);
+                        await saveRoster();
+                    }}
+                />
             )}
         </section>
     );
@@ -135,6 +159,7 @@ function AttendDest({ attendance, roster, signedIn, author, onChanged, onToast }
     const names = roster.map((r) => r.name).filter(Boolean);
     const [month, setMonth] = useState(thisMonth());
     const [modal, setModal] = useState(false);
+    const [pending, setPending] = useState(null);
     const [form, setForm] = useState({ date: todayYmd(), student: '', status: '출석', note: '' });
 
     const byMonth = useMemo(() => {
@@ -185,10 +210,7 @@ function AttendDest({ attendance, roster, signedIn, author, onChanged, onToast }
                                     {byDate[d].map((a) => (
                                         <li key={a.id} className="flex justify-between gap-3 text-sm">
                                             <span><strong>{a.student}</strong> · {a.status}{a.note ? ` · ${a.note}` : ''}</span>
-                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={async () => {
-                                                await removeItem('teacherAttend', a.id, signedIn);
-                                                onChanged();
-                                            }}>삭제</button>
+                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={() => setPending(a)}>삭제</button>
                                         </li>
                                     ))}
                                 </ul>
@@ -213,6 +235,19 @@ function AttendDest({ attendance, roster, signedIn, author, onChanged, onToast }
                     })}
                 </div>
             </details>
+            {pending && (
+                <ConfirmDialog
+                    title="이 출결을 지울까요?"
+                    body={`${pending.student || ''} · ${pending.status || ''}${pending.note ? ` · ${pending.note}` : ''}`}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('teacherAttend', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
+            )}
             {modal && (
                 <Modal title="출결 기록" onClose={() => setModal(false)}>
                     <Field label="날짜"><input type="date" className="field" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
@@ -242,6 +277,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
     const names = roster.map((r) => r.name).filter(Boolean);
     const [filter, setFilter] = useState('all');
     const [modal, setModal] = useState(false);
+    const [pending, setPending] = useState(null);
     const [form, setForm] = useState({ student: '', text: '', date: todayYmd(), kind: '상담' });
 
     const items = counselNotes
@@ -276,11 +312,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
                         <li key={row.id} className="card p-4 bg-[#fffaf0]/85">
                             <p className="text-xs font-bold text-stone-500">{row.date} · {row.student} · {row.kind || '상담'}</p>
                             <p className="font-black mt-1 whitespace-pre-wrap">{row.text}</p>
-                            <button type="button" className="text-sm text-rose-700 underline mt-2 min-h-tap" onClick={async () => {
-                                if (!confirm('이 기록을 삭제할까요?')) return;
-                                await removeItem('counselNotes', row.id, signedIn);
-                                onChanged();
-                            }}>삭제</button>
+                            <button type="button" className="text-sm text-rose-700 underline mt-2 min-h-tap" onClick={() => setPending(row)}>삭제</button>
                         </li>
                     ))}
                 </ul>
@@ -307,6 +339,19 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
                     }}>저장</button>
                 </Modal>
             )}
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('counselNotes', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
+            )}
         </section>
     );
 }
@@ -315,6 +360,7 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
     const today = todayYmd();
     const week = startOfWeekMon(today);
     const [modal, setModal] = useState(false);
+    const [pending, setPending] = useState(null);
     const [form, setForm] = useState({ text: '', date: today, kind: 'today' });
 
     const todayItems = plans.filter((p) => p.kind === 'today' && p.date === today);
@@ -324,11 +370,7 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
         .slice()
         .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
-    const removePlan = async (row) => {
-        if (!confirm('이 기록을 삭제할까요?')) return;
-        await removeItem('teacherPlans', row.id, signedIn);
-        onChanged();
-    };
+    const removePlan = (row) => setPending(row);
 
     return (
         <section className="space-y-3">
@@ -369,6 +411,19 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
                     }}>저장</button>
                 </Modal>
             )}
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('teacherPlans', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
+            )}
         </section>
     );
 }
@@ -376,6 +431,7 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
 function TaskDest({ todos, signedIn, author, onChanged, onToast }) {
     const [text, setText] = useState('');
     const [date, setDate] = useState(todayYmd());
+    const [pending, setPending] = useState(null);
     const items = todos.slice().sort((a, b) => Number(!!a.done) - Number(!!b.done) || String(b.date).localeCompare(String(a.date)));
 
     const addTodo = async () => {
@@ -414,15 +470,25 @@ function TaskDest({ todos, signedIn, author, onChanged, onToast }) {
                                     <span className="text-xs font-bold text-stone-500 mr-2">{t.date}</span>
                                     {t.text}
                                 </span>
-                                <button type="button" className="text-stone-500 min-h-tap" aria-label="삭제" onClick={async () => {
-                                    await removeItem('teacherTodos', t.id, signedIn);
-                                    onChanged();
-                                }}><Trash2 size={16} /></button>
+                                <button type="button" className="text-stone-500 min-h-tap" aria-label="삭제" onClick={() => setPending(t)}><Trash2 size={16} /></button>
                             </li>
                         ))}
                     </ul>
                 )}
             </div>
+            {pending && (
+                <ConfirmDialog
+                    title="이 할 일을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('teacherTodos', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
+            )}
         </section>
     );
 }

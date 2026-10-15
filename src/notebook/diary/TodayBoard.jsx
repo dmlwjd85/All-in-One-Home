@@ -3,6 +3,8 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { VIEW_PAGES } from '../routes.js';
 import { sortNote, archiveNotes } from '../ssugeokStore.js';
 import CaptureBox from './CaptureBox.jsx';
+import NoteEdit from './NoteEdit.jsx';
+import { captureShortcutHere } from './shortcut.js';
 import {
     DOW, dow, holidayName, monthGrid, monthPageFor, noteDay, parts, shiftYm, today, weekOf, weekPageFor,
 } from './dates.js';
@@ -68,7 +70,7 @@ function MiniMonth({ selected, onPick, onOpenMonth, marks }) {
     );
 }
 
-function DayCard({ ymd, items, onOpen, compact }) {
+function DayCard({ ymd, items, onOpen }) {
     const now = today();
     const p = parts(ymd);
     const wd = dow(ymd);
@@ -77,7 +79,7 @@ function DayCard({ ymd, items, onOpen, compact }) {
     return (
         <button
             type="button"
-            className={`dy-day ${isToday ? 'is-today' : ''} ${wd === 0 || hol ? 'is-red' : ''} ${wd === 6 ? 'is-sat' : ''} ${ymd < now ? 'is-past' : ''}`}
+            className={`dy-day ${isToday ? 'is-today' : ''} ${wd === 0 || hol ? 'is-red' : ''} ${wd === 6 ? 'is-sat' : ''} ${wd === 0 ? 'is-sun' : ''} ${ymd < now ? 'is-past' : ''}`}
             onClick={() => onOpen(ymd)}
             aria-label={`${p.m}월 ${p.d}일 ${DOW[wd]}요일${isToday ? ', 오늘' : ''} 주간 쪽 열기`}
         >
@@ -85,14 +87,17 @@ function DayCard({ ymd, items, onOpen, compact }) {
                 <span className="dy-day-num">{p.d}</span>
                 <span className="dy-day-dow">{DOW[wd]}</span>
                 {isToday && <span className="dy-pill">오늘</span>}
-                {hol && <span className="dy-day-hol">{hol}</span>}
             </span>
-            <span className="dy-day-items">
-                {items.length === 0 && !compact && <span className="dy-day-empty">비어 있어요</span>}
-                {items.slice(0, compact ? 3 : 4).map((n) => (
-                    <span key={n.id} className="dy-day-item">{n.text}</span>
+            {hol && <span className="dy-day-hol">{hol}</span>}
+            <span className={`dy-day-items ${items.length === 0 ? 'is-blank' : ''}`}>
+                {items.length === 0 && (
+                    <span className="dy-day-empty">{isToday ? '오늘 한 줄' : wd === 0 || wd === 6 ? '쉬는 날' : '한 줄 여유'}</span>
+                )}
+                {items.length === 0 && <span className="dy-day-sheet" aria-hidden="true" />}
+                {items.slice(0, 2).map((n) => (
+                    <span key={n.id} className={`dy-day-item is-${n.suggestion?.tone || 'sand'}`}>{n.text}</span>
                 ))}
-                {items.length > (compact ? 3 : 4) && <span className="dy-day-more">+{items.length - (compact ? 3 : 4)}</span>}
+                {items.length > 2 && <span className="dy-day-more">+{items.length - 2}</span>}
             </span>
         </button>
     );
@@ -115,19 +120,35 @@ function Inbox({ notes, signedIn, onChanged, onToast, onGo, big }) {
         onChanged?.();
         onToast?.('보관했어요.');
     };
-    if (!list.length) return <p className="dy-muted">나눌 메모가 없어요. 적기만 하면 돼요.</p>;
+    if (!list.length) {
+        return (
+            <div className="dy-empty">
+                <p className="dy-muted">나눌 메모가 없어요. 적기만 하면 돼요.</p>
+                <p className="dy-example">예: @12 #행발 발표를 또렷하게</p>
+                <p className="dy-example">예: 내일 회의 자료 인쇄</p>
+            </div>
+        );
+    }
     return (
         <ul className={`dy-inbox ${big ? 'is-big' : ''}`}>
             {list.map((note) => (
                 <li key={note.id}>
-                    <p className="dy-inbox-text">{note.text}</p>
-                    <div className="dy-inbox-acts">
-                        <button type="button" className="dy-btn-soft" onClick={() => sortOne(note)}>
-                            {note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}
-                            <ArrowRight size={16} aria-hidden="true" />
-                        </button>
-                        <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
-                    </div>
+                    <NoteEdit
+                        note={note}
+                        variant="inbox"
+                        signedIn={signedIn}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                        extra={(
+                            <>
+                                <button type="button" className="dy-btn-soft dy-act-main" onClick={() => sortOne(note)}>
+                                    <span className="dy-ellip">{note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}</span>
+                                    <ArrowRight size={14} aria-hidden="true" />
+                                </button>
+                                <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
+                            </>
+                        )}
+                    />
                 </li>
             ))}
         </ul>
@@ -148,6 +169,9 @@ export default function TodayBoard({
     };
     const sp = parts(selected);
     const inboxCount = notes.filter((n) => n.status === 'inbox').length;
+    const shortcut = captureShortcutHere();
+    const weekMemos = days.reduce((sum, ymd) => sum + (marks[ymd]?.length || 0), 0);
+    const emptyDays = days.filter((ymd) => !(marks[ymd]?.length)).length;
     const capProps = { author, signedIn, fromPage: VIEW_PAGES.home, onChanged, onToast };
 
     if (phone) {
@@ -155,7 +179,7 @@ export default function TodayBoard({
         const wd = dow(selected);
         return (
             <div className="dy-m">
-                <CaptureBox big {...capProps} placeholder={'지금 떠오른 것을 그냥 적어요.\n@12 #행발 발표를 또렷하게'} />
+                <CaptureBox big {...capProps} />
                 <div className="dy-strip" role="tablist" aria-label="이번 주">
                     {days.map((ymd) => {
                         const p = parts(ymd);
@@ -166,7 +190,7 @@ export default function TodayBoard({
                                 type="button"
                                 role="tab"
                                 aria-selected={ymd === selected}
-                                className={`dy-strip-day ${ymd === selected ? 'is-sel' : ''} ${ymd === now ? 'is-today' : ''} ${d === 0 || holidayName(ymd) ? 'is-red' : ''}`}
+                                className={`dy-strip-day ${ymd === selected ? 'is-sel' : ''} ${ymd === now ? 'is-today' : ''} ${d === 6 ? 'is-sat' : ''} ${d === 0 || holidayName(ymd) ? 'is-red' : ''}`}
                                 onClick={() => setSelected(ymd)}
                             >
                                 <span>{DOW[d]}</span>
@@ -178,13 +202,24 @@ export default function TodayBoard({
                 </div>
                 <section className="dy-card">
                     <div className="dy-sec-head">
-                        <h2 className="dy-h">{sp.m}월 {sp.d}일 {DOW[wd]}요일{selected === now ? ' · 오늘' : ''}</h2>
+                        <h2 className="dy-h dy-day-title">{sp.m}월 {sp.d}일 {DOW[wd]}요일{selected === now ? <span className="dy-today-mark"> · 오늘</span> : null}</h2>
                         <button type="button" className="dy-link" onClick={() => openDay(selected)}>주간 쪽 <ArrowRight size={14} /></button>
                     </div>
                     {holidayName(selected) && <p className="dy-hol">{holidayName(selected)}</p>}
                     {items.length ? (
-                        <ul className="dy-list">{items.map((n) => <li key={n.id}>{n.text}</li>)}</ul>
-                    ) : <p className="dy-muted">이날 적은 것이 없어요.</p>}
+                        <ul className="dy-list">
+                            {items.map((n) => (
+                                <li key={n.id}>
+                                    <NoteEdit note={n} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="dy-empty">
+                            <p className="dy-muted">이날 적은 것이 없어요.</p>
+                            <p className="dy-example">위에서 쓱, 적어 두거나 주간 쪽에서 교시를 적어요.</p>
+                        </div>
+                    )}
                 </section>
                 <section className="dy-card">
                     <div className="dy-sec-head">
@@ -209,6 +244,7 @@ export default function TodayBoard({
                 <label className="dy-card dy-goal">
                     <span className="dy-label">올해 우리 반 한 줄 목표</span>
                     <input value={fields?.goal || ''} onChange={(e) => setField('goal', e.target.value)} placeholder="한 줄로 적어 두세요" />
+                    <span className="dy-example">학기 동안 이 칸에 한 줄만 남겨 두세요.</span>
                 </label>
             </aside>
             <section className="dy-col-center" aria-label="이번 주">
@@ -216,6 +252,7 @@ export default function TodayBoard({
                     <div>
                         <p className="dy-kicker">{selected === now ? '오늘' : '고른 날'} · {sp.m}월 {sp.d}일 {DOW[dow(selected)]}요일</p>
                         <h1 className="dy-title">이번 주</h1>
+                        <p className="dy-week-stats">일곱 날 · 메모 {weekMemos} · 빈 날 {emptyDays}</p>
                     </div>
                     <div className="dy-week-nav">
                         <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, -1))} aria-label="지난주"><ChevronLeft size={18} /></button>
@@ -223,16 +260,21 @@ export default function TodayBoard({
                         <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, 1))} aria-label="다음 주"><ChevronRight size={18} /></button>
                     </div>
                 </div>
+                <ul className="dy-legend" aria-label="색 안내">
+                    <li><i className="is-today" aria-hidden="true" />오늘</li>
+                    <li><i className="is-weekend" aria-hidden="true" />주말</li>
+                    <li><i className="is-work" aria-hidden="true" />업무</li>
+                </ul>
                 <div className="dy-week">
                     {days.map((ymd) => (
-                        <DayCard key={ymd} ymd={ymd} items={marks[ymd] || []} onOpen={openDay} compact={dow(ymd) === 0 || dow(ymd) === 6} />
+                        <DayCard key={ymd} ymd={ymd} items={marks[ymd] || []} onOpen={openDay} />
                     ))}
                 </div>
             </section>
             <aside className="dy-col-right dy-card dy-ssu-panel" aria-label="쓱, 적">
                 <div className="dy-sec-head">
                     <h2 className="dy-h">쓱, 적</h2>
-                    <kbd className="dy-kbd" title="어디서나 ⌘K · Ctrl+K">⌘K</kbd>
+                    <kbd className="dy-kbd" title={`${shortcut}로 어디서나`}>{shortcut}</kbd>
                 </div>
                 <CaptureBox {...capProps} />
                 <div className="dy-sec-head dy-gap">
