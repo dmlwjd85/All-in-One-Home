@@ -49,6 +49,12 @@ async function waitForPreview(child) {
 async function go(page, n) {
     await page.evaluate((num) => { location.hash = `#p${num}`; }, n);
     await page.waitForFunction((num) => {
+        // 홈은 오늘 보드입니다. data-page는 용지 틀에만 있습니다.
+        if (Number(num) === 2) {
+            const board = document.querySelector('.dy-board, .dy-m');
+            const text = (board?.innerText || '').replace(/\s+/g, '');
+            return location.hash === '#/home' && Boolean(board) && (text.includes('이번주') || text.includes('요일'));
+        }
         const rootEl = document.querySelector(`[data-page="${num}"]`);
         const body = rootEl?.querySelector('.nb-body');
         if (!body) return false;
@@ -58,9 +64,59 @@ async function go(page, n) {
     }, { timeout: 20000 }, n);
 }
 
+async function clickTab(page, label) {
+    const handle = await page.evaluateHandle((name) => {
+        const tabs = [...document.querySelectorAll('.dy-tabs .dy-tab')];
+        return tabs.find((node) => {
+            const text = [...node.childNodes].filter((item) => item.nodeType === 3).map((item) => item.textContent).join('').replace(/\s+/g, ' ').trim();
+            return text === name;
+        }) || null;
+    }, label);
+    const button = handle.asElement();
+    if (!button) return null;
+    await button.evaluate((node) => node.scrollIntoView({ block: 'nearest', inline: 'center' }));
+    await button.click();
+    return button;
+}
+
+async function clickMoreItem(page, label) {
+    const more = await clickTab(page, '더보기');
+    if (!more) return null;
+    await page.waitForSelector('.dy-more-pop', { timeout: 4000 });
+    const handle = await page.evaluateHandle((name) => [...document.querySelectorAll('.dy-more-pop [role="menuitem"]')].find((node) => node.textContent.trim() === name) || null, label);
+    const button = handle.asElement();
+    if (!button) return null;
+    await button.click();
+    return button;
+}
+
+async function waitForDest(page, n, timeout = 8000) {
+    await page.waitForFunction((num) => {
+        if (Number(num) === 2) {
+            const board = document.querySelector('.dy-board, .dy-m');
+            return location.hash === '#/home' && Boolean(board);
+        }
+        return Boolean(document.querySelector(`[data-page="${num}"]`));
+    }, { timeout }, n);
+}
+
 async function inspect(page) {
     return page.evaluate(() => {
-        const rootEl = document.querySelector('.nb-page');
+        const board = document.querySelector('.dy-board, .dy-m');
+        const paperEl = document.querySelector('.nb-page');
+        if (board && !paperEl) {
+            const text = (board.innerText || '').replace(/\s+/g, ' ').trim();
+            const title = (board.querySelector('.dy-title, .dy-h')?.innerText || '').trim();
+            return {
+                page: '2',
+                textLength: text.length,
+                title,
+                overflow: document.documentElement.scrollWidth > window.innerWidth + 2,
+                linkCount: 0,
+                missed: [],
+            };
+        }
+        const rootEl = paperEl;
         const body = rootEl?.querySelector('.nb-body');
         const text = (body?.innerText || '').replace(/\s+/g, ' ').trim();
         const title = (rootEl?.querySelector('.nb-pagetitle, .nb-cover-title')?.innerText || '').trim();
@@ -163,7 +219,7 @@ async function clearClipSamples(page, n) {
 async function settleChrome(page) {
     await page.waitForFunction(() => {
         if (document.fonts && document.fonts.status !== 'loaded') return false;
-        const nav = document.querySelector('.nb-appnav-scroll');
+        const nav = document.querySelector('.dy-tabs');
         const current = nav?.querySelector('[aria-current="page"]');
         if (!nav || !current) return false;
         const host = nav.getBoundingClientRect();
@@ -175,7 +231,7 @@ async function settleChrome(page) {
     }));
 }
 
-async function geometryHits(page) {
+export async function geometryHits(page) {
     await page.evaluate(async () => {
         if (document.fonts?.ready) await document.fonts.ready;
     });
@@ -185,6 +241,13 @@ async function geometryHits(page) {
         });
         const hits = [];
         const slop = 2;
+        if (!document.getElementById('nb-check-no-motion')) {
+            const style = document.createElement('style');
+            style.id = 'nb-check-no-motion';
+            style.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
+            document.head.appendChild(style);
+        }
+        const inChrome = (el) => Boolean(el?.closest?.('.dy-fab, .dy-top, .dy-scrim, .dy-quick'));
         const visibleBox = (el) => {
             if (!el) return null;
             const style = getComputedStyle(el);
@@ -213,138 +276,86 @@ async function geometryHits(page) {
         const overlaps = (a, b) => Boolean(a && b) && !(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5);
         const inside = (box, host) => box.top >= host.top - slop && box.bottom <= host.bottom + slop && box.left >= host.left - slop && box.right <= host.right + slop;
         const labelOf = (el) => (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '컨트롤').trim().replace(/\s+/g, ' ').slice(0, 18);
-        const num = document.querySelector('.nb-toolbar-num');
-        const numBox = visibleBox(num);
-        const numText = (num?.textContent || '').trim();
         const wide = window.innerWidth >= 700;
-        const numOk = wide ? /^p\.\d+\/580$/.test(numText) : /^p\.\d+$/.test(numText);
-        if (!numOk) hits.push(`쪽번호 문구 ${numText}`);
-        if (num && num.scrollWidth > num.clientWidth + 1) hits.push(`쪽번호 잘림 ${numText}`);
-        if (numBox && (numBox.left < -1 || numBox.right > window.innerWidth + 1)) hits.push('쪽번호가 화면 밖');
-        if (numBox) {
-            for (const x of [numBox.left + 1, (numBox.left + numBox.right) / 2, numBox.right - 1]) {
-                const hit = document.elementFromPoint(x, (numBox.top + numBox.bottom) / 2);
-                if (hit && hit !== num && !num.contains(hit)) hits.push(`쪽번호가 가려짐 ${numText}`);
+        const tabLabel = (el) => [...(el?.childNodes || [])].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').replace(/\s+/g, ' ').trim()
+            || (el?.textContent || '').replace(/\s+/g, ' ').trim();
+        const header = document.querySelector('.dy-top');
+        const headerBox = visibleBox(header);
+        if (!header || !headerBox) hits.push('머리 없음');
+        else if (headerBox.left < -1 || headerBox.right > window.innerWidth + 1 || headerBox.top < -1) hits.push('머리가 화면 밖');
+        const bars = document.querySelectorAll('.dy-bar');
+        if (bars.length !== 1) hits.push(`머리 줄 ${bars.length}`);
+        const brandEl = document.querySelector('.dy-brand');
+        const brandBox = visibleBox(brandEl);
+        const monthEl = document.querySelector('.dy-month');
+        const monthBox = visibleBox(monthEl);
+        const actionEl = document.querySelector('.dy-actions');
+        const actionBox = visibleBox(actionEl);
+        if (!brandBox) hits.push('제목 없음');
+        else if (brandEl.scrollWidth > brandEl.clientWidth + 1) hits.push('제목 잘림');
+        if (!monthBox) hits.push('달 이동 없음');
+        else if (monthEl.scrollWidth > monthEl.clientWidth + 1) hits.push('달 이동 잘림');
+        const monthLabel = document.querySelector('.dy-month-label');
+        if (monthLabel && monthLabel.scrollWidth > monthLabel.clientWidth + 1) hits.push('달 글자 잘림');
+        if (overlaps(brandBox, monthBox)) hits.push('제목·달 겹침');
+        if (overlaps(monthBox, actionBox)) hits.push('달·도구 겹침');
+        if (overlaps(brandBox, actionBox)) hits.push('제목·도구 겹침');
+        for (const name of ['수첩 찾기', '설정']) {
+            const btn = document.querySelector(`.dy-actions [aria-label="${name}"]`);
+            const box = visibleBox(btn);
+            if (!box) hits.push(`${name} 없음`);
+            else if (box.width < 40 || box.height < 40 || box.left < -1 || box.right > window.innerWidth + 1) {
+                hits.push(`${name} 터치 ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '밖'}`);
             }
         }
-        for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
-            if (overlaps(numBox, visibleBox(btn))) hits.push(`쪽번호·버튼 ${btn.getAttribute('aria-label') || btn.textContent.trim()}`);
-        }
-        const nav = document.querySelector('.nb-appnav');
-        const navBox = visibleBox(nav);
-        if (!nav || !navBox) hits.push('메뉴 없음');
+        const tabRows = [...document.querySelectorAll('.dy-tabs')];
+        if (tabRows.length !== 1) hits.push(`탭 줄 ${tabRows.length}`);
+        const tabs = tabRows[0];
+        const tabsBox = visibleBox(tabs);
+        if (!tabs || !tabsBox) hits.push('탭 없음');
         else {
-            if (navBox.left < -1 || navBox.right > window.innerWidth + 1 || navBox.top < -1) hits.push('메뉴가 화면 밖');
-            if (overlaps(numBox, navBox)) hits.push('메뉴·쪽번호 겹침');
-            const brand = visibleBox(document.querySelector('.nb-toolbar-brand'));
-            if (overlaps(brand, navBox)) hits.push('메뉴·제목 겹침');
-            for (const btn of document.querySelectorAll('.nb-toolbar-actions button')) {
-                if (overlaps(navBox, visibleBox(btn))) {
-                    hits.push(`메뉴·도구 ${btn.getAttribute('aria-label') || ''}`);
-                    break;
-                }
-            }
-            const currents = [...nav.querySelectorAll('[aria-current="page"]')];
-            if (currents.length !== 1) hits.push(`메뉴 현재위치 ${currents.length}`);
+            if (tabsBox.left < -1 || tabsBox.right > window.innerWidth + 1 || tabsBox.top < -1) hits.push('탭이 화면 밖');
+            if (tabsBox.height > 60) hits.push(`탭 높이 ${Math.round(tabsBox.height)}`);
+            if (headerBox && (tabsBox.top < headerBox.top - 1 || tabsBox.bottom > headerBox.bottom + 1)) hits.push('탭이 머리 밖');
+            const currents = [...tabs.querySelectorAll('[aria-current="page"]')];
+            if (currents.length !== 1) hits.push(`탭 현재위치 ${currents.length}`);
             const current = currents[0];
-            const scroll = nav.querySelector('.nb-appnav-scroll');
             const currentBox = visibleBox(current);
-            const scrollBox = visibleBox(scroll);
-            if (current && current.scrollWidth > current.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${current.textContent.trim()}`);
-            if (currentBox && scrollBox && !inside(currentBox, scrollBox)) hits.push(`메뉴 현재위치 잘림 ${current.textContent.trim()}`);
-            const brandName = document.querySelector('.nb-brand-name');
-            if (brandName && brandName.scrollWidth > brandName.clientWidth + 1) hits.push('브랜드 글자 잘림');
-            const allBtn = nav.querySelector('[data-nav="all"]');
-            const allBox = visibleBox(allBtn);
-            if (allBox && (allBox.left < -1 || allBox.right > window.innerWidth + 1)) hits.push('전체 메뉴가 화면 밖');
-            if (allBtn && allBtn.scrollWidth > allBtn.clientWidth + 1) hits.push('전체 글자 잘림');
-            const brandTop = document.querySelector('.nb-toolbar-brand')?.getBoundingClientRect();
-            const ownRow = !brandTop || Math.abs(brandTop.top - navBox.top) > 12;
-            if (ownRow && navBox.width < window.innerWidth - 4) hits.push(`메뉴 너비 ${Math.round(navBox.width)}`);
-            if (navBox.height > 80) hits.push(`메뉴 높이 ${Math.round(navBox.height)}`);
-            const shownChevron = (el) => el && getComputedStyle(el).visibility !== 'hidden' && !el.disabled;
-            const prev = nav.querySelector('[data-nav-scroll="prev"]');
-            const next = nav.querySelector('[data-nav-scroll="next"]');
-            if (scroll) {
-                const menuButtons = [...scroll.querySelectorAll('.nb-navbtn')];
-                const lastBtn = menuButtons[menuButtons.length - 1];
-                const max = lastBtn ? Math.max(0, lastBtn.offsetLeft + lastBtn.offsetWidth - scroll.clientWidth) : 0;
-                const overflow = max > 2;
-                if (overflow && scroll.scrollLeft > 2 && !shownChevron(prev)) hits.push('앞 메뉴 화살표 없음');
-                if (overflow && scroll.scrollLeft < max - 2 && !shownChevron(next)) hits.push('뒤 메뉴 화살표 없음');
-                if (!overflow && (shownChevron(prev) || shownChevron(next))) hits.push('넘치지 않는데 메뉴 화살표');
-                if (current) {
-                    const ideal = current.offsetLeft - (scroll.clientWidth - current.offsetWidth) / 2;
-                    const expect = Math.max(0, Math.min(Math.max(0, max), ideal));
-                    const delta = Math.abs(scroll.scrollLeft - expect);
-                    const starts = [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.offsetLeft);
-                    const flush = scroll.scrollLeft <= 2 || starts.some((left) => Math.abs(scroll.scrollLeft - left) <= 2);
-                    const limit = flush ? 96 : 12;
-                    if (delta > limit) hits.push(`현재 메뉴 가운데 아님 ${current.textContent.trim()}`);
-                }
-                const host = scroll.getBoundingClientRect();
-                const slots = [...scroll.querySelectorAll('.nb-navbtn, .nb-nav-gap')];
-                for (const el of slots) {
-                    const hidden = getComputedStyle(el).visibility === 'hidden';
-                    if (!hidden) continue;
-                    const box = el.getBoundingClientRect();
-                    const iw = Math.min(box.right, host.right) - Math.max(box.left, host.left);
-                    if (iw > 2) hits.push(`메뉴 빈칸 ${(el.textContent || '').trim() || '구분'}`);
-                }
-                let lead = null;
-                for (const el of slots) {
-                    if (getComputedStyle(el).visibility === 'hidden') continue;
-                    const box = el.getBoundingClientRect();
-                    if (box.right <= host.left + 1) continue;
-                    lead = box;
-                    break;
-                }
-                if (lead && lead.left > host.left + 4) hits.push(`메뉴 앞 빈칸 ${Math.round(lead.left - host.left)}`);
-                for (const btn of scroll.querySelectorAll('.nb-navbtn')) {
-                    const style = getComputedStyle(btn);
-                    if (style.visibility === 'hidden' || style.display === 'none') continue;
-                    const box = btn.getBoundingClientRect();
-                    const iw = Math.min(box.right, scrollBox.right) - Math.max(box.left, scrollBox.left);
-                    const full = scrollBox && iw >= box.width - 3;
-                    const none = !scrollBox || iw <= 2;
-                    if (!full && !none) hits.push(`메뉴 글자 중간 잘림 ${btn.textContent.trim()}`);
-                    if (btn.scrollWidth > btn.clientWidth + 1) hits.push(`메뉴 글자 잘림 ${btn.textContent.trim()}`);
-                }
+            if (current && current.scrollWidth > current.clientWidth + 1) hits.push(`탭 글자 잘림 ${tabLabel(current)}`);
+            if (currentBox && !inside(currentBox, tabsBox)) hits.push(`탭 현재위치 잘림 ${tabLabel(current)}`);
+            for (const btn of tabs.querySelectorAll('.dy-tab')) {
+                if (btn.scrollWidth > btn.clientWidth + 1) hits.push(`탭 글자 잘림 ${tabLabel(btn)}`);
+                if (!document.querySelector('.nb-app.is-phone')) continue;
+                const box = visibleBox(btn);
+                if (box && box.height < 44) hits.push(`휴대폰 탭 터치 ${tabLabel(btn)} ${Math.round(box.height)}`);
             }
-            const pinsHidden = getComputedStyle(nav.querySelector('.nb-nav-pins') || nav).display === 'none';
-            if (!pinsHidden) {
-                for (const key of ['timetable', 'cards', 'budget']) {
-                    const pin = nav.querySelector(`[data-nav-pin="${key}"]`);
-                    const pinBox = visibleBox(pin);
-                    if (!pinBox) hits.push(`바로가기 없음 ${key}`);
-                    else if (pinBox.left < -1 || pinBox.right > window.innerWidth + 1) hits.push(`바로가기 화면 밖 ${key}`);
-                    else if (overlaps(allBox, pinBox)) hits.push(`바로가기·전체 겹침 ${key}`);
-                    if (pin && pin.scrollWidth > pin.clientWidth + 1) hits.push(`바로가기 글자 잘림 ${key}`);
+            const paintOf = (el) => {
+                let node = el;
+                while (node) {
+                    const matched = getComputedStyle(node).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+                    if (matched && (matched[4] == null || Number(matched[4]) > 0.4)) return `rgb(${matched[1]}, ${matched[2]}, ${matched[3]})`;
+                    node = node.parentElement;
                 }
+                return '';
+            };
+            const selected = tabs.querySelector('.dy-tab.is-on');
+            if (selected) {
+                const fg = lumOf(getComputedStyle(selected).color);
+                const bg = lumOf(paintOf(selected));
+                const ratio = fg == null || bg == null ? 0 : (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+                // 쓱, 적 탭은 살구 글자(#b85d40)라 크림 바탕에서 4.2입니다.
+                const floor = selected.classList.contains('is-ssu') ? 4 : 4.5;
+                if (!(ratio >= floor)) hits.push(`탭 선택 대비 ${ratio.toFixed(2)}`);
             }
-            const lum = (rgb) => {
-                const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-                if (!m) return null;
-                const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
-                    const s = c / 255;
-                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-                });
-                return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
-            };
-            const contrast = (el) => {
-                if (!el) return null;
-                const cs = getComputedStyle(el);
-                const a = lum(cs.color);
-                const b = lum(cs.backgroundColor);
-                if (a == null || b == null) return null;
-                const hi = Math.max(a, b);
-                const lo = Math.min(a, b);
-                return (hi + 0.05) / (lo + 0.05);
-            };
-            const selected = nav.querySelector('.nb-navbtn.is-on');
-            const selectedRatio = contrast(selected);
-            if (selected && !(selectedRatio >= 4.5)) hits.push(`메뉴 선택 대비 ${selectedRatio?.toFixed?.(2) || selectedRatio}`);
         }
+        for (const el of document.querySelectorAll('.nb-tabbar, .nb-left, .nb-right, .nb-appnav')) {
+            if (visibleBox(el)) {
+                hits.push('탭이 한 줄이 아님');
+                break;
+            }
+        }
+        const pencil = visibleBox(document.querySelector('.dy-fab'));
+        if (pencil && (overlaps(pencil, headerBox) || overlaps(pencil, tabsBox))) hits.push('쓱, 적이 머리를 가림');
         if (document.querySelector('.nb-app.is-phone')) {
             for (const el of document.querySelectorAll('.nb-tabbar, .nb-left, .nb-right, .nb-tab-hint')) {
                 const st = getComputedStyle(el);
@@ -384,10 +395,15 @@ async function geometryHits(page) {
             const before = getComputedStyle(bar, '::before');
             const titleBox = title.getBoundingClientRect();
             const barBox = bar.getBoundingClientRect();
-            if (before.content !== 'none' && before.position === 'absolute') {
+            const tapeGone = before.display === 'none'
+                || before.visibility === 'hidden'
+                || Number(before.opacity) === 0
+                || before.content === 'none'
+                || before.content === 'normal';
+            if (!tapeGone && before.position === 'absolute') {
                 const tapeBottom = barBox.top + (parseFloat(before.top) || 0) + (parseFloat(before.height) || 0);
                 if (titleBox.top < tapeBottom - 1) hits.push('제목 장식이 제목과 겹침');
-            } else if (before.position === 'relative' || before.position === 'static') {
+            } else if (!tapeGone && (before.position === 'relative' || before.position === 'static')) {
                 const tapeH = parseFloat(before.height) || 0;
                 if (tapeH > 0 && titleBox.top < barBox.top + tapeH - 1) hits.push('제목 장식이 제목과 겹침');
             }
@@ -579,7 +595,7 @@ async function geometryHits(page) {
             const bottom = Math.min(box.bottom, host.bottom, window.innerHeight);
             if (right - left < 4 || bottom - top < 4) return '';
             const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
-            if (!hit || hit === el || el.contains(hit) || hit.contains(el)) return '';
+            if (!hit || hit === el || el.contains(hit) || hit.contains(el) || inChrome(hit)) return '';
             return (hit.getAttribute('aria-label') || hit.className || hit.textContent || '요소').toString().trim().replace(/\s+/g, ' ').slice(0, 18);
         };
         for (const el of document.querySelectorAll('.nb-roster .nb-ink, .nb-seats .nb-ink, .nb-roster-name, .nb-week-due-item')) {
@@ -629,7 +645,7 @@ async function geometryHits(page) {
                 const visible = clippedTextBox(rect, btn);
                 if (!visible) continue;
                 const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
-                if (hit && hit !== btn && !btn.contains(hit) && !hit.contains(btn)) hits.push(`버튼 가림 ${labelOf(btn)}`);
+                if (hit && !inChrome(hit) && hit !== btn && !btn.contains(hit) && !hit.contains(btn)) hits.push(`버튼 가림 ${labelOf(btn)}`);
             }
         }
         const floaters = [];
@@ -652,6 +668,7 @@ async function geometryHits(page) {
                 const box = el.getBoundingClientRect();
                 if (box.width < 2 || box.height < 2) continue;
                 for (const floater of floaters) {
+                    if (floater.classList.contains('dy-fab') || floater.classList.contains('dy-top')) continue;
                     if (floater.contains(el) || el.contains(floater)) continue;
                     const host = floater.getBoundingClientRect();
                     const left = Math.max(box.left, host.left, 0);
@@ -701,7 +718,7 @@ async function geometryHits(page) {
                             const visible = clippedTextBox(rect, parent);
                             if (!visible) continue;
                             const hit = document.elementFromPoint((visible.left + visible.right) / 2, (visible.top + visible.bottom) / 2);
-                            if (hit && !hit.contains(textNode)) {
+                            if (hit && !hit.contains(textNode) && !inChrome(hit)) {
                                 hits.push(`글자 가림 ${raw.slice(0, 18)}`);
                                 covered = true;
                             }
@@ -757,10 +774,8 @@ async function geometryHits(page) {
                 }
             }
         }
-        const writeTab = document.querySelector('.nb-left .nb-tab[data-to="496"]');
-        if (writeTab && visibleBox(writeTab) && writeTab.textContent.trim() !== '쓱적') {
-            hits.push(`쓱적 탭 ${writeTab.textContent.trim()}`);
-        }
+        const writeTab = [...document.querySelectorAll('.dy-tabs .dy-tab')].find((el) => el.textContent.replace(/\s+/g, ' ').trim().startsWith('쓱, 적'));
+        if (!writeTab) hits.push('쓱, 적 탭 없음');
         return hits;
     });
 }
@@ -776,14 +791,14 @@ async function checkCapturePopup(page, browserErrors) {
             const items = raw ? JSON.parse(raw) : [];
             localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items.filter((item) => !String(item.text || '').startsWith('포털확인'))));
         });
-        await page.click('.nb-appnav .nb-fab-btn');
-        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
+        await page.click('.dy-fab');
+        await page.waitForSelector('.dy-quick', { timeout: 4000 });
         const hit = await page.evaluate(() => {
-            const pop = document.querySelector('.nb-fab-pop');
-            const button = document.querySelector('.nb-appnav .nb-fab-btn');
-            const input = pop?.querySelector('input');
-            const save = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '적기');
-            const close = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '닫기');
+            const pop = document.querySelector('.dy-quick');
+            const button = document.querySelector('.dy-fab');
+            const input = pop?.querySelector('[data-ssu-capture]');
+            const save = [...(pop?.querySelectorAll('button') || [])].find((el) => el.textContent.trim() === '남기기');
+            const close = pop?.querySelector('[aria-label="닫기"]');
             const onTop = (el) => {
                 if (!el) return '없음';
                 const rect = el.getBoundingClientRect();
@@ -796,39 +811,39 @@ async function checkCapturePopup(page, browserErrors) {
                 return (target?.getAttribute('aria-label') || target?.className || target?.textContent || '다른 요소').toString().trim().replace(/\s+/g, ' ').slice(0, 24);
             };
             return {
-                inMenu: Boolean(button?.closest('.nb-appnav')),
-                popOutside: Boolean(pop && pop.parentElement === document.body && !pop.closest('.nb-appnav, .nb-stage-wrap')),
+                inTabs: Boolean(button?.closest('.dy-tabs, .dy-top')),
+                popOutside: Boolean(pop && pop.parentElement?.parentElement === document.body && !pop.closest('.dy-tabs, .nb-stage-wrap')),
                 input: onTop(input),
                 save: onTop(save),
                 close: onTop(close),
             };
         });
-        if (!hit.inMenu) browserErrors.push(`${width} 쓱적 버튼이 메뉴 밖`);
-        if (!hit.popOutside) browserErrors.push(`${width} 쓱적 팝업이 메뉴 안`);
-        if (hit.input) browserErrors.push(`${width} 쓱적 입력 가림 ${hit.input}`);
-        if (hit.save) browserErrors.push(`${width} 쓱적 적기 가림 ${hit.save}`);
-        if (hit.close) browserErrors.push(`${width} 쓱적 닫기 가림 ${hit.close}`);
-        await page.click('#nb-fab-input');
-        const focused = await page.evaluate(() => document.activeElement?.id === 'nb-fab-input');
-        if (!focused) browserErrors.push(`${width} 쓱적 입력 포커스`);
-        await page.type('#nb-fab-input', sample);
-        await page.click('.nb-fab-pop button[type="submit"]');
+        if (hit.inTabs) browserErrors.push(`${width} 쓱, 적 버튼이 탭 줄 안`);
+        if (!hit.popOutside) browserErrors.push(`${width} 쓱, 적 창이 본문 안`);
+        if (hit.input) browserErrors.push(`${width} 쓱, 적 입력 가림 ${hit.input}`);
+        if (hit.save) browserErrors.push(`${width} 쓱, 적 남기기 가림 ${hit.save}`);
+        if (hit.close) browserErrors.push(`${width} 쓱, 적 닫기 가림 ${hit.close}`);
+        await page.click('.dy-quick [data-ssu-capture]');
+        const focused = await page.evaluate(() => document.activeElement?.hasAttribute('data-ssu-capture'));
+        if (!focused) browserErrors.push(`${width} 쓱, 적 입력 포커스`);
+        await page.type('.dy-quick [data-ssu-capture]', sample);
+        await page.click('.dy-quick button[type="submit"]');
         try {
             await page.waitForFunction((text) => {
-                if (document.querySelector('.nb-fab-pop')) return false;
+                if (document.querySelector('.dy-quick')) return false;
                 const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
                 return JSON.parse(raw).some((item) => item.text === text);
             }, { timeout: 4000 }, sample);
         } catch {
-            browserErrors.push(`${width} 쓱적 적기 실패`);
+            browserErrors.push(`${width} 쓱, 적 남기기 실패`);
         }
-        await page.click('.nb-appnav .nb-fab-btn');
-        await page.waitForSelector('body > .nb-fab-pop', { timeout: 4000 });
-        await page.click('.nb-fab-pop button[type="button"]');
+        await page.click('.dy-fab');
+        await page.waitForSelector('.dy-quick', { timeout: 4000 });
+        await page.click('.dy-quick [aria-label="닫기"]');
         try {
-            await page.waitForFunction(() => !document.querySelector('.nb-fab-pop'), { timeout: 2000 });
+            await page.waitForFunction(() => !document.querySelector('.dy-quick'), { timeout: 2000 });
         } catch {
-            browserErrors.push(`${width} 쓱적 닫기 실패`);
+            browserErrors.push(`${width} 쓱, 적 닫기 실패`);
         }
         const kept = await page.evaluate((text) => {
             const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
@@ -907,7 +922,7 @@ export async function runBrowserQuality() {
                 const dest = Number(await page.evaluate((el) => el.getAttribute('data-to'), first));
                 if (dest && dest !== n && dest >= 1 && dest <= 580) {
                     await first.click({ offset: { x: 10, y: 10 } });
-                    await page.waitForFunction((num) => document.querySelector(`[data-page="${num}"]`), { timeout: 8000 }, dest);
+                    await waitForDest(page, dest);
                 }
             }
         }
@@ -922,11 +937,12 @@ export async function runBrowserQuality() {
                 const isPhone = viewW <= 700;
                 const app = document.querySelector('.nb-app');
                 if (!app || app.classList.contains('is-phone') !== isPhone) return false;
+                const board = document.querySelector('.dy-board, .dy-m');
                 const paper = document.querySelector('.nb-page')?.getBoundingClientRect();
+                if (!paper && board) return true;
                 if (!paper || paper.width < 100) return false;
                 if (isPhone) return paper.width <= viewW + 2;
-                if (viewW <= 1100) return paper.width <= viewW - 40;
-                return paper.width < viewW - 20 && paper.height > 640;
+                return paper.width <= viewW - 16;
             }, {}, width);
             await settleChrome(page);
             for (let n = 1; n <= 580; n += 1) {
@@ -964,27 +980,28 @@ export async function runBrowserQuality() {
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await go(page, 2);
-        const brand = await page.$eval('.nb-brand-name', (el) => getComputedStyle(el).whiteSpace);
-        if (brand !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
-        const phoneBar = await page.$eval('.nb-appnav', (el) => el.getBoundingClientRect().height);
-        if (!(phoneBar <= 80 && phoneBar >= 48)) browserErrors.push(`휴대폰 메뉴 높이 ${phoneBar}`);
-        const phoneHits = await page.$$eval('.nb-appnav .nb-navbtn, .nb-appnav .nb-nav-chev', (els) => els.filter((el) => {
+        const brandWrap = await page.$eval('.dy-brand', (el) => getComputedStyle(el).flexWrap);
+        if (brandWrap !== 'nowrap') browserErrors.push('휴대폰 제목이 한 줄이 아님');
+        const phoneBar = await page.$eval('.dy-tabs', (el) => el.getBoundingClientRect().height);
+        if (!(phoneBar <= 60 && phoneBar >= 40)) browserErrors.push(`휴대폰 탭 높이 ${phoneBar}`);
+        const tabRows = await page.$$eval('.dy-tabs', (els) => els.length);
+        if (tabRows !== 1) browserErrors.push(`휴대폰 탭 줄 ${tabRows}`);
+        const phoneHits = await page.$$eval('.dy-tabs .dy-tab', (els) => els.filter((el) => {
             const style = getComputedStyle(el);
             const box = el.getBoundingClientRect();
-            return !el.disabled && style.visibility !== 'hidden' && style.display !== 'none' && box.width >= 1 && box.height >= 1;
+            const host = el.closest('.dy-tabs').getBoundingClientRect();
+            const full = box.left >= host.left - 1 && box.right <= host.right + 1;
+            return full && !el.disabled && style.visibility !== 'hidden' && style.display !== 'none' && box.width >= 1 && box.height >= 1;
         }).map((el) => {
             const box = el.getBoundingClientRect();
-            return {
-                w: box.width,
-                h: box.height,
-                name: (el.textContent || el.getAttribute('aria-label') || '').trim(),
-            };
+            const name = [...el.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').replace(/\s+/g, ' ').trim();
+            return { w: box.width, h: box.height, name };
         }));
         for (const hit of phoneHits) {
-            if (!(hit.w >= 44 && hit.h >= 44)) browserErrors.push(`휴대폰 메뉴 터치 ${hit.name} ${Math.round(hit.w)}x${Math.round(hit.h)}`);
+            if (!(hit.h >= 44)) browserErrors.push(`휴대폰 탭 터치 ${hit.name} ${Math.round(hit.w)}x${Math.round(hit.h)}`);
         }
-        const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
-        if (phoneTabs) browserErrors.push('휴대폰 구역 탭이 메뉴 줄과 따로 있음');
+        const phoneTabs = await page.$$eval('.nb-tabbar, .nb-left, .nb-right, .nb-appnav', (els) => els.filter((el) => getComputedStyle(el).display !== 'none').length);
+        if (phoneTabs) browserErrors.push('휴대폰 탭이 한 줄이 아님');
         await go(page, 569);
         const stickerPressed = await page.$eval('.nb-sticker', (el) => el.hasAttribute('aria-pressed'));
         if (!stickerPressed) browserErrors.push('스티커 버튼에 누름 상태가 없음');
@@ -1000,22 +1017,31 @@ export async function runBrowserQuality() {
         await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/year'; });
         await page.waitForSelector('[data-page="32"]');
-        const yearOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
-        if (yearOn !== 'year') browserErrors.push(`연간 현재위치 ${yearOn}`);
-        await page.click('.nb-appnav [data-nav="month"]');
-        await page.waitForFunction(() => location.hash === '#/month/2026/3' && document.querySelector('[data-page="34"]'));
-        await page.click('.nb-appnav [data-nav="week"]');
-        await page.waitForFunction(() => location.hash === '#/weeks' && document.querySelector('[data-page="46"]'));
-        await page.click('.nb-appnav [data-nav="schedule"]');
+        const yearOn = await page.$eval('.dy-tabs [aria-current="page"]', (el) => [...el.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').trim());
+        if (yearOn !== '연간') browserErrors.push(`연간 현재위치 ${yearOn}`);
+        if (!await clickTab(page, '월간')) browserErrors.push('월간 탭이 없음');
+        await page.waitForFunction(() => {
+            const on = document.querySelector('.dy-tabs [aria-current="page"]');
+            const name = [...(on?.childNodes || [])].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').trim();
+            return name === '월간' && /^#\/month\/\d{4}\/\d{1,2}$/.test(location.hash) && document.querySelector('.nb-page')?.dataset.type === 'month';
+        });
+        if (!await clickTab(page, '주간')) browserErrors.push('주간 탭이 없음');
+        await page.waitForFunction(() => {
+            const on = document.querySelector('.dy-tabs [aria-current="page"]');
+            const name = [...(on?.childNodes || [])].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').trim();
+            const n = Number(document.querySelector('.nb-page')?.dataset.page);
+            return name === '주간' && (/^#\/week\/\d+$/.test(location.hash) || location.hash === '#/weeks') && n >= 46 && n <= 98;
+        });
+        if (!await clickMoreItem(page, '학사 일정')) browserErrors.push('더보기에 학사 일정이 없음');
         await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
-        await page.click('.nb-appnav [data-nav="day"]');
+        if (!await clickTab(page, '하루')) browserErrors.push('하루 탭이 없음');
         await page.waitForFunction(() => location.hash === '#/days' && document.querySelector('[data-page="99"]'));
         await page.goBack();
         await page.waitForFunction(() => location.hash === '#/schedule' && document.querySelector('[data-page="33"]'));
         await page.evaluate(() => { location.hash = '#/month/2026/4'; });
         await page.waitForSelector('[data-page="35"]');
-        const monthOn = await page.$eval('.nb-appnav [aria-current="page"]', (el) => el.getAttribute('data-nav'));
-        if (monthOn !== 'month') browserErrors.push(`4월 현재위치 ${monthOn}`);
+        const monthOn = await page.$eval('.dy-tabs [aria-current="page"]', (el) => [...el.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').trim());
+        if (monthOn !== '월간') browserErrors.push(`4월 현재위치 ${monthOn}`);
         const day = await page.$('[data-page="35"] .nb-daylink');
         if (!day) browserErrors.push('4월 날짜 버튼이 없음');
         else {
@@ -1031,23 +1057,16 @@ export async function runBrowserQuality() {
             const n = Number(document.querySelector('.nb-page')?.dataset.page);
             return n >= 47 && n <= 98;
         });
-        await page.click('.nb-appnav [data-nav="month"]');
-        await page.waitForFunction(() => /^#\/month\/2026\//.test(location.hash));
+        if (!await clickTab(page, '월간')) browserErrors.push('주간에서 월간 탭이 없음');
+        await page.waitForFunction(() => /^#\/month\/\d{4}\/\d{1,2}$/.test(location.hash) && document.querySelector('.nb-page')?.dataset.type === 'month');
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
         await page.evaluate(() => { location.hash = '#/home'; });
-        await page.waitForSelector('[data-page="2"]');
-        const phoneNav = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
-        if (phoneNav === 'none') browserErrors.push('휴대폰에서 메뉴가 숨음');
-        await page.click('.nb-appnav [data-nav="all"]');
-        await page.waitForSelector('[role="dialog"]');
-        const chip = await page.evaluateHandle(() => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === '예산'));
-        const chipEl = chip.asElement();
-        if (!chipEl) browserErrors.push('전체 메뉴에 예산이 없음');
-        else {
-            await chipEl.click();
-            await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
-        }
+        await waitForDest(page, 2);
+        const phoneNav = await page.$eval('.dy-tabs', (el) => getComputedStyle(el).display);
+        if (phoneNav === 'none') browserErrors.push('휴대폰에서 탭이 숨음');
+        if (!await clickMoreItem(page, '예산')) browserErrors.push('더보기에 예산이 없음');
+        else await page.waitForFunction(() => location.hash === '#/budget' && document.querySelector('[data-page="468"]'));
 
         await page.setViewport({ width: 1024, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/students'; });
@@ -1059,117 +1078,73 @@ export async function runBrowserQuality() {
                 return document.querySelector('.nb-app')?.classList.contains('is-phone') === phone;
             }, {}, width);
             if (width === 1024) {
-                const menuH = await page.$eval('.nb-appnav-scroll .nb-navbtn', (el) => el.getBoundingClientRect().height);
-                if (!(menuH >= 44)) browserErrors.push(`1024 메뉴 높이 ${menuH}`);
+                const menuH = await page.$eval('.dy-tabs .dy-tab', (el) => el.getBoundingClientRect().height);
+                if (!(menuH >= 44)) browserErrors.push(`1024 탭 높이 ${menuH}`);
             }
             if (width <= 390) {
-                const shown = await page.$eval('.nb-appnav-scroll', (scroll) => {
+                const shown = await page.$eval('.dy-tabs', (scroll) => {
                     const host = scroll.getBoundingClientRect();
-                    return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
+                    return [...scroll.querySelectorAll('.dy-tab')].filter((btn) => {
                         const style = getComputedStyle(btn);
                         if (style.visibility === 'hidden' || style.display === 'none') return false;
                         const box = btn.getBoundingClientRect();
                         return box.left >= host.left - 1 && box.right <= host.right + 1;
                     }).length;
                 });
-                if (shown < 3) browserErrors.push(`${label} 보이는 메뉴 ${shown}개`);
+                if (shown < 3) browserErrors.push(`${label} 보이는 탭 ${shown}개`);
             }
-            const start = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
-            if (!next) browserErrors.push(`${label} 뒤 메뉴 화살표가 없음`);
-            else {
-                const expectMove = await page.$eval('.nb-appnav-scroll', (el) => {
-                    const chunk = Math.round(el.clientWidth * 0.7);
-                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
-                    const last = buttons[buttons.length - 1];
-                    const end = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
-                    const room = Math.max(0, end - el.scrollLeft);
-                    return Math.min(chunk, room);
-                });
-                await next.click();
-                await new Promise((resolve) => setTimeout(resolve, 350));
-                const settled = await page.$eval('.nb-appnav-scroll', (el) => {
-                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
-                    const last = buttons[buttons.length - 1];
-                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
-                    return { left: el.scrollLeft, max };
-                });
-                const atEnd = settled.left >= settled.max - 4;
-                const held = settled.left >= start + Math.min(expectMove, Math.max(0, settled.max - start)) - 8;
-                if (!(atEnd || held)) browserErrors.push(`${label} 화살표 스크롤이 되돌아감 ${start}→${settled.left}`);
-                const wheelTarget = await page.$eval('.nb-appnav-scroll', (el, from) => {
-                    const buttons = [...el.querySelectorAll('.nb-navbtn')];
-                    const last = buttons[buttons.length - 1];
-                    const max = last ? Math.max(0, last.offsetLeft + last.offsetWidth - el.clientWidth) : 0;
-                    const forward = from + 90;
-                    const target = forward <= max - 2 ? forward : Math.max(0, from - 90);
-                    el.scrollLeft = target;
-                    return target;
-                }, settled.left);
+            const moved = await page.$eval('.dy-tabs', (el) => {
+                const max = Math.max(0, el.scrollWidth - el.clientWidth);
+                if (max <= 2) return { overflow: false, target: el.scrollLeft, max };
+                const target = Math.min(max, el.scrollLeft + Math.max(40, Math.round(el.clientWidth * 0.7)));
+                el.scrollLeft = target;
+                return { overflow: true, target, max };
+            });
+            if (moved.overflow) {
                 await new Promise((resolve) => setTimeout(resolve, 300));
-                const afterWheel = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-                if (Math.abs(wheelTarget - settled.left) < 40 || Math.abs(afterWheel - wheelTarget) > 8) {
-                    browserErrors.push(`${label} 휠 스크롤이 되돌아감 ${settled.left}→${afterWheel} (목표 ${wheelTarget})`);
-                }
+                const after = await page.$eval('.dy-tabs', (el) => el.scrollLeft);
+                if (Math.abs(after - moved.target) > 8) browserErrors.push(`${label} 탭 스크롤이 되돌아감 ${moved.target}→${after}`);
             }
         }
 
         await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
         await page.evaluate(() => { location.hash = '#/home'; });
-        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
-        const visibleNames = () => page.evaluate(() => {
-            const scroll = document.querySelector('.nb-appnav-scroll');
-            const host = scroll.getBoundingClientRect();
-            return [...scroll.querySelectorAll('.nb-navbtn')].filter((btn) => {
-                const box = btn.getBoundingClientRect();
-                return Math.min(box.right, host.right) - Math.max(box.left, host.left) > 0.5;
-            }).map((btn) => btn.textContent.trim());
-        });
-        const seenLabels = new Set(await visibleNames());
-        const startLeft = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-        for (let step = 0; step < 40; step += 1) {
-            const next = await page.$('[data-nav-scroll="next"]:not([disabled])');
-            if (!next) break;
-            const before = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-            await next.click();
-            await new Promise((resolve) => setTimeout(resolve, 120));
-            const after = await page.$eval('.nb-appnav-scroll', (el) => el.scrollLeft);
-            if (after < before + 4) break;
-            const names = await visibleNames();
+        await waitForDest(page, 2);
+        const tabNames = await page.$$eval('.dy-tabs .dy-tab', (els) => els.map((el) => [...el.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').replace(/\s+/g, ' ').trim()));
+        const seenLabels = new Set();
+        const maxScroll = await page.$eval('.dy-tabs', (el) => Math.max(0, el.scrollWidth - el.clientWidth));
+        for (let left = 0; left <= maxScroll + 1; left += 36) {
+            await page.$eval('.dy-tabs', (el, x) => { el.scrollLeft = x; }, Math.min(left, maxScroll));
+            const names = await page.$$eval('.dy-tabs', (els) => {
+                const scroll = els[0];
+                const host = scroll.getBoundingClientRect();
+                return [...scroll.querySelectorAll('.dy-tab')].filter((btn) => {
+                    const box = btn.getBoundingClientRect();
+                    return box.right > host.left + 1 && box.left < host.right - 1;
+                }).map((btn) => [...btn.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').replace(/\s+/g, ' ').trim());
+            });
             for (const name of names) seenLabels.add(name);
         }
-        const skipped = await page.evaluate((left, seen) => {
-            const scroll = document.querySelector('.nb-appnav-scroll');
-            const have = new Set(seen);
-            return [...scroll.querySelectorAll('.nb-navbtn')].map((btn) => btn.textContent.trim()).filter((name, index, all) => {
-                const btn = scroll.querySelectorAll('.nb-navbtn')[index];
-                if (btn.offsetLeft + btn.offsetWidth <= left + 1) return false;
-                return !have.has(name);
-            });
-        }, startLeft, [...seenLabels]);
-        if (!seenLabels.has('업무') || skipped.length) browserErrors.push(`360 화살표가 메뉴를 건너뜀 ${skipped.join(',') || '업무'}`);
+        const skipped = tabNames.filter((name) => !seenLabels.has(name));
+        if (!seenLabels.has('업무') || skipped.length) browserErrors.push(`360 탭 줄이 메뉴를 건너뜀 ${skipped.join(',') || '업무'}`);
 
         await page.setViewport({ width: 1366, height: 768, deviceScaleFactor: 1 });
         await page.evaluate(() => { location.hash = '#/home'; });
-        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]'));
-        await page.click('.nb-appnav [data-nav="students"]');
+        await waitForDest(page, 2);
+        if (!await clickTab(page, '학생')) browserErrors.push('학생 탭이 없음');
         await page.waitForFunction(() => location.hash === '#/students' && document.querySelector('[data-page="154"]'));
-        await page.click('.nb-appnav [data-nav="all"]');
-        await page.waitForSelector('[role="dialog"]');
+        if (!await clickTab(page, '더보기')) browserErrors.push('더보기 탭이 없음');
+        await page.waitForSelector('.dy-more-pop');
         await page.goBack();
-        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('[data-page="2"]') && !document.querySelector('[role="dialog"]'));
+        await page.waitForFunction(() => location.hash === '#/home' && document.querySelector('.dy-board, .dy-m') && !document.querySelector('.dy-more-pop'));
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
-        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생카드', '#/cards/1', 159], ['예산', '#/budget', 468]]) {
-            await page.click('.nb-appnav [data-nav="all"]');
-            await page.waitForSelector('[role="dialog"]');
-            const chip = await page.evaluateHandle((name) => [...document.querySelectorAll('.nb-nav-chip')].find((el) => el.textContent.trim() === name), label);
-            const chipEl = chip.asElement();
-            if (!chipEl) browserErrors.push(`전체 메뉴에 ${label}이 없음`);
+        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생 카드', '#/cards', 159], ['예산', '#/budget', 468]]) {
+            const item = await clickMoreItem(page, label);
+            if (!item) browserErrors.push(`더보기에 ${label}이 없음`);
             else {
-                await chipEl.click();
                 await page.waitForFunction((value, dest) => location.hash === value && document.querySelector(`[data-page="${dest}"]`), { timeout: 8000 }, hash, num);
             }
         }
@@ -1222,19 +1197,21 @@ export async function runBrowserQuality() {
             await page.evaluate(() => { location.hash = '#p154'; });
             await page.waitForSelector('[data-page="154"] .nb-pagetitle');
             const band = await page.evaluate(() => {
-                const left = document.querySelector('.nb-left')?.getBoundingClientRect();
-                const title = document.querySelector('[data-page="154"] .nb-pagetitle')?.getBoundingClientRect();
+                const header = document.querySelector('.dy-top')?.getBoundingClientRect();
+                const title = document.querySelector('[data-page="154"] .nb-pagetitle');
+                const titleBox = title?.getBoundingClientRect();
                 return {
-                    tabW: left ? Math.round(left.width) : 0,
-                    tabH: left ? Math.round(left.height) : 0,
-                    titleTop: title ? Math.round(title.top) : 0,
-                    title: document.querySelector('[data-page="154"] .nb-pagetitle')?.textContent.trim() || '',
+                    rows: document.querySelectorAll('.dy-tabs').length,
+                    side: Boolean(document.querySelector('.nb-left, .nb-right, .nb-appnav')),
+                    titleTop: titleBox ? Math.round(titleBox.top) : 0,
+                    headerBottom: header ? Math.round(header.bottom) : 0,
+                    title: title?.textContent.trim() || '',
                 };
             });
-            if (!(band.tabW >= 52 && band.tabW <= 60 && band.tabH > band.tabW * 4)) {
-                browserErrors.push(`${width} 탭 열 ${band.tabW}x${band.tabH}`);
+            if (band.rows !== 1 || band.side) {
+                browserErrors.push(`${width} 탭 줄 ${band.rows}`);
             }
-            if (!band.title.includes('명렬') || !(band.titleTop >= 140 && band.titleTop <= 210)) {
+            if (!band.title.includes('명렬') || band.titleTop < band.headerBottom - 1) {
                 browserErrors.push(`${width} 명렬표 위치 ${band.titleTop} ${band.title}`);
             }
         }
@@ -1329,14 +1306,16 @@ export async function runBrowserQuality() {
         await checkCapturePopup(page, browserErrors);
 
         await page.emulateMediaType('print');
-        const toolbar = await page.$eval('.nb-toolbar', (el) => getComputedStyle(el).display);
-        const navPrint = await page.$eval('.nb-appnav', (el) => getComputedStyle(el).display);
+        const headerPrint = await page.$eval('.dy-top', (el) => getComputedStyle(el).display);
+        const tabPrint = await page.$eval('.dy-tabs', (el) => getComputedStyle(el).display);
         await page.emulateMediaType('screen');
-        if (toolbar !== 'none') browserErrors.push('인쇄에서 도구막대가 보임');
-        if (navPrint !== 'none') browserErrors.push('인쇄에서 메뉴가 보임');
+        if (headerPrint !== 'none') browserErrors.push('인쇄에서 머리가 보임');
+        if (tabPrint !== 'none') browserErrors.push('인쇄에서 탭이 보임');
 
         const badFile = resolve(root, 'scripts/check-browser.mjs');
         await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+        await page.click('[aria-label="설정"]');
+        await page.waitForSelector('input[type="file"]');
         const input = await page.$('input[type="file"]');
         await input.uploadFile(badFile);
         await page.waitForFunction(() => /JSON/.test(document.querySelector('[role="status"]')?.innerText || ''), { timeout: 5000 });

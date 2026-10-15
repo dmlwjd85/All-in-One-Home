@@ -2477,6 +2477,10 @@
 @media print {
     .nb-toolbar,
     .nb-appnav,
+    .dy-top,
+    .dy-tabs,
+    .dy-fab,
+    .dy-scrim,
     .nb-fab,
     .nb-fab-pop-layer,
     .nb-left,

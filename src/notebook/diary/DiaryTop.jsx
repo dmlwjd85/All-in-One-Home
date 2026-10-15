@@ -70,10 +70,24 @@ export default function DiaryTop({ page, pages, onGo, onSearch, onSettings, sign
 
     useLayoutEffect(() => {
         const nav = navRef.current;
-        const cur = nav?.querySelector('[aria-current="page"]');
-        if (!nav || !cur) return;
-        const left = cur.offsetLeft - (nav.clientWidth - cur.offsetWidth) / 2;
-        nav.scrollTo({ left: Math.max(0, left) });
+        if (!nav) return undefined;
+        // 더보기는 한 겹 더 감싸여 있어 offsetLeft가 탭 줄 기준이 아닙니다.
+        const center = () => {
+            const cur = nav.querySelector('[aria-current="page"]');
+            if (!cur) return;
+            const navRect = nav.getBoundingClientRect();
+            const curRect = cur.getBoundingClientRect();
+            const desired = navRect.left + (nav.clientWidth - curRect.width) / 2;
+            const max = Math.max(0, nav.scrollWidth - nav.clientWidth);
+            const next = Math.max(0, Math.min(max, nav.scrollLeft + (curRect.left - desired)));
+            if (Math.abs(next - nav.scrollLeft) > 1) nav.scrollLeft = next;
+        };
+        center();
+        const watch = new ResizeObserver(center);
+        watch.observe(nav);
+        const cur = nav.querySelector('[aria-current="page"]');
+        if (cur) watch.observe(cur);
+        return () => watch.disconnect();
     }, [on]);
 
     useEffect(() => { setMoreOpen(false); }, [page]);
