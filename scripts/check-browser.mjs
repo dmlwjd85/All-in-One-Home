@@ -1675,16 +1675,18 @@ async function checkQaLayout(page, browserErrors) {
             const stuckAt = () => {
                 const origin = stage.scrollTop;
                 const hits = [];
-                const maxScroll = stage.scrollHeight - stage.clientHeight;
+                const maxScroll = Math.max(0, stage.scrollHeight - stage.clientHeight);
                 for (const el of controls) {
                     const box = painted(el);
-                    if (!box || !overlaps(fab, box)) continue;
+                    const raw = el.getBoundingClientRect();
+                    if (!box || raw.height < 1 || !overlaps(fab, box)) continue;
                     const name = (el.getAttribute('aria-label') || el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 16);
-                    const need = Math.max(0, box.bottom - fab.top + 2);
+                    const need = Math.max(0, raw.bottom - fab.top + 2);
                     stage.scrollTop = Math.min(maxScroll, origin + need);
                     const moved = painted(el);
+                    const movedRaw = el.getBoundingClientRect();
                     stage.scrollTop = origin;
-                    if (moved && overlaps(fab, moved)) hits.push(`단추:${name}`);
+                    if (moved && overlaps(fab, moved) && movedRaw.bottom > fab.top + 1) hits.push(`단추:${name}`);
                 }
                 return hits;
             };
