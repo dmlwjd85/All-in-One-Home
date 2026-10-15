@@ -87,8 +87,8 @@ function DayCard({ ymd, items, onOpen }) {
                 <span className="dy-day-num">{p.d}</span>
                 <span className="dy-day-dow">{DOW[wd]}</span>
                 {isToday && <span className="dy-pill">오늘</span>}
-                {hol && <span className="dy-day-hol">{hol}</span>}
             </span>
+            {hol && <span className="dy-day-hol">{hol}</span>}
             <span className={`dy-day-items ${items.length === 0 ? 'is-blank' : ''}`}>
                 {items.length === 0 && <span className="dy-day-empty">비어 있어요</span>}
                 {items.length === 0 && <span className="dy-day-sheet" aria-hidden="true" />}
