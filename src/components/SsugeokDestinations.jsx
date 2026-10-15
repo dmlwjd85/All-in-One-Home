@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, Users } from 'lucide-react';
-import { EmptyState, Field, Modal } from './ui.jsx';
+import { ConfirmDialog, EmptyState, Field, Modal } from './ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { ensureRosterName } from '../lib/ssugeok.js';
 import { ATTEND_STATUS, monthLabel, startOfWeekMon, thisMonth, todayYmd } from '../lib/utils.js';
@@ -21,6 +21,7 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
     const [modal, setModal] = useState(null);
     const [note, setNote] = useState({ student: '', text: '', date: todayYmd() });
     const [rosterText, setRosterText] = useState(names.join('\n'));
+    const [pending, setPending] = useState(null);
 
     const grouped = useMemo(() => {
         const n = q.trim();
@@ -97,11 +98,7 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
                                                 <span className="block text-xs font-bold text-stone-500">{row.date}</span>
                                                 <span className="whitespace-pre-wrap">{row.text}</span>
                                             </span>
-                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={async () => {
-                                                if (!confirm('이 기록을 삭제할까요?')) return;
-                                                await removeItem('studentNotes', row.id, signedIn);
-                                                onChanged();
-                                            }}>삭제</button>
+                                            <button type="button" className="text-rose-700 underline shrink-0 min-h-tap" onClick={() => setPending(row)}>삭제</button>
                                         </li>
                                     ))}
                                 </ul>
@@ -109,6 +106,20 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
                         </article>
                     ))}
                 </div>
+            )}
+
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('studentNotes', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
             )}
 
             {modal === 'note' && (
@@ -242,6 +253,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
     const names = roster.map((r) => r.name).filter(Boolean);
     const [filter, setFilter] = useState('all');
     const [modal, setModal] = useState(false);
+    const [pending, setPending] = useState(null);
     const [form, setForm] = useState({ student: '', text: '', date: todayYmd(), kind: '상담' });
 
     const items = counselNotes
@@ -276,11 +288,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
                         <li key={row.id} className="card p-4 bg-[#fffaf0]/85">
                             <p className="text-xs font-bold text-stone-500">{row.date} · {row.student} · {row.kind || '상담'}</p>
                             <p className="font-black mt-1 whitespace-pre-wrap">{row.text}</p>
-                            <button type="button" className="text-sm text-rose-700 underline mt-2 min-h-tap" onClick={async () => {
-                                if (!confirm('이 기록을 삭제할까요?')) return;
-                                await removeItem('counselNotes', row.id, signedIn);
-                                onChanged();
-                            }}>삭제</button>
+                            <button type="button" className="text-sm text-rose-700 underline mt-2 min-h-tap" onClick={() => setPending(row)}>삭제</button>
                         </li>
                     ))}
                 </ul>
@@ -307,6 +315,19 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
                     }}>저장</button>
                 </Modal>
             )}
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('counselNotes', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
+            )}
         </section>
     );
 }
@@ -315,6 +336,7 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
     const today = todayYmd();
     const week = startOfWeekMon(today);
     const [modal, setModal] = useState(false);
+    const [pending, setPending] = useState(null);
     const [form, setForm] = useState({ text: '', date: today, kind: 'today' });
 
     const todayItems = plans.filter((p) => p.kind === 'today' && p.date === today);
@@ -324,11 +346,7 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
         .slice()
         .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
-    const removePlan = async (row) => {
-        if (!confirm('이 기록을 삭제할까요?')) return;
-        await removeItem('teacherPlans', row.id, signedIn);
-        onChanged();
-    };
+    const removePlan = (row) => setPending(row);
 
     return (
         <section className="space-y-3">
@@ -368,6 +386,19 @@ function PlanDest({ plans, signedIn, author, onChanged, onToast }) {
                         onChanged();
                     }}>저장</button>
                 </Modal>
+            )}
+            {pending && (
+                <ConfirmDialog
+                    title="이 기록을 지울까요?"
+                    body={pending.text}
+                    onClose={() => setPending(null)}
+                    onConfirm={async () => {
+                        const row = pending;
+                        setPending(null);
+                        await removeItem('teacherPlans', row.id, signedIn);
+                        onChanged();
+                    }}
+                />
             )}
         </section>
     );

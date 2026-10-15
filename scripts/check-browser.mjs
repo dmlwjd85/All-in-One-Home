@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { captureShortcut } from '../src/notebook/diary/shortcut.js';
@@ -1000,6 +1000,24 @@ async function checkNoteRevise(page, browserErrors) {
     await go(page, 2);
 }
 
+function nativeDialogMisses() {
+    const hits = [];
+    const walk = (dir) => {
+        for (const name of readdirSync(dir, { withFileTypes: true })) {
+            const full = resolve(dir, name.name);
+            if (name.isDirectory()) {
+                if (name.name === 'node_modules' || name.name === 'dist') continue;
+                walk(full);
+            } else if (/\.(js|jsx|mjs)$/.test(name.name)) {
+                const text = readFileSync(full, 'utf8');
+                if (/\b(confirm|alert|prompt)\s*\(/.test(text)) hits.push(full.slice(root.length + 1));
+            }
+        }
+    };
+    walk(resolve(root, 'src'));
+    return hits;
+}
+
 function shortcutMisses() {
     const cases = [
         ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Win32', 'Ctrl+K'],
@@ -1011,6 +1029,7 @@ function shortcutMisses() {
 }
 
 async function checkQaLayout(page, browserErrors) {
+    for (const file of nativeDialogMisses()) browserErrors.push(`네이티브 대화상자 ${file}`);
     for (const miss of shortcutMisses()) browserErrors.push(miss);
     for (const width of [1440, 1024]) {
         await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
@@ -1034,6 +1053,13 @@ async function checkQaLayout(page, browserErrors) {
                 const outside = label.left < card.left - 1 || label.right > card.right + 1 || label.top < card.top - 1;
                 return hits || outside;
             });
+            const paint = (el) => el ? getComputedStyle(el).backgroundColor : '';
+            const sheets = days.map((el) => ({
+                today: el.classList.contains('is-today'),
+                weekend: el.classList.contains('is-sat') || el.classList.contains('is-sun'),
+                empty: el.querySelector('.dy-day-empty')?.textContent || '',
+                sheet: paint(el.querySelector('.dy-day-sheet')),
+            }));
             return {
                 count: days.length,
                 topSpread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99,
@@ -1045,6 +1071,7 @@ async function checkQaLayout(page, browserErrors) {
                 overlap,
                 emptyCount: empties.length,
                 legend: document.querySelector('.dy-legend')?.innerText || '',
+                sheets,
             };
         });
         if (week.count !== 7) browserErrors.push(`${width} 요일 ${week.count}`);
@@ -1056,6 +1083,14 @@ async function checkQaLayout(page, browserErrors) {
         if (week.badWrap) browserErrors.push(`${width} 빈 날 줄바꿈`);
         if (week.overlap) browserErrors.push(`${width} 빈 날 글자가 줄 위에 겹침`);
         if (!week.legend.includes('오늘') || !week.legend.includes('주말') || !week.legend.includes('업무')) browserErrors.push(`${width} 색 안내 없음`);
+        const weekday = week.sheets.filter((day) => day.sheet && !day.today && !day.weekend).map((day) => day.sheet);
+        const weekend = week.sheets.filter((day) => day.sheet && day.weekend).map((day) => day.sheet);
+        const todaySheet = week.sheets.find((day) => day.today && day.sheet)?.sheet;
+        const same = (list) => list.length > 0 && list.every((color) => color === list[0]);
+        if (!same(weekday) || !same(weekend) || weekday[0] === weekend[0]) browserErrors.push(`${width} 빈 날 색이 같음`);
+        if (todaySheet && (todaySheet === weekday[0] || todaySheet === weekend[0])) browserErrors.push(`${width} 오늘 칸 색이 평일과 같음`);
+        const emptyText = week.sheets.map((day) => day.empty).filter(Boolean);
+        if (emptyText.some((text) => text === '비어 있어요')) browserErrors.push(`${width} 빈 날 안내가 같음`);
     }
 
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
@@ -1120,7 +1155,7 @@ async function checkQaLayout(page, browserErrors) {
         const withErase = buttons.filter((el) => Math.abs(el.getBoundingClientRect().top - top) < 6).length;
         return { count: buttons.length, withErase };
     });
-    if (row.count < 4 || row.withErase < 2) browserErrors.push(`지우기 혼자 줄 ${row.count}/${row.withErase}`);
+    if (row.count < 4 || row.withErase !== row.count) browserErrors.push(`1440 버튼이 한 줄이 아님 ${row.count}/${row.withErase}`);
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await go(page, 2);
@@ -1161,15 +1196,102 @@ async function checkQaLayout(page, browserErrors) {
         if (!toast || !save || !cancel) return { missing: true };
         const a = toast.getBoundingClientRect();
         const overlaps = (el) => {
+            if (!el) return false;
             const b = el.getBoundingClientRect();
+            if (b.width < 1 || b.height < 1) return false;
             return !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
         };
-        return { missing: false, save: overlaps(save), cancel: overlaps(cancel), top: a.top };
+        const fields = [...document.querySelectorAll('textarea, input')].filter((el) => el.type !== 'hidden' && el.type !== 'checkbox');
+        const fab = document.querySelector('.dy-fab');
+        return { missing: false, save: overlaps(save), cancel: overlaps(cancel), input: fields.some(overlaps), fab: overlaps(fab), top: a.top };
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
     else {
         if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
-        if (!(cover.top < 180)) browserErrors.push(`390 토스트 위치 ${Math.round(cover.top)}`);
+        if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
+        if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
+        if (!(cover.top > 520)) browserErrors.push(`390 토스트 위치 ${Math.round(cover.top)}`);
+    }
+    const phoneRows = await page.evaluate(() => {
+        const read = (sel) => {
+            const acts = document.querySelector(sel);
+            const buttons = [...(acts?.querySelectorAll('button') || [])].filter((el) => el.offsetParent);
+            const tops = buttons.map((el) => el.getBoundingClientRect().top);
+            return { count: buttons.length, spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99 };
+        };
+        return { home: read('.dy-inbox .dy-entry-acts') };
+    });
+    if (phoneRows.home.count < 4 || phoneRows.home.spread > 8) browserErrors.push(`390 오늘 버튼이 한 줄이 아님 ${phoneRows.home.count}/${Math.round(phoneRows.home.spread)}`);
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await go(page, 496);
+    await page.waitForSelector('.nb-ssu-list .dy-entry-acts');
+    const phoneWrite = await page.evaluate(() => {
+        const acts = document.querySelector('.nb-ssu-list .dy-entry-acts');
+        const buttons = [...(acts?.querySelectorAll('button') || [])].filter((el) => el.offsetParent);
+        const tops = buttons.map((el) => el.getBoundingClientRect().top);
+        return { count: buttons.length, spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99 };
+    });
+    if (phoneWrite.count < 3 || phoneWrite.spread > 8) browserErrors.push(`390 쓱, 적 버튼이 한 줄이 아님 ${phoneWrite.count}/${Math.round(phoneWrite.spread)}`);
+    for (const width of [1024, 1280]) {
+        await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+        await go(page, 2);
+        await page.waitForSelector('.dy-board [data-ssu-capture]');
+        await page.evaluate(() => {
+            const entry = [...document.querySelectorAll('.dy-inbox .dy-entry')].find((el) => el.innerText.includes('토스트확인'));
+            entry?.querySelector('[data-note-edit]')?.click();
+        });
+        await page.$eval('.dy-board [data-ssu-capture]', (el, value) => {
+            const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            set.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, `토스트가로${width}`);
+        await page.click('.dy-board button[type="submit"]');
+        try {
+            await page.waitForSelector('[role="status"]', { timeout: 2500 });
+        } catch {
+            browserErrors.push(`${width} 토스트 없음`);
+        }
+        const wideCover = await page.evaluate(() => {
+            const toast = document.querySelector('[role="status"]')?.getBoundingClientRect();
+            if (!toast) return { missing: true };
+            const hit = (el) => {
+                if (!el) return false;
+                const b = el.getBoundingClientRect();
+                if (b.width < 1 || b.height < 1) return false;
+                return !(toast.bottom <= b.top + 1 || toast.top >= b.bottom - 1 || toast.right <= b.left + 1 || toast.left >= b.right - 1);
+            };
+            const fields = [...document.querySelectorAll('textarea, input')].filter((el) => el.type !== 'hidden' && el.type !== 'checkbox');
+            return {
+                missing: false,
+                input: fields.some(hit),
+                save: hit(document.querySelector('[data-note-save]')),
+                top: toast.top,
+                bottom: toast.bottom,
+                height: window.innerHeight,
+            };
+        });
+        if (wideCover.missing) browserErrors.push(`${width} 토스트 없음`);
+        else {
+            if (wideCover.input) browserErrors.push(`${width} 토스트가 입력을 가림`);
+            if (wideCover.save) browserErrors.push(`${width} 토스트가 저장 버튼을 가림`);
+            if (!(wideCover.top > wideCover.height * 0.65)) browserErrors.push(`${width} 토스트 위치 ${Math.round(wideCover.top)}`);
+        }
+        const spread = await page.evaluate(() => {
+            const acts = document.querySelector('.dy-inbox .dy-entry-acts');
+            const buttons = [...(acts?.querySelectorAll('button') || [])].filter((el) => el.offsetParent);
+            const tops = buttons.map((el) => el.getBoundingClientRect().top);
+            return { count: buttons.length, spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99 };
+        });
+        if (spread.count < 4 || spread.spread > 8) browserErrors.push(`${width} 오늘 버튼이 한 줄이 아님 ${spread.count}/${Math.round(spread.spread)}`);
+        await go(page, 496);
+        await page.waitForSelector('.nb-ssu-list .dy-entry-acts');
+        const writeSpread = await page.evaluate(() => {
+            const acts = document.querySelector('.nb-ssu-list .dy-entry-acts');
+            const buttons = [...(acts?.querySelectorAll('button') || [])].filter((el) => el.offsetParent);
+            const tops = buttons.map((el) => el.getBoundingClientRect().top);
+            return { count: buttons.length, spread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99 };
+        });
+        if (writeSpread.count < 3 || writeSpread.spread > 8) browserErrors.push(`${width} 쓱, 적 버튼이 한 줄이 아님 ${writeSpread.count}/${Math.round(writeSpread.spread)}`);
     }
 
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });

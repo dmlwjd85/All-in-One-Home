@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export function IconBtn({ label, onClick, children, className = '' }) {
     return (
@@ -86,8 +87,12 @@ export function Field({ label, children, hint }) {
 }
 
 export function Toast({ message, actionLabel, onAction }) {
+    const [host, setHost] = useState(null);
+    useEffect(() => {
+        setHost(document.querySelector('.dy-app'));
+    }, [message]);
     if (!message) return null;
-    return (
+    const node = (
         <div role="status" aria-live="polite" className="dy-toast">
             <span>{message}</span>
             {actionLabel && onAction ? (
@@ -96,6 +101,28 @@ export function Toast({ message, actionLabel, onAction }) {
                 </button>
             ) : null}
         </div>
+    );
+    return host ? createPortal(node, host) : node;
+}
+
+export function ConfirmDialog({ title, body, confirmLabel = '지우기', onConfirm, onClose }) {
+    useEffect(() => {
+        const onKey = (event) => { if (event.key === 'Escape') onClose?.(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+    return createPortal(
+        <div className="dy-scrim" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose?.(); }}>
+            <div className="dy-quick is-confirm" role="dialog" aria-modal="true" aria-labelledby="dy-confirm-title">
+                <h2 id="dy-confirm-title" className="dy-h">{title}</h2>
+                {body ? <p className="dy-muted">{body}</p> : null}
+                <div className="dy-row">
+                    <button type="button" className="dy-btn-ghost" onClick={onClose}>취소</button>
+                    <button type="button" className="dy-btn-primary" onClick={onConfirm}>{confirmLabel}</button>
+                </div>
+            </div>
+        </div>,
+        document.body,
     );
 }
 

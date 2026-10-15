@@ -90,7 +90,9 @@ function DayCard({ ymd, items, onOpen }) {
             </span>
             {hol && <span className="dy-day-hol">{hol}</span>}
             <span className={`dy-day-items ${items.length === 0 ? 'is-blank' : ''}`}>
-                {items.length === 0 && <span className="dy-day-empty">비어 있어요</span>}
+                {items.length === 0 && (
+                    <span className="dy-day-empty">{isToday ? '오늘 한 줄' : wd === 0 || wd === 6 ? '쉬는 날' : '한 줄 여유'}</span>
+                )}
                 {items.length === 0 && <span className="dy-day-sheet" aria-hidden="true" />}
                 {items.slice(0, 2).map((n) => (
                     <span key={n.id} className={`dy-day-item is-${n.suggestion?.tone || 'sand'}`}>{n.text}</span>
@@ -139,9 +141,9 @@ function Inbox({ notes, signedIn, onChanged, onToast, onGo, big }) {
                         onToast={onToast}
                         extra={(
                             <>
-                                <button type="button" className="dy-btn-soft" onClick={() => sortOne(note)}>
-                                    {note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}
-                                    <ArrowRight size={16} aria-hidden="true" />
+                                <button type="button" className="dy-btn-soft dy-act-main" onClick={() => sortOne(note)}>
+                                    <span className="dy-ellip">{note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}</span>
+                                    <ArrowRight size={14} aria-hidden="true" />
                                 </button>
                                 <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
                             </>

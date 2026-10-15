@@ -325,8 +325,8 @@ function FlickCard({ item, onFlick, onSend, onEdit, onDelete }) {
                 <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-extrabold text-amber-900/70">{item.typeHint || '메모'}</p>
                     <div className="flex gap-1" onPointerDown={(e) => e.stopPropagation()}>
-                        <button type="button" className="min-h-tap min-w-tap text-stone-600" aria-label="고치기" onClick={onEdit}><Pencil size={16} /></button>
-                        <button type="button" className="min-h-tap min-w-tap text-rose-700" aria-label="삭제" onClick={onDelete}><Trash2 size={16} /></button>
+                        <button type="button" className="dy-hub-icon" aria-label="고치기" onClick={onEdit}><Pencil size={18} /></button>
+                        <button type="button" className="dy-hub-icon is-danger" aria-label="삭제" onClick={onDelete}><Trash2 size={18} /></button>
                     </div>
                 </div>
                 <p className="font-black text-lg whitespace-pre-wrap mt-1">{item.text}</p>

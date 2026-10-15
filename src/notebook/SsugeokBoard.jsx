@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { readPageFields } from './fieldStore.js';
 import {
     destinationFor,
@@ -8,7 +9,6 @@ import {
     whoPage,
 } from './ssugeokModel.js';
 import { archiveNotes, sortNote } from './ssugeokStore.js';
-import { TONE_MARK } from './tones.js';
 import CaptureBox from './diary/CaptureBox.jsx';
 import NoteEdit from './diary/NoteEdit.jsx';
 
@@ -204,7 +204,6 @@ export default function SsugeokBoard({
                     const draft = drafts[note.id] || {};
                     const ready = readyNote(note, draft);
                     const suggestion = ready.suggestion;
-                    const mark = TONE_MARK[suggestion?.tone] || '✦';
                     const tone = suggestion?.tone || (note.status === 'sorted' ? 'mint' : note.status === 'archived' ? 'lavender' : 'sand');
                     return (
                         <li key={note.id} id={`ssu-note-${note.id}`} className={`is-tone-${tone}${focusId === note.id ? ' is-focus' : ''}`}>
@@ -231,32 +230,37 @@ export default function SsugeokBoard({
                                     onToast={onToast}
                                     extra={note.status !== 'archived' ? (
                                         <div className="nb-ssu-actions">
-                                        <select
-                                            value={draft.destId || ''}
-                                            onChange={(e) => setDraft(note.id, { destId: e.target.value })}
-                                            aria-label="옮길 곳"
-                                        >
-                                            {DEST_OPTIONS.map(([id, label]) => <option key={id || 'auto'} value={id}>{label}</option>)}
-                                        </select>
-                                        {suggestion?.needsStudent && (
-                                            <select
-                                                value={draft.studentNo || note.studentNo || ''}
-                                                onChange={(e) => setDraft(note.id, { studentNo: Number(e.target.value) || null })}
-                                                aria-label="학생 번호"
-                                            >
-                                                <option value="">번호</option>
-                                                {Array.from({ length: 32 }, (_, i) => (
-                                                    <option key={i + 1} value={i + 1}>{i + 1}번</option>
-                                                ))}
-                                            </select>
-                                        )}
-                                        <button type="button" className={`tone-${suggestion?.tone || 'sand'}`} onClick={() => sortOne(note)}>
-                                            {mark} {suggestion?.label || '옮기기'}
+                                        <button type="button" className={`tone-${suggestion?.tone || 'sand'} dy-act-main`} onClick={() => sortOne(note)}>
+                                            <span className="dy-ellip">{suggestion?.label || '옮기기'}</span>
                                         </button>
-                                        {note.placement?.page && (
-                                            <button type="button" onClick={() => onGo?.(note.placement.page)}>쪽 열기</button>
-                                        )}
                                         <button type="button" onClick={() => archiveSome([note])}>보관</button>
+                                        <details className="dy-act-more">
+                                            <summary aria-label="옮길 곳"><MoreHorizontal size={18} /></summary>
+                                            <div className="dy-act-pop">
+                                                <select
+                                                    value={draft.destId || ''}
+                                                    onChange={(e) => setDraft(note.id, { destId: e.target.value })}
+                                                    aria-label="옮길 곳"
+                                                >
+                                                    {DEST_OPTIONS.map(([id, label]) => <option key={id || 'auto'} value={id}>{label}</option>)}
+                                                </select>
+                                                {suggestion?.needsStudent && (
+                                                    <select
+                                                        value={draft.studentNo || note.studentNo || ''}
+                                                        onChange={(e) => setDraft(note.id, { studentNo: Number(e.target.value) || null })}
+                                                        aria-label="학생 번호"
+                                                    >
+                                                        <option value="">번호</option>
+                                                        {Array.from({ length: 32 }, (_, i) => (
+                                                            <option key={i + 1} value={i + 1}>{i + 1}번</option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                                {note.placement?.page && (
+                                                    <button type="button" onClick={() => onGo?.(note.placement.page)}>쪽 열기</button>
+                                                )}
+                                            </div>
+                                        </details>
                                         </div>
                                     ) : null}
                                 />
