@@ -293,6 +293,12 @@ export default function NotebookApp({
                 )}
             </div>
 
+            {phone && (
+                <div className="dy-dock">
+                    <div className="dy-dock-slot" />
+                </div>
+            )}
+
             {phone && !quickOpen && (
                 <button type="button" className="dy-fab" onClick={() => setQuickOpen(true)} aria-label="쓱, 적 적기">
                     <Pencil size={24} strokeWidth={1.8} />

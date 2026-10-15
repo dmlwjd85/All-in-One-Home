@@ -32,6 +32,8 @@
     --dy-body: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
     --dy-r: 20px;
     --dy-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* 16 + 64 쓱, 적 + 16. 안전 영역은 막대 높이 밖에 더합니다. */
+    --dy-dock-h: 96px;
 }
 
 .dy-app.nb-app {
@@ -499,7 +501,7 @@
 .dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
 .dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
 
-/* 넓은 화면 토스트는 머리 오른쪽 빈칸에 둡니다. 좁은 화면은 쓱, 적 단추 왼쪽 같은 높이에 둡니다. */
+/* 넓은 화면 토스트는 머리 오른쪽 빈칸에 둡니다. 600 이하는 아래 막대 안, 쓱, 적 왼쪽에 둡니다. */
 .dy-toast {
     position: fixed; z-index: 40; margin: 0; box-sizing: border-box; min-width: 0;
     display: flex; align-items: center; justify-content: flex-end; gap: 8px;
@@ -510,14 +512,19 @@
 }
 .dy-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dy-toast button { pointer-events: auto; flex: 0 0 auto; }
-.dy-toast.is-bar {
-    width: auto; height: auto; max-width: none;
+.dy-toast.is-bar,
+.dy-dock .dy-toast {
+    position: relative; inset: auto; z-index: 1;
+    width: 100%; height: auto; max-width: 100%;
     white-space: normal; overflow: visible; justify-content: flex-start; align-items: center;
     line-height: 22px; padding: 8px 12px; text-align: left;
 }
-.dy-toast.is-bar span {
+.dy-toast.is-bar span,
+.dy-dock .dy-toast span {
     flex: 1 1 auto; white-space: normal; overflow: visible; text-overflow: clip; line-height: 22px;
 }
+.dy-dock { display: none; }
+.dy-app > .dy-dock { order: 2; }
 .dy-app > .dy-top { order: 0; }
 .dy-app > .dy-stage { order: 1; }
 
@@ -580,7 +587,7 @@
 .dy-app .dy-page .nb-ssu-actions .tone-butter,
 .dy-app .dy-page .nb-ssu-actions .tone-sand { background-color: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
 
-/* 휴대폰은 긴 제안이 화면을 밀지 않게 줄을 바꿉니다. 본문은 화면 끝까지 가고, 쓱, 적 단추만큼만 스크롤 여백을 둡니다. */
+/* 휴대폰은 긴 제안이 화면을 밀지 않게 줄을 바꿉니다. 601–700은 쓱, 적 단추만큼만 스크롤 여백을 둡니다. */
 .dy-app.is-phone {
     max-width: 100%;
     overflow-x: clip;
@@ -589,6 +596,34 @@
     padding-bottom: calc(88px + env(safe-area-inset-bottom)) !important;
 }
 .dy-app.is-phone .dy-fab { bottom: calc(16px + env(safe-area-inset-bottom)); }
+/* 600 이하: 종이색 막대가 쓱, 적 줄을 담고, 스크롤 영역은 그 막대 위에서 끝납니다.
+   여백을 막대 높이만큼 한 번만 두어 본문이 막대 아래로 들어가지 않습니다. */
+@media (max-width: 600px) {
+    .dy-app.is-phone > .dy-dock {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 45;
+        box-sizing: border-box;
+        height: calc(var(--dy-dock-h) + env(safe-area-inset-bottom));
+        padding: 16px 96px calc(16px + env(safe-area-inset-bottom)) 16px;
+        align-items: center;
+        background: var(--dy-canvas);
+    }
+    .dy-app.is-phone .dy-dock-slot {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 64px;
+        display: flex;
+        align-items: center;
+    }
+    .dy-app.is-phone .dy-stage.nb-stage-wrap {
+        margin-bottom: calc(var(--dy-dock-h) + env(safe-area-inset-bottom));
+        padding-bottom: 0 !important;
+    }
+}
 .dy-app.is-phone .dy-chips {
     flex-wrap: wrap;
     overflow: visible;

@@ -86,54 +86,33 @@ export function Field({ label, children, hint }) {
     );
 }
 
+function toastHost() {
+    if (typeof document === 'undefined') return null;
+    if (window.innerWidth > 600) return document.body;
+    const slot = document.querySelector('.dy-dock-slot');
+    if (!slot || slot.getClientRects().length === 0) return document.body;
+    return slot;
+}
+
 function placeToast(el) {
     if (!el) return;
-    const narrow = window.innerWidth <= 600;
-    el.classList.toggle('is-bar', narrow);
-    if (narrow) {
-        const fab = document.querySelector('.dy-fab');
-        const fabBox = fab?.getBoundingClientRect();
-        const fabLeft = fabBox && fabBox.width >= 8 ? fabBox.left : window.innerWidth - 84;
-        const fabTop = fabBox && fabBox.height >= 8 ? fabBox.top : window.innerHeight - 80;
-        const fabBottom = fabBox && fabBox.height >= 8 ? fabBox.bottom : window.innerHeight - 16;
-        const rightEdge = fabLeft - 12;
-        el.style.left = '16px';
-        el.style.right = `${Math.max(16, Math.round(window.innerWidth - rightEdge))}px`;
-        el.style.width = 'auto';
+    const inDock = Boolean(el.closest('.dy-dock'));
+    el.classList.toggle('is-bar', inDock);
+    el.style.top = '';
+    el.style.right = '';
+    el.style.bottom = '';
+    el.style.left = '';
+    el.style.width = '';
+    el.style.height = '';
+    el.style.maxWidth = '';
+    if (inDock) {
+        el.style.position = 'relative';
+        el.style.width = '100%';
         el.style.height = 'auto';
-        el.style.maxWidth = 'none';
-        el.style.bottom = 'auto';
-        el.style.top = `${Math.round(fabTop)}px`;
-        const toastHeight = el.getBoundingClientRect().height || 38;
-        const blockers = [];
-        for (const node of document.querySelectorAll('button, a, input, textarea, select')) {
-            if (node.closest('.dy-toast') || node.classList.contains('dy-fab')) continue;
-            const shown = getComputedStyle(node);
-            if (shown.display === 'none' || shown.visibility === 'hidden' || Number(shown.opacity) === 0) continue;
-            const rect = node.getBoundingClientRect();
-            if (rect.width < 8 || rect.height < 8) continue;
-            if (rect.right <= 17 || rect.left >= rightEdge - 1) continue;
-            blockers.push(rect);
-        }
-        const clearAt = (top) => !blockers.some((rect) => !(top + toastHeight <= rect.top + 1 || top >= rect.bottom - 1));
-        const onBand = (top) => top + toastHeight > fabTop + 1 && top < fabBottom - 1;
-        const lowest = window.innerHeight - toastHeight - 4;
-        let chosen = null;
-        for (let top = lowest; top >= 8; top -= 1) {
-            if (!onBand(top) || !clearAt(top)) continue;
-            chosen = top;
-            break;
-        }
-        if (chosen == null) {
-            for (let top = lowest; top >= 8; top -= 2) {
-                if (!clearAt(top)) continue;
-                chosen = top;
-                break;
-            }
-        }
-        el.style.top = `${Math.round(chosen == null ? Math.max(8, fabBottom - toastHeight) : chosen)}px`;
+        el.style.maxWidth = '100%';
         return;
     }
+    el.style.position = '';
     el.style.bottom = 'auto';
     el.style.width = 'max-content';
     const gap = document.querySelector('.dy-status-gap');
@@ -158,31 +137,37 @@ function placeToast(el) {
 
 export function Toast({ message, actionLabel, onAction }) {
     const ref = useRef(null);
+    const [host, setHost] = useState(null);
     useLayoutEffect(() => {
         if (!message) return undefined;
-        const el = ref.current;
-        let frame = 0;
         const place = () => {
-            placeToast(el);
-            cancelAnimationFrame(frame);
-            frame = requestAnimationFrame(() => placeToast(el));
+            const next = toastHost();
+            setHost((prev) => (prev === next ? prev : next));
         };
         place();
-        const watched = [document.querySelector('.dy-status-gap'), document.querySelector('.dy-bar'), document.querySelector('.dy-fab')].filter(Boolean);
+        const watched = [
+            document.querySelector('.dy-status-gap'),
+            document.querySelector('.dy-bar'),
+            document.querySelector('.dy-fab'),
+            document.querySelector('.dy-dock'),
+        ].filter(Boolean);
         const observer = new ResizeObserver(place);
         watched.forEach((node) => observer.observe(node));
         window.addEventListener('resize', place);
-        window.addEventListener('scroll', place, true);
         return () => {
-            cancelAnimationFrame(frame);
             observer.disconnect();
             window.removeEventListener('resize', place);
-            window.removeEventListener('scroll', place, true);
         };
     }, [message]);
-    if (!message) return null;
+    useLayoutEffect(() => {
+        if (!message) return undefined;
+        placeToast(ref.current);
+        const frame = requestAnimationFrame(() => placeToast(ref.current));
+        return () => cancelAnimationFrame(frame);
+    }, [message, host]);
+    if (!message || !host) return null;
     return createPortal(
-        <div ref={ref} role="status" aria-live="polite" className="dy-toast">
+        <div ref={ref} role="status" aria-live="polite" className={`dy-toast${host !== document.body ? ' is-bar' : ''}`}>
             <span>{message}</span>
             {actionLabel && onAction ? (
                 <button type="button" className="min-h-tap min-w-tap rounded-xl bg-white text-ink-900 px-3 py-2" onClick={onAction}>
@@ -190,7 +175,7 @@ export function Toast({ message, actionLabel, onAction }) {
                 </button>
             ) : null}
         </div>,
-        document.body,
+        host,
     );
 }
 
