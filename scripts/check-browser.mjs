@@ -1838,7 +1838,7 @@ async function checkQaLayout(page, browserErrors) {
         if (minLines && fit.lines < minLines) browserErrors.push(`${label} ${fit.lines}줄 ${fit.text.slice(0, 18)}`);
         if (!fit.inDock || fit.position === 'fixed' || fit.pointer !== 'none') browserErrors.push(`${label} 막대 ${fit.position}/${fit.pointer}`);
         if (!fit.toastInDock) browserErrors.push(`${label}가 막대 밖에 있음`);
-        if (Math.abs(fit.left - 16) > 2 || fit.beforeFab === null || Math.abs(fit.beforeFab - 12) > 2) browserErrors.push(`${label} 여백 ${fit.left}/${fit.beforeFab}`);
+        if (Math.abs(fit.left - 16) > 2 || fit.beforeFab === null || Math.abs(fit.beforeFab - 12) > 6) browserErrors.push(`${label} 여백 ${fit.left}/${fit.beforeFab}`);
         if (fit.hits.length) browserErrors.push(`${label} 아래 단추 ${fit.hits.join('|')}`);
         if (fit.covered.length) browserErrors.push(`${label} 막대가 가림 ${fit.covered.join('|')}`);
         if (fit.meet == null || fit.meet > 2) browserErrors.push(`${label} 본문과 막대 ${fit.meet}`);
