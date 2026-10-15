@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export function IconBtn({ label, onClick, children, className = '' }) {
@@ -88,10 +88,10 @@ export function Field({ label, children, hint }) {
 
 export function Toast({ message, actionLabel, onAction }) {
     const [host, setHost] = useState(null);
-    useEffect(() => {
+    useLayoutEffect(() => {
         setHost(document.querySelector('.dy-app'));
     }, [message]);
-    if (!message) return null;
+    if (!message || !host) return null;
     const node = (
         <div role="status" aria-live="polite" className="dy-toast">
             <span>{message}</span>

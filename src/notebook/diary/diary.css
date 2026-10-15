@@ -199,8 +199,10 @@
 }
 .dy-cap textarea::placeholder { color: var(--dy-soft); }
 .dy-cap.is-big textarea { font-size: 19px; min-height: 200px; }
-.dy-cap-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.dy-cap-hint { font-size: 14px; color: var(--dy-mute); }
+.dy-cap { min-width: 0; max-width: 100%; }
+.dy-cap textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.dy-cap-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.dy-cap-hint { font-size: 14px; color: var(--dy-mute); min-width: 0; overflow-wrap: anywhere; }
 
 /* ── 오늘 보드 (B) ─────────────────── */
 .dy-board {
@@ -311,8 +313,8 @@
 .dy-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; margin-left: 4px; border-radius: 999px; background: var(--dy-acc-tint); color: var(--dy-acc-deep); font: 700 14px var(--dy-body); vertical-align: 2px; }
 .dy-muted { margin: 0; font-size: 14px; color: var(--dy-mute); line-height: 1.6; }
 .dy-note { margin-top: 4px; }
-.dy-inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.dy-inbox li { padding: 12px 14px; border-radius: 14px; background: var(--dy-sunken); animation: dy-in 0.3s var(--dy-ease); }
+.dy-inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.dy-inbox li { padding: 12px 14px; border-radius: 14px; background: var(--dy-sunken); animation: dy-in 0.3s var(--dy-ease); min-width: 0; max-width: 100%; }
 .dy-inbox-text { margin: 0 0 8px; font-size: 15px; line-height: 1.55; color: var(--dy-ink); word-break: keep-all; overflow-wrap: anywhere; }
 .dy-inbox-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .dy-inbox-acts .dy-btn-soft, .dy-inbox-acts .dy-btn-ghost { min-height: 38px; padding: 0 12px; font-size: 14px; border-radius: 12px; }
@@ -342,9 +344,10 @@
 .dy-app.is-phone .dy-entry-acts .dy-btn-soft { min-height: 44px; }
 
 /* ── 모바일 (C) ─────────────────────── */
-.dy-m { display: grid; gap: var(--dy-s3); padding: 14px var(--dy-s3) 120px; }
-.dy-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px; background: var(--dy-card); border-radius: 20px; box-shadow: var(--dy-shadow); }
-.dy-strip-day { position: relative; display: grid; justify-items: center; gap: 2px; padding: 8px 0 12px; border: 0; background: none; border-radius: 14px; color: var(--dy-ink); cursor: pointer; }
+.dy-m { display: grid; gap: var(--dy-s3); padding: 14px var(--dy-s3) 20px; min-width: 0; max-width: 100%; }
+.dy-m > * { min-width: 0; max-width: 100%; }
+.dy-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 6px; background: var(--dy-card); border-radius: 20px; box-shadow: var(--dy-shadow); min-width: 0; max-width: 100%; }
+.dy-strip-day { position: relative; display: grid; justify-items: center; gap: 2px; min-width: 0; padding: 8px 0 12px; border: 0; background: none; border-radius: 14px; color: var(--dy-ink); cursor: pointer; }
 .dy-strip-day span { font-size: 14px; color: var(--dy-mute); }
 .dy-strip-day b { font: 700 18px var(--dy-head); font-variant-numeric: tabular-nums; }
 .dy-strip-day.is-red b, .dy-strip-day.is-red span { color: var(--dy-red); }
@@ -427,7 +430,7 @@
 .dy-app .nb-month-cell { border: 0 !important; background: #fff; }
 .dy-col-left, .dy-col-right { grid-template-columns: minmax(0, 1fr); }
 .dy-app.nb-app { overflow: clip; }
-.dy-app .dy-stage.nb-stage-wrap { flex: 1 1 auto; min-height: 0; padding: 0 !important; }
+.dy-app .dy-stage.nb-stage-wrap { flex: 1 1 auto; min-height: 0; min-width: 0; max-width: 100%; padding: 0 !important; overflow-x: clip; }
 .dy-app .dy-page.nb-page { width: auto !important; min-height: 0 !important; }
 .dy-goal input { width: 100%; min-width: 0; }
 .dy-app.nb-app { display: flex !important; flex-direction: column; grid-template-columns: none; grid-template-rows: none; height: 100dvh; }
@@ -516,18 +519,17 @@
 .dy-entry-acts .dy-act-more summary,
 .dy-entry-pair .dy-btn-ghost,
 .dy-entry-pair .dy-btn-primary {
-    flex: 0 1 auto; width: auto; min-width: 0; max-width: none;
-    min-height: 40px; padding: 0 10px; white-space: nowrap; text-align: center; font-size: 14px;
+    flex: 0 1 auto; width: auto; min-width: 0; max-width: 100%;
+    min-height: 44px; padding: 0 10px; white-space: nowrap; text-align: center; font-size: 14px;
+    overflow: hidden;
 }
-.dy-entry-acts .dy-act-main { flex: 0 1 auto; min-width: 0; max-width: 14rem; overflow: hidden; }
+.dy-entry-acts .dy-act-main { flex: 1 1 auto; min-width: 0; max-width: 100%; overflow: hidden; }
 .dy-entry-acts button,
-.dy-entry-acts .dy-act-more summary { min-height: 40px; }
-.dy-app.is-phone .dy-entry-acts button,
-.dy-app.is-phone .dy-entry-acts .dy-act-more summary { min-height: 44px; }
-.dy-app.is-phone .dy-act-more summary { width: 44px; min-width: 44px; }
-.dy-act-more { position: relative; flex: 0 0 auto; }
-.dy-act-more summary {
-    display: inline-grid; place-items: center; width: 40px; min-width: 40px; padding: 0;
+.dy-entry-acts .dy-act-more summary { min-height: 44px; }
+.dy-act-more { position: relative; flex: 0 0 44px; width: 44px; height: 44px; align-self: center; }
+.dy-entry-acts .dy-act-more summary {
+    display: inline-grid; place-items: center; box-sizing: border-box;
+    width: 44px; height: 44px; min-width: 44px; max-width: 44px; min-height: 44px; max-height: 44px; padding: 0;
     list-style: none; cursor: pointer; border-radius: 12px; border: 1px solid var(--dy-line2);
     background: #fff; color: var(--dy-ink);
 }
@@ -567,6 +569,48 @@
 .dy-app .dy-page .nb-ssu-actions .tone-peach,
 .dy-app .dy-page .nb-ssu-actions .tone-butter,
 .dy-app .dy-page .nb-ssu-actions .tone-sand { background-color: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
+
+/* 휴대폰은 긴 제안이 화면을 밀지 않게 줄을 바꾸고, 쓱, 적 단추는 스크롤 밖에 둡니다. */
+.dy-app.is-phone {
+    max-width: 100%;
+    overflow-x: clip;
+}
+.dy-app.is-phone::after {
+    content: '';
+    flex: 0 0 calc(96px + env(safe-area-inset-bottom));
+}
+.dy-app.is-phone .dy-fab { bottom: calc(16px + env(safe-area-inset-bottom)); }
+.dy-app.is-phone .dy-chips {
+    flex-wrap: wrap;
+    overflow: visible;
+    max-width: 100%;
+    min-width: 0;
+}
+.dy-list li, .dy-card, .dy-col-right, .dy-ssu-panel { min-width: 0; max-width: 100%; }
+.dy-app .dy-page.nb-page,
+.dy-app .dy-page .nb-body,
+.dy-app .nb-ssu-list,
+.dy-app .nb-ssu-list > li { min-width: 0; }
+.dy-app .dy-page .nb-body,
+.dy-app .nb-ssu-list,
+.dy-app .nb-ssu-list > li { max-width: 100%; }
+.dy-app.is-phone .dy-entry-acts,
+.dy-app.is-phone .dy-note-acts,
+.dy-app.is-phone .dy-inbox-acts { flex-wrap: wrap; max-width: 100%; }
+.dy-app.is-phone .dy-inbox.is-big .dy-inbox-acts .dy-btn-soft,
+.dy-app.is-phone .dy-inbox.is-big .dy-inbox-acts .dy-btn-ghost,
+.dy-app.is-phone .dy-entry-acts button {
+    flex: 0 1 auto;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 44px;
+}
+.dy-app.is-phone .dy-entry-acts .dy-act-main,
+.dy-app.is-phone .dy-inbox.is-big .dy-inbox-acts .dy-act-main {
+    flex: 1 1 100%;
+    max-width: 100%;
+    min-width: 0;
+}
 .dy-app .dy-page .nb-ssu-actions .tone-mint { background-color: var(--dy-sage-tint); color: var(--dy-sage); }
 .dy-app .dy-page .nb-ssu-actions .tone-lavender { background-color: var(--dy-dusk-tint); color: var(--dy-dusk); }
 .dy-quick.is-confirm { width: min(420px, 100%); }

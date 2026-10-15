@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ConfirmDialog } from '../components/ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { readPageFields } from './fieldStore.js';
 import { daysUntil, ddayBadge } from './boardsModel.js';
@@ -43,6 +44,7 @@ function Badge({ deadline, status }) {
 }
 
 function Card({ item, signedIn, onChanged, onGo }) {
+    const [pending, setPending] = useState(false);
     const move = async (status) => {
         await patchItem('ddayCards', item.id, { status }, signedIn);
         onChanged?.();
@@ -63,10 +65,22 @@ function Card({ item, signedIn, onChanged, onGo }) {
                         {item.status !== 'todo' && <button type="button" onClick={() => move('todo')}>할 일</button>}
                         {item.status !== 'doing' && <button type="button" onClick={() => move('doing')}>진행</button>}
                         {item.status !== 'done' && <button type="button" onClick={() => move('done')}>완료</button>}
-                        <button type="button" onClick={async () => { await removeItem('ddayCards', item.id, signedIn); onChanged?.(); }}>지우기</button>
+                        <button type="button" onClick={() => setPending(true)}>지우기</button>
                     </>
                 )}
             </div>
+            {pending && (
+                <ConfirmDialog
+                    title="이 기한을 지울까요?"
+                    body={item.title}
+                    onClose={() => setPending(false)}
+                    onConfirm={async () => {
+                        setPending(false);
+                        await removeItem('ddayCards', item.id, signedIn);
+                        onChanged?.();
+                    }}
+                />
+            )}
         </li>
     );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ConfirmDialog } from '../components/ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
 import { readPageFields } from './fieldStore.js';
 import { alimSentence, missingNumbers } from './boardsModel.js';
@@ -28,6 +29,7 @@ export default function SubmissionBoard({ sheets, signedIn, onChanged, onToast }
     const students = useRosterNames();
     const [title, setTitle] = useState('');
     const [activeId, setActiveId] = useState(null);
+    const [pending, setPending] = useState(false);
     const active = (sheets || []).find((sheet) => sheet.id === activeId) || sheets?.[0] || null;
     const missing = active ? missingNumbers(active.submitted) : [];
     const sentence = active ? alimSentence(active.title, missing) : '';
@@ -103,8 +105,21 @@ export default function SubmissionBoard({ sheets, signedIn, onChanged, onToast }
                     <div className="nb-submit-copy">
                         <p>{sentence}</p>
                         <button type="button" onClick={copy}>알림장 복사</button>
-                        <button type="button" onClick={async () => { await removeItem('submissionSheets', active.id, signedIn); onChanged?.(); }}>이 칸 지우기</button>
+                        <button type="button" onClick={() => setPending(true)}>이 칸 지우기</button>
                     </div>
+                    {pending && (
+                        <ConfirmDialog
+                            title="이 칸을 지울까요?"
+                            body={active.title}
+                            onClose={() => setPending(false)}
+                            onConfirm={async () => {
+                                const id = active.id;
+                                setPending(false);
+                                await removeItem('submissionSheets', id, signedIn);
+                                onChanged?.();
+                            }}
+                        />
+                    )}
                 </>
             )}
         </div>
