@@ -656,7 +656,7 @@
 .dy-app .nb-dday-no { color: var(--dy-acc-ink); }
 .dy-app .nb-dday-mark { background: var(--dy-acc-tint); color: var(--dy-acc-ink); }
 .dy-app .nb-dday-badge.is-day,
-.dy-app .nb-dday-mark.is-day { background: var(--dy-red); color: #fff; }
+.dy-app .nb-dday-mark.is-day { background: var(--dy-acc-deep); color: #fff; }
 .dy-app .nb-dday-badge.is-soon,
 .dy-app .nb-dday-mark.is-soon { background: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
 .dy-app .nb-submit-tabs button.is-on,
