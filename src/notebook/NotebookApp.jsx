@@ -224,7 +224,6 @@ export default function NotebookApp({
                 onSettings={() => setSettingsOpen(true)}
                 signedIn={signedIn}
             />
-            <div className="dy-toast-slot" />
 
             <div className="nb-stage-wrap dy-stage" ref={stageRef} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
                 {isHome ? (

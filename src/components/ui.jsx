@@ -86,23 +86,64 @@ export function Field({ label, children, hint }) {
     );
 }
 
+function placeToast(el) {
+    if (!el) return;
+    const gap = document.querySelector('.dy-status-gap');
+    const bar = document.querySelector('.dy-bar');
+    const height = 32;
+    if (!gap || !bar) {
+        el.style.top = '8px';
+        el.style.height = `${height}px`;
+        el.style.right = '12px';
+        el.style.left = 'auto';
+        el.style.maxWidth = 'min(240px, calc(100vw - 24px))';
+        return;
+    }
+    const box = gap.getBoundingClientRect();
+    const barBox = bar.getBoundingClientRect();
+    el.style.top = `${Math.round(barBox.top + (barBox.height - height) / 2)}px`;
+    el.style.height = `${height}px`;
+    el.style.right = `${Math.round(window.innerWidth - box.right)}px`;
+    el.style.left = 'auto';
+    el.style.maxWidth = `${Math.max(0, Math.floor(box.width))}px`;
+}
+
 export function Toast({ message, actionLabel, onAction }) {
-    const [host, setHost] = useState(null);
+    const ref = useRef(null);
     useLayoutEffect(() => {
-        setHost(document.querySelector('.dy-toast-slot'));
+        if (!message) return undefined;
+        const el = ref.current;
+        let frame = 0;
+        const place = () => {
+            placeToast(el);
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => placeToast(el));
+        };
+        place();
+        const watched = [document.querySelector('.dy-status-gap'), document.querySelector('.dy-bar')].filter(Boolean);
+        const observer = new ResizeObserver(place);
+        watched.forEach((node) => observer.observe(node));
+        window.addEventListener('resize', place);
+        window.addEventListener('scroll', place, true);
+        return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+            window.removeEventListener('resize', place);
+            window.removeEventListener('scroll', place, true);
+        };
     }, [message]);
-    if (!message || !host) return null;
-    const node = (
-        <div role="status" aria-live="polite" className="dy-toast">
+    if (!message) return null;
+    return createPortal(
+        <div ref={ref} role="status" aria-live="polite" className="dy-toast">
             <span>{message}</span>
             {actionLabel && onAction ? (
                 <button type="button" className="min-h-tap min-w-tap rounded-xl bg-white text-ink-900 px-3 py-2" onClick={onAction}>
                     {actionLabel}
                 </button>
             ) : null}
-        </div>
+        </div>,
+        document.body,
     );
-    return host ? createPortal(node, host) : node;
 }
 
 export function ConfirmDialog({ title, body, confirmLabel = '지우기', onConfirm, onClose }) {

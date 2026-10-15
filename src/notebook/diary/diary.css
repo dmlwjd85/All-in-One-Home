@@ -89,7 +89,8 @@
 .dy-arrow:hover:not(:disabled) { background: var(--dy-card); box-shadow: var(--dy-shadow); color: var(--dy-ink); }
 .dy-arrow:active:not(:disabled) { transform: scale(0.92); }
 .dy-arrow:disabled { opacity: 0.3; cursor: default; }
-.dy-actions { justify-self: end; display: flex; gap: 6px; }
+.dy-actions { justify-self: stretch; display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.dy-status-gap { flex: 1 1 auto; align-self: center; min-width: 0; height: 32px; }
 .dy-icon {
     position: relative; width: 44px; height: 44px; display: inline-grid; place-items: center;
     border: 0; border-radius: 14px; background: transparent; color: var(--dy-soft); cursor: pointer;
@@ -398,10 +399,10 @@
     .dy-chips { padding: 10px 16px 12px; }
 }
 @media (max-width: 700px) {
-    .dy-bar { grid-template-columns: auto 1fr auto; padding: 8px 10px 0; gap: 4px; }
+    .dy-bar { grid-template-columns: auto auto minmax(0, 1fr); padding: 8px 10px 0; gap: 4px; }
     .dy-brand > span:last-child { display: none; }
-    .dy-month { justify-self: center; }
-    .dy-month-label { font-size: 20px; min-width: 96px; padding: 4px 6px; }
+    .dy-month { justify-self: start; min-width: 0; }
+    .dy-month-label { font-size: 18px; min-width: 0; padding: 4px 4px; }
     .dy-tabs { padding: 0 8px; }
     .dy-tab { padding: 0 12px; font-size: 15px; }
     .dy-chips { padding: 8px 12px 10px; }
@@ -494,23 +495,19 @@
 .dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
 .dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
 
-/* 토스트 자리는 항상 40px입니다. 알림은 그 칸 안에만 겹쳐, 나타났다 사라져도 아래가 움직이지 않습니다. */
-.dy-toast-slot {
-    order: 1; position: relative; flex: 0 0 40px; height: 40px; align-self: stretch;
-    overflow: hidden; pointer-events: none;
-}
+/* 토스트는 머리 오른쪽 빈칸에 고정됩니다. 자리를 밀지 않고 단추도 덮지 않습니다. */
 .dy-toast {
-    position: absolute; inset: 0; z-index: 2; margin: 0;
-    display: flex; align-items: center; gap: 12px;
-    padding: 0 16px; border-radius: 0; background: #3b3530; color: #fff;
-    font-size: 14px; font-weight: 700; line-height: 40px;
+    position: fixed; z-index: 40; margin: 0; box-sizing: border-box; min-width: 0;
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+    padding: 0 12px; border-radius: 10px; background: #3b3530; color: #fff;
+    font-family: var(--dy-body); font-size: 14px; font-weight: 700; line-height: 32px;
     box-shadow: none; pointer-events: none;
-    white-space: nowrap; overflow: hidden;
+    white-space: nowrap; overflow: hidden; width: max-content;
 }
 .dy-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dy-toast button { pointer-events: auto; flex: 0 0 auto; }
 .dy-app > .dy-top { order: 0; }
-.dy-app > .dy-stage { order: 2; }
+.dy-app > .dy-stage { order: 1; }
 
 .dy-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dy-entry-acts > .dy-btn-ghost,
@@ -626,16 +623,42 @@
 .dy-app .nb-submit-copy,
 .dy-app .nb-submit-grid,
 .dy-app .nb-kanban { min-width: 0; max-width: 100%; }
-.dy-app .nb-dday-form input,
-.dy-app .nb-ko-date { min-height: 44px; box-shadow: 0 0 0 1px var(--dy-line2); }
-.dy-app .nb-ko-date { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; }
+.dy-app .nb-dday > .nb-dday-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dy-app .nb-dday > .nb-dday-form > input,
+.dy-app .nb-dday > .nb-dday-form > .nb-ko-date {
+    flex: 1 1 160px; min-width: 0; width: auto; max-width: 100%;
+}
+.dy-app .nb-dday-submit { display: flex; flex: 0 0 auto; gap: 8px; align-items: center; }
+.dy-app .nb-dday-submit button { white-space: nowrap; }
+.dy-app .nb-dday-form > input,
+.dy-app .nb-ko-date {
+    min-height: 44px; border: 0; border-radius: 999px; background: #fff;
+    box-shadow: 0 0 0 1px var(--dy-line2);
+}
+.dy-app .nb-ko-date {
+    position: relative; display: flex; align-items: center; min-width: 0; max-width: 100%;
+    padding: 0 0 0 14px; overflow: hidden;
+}
 .dy-app .nb-ko-date input[type="text"] {
-    width: 210px; min-width: 0; max-width: 100%; cursor: pointer; font-weight: 700; color: var(--dy-ink);
+    flex: 1 1 auto; width: auto; min-width: 0; max-width: 100%; height: 44px;
+    border: 0; border-radius: 0; background: transparent; box-shadow: none;
+    font-weight: 700; color: var(--dy-ink); padding: 0;
 }
 .dy-app .nb-ko-date input[type="text"]::placeholder { color: var(--dy-mute); font-weight: 600; opacity: 1; }
+.dy-app .nb-ko-date .nb-ko-date-open {
+    flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    border: 0; border-radius: 999px; background: transparent; box-shadow: none;
+    color: var(--dy-acc-deep); display: inline-grid; place-items: center; cursor: pointer; padding: 0;
+}
 .dy-app .nb-ko-date-native {
-    position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; border: 0;
-    opacity: 0; pointer-events: none;
+    position: absolute; width: 1px; height: 1px; min-width: 0; min-height: 0; margin: 0; padding: 0;
+    border: 0; opacity: 0; pointer-events: none; box-shadow: none;
+}
+@media (max-width: 700px) {
+    .dy-app .nb-dday > .nb-dday-form > input,
+    .dy-app .nb-dday > .nb-dday-form > .nb-ko-date { flex-basis: 100%; }
+    .dy-app .nb-dday-submit { flex: 1 1 100%; }
+    .dy-app .nb-dday-submit button { flex: 1 1 0; }
 }
 .dy-app .nb-dday-form button,
 .dy-app .nb-dday-actions button,
@@ -659,6 +682,8 @@
 .dy-app .nb-dday-mark.is-day { background: var(--dy-acc-deep); color: #fff; }
 .dy-app .nb-dday-badge.is-soon,
 .dy-app .nb-dday-mark.is-soon { background: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
+.dy-app .nb-dday-badge.is-late,
+.dy-app .nb-dday-mark.is-late { background: #f6ddd8; color: #7a3328; }
 .dy-app .nb-submit-tabs button.is-on,
 .dy-app .nb-submit-grid button.is-on { background: var(--dy-sage); color: #fff; box-shadow: none; }
 .dy-app .nb-submit-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }

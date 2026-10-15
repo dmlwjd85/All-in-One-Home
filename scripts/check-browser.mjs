@@ -1356,7 +1356,7 @@ async function checkQaLayout(page, browserErrors) {
             top: a.top,
             position: style.position,
             pointer: style.pointerEvents,
-            inSlot: Boolean(toast.closest('.dy-toast-slot')),
+            slot: Boolean(document.querySelector('.dy-toast-slot')),
         };
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
@@ -1364,7 +1364,7 @@ async function checkQaLayout(page, browserErrors) {
         if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
         if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
         if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
-        if (cover.position !== 'absolute' || !cover.inSlot) browserErrors.push('390 토스트가 흐름에 있음');
+        if (cover.position !== 'fixed' || cover.slot) browserErrors.push('390 토스트가 흐름에 있음');
         if (cover.pointer !== 'none') browserErrors.push('390 토스트가 클릭을 막음');
     }
     const phoneRows = await page.evaluate(() => {
@@ -1446,14 +1446,14 @@ async function checkQaLayout(page, browserErrors) {
                 height: window.innerHeight,
                 position: style.position,
                 pointer: style.pointerEvents,
-                inSlot: Boolean(el.closest('.dy-toast-slot')),
+                slot: Boolean(document.querySelector('.dy-toast-slot')),
             };
         });
         if (wideCover.missing) browserErrors.push(`${width} 토스트 없음`);
         else {
             if (wideCover.input) browserErrors.push(`${width} 토스트가 입력을 가림`);
             if (wideCover.save) browserErrors.push(`${width} 토스트가 저장 버튼을 가림`);
-            if (wideCover.position !== 'absolute' || !wideCover.inSlot) browserErrors.push(`${width} 토스트가 흐름에 있음`);
+            if (wideCover.position !== 'fixed' || wideCover.slot) browserErrors.push(`${width} 토스트가 흐름에 있음`);
             if (wideCover.pointer !== 'none') browserErrors.push(`${width} 토스트가 클릭을 막음`);
         }
         const spread = await page.evaluate(() => {
@@ -1565,6 +1565,56 @@ async function checkQaLayout(page, browserErrors) {
         };
         return [cmp(before, during, '동안'), cmp(before, after, '뒤')].filter(Boolean).join('; ');
     };
+    const assertScrollClear = async (label) => {
+        const bad = await page.evaluate(() => {
+            const stage = document.querySelector('.dy-stage');
+            const sample = () => {
+                const hits = [];
+                if (document.querySelector('.dy-toast-slot')) hits.push('빈칸');
+                const header = document.querySelector('.dy-top')?.getBoundingClientRect();
+                const stageBox = stage?.getBoundingClientRect();
+                if (header && stageBox) {
+                    const gap = stageBox.top - header.bottom;
+                    if (gap > 4) hits.push(`빈띠 ${Math.round(gap)}`);
+                    if (gap < -1) hits.push('머리가 본문을 가림');
+                }
+                if (!stageBox) return hits;
+                const targets = document.querySelectorAll('.dy-entry, .nb-dday-card, .dy-card, .dy-day, .nb-page, .nb-kanban section');
+                for (const el of targets) {
+                    const rect = el.getBoundingClientRect();
+                    const top = Math.max(rect.top, stageBox.top);
+                    const left = Math.max(rect.left, stageBox.left);
+                    const right = Math.min(rect.right, stageBox.right);
+                    const bottom = Math.min(rect.bottom, stageBox.bottom, window.innerHeight);
+                    if (right - left < 12 || bottom - top < 12) continue;
+                    const x = left + Math.min(20, (right - left) / 2);
+                    const y = top + 4;
+                    const hit = document.elementFromPoint(x, y);
+                    if (!hit || hit === el || el.contains(hit)) continue;
+                    const cover = hit.closest('.dy-toast, .dy-toast-slot, .dy-top');
+                    if (!cover) continue;
+                    const name = (el.innerText || el.className || '').toString().replace(/\s+/g, ' ').trim().slice(0, 18);
+                    hits.push(`가림:${name}`);
+                }
+                return hits;
+            };
+            const points = stage ? [0, Math.round(stage.scrollHeight / 2), stage.scrollHeight] : [0];
+            const prev = stage?.scrollTop || 0;
+            const behavior = stage?.style.scrollBehavior;
+            if (stage) stage.style.scrollBehavior = 'auto';
+            const found = [];
+            for (const top of points) {
+                if (stage) stage.scrollTop = top;
+                found.push(...sample());
+            }
+            if (stage) {
+                stage.scrollTop = prev;
+                stage.style.scrollBehavior = behavior;
+            }
+            return [...new Set(found)].slice(0, 6);
+        });
+        if (bad.length) browserErrors.push(`${label} 스크롤 잘림 ${bad.join('|')}`);
+    };
     const samples = [
         '@12 #행발 발표를 또렷하게 그리고 복도 게시판까지 안내문을 길게 남긴다',
         '내일 회의 자료 인쇄와 학부모 안내문 초안과 복사실 예약을 한 메모에 모아 둔다',
@@ -1614,7 +1664,8 @@ async function checkQaLayout(page, browserErrors) {
             const collect = () => {
                 const toastEl = document.querySelector('.dy-toast');
                 const toast = painted(toastEl);
-                if (toastEl && (getComputedStyle(toastEl).position !== 'absolute' || !toastEl.closest('.dy-toast-slot'))) return ['토스트:흐름'];
+                if (toastEl && getComputedStyle(toastEl).position !== 'fixed') return ['토스트:흐름'];
+                if (document.querySelector('.dy-toast-slot')) return ['토스트:빈칸'];
                 const fab = painted(document.querySelector('.dy-fab'));
                 const hits = [];
                 for (const el of document.querySelectorAll('button, a, input, textarea, select, summary')) {
@@ -1710,6 +1761,7 @@ async function checkQaLayout(page, browserErrors) {
             await assertClear(`${width} 토스트${count}`);
             if (count === 1) {
                 const duringLayout = await snapStable(page);
+                await assertScrollClear(`${width} 토스트`);
                 try {
                     await page.waitForFunction(() => !document.querySelector('.dy-toast'), { timeout: 5000 });
                 } catch {
@@ -1718,6 +1770,7 @@ async function checkQaLayout(page, browserErrors) {
                 const afterLayout = await snapStable(page);
                 const shift = layoutShift(beforeLayout, duringLayout, afterLayout);
                 if (shift) browserErrors.push(`${width} 저장 위치 ${shift}`);
+                await assertScrollClear(`${width} 토스트 후`);
             }
             if (count === 8) {
                 await go(page, 496);
@@ -1753,9 +1806,20 @@ async function checkQaLayout(page, browserErrors) {
         localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{
             id: 'local-roster-qa', name: '김가온', createdAt: new Date().toISOString(),
         }]));
-        localStorage.setItem('homenote_v2_ddayCards', JSON.stringify([{
-            id: 'local-dday-qa', docNo: '12', title: '확인용 기한', deadline: stamp, status: 'todo',
-        }]));
+        const past = new Date(`${stamp}T12:00:00`);
+        past.setDate(past.getDate() - 2);
+        const future = new Date(`${stamp}T12:00:00`);
+        future.setDate(future.getDate() + 3);
+        const ymd = (date) => {
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${date.getFullYear()}-${m}-${d}`;
+        };
+        localStorage.setItem('homenote_v2_ddayCards', JSON.stringify([
+            { id: 'local-dday-qa', docNo: '12', title: '확인용 기한', deadline: stamp, status: 'todo' },
+            { id: 'local-dday-past', docNo: '11', title: '지난 기한', deadline: ymd(past), status: 'todo' },
+            { id: 'local-dday-soon', docNo: '13', title: '다가올 기한', deadline: ymd(future), status: 'todo' },
+        ]));
         localStorage.setItem('homenote_v2_submissionSheets', JSON.stringify([{
             id: 'local-sheet-qa', title: '확인용 제출', submitted: [],
         }]));
@@ -1894,7 +1958,30 @@ async function checkQaLayout(page, browserErrors) {
         const dateInput = document.querySelector('.nb-ko-date-native');
         const opacity = dateInput ? getComputedStyle(dateInput).opacity : '';
         const english = /[A-Za-z]{2,}/.test(document.querySelector('.nb-dday')?.innerText || '');
-        return { actions, bg, shown, opacity, english };
+        const pastCard = [...document.querySelectorAll('.nb-dday-card')].find((el) => el.innerText.includes('지난 기한'));
+        const late = pastCard?.querySelector('.nb-dday-badge.is-late');
+        const lateStyle = late ? getComputedStyle(late) : null;
+        const lum = (rgb) => {
+            const m = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (!m) return null;
+            const ch = [Number(m[1]), Number(m[2]), Number(m[3])].map((c) => {
+                const s = c / 255;
+                return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const l1 = lateStyle ? lum(lateStyle.color) : null;
+        const l2 = lateStyle ? lum(lateStyle.backgroundColor) : null;
+        const contrast = l1 == null || l2 == null ? 0 : (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        const dateText = pastCard?.querySelector('.nb-hint')?.textContent || '';
+        const submitRow = [...document.querySelectorAll('.nb-dday-submit button')].map((el) => el.getBoundingClientRect().top);
+        const innerShadow = shownField ? getComputedStyle(shownField).boxShadow : '';
+        return {
+            actions, bg, shown, opacity, english, readOnly: Boolean(shownField?.readOnly),
+            late: late?.textContent || '', contrast, dateText,
+            rowSpread: submitRow.length ? Math.max(...submitRow) - Math.min(...submitRow) : 99,
+            innerShadow,
+        };
     });
     for (const btn of dueFit.actions) {
         if (btn.h < 44 || btn.w < 44) browserErrors.push(`1280 기한 버튼 ${btn.name} ${Math.round(btn.w)}x${Math.round(btn.h)}`);
@@ -1906,6 +1993,12 @@ async function checkQaLayout(page, browserErrors) {
     if (!dueFit.shown || /[A-Za-z]/.test(dueFit.shown) || dueFit.shown.includes('mm')) browserErrors.push(`1280 기한 표시 ${dueFit.shown}`);
     if (dueFit.opacity !== '0') browserErrors.push(`1280 날짜 입력 보임 ${dueFit.opacity}`);
     if (dueFit.english) browserErrors.push('1280 기한 화면에 영문');
+    if (!/일 지남$/.test(dueFit.late || '')) browserErrors.push(`1280 지난 배지 ${dueFit.late}`);
+    if (!(dueFit.contrast >= 4.5)) browserErrors.push(`1280 지난 배지 대비 ${dueFit.contrast ? dueFit.contrast.toFixed(2) : '없음'}`);
+    if (!/^\d{1,2}월 \d{1,2}일 \([일월화수목금토]\)$/.test(dueFit.dateText || '')) browserErrors.push(`1280 기한 날짜 ${dueFit.dateText}`);
+    if (dueFit.readOnly) browserErrors.push('1280 기한 입력이 읽기 전용');
+    if (dueFit.rowSpread > 8) browserErrors.push(`1280 올리기 줄 ${Math.round(dueFit.rowSpread)}`);
+    if (dueFit.innerShadow && dueFit.innerShadow !== 'none') browserErrors.push('1280 날짜 칸 테두리가 겹침');
     const confirmPlace = await page.evaluate(() => {
         const box = document.querySelector('.dy-quick.is-confirm')?.getBoundingClientRect();
         if (!box || box.height < 8) return null;
@@ -1914,6 +2007,14 @@ async function checkQaLayout(page, browserErrors) {
     });
     if (confirmPlace == null || confirmPlace > 100) browserErrors.push(`확인 창이 가운데가 아님 ${confirmPlace == null ? '없음' : Math.round(confirmPlace)}`);
     await page.keyboard.press('Escape');
+    await page.click('[aria-label="기한"]');
+    await page.keyboard.type('2026-12-24', { delay: 20 });
+    try {
+        await page.waitForFunction(() => document.querySelector('.nb-ko-date-native')?.value === '2026-12-24', { timeout: 2000 });
+    } catch {
+        const typedDue = await page.$eval('.nb-ko-date-native', (el) => el.value).catch(() => '');
+        browserErrors.push(`1280 기한 입력 ${typedDue || '없음'}`);
+    }
     await go(page, 458);
     await page.waitForSelector('.nb-submit');
     await page.evaluate(() => {
@@ -1959,14 +2060,24 @@ async function checkQaLayout(page, browserErrors) {
     await page.waitForSelector('.nb-dday-actions');
     const phoneDue = await page.evaluate(() => {
         const card = [...document.querySelectorAll('.nb-dday-card')].find((el) => el.innerText.includes('확인용 기한'));
-        return [...(card?.querySelectorAll('.nb-dday-actions button') || [])].map((el) => {
+        const actions = [...(card?.querySelectorAll('.nb-dday-actions button') || [])].map((el) => {
             const rect = el.getBoundingClientRect();
             return { name: el.textContent.trim(), h: rect.height };
         });
+        const tops = [...document.querySelectorAll('.nb-dday-submit button')].map((el) => el.getBoundingClientRect().top);
+        const date = document.querySelector('.nb-ko-date')?.getBoundingClientRect();
+        const paper = document.querySelector('.dy-page')?.getBoundingClientRect();
+        return {
+            actions,
+            rowSpread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99,
+            dateRight: date && paper ? Math.round(paper.right - date.right) : -1,
+        };
     });
-    for (const btn of phoneDue) {
+    for (const btn of phoneDue.actions) {
         if (btn.h < 44) browserErrors.push(`390 기한 버튼 ${btn.name} ${Math.round(btn.h)}`);
     }
+    if (phoneDue.rowSpread > 8) browserErrors.push(`390 업무 할 일 줄바꿈 ${Math.round(phoneDue.rowSpread)}`);
+    if (phoneDue.dateRight < 8) browserErrors.push(`390 날짜 칸 오른쪽 ${phoneDue.dateRight}`);
 
     await page.evaluate(() => {
         const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
