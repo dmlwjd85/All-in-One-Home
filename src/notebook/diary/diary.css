@@ -519,6 +519,13 @@
     white-space: normal; overflow: visible; justify-content: flex-start; align-items: center;
     line-height: 22px; padding: 8px 12px; text-align: left;
 }
+.dy-dock .dy-toast {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+}
 .dy-toast.is-bar span,
 .dy-dock .dy-toast span {
     flex: 1 1 auto; white-space: normal; overflow: visible; text-overflow: clip; line-height: 22px;
