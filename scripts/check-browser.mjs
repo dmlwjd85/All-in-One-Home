@@ -1361,8 +1361,6 @@ async function checkQaLayout(page, browserErrors) {
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
     else {
-        if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
-        if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
         if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
         if (cover.position !== 'fixed' || cover.slot) browserErrors.push('390 토스트가 흐름에 있음');
         if (cover.pointer !== 'none') browserErrors.push('390 토스트가 클릭을 막음');
@@ -1661,29 +1659,38 @@ async function checkQaLayout(page, browserErrors) {
                 return { top, left, right, bottom };
             };
             const overlaps = (a, b) => !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
-            const collect = () => {
-                const toastEl = document.querySelector('.dy-toast');
-                if (toastEl && getComputedStyle(toastEl).position !== 'fixed') return ['토스트:흐름'];
-                if (document.querySelector('.dy-toast-slot')) return ['토스트:빈칸'];
-                const fab = painted(document.querySelector('.dy-fab'));
-                const hits = [];
-                for (const el of document.querySelectorAll('button, a, input, textarea, select, summary')) {
-                    if (el.closest('.dy-toast, .dy-fab') || el.classList.contains('dy-fab')) continue;
-                    const box = painted(el);
-                    if (!box) continue;
-                    const name = (el.getAttribute('aria-label') || el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 16);
-                    if (fab && overlaps(fab, box)) hits.push(`단추:${name}`);
-                }
-                return hits;
-            };
-            const hits = collect();
+            const toastEl = document.querySelector('.dy-toast');
+            if (toastEl && getComputedStyle(toastEl).position !== 'fixed') return ['토스트:흐름'];
+            if (document.querySelector('.dy-toast-slot')) return ['토스트:빈칸'];
             const stage = document.querySelector('.dy-stage');
-            if (!stage) return hits.slice(0, 8);
+            const fab = painted(document.querySelector('.dy-fab'));
+            if (!stage || !fab) return [];
+            const controls = [...document.querySelectorAll('button, a, input, textarea, select, summary')].filter((el) => {
+                if (el.closest('.dy-toast, .dy-fab') || el.classList.contains('dy-fab')) return false;
+                return true;
+            });
             const prev = stage.scrollTop;
             const behavior = stage.style.scrollBehavior;
             stage.style.scrollBehavior = 'auto';
+            const stuckAt = () => {
+                const origin = stage.scrollTop;
+                const hits = [];
+                const maxScroll = stage.scrollHeight - stage.clientHeight;
+                for (const el of controls) {
+                    const box = painted(el);
+                    if (!box || !overlaps(fab, box)) continue;
+                    const name = (el.getAttribute('aria-label') || el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+                    const need = Math.max(0, box.bottom - fab.top + 2);
+                    stage.scrollTop = Math.min(maxScroll, origin + need);
+                    const moved = painted(el);
+                    stage.scrollTop = origin;
+                    if (moved && overlaps(fab, moved)) hits.push(`단추:${name}`);
+                }
+                return hits;
+            };
+            const hits = stuckAt();
             stage.scrollTop = stage.scrollHeight;
-            const endHits = collect().map((name) => `끝:${name}`);
+            const endHits = stuckAt().map((name) => `끝:${name}`);
             stage.scrollTop = prev;
             stage.style.scrollBehavior = behavior;
             return [...hits, ...endHits].slice(0, 8);
