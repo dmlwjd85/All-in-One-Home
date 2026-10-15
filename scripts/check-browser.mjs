@@ -1247,6 +1247,12 @@ async function checkQaLayout(page, browserErrors) {
     if (!(row.minH >= 44)) browserErrors.push(`1440 버튼 높이 ${Math.round(row.minH || 0)}`);
 
     const assertDayTitle = async (width) => {
+        try {
+            await page.waitForSelector('.dy-m .dy-day-title', { timeout: 4000 });
+        } catch {
+            browserErrors.push(`${width} 날짜 제목 없음`);
+            return;
+        }
         const title = await page.evaluate(() => {
             const el = document.querySelector('.dy-m .dy-day-title');
             if (!el) return { missing: true };
