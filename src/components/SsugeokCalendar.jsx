@@ -87,7 +87,7 @@ export default function SsugeokCalendar({
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-rose-800 bg-rose-100">공휴일</span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-amber-900 bg-amber-100">기념일</span>
             </div>
-            <p className="text-[11px] text-stone-500">설날·추석·부처님오신날은 {LUNAR_YEAR_MIN}–{LUNAR_YEAR_MAX}년 한국 음력 기준입니다. 달력은 보조 보기이고, 기록은 쓱적에서 날려보냅니다.</p>
+            <p className="text-[11px] text-stone-500">설날·추석·부처님오신날은 {LUNAR_YEAR_MIN}–{LUNAR_YEAR_MAX}년 한국 음력 기준입니다. 달력은 보조 보기이고, 기록은 쓱, 적에서 날려보냅니다.</p>
             <div className="grid grid-cols-7 text-center text-[11px] font-extrabold text-amber-900/70 mb-1">
                 {WEEKDAYS_FULL.map((d) => <div key={d} className={d === '일' ? 'text-rose-700' : d === '토' ? 'text-sky-800' : ''}>{d}</div>)}
             </div>
@@ -139,7 +139,7 @@ export default function SsugeokCalendar({
                         </p>
                     )}
                     {picked.length === 0 ? (
-                        <EmptyState title="이 날 기록이 없습니다" hint="쓱적에 먼저 적고 카드를 밀어 나누세요." />
+                        <EmptyState title="이 날 기록이 없습니다" hint="쓱, 적에 먼저 적고 카드를 밀어 나누세요." />
                     ) : (
                         <ul className="space-y-2">
                             {picked.map((ev, i) => {
@@ -164,7 +164,7 @@ export default function SsugeokCalendar({
                         </ul>
                     )}
                     <button type="button" className="btn-primary w-full mt-3" onClick={() => { setPick(null); onView('inbox'); }}>
-                        쓱적으로 가서 적기
+                        쓱, 적으로 가서 적기
                     </button>
                 </Modal>
             )}

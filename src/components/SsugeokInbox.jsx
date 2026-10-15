@@ -50,13 +50,13 @@ export default function SsugeokInbox({
     const addDraft = async () => {
         const text = draft.trim();
         if (!text) {
-            onToast('쓱적에 넣을 내용을 적어 주세요.');
+            onToast('쓱, 적에 넣을 내용을 적어 주세요.');
             return;
         }
         await addItem('ssugeokInbox', { text, typeHint, author }, signedIn);
         setDraft('');
         onChanged();
-        onToast('쓱적에 넣었습니다. 옆으로 날려보내 보세요.');
+        onToast('쓱, 적에 넣었습니다. 옆으로 날려보내 보세요.');
     };
 
     const saveEdit = async () => {
@@ -69,11 +69,11 @@ export default function SsugeokInbox({
         await patchItem('ssugeokInbox', editing.id, { text, typeHint: editing.typeHint || '' }, signedIn);
         setEditing(null);
         onChanged();
-        onToast('쓱적을 고쳤습니다.');
+        onToast('쓱, 적을 고쳤습니다.');
     };
 
     const removeInbox = async (item) => {
-        if (!confirm('이 쓱적을 삭제할까요?')) return;
+        if (!confirm('이 쓱, 적을 삭제할까요?')) return;
         await removeItem('ssugeokInbox', item.id, signedIn);
         onChanged();
     };
@@ -120,11 +120,11 @@ export default function SsugeokInbox({
                         <PenLine size={20} aria-hidden="true" />
                     </span>
                     <div>
-                        <h2 className="font-black text-xl leading-tight">쓱적에 쏟아 넣기</h2>
+                        <h2 className="font-black text-xl leading-tight">쓱, 적에 쏟아 넣기</h2>
                         <p className="text-sm text-stone-600">생각·있었던 일·할 일을 먼저 적고, 카드를 밀어 제자리로 나눕니다.</p>
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-1" role="group" aria-label="쓱적 종류">
+                <div className="flex flex-wrap gap-1" role="group" aria-label="쓱, 적 종류">
                     {SSUGEOK_HINTS.map((h) => (
                         <button
                             key={h}
@@ -160,15 +160,15 @@ export default function SsugeokInbox({
                         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addDraft();
                     }}
                     placeholder="오늘 있었던 일, 떠오른 생각, 해야 할 일을 그냥 적으세요"
-                    aria-label="쓱적 내용"
+                    aria-label="쓱, 적 내용"
                 />
                 <button type="button" className="btn-primary w-full" onClick={addDraft}>
-                    <Inbox size={18} /> 쓱적에 넣기
+                    <Inbox size={18} /> 쓱, 적에 넣기
                 </button>
             </section>
 
             {pending.length === 0 ? (
-                <EmptyState title="쓱적이 비어 있습니다" hint="위에 한 줄을 적으면 받은함에 쌓입니다. 카드를 좌우로 밀어 학생·출결·상담·주간·업무로 날려보내세요." />
+                <EmptyState title="쓱, 적이 비어 있습니다" hint="위에 한 줄을 적으면 받은함에 쌓입니다. 카드를 좌우로 밀어 학생·출결·상담·주간·업무로 날려보내세요." />
             ) : (
                 <ul className="space-y-3">
                     {pending.map((item) => (
@@ -211,7 +211,7 @@ export default function SsugeokInbox({
             )}
 
             {editing && (
-                <Modal title="쓱적 고치기" onClose={() => setEditing(null)}>
+                <Modal title="쓱, 적 고치기" onClose={() => setEditing(null)}>
                     <Field label="종류">
                         <input className="field" value={editing.typeHint} onChange={(e) => setEditing({ ...editing, typeHint: e.target.value })} placeholder="생각 / 일 / 할일" />
                     </Field>

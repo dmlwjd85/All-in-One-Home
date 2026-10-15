@@ -19,8 +19,8 @@ export default function PageTrail({ page, fields, sensitiveNotes, onOpenNote }) 
     ];
     if (!rows.length) return null;
     return (
-        <section className="nb-trail" aria-label="쓱적에서 온 기록">
-            <p className="nb-kicker">쓱적에서 온 기록</p>
+        <section className="nb-trail" aria-label="쓱, 적에서 온 기록">
+            <p className="nb-kicker">쓱, 적에서 온 기록</p>
             <ul>
                 {rows.map((row) => (
                     <li key={row.noteId}>

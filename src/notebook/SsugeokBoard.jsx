@@ -7,8 +7,9 @@ import {
     quietStudents,
     whoPage,
 } from './ssugeokModel.js';
-import { archiveNotes, captureNote, sortNote } from './ssugeokStore.js';
+import { archiveNotes, sortNote } from './ssugeokStore.js';
 import { TONE_MARK } from './tones.js';
+import CaptureBox from './diary/CaptureBox.jsx';
 
 const FILTERS = [
     ['inbox', '미분류'],
@@ -73,7 +74,6 @@ export default function SsugeokBoard({
     onGo,
     focusId,
 }) {
-    const [text, setText] = useState('');
     const [filter, setFilter] = useState('inbox');
     const [picked, setPicked] = useState({});
     const [drafts, setDrafts] = useState({});
@@ -85,6 +85,12 @@ export default function SsugeokBoard({
         archived: notes.filter((n) => n.status === 'archived').length,
     };
     const shown = notes.filter((n) => n.status === filter);
+
+    useEffect(() => {
+        const onFilter = (e) => setFilter(e.detail);
+        window.addEventListener('nb-ssu-filter', onFilter);
+        return () => window.removeEventListener('nb-ssu-filter', onFilter);
+    }, []);
 
     const notesRef = useRef(notes);
     notesRef.current = notes;
@@ -98,15 +104,6 @@ export default function SsugeokBoard({
         if (!focusId) return;
         document.getElementById(`ssu-note-${focusId}`)?.scrollIntoView({ block: 'nearest' });
     }, [focusId, shown.length, filter]);
-
-    const save = async () => {
-        const note = await captureNote({ text, author, fromPage, signedIn });
-        if (!note) return;
-        setText('');
-        setFilter('inbox');
-        onChanged?.();
-        onToast?.(note.sensitive ? '건강·민원 내용은 이 기기에만 적었어요.' : '쓱적에 남겼어요. 나중에 나누면 돼요.');
-    };
 
     const setDraft = (id, patch) => {
         setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -156,23 +153,17 @@ export default function SsugeokBoard({
 
     return (
         <div className="nb-ssu-board">
-            <form
-                className="nb-ssu-capture"
-                onSubmit={(e) => {
-                    e.preventDefault();
-                    save();
-                }}
-            >
-                <input
-                    data-ssu-capture
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="@12 #행발 오늘 발표를 또렷하게"
-                    aria-label="쓱적 입력"
-                />
-                <button type="submit" aria-describedby="ssu-save-help">적기</button>
-            </form>
-            <p id="ssu-save-help" className="nb-hint">적기는 이 줄을 목록에 남깁니다. Enter로도 저장되고, 누르는 동안 버튼이 내려갑니다. 어디서나 Alt+S · @번호 #행발 처럼 적으면 누가기록으로 제안해요.</p>
+            <CaptureBox
+                big
+                autoFocus
+                author={author}
+                signedIn={signedIn}
+                fromPage={fromPage}
+                onChanged={onChanged}
+                onToast={onToast}
+                onSaved={() => setFilter('inbox')}
+            />
+            <p className="dy-muted dy-note">적기만 하세요. 아래 제안을 누를 때만 옮겨지고, 원문은 여기 남아요.</p>
 
             <div className="nb-ssu-filters" role="tablist" aria-label="메모 상태">
                 {FILTERS.map(([id, label]) => (

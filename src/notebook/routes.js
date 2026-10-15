@@ -45,7 +45,7 @@ export const MENU_ITEMS = [
     { key: 'counsel', label: '상담', group: 'class' },
     { key: 'lesson', label: '수업', group: 'class' },
     { key: 'work', label: '업무', group: 'work' },
-    { key: 'write', label: '쓱적', group: 'book' },
+    { key: 'write', label: '쓱, 적', group: 'book' },
     { key: 'notebook', label: '공책', group: 'book' },
     { key: 'board', label: '칠판', group: 'book' },
     { key: 'stickers', label: '스티커', group: 'book' },

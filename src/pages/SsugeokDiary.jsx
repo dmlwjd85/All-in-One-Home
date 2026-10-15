@@ -43,12 +43,12 @@ export default function SsugeokDiary({
     return (
         <div className="notebook-shell notebook-page space-y-4">
             <section>
-                <p className="text-sm font-bold text-amber-900/70">교사 쓱적 다이어리</p>
+                <p className="text-sm font-bold text-amber-900/70">교사 쓱, 적 다이어리</p>
                 <h2 className="text-2xl md:text-3xl font-black mt-1 text-ink-900">쏟아 넣고, 밀어 나누기</h2>
-                <p className="mt-1 text-stone-700">쓱적 {pending}건 · 남은 업무 {openTodos}건 · 학생 {roster.length}명</p>
+                <p className="mt-1 text-stone-700">쓱, 적 {pending}건 · 남은 업무 {openTodos}건 · 학생 {roster.length}명</p>
             </section>
 
-            <div role="tablist" aria-label="쓱적 다이어리 메뉴" className="flex gap-1 overflow-x-auto pb-1">
+            <div role="tablist" aria-label="쓱, 적 다이어리 메뉴" className="flex gap-1 overflow-x-auto pb-1">
                 {SSUGEOK_VIEWS.map((t) => {
                     const Icon = ICONS[t.id];
                     return (

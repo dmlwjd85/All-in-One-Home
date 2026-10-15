@@ -247,7 +247,7 @@ export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) 
                     <Ink multiline rows={3} value={fields.guide} onChange={(v) => setField('guide', v)} placeholder="공부할 내용 · 준비물" />
                     <p className="nb-kicker">이번 주 할 일</p>
                     <LinedBlock n={5} get={(k) => fields[k]} set={setField} prefix="todo" placeholder="할 일" />
-                    <Tick checked={fields.ssugeokDone} onChange={(v) => setField('ssugeokDone', v)} label="쓱적 정리" />
+                    <Tick checked={fields.ssugeokDone} onChange={(v) => setField('ssugeokDone', v)} label="쓱, 적 정리" />
                     <Ink multiline rows={2} value={fields.ssugeok} onChange={(v) => setField('ssugeok', v)} placeholder="옮길 메모" />
                 </section>
             </div>

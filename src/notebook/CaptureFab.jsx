@@ -69,7 +69,7 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
         setText('');
         setOpen(false);
         onChanged?.();
-        onToast?.(note.sensitive ? '건강·민원 내용은 이 기기에만 적었어요.' : '쓱적에 남겼어요.');
+        onToast?.(note.sensitive ? '건강·민원 내용은 이 기기에만 적었어요.' : '쓱, 적에 남겼어요.');
     };
 
     const form = open ? (
@@ -88,7 +88,7 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="@12 #행발 오늘 발표를 또렷하게"
-                aria-label="쓱적 한 줄"
+                aria-label="쓱, 적 한 줄"
             />
             <div className="nb-fab-actions">
                 <button type="button" onClick={() => setOpen(false)}>닫기</button>
@@ -106,9 +106,9 @@ export default function CaptureFab({ author, signedIn, fromPage, onChanged, onTo
                 className="nb-fab-btn"
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
-                aria-label="쓱적 적기"
+                aria-label="쓱, 적 적기"
             >
-                쓱적
+                쓱, 적
             </button>
         </div>
     );

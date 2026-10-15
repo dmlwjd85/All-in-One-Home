@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { PenLine } from 'lucide-react';
 import { loadFirebase } from './firebase.js';
 import { Modal, Toast } from './components/ui.jsx';
 import { applyBackupLocal, BACKUP_LABELS, buildExportPayload, validateBackup } from './lib/backup.js';
@@ -34,10 +33,7 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        if (guest) {
-            setAuthReady(true);
-            return undefined;
-        }
+        // 로그인 카드 없이 바로 씁니다. 로그인은 설정에서 하고, 로그인돼 있으면 그대로 동기화합니다.
         let cancelled = false;
         let unsub = () => {};
         const fallback = window.setTimeout(() => {
@@ -67,7 +63,7 @@ export default function App() {
             window.clearTimeout(fallback);
             unsub();
         };
-    }, [guest]);
+    }, []);
 
     const enabled = signedIn;
     const todos = useSharedList('teacherTodos', enabled, rev);
@@ -181,34 +177,6 @@ export default function App() {
         }
     };
 
-    if (!authReady) {
-        return (
-            <div className="min-h-[100dvh] flex items-center justify-center p-6">
-                <p className="text-lg font-bold">교무수첩을 준비하는 중입니다…</p>
-            </div>
-        );
-    }
-
-    if (!signedIn && !guest) {
-        return (
-            <main className="gate min-h-[100dvh] flex items-center justify-center p-4">
-                <div className="card gate-card max-w-md w-full p-7 text-center">
-                    <div className="gate-mark w-14 h-14 mx-auto rounded-2xl text-white flex items-center justify-center mb-5"><PenLine size={28} /></div>
-                    <h1 className="text-3xl font-black">2026 교무수첩</h1>
-                    <p className="mt-3 text-stone-600 leading-relaxed">
-                        PDF 교무수첩과 같은 탭·링크로 움직이고, 칸은 마우스와 키보드로 채울 수 있습니다. 쓰 쪽에서는 쓱적 허브로 학생·출결·상담·주간·업무에 나눌 수 있습니다.
-                    </p>
-                    <button type="button" className="btn-primary w-full mt-6" onClick={loginGoogle}>Google 계정으로 로그인</button>
-                    <button type="button" className="btn-secondary w-full mt-2" onClick={enterGuest}>이 기기에서만 사용</button>
-                    <p className="mt-4 text-xs text-stone-500 leading-relaxed">
-                        Google 로그인을 쓰면 여러 기기에 기록이 동기화됩니다. Firebase 콘솔에 배포 도메인(github.io)이 허용되어 있어야 합니다.
-                    </p>
-                </div>
-                <Toast message={toast?.message} actionLabel={toast?.actionLabel} onAction={toast?.onAction} />
-            </main>
-        );
-    }
-
     const importModal = importPreview ? (
         <Modal title="백업 가져오기" onClose={() => { if (!importing) setImportPreview(null); }}>
             <p className="text-sm text-stone-700 leading-relaxed">덮어쓰기는 백업에 들어 있는 항목 전체를 이 기기 기록으로 바꿉니다. 합치기는 같은 id와 같은 칸만 백업 값으로 고치고, 이 기기에만 있는 기록은 남깁니다.</p>
@@ -238,6 +206,8 @@ export default function App() {
                     author={author}
                     signedIn={signedIn}
                     onLogout={logout}
+                    onLogin={loginGoogle}
+                    authReady={authReady}
                     onExport={exportAll}
                     onImportText={reviewImport}
                     inbox={inbox.items}

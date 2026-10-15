@@ -43,8 +43,8 @@ export const DEST_LABEL = {
     469: '예산 사업',
     493: '연락처',
     494: '2027 준비',
-    495: '쓱적 · 메모',
-    496: '쓱적',
+    495: '쓱, 적 · 메모',
+    496: '쓱, 적',
     516: '공책',
     559: '칠판',
     560: '칠판',
@@ -139,8 +139,8 @@ const TYPE_LABEL = {
     'budget-item': '예산 사업',
     'budget-misc': '예산',
     'year-prep': '2027 준비',
-    'ssugeok-toc': '쓱적 · 메모',
-    ssugeok: '쓱적',
+    'ssugeok-toc': '쓱, 적 · 메모',
+    ssugeok: '쓱, 적',
     memo: '메모',
     'notebook-toc': '공책',
     'notebook-paper': '공책',
@@ -197,7 +197,7 @@ export function navLabel(to, pages, pageNo) {
     if (n && (dest.type === 'student-card' || dest.type === 'student-who' || dest.type === 'counsel' || dest.type === 'parent')) {
         return `${base} ${n}번`;
     }
-    if (dest.type === 'ssugeok' && dest.extra?.slot) return `쓱적 ${dest.extra.slot}`;
+    if (dest.type === 'ssugeok' && dest.extra?.slot) return `쓱, 적 ${dest.extra.slot}`;
     if (dest.type === 'meeting' && dest.extra?.slot) return `회의록 ${dest.extra.slot}`;
     return base;
 }
@@ -212,7 +212,7 @@ export function linkText(link, pages, pageNo) {
 
 export const LEFT_TABS = [
     { label: '홈', to: 2 },
-    { label: '쓱적', to: 496 },
+    { label: '쓱, 적', to: 496 },
     { label: '연간', to: 32 },
     { label: '주간', to: 46 },
     { label: '하루', to: 99 },

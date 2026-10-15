@@ -91,7 +91,7 @@ const MORE = [
             { label: '업무', page: VIEW_PAGES.work },
             { label: '기한', page: VIEW_PAGES.deadlines },
             { label: '예산', page: VIEW_PAGES.budget },
-            { label: '쓱적', page: VIEW_PAGES.write },
+            { label: '쓱, 적', page: VIEW_PAGES.write },
             { label: '공책', page: VIEW_PAGES.notebook },
             { label: '칠판', page: VIEW_PAGES.board },
             { label: '스티커', page: VIEW_PAGES.stickers },
