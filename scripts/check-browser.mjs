@@ -1356,6 +1356,7 @@ async function checkQaLayout(page, browserErrors) {
             top: a.top,
             position: style.position,
             pointer: style.pointerEvents,
+            inSlot: Boolean(toast.closest('.dy-toast-slot')),
         };
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
@@ -1363,7 +1364,7 @@ async function checkQaLayout(page, browserErrors) {
         if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
         if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
         if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
-        if (cover.position === 'fixed') browserErrors.push('390 토스트가 떠 있음');
+        if (cover.position !== 'absolute' || !cover.inSlot) browserErrors.push('390 토스트가 흐름에 있음');
         if (cover.pointer !== 'none') browserErrors.push('390 토스트가 클릭을 막음');
     }
     const phoneRows = await page.evaluate(() => {
@@ -1445,13 +1446,14 @@ async function checkQaLayout(page, browserErrors) {
                 height: window.innerHeight,
                 position: style.position,
                 pointer: style.pointerEvents,
+                inSlot: Boolean(el.closest('.dy-toast-slot')),
             };
         });
         if (wideCover.missing) browserErrors.push(`${width} 토스트 없음`);
         else {
             if (wideCover.input) browserErrors.push(`${width} 토스트가 입력을 가림`);
             if (wideCover.save) browserErrors.push(`${width} 토스트가 저장 버튼을 가림`);
-            if (wideCover.position === 'fixed') browserErrors.push(`${width} 토스트가 떠 있음`);
+            if (wideCover.position !== 'absolute' || !wideCover.inSlot) browserErrors.push(`${width} 토스트가 흐름에 있음`);
             if (wideCover.pointer !== 'none') browserErrors.push(`${width} 토스트가 클릭을 막음`);
         }
         const spread = await page.evaluate(() => {
@@ -1530,6 +1532,39 @@ async function checkQaLayout(page, browserErrors) {
         await page.keyboard.press('Escape');
     }
 
+    const snapStable = (target) => target.evaluate(() => {
+        const nodes = [];
+        const push = (el, name) => {
+            if (!el || !el.getClientRects().length) return;
+            const rect = el.getBoundingClientRect();
+            nodes.push({
+                name,
+                top: Math.round(rect.top * 10) / 10,
+                left: Math.round(rect.left * 10) / 10,
+            });
+        };
+        document.querySelectorAll('.dy-tab').forEach((el, index) => push(el, `탭${index}`));
+        push(document.querySelector('.dy-month-label'), '달');
+        push(document.querySelector('[data-ssu-capture]'), '입력');
+        const form = document.querySelector('[data-ssu-capture]')?.closest('form');
+        push(form?.querySelector('button[type="submit"]'), '남기기');
+        push(document.querySelector('.dy-fab'), '쓱적');
+        return nodes;
+    });
+    const layoutShift = (before, during, after) => {
+        const cmp = (a, b, tag) => {
+            if (!a || !b || !a.length || !b.length) return `${tag} 없음`;
+            if (a.length !== b.length) return `${tag} 개수 ${a.length}/${b.length}`;
+            const moved = [];
+            for (let i = 0; i < a.length; i += 1) {
+                if (Math.abs(a[i].top - b[i].top) > 1 || Math.abs(a[i].left - b[i].left) > 1) {
+                    moved.push(`${a[i].name} ${a[i].top}->${b[i].top}`);
+                }
+            }
+            return moved.length ? `${tag} ${moved.slice(0, 3).join('|')}` : '';
+        };
+        return [cmp(before, during, '동안'), cmp(before, after, '뒤')].filter(Boolean).join('; ');
+    };
     const samples = [
         '@12 #행발 발표를 또렷하게 그리고 복도 게시판까지 안내문을 길게 남긴다',
         '내일 회의 자료 인쇄와 학부모 안내문 초안과 복사실 예약을 한 메모에 모아 둔다',
@@ -1579,7 +1614,7 @@ async function checkQaLayout(page, browserErrors) {
             const collect = () => {
                 const toastEl = document.querySelector('.dy-toast');
                 const toast = painted(toastEl);
-                if (toastEl && getComputedStyle(toastEl).position === 'fixed') return ['토스트:고정'];
+                if (toastEl && (getComputedStyle(toastEl).position !== 'absolute' || !toastEl.closest('.dy-toast-slot'))) return ['토스트:흐름'];
                 const fab = painted(document.querySelector('.dy-fab'));
                 const hits = [];
                 for (const el of document.querySelectorAll('button, a, input, textarea, select, summary')) {
@@ -1664,6 +1699,7 @@ async function checkQaLayout(page, browserErrors) {
                 const btn = field?.closest('form')?.querySelector('button[type="submit"]');
                 return btn && !btn.disabled;
             }, { timeout: 2000 }, captureSel).catch(() => {});
+            const beforeLayout = count === 1 ? await snapStable(page) : null;
             await page.evaluate((sel) => document.querySelector(sel)?.closest('form')?.querySelector('button[type="submit"]')?.click(), captureSel);
             try {
                 await page.waitForSelector('[role="status"]', { timeout: 2500 });
@@ -1672,6 +1708,17 @@ async function checkQaLayout(page, browserErrors) {
             }
             await assertFit(`${width} 토스트${count}`);
             await assertClear(`${width} 토스트${count}`);
+            if (count === 1) {
+                const duringLayout = await snapStable(page);
+                try {
+                    await page.waitForFunction(() => !document.querySelector('.dy-toast'), { timeout: 5000 });
+                } catch {
+                    browserErrors.push(`${width} 토스트가 남지 않음`);
+                }
+                const afterLayout = await snapStable(page);
+                const shift = layoutShift(beforeLayout, duringLayout, afterLayout);
+                if (shift) browserErrors.push(`${width} 저장 위치 ${shift}`);
+            }
             if (count === 8) {
                 await go(page, 496);
                 await page.waitForSelector('.nb-ssu-list .dy-entry');
@@ -1834,6 +1881,30 @@ async function checkQaLayout(page, browserErrors) {
     }
     const dueTitle = await page.$eval('#dy-confirm-title', (el) => el.textContent.trim()).catch(() => '');
     if (dueTitle !== '이 기한을 지울까요?') browserErrors.push(`기한 확인 ${dueTitle}`);
+    const dueFit = await page.evaluate(() => {
+        const card = [...document.querySelectorAll('.nb-dday-card')].find((el) => el.innerText.includes('확인용 기한'));
+        const actions = [...(card?.querySelectorAll('.nb-dday-actions button') || [])].map((el) => {
+            const rect = el.getBoundingClientRect();
+            return { name: el.textContent.trim(), h: rect.height, w: rect.width };
+        });
+        const submit = document.querySelector('.nb-dday-form button[type="submit"]');
+        const bg = submit ? getComputedStyle(submit).backgroundColor : '';
+        const shown = document.querySelector('.nb-ko-date span')?.textContent || '';
+        const dateInput = document.querySelector('.nb-ko-date input');
+        const opacity = dateInput ? getComputedStyle(dateInput).opacity : '';
+        const english = /[A-Za-z]{2,}/.test(document.querySelector('.nb-dday')?.innerText || '');
+        return { actions, bg, shown, opacity, english };
+    });
+    for (const btn of dueFit.actions) {
+        if (btn.h < 44 || btn.w < 44) browserErrors.push(`1280 기한 버튼 ${btn.name} ${Math.round(btn.w)}x${Math.round(btn.h)}`);
+    }
+    if (!dueFit.actions.some((btn) => btn.name === '진행' || btn.name === '완료' || btn.name === '지우기')) {
+        browserErrors.push('1280 기한 동작 버튼 없음');
+    }
+    if (dueFit.bg !== 'rgb(154, 83, 64)') browserErrors.push(`1280 올리기 색 ${dueFit.bg}`);
+    if (!dueFit.shown || /[A-Za-z]/.test(dueFit.shown) || dueFit.shown.includes('mm')) browserErrors.push(`1280 기한 표시 ${dueFit.shown}`);
+    if (dueFit.opacity !== '0') browserErrors.push(`1280 날짜 입력 보임 ${dueFit.opacity}`);
+    if (dueFit.english) browserErrors.push('1280 기한 화면에 영문');
     const confirmPlace = await page.evaluate(() => {
         const box = document.querySelector('.dy-quick.is-confirm')?.getBoundingClientRect();
         if (!box || box.height < 8) return null;
@@ -1855,6 +1926,46 @@ async function checkQaLayout(page, browserErrors) {
     const sheetTitle = await page.$eval('#dy-confirm-title', (el) => el.textContent.trim()).catch(() => '');
     if (sheetTitle !== '이 칸을 지울까요?') browserErrors.push(`제출 확인 ${sheetTitle}`);
     await page.keyboard.press('Escape');
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await go(page, 458);
+    await page.waitForSelector('.nb-submit-grid');
+    const sheetEdges = await page.evaluate(() => {
+        const paper = document.querySelector('.dy-page')?.getBoundingClientRect();
+        const grid = document.querySelector('.nb-submit-grid')?.getBoundingClientRect();
+        if (!paper || !grid) return null;
+        return {
+            left: Math.round(paper.left),
+            right: Math.round(window.innerWidth - paper.right),
+            padL: Math.round(grid.left - paper.left),
+            padR: Math.round(paper.right - grid.right),
+            scroll: document.documentElement.scrollWidth,
+            inner: window.innerWidth,
+            english: /[A-Za-z]{2,}/.test(document.querySelector('.nb-submit')?.innerText || ''),
+        };
+    });
+    if (!sheetEdges) browserErrors.push('390 제출 여백 없음');
+    else {
+        if (Math.abs(sheetEdges.left - sheetEdges.right) > 1 || sheetEdges.left < 12) {
+            browserErrors.push(`390 제출 여백 ${sheetEdges.left}/${sheetEdges.right}`);
+        }
+        if (Math.abs(sheetEdges.padL - sheetEdges.padR) > 2) {
+            browserErrors.push(`390 제출 안쪽 여백 ${sheetEdges.padL}/${sheetEdges.padR}`);
+        }
+        if (sheetEdges.scroll > sheetEdges.inner + 1) browserErrors.push(`390 제출 가로 스크롤 ${sheetEdges.scroll}`);
+        if (sheetEdges.english) browserErrors.push('390 제출 화면에 영문');
+    }
+    await go(page, 405);
+    await page.waitForSelector('.nb-dday-actions');
+    const phoneDue = await page.evaluate(() => {
+        const card = [...document.querySelectorAll('.nb-dday-card')].find((el) => el.innerText.includes('확인용 기한'));
+        return [...(card?.querySelectorAll('.nb-dday-actions button') || [])].map((el) => {
+            const rect = el.getBoundingClientRect();
+            return { name: el.textContent.trim(), h: rect.height };
+        });
+    });
+    for (const btn of phoneDue) {
+        if (btn.h < 44) browserErrors.push(`390 기한 버튼 ${btn.name} ${Math.round(btn.h)}`);
+    }
 
     await page.evaluate(() => {
         const raw = localStorage.getItem('homenote_v2_ssugeokInbox');

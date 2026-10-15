@@ -494,18 +494,22 @@
 .dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
 .dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
 
-/* 토스트는 탭 바로 아래 한 줄입니다. 카드 위를 덮지 않고 클릭도 막지 않습니다. */
-.dy-toast {
-    position: relative; left: auto; right: auto; bottom: auto; top: auto;
-    transform: none; z-index: auto; width: auto; max-width: none; margin: 0;
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 16px; border-radius: 0; background: #3b3530; color: #fff;
-    font-size: 14px; font-weight: 700; line-height: 1.45;
-    box-shadow: none; pointer-events: none;
+/* 토스트 자리는 항상 40px입니다. 알림은 그 칸 안에만 겹쳐, 나타났다 사라져도 아래가 움직이지 않습니다. */
+.dy-toast-slot {
+    order: 1; position: relative; flex: 0 0 40px; height: 40px; align-self: stretch;
+    overflow: hidden; pointer-events: none;
 }
-.dy-toast button { pointer-events: auto; }
+.dy-toast {
+    position: absolute; inset: 0; z-index: 2; margin: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; border-radius: 0; background: #3b3530; color: #fff;
+    font-size: 14px; font-weight: 700; line-height: 40px;
+    box-shadow: none; pointer-events: none;
+    white-space: nowrap; overflow: hidden;
+}
+.dy-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dy-toast button { pointer-events: auto; flex: 0 0 auto; }
 .dy-app > .dy-top { order: 0; }
-.dy-app > .dy-toast { order: 1; flex: 0 0 auto; align-self: stretch; }
 .dy-app > .dy-stage { order: 2; }
 
 .dy-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -613,3 +617,61 @@
 .dy-app .dy-page .nb-ssu-actions .tone-lavender { background-color: var(--dy-dusk-tint); color: var(--dy-dusk); }
 .dy-quick.is-confirm { width: min(420px, 100%); }
 .dy-quick.is-confirm .dy-row { justify-content: flex-end; }
+
+/* 기한·제출: 살구·세이지·먹색. 동작 단추는 44px, 날짜는 한글로 보여 줍니다. */
+.dy-app .nb-dday,
+.dy-app .nb-submit,
+.dy-app .nb-dday-form,
+.dy-app .nb-submit-tabs,
+.dy-app .nb-submit-copy,
+.dy-app .nb-submit-grid,
+.dy-app .nb-kanban { min-width: 0; max-width: 100%; }
+.dy-app .nb-dday-form input,
+.dy-app .nb-ko-date { min-height: 44px; box-shadow: 0 0 0 1px var(--dy-line2); }
+.dy-app .nb-ko-date {
+    position: relative; display: inline-flex; align-items: center; min-width: 168px;
+    padding: 0 14px; border-radius: 999px; background: #fff; color: var(--dy-ink); font-weight: 700;
+}
+.dy-app .nb-ko-date.is-empty { color: var(--dy-mute); font-weight: 600; }
+.dy-app .nb-ko-date input {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+    opacity: 0; cursor: pointer; border-radius: 999px; box-shadow: none;
+}
+.dy-app .nb-ko-date span { pointer-events: none; font-size: 14px; white-space: nowrap; }
+.dy-app .nb-dday-form button,
+.dy-app .nb-dday-actions button,
+.dy-app .nb-dday-strip button,
+.dy-app .nb-submit-tabs button,
+.dy-app .nb-submit-copy button {
+    min-height: 44px; min-width: 44px; padding: 0 14px;
+    box-shadow: 0 0 0 1px var(--dy-line2); color: var(--dy-ink);
+}
+.dy-app .nb-dday-form button[type="submit"] {
+    background: #9a5340; color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.dy-app .nb-dday-form button[type="submit"]:hover { background: var(--dy-acc-deep); }
+.dy-app .nb-kanban section { background: var(--dy-acc-tint); }
+.dy-app .nb-kanban .is-doing { background: var(--dy-dusk-tint); }
+.dy-app .nb-kanban .is-done { background: var(--dy-sage-tint); }
+.dy-app .nb-kanban h3 { color: var(--dy-ink); }
+.dy-app .nb-dday-no { color: var(--dy-acc-ink); }
+.dy-app .nb-dday-mark { background: var(--dy-acc-tint); color: var(--dy-acc-ink); }
+.dy-app .nb-dday-badge.is-day,
+.dy-app .nb-dday-mark.is-day { background: var(--dy-red); color: #fff; }
+.dy-app .nb-dday-badge.is-soon,
+.dy-app .nb-dday-mark.is-soon { background: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
+.dy-app .nb-submit-tabs button.is-on,
+.dy-app .nb-submit-grid button.is-on { background: var(--dy-sage); color: #fff; box-shadow: none; }
+.dy-app .nb-submit-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.dy-app .nb-submit-grid button { min-width: 0; box-shadow: 0 0 0 1px #c9ddd2; }
+.dy-app .nb-submit-copy p { min-width: 0; flex: 1 1 160px; }
+@media (max-width: 800px) {
+    .dy-app .nb-submit-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+    .dy-app .dy-page.nb-page {
+        margin-left: 16px; margin-right: 16px;
+        width: calc(100% - 32px) !important;
+        max-width: calc(100% - 32px);
+    }
+}

@@ -141,7 +141,7 @@ export function DeadlinePage({ extra, fields, setField, ddayCards, signedIn, onC
     if (Number(extra.slot) === 1) {
         return (
             <div className="nb-fill">
-                <TitleBar title="기한 있는 일" hint="공문번호와 기한을 올리면 D-3, D-day가 붙고 달력에도 보여요" />
+                <TitleBar title="기한 있는 일" hint="공문번호와 기한을 올리면 사흘 안과 당일이 붙고 달력에도 보여요" />
                 <DdayBoard cards={ddayCards} signedIn={signedIn} onChanged={onChanged} onToast={onToast} onGo={onGo} />
                 {hasLines && (
                     <details className="nb-legacy">

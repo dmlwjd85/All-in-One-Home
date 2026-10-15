@@ -9,10 +9,10 @@ export function daysUntil(ymd, now = new Date()) {
 
 export function ddayBadge(diff) {
     if (diff === null || Number.isNaN(diff)) return null;
-    if (diff === 0) return { kind: 'day', text: 'D-day' };
-    if (diff > 0 && diff <= 3) return { kind: 'soon', text: `D-${diff}` };
-    if (diff < 0) return { kind: 'late', text: `D+${-diff}` };
-    return { kind: 'later', text: `D-${diff}` };
+    if (diff === 0) return { kind: 'day', text: '당일' };
+    if (diff > 0 && diff <= 3) return { kind: 'soon', text: `${diff}일 남음` };
+    if (diff < 0) return { kind: 'late', text: `${-diff}일 지남` };
+    return { kind: 'later', text: `${diff}일 남음` };
 }
 
 export function calendarMarks(ymd, items) {

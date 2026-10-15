@@ -36,6 +36,22 @@ export function allDeadlines(cards) {
     return [...(cards || []), ...lineDeadlines()];
 }
 
+function formatKoDate(value) {
+    const [year, month, day] = String(value || '').split('-');
+    if (!year || !month || !day) return '';
+    return `${year}년 ${Number(month)}월 ${Number(day)}일`;
+}
+
+function KoDateField({ value, onChange }) {
+    const shown = formatKoDate(value);
+    return (
+        <label className={`nb-ko-date${shown ? '' : ' is-empty'}`}>
+            <input type="date" lang="ko" value={value} onChange={(e) => onChange(e.target.value)} aria-label="기한" />
+            <span aria-hidden="true">{shown || '연도. 월. 일'}</span>
+        </label>
+    );
+}
+
 function Badge({ deadline, status }) {
     if (status === 'done') return null;
     const badge = ddayBadge(daysUntil(deadline));
@@ -137,7 +153,7 @@ export default function DdayBoard({ cards, signedIn, onChanged, onToast, onGo })
             <form className="nb-dday-form" onSubmit={add}>
                 <input value={docNo} onChange={(e) => setDocNo(e.target.value)} placeholder="공문번호" aria-label="공문번호" />
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목" aria-label="제목" />
-                <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} aria-label="기한" />
+                <KoDateField value={deadline} onChange={setDeadline} />
                 <button type="submit">올리기</button>
                 <button type="button" onClick={() => onGo?.(411)}>업무 할 일</button>
             </form>

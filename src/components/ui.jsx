@@ -89,7 +89,7 @@ export function Field({ label, children, hint }) {
 export function Toast({ message, actionLabel, onAction }) {
     const [host, setHost] = useState(null);
     useLayoutEffect(() => {
-        setHost(document.querySelector('.dy-app'));
+        setHost(document.querySelector('.dy-toast-slot'));
     }, [message]);
     if (!message || !host) return null;
     const node = (
