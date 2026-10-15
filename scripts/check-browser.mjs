@@ -123,7 +123,16 @@ async function inspect(page) {
         const overflow = document.documentElement.scrollWidth > window.innerWidth + 2;
         const paper = rootEl?.getBoundingClientRect();
         const missed = [];
-        const links = [...document.querySelectorAll('.nb-body [data-to]')];
+        const shownLink = (el) => {
+            let node = el;
+            while (node && node !== document.body) {
+                const st = getComputedStyle(node);
+                if (st.display === 'none' || st.visibility === 'hidden') return false;
+                node = node.parentElement;
+            }
+            return true;
+        };
+        const links = [...document.querySelectorAll('.nb-body [data-to]')].filter(shownLink);
         for (const el of links) {
             const details = el.closest('details');
             if (details && !details.open) continue;
@@ -231,7 +240,18 @@ async function settleChrome(page) {
     }));
 }
 
+async function quietMotion(page) {
+    await page.evaluate(() => {
+        if (document.getElementById('nb-check-no-motion')) return;
+        const style = document.createElement('style');
+        style.id = 'nb-check-no-motion';
+        style.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } .dy-tabs { scroll-snap-type: none !important; }';
+        document.head.appendChild(style);
+    });
+}
+
 export async function geometryHits(page) {
+    await quietMotion(page);
     await page.evaluate(async () => {
         if (document.fonts?.ready) await document.fonts.ready;
     });
@@ -241,12 +261,6 @@ export async function geometryHits(page) {
         });
         const hits = [];
         const slop = 2;
-        if (!document.getElementById('nb-check-no-motion')) {
-            const style = document.createElement('style');
-            style.id = 'nb-check-no-motion';
-            style.textContent = '*, *::before, *::after { transition: none !important; animation: none !important; }';
-            document.head.appendChild(style);
-        }
         const inChrome = (el) => Boolean(el?.closest?.('.dy-fab, .dy-top, .dy-scrim, .dy-quick'));
         const visibleBox = (el) => {
             if (!el) return null;
@@ -893,6 +907,7 @@ export async function runBrowserQuality() {
         await page.evaluateOnNewDocument(() => localStorage.setItem('homenote_guest', '1'));
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.goto(base, { waitUntil: 'networkidle0', timeout: 60000 });
+        await quietMotion(page);
         await page.waitForSelector('[data-page="1"]', { timeout: 20000 });
         await page.waitForFunction(() => navigator.serviceWorker?.controller, { timeout: 20000 });
         await page.setOfflineMode(true);
@@ -917,11 +932,33 @@ export async function runBrowserQuality() {
             const phoneHits = await geometryHits(page);
             await clearClipSamples(page, n);
             if (phoneHits.length) browserErrors.push(`390 p${n} ${phoneHits.slice(0, 4).join(', ')}`);
-            const first = await page.$('.nb-body [data-to]');
+            const firstHandle = await page.evaluateHandle(() => {
+                const shown = (el) => {
+                    let node = el;
+                    while (node && node !== document.body) {
+                        const st = getComputedStyle(node);
+                        if (st.display === 'none' || st.visibility === 'hidden') return false;
+                        node = node.parentElement;
+                    }
+                    const rect = el.getBoundingClientRect();
+                    return rect.width >= 8 && rect.height >= 8;
+                };
+                return [...document.querySelectorAll('.nb-body [data-to]')].find(shown) || null;
+            });
+            const first = firstHandle.asElement();
             if (first) {
                 const dest = Number(await page.evaluate((el) => el.getAttribute('data-to'), first));
                 if (dest && dest !== n && dest >= 1 && dest <= 580) {
-                    await first.click({ offset: { x: 10, y: 10 } });
+                    await first.evaluate((el) => {
+                        const rect = el.getBoundingClientRect();
+                        const x = rect.left + Math.min(10, rect.width / 2);
+                        const y = rect.top + Math.min(10, rect.height / 2);
+                        const inView = x >= 1 && y >= 1 && x < window.innerWidth - 1 && y < window.innerHeight - 1;
+                        if (!inView) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+                    });
+                    const box = await first.boundingBox();
+                    const offset = box && box.width > 24 && box.height > 24 ? { x: 10, y: 10 } : undefined;
+                    await first.click(offset ? { offset } : undefined);
                     await waitForDest(page, dest);
                 }
             }
@@ -962,12 +999,21 @@ export async function runBrowserQuality() {
         const budgetCount = budget.linkCount;
         for (let i = 0; i < budgetCount; i += 1) {
             const dest = await page.evaluate((index) => {
-                const el = document.querySelectorAll('.nb-body [data-to]')[index];
+                const shown = (el) => {
+                    let node = el;
+                    while (node && node !== document.body) {
+                        const st = getComputedStyle(node);
+                        if (st.display === 'none' || st.visibility === 'hidden') return false;
+                        node = node.parentElement;
+                    }
+                    return true;
+                };
+                const el = [...document.querySelectorAll('.nb-body [data-to]')].filter(shown)[index];
                 el.scrollIntoView({ block: 'center', inline: 'nearest' });
+                el.setAttribute('data-nb-probe', '1');
                 return Number(el.getAttribute('data-to'));
             }, i);
-            const links = await page.$$('.nb-body [data-to]');
-            await links[i].click();
+            await page.click('[data-nb-probe="1"]');
             await page.waitForFunction((num) => document.querySelector(`[data-page="${num}"]`), { timeout: 8000 }, dest);
             await go(page, 468);
         }
@@ -1141,7 +1187,7 @@ export async function runBrowserQuality() {
 
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
         await page.waitForFunction(() => document.querySelector('.nb-app')?.classList.contains('is-phone'));
-        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생 카드', '#/cards', 159], ['예산', '#/budget', 468]]) {
+        for (const [label, hash, num] of [['시간표', '#/timetable', 141], ['학생 카드', '#/cards/1', 159], ['예산', '#/budget', 468]]) {
             const item = await clickMoreItem(page, label);
             if (!item) browserErrors.push(`더보기에 ${label}이 없음`);
             else {

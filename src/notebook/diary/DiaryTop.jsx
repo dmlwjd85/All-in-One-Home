@@ -67,6 +67,7 @@ export default function DiaryTop({ page, pages, onGo, onSearch, onSettings, sign
     const [moreOpen, setMoreOpen] = useState(false);
     const navRef = useRef(null);
     const moreRef = useRef(null);
+    const popRef = useRef(null);
 
     useLayoutEffect(() => {
         const nav = navRef.current;
@@ -93,7 +94,10 @@ export default function DiaryTop({ page, pages, onGo, onSearch, onSettings, sign
     useEffect(() => { setMoreOpen(false); }, [page]);
     useEffect(() => {
         if (!moreOpen) return undefined;
-        const close = (e) => { if (!moreRef.current?.contains(e.target)) setMoreOpen(false); };
+        const close = (e) => {
+            if (moreRef.current?.contains(e.target) || popRef.current?.contains(e.target)) return;
+            setMoreOpen(false);
+        };
         document.addEventListener('pointerdown', close);
         return () => document.removeEventListener('pointerdown', close);
     }, [moreOpen]);
@@ -157,7 +161,7 @@ export default function DiaryTop({ page, pages, onGo, onSearch, onSettings, sign
                     </div>
                 </nav>
                 {moreOpen && (
-                    <div className="dy-more-pop" role="menu">
+                    <div className="dy-more-pop" role="menu" ref={popRef}>
                         {MORE.map((item) => (
                             <button key={item.label} type="button" role="menuitem" onClick={() => onGo(item.page)}>{item.label}</button>
                         ))}
