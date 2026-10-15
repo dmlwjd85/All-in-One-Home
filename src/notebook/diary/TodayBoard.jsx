@@ -202,7 +202,7 @@ export default function TodayBoard({
                 </div>
                 <section className="dy-card">
                     <div className="dy-sec-head">
-                        <h2 className="dy-h">{sp.m}월 {sp.d}일 {DOW[wd]}요일{selected === now ? ' · 오늘' : ''}</h2>
+                        <h2 className="dy-h dy-day-title">{sp.m}월 {sp.d}일 {DOW[wd]}요일{selected === now ? <span className="dy-today-mark"> · 오늘</span> : null}</h2>
                         <button type="button" className="dy-link" onClick={() => openDay(selected)}>주간 쪽 <ArrowRight size={14} /></button>
                     </div>
                     {holidayName(selected) && <p className="dy-hol">{holidayName(selected)}</p>}

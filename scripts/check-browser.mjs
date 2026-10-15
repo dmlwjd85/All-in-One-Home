@@ -1246,8 +1246,23 @@ async function checkQaLayout(page, browserErrors) {
     if (row.count < 4 || row.withErase !== row.count) browserErrors.push(`1440 버튼이 한 줄이 아님 ${row.count}/${row.withErase}`);
     if (!(row.minH >= 44)) browserErrors.push(`1440 버튼 높이 ${Math.round(row.minH || 0)}`);
 
-    await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 1 });
+    const assertDayTitle = async (width) => {
+        const title = await page.evaluate(() => {
+            const el = document.querySelector('.dy-m .dy-day-title');
+            if (!el) return { missing: true };
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const rects = [...range.getClientRects()].filter((rect) => rect.width > 0.5 && rect.height > 0.5);
+            const tops = rects.map((rect) => rect.top);
+            const span = tops.length ? Math.max(...tops) - Math.min(...tops) : 0;
+            return { missing: false, text: el.innerText.replace(/\s+/g, ' ').trim(), span };
+        });
+        if (title.missing) browserErrors.push(`${width} 날짜 제목 없음`);
+        else if (title.span > 4) browserErrors.push(`${width} 날짜 제목 줄 ${title.text}`);
+    };
+    await page.setViewport({ width: 360, height: 800, deviceScaleFactor: 1 });
     await go(page, 2);
+    await assertDayTitle(360);
     const titleBreaks = await page.evaluate(() => {
         const bad = [];
         const walk = (el, label) => {
@@ -1282,6 +1297,7 @@ async function checkQaLayout(page, browserErrors) {
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await go(page, 2);
+    await assertDayTitle(390);
     await page.waitForSelector('.dy-m [data-ssu-capture]');
     const fill = async (text) => {
         await page.$eval('.dy-m [data-ssu-capture]', (el, value) => {
@@ -1361,6 +1377,8 @@ async function checkQaLayout(page, browserErrors) {
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
     else {
+        if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
+        if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
         if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
         if (cover.position !== 'fixed' || cover.slot) browserErrors.push('390 토스트가 흐름에 있음');
         if (cover.pointer !== 'none') browserErrors.push('390 토스트가 클릭을 막음');
@@ -1708,6 +1726,18 @@ async function checkQaLayout(page, browserErrors) {
             const box = toast.getBoundingClientRect();
             const style = getComputedStyle(toast);
             const line = parseFloat(getComputedStyle(span).lineHeight) || 22;
+            const overlaps = (a, b) => !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
+            const covered = [];
+            for (const el of document.querySelectorAll('button, a, input, textarea, select')) {
+                if (el.closest('.dy-toast')) continue;
+                const shown = getComputedStyle(el);
+                if (shown.display === 'none' || shown.visibility === 'hidden' || Number(shown.opacity) === 0) continue;
+                const rect = el.getBoundingClientRect();
+                if (rect.width < 8 || rect.height < 8) continue;
+                if (!overlaps(box, rect)) continue;
+                covered.push((el.getAttribute('aria-label') || el.innerText || el.tagName).replace(/\s+/g, ' ').trim().slice(0, 16));
+            }
+            const sameBand = fab ? box.bottom > fab.top + 1 && box.top < fab.bottom - 1 : false;
             return {
                 missing: false,
                 text: span.textContent || '',
@@ -1717,10 +1747,11 @@ async function checkQaLayout(page, browserErrors) {
                 ch: span.clientHeight,
                 lines: Math.round(span.getBoundingClientRect().height / line),
                 left: Math.round(box.left),
-                right: Math.round(window.innerWidth - box.right),
+                beforeFab: fab ? Math.round(fab.left - box.right) : null,
                 position: style.position,
                 pointer: style.pointerEvents,
-                aboveFab: fab ? box.bottom <= fab.top + 1 : true,
+                sameBand,
+                covered: covered.slice(0, 6),
             };
         });
         if (fit.missing) {
@@ -1730,8 +1761,9 @@ async function checkQaLayout(page, browserErrors) {
         if (fit.sw > fit.cw + 1 || fit.sh > fit.ch + 1) browserErrors.push(`${label} 잘림 ${fit.sw}/${fit.cw} ${fit.text.slice(0, 18)}`);
         if (fit.lines > 2) browserErrors.push(`${label} ${fit.lines}줄`);
         if (fit.position !== 'fixed' || fit.pointer !== 'none') browserErrors.push(`${label} 흐름`);
-        if (Math.abs(fit.left - 16) > 2 || Math.abs(fit.right - 16) > 2) browserErrors.push(`${label} 여백 ${fit.left}/${fit.right}`);
-        if (!fit.aboveFab) browserErrors.push(`${label}가 쓱, 적 버튼을 가림`);
+        if (Math.abs(fit.left - 16) > 2 || fit.beforeFab === null || Math.abs(fit.beforeFab - 12) > 2) browserErrors.push(`${label} 여백 ${fit.left}/${fit.beforeFab}`);
+        if (!fit.sameBand) browserErrors.push(`${label}가 쓱, 적 높이에 없음`);
+        if (fit.covered.length) browserErrors.push(`${label} 겹침 ${fit.covered.join('|')}`);
     };
     const assertStageReach = async (label) => {
         const reach = await page.evaluate(() => {
@@ -1772,7 +1804,7 @@ async function checkQaLayout(page, browserErrors) {
     };
     for (const width of [360, 390, 1024, 1280, 1440]) {
         const phone = width <= 700;
-        await page.setViewport({ width, height: phone ? 844 : 900, deviceScaleFactor: 1 });
+        await page.setViewport({ width, height: width <= 600 ? 800 : (phone ? 844 : 900), deviceScaleFactor: 1 });
         for (const count of [1, 3, 8]) {
             const notes = Array.from({ length: count }, (_, i) => ({
                 id: `local-qa-${width}-${count}-${i}`,

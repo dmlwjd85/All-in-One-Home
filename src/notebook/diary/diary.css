@@ -309,6 +309,10 @@
 
 .dy-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .dy-sec-head .dy-h { margin: 0; font-size: 22px; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: normal; }
+@media (max-width: 360px) {
+    .dy-m .dy-today-mark { display: none; }
+    .dy-m .dy-day-title { font-size: 18px; }
+}
 .dy-app .dy-h, .dy-app .dy-title, .dy-app .dy-h3 { word-break: keep-all; overflow-wrap: normal; }
 .dy-h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--dy-ink); }
 .dy-gap { margin-top: 8px; }
@@ -495,7 +499,7 @@
 .dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
 .dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
 
-/* 토스트는 머리 오른쪽 빈칸에 고정됩니다. 자리를 밀지 않고 단추도 덮지 않습니다. */
+/* 넓은 화면 토스트는 머리 오른쪽 빈칸에 둡니다. 좁은 화면은 쓱, 적 단추 왼쪽 같은 높이에 둡니다. */
 .dy-toast {
     position: fixed; z-index: 40; margin: 0; box-sizing: border-box; min-width: 0;
     display: flex; align-items: center; justify-content: flex-end; gap: 8px;
@@ -509,7 +513,7 @@
 .dy-toast.is-bar {
     width: auto; height: auto; max-width: none;
     white-space: normal; overflow: visible; justify-content: flex-start; align-items: center;
-    line-height: 22px; padding: 10px 16px; text-align: left;
+    line-height: 22px; padding: 8px 12px; text-align: left;
 }
 .dy-toast.is-bar span {
     flex: 1 1 auto; white-space: normal; overflow: visible; text-overflow: clip; line-height: 22px;

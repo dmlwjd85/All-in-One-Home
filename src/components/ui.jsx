@@ -93,14 +93,45 @@ function placeToast(el) {
     if (narrow) {
         const fab = document.querySelector('.dy-fab');
         const fabBox = fab?.getBoundingClientRect();
+        const fabLeft = fabBox && fabBox.width >= 8 ? fabBox.left : window.innerWidth - 84;
         const fabTop = fabBox && fabBox.height >= 8 ? fabBox.top : window.innerHeight - 80;
-        el.style.top = 'auto';
+        const fabBottom = fabBox && fabBox.height >= 8 ? fabBox.bottom : window.innerHeight - 16;
+        const rightEdge = fabLeft - 12;
         el.style.left = '16px';
-        el.style.right = '16px';
-        el.style.bottom = `${Math.max(16, Math.round(window.innerHeight - fabTop + 8))}px`;
+        el.style.right = `${Math.max(16, Math.round(window.innerWidth - rightEdge))}px`;
         el.style.width = 'auto';
         el.style.height = 'auto';
         el.style.maxWidth = 'none';
+        el.style.bottom = 'auto';
+        el.style.top = `${Math.round(fabTop)}px`;
+        const toastHeight = el.getBoundingClientRect().height || 38;
+        const blockers = [];
+        for (const node of document.querySelectorAll('button, a, input, textarea, select')) {
+            if (node.closest('.dy-toast') || node.classList.contains('dy-fab')) continue;
+            const shown = getComputedStyle(node);
+            if (shown.display === 'none' || shown.visibility === 'hidden' || Number(shown.opacity) === 0) continue;
+            const rect = node.getBoundingClientRect();
+            if (rect.width < 8 || rect.height < 8) continue;
+            if (rect.right <= 17 || rect.left >= rightEdge - 1) continue;
+            blockers.push(rect);
+        }
+        const clearAt = (top) => !blockers.some((rect) => !(top + toastHeight <= rect.top + 1 || top >= rect.bottom - 1));
+        const onBand = (top) => top + toastHeight > fabTop + 1 && top < fabBottom - 1;
+        const lowest = window.innerHeight - toastHeight - 4;
+        let chosen = null;
+        for (let top = lowest; top >= 8; top -= 1) {
+            if (!onBand(top) || !clearAt(top)) continue;
+            chosen = top;
+            break;
+        }
+        if (chosen == null) {
+            for (let top = lowest; top >= 8; top -= 2) {
+                if (!clearAt(top)) continue;
+                chosen = top;
+                break;
+            }
+        }
+        el.style.top = `${Math.round(chosen == null ? Math.max(8, fabBottom - toastHeight) : chosen)}px`;
         return;
     }
     el.style.bottom = 'auto';
@@ -137,7 +168,7 @@ export function Toast({ message, actionLabel, onAction }) {
             frame = requestAnimationFrame(() => placeToast(el));
         };
         place();
-        const watched = [document.querySelector('.dy-status-gap'), document.querySelector('.dy-bar')].filter(Boolean);
+        const watched = [document.querySelector('.dy-status-gap'), document.querySelector('.dy-bar'), document.querySelector('.dy-fab')].filter(Boolean);
         const observer = new ResizeObserver(place);
         watched.forEach((node) => observer.observe(node));
         window.addEventListener('resize', place);
