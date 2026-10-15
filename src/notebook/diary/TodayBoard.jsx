@@ -3,6 +3,7 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { VIEW_PAGES } from '../routes.js';
 import { sortNote, archiveNotes } from '../ssugeokStore.js';
 import CaptureBox from './CaptureBox.jsx';
+import NoteEdit from './NoteEdit.jsx';
 import {
     DOW, dow, holidayName, monthGrid, monthPageFor, noteDay, parts, shiftYm, today, weekOf, weekPageFor,
 } from './dates.js';
@@ -87,7 +88,8 @@ function DayCard({ ymd, items, onOpen, compact }) {
                 {isToday && <span className="dy-pill">오늘</span>}
                 {hol && <span className="dy-day-hol">{hol}</span>}
             </span>
-            <span className="dy-day-items">
+            <span className={`dy-day-items ${items.length === 0 ? 'is-blank' : ''}`}>
+                {items.length === 0 && <span className="dy-day-sheet" aria-hidden="true" />}
                 {items.length === 0 && !compact && <span className="dy-day-empty">비어 있어요</span>}
                 {items.slice(0, compact ? 3 : 4).map((n) => (
                     <span key={n.id} className="dy-day-item">{n.text}</span>
@@ -115,19 +117,35 @@ function Inbox({ notes, signedIn, onChanged, onToast, onGo, big }) {
         onChanged?.();
         onToast?.('보관했어요.');
     };
-    if (!list.length) return <p className="dy-muted">나눌 메모가 없어요. 적기만 하면 돼요.</p>;
+    if (!list.length) {
+        return (
+            <div className="dy-empty">
+                <p className="dy-muted">나눌 메모가 없어요. 적기만 하면 돼요.</p>
+                <p className="dy-example">예: @12 #행발 발표를 또렷하게</p>
+                <p className="dy-example">예: 내일 회의 자료 인쇄</p>
+            </div>
+        );
+    }
     return (
         <ul className={`dy-inbox ${big ? 'is-big' : ''}`}>
             {list.map((note) => (
                 <li key={note.id}>
-                    <p className="dy-inbox-text">{note.text}</p>
-                    <div className="dy-inbox-acts">
-                        <button type="button" className="dy-btn-soft" onClick={() => sortOne(note)}>
-                            {note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}
-                            <ArrowRight size={16} aria-hidden="true" />
-                        </button>
-                        <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
-                    </div>
+                    <NoteEdit
+                        note={note}
+                        variant="inbox"
+                        signedIn={signedIn}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                        extra={(
+                            <>
+                                <button type="button" className="dy-btn-soft" onClick={() => sortOne(note)}>
+                                    {note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}
+                                    <ArrowRight size={16} aria-hidden="true" />
+                                </button>
+                                <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
+                            </>
+                        )}
+                    />
                 </li>
             ))}
         </ul>
@@ -155,7 +173,7 @@ export default function TodayBoard({
         const wd = dow(selected);
         return (
             <div className="dy-m">
-                <CaptureBox big {...capProps} placeholder={'지금 떠오른 것을 그냥 적어요.\n@12 #행발 발표를 또렷하게'} />
+                <CaptureBox big {...capProps} />
                 <div className="dy-strip" role="tablist" aria-label="이번 주">
                     {days.map((ymd) => {
                         const p = parts(ymd);
@@ -183,8 +201,19 @@ export default function TodayBoard({
                     </div>
                     {holidayName(selected) && <p className="dy-hol">{holidayName(selected)}</p>}
                     {items.length ? (
-                        <ul className="dy-list">{items.map((n) => <li key={n.id}>{n.text}</li>)}</ul>
-                    ) : <p className="dy-muted">이날 적은 것이 없어요.</p>}
+                        <ul className="dy-list">
+                            {items.map((n) => (
+                                <li key={n.id}>
+                                    <NoteEdit note={n} signedIn={signedIn} onChanged={onChanged} onToast={onToast} />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="dy-empty">
+                            <p className="dy-muted">이날 적은 것이 없어요.</p>
+                            <p className="dy-example">위에서 쓱, 적어 두거나 주간 쪽에서 교시를 적어요.</p>
+                        </div>
+                    )}
                 </section>
                 <section className="dy-card">
                     <div className="dy-sec-head">
@@ -209,6 +238,7 @@ export default function TodayBoard({
                 <label className="dy-card dy-goal">
                     <span className="dy-label">올해 우리 반 한 줄 목표</span>
                     <input value={fields?.goal || ''} onChange={(e) => setField('goal', e.target.value)} placeholder="한 줄로 적어 두세요" />
+                    <span className="dy-example">학기 동안 이 칸에 한 줄만 남겨 두세요.</span>
                 </label>
             </aside>
             <section className="dy-col-center" aria-label="이번 주">

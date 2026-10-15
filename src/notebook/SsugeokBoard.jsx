@@ -10,6 +10,7 @@ import {
 import { archiveNotes, sortNote } from './ssugeokStore.js';
 import { TONE_MARK } from './tones.js';
 import CaptureBox from './diary/CaptureBox.jsx';
+import NoteEdit from './diary/NoteEdit.jsx';
 
 const FILTERS = [
     ['inbox', '미분류'],
@@ -222,9 +223,13 @@ export default function SsugeokBoard({
                                     {note.detectedDate ? <span>{note.detectedDate}</span> : null}
                                     {note.sensitive ? <em>이 기기만</em> : null}
                                 </p>
-                                <p className="nb-ssu-text">{note.text}</p>
-                                {note.status !== 'archived' && (
-                                    <div className="nb-ssu-actions">
+                                <NoteEdit
+                                    note={note}
+                                    signedIn={signedIn}
+                                    onChanged={onChanged}
+                                    onToast={onToast}
+                                    extra={note.status !== 'archived' ? (
+                                        <div className="nb-ssu-actions">
                                         <select
                                             value={draft.destId || ''}
                                             onChange={(e) => setDraft(note.id, { destId: e.target.value })}
@@ -251,8 +256,9 @@ export default function SsugeokBoard({
                                             <button type="button" onClick={() => onGo?.(note.placement.page)}>쪽 열기</button>
                                         )}
                                         <button type="button" onClick={() => archiveSome([note])}>보관</button>
-                                    </div>
-                                )}
+                                        </div>
+                                    ) : null}
+                                />
                                 {note.status === 'archived' && note.placement?.page && (
                                     <button type="button" onClick={() => onGo?.(note.placement.page)}>나눠 둔 쪽</button>
                                 )}

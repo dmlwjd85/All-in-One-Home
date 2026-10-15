@@ -1,19 +1,28 @@
-/* 교무수첩 v3 · 크림 바탕, 흰 카드, 살구색 하나. 제목 고운바탕, 본문 Pretendard. 14px 아래 글자 없음. */
+/* 교무수첩 · 따뜻한 중립 사다리 + 살구 한 점. 8px 간격, 헤어라인 하나, 옅은 결.
+   제목 고운바탕, 본문 Pretendard. 14px 아래 글자 없음. */
 :root {
     --dy-bg: #fbf7f2;
+    --dy-canvas: #f3ece4;
+    --dy-sunken: #f6f0e8;
     --dy-card: #ffffff;
     --dy-ink: #3b3530;
     --dy-soft: #6b6159;
     --dy-mute: #8f847b;
     --dy-line: #efe7de;
     --dy-line2: #eadfd3;
+    --dy-hair: #e6dcd2;
     --dy-acc: #e58c6f;
     --dy-acc-ink: #b85d40;
     --dy-acc-tint: #fbefe8;
     --dy-acc-tint2: #fde8df;
     --dy-red: #c75a4a;
-    --dy-shadow: 0 1px 2px rgba(59, 53, 48, 0.04), 0 10px 30px rgba(138, 106, 80, 0.08);
-    --dy-shadow-hi: 0 2px 4px rgba(59, 53, 48, 0.05), 0 18px 40px rgba(138, 106, 80, 0.14);
+    --dy-s1: 4px;
+    --dy-s2: 8px;
+    --dy-s3: 16px;
+    --dy-s4: 24px;
+    --dy-s5: 40px;
+    --dy-shadow: 0 1px 1px rgba(59, 53, 48, 0.04), 0 8px 24px rgba(120, 86, 62, 0.07);
+    --dy-shadow-hi: 0 1px 2px rgba(59, 53, 48, 0.05), 0 16px 36px rgba(120, 86, 62, 0.12);
     --dy-head: 'Gowun Batang', serif;
     --dy-body: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
     --dy-r: 20px;
@@ -21,7 +30,11 @@
 }
 
 .dy-app.nb-app {
-    background: var(--dy-bg);
+    background-color: var(--dy-canvas);
+    background-image:
+        radial-gradient(980px 420px at -8% -18%, rgba(229, 140, 111, 0.18), transparent 58%),
+        radial-gradient(720px 320px at 108% -12%, rgba(229, 140, 111, 0.08), transparent 52%),
+        repeating-linear-gradient(0deg, rgba(90, 62, 44, 0.018) 0 1px, transparent 1px 4px);
     color: var(--dy-ink);
     font-family: var(--dy-body);
     font-size: 16px;
@@ -38,7 +51,7 @@
     background: rgba(251, 247, 242, 0.86);
     backdrop-filter: saturate(1.4) blur(14px);
     -webkit-backdrop-filter: saturate(1.4) blur(14px);
-    border-bottom: 1px solid var(--dy-line);
+    border-bottom: 1px solid var(--dy-hair);
     flex-shrink: 0;
 }
 .dy-bar {
@@ -96,7 +109,7 @@
 }
 .dy-tab:hover { color: var(--dy-ink); }
 .dy-tab::after {
-    content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 2.5px; border-radius: 2px;
+    content: ''; position: absolute; left: 14px; right: 14px; bottom: 8px; height: 2px; border-radius: 2px;
     background: var(--dy-acc); transform: scaleX(0); transition: transform 0.28s var(--dy-ease);
 }
 .dy-tab.is-on { color: var(--dy-ink); font-weight: 700; }
@@ -113,7 +126,7 @@
 
 .dy-chips {
     display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-    padding: 10px 28px 12px; max-width: 1480px; margin: 0 auto; border-top: 1px solid var(--dy-line);
+    padding: 10px 28px 12px; max-width: 1480px; margin: 0 auto;
 }
 .dy-chips::-webkit-scrollbar { display: none; }
 .dy-chip {
@@ -167,25 +180,31 @@
     background: #fdfbf8; border: 1.5px dashed var(--dy-line2); border-radius: 18px; padding: 16px;
     transition: border-color 0.2s, background 0.2s, box-shadow 0.25s var(--dy-ease);
 }
-.dy-cap:focus-within { border-style: solid; border-color: var(--dy-acc); background: #fff; box-shadow: 0 0 0 5px var(--dy-acc-tint); }
+.dy-cap:focus-within { border-style: solid; border-color: var(--dy-acc); background: #fff; box-shadow: none; }
 .dy-cap textarea {
-    width: 100%; border: 0; outline: none !important; resize: none; background: transparent;
+    width: 100%; border: 0; outline: none !important; resize: none; background-color: transparent;
     font: 400 17px/1.7 var(--dy-body); color: var(--dy-ink);
-    /* 줄 공책 느낌: 아주 옅은 가로줄 */
-    background-image: linear-gradient(transparent calc(1.7em - 1px), rgba(234, 223, 211, 0.55) 1px);
-    background-size: 100% 1.7em; background-attachment: local;
+    padding: 0 2px 4px;
+    background-image: linear-gradient(transparent calc(1.7em - 1px), rgba(196, 176, 158, 0.45) 1px);
+    background-size: calc(100% - 4px) 1.7em;
+    background-position: 2px 0;
+    background-repeat: repeat-y;
+    background-attachment: local;
 }
-.dy-cap textarea::placeholder { color: #c9bdb2; }
+.dy-cap textarea::placeholder { color: var(--dy-soft); }
 .dy-cap.is-big textarea { font-size: 19px; min-height: 200px; }
 .dy-cap-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dy-cap-hint { font-size: 14px; color: var(--dy-mute); }
 
 /* ── 오늘 보드 (B) ─────────────────── */
 .dy-board {
-    display: grid; grid-template-columns: 300px minmax(0, 1fr) 360px; gap: 24px;
-    max-width: 1480px; margin: 0 auto; padding: 24px 28px 48px; align-items: start;
+    display: grid; grid-template-columns: 300px minmax(0, 1fr) 360px; gap: var(--dy-s4);
+    max-width: 1480px; margin: 0 auto; padding: var(--dy-s4) 28px var(--dy-s5); align-items: start;
 }
-.dy-card { background: var(--dy-card); border-radius: var(--dy-r); box-shadow: var(--dy-shadow); padding: 20px; }
+.dy-card {
+    background: var(--dy-card); border-radius: var(--dy-r); padding: var(--dy-s4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--dy-shadow);
+}
 .dy-col-left { display: grid; gap: 16px; position: sticky; top: 16px; }
 .dy-col-right { position: sticky; top: 16px; display: grid; gap: 12px; align-content: start; }
 .dy-mini-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -231,8 +250,12 @@
 .dy-day:hover { transform: translateY(-3px); box-shadow: var(--dy-shadow-hi); }
 .dy-day.is-past { background: #fefdfb; }
 .dy-day.is-past .dy-day-num { color: var(--dy-mute); }
-.dy-day.is-today { border-color: var(--dy-acc); box-shadow: 0 0 0 4px var(--dy-acc-tint), var(--dy-shadow-hi); }
-.dy-day.is-today::before { content: ''; position: absolute; left: 16px; right: 16px; top: 0; height: 3px; border-radius: 0 0 3px 3px; background: var(--dy-acc); }
+.dy-day.is-today {
+    border-color: transparent;
+    background: linear-gradient(180deg, var(--dy-acc-tint) 0, #fff 46px);
+    box-shadow: inset 0 3px 0 var(--dy-acc), var(--dy-shadow-hi);
+}
+.dy-day.is-today::before { content: none; }
 .dy-day-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .dy-day-num { font-family: var(--dy-head); font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .dy-day-dow { font-size: 14px; color: var(--dy-mute); }
@@ -242,7 +265,14 @@
 .dy-day-items { display: grid; gap: 6px; }
 .dy-day-item { font-size: 14px; line-height: 1.45; color: var(--dy-soft); padding-left: 12px; position: relative; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .dy-day-item::before { content: ''; position: absolute; left: 0; top: 0.6em; width: 5px; height: 5px; border-radius: 50%; background: var(--dy-acc); opacity: 0.6; }
-.dy-day-empty { font-size: 14px; color: #cfc5bb; }
+.dy-day-items.is-blank { position: relative; flex: 1; min-height: 72px; }
+.dy-day-sheet {
+    position: absolute; left: 0; right: 0; top: 4px; bottom: 0; border-radius: 12px;
+    background-color: var(--dy-sunken);
+    background-image: repeating-linear-gradient(to bottom, transparent 0 27px, var(--dy-line2) 27px 28px);
+}
+.dy-week .dy-day:nth-child(n+6) .dy-day-items.is-blank { min-height: 48px; }
+.dy-day-empty { position: relative; font-size: 14px; color: var(--dy-soft); }
 .dy-day-more { font-size: 14px; color: var(--dy-acc-ink); font-weight: 600; }
 
 .dy-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -253,17 +283,36 @@
 .dy-muted { margin: 0; font-size: 14px; color: var(--dy-mute); line-height: 1.6; }
 .dy-note { margin-top: 4px; }
 .dy-inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.dy-inbox li { padding: 12px 14px; border-radius: 14px; background: #fdfbf8; border: 1px solid var(--dy-line); animation: dy-in 0.3s var(--dy-ease); }
+.dy-inbox li { padding: 12px 14px; border-radius: 14px; background: var(--dy-sunken); animation: dy-in 0.3s var(--dy-ease); }
 .dy-inbox-text { margin: 0 0 8px; font-size: 15px; line-height: 1.55; color: var(--dy-ink); word-break: keep-all; overflow-wrap: anywhere; }
 .dy-inbox-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .dy-inbox-acts .dy-btn-soft, .dy-inbox-acts .dy-btn-ghost { min-height: 38px; padding: 0 12px; font-size: 14px; border-radius: 12px; }
 .dy-inbox.is-big .dy-inbox-acts .dy-btn-soft, .dy-inbox.is-big .dy-inbox-acts .dy-btn-ghost { min-height: 52px; font-size: 16px; flex: 1; border-radius: 16px; }
 .dy-hol { margin: 6px 0 0; color: var(--dy-red); font-size: 14px; }
 .dy-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.dy-list li { padding: 10px 12px; border-radius: 12px; background: #fdfbf8; font-size: 15px; }
+.dy-list li { padding: 12px; border-radius: 12px; background: var(--dy-sunken); font-size: 15px; }
+.dy-empty {
+    display: grid; gap: var(--dy-s1); padding: 12px 14px; border-radius: 14px;
+    background-color: var(--dy-sunken);
+    background-image: repeating-linear-gradient(to bottom, transparent 0 27px, rgba(234, 223, 211, 0.9) 27px 28px);
+}
+.dy-example { margin: 0; font-size: 14px; line-height: 1.55; color: var(--dy-soft); }
+.dy-entry { display: grid; gap: 8px; min-width: 0; }
+.dy-entry-text, .dy-note-text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--dy-ink); word-break: keep-all; overflow-wrap: anywhere; }
+.dy-entry-ask, .dy-note-ask { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dy-ink); }
+.dy-entry-acts, .dy-note-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dy-entry-acts .nb-ssu-actions, .dy-note-acts .nb-ssu-actions { flex: 1 1 100%; margin-top: 0; }
+.dy-entry-input, .dy-note-input {
+    box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 88px;
+    border: 1px solid var(--dy-line2); border-radius: 12px; padding: 10px 12px; resize: vertical;
+    font: 400 15px/1.5 var(--dy-body); color: var(--dy-ink); background: #fff;
+}
+.dy-app.is-phone .dy-entry-acts .dy-btn-ghost,
+.dy-app.is-phone .dy-entry-acts .dy-btn-primary,
+.dy-app.is-phone .dy-entry-acts .dy-btn-soft { min-height: 44px; }
 
 /* ── 모바일 (C) ─────────────────────── */
-.dy-m { display: grid; gap: 14px; padding: 14px 16px 120px; }
+.dy-m { display: grid; gap: var(--dy-s3); padding: 14px var(--dy-s3) 120px; }
 .dy-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px; background: var(--dy-card); border-radius: 20px; box-shadow: var(--dy-shadow); }
 .dy-strip-day { position: relative; display: grid; justify-items: center; gap: 2px; padding: 8px 0 12px; border: 0; background: none; border-radius: 14px; color: var(--dy-ink); cursor: pointer; }
 .dy-strip-day span { font-size: 14px; color: var(--dy-mute); }
@@ -333,7 +382,16 @@
 .dy-app .nb-titlebar::before { display: none; }
 .dy-app .nb-titlebar { margin-bottom: 16px; }
 .dy-week .dy-day:nth-child(n+6) { min-height: 110px; background: #fefcf9; }
-.dy-app .nb-month-grid { border-radius: 16px; overflow: hidden; }
+.dy-week .dy-day.is-today {
+    border-color: transparent;
+    background: linear-gradient(180deg, var(--dy-acc-tint) 0, #fff 46px);
+    box-shadow: inset 0 3px 0 var(--dy-acc), var(--dy-shadow-hi);
+}
+.dy-app .nb-month-grid {
+    gap: 1px; padding: 1px; border-radius: 16px; overflow: hidden;
+    background: var(--dy-hair); border: 0;
+}
+.dy-app .nb-month-cell { border: 0 !important; background: #fff; }
 .dy-col-left, .dy-col-right { grid-template-columns: minmax(0, 1fr); }
 .dy-app.nb-app { overflow: clip; }
 .dy-app .dy-stage.nb-stage-wrap { flex: 1 1 auto; min-height: 0; padding: 0 !important; }
@@ -382,7 +440,7 @@
 /* 모바일 월간: 7칸 대신 날짜별 한 줄 */
 @media (max-width: 700px) {
     .dy-app .nb-month-dow { display: none !important; }
-    .dy-app .nb-month-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 6px !important; border: 0 !important; border-radius: 0; overflow: visible; }
+    .dy-app .nb-month-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 6px !important; padding: 0; border: 0 !important; border-radius: 0; overflow: visible; background: transparent; }
     .dy-app .nb-month-cell.out { display: none !important; }
     .dy-app .nb-month-cell {
         display: grid !important; grid-template-columns: 56px minmax(0, 1fr); align-items: center; column-gap: 10px;

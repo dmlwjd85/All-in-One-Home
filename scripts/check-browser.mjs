@@ -460,7 +460,7 @@ export async function geometryHits(page) {
         }
         const fab = document.querySelector('.nb-fab-btn');
         const fabBox = visibleBox(fab);
-        if (fabBox && paper && wide && overlaps(fabBox, paper)) hits.push('쓱적이 용지 안');
+        if (fabBox && paper && wide && overlaps(fabBox, paper)) hits.push('쓱, 적이 용지 안');
         if (fabBox) {
             const stage = document.querySelector('.nb-stage-wrap')?.getBoundingClientRect();
             const nodes = document.querySelectorAll('.nb-body button, .nb-body input, .nb-body select, .nb-body textarea, .nb-body a, .nb-tab');
@@ -477,7 +477,7 @@ export async function geometryHits(page) {
                     const right = Math.min(fabBox.right, elBox.right, stage.right);
                     if (bottom - top < 1 || right - left < 1) continue;
                 }
-                hits.push(`쓱적·${labelOf(el)}`);
+                hits.push(`쓱, 적·${labelOf(el)}`);
                 break;
             }
         }
@@ -488,7 +488,7 @@ export async function geometryHits(page) {
                 const dx = Math.max(0, Math.max(stickerBox.left - fabBox.right, fabBox.left - stickerBox.right));
                 const dy = Math.max(0, Math.max(stickerBox.top - fabBox.bottom, fabBox.top - stickerBox.bottom));
                 const dist = dx > 0 && dy > 0 ? Math.hypot(dx, dy) : Math.max(dx, dy);
-                if (dist < 16) hits.push(`쓱적·스티커 간격 ${Math.round(dist)}`);
+                if (dist < 16) hits.push(`쓱, 적·스티커 간격 ${Math.round(dist)}`);
             }
         }
         if (pageEl && paper) {
@@ -790,6 +790,7 @@ export async function geometryHits(page) {
         }
         const writeTab = [...document.querySelectorAll('.dy-tabs .dy-tab')].find((el) => el.textContent.replace(/\s+/g, ' ').trim().startsWith('쓱, 적'));
         if (!writeTab) hits.push('쓱, 적 탭 없음');
+        if (document.body.innerText.includes('쓱적')) hits.push('브랜드 띄어쓰기');
         return hits;
     });
 }
@@ -807,6 +808,8 @@ async function checkCapturePopup(page, browserErrors) {
         });
         await page.click('.dy-fab');
         await page.waitForSelector('.dy-quick', { timeout: 4000 });
+        const placeholder = await page.$eval('.dy-quick [data-ssu-capture]', (el) => el.getAttribute('placeholder'));
+        if (placeholder !== '쓱, 적어 두세요.') browserErrors.push(`${width} 쓱, 적 안내문 ${placeholder}`);
         const hit = await page.evaluate(() => {
             const pop = document.querySelector('.dy-quick');
             const button = document.querySelector('.dy-fab');
@@ -863,7 +866,7 @@ async function checkCapturePopup(page, browserErrors) {
             const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
             return JSON.parse(raw).filter((item) => item.text === text).length;
         }, sample);
-        if (kept !== 1) browserErrors.push(`${width} 쓱적 저장 ${kept}`);
+        if (kept !== 1) browserErrors.push(`${width} 쓱, 적 저장 ${kept}`);
     }
     await page.evaluate(() => {
         const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
@@ -872,6 +875,125 @@ async function checkCapturePopup(page, browserErrors) {
         localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items));
     });
     await page.setViewport({ width: 360, height: 780, deviceScaleFactor: 1 });
+}
+
+async function checkNoteRevise(page, browserErrors) {
+    const wipe = () => page.evaluate(() => {
+        const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+        const items = raw ? JSON.parse(raw) : [];
+        localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items.filter((item) => {
+            const text = String(item.text || '');
+            return !text.startsWith('고치기확인') && !text.startsWith('고친메모');
+        })));
+    });
+    const noteOf = (text, scope) => page.evaluateHandle((sample, root) => {
+        const host = root ? document.querySelector(root) : document;
+        return [...(host?.querySelectorAll('.dy-entry') || [])].find((el) => el.innerText.includes(sample)) || null;
+    }, text, scope);
+    const clickIn = async (text, attr, scope) => {
+        const handle = await noteOf(text, scope);
+        const button = await handle.evaluateHandle((el, name) => el?.querySelector(`[${name}]`) || null, attr);
+        const exists = await button.evaluate((el) => Boolean(el));
+        if (!exists) return false;
+        await button.evaluate((el) => el.click());
+        return true;
+    };
+    await wipe();
+    for (const width of [1440, 390]) {
+        const marker = `고치기확인${width}`;
+        const revised = `고친메모${width}`;
+        await page.setViewport({ width, height: width === 390 ? 844 : 900, deviceScaleFactor: 1 });
+        await go(page, 2);
+        await page.waitForSelector('.dy-board [data-ssu-capture], .dy-m [data-ssu-capture]');
+        const homePlaceholder = await page.$eval('.dy-board [data-ssu-capture], .dy-m [data-ssu-capture]', (el) => el.getAttribute('placeholder'));
+        if (homePlaceholder !== '쓱, 적어 두세요.') browserErrors.push(`${width} 오늘 안내문 ${homePlaceholder}`);
+        const branded = await page.evaluate(() => document.body.innerText.includes('쓱적'));
+        if (branded) browserErrors.push(`${width} 화면에 쓱적`);
+        await page.click('.dy-board [data-ssu-capture], .dy-m [data-ssu-capture]');
+        await page.type('.dy-board [data-ssu-capture], .dy-m [data-ssu-capture]', marker);
+        await page.click('.dy-board button[type="submit"], .dy-m button[type="submit"]');
+        try {
+            await page.waitForFunction((text) => {
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                return JSON.parse(raw).some((item) => item.text === text)
+                    && [...document.querySelectorAll('.dy-entry')].some((el) => el.innerText.includes(text));
+            }, { timeout: 4000 }, marker);
+        } catch {
+            browserErrors.push(`${width} 쓱, 적 남긴 글이 안 보임`);
+            continue;
+        }
+        if (!await clickIn(marker, 'data-note-edit', width === 390 ? '.dy-list' : '.dy-inbox')) {
+            browserErrors.push(`${width} 고치기 없음`);
+            continue;
+        }
+        try {
+            await page.waitForSelector('.dy-entry-input', { timeout: 2000 });
+        } catch {
+            browserErrors.push(`${width} 고치기 입력 없음`);
+            continue;
+        }
+        await page.$eval('.dy-entry-input', (el, value) => {
+            const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            set.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, revised);
+        try {
+            await page.waitForFunction((scope) => {
+                const host = document.querySelector(scope);
+                const btn = host?.querySelector('[data-note-save]');
+                return Boolean(btn && !btn.disabled);
+            }, { timeout: 2000 }, width === 390 ? '.dy-list' : '.dy-inbox');
+        } catch {
+            browserErrors.push(`${width} 저장이 켜지지 않음`);
+            continue;
+        }
+        if (!await clickIn(revised, 'data-note-save', width === 390 ? '.dy-list' : '.dy-inbox')) {
+            browserErrors.push(`${width} 저장 없음`);
+            continue;
+        }
+        try {
+            await page.waitForFunction((text) => {
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                return JSON.parse(raw).some((item) => item.text === text);
+            }, { timeout: 4000 }, revised);
+        } catch {
+            browserErrors.push(`${width} 고친 글 저장 실패`);
+            continue;
+        }
+        if (width === 1440) {
+            await go(page, 496);
+            const onWrite = await page.evaluate((text) => {
+                const note = [...document.querySelectorAll('.dy-entry')].find((el) => el.innerText.includes(text));
+                return Boolean(note?.querySelector('[data-note-edit]'));
+            }, revised);
+            if (!onWrite) browserErrors.push('쓰기 쪽에 고치기 없음');
+            if (!await clickIn(revised, 'data-note-delete')) browserErrors.push('쓰기 쪽 지우기 없음');
+        } else if (!await clickIn(revised, 'data-note-delete', '.dy-list')) {
+            browserErrors.push(`${width} 지우기 없음`);
+        }
+        try {
+            await page.waitForFunction((text) => [...document.querySelectorAll('.dy-entry')].some((el) => el.innerText.includes(text) && el.innerText.includes('이 메모를 지울까요?')), { timeout: 2000 }, revised);
+        } catch {
+            browserErrors.push(`${width} 지우기 확인 없음`);
+            continue;
+        }
+        if (!await clickIn(revised, 'data-note-confirm')) {
+            browserErrors.push(`${width} 지우기 확인 버튼 없음`);
+            continue;
+        }
+        try {
+            await page.waitForFunction((text) => {
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                const goneStore = !JSON.parse(raw).some((item) => item.text === text);
+                const goneDom = ![...document.querySelectorAll('.dy-entry')].some((el) => el.innerText.includes(text));
+                return goneStore && goneDom;
+            }, { timeout: 4000 }, revised);
+        } catch {
+            browserErrors.push(`${width} 지운 글이 남음`);
+        }
+    }
+    await wipe();
+    await go(page, 2);
 }
 
 export async function runBrowserQuality() {
@@ -1350,6 +1472,7 @@ export async function runBrowserQuality() {
         if (leaked) browserErrors.push('다른 주에 이번 주 기한이 보임');
 
         await checkCapturePopup(page, browserErrors);
+        await checkNoteRevise(page, browserErrors);
 
         await page.emulateMediaType('print');
         const headerPrint = await page.$eval('.dy-top', (el) => getComputedStyle(el).display);

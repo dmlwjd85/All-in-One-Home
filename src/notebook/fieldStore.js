@@ -76,15 +76,36 @@ export function linkRosterValue(studentNo, rosterKey, value, previous, signedIn)
     writePageFields(page, { ...card, [cardKey]: value }, signedIn);
 }
 
+async function writeTrail(page, notes, signedIn) {
+    const fields = readLocal(page);
+    const next = { ...fields, ssugeokNotes: notes };
+    writeLocal(page, next);
+    if (!signedIn || isLocalOnlyPage(page)) return;
+    await upsertDoc('notebookFields', `p${page}`, { fields: next, page: Number(page) }, true);
+}
+
 /** 쓱, 적에서 옮긴 한 줄을 그 쪽 타임라인에 붙입니다. */
 export async function appendPageTrail(page, entry, signedIn) {
     const fields = readLocal(page);
     const notes = Array.isArray(fields.ssugeokNotes) ? fields.ssugeokNotes : [];
     if (notes.some((n) => n.noteId === entry.noteId)) return;
-    const next = { ...fields, ssugeokNotes: [entry, ...notes].slice(0, 40) };
-    writeLocal(page, next);
-    if (!signedIn || isLocalOnlyPage(page) || entry.sensitive) return;
-    await upsertDoc('notebookFields', `p${page}`, { fields: next, page: Number(page) }, true);
+    await writeTrail(page, [entry, ...notes].slice(0, 40), signedIn);
+}
+
+/** 고친 원문을 이미 붙여 둔 타임라인 줄에 반영합니다. */
+export async function patchPageTrail(page, noteId, patch, signedIn) {
+    if (!page || !noteId) return;
+    const notes = Array.isArray(readLocal(page).ssugeokNotes) ? readLocal(page).ssugeokNotes : [];
+    if (!notes.some((n) => n.noteId === noteId)) return;
+    await writeTrail(page, notes.map((n) => (n.noteId === noteId ? { ...n, ...patch } : n)), signedIn);
+}
+
+/** 지운 메모의 타임라인 줄을 걷어 냅니다. */
+export async function dropPageTrail(page, noteId, signedIn) {
+    if (!page || !noteId) return;
+    const notes = Array.isArray(readLocal(page).ssugeokNotes) ? readLocal(page).ssugeokNotes : [];
+    if (!notes.some((n) => n.noteId === noteId)) return;
+    await writeTrail(page, notes.filter((n) => n.noteId !== noteId), signedIn);
 }
 
 /** 쪽마다 칸 값을 담고, 로그인 시 Firestore·아니면 localStorage에 남깁니다. */
