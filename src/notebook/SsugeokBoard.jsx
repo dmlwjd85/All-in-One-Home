@@ -173,7 +173,7 @@ export default function SsugeokBoard({
                         type="button"
                         role="tab"
                         aria-selected={filter === id}
-                        className={filter === id ? 'is-on' : ''}
+                        className={`is-${id}${filter === id ? ' is-on' : ''}`}
                         onClick={() => setFilter(id)}
                     >
                         {label} {counts[id]}
@@ -205,8 +205,9 @@ export default function SsugeokBoard({
                     const ready = readyNote(note, draft);
                     const suggestion = ready.suggestion;
                     const mark = TONE_MARK[suggestion?.tone] || '✦';
+                    const tone = suggestion?.tone || (note.status === 'sorted' ? 'mint' : note.status === 'archived' ? 'lavender' : 'sand');
                     return (
-                        <li key={note.id} id={`ssu-note-${note.id}`} className={focusId === note.id ? 'is-focus' : ''}>
+                        <li key={note.id} id={`ssu-note-${note.id}`} className={`is-tone-${tone}${focusId === note.id ? ' is-focus' : ''}`}>
                             <label className="nb-ssu-check">
                                 <input
                                     type="checkbox"

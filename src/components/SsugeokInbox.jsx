@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Inbox, Pencil, PenLine, Send, Trash2 } from 'lucide-react';
 import { EmptyState, Field, Modal } from './ui.jsx';
 import { addItem, patchItem, removeItem } from '../lib/store.js';
@@ -43,6 +44,7 @@ export default function SsugeokInbox({
     const [send, setSend] = useState(null);
     const [flickSide, setFlickSide] = useState(null);
     const [flickItem, setFlickItem] = useState(null);
+    const [pendingDelete, setPendingDelete] = useState(null);
 
     const pending = inbox.filter((row) => row.text);
     const typeHint = hint === '' ? customHint.trim() : hint;
@@ -72,8 +74,19 @@ export default function SsugeokInbox({
         onToast('쓱, 적을 고쳤습니다.');
     };
 
-    const removeInbox = async (item) => {
-        if (!confirm('이 쓱, 적을 삭제할까요?')) return;
+    useEffect(() => {
+        if (!pendingDelete) return undefined;
+        const onKey = (e) => { if (e.key === 'Escape') setPendingDelete(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [pendingDelete]);
+
+    const removeInbox = (item) => setPendingDelete(item);
+
+    const confirmRemove = async () => {
+        const item = pendingDelete;
+        if (!item) return;
+        setPendingDelete(null);
         await removeItem('ssugeokInbox', item.id, signedIn);
         onChanged();
     };
@@ -159,7 +172,7 @@ export default function SsugeokInbox({
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addDraft();
                     }}
-                    placeholder="오늘 있었던 일, 떠오른 생각, 해야 할 일을 그냥 적으세요"
+                    placeholder="쓱, 적어 두세요."
                     aria-label="쓱, 적 내용"
                 />
                 <button type="button" className="btn-primary w-full" onClick={addDraft}>
@@ -230,6 +243,20 @@ export default function SsugeokInbox({
                     onClose={() => setSend(null)}
                     onConfirm={confirmSend}
                 />
+            )}
+
+            {pendingDelete && createPortal(
+                <div className="dy-scrim" onPointerDown={(e) => { if (e.target === e.currentTarget) setPendingDelete(null); }}>
+                    <div className="dy-quick is-confirm" role="dialog" aria-modal="true" aria-labelledby="ssu-del-title">
+                        <h2 id="ssu-del-title" className="dy-h">이 쓱, 적을 지울까요?</h2>
+                        <p className="dy-muted">{pendingDelete.text}</p>
+                        <div className="dy-row">
+                            <button type="button" className="dy-btn-ghost" onClick={() => setPendingDelete(null)}>취소</button>
+                            <button type="button" className="dy-btn-primary" onClick={confirmRemove}>지우기</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body,
             )}
         </div>
     );

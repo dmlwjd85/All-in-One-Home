@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { captureShortcut } from '../src/notebook/diary/shortcut.js';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const port = Number(process.env.PREVIEW_PORT || 4175);
@@ -999,6 +1000,239 @@ async function checkNoteRevise(page, browserErrors) {
     await go(page, 2);
 }
 
+function shortcutMisses() {
+    const cases = [
+        ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Win32', 'Ctrl+K'],
+        ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36', 'Linux x86_64', 'Ctrl+K'],
+        ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'MacIntel', '⌘K'],
+        ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', 'iPhone', '⌘K'],
+    ];
+    return cases.flatMap(([ua, platform, want]) => (captureShortcut(ua, platform) === want ? [] : [`단축키 ${platform}`]));
+}
+
+async function checkQaLayout(page, browserErrors) {
+    for (const miss of shortcutMisses()) browserErrors.push(miss);
+    for (const width of [1440, 1024]) {
+        await page.setViewport({ width, height: 900, deviceScaleFactor: 1 });
+        await go(page, 2);
+        await page.waitForSelector('.dy-week .dy-day');
+        const week = await page.evaluate(() => {
+            const days = [...document.querySelectorAll('.dy-week .dy-day')];
+            const boxes = days.map((el) => el.getBoundingClientRect());
+            const tops = boxes.map((box) => box.top);
+            const widths = boxes.map((box) => box.width);
+            const weekBox = document.querySelector('.dy-week')?.getBoundingClientRect();
+            const empties = [...document.querySelectorAll('.dy-week .dy-day-empty')];
+            const badWrap = empties.some((el) => el.innerText.split('\n').map((line) => line.trim()).some((line) => line === '요' || line === '어'));
+            const overlap = empties.some((el) => {
+                const sheet = el.parentElement?.querySelector('.dy-day-sheet');
+                const card = el.closest('.dy-day')?.getBoundingClientRect();
+                if (!sheet || !card) return true;
+                const label = el.getBoundingClientRect();
+                const lines = sheet.getBoundingClientRect();
+                const hits = !(label.bottom <= lines.top + 1 || label.top >= lines.bottom - 1);
+                const outside = label.left < card.left - 1 || label.right > card.right + 1 || label.top < card.top - 1;
+                return hits || outside;
+            });
+            return {
+                count: days.length,
+                topSpread: tops.length ? Math.max(...tops) - Math.min(...tops) : 99,
+                widthSpread: widths.length ? Math.max(...widths) - Math.min(...widths) : 99,
+                minWidth: widths.length ? Math.min(...widths) : 0,
+                weekRight: weekBox?.right || 0,
+                view: window.innerWidth,
+                badWrap,
+                overlap,
+                emptyCount: empties.length,
+                legend: document.querySelector('.dy-legend')?.innerText || '',
+            };
+        });
+        if (week.count !== 7) browserErrors.push(`${width} 요일 ${week.count}`);
+        if (week.topSpread > 4) browserErrors.push(`${width} 요일이 한 줄이 아님`);
+        if (week.widthSpread > 8) browserErrors.push(`${width} 요일 너비 차이 ${Math.round(week.widthSpread)}`);
+        if (week.minWidth < 96) browserErrors.push(`${width} 요일 칸 ${Math.round(week.minWidth)}`);
+        if (week.weekRight > week.view + 2) browserErrors.push(`${width} 주간이 화면 밖`);
+        if (week.emptyCount < 1) browserErrors.push(`${width} 빈 날 없음`);
+        if (week.badWrap) browserErrors.push(`${width} 빈 날 줄바꿈`);
+        if (week.overlap) browserErrors.push(`${width} 빈 날 글자가 줄 위에 겹침`);
+        if (!week.legend.includes('오늘') || !week.legend.includes('주말') || !week.legend.includes('업무')) browserErrors.push(`${width} 색 안내 없음`);
+    }
+
+    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+    await go(page, 2);
+    const shown = await page.$eval('.dy-col-right .dy-kbd', (el) => el.textContent.trim());
+    const want = captureShortcut(await page.evaluate(() => navigator.userAgent), await page.evaluate(() => navigator.platform));
+    if (shown !== want) browserErrors.push(`화면 단축키 ${shown}`);
+    const contrast = await page.evaluate(() => {
+        const lum = (rgb) => {
+            const matched = String(rgb).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (!matched) return null;
+            const ch = [Number(matched[1]), Number(matched[2]), Number(matched[3])].map((c) => {
+                const s = c / 255;
+                return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+        };
+        const paint = (el) => {
+            let node = el;
+            while (node) {
+                const matched = getComputedStyle(node).backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+                if (matched && (matched[4] == null || Number(matched[4]) >= 0.95)) return `rgb(${matched[1]}, ${matched[2]}, ${matched[3]})`;
+                node = node.parentElement;
+            }
+            return 'rgb(255, 255, 255)';
+        };
+        const ratio = (el) => {
+            const cs = getComputedStyle(el);
+            const a = lum(cs.color);
+            const b = lum(paint(el));
+            if (a == null || b == null) return 0;
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        };
+        const hint = document.querySelector('.dy-cap-hint');
+        const btn = document.querySelector('.dy-cap button[type="submit"]');
+        return {
+            hint: hint ? ratio(hint) : 0,
+            btn: btn ? ratio(btn) : 0,
+            opacity: btn ? Number(getComputedStyle(btn).opacity) : 0,
+            disabled: Boolean(btn?.disabled),
+        };
+    });
+    if (!contrast.disabled) browserErrors.push('남기기 버튼이 켜져 있음');
+    if (!(contrast.hint >= 4.5)) browserErrors.push(`안내 대비 ${contrast.hint.toFixed(2)}`);
+    if (!(contrast.btn >= 4.5)) browserErrors.push(`남기기 대비 ${contrast.btn.toFixed(2)}`);
+    if (!(contrast.opacity >= 0.99)) browserErrors.push('남기기 흐림');
+
+    await page.click('.dy-board [data-ssu-capture]');
+    await page.type('.dy-board [data-ssu-capture]', '버튼줄확인');
+    await page.click('.dy-board button[type="submit"]');
+    try {
+        await page.waitForFunction(() => [...document.querySelectorAll('.dy-inbox .dy-entry')].some((el) => el.innerText.includes('버튼줄확인')), { timeout: 4000 });
+    } catch {
+        browserErrors.push('1440 버튼 줄 메모 없음');
+    }
+    const row = await page.evaluate(() => {
+        const entry = [...document.querySelectorAll('.dy-inbox .dy-entry')].find((el) => el.innerText.includes('버튼줄확인'));
+        const buttons = [...(entry?.querySelectorAll('.dy-entry-acts button') || [])];
+        const erase = buttons.find((el) => el.textContent.includes('지우기'));
+        if (!erase) return { count: buttons.length, withErase: 0 };
+        const top = erase.getBoundingClientRect().top;
+        const withErase = buttons.filter((el) => Math.abs(el.getBoundingClientRect().top - top) < 6).length;
+        return { count: buttons.length, withErase };
+    });
+    if (row.count < 4 || row.withErase < 2) browserErrors.push(`지우기 혼자 줄 ${row.count}/${row.withErase}`);
+
+    await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+    await go(page, 2);
+    await page.waitForSelector('.dy-m [data-ssu-capture]');
+    const fill = async (text) => {
+        await page.$eval('.dy-m [data-ssu-capture]', (el, value) => {
+            const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            set.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }, text);
+        await page.click('.dy-m button[type="submit"]');
+    };
+    await fill('토스트확인');
+    try {
+        await page.waitForFunction(() => [...document.querySelectorAll('.dy-entry')].some((el) => el.innerText.includes('토스트확인')), { timeout: 4000 });
+    } catch {
+        browserErrors.push('390 토스트용 메모 없음');
+    }
+    await page.evaluate(() => {
+        const entry = [...document.querySelectorAll('.dy-entry')].find((el) => el.innerText.includes('토스트확인'));
+        entry?.querySelector('[data-note-edit]')?.click();
+    });
+    try {
+        await page.waitForSelector('[data-note-save]', { timeout: 2000 });
+    } catch {
+        browserErrors.push('390 저장 버튼 없음');
+    }
+    await fill('토스트둘');
+    try {
+        await page.waitForSelector('[role="status"]', { timeout: 2500 });
+    } catch {
+        browserErrors.push('390 토스트 없음');
+    }
+    const cover = await page.evaluate(() => {
+        const toast = document.querySelector('[role="status"]');
+        const save = document.querySelector('[data-note-save]');
+        const cancel = document.querySelector('[data-note-cancel]');
+        if (!toast || !save || !cancel) return { missing: true };
+        const a = toast.getBoundingClientRect();
+        const overlaps = (el) => {
+            const b = el.getBoundingClientRect();
+            return !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
+        };
+        return { missing: false, save: overlaps(save), cancel: overlaps(cancel), top: a.top };
+    });
+    if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
+    else {
+        if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
+        if (!(cover.top < 180)) browserErrors.push(`390 토스트 위치 ${Math.round(cover.top)}`);
+    }
+
+    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
+    await go(page, 496);
+    await page.evaluate(() => { window.confirm = () => { window.__nativeConfirm = true; return false; }; });
+    const hub = await page.$('button.nb-hubbtn');
+    if (!hub) browserErrors.push('허브 버튼 없음');
+    else {
+        await hub.click();
+        try {
+            await page.waitForSelector('textarea[aria-label="쓱, 적 내용"]', { timeout: 3000 });
+        } catch {
+            browserErrors.push('허브 입력 없음');
+        }
+        const placeholder = await page.$eval('textarea[aria-label="쓱, 적 내용"]', (el) => el.getAttribute('placeholder'));
+        if (placeholder !== '쓱, 적어 두세요.') browserErrors.push(`허브 안내문 ${placeholder}`);
+        await page.type('textarea[aria-label="쓱, 적 내용"]', '허브삭제확인');
+        await page.evaluate(() => {
+            [...document.querySelectorAll('button')].find((el) => el.textContent.includes('쓱, 적에 넣기'))?.click();
+        });
+        try {
+            await page.waitForFunction(() => document.body.innerText.includes('허브삭제확인'), { timeout: 4000 });
+        } catch {
+            browserErrors.push('허브 메모 없음');
+        }
+        await page.evaluate(() => {
+            const card = [...document.querySelectorAll('article')].find((el) => el.innerText.includes('허브삭제확인'));
+            card?.querySelector('[aria-label="삭제"]')?.click();
+        });
+        try {
+            await page.waitForSelector('#ssu-del-title', { timeout: 2000 });
+        } catch {
+            browserErrors.push('허브 지우기 창 없음');
+        }
+        const title = await page.$eval('#ssu-del-title', (el) => el.textContent.trim()).catch(() => '');
+        if (title !== '이 쓱, 적을 지울까요?') browserErrors.push(`허브 확인 ${title}`);
+        if (await page.evaluate(() => window.__nativeConfirm === true)) browserErrors.push('허브가 confirm을 씀');
+        await page.evaluate(() => {
+            [...document.querySelectorAll('.dy-quick.is-confirm button')].find((el) => el.textContent.trim() === '지우기')?.click();
+        });
+        try {
+            await page.waitForFunction(() => {
+                const raw = localStorage.getItem('homenote_v2_ssugeokInbox') || '[]';
+                return !JSON.parse(raw).some((item) => item.text === '허브삭제확인');
+            }, { timeout: 4000 });
+        } catch {
+            browserErrors.push('허브 삭제가 저장에 남음');
+        }
+        await page.keyboard.press('Escape');
+    }
+
+    await page.evaluate(() => {
+        const raw = localStorage.getItem('homenote_v2_ssugeokInbox');
+        if (!raw) return;
+        const items = JSON.parse(raw).filter((item) => {
+            const text = String(item.text || '');
+            return !text.startsWith('버튼줄') && !text.startsWith('토스트') && !text.startsWith('허브삭제');
+        });
+        localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify(items));
+    });
+    await go(page, 2);
+}
+
 export async function runBrowserQuality() {
     const dist = resolve(root, 'dist/index.html');
     if (!existsSync(dist)) throw new Error('dist가 없습니다. npm run build 뒤에 브라우저 검사를 실행하세요.');
@@ -1476,6 +1710,7 @@ export async function runBrowserQuality() {
 
         await checkCapturePopup(page, browserErrors);
         await checkNoteRevise(page, browserErrors);
+        await checkQaLayout(page, browserErrors);
 
         await page.emulateMediaType('print');
         const headerPrint = await page.$eval('.dy-top', (el) => getComputedStyle(el).display);

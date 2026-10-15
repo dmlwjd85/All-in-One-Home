@@ -88,7 +88,7 @@ export function Field({ label, children, hint }) {
 export function Toast({ message, actionLabel, onAction }) {
     if (!message) return null;
     return (
-        <div role="status" aria-live="polite" className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-ink-900 text-white px-4 py-3 rounded-2xl shadow-lg text-sm font-bold max-w-[90vw] flex items-center gap-3">
+        <div role="status" aria-live="polite" className="dy-toast">
             <span>{message}</span>
             {actionLabel && onAction ? (
                 <button type="button" className="min-h-tap min-w-tap rounded-xl bg-white text-ink-900 px-3 py-2" onClick={onAction}>

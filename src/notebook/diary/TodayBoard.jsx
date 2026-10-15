@@ -4,6 +4,7 @@ import { VIEW_PAGES } from '../routes.js';
 import { sortNote, archiveNotes } from '../ssugeokStore.js';
 import CaptureBox from './CaptureBox.jsx';
 import NoteEdit from './NoteEdit.jsx';
+import { captureShortcutHere } from './shortcut.js';
 import {
     DOW, dow, holidayName, monthGrid, monthPageFor, noteDay, parts, shiftYm, today, weekOf, weekPageFor,
 } from './dates.js';
@@ -69,7 +70,7 @@ function MiniMonth({ selected, onPick, onOpenMonth, marks }) {
     );
 }
 
-function DayCard({ ymd, items, onOpen, compact }) {
+function DayCard({ ymd, items, onOpen }) {
     const now = today();
     const p = parts(ymd);
     const wd = dow(ymd);
@@ -78,7 +79,7 @@ function DayCard({ ymd, items, onOpen, compact }) {
     return (
         <button
             type="button"
-            className={`dy-day ${isToday ? 'is-today' : ''} ${wd === 0 || hol ? 'is-red' : ''} ${wd === 6 ? 'is-sat' : ''} ${ymd < now ? 'is-past' : ''}`}
+            className={`dy-day ${isToday ? 'is-today' : ''} ${wd === 0 || hol ? 'is-red' : ''} ${wd === 6 ? 'is-sat' : ''} ${wd === 0 ? 'is-sun' : ''} ${ymd < now ? 'is-past' : ''}`}
             onClick={() => onOpen(ymd)}
             aria-label={`${p.m}월 ${p.d}일 ${DOW[wd]}요일${isToday ? ', 오늘' : ''} 주간 쪽 열기`}
         >
@@ -89,12 +90,12 @@ function DayCard({ ymd, items, onOpen, compact }) {
                 {hol && <span className="dy-day-hol">{hol}</span>}
             </span>
             <span className={`dy-day-items ${items.length === 0 ? 'is-blank' : ''}`}>
+                {items.length === 0 && <span className="dy-day-empty">비어 있어요</span>}
                 {items.length === 0 && <span className="dy-day-sheet" aria-hidden="true" />}
-                {items.length === 0 && !compact && <span className="dy-day-empty">비어 있어요</span>}
-                {items.slice(0, compact ? 3 : 4).map((n) => (
-                    <span key={n.id} className="dy-day-item">{n.text}</span>
+                {items.slice(0, 2).map((n) => (
+                    <span key={n.id} className={`dy-day-item is-${n.suggestion?.tone || 'sand'}`}>{n.text}</span>
                 ))}
-                {items.length > (compact ? 3 : 4) && <span className="dy-day-more">+{items.length - (compact ? 3 : 4)}</span>}
+                {items.length > 2 && <span className="dy-day-more">+{items.length - 2}</span>}
             </span>
         </button>
     );
@@ -166,6 +167,9 @@ export default function TodayBoard({
     };
     const sp = parts(selected);
     const inboxCount = notes.filter((n) => n.status === 'inbox').length;
+    const shortcut = captureShortcutHere();
+    const weekMemos = days.reduce((sum, ymd) => sum + (marks[ymd]?.length || 0), 0);
+    const emptyDays = days.filter((ymd) => !(marks[ymd]?.length)).length;
     const capProps = { author, signedIn, fromPage: VIEW_PAGES.home, onChanged, onToast };
 
     if (phone) {
@@ -184,7 +188,7 @@ export default function TodayBoard({
                                 type="button"
                                 role="tab"
                                 aria-selected={ymd === selected}
-                                className={`dy-strip-day ${ymd === selected ? 'is-sel' : ''} ${ymd === now ? 'is-today' : ''} ${d === 0 || holidayName(ymd) ? 'is-red' : ''}`}
+                                className={`dy-strip-day ${ymd === selected ? 'is-sel' : ''} ${ymd === now ? 'is-today' : ''} ${d === 6 ? 'is-sat' : ''} ${d === 0 || holidayName(ymd) ? 'is-red' : ''}`}
                                 onClick={() => setSelected(ymd)}
                             >
                                 <span>{DOW[d]}</span>
@@ -246,6 +250,7 @@ export default function TodayBoard({
                     <div>
                         <p className="dy-kicker">{selected === now ? '오늘' : '고른 날'} · {sp.m}월 {sp.d}일 {DOW[dow(selected)]}요일</p>
                         <h1 className="dy-title">이번 주</h1>
+                        <p className="dy-week-stats">일곱 날 · 메모 {weekMemos} · 빈 날 {emptyDays}</p>
                     </div>
                     <div className="dy-week-nav">
                         <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, -1))} aria-label="지난주"><ChevronLeft size={18} /></button>
@@ -253,16 +258,21 @@ export default function TodayBoard({
                         <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, 1))} aria-label="다음 주"><ChevronRight size={18} /></button>
                     </div>
                 </div>
+                <ul className="dy-legend" aria-label="색 안내">
+                    <li><i className="is-today" aria-hidden="true" />오늘</li>
+                    <li><i className="is-weekend" aria-hidden="true" />주말</li>
+                    <li><i className="is-work" aria-hidden="true" />업무</li>
+                </ul>
                 <div className="dy-week">
                     {days.map((ymd) => (
-                        <DayCard key={ymd} ymd={ymd} items={marks[ymd] || []} onOpen={openDay} compact={dow(ymd) === 0 || dow(ymd) === 6} />
+                        <DayCard key={ymd} ymd={ymd} items={marks[ymd] || []} onOpen={openDay} />
                     ))}
                 </div>
             </section>
             <aside className="dy-col-right dy-card dy-ssu-panel" aria-label="쓱, 적">
                 <div className="dy-sec-head">
                     <h2 className="dy-h">쓱, 적</h2>
-                    <kbd className="dy-kbd" title="어디서나 ⌘K · Ctrl+K">⌘K</kbd>
+                    <kbd className="dy-kbd" title={`${shortcut}로 어디서나`}>{shortcut}</kbd>
                 </div>
                 <CaptureBox {...capProps} />
                 <div className="dy-sec-head dy-gap">

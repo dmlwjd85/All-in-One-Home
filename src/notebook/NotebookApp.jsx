@@ -15,6 +15,7 @@ import TodayBoard from './diary/TodayBoard.jsx';
 import QuickCapture from './diary/QuickCapture.jsx';
 import { monthOfPage } from './diary/DiaryTop.jsx';
 import { monthPageFor, shiftYm } from './diary/dates.js';
+import { captureShortcutHere } from './diary/shortcut.js';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
 import { canonicalHash, pageFromHash, resolveHash } from './routes.js';
 
@@ -327,7 +328,7 @@ export default function NotebookApp({
                         </section>
                         <section>
                             <h3 className="dy-h3">단축키</h3>
-                            <p className="dy-muted">⌘K · Ctrl+K 쓱, 적 · ⌘/ 찾기 · 월간에서 ← → 달 넘기기</p>
+                            <p className="dy-muted">{captureShortcutHere()} 쓱, 적 · ⌘/ 찾기 · 월간에서 ← → 달 넘기기</p>
                         </section>
                     </div>
                 </Modal>
