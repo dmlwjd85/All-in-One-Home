@@ -407,7 +407,7 @@
     .dy-tab { padding: 0 12px; font-size: 15px; }
     .dy-chips { padding: 8px 12px 10px; }
     .dy-chip { min-height: 44px; font-size: 15px; }
-    .dy-app .dy-page.nb-page { margin: 12px 10px 110px; border-radius: 22px; }
+    .dy-app .dy-page.nb-page { margin: 12px 10px 16px; border-radius: 22px; }
     .dy-app .dy-page .nb-body { padding: 20px 16px 28px; }
     .dy-actions .dy-icon { width: 40px; }
 }
@@ -439,7 +439,7 @@
 .dy-app.nb-app { display: flex !important; flex-direction: column; grid-template-columns: none; grid-template-rows: none; height: 100dvh; }
 .dy-app .dy-page.nb-page { margin: 24px 20px 64px; }
 @media (min-width: 1221px) { .dy-app .dy-page.nb-page { margin: 24px auto 64px; } }
-@media (max-width: 700px) { .dy-app .dy-page.nb-page { margin: 12px 10px 110px; } }
+@media (max-width: 700px) { .dy-app .dy-page.nb-page { margin: 12px 10px 16px; } }
 .dy-btn-primary, .dy-btn-ghost, .dy-btn-soft { white-space: nowrap; }
 .dy-app .nb-ssu-links { display: none; }
 .dy-app .nb-dday-form { min-width: 0; max-width: 100%; }
@@ -576,18 +576,13 @@
 .dy-app .dy-page .nb-ssu-actions .tone-butter,
 .dy-app .dy-page .nb-ssu-actions .tone-sand { background-color: var(--dy-acc-tint2); color: var(--dy-acc-deep); }
 
-/* 휴대폰은 긴 제안이 화면을 밀지 않게 줄을 바꾸고, 쓱, 적 단추는 스크롤 밖에 둡니다. */
+/* 휴대폰은 긴 제안이 화면을 밀지 않게 줄을 바꿉니다. 본문은 화면 끝까지 가고, 쓱, 적 단추만큼만 스크롤 여백을 둡니다. */
 .dy-app.is-phone {
     max-width: 100%;
     overflow-x: clip;
 }
-.dy-app.is-phone::after {
-    content: '';
-    order: 3;
-    flex: 0 0 calc(96px + env(safe-area-inset-bottom));
-}
-@media (max-width: 600px) {
-    .dy-app.is-phone::after { flex-basis: calc(168px + env(safe-area-inset-bottom)); }
+.dy-app.is-phone .dy-stage.nb-stage-wrap {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom)) !important;
 }
 .dy-app.is-phone .dy-fab { bottom: calc(16px + env(safe-area-inset-bottom)); }
 .dy-app.is-phone .dy-chips {

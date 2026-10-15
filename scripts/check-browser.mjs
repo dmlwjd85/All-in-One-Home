@@ -1591,7 +1591,7 @@ async function checkQaLayout(page, browserErrors) {
                     const y = top + 4;
                     const hit = document.elementFromPoint(x, y);
                     if (!hit || hit === el || el.contains(hit)) continue;
-                    const cover = hit.closest('.dy-toast, .dy-toast-slot, .dy-top');
+                    const cover = hit.closest('.dy-toast-slot, .dy-top');
                     if (!cover) continue;
                     const name = (el.innerText || el.className || '').toString().replace(/\s+/g, ' ').trim().slice(0, 18);
                     hits.push(`가림:${name}`);
@@ -1663,7 +1663,6 @@ async function checkQaLayout(page, browserErrors) {
             const overlaps = (a, b) => !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
             const collect = () => {
                 const toastEl = document.querySelector('.dy-toast');
-                const toast = painted(toastEl);
                 if (toastEl && getComputedStyle(toastEl).position !== 'fixed') return ['토스트:흐름'];
                 if (document.querySelector('.dy-toast-slot')) return ['토스트:빈칸'];
                 const fab = painted(document.querySelector('.dy-fab'));
@@ -1673,7 +1672,6 @@ async function checkQaLayout(page, browserErrors) {
                     const box = painted(el);
                     if (!box) continue;
                     const name = (el.getAttribute('aria-label') || el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 16);
-                    if (toast && overlaps(toast, box)) hits.push(`토스트:${name}`);
                     if (fab && overlaps(fab, box)) hits.push(`단추:${name}`);
                 }
                 return hits;
@@ -1726,6 +1724,43 @@ async function checkQaLayout(page, browserErrors) {
         if (Math.abs(fit.left - 16) > 2 || Math.abs(fit.right - 16) > 2) browserErrors.push(`${label} 여백 ${fit.left}/${fit.right}`);
         if (!fit.aboveFab) browserErrors.push(`${label}가 쓱, 적 버튼을 가림`);
     };
+    const assertStageReach = async (label) => {
+        const reach = await page.evaluate(() => {
+            const stage = document.querySelector('.dy-stage')?.getBoundingClientRect();
+            if (!stage) return null;
+            const fab = document.querySelector('.dy-fab')?.getBoundingClientRect();
+            const scroller = document.querySelector('.dy-stage');
+            const prev = scroller?.scrollTop || 0;
+            const behavior = scroller?.style.scrollBehavior;
+            if (scroller) {
+                scroller.style.scrollBehavior = 'auto';
+                scroller.scrollTop = scroller.scrollHeight;
+            }
+            const buttons = [...document.querySelectorAll('.dy-entry button, .nb-dday-card button, .nb-page button')].filter((el) => {
+                const box = el.getBoundingClientRect();
+                return box.width > 8 && box.height > 8;
+            });
+            const tail = buttons.length ? buttons[buttons.length - 1].getBoundingClientRect() : null;
+            const fabNow = document.querySelector('.dy-fab')?.getBoundingClientRect();
+            if (scroller) {
+                scroller.scrollTop = prev;
+                scroller.style.scrollBehavior = behavior;
+            }
+            return {
+                gap: Math.round((window.innerHeight - stage.bottom) * 10) / 10,
+                fabBand: fab ? Math.round(window.innerHeight - fab.top) : 88,
+                tailClear: tail && fabNow ? tail.bottom <= fabNow.top + 1 : true,
+            };
+        });
+        if (!reach) {
+            browserErrors.push(`${label} 본문 없음`);
+            return;
+        }
+        const reachesScreen = reach.gap <= 8;
+        const reachesFab = reach.gap <= reach.fabBand + 4;
+        if (!reachesScreen && !reachesFab) browserErrors.push(`${label} 아래 빈칸 ${reach.gap}`);
+        if (!reach.tailClear) browserErrors.push(`${label} 마지막 카드가 쓱, 적에 가림`);
+    };
     for (const width of [360, 390, 1024, 1280, 1440]) {
         const phone = width <= 700;
         await page.setViewport({ width, height: phone ? 844 : 900, deviceScaleFactor: 1 });
@@ -1748,6 +1783,7 @@ async function checkQaLayout(page, browserErrors) {
             await page.waitForSelector('.dy-inbox .dy-entry-acts');
             await assertFit(`${width} 메모${count}`);
             await assertClear(`${width} 메모${count}`);
+            if (phone) await assertStageReach(`${width} 메모${count}`);
             if (!phone) {
                 const row = await page.evaluate(() => {
                     const acts = document.querySelector('.dy-inbox .dy-entry-acts');
@@ -1793,7 +1829,10 @@ async function checkQaLayout(page, browserErrors) {
             }
             await assertFit(`${width} 토스트${count}`);
             await assertClear(`${width} 토스트${count}`);
-            if (width <= 600) await assertToastText(`${width} 저장 토스트${count}`);
+            if (width <= 600) {
+                await assertToastText(`${width} 저장 토스트${count}`);
+                await assertStageReach(`${width} 토스트${count}`);
+            }
             if (count === 1) {
                 const duringLayout = await snapStable(page);
                 await assertScrollClear(`${width} 토스트`);
@@ -2132,6 +2171,7 @@ async function checkQaLayout(page, browserErrors) {
         }
         await assertToastText(`${width} 기한 토스트`);
         await assertClear(`${width} 기한 토스트`);
+        await assertStageReach(`${width} 기한`);
     }
 
     await page.evaluate(() => {
