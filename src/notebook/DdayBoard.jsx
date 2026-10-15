@@ -10,6 +10,11 @@ const COLUMNS = [
     ['done', '완료'],
 ];
 
+const EMPTY_HINT = {
+    doing: '진행으로 옮기면 여기에 보여요',
+    done: '끝낸 일은 여기에 모여요',
+};
+
 export function lineDeadlines() {
     const items = [];
     for (let page = 405; page <= 410; page += 1) {
@@ -197,16 +202,20 @@ export default function DdayBoard({ cards, signedIn, onChanged, onToast, onGo })
                 </div>
             </form>
             <div className="nb-kanban">
-                {COLUMNS.map(([status, label]) => (
-                    <section key={status} className={`is-${status}`}>
-                        <h3>{label}</h3>
-                        <ul>
-                            {items.filter((item) => (item.status || 'todo') === status).map((item) => (
-                                <Card key={item.id} item={item} signedIn={signedIn} onChanged={onChanged} onGo={onGo} />
-                            ))}
-                        </ul>
-                    </section>
-                ))}
+                {COLUMNS.map(([status, label]) => {
+                    const columnItems = items.filter((item) => (item.status || 'todo') === status);
+                    return (
+                        <section key={status} className={`is-${status}`}>
+                            <h3>{label}</h3>
+                            <ul>
+                                {columnItems.map((item) => (
+                                    <Card key={item.id} item={item} signedIn={signedIn} onChanged={onChanged} onGo={onGo} />
+                                ))}
+                            </ul>
+                            {!columnItems.length && EMPTY_HINT[status] ? <p className="nb-dday-empty">{EMPTY_HINT[status]}</p> : null}
+                        </section>
+                    );
+                })}
             </div>
         </div>
     );

@@ -506,6 +506,14 @@
 }
 .dy-toast span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dy-toast button { pointer-events: auto; flex: 0 0 auto; }
+.dy-toast.is-bar {
+    width: auto; height: auto; max-width: none;
+    white-space: normal; overflow: visible; justify-content: flex-start; align-items: center;
+    line-height: 22px; padding: 10px 16px; text-align: left;
+}
+.dy-toast.is-bar span {
+    flex: 1 1 auto; white-space: normal; overflow: visible; text-overflow: clip; line-height: 22px;
+}
 .dy-app > .dy-top { order: 0; }
 .dy-app > .dy-stage { order: 1; }
 
@@ -577,6 +585,9 @@
     content: '';
     order: 3;
     flex: 0 0 calc(96px + env(safe-area-inset-bottom));
+}
+@media (max-width: 600px) {
+    .dy-app.is-phone::after { flex-basis: calc(168px + env(safe-area-inset-bottom)); }
 }
 .dy-app.is-phone .dy-fab { bottom: calc(16px + env(safe-area-inset-bottom)); }
 .dy-app.is-phone .dy-chips {
@@ -676,6 +687,7 @@
 .dy-app .nb-kanban .is-doing { background: var(--dy-dusk-tint); }
 .dy-app .nb-kanban .is-done { background: var(--dy-sage-tint); }
 .dy-app .nb-kanban h3 { color: var(--dy-ink); }
+.dy-app .nb-dday-empty { margin: 8px 6px 10px; font-size: 14px; line-height: 1.45; font-weight: 600; color: var(--dy-soft); }
 .dy-app .nb-dday-no { color: var(--dy-acc-ink); }
 .dy-app .nb-dday-mark { background: var(--dy-acc-tint); color: var(--dy-acc-ink); }
 .dy-app .nb-dday-badge.is-day,

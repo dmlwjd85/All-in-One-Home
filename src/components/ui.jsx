@@ -88,6 +88,23 @@ export function Field({ label, children, hint }) {
 
 function placeToast(el) {
     if (!el) return;
+    const narrow = window.innerWidth <= 600;
+    el.classList.toggle('is-bar', narrow);
+    if (narrow) {
+        const fab = document.querySelector('.dy-fab');
+        const fabBox = fab?.getBoundingClientRect();
+        const fabTop = fabBox && fabBox.height >= 8 ? fabBox.top : window.innerHeight - 80;
+        el.style.top = 'auto';
+        el.style.left = '16px';
+        el.style.right = '16px';
+        el.style.bottom = `${Math.max(16, Math.round(window.innerHeight - fabTop + 8))}px`;
+        el.style.width = 'auto';
+        el.style.height = 'auto';
+        el.style.maxWidth = 'none';
+        return;
+    }
+    el.style.bottom = 'auto';
+    el.style.width = 'max-content';
     const gap = document.querySelector('.dy-status-gap');
     const bar = document.querySelector('.dy-bar');
     const height = 32;
