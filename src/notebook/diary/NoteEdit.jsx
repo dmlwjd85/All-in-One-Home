@@ -62,22 +62,22 @@ export default function NoteEdit({ note, signedIn, onChanged, onToast, extra = n
             <div className={`dy-entry-acts ${variant === 'inbox' ? 'dy-inbox-acts' : ''}`}>
                 {mode === 'view' && extra}
                 {mode === 'view' && (
-                    <>
+                    <div className="dy-entry-pair">
                         <button type="button" className="dy-btn-ghost" data-note-edit onClick={() => { setDraft(note.text || ''); setMode('edit'); }}>고치기</button>
                         <button type="button" className="dy-btn-ghost" data-note-delete onClick={() => setMode('confirm')}>지우기</button>
-                    </>
+                    </div>
                 )}
                 {mode === 'edit' && (
-                    <>
+                    <div className="dy-entry-pair">
                         <button type="button" className="dy-btn-primary" data-note-save disabled={busy || !draft.trim()} onClick={save}>저장</button>
                         <button type="button" className="dy-btn-ghost" data-note-cancel disabled={busy} onClick={() => setMode('view')}>취소</button>
-                    </>
+                    </div>
                 )}
                 {mode === 'confirm' && (
-                    <>
+                    <div className="dy-entry-pair">
                         <button type="button" className="dy-btn-primary" data-note-confirm disabled={busy} onClick={remove}>지우기</button>
                         <button type="button" className="dy-btn-ghost" data-note-cancel disabled={busy} onClick={() => setMode('view')}>취소</button>
-                    </>
+                    </div>
                 )}
             </div>
         </div>

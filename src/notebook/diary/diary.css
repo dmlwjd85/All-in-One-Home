@@ -317,8 +317,9 @@
 .dy-entry { display: grid; gap: 8px; min-width: 0; }
 .dy-entry-text, .dy-note-text { margin: 0; font-size: 15px; line-height: 1.55; color: var(--dy-ink); word-break: keep-all; overflow-wrap: anywhere; }
 .dy-entry-ask, .dy-note-ask { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dy-ink); }
-.dy-entry-acts, .dy-note-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
+.dy-entry-acts, .dy-note-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
 .dy-entry-acts .nb-ssu-actions, .dy-note-acts .nb-ssu-actions { display: contents; }
+.dy-entry-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1 1 100%; }
 .dy-entry-input, .dy-note-input {
     box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; min-height: 88px;
     border: 1px solid var(--dy-line2); border-radius: 12px; padding: 10px 12px; resize: vertical;
@@ -491,7 +492,12 @@
 .dy-entry-acts > .dy-btn-soft,
 .dy-entry-acts .nb-ssu-actions button,
 .dy-entry-acts .nb-ssu-actions select {
-    width: 100%; min-width: 0; min-height: 44px; white-space: normal; text-align: center;
+    flex: 1 1 calc(50% - 8px); width: auto; min-width: 0; max-width: calc(50% - 4px);
+    min-height: 44px; white-space: normal; text-align: center;
+}
+.dy-entry-pair .dy-btn-ghost,
+.dy-entry-pair .dy-btn-primary {
+    width: 100%; min-width: 0; max-width: none; min-height: 44px; white-space: normal; text-align: center;
 }
 
 .dy-app .nb-ssu-list { gap: 16px; }
