@@ -345,6 +345,13 @@
 @media (max-width: 700px) { .dy-app .dy-page.nb-page { margin: 12px 10px 110px; } }
 .dy-btn-primary, .dy-btn-ghost, .dy-btn-soft { white-space: nowrap; }
 .dy-app .nb-ssu-links { display: none; }
+.dy-app .nb-dday-form { min-width: 0; max-width: 100%; }
+.dy-app .nb-dday-form input { min-width: 0; max-width: 100%; }
+/* 좁은 화면의 연간 달은 칸보다 넓어 옆 달 위에 겹칩니다. 14px 숫자가 들어가는 너비로 줄입니다. */
+@media (max-width: 800px) {
+    .dy-app .nb-yeargrid { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); }
+    .dy-app .nb-monthlink { min-width: 0; }
+}
 
 /* 주간 쪽: 무지개 요일 머리 대신 살구 하나 */
 .dy-app .nb-dayhead {
