@@ -1050,6 +1050,69 @@ function shortcutMisses() {
     return cases.flatMap(([ua, platform, want]) => (captureShortcut(ua, platform) === want ? [] : [`단축키 ${platform}`]));
 }
 
+async function lowContrastButtons(page) {
+    return page.evaluate(() => {
+        const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+        const lum = (rgb) => 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+        const parse = (str) => {
+            const out = [];
+            const re = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\)/g;
+            let matched = re.exec(str);
+            while (matched) {
+                out.push([Number(matched[1]) / 255, Number(matched[2]) / 255, Number(matched[3]) / 255, matched[4] == null ? 1 : Number(matched[4])]);
+                matched = re.exec(str);
+            }
+            return out;
+        };
+        const stops = (el) => {
+            const colors = [];
+            let node = el;
+            while (node) {
+                const style = getComputedStyle(node);
+                for (const color of [...parse(style.backgroundImage), ...parse(style.backgroundColor)]) {
+                    if (color[3] >= 0.95) colors.push(color);
+                }
+                if (colors.length) break;
+                node = node.parentElement;
+            }
+            return colors.length ? colors : [[1, 1, 1, 1]];
+        };
+        const misses = [];
+        for (const el of document.querySelectorAll('button')) {
+            if (el.disabled || el.closest('.sr-only')) continue;
+            const box = el.getBoundingClientRect();
+            if (box.width < 8 || box.height < 8 || box.bottom < 0 || box.top > window.innerHeight) continue;
+            const style = getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) < 0.99) continue;
+            const texts = [];
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            let node = walker.nextNode();
+            while (node) {
+                if (node.textContent.trim() && !node.parentElement.closest('.sr-only')) texts.push(node.parentElement);
+                node = walker.nextNode();
+            }
+            const samples = texts.length ? texts : [el];
+            let worst = 99;
+            for (const sample of samples) {
+                const fg = parse(getComputedStyle(sample).color)[0];
+                if (!fg) continue;
+                const fgLum = lum(fg);
+                // 흰 글자가 살구 위에 앉는 경우만 봅니다. 어두운 본문은 기존 안내 대비 검사가 맡습니다.
+                if (fgLum < 0.6) continue;
+                for (const bg of stops(sample)) {
+                    const ratio = (Math.max(fgLum, lum(bg)) + 0.05) / (Math.min(fgLum, lum(bg)) + 0.05);
+                    if (ratio < worst) worst = ratio;
+                }
+            }
+            if (worst < 4.5) {
+                const name = (el.getAttribute('aria-label') || el.innerText || '버튼').replace(/\s+/g, ' ').trim().slice(0, 18);
+                misses.push(`${name} ${worst.toFixed(2)}`);
+            }
+        }
+        return misses.slice(0, 8);
+    });
+}
+
 async function checkQaLayout(page, browserErrors) {
     for (const file of nativeDialogMisses()) browserErrors.push(`네이티브 대화상자 ${file}`);
     for (const file of instantDeleteMisses()) browserErrors.push(`확인 없는 삭제 ${file}`);
@@ -1163,6 +1226,7 @@ async function checkQaLayout(page, browserErrors) {
 
     await page.click('.dy-board [data-ssu-capture]');
     await page.type('.dy-board [data-ssu-capture]', '버튼줄확인');
+    for (const item of await lowContrastButtons(page)) browserErrors.push(`1440 버튼 대비 ${item}`);
     await page.click('.dy-board button[type="submit"]');
     try {
         await page.waitForFunction(() => [...document.querySelectorAll('.dy-inbox .dy-entry')].some((el) => el.innerText.includes('버튼줄확인')), { timeout: 4000 });
@@ -1181,6 +1245,40 @@ async function checkQaLayout(page, browserErrors) {
     });
     if (row.count < 4 || row.withErase !== row.count) browserErrors.push(`1440 버튼이 한 줄이 아님 ${row.count}/${row.withErase}`);
     if (!(row.minH >= 44)) browserErrors.push(`1440 버튼 높이 ${Math.round(row.minH || 0)}`);
+
+    await page.setViewport({ width: 360, height: 844, deviceScaleFactor: 1 });
+    await go(page, 2);
+    const titleBreaks = await page.evaluate(() => {
+        const bad = [];
+        const walk = (el, label) => {
+            if (!el) return;
+            const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            let node = walker.nextNode();
+            const range = document.createRange();
+            while (node) {
+                const text = node.textContent;
+                let prev = null;
+                for (let i = 0; i < text.length; i += 1) {
+                    const ch = text[i];
+                    if (/\s/.test(ch)) {
+                        prev = null;
+                        continue;
+                    }
+                    range.setStart(node, i);
+                    range.setEnd(node, i + 1);
+                    const rect = range.getClientRects()[0];
+                    if (!rect) continue;
+                    const top = Math.round(rect.top);
+                    if (prev && Math.abs(top - prev.top) > 4) bad.push(`${label} ${prev.ch}${ch}`);
+                    prev = { ch, top };
+                }
+                node = walker.nextNode();
+            }
+        };
+        document.querySelectorAll('.dy-m .dy-sec-head .dy-h, .dy-m .dy-sec-head .dy-link').forEach((el, index) => walk(el, index === 0 ? '날짜' : el.innerText.replace(/\s+/g, '').slice(0, 8)));
+        return bad.slice(0, 6);
+    });
+    if (titleBreaks.length) browserErrors.push(`360 제목 줄바꿈 ${titleBreaks.join('|')}`);
 
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await go(page, 2);
@@ -1208,6 +1306,7 @@ async function checkQaLayout(page, browserErrors) {
     } catch {
         browserErrors.push('390 저장 버튼 없음');
     }
+    for (const item of await lowContrastButtons(page)) browserErrors.push(`390 버튼 대비 ${item}`);
     await fill('토스트둘');
     try {
         await page.waitForSelector('[role="status"]', { timeout: 2500 });
@@ -1247,14 +1346,25 @@ async function checkQaLayout(page, browserErrors) {
         };
         const fields = [...document.querySelectorAll('textarea, input')].filter((el) => el.type !== 'hidden' && el.type !== 'checkbox');
         const fab = document.querySelector('.dy-fab');
-        return { missing: false, save: overlaps(save), cancel: overlaps(cancel), input: fields.some(overlaps), fab: overlaps(fab), top: a.top };
+        const style = getComputedStyle(toast);
+        return {
+            missing: false,
+            save: overlaps(save),
+            cancel: overlaps(cancel),
+            input: fields.some(overlaps),
+            fab: overlaps(fab),
+            top: a.top,
+            position: style.position,
+            pointer: style.pointerEvents,
+        };
     });
     if (cover.missing) browserErrors.push('390 토스트 또는 저장 버튼 없음');
     else {
         if (cover.save || cover.cancel) browserErrors.push('390 토스트가 저장 버튼을 가림');
         if (cover.input) browserErrors.push('390 토스트가 입력을 가림');
         if (cover.fab) browserErrors.push('390 토스트가 쓱, 적 버튼을 가림');
-        if (!(cover.top > 520)) browserErrors.push(`390 토스트 위치 ${Math.round(cover.top)}`);
+        if (cover.position === 'fixed') browserErrors.push('390 토스트가 떠 있음');
+        if (cover.pointer !== 'none') browserErrors.push('390 토스트가 클릭을 막음');
     }
     const phoneRows = await page.evaluate(() => {
         const read = (sel) => {
@@ -1324,6 +1434,8 @@ async function checkQaLayout(page, browserErrors) {
                 return !(toast.bottom <= b.top + 1 || toast.top >= b.bottom - 1 || toast.right <= b.left + 1 || toast.left >= b.right - 1);
             };
             const fields = [...document.querySelectorAll('textarea, input')].filter((el) => el.type !== 'hidden' && el.type !== 'checkbox');
+            const el = document.querySelector('[role="status"]');
+            const style = getComputedStyle(el);
             return {
                 missing: false,
                 input: fields.some(hit),
@@ -1331,13 +1443,16 @@ async function checkQaLayout(page, browserErrors) {
                 top: toast.top,
                 bottom: toast.bottom,
                 height: window.innerHeight,
+                position: style.position,
+                pointer: style.pointerEvents,
             };
         });
         if (wideCover.missing) browserErrors.push(`${width} 토스트 없음`);
         else {
             if (wideCover.input) browserErrors.push(`${width} 토스트가 입력을 가림`);
             if (wideCover.save) browserErrors.push(`${width} 토스트가 저장 버튼을 가림`);
-            if (!(wideCover.top > wideCover.height * 0.65)) browserErrors.push(`${width} 토스트 위치 ${Math.round(wideCover.top)}`);
+            if (wideCover.position === 'fixed') browserErrors.push(`${width} 토스트가 떠 있음`);
+            if (wideCover.pointer !== 'none') browserErrors.push(`${width} 토스트가 클릭을 막음`);
         }
         const spread = await page.evaluate(() => {
             const acts = document.querySelector('.dy-inbox .dy-entry-acts');
@@ -1462,7 +1577,9 @@ async function checkQaLayout(page, browserErrors) {
             };
             const overlaps = (a, b) => !(a.bottom <= b.top + 1 || a.top >= b.bottom - 1 || a.right <= b.left + 1 || a.left >= b.right - 1);
             const collect = () => {
-                const toast = painted(document.querySelector('.dy-toast'));
+                const toastEl = document.querySelector('.dy-toast');
+                const toast = painted(toastEl);
+                if (toastEl && getComputedStyle(toastEl).position === 'fixed') return ['토스트:고정'];
                 const fab = painted(document.querySelector('.dy-fab'));
                 const hits = [];
                 for (const el of document.querySelectorAll('button, a, input, textarea, select, summary')) {
@@ -1700,9 +1817,10 @@ async function checkQaLayout(page, browserErrors) {
         } catch {
             browserErrors.push('명단 확인 창 없음');
         }
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
     }
+    await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
     await go(page, 405);
     await page.waitForSelector('.nb-dday-card');
     await page.evaluate(() => {
@@ -1716,6 +1834,13 @@ async function checkQaLayout(page, browserErrors) {
     }
     const dueTitle = await page.$eval('#dy-confirm-title', (el) => el.textContent.trim()).catch(() => '');
     if (dueTitle !== '이 기한을 지울까요?') browserErrors.push(`기한 확인 ${dueTitle}`);
+    const confirmPlace = await page.evaluate(() => {
+        const box = document.querySelector('.dy-quick.is-confirm')?.getBoundingClientRect();
+        if (!box || box.height < 8) return null;
+        const mid = (box.top + box.bottom) / 2;
+        return Math.abs(mid - window.innerHeight / 2);
+    });
+    if (confirmPlace == null || confirmPlace > 100) browserErrors.push(`확인 창이 가운데가 아님 ${confirmPlace == null ? '없음' : Math.round(confirmPlace)}`);
     await page.keyboard.press('Escape');
     await go(page, 458);
     await page.waitForSelector('.nb-submit');

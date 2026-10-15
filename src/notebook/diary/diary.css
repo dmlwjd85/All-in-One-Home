@@ -169,15 +169,15 @@
     min-height: 44px; padding: 0 18px; border-radius: 14px; font-size: 15px; font-weight: 600;
     cursor: pointer; transition: transform 0.15s var(--dy-ease), box-shadow 0.2s, background 0.2s;
 }
-.dy-btn-primary { border: 0; color: #fff; background: linear-gradient(180deg, #ec9b80, var(--dy-acc)); box-shadow: 0 6px 16px rgba(229, 140, 111, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
-.dy-btn-primary:hover:not(:disabled) { box-shadow: 0 8px 22px rgba(229, 140, 111, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.dy-btn-primary { border: 0; color: #fff; background: #9a5340; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.dy-btn-primary:hover:not(:disabled) { background: var(--dy-acc-deep); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
 .dy-btn-primary:active:not(:disabled), .dy-btn-ghost:active, .dy-btn-soft:active { transform: scale(0.97); }
 .dy-btn-primary:disabled { opacity: 1; box-shadow: none; cursor: default; background: var(--dy-acc-deep); color: #fff; }
 .dy-btn-ghost { border: 1px solid var(--dy-line2); background: var(--dy-card); color: var(--dy-soft); }
 .dy-btn-ghost:hover { color: var(--dy-ink); border-color: var(--dy-mute); }
 .dy-btn-soft { border: 0; background: var(--dy-acc-tint); color: var(--dy-acc-deep); }
 .dy-btn-soft:hover { background: var(--dy-acc-tint2); }
-.dy-link { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--dy-acc-deep); font-size: 14px; font-weight: 600; cursor: pointer; min-height: 36px; }
+.dy-link { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--dy-acc-deep); font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px; white-space: nowrap; word-break: keep-all; }
 .dy-kbd { font-family: var(--dy-body); font-size: 14px; color: var(--dy-mute); padding: 2px 8px; border-radius: 8px; border: 1px solid var(--dy-line2); background: #fdfbf8; box-shadow: inset 0 -1px 0 var(--dy-line2); }
 
 /* ── 쓱, 적 입력 ────────────────────── */
@@ -306,8 +306,9 @@
 .dy-week .dy-day.is-sun .dy-day-empty { color: var(--dy-sage); }
 .dy-day-more { font-size: 14px; color: var(--dy-acc-ink); font-weight: 600; }
 
-.dy-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.dy-sec-head .dy-h { margin: 0; font-size: 22px; }
+.dy-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.dy-sec-head .dy-h { margin: 0; font-size: 22px; flex: 1 1 auto; min-width: 0; word-break: keep-all; overflow-wrap: normal; }
+.dy-app .dy-h, .dy-app .dy-title, .dy-app .dy-h3 { word-break: keep-all; overflow-wrap: normal; }
 .dy-h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--dy-ink); }
 .dy-gap { margin-top: 8px; }
 .dy-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; margin-left: 4px; border-radius: 999px; background: var(--dy-acc-tint); color: var(--dy-acc-deep); font: 700 14px var(--dy-body); vertical-align: 2px; }
@@ -362,14 +363,15 @@
     position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 50;
     width: 64px; height: 64px; border-radius: 50%; border: 0; color: #fff; cursor: pointer;
     display: grid; place-items: center;
-    background: radial-gradient(circle at 30% 25%, #f3ad94, var(--dy-acc) 60%, #d97a5c);
-    box-shadow: 0 10px 24px rgba(229, 140, 111, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    background: #8d4a36;
+    box-shadow: 0 10px 24px rgba(141, 74, 54, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
     transition: transform 0.2s var(--dy-ease);
     animation: dy-rise 0.4s var(--dy-ease);
 }
 .dy-fab:active { transform: scale(0.92) rotate(-8deg); }
 
 .dy-scrim { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding: 12vh 16px 16px; background: rgba(59, 53, 48, 0.28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: dy-fade 0.18s; }
+@media (min-width: 701px) { .dy-scrim { place-items: center; padding: 24px; } }
 .dy-quick { width: min(620px, 100%); background: var(--dy-card); border-radius: 26px; padding: 20px; box-shadow: 0 30px 80px rgba(59, 53, 48, 0.25); animation: dy-pop 0.24s var(--dy-ease); display: grid; gap: 12px; }
 .dy-quick-head { display: flex; align-items: center; gap: 10px; }
 .dy-quick-head .dy-h { margin: 0; font-size: 22px; flex: 1; }
@@ -492,24 +494,19 @@
 .dy-app .nb-dayh.is-today .nb-dayhead { color: #fff !important; }
 .dy-app .nb-dayh.is-today .nb-dayhead::after { content: ' · 오늘'; }
 
-/* 토스트는 스크롤 영역 아래 한 줄. 입력과 휴대폰 쓱, 적 버튼을 가리지 않습니다. */
+/* 토스트는 탭 바로 아래 한 줄입니다. 카드 위를 덮지 않고 클릭도 막지 않습니다. */
 .dy-toast {
-    position: fixed; left: 16px; right: 16px; bottom: calc(12px + env(safe-area-inset-bottom)); top: auto;
-    transform: none; z-index: 45; width: auto; max-width: 440px; margin-right: auto;
+    position: relative; left: auto; right: auto; bottom: auto; top: auto;
+    transform: none; z-index: auto; width: auto; max-width: none; margin: 0;
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; border-radius: 16px; background: #3b3530; color: #fff;
+    padding: 10px 16px; border-radius: 0; background: #3b3530; color: #fff;
     font-size: 14px; font-weight: 700; line-height: 1.45;
-    box-shadow: 0 12px 32px rgba(59, 53, 48, 0.28);
+    box-shadow: none; pointer-events: none;
 }
-.dy-app > .dy-toast {
-    position: relative; left: auto; right: auto; bottom: auto; flex: 0 0 auto; z-index: 35;
-    align-self: center; width: min(440px, calc(100% - 32px)); max-width: none;
-    margin: 8px auto calc(12px + env(safe-area-inset-bottom));
-}
-@media (max-width: 700px) {
-    .dy-toast { right: 96px; max-width: none; bottom: calc(16px + env(safe-area-inset-bottom)); }
-    .dy-app > .dy-toast { align-self: stretch; width: auto; margin: 8px 96px calc(16px + env(safe-area-inset-bottom)) 12px; }
-}
+.dy-toast button { pointer-events: auto; }
+.dy-app > .dy-top { order: 0; }
+.dy-app > .dy-toast { order: 1; flex: 0 0 auto; align-self: stretch; }
+.dy-app > .dy-stage { order: 2; }
 
 .dy-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dy-entry-acts > .dy-btn-ghost,
@@ -577,6 +574,7 @@
 }
 .dy-app.is-phone::after {
     content: '';
+    order: 3;
     flex: 0 0 calc(96px + env(safe-area-inset-bottom));
 }
 .dy-app.is-phone .dy-fab { bottom: calc(16px + env(safe-area-inset-bottom)); }
