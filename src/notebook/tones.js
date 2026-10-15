@@ -18,10 +18,10 @@ const RECORD = new Set([
 ]);
 
 export const TONE_MARK = {
-    peach: '🍑',
-    mint: '🌱',
-    lavender: '📎',
-    butter: '✏️',
+    peach: '•',
+    mint: '•',
+    lavender: '•',
+    butter: '•',
     sand: '✦',
 };
 

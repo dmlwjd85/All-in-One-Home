@@ -1,0 +1,252 @@
+import { useMemo, useState } from 'react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
+import { VIEW_PAGES } from '../routes.js';
+import { sortNote, archiveNotes } from '../ssugeokStore.js';
+import CaptureBox from './CaptureBox.jsx';
+import {
+    DOW, dow, holidayName, monthGrid, monthPageFor, noteDay, parts, shiftYm, today, weekOf, weekPageFor,
+} from './dates.js';
+
+function byDay(notes) {
+    const map = {};
+    for (const note of notes || []) {
+        if (note.status === 'archived') continue;
+        const day = noteDay(note);
+        if (!day) continue;
+        (map[day] ||= []).push(note);
+    }
+    return map;
+}
+
+function MiniMonth({ selected, onPick, onOpenMonth, marks }) {
+    const sp = parts(selected);
+    const [ym, setYm] = useState({ y: sp.y, m: sp.m });
+    const now = today();
+    const cells = monthGrid(ym.y, ym.m);
+    const week = new Set(weekOf(selected));
+    const move = (d) => setYm((v) => shiftYm(v.y, v.m, d));
+    return (
+        <section className="dy-card dy-mini" aria-label="이달 달력">
+            <div className="dy-mini-head">
+                <button type="button" className="dy-arrow" onClick={() => move(-1)} aria-label="이전 달"><ChevronLeft size={18} /></button>
+                <button type="button" className="dy-h dy-mini-title" onClick={() => onOpenMonth(ym.y, ym.m)} disabled={!monthPageFor(ym.y, ym.m)}>
+                    {ym.y}. {ym.m}
+                </button>
+                <button type="button" className="dy-arrow" onClick={() => move(1)} aria-label="다음 달"><ChevronRight size={18} /></button>
+            </div>
+            <div className="dy-mini-grid" role="grid">
+                {['월', '화', '수', '목', '금', '토', '일'].map((d) => <span key={d} className="dy-mini-dow">{d}</span>)}
+                {cells.map((ymd) => {
+                    const p = parts(ymd);
+                    const out = p.m !== ym.m;
+                    const hol = holidayName(ymd);
+                    const wd = dow(ymd);
+                    return (
+                        <button
+                            key={ymd}
+                            type="button"
+                            className={[
+                                'dy-mini-day',
+                                out ? 'is-out' : '',
+                                ymd === now ? 'is-today' : '',
+                                week.has(ymd) ? 'is-week' : '',
+                                ymd === selected ? 'is-sel' : '',
+                                hol || wd === 0 ? 'is-red' : '',
+                            ].join(' ')}
+                            onClick={() => onPick(ymd)}
+                            aria-label={`${p.m}월 ${p.d}일${hol ? ` ${hol}` : ''}${ymd === now ? ' 오늘' : ''}`}
+                            title={hol || undefined}
+                        >
+                            {p.d}
+                            {marks[ymd] ? <i className="dy-dot" aria-hidden="true" /> : null}
+                        </button>
+                    );
+                })}
+            </div>
+            <button type="button" className="dy-today-btn" onClick={() => { const t = parts(now); setYm({ y: t.y, m: t.m }); onPick(now); }}>오늘</button>
+        </section>
+    );
+}
+
+function DayCard({ ymd, items, onOpen, compact }) {
+    const now = today();
+    const p = parts(ymd);
+    const wd = dow(ymd);
+    const hol = holidayName(ymd);
+    const isToday = ymd === now;
+    return (
+        <button
+            type="button"
+            className={`dy-day ${isToday ? 'is-today' : ''} ${wd === 0 || hol ? 'is-red' : ''} ${wd === 6 ? 'is-sat' : ''} ${ymd < now ? 'is-past' : ''}`}
+            onClick={() => onOpen(ymd)}
+            aria-label={`${p.m}월 ${p.d}일 ${DOW[wd]}요일${isToday ? ', 오늘' : ''} 주간 쪽 열기`}
+        >
+            <span className="dy-day-head">
+                <span className="dy-day-num">{p.d}</span>
+                <span className="dy-day-dow">{DOW[wd]}</span>
+                {isToday && <span className="dy-pill">오늘</span>}
+                {hol && <span className="dy-day-hol">{hol}</span>}
+            </span>
+            <span className="dy-day-items">
+                {items.length === 0 && !compact && <span className="dy-day-empty">비어 있어요</span>}
+                {items.slice(0, compact ? 3 : 4).map((n) => (
+                    <span key={n.id} className="dy-day-item">{n.text}</span>
+                ))}
+                {items.length > (compact ? 3 : 4) && <span className="dy-day-more">+{items.length - (compact ? 3 : 4)}</span>}
+            </span>
+        </button>
+    );
+}
+
+function Inbox({ notes, signedIn, onChanged, onToast, onGo, big }) {
+    const list = notes.filter((n) => n.status === 'inbox').slice(0, big ? 3 : 5);
+    const sortOne = async (note) => {
+        const s = note.suggestion;
+        if (!s || (s.needsStudent && !note.studentNo)) {
+            onGo(VIEW_PAGES.write);
+            return;
+        }
+        const placed = await sortNote(note, s, signedIn);
+        onChanged?.();
+        onToast?.(`${placed.label}에 옮겼어요. 원문은 쓱, 적에 남아요.`);
+    };
+    const archive = async (note) => {
+        await archiveNotes([note], signedIn);
+        onChanged?.();
+        onToast?.('보관했어요.');
+    };
+    if (!list.length) return <p className="dy-muted">나눌 메모가 없어요. 적기만 하면 돼요.</p>;
+    return (
+        <ul className={`dy-inbox ${big ? 'is-big' : ''}`}>
+            {list.map((note) => (
+                <li key={note.id}>
+                    <p className="dy-inbox-text">{note.text}</p>
+                    <div className="dy-inbox-acts">
+                        <button type="button" className="dy-btn-soft" onClick={() => sortOne(note)}>
+                            {note.suggestion?.label ? `제안: ${note.suggestion.label}` : '나누기'}
+                            <ArrowRight size={16} aria-hidden="true" />
+                        </button>
+                        <button type="button" className="dy-btn-ghost" onClick={() => archive(note)}>보관</button>
+                    </div>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+export default function TodayBoard({
+    pages, onGo, notes, signedIn, author, onChanged, onToast, fields, setField, phone,
+}) {
+    const now = today();
+    const [selected, setSelected] = useState(now);
+    const marks = useMemo(() => byDay(notes), [notes]);
+    const days = weekOf(selected);
+    const openDay = (ymd) => {
+        const dest = weekPageFor(ymd, pages);
+        if (dest) onGo(dest, { hash: `#/date/${ymd}` });
+        else onToast?.('그날은 수첩 주간 쪽 밖이에요.');
+    };
+    const sp = parts(selected);
+    const inboxCount = notes.filter((n) => n.status === 'inbox').length;
+    const capProps = { author, signedIn, fromPage: VIEW_PAGES.home, onChanged, onToast };
+
+    if (phone) {
+        const items = marks[selected] || [];
+        const wd = dow(selected);
+        return (
+            <div className="dy-m">
+                <CaptureBox big {...capProps} placeholder={'지금 떠오른 것을 그냥 적어요.\n@12 #행발 발표를 또렷하게'} />
+                <div className="dy-strip" role="tablist" aria-label="이번 주">
+                    {days.map((ymd) => {
+                        const p = parts(ymd);
+                        const d = dow(ymd);
+                        return (
+                            <button
+                                key={ymd}
+                                type="button"
+                                role="tab"
+                                aria-selected={ymd === selected}
+                                className={`dy-strip-day ${ymd === selected ? 'is-sel' : ''} ${ymd === now ? 'is-today' : ''} ${d === 0 || holidayName(ymd) ? 'is-red' : ''}`}
+                                onClick={() => setSelected(ymd)}
+                            >
+                                <span>{DOW[d]}</span>
+                                <b>{p.d}</b>
+                                {marks[ymd] ? <i className="dy-dot" aria-hidden="true" /> : <i className="dy-dot is-none" aria-hidden="true" />}
+                            </button>
+                        );
+                    })}
+                </div>
+                <section className="dy-card">
+                    <div className="dy-sec-head">
+                        <h2 className="dy-h">{sp.m}월 {sp.d}일 {DOW[wd]}요일{selected === now ? ' · 오늘' : ''}</h2>
+                        <button type="button" className="dy-link" onClick={() => openDay(selected)}>주간 쪽 <ArrowRight size={14} /></button>
+                    </div>
+                    {holidayName(selected) && <p className="dy-hol">{holidayName(selected)}</p>}
+                    {items.length ? (
+                        <ul className="dy-list">{items.map((n) => <li key={n.id}>{n.text}</li>)}</ul>
+                    ) : <p className="dy-muted">이날 적은 것이 없어요.</p>}
+                </section>
+                <section className="dy-card">
+                    <div className="dy-sec-head">
+                        <h2 className="dy-h">나누기 {inboxCount ? <span className="dy-count">{inboxCount}</span> : null}</h2>
+                        <button type="button" className="dy-link" onClick={() => onGo(VIEW_PAGES.write)}>모두 보기 <ArrowRight size={14} /></button>
+                    </div>
+                    <Inbox notes={notes} big signedIn={signedIn} onChanged={onChanged} onToast={onToast} onGo={onGo} />
+                </section>
+            </div>
+        );
+    }
+
+    return (
+        <div className="dy-board">
+            <aside className="dy-col-left">
+                <MiniMonth
+                    selected={selected}
+                    onPick={setSelected}
+                    marks={marks}
+                    onOpenMonth={(y, m) => { const d = monthPageFor(y, m); if (d) onGo(d); }}
+                />
+                <label className="dy-card dy-goal">
+                    <span className="dy-label">올해 우리 반 한 줄 목표</span>
+                    <input value={fields?.goal || ''} onChange={(e) => setField('goal', e.target.value)} placeholder="한 줄로 적어 두세요" />
+                </label>
+            </aside>
+            <section className="dy-col-center" aria-label="이번 주">
+                <div className="dy-week-head">
+                    <div>
+                        <p className="dy-kicker">{selected === now ? '오늘' : '고른 날'} · {sp.m}월 {sp.d}일 {DOW[dow(selected)]}요일</p>
+                        <h1 className="dy-title">이번 주</h1>
+                    </div>
+                    <div className="dy-week-nav">
+                        <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, -1))} aria-label="지난주"><ChevronLeft size={18} /></button>
+                        <button type="button" className="dy-btn-ghost" onClick={() => setSelected(now)}>오늘</button>
+                        <button type="button" className="dy-arrow" onClick={() => setSelected((s) => addWeek(s, 1))} aria-label="다음 주"><ChevronRight size={18} /></button>
+                    </div>
+                </div>
+                <div className="dy-week">
+                    {days.map((ymd) => (
+                        <DayCard key={ymd} ymd={ymd} items={marks[ymd] || []} onOpen={openDay} compact={dow(ymd) === 0 || dow(ymd) === 6} />
+                    ))}
+                </div>
+            </section>
+            <aside className="dy-col-right dy-card dy-ssu-panel" aria-label="쓱, 적">
+                <div className="dy-sec-head">
+                    <h2 className="dy-h">쓱, 적</h2>
+                    <kbd className="dy-kbd" title="어디서나 ⌘K · Ctrl+K">⌘K</kbd>
+                </div>
+                <CaptureBox {...capProps} />
+                <div className="dy-sec-head dy-gap">
+                    <h3 className="dy-h3">나눌 메모 {inboxCount ? <span className="dy-count">{inboxCount}</span> : null}</h3>
+                    <button type="button" className="dy-link" onClick={() => onGo(VIEW_PAGES.write)}>모두 <ArrowRight size={14} /></button>
+                </div>
+                <Inbox notes={notes} signedIn={signedIn} onChanged={onChanged} onToast={onToast} onGo={onGo} />
+                <p className="dy-muted dy-note">제안만 보여요. 누르기 전에는 아무 데도 옮기지 않아요.</p>
+            </aside>
+        </div>
+    );
+}
+
+function addWeek(ymd, n) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 7 * n)).toISOString().slice(0, 10);
+}

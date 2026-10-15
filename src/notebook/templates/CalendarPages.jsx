@@ -175,7 +175,13 @@ export function WeekTocPage({ page, pageRec, pages, onGo }) {
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 const DAY_KO = ['월', '화', '수', '목', '금'];
-const DAY_TINT = ['#fde2e4', '#ffe8cc', '#fff3bf', '#d8f3dc', '#cce3de'];
+/** 주 첫날(월)부터 i일 뒤가 오늘(서울)이면 true */
+function dayIsToday(span, i) {
+    if (!span?.start) return false;
+    const [y, m, d] = span.start.split('-').map(Number);
+    const ymd = new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10);
+    return ymd === new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+}
 
 export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) {
     const { body } = partitionLinks(pageRec);
@@ -185,7 +191,7 @@ export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) 
     const head = (i, label, tint) => {
         const link = dayLinks[i];
         return (
-            <h3 style={{ background: tint }}>
+            <h3 className={`nb-dayh${tint === 'today' ? ' is-today' : ''}`}>
                 {link ? (
                     <button type="button" className="nb-dayhead" onClick={() => onGo(link.to)} aria-label={`${label}, ${link.to}쪽`}>
                         {label}
@@ -203,7 +209,7 @@ export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) 
             <div className="nb-week-days">
                 {DAY_KEYS.map((key, i) => (
                     <section key={key} className="nb-week-col">
-                        {head(i, DAY_KO[i], DAY_TINT[i])}
+                        {head(i, DAY_KO[i], dayIsToday(span, i) ? 'today' : '')}
                         {[1, 2, 3, 4, 5, 6].map((p) => (
                             <label key={p} className="nb-period">
                                 <span>{p}</span>
@@ -240,14 +246,14 @@ export function WeekPage({ pageRec, extra, fields, setField, onGo, ddayCards }) 
                         </div>
                     )}
                     <div className="nb-split" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                        <div className="nb-panel">{head(5, '토', '#e7eef8')}<Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} /></div>
-                        <div className="nb-panel">{head(6, '일', '#fde8ef')}<Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} /></div>
+                        <div className="nb-panel">{head(5, '토', dayIsToday(span, 5) ? 'today' : '')}<Ink multiline rows={2} value={fields.sat} onChange={(v) => setField('sat', v)} /></div>
+                        <div className="nb-panel">{head(6, '일', dayIsToday(span, 6) ? 'today' : '')}<Ink multiline rows={2} value={fields.sun} onChange={(v) => setField('sun', v)} /></div>
                     </div>
                     <p className="nb-kicker">주간학습안내</p>
                     <Ink multiline rows={3} value={fields.guide} onChange={(v) => setField('guide', v)} placeholder="공부할 내용 · 준비물" />
                     <p className="nb-kicker">이번 주 할 일</p>
                     <LinedBlock n={5} get={(k) => fields[k]} set={setField} prefix="todo" placeholder="할 일" />
-                    <Tick checked={fields.ssugeokDone} onChange={(v) => setField('ssugeokDone', v)} label="쓱적 정리" />
+                    <Tick checked={fields.ssugeokDone} onChange={(v) => setField('ssugeokDone', v)} label="쓱, 적 정리" />
                     <Ink multiline rows={2} value={fields.ssugeok} onChange={(v) => setField('ssugeok', v)} placeholder="옮길 메모" />
                 </section>
             </div>

@@ -43,8 +43,8 @@ export const DEST_LABEL = {
     469: '예산 사업',
     493: '연락처',
     494: '2027 준비',
-    495: '쓱적 · 메모',
-    496: '쓱적',
+    495: '쓱, 적 · 메모',
+    496: '쓱, 적',
     516: '공책',
     559: '칠판',
     560: '칠판',
@@ -139,8 +139,8 @@ const TYPE_LABEL = {
     'budget-item': '예산 사업',
     'budget-misc': '예산',
     'year-prep': '2027 준비',
-    'ssugeok-toc': '쓱적 · 메모',
-    ssugeok: '쓱적',
+    'ssugeok-toc': '쓱, 적 · 메모',
+    ssugeok: '쓱, 적',
     memo: '메모',
     'notebook-toc': '공책',
     'notebook-paper': '공책',
@@ -197,7 +197,7 @@ export function navLabel(to, pages, pageNo) {
     if (n && (dest.type === 'student-card' || dest.type === 'student-who' || dest.type === 'counsel' || dest.type === 'parent')) {
         return `${base} ${n}번`;
     }
-    if (dest.type === 'ssugeok' && dest.extra?.slot) return `쓱적 ${dest.extra.slot}`;
+    if (dest.type === 'ssugeok' && dest.extra?.slot) return `쓱, 적 ${dest.extra.slot}`;
     if (dest.type === 'meeting' && dest.extra?.slot) return `회의록 ${dest.extra.slot}`;
     return base;
 }
@@ -208,64 +208,4 @@ export function linkText(link, pages, pageNo) {
     if (raw.startsWith('#')) return raw.split(/\s/)[0];
     if (raw && raw.length <= 24) return raw;
     return navLabel(link.to, pages, pageNo);
-}
-
-export const LEFT_TABS = [
-    { label: '홈', to: 2 },
-    { label: '쓱적', to: 496 },
-    { label: '연간', to: 32 },
-    { label: '주간', to: 46 },
-    { label: '하루', to: 99 },
-    { label: '학급', to: 140 },
-    { label: '학생', to: 154 },
-    { label: '출결', to: 231 },
-    { label: '상담', to: 256 },
-    { label: '수업', to: 335 },
-    { label: '업무', to: 404 },
-    { label: '태그', to: 9 },
-    { label: '공책', to: 516 },
-    { label: '칠판', to: 559 },
-];
-
-export const RIGHT_TABS = [
-    { label: '3', to: 34 },
-    { label: '4', to: 35 },
-    { label: '5', to: 36 },
-    { label: '6', to: 37 },
-    { label: '7', to: 38 },
-    { label: '8', to: 39 },
-    { label: '9', to: 40 },
-    { label: '10', to: 41 },
-    { label: '11', to: 42 },
-    { label: '12', to: 43 },
-    { label: '1', to: 44 },
-    { label: '2', to: 45 },
-    { label: '스티커', to: 563 },
-];
-
-/** 활성 탭: 현재 쪽이 그 구간이면 켜집니다. */
-export function activeLeft(page) {
-    if (page === 1) return null;
-    if (page === 2 || page === 3 || page === 4) return 2;
-    if (page >= 5 && page <= 8) return 2;
-    if (page >= 9 && page <= 31) return 9;
-    if (page >= 32 && page <= 45) return 32;
-    if (page >= 46 && page <= 98) return 46;
-    if (page >= 99 && page <= 139) return 99;
-    if (page >= 140 && page <= 153) return 140;
-    if (page >= 154 && page <= 230) return 154;
-    if (page >= 231 && page <= 255) return 231;
-    if (page >= 256 && page <= 334) return 256;
-    if (page >= 335 && page <= 403) return 335;
-    if (page >= 404 && page <= 494) return 404;
-    if (page >= 495 && page <= 515) return 496;
-    if (page >= 516 && page <= 558) return 516;
-    if (page >= 559 && page <= 562) return 559;
-    return null;
-}
-
-export function activeRight(page) {
-    if (page >= 34 && page <= 45) return page;
-    if (page >= 563) return 563;
-    return null;
 }

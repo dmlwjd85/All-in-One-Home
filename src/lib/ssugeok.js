@@ -1,7 +1,7 @@
 import { addItem, removeItem } from './store.js';
 import { ATTEND_STATUS, startOfWeekMon, todayYmd } from './utils.js';
 
-/** 쓱적 빠른 분류 힌트. 빈 값은 직접 입력. */
+/** 쓱, 적 빠른 분류 힌트. 빈 값은 직접 입력. */
 export const SSUGEOK_HINTS = ['생각', '일', '할일'];
 
 /** 날려보내기 목적지. 왼쪽/오른쪽 스와이프 묶음과 맞춥니다. */
@@ -15,7 +15,7 @@ export const SSUGEOK_DESTS = [
 
 /** 다이어리 화면. 받은함이 기본이고 달력은 보조 보기입니다. */
 export const SSUGEOK_VIEWS = [
-    { id: 'inbox', label: '쓱적', short: '쓱적' },
+    { id: 'inbox', label: '쓱, 적', short: '쓱, 적' },
     { id: 'student', label: '학생', short: '학생' },
     { id: 'attend', label: '출결', short: '출결' },
     { id: 'counsel', label: '상담', short: '상담' },
@@ -70,7 +70,7 @@ export async function ensureRosterName(name, roster, signedIn) {
 }
 
 /**
- * 쓱적 한 건을 목적지로 옮긴 뒤 받은함에서 지웁니다.
+ * 쓱, 적 한 건을 목적지로 옮긴 뒤 받은함에서 지웁니다.
  * 기존 출결·할 일 컬렉션을 재사용하고, 없는 목적지는 전용 컬렉션에 둡니다.
  */
 export async function sendSsugeokItem({ destId, item, extras, roster, signedIn, author }) {

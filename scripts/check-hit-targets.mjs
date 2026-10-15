@@ -5,8 +5,8 @@
 import { readFileSync } from 'node:fs';
 
 const notebook = JSON.parse(readFileSync(new URL('../src/notebook/data/notebook.json', import.meta.url), 'utf8'));
-import { LEFT_TABS, RIGHT_TABS, TAGS } from '../src/notebook/labels.js';
-import { PAGE_H, TAB_MIN, TAB_W, tabStackHeight } from '../src/notebook/layout.js';
+import { TAGS } from '../src/notebook/labels.js';
+import { PAGE_H, TAB_MIN, TAB_W } from '../src/notebook/layout.js';
 import {
     bodyLinks,
     destForStudentNumber,
@@ -23,22 +23,7 @@ const notes = [];
 const ok = (cond, msg) => { if (!cond) errors.push(msg); };
 
 ok(TAB_W >= TAB_MIN, `탭 너비 ${TAB_W} < ${TAB_MIN}`);
-ok(tabStackHeight(LEFT_TABS.length) >= TAB_MIN, `왼쪽 탭 높이 ${tabStackHeight(LEFT_TABS.length).toFixed(1)} < ${TAB_MIN}`);
-ok(tabStackHeight(RIGHT_TABS.length) >= TAB_MIN, `오른쪽 탭 높이 ${tabStackHeight(RIGHT_TABS.length).toFixed(1)} < ${TAB_MIN}`);
 ok(PAGE_H === 820, `용지 높이 ${PAGE_H}`);
-
-const chromeLeft = notebook.chrome.left;
-const chromeRight = notebook.chrome.right;
-ok(LEFT_TABS.length === chromeLeft.length, `왼쪽 탭 수 ${LEFT_TABS.length} ≠ ${chromeLeft.length}`);
-ok(RIGHT_TABS.length === chromeRight.length, `오른쪽 탭 수 ${RIGHT_TABS.length} ≠ ${chromeRight.length}`);
-LEFT_TABS.forEach((tab, i) => {
-    const shown = chromeLeft[i].label === '쓰' ? '쓱적' : chromeLeft[i].label;
-    ok(tab.to === chromeLeft[i].to, `왼쪽 ${tab.label}: ${tab.to} ≠ PDF ${chromeLeft[i].label}:${chromeLeft[i].to}`);
-    ok(tab.label === shown, `왼쪽 라벨 ${tab.label} ≠ ${shown}`);
-});
-RIGHT_TABS.forEach((tab, i) => {
-    ok(tab.to === chromeRight[i].to, `오른쪽 ${tab.label}: ${tab.to} ≠ PDF ${chromeRight[i].to}`);
-});
 
 for (let n = 1; n <= 32; n++) {
     ok(studentCardPage(n) === 157 + n * 2, `카드 ${n} → ${studentCardPage(n)}`);
@@ -121,10 +106,6 @@ if (monthGaps.length) {
 
 const report = {
     tabW: TAB_W,
-    leftTabH: Number(tabStackHeight(LEFT_TABS.length).toFixed(2)),
-    rightTabH: Number(tabStackHeight(RIGHT_TABS.length).toFixed(2)),
-    leftTabs: LEFT_TABS.map((t) => `${t.label}→${t.to}`),
-    rightTabs: RIGHT_TABS.map((t) => `${t.label}→${t.to}`),
     topLinksCollected: topCovered,
     bodyLinksRendered: bodyKnown,
     bodyLinksUnknown: bodyUnknown,

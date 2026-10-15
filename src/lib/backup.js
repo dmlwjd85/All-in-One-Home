@@ -21,7 +21,7 @@ export const BACKUP_LISTS = {
 export const BACKUP_RECORD = 'praiseBoard';
 
 export const BACKUP_LABELS = {
-    inbox: '쓱적 받은함',
+    inbox: '쓱, 적 받은함',
     studentNotes: '학생 메모',
     counselNotes: '상담 메모',
     plans: '주간 계획',

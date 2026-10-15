@@ -76,7 +76,7 @@ export function linkRosterValue(studentNo, rosterKey, value, previous, signedIn)
     writePageFields(page, { ...card, [cardKey]: value }, signedIn);
 }
 
-/** 쓱적에서 옮긴 한 줄을 그 쪽 타임라인에 붙입니다. */
+/** 쓱, 적에서 옮긴 한 줄을 그 쪽 타임라인에 붙입니다. */
 export async function appendPageTrail(page, entry, signedIn) {
     const fields = readLocal(page);
     const notes = Array.isArray(fields.ssugeokNotes) ? fields.ssugeokNotes : [];

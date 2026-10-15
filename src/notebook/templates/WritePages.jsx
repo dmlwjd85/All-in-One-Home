@@ -86,7 +86,7 @@ export function SsugeokPage({
     };
     return (
         <div className="nb-ssugeok nb-fill">
-            <TitleBar title={`쓱적 ${extra.slot || 1}`} hint="먼저 적고, 나중에 나눕니다. 한 줄에 한 건." />
+            <TitleBar title={extra.slot > 1 ? `쓱, 적 ${extra.slot}` : '쓱, 적'} hint="먼저 적고, 나중에 나눕니다." />
             <SsugeokBoard
                 notes={ssugeokNotes || []}
                 signedIn={signedIn}
@@ -264,7 +264,7 @@ export function WriteGroup(props) {
     switch (type) {
         case 'tag-legend': return <TagLegendPage {...props} />;
         case 'tag-index': return <TagIndexPage {...props} />;
-        case 'ssugeok-toc': return <TocCards title="쓱적·메모 목차" hint="쓱적 · 모눈 · 점 · 무지 다섯 장씩" {...props} />;
+        case 'ssugeok-toc': return <TocCards title="쓱, 적·메모 목차" hint="쓱, 적 · 모눈 · 점 · 무지 다섯 장씩" {...props} />;
         case 'ssugeok': return <SsugeokPage {...props} />;
         case 'memo': return <MemoPage {...props} />;
         case 'notebook-toc': return <TocCards title="공책 목차" hint="이름을 누르면 1쪽, 숫자를 누르면 그 쪽으로 가요" {...props} />;

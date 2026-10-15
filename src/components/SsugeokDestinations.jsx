@@ -66,7 +66,7 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
         <section className="space-y-3">
             <Header
                 title="학생"
-                hint="명렬에 붙인 쓱적과 관찰을 학생별로 모읍니다."
+                hint="명렬에 붙인 쓱, 적과 관찰을 학생별로 모읍니다."
                 actions={(
                     <>
                         <button type="button" className="btn-secondary" onClick={() => { setRosterText(names.join('\n')); setModal('roster'); }}>
@@ -78,7 +78,7 @@ function StudentDest({ studentNotes, roster, signedIn, author, onChanged, onToas
             />
             <input className="field" value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름·내용 검색" aria-label="학생 검색" />
             {names.length === 0 && studentNotes.length === 0 && (
-                <p className="text-sm text-stone-600">아직 명단이 없습니다. 쓱적을 학생에게 보낼 때 이름을 적으면 최소 명단이 만들어집니다.</p>
+                <p className="text-sm text-stone-600">아직 명단이 없습니다. 쓱, 적을 학생에게 보낼 때 이름을 적으면 최소 명단이 만들어집니다.</p>
             )}
             {grouped.length === 0 ? (
                 <EmptyState title="학생 기록이 없습니다" hint="받은함에서 카드를 밀어 이곳으로 날려보내 보세요." />
@@ -172,7 +172,7 @@ function AttendDest({ attendance, roster, signedIn, author, onChanged, onToast }
                 <input type="month" className="field mt-1" value={month} onChange={(e) => setMonth(e.target.value)} />
             </label>
             {rows.length === 0 ? (
-                <EmptyState title="이달 출결 기록이 없습니다" hint="쓱적 카드를 출결로 밀거나, 여기서 바로 남길 수 있습니다." />
+                <EmptyState title="이달 출결 기록이 없습니다" hint="쓱, 적 카드를 출결로 밀거나, 여기서 바로 남길 수 있습니다." />
             ) : (
                 <article className="card p-4 bg-[#fffaf0]/85">
                     <h3 className="font-black text-lg">{monthLabel(month)}</h3>
@@ -253,7 +253,7 @@ function CounselDest({ counselNotes, roster, signedIn, author, onChanged, onToas
         <section className="space-y-3">
             <Header
                 title="상담·누가"
-                hint="쓱적으로 날아온 상담과 누가기록을 모읍니다."
+                hint="쓱, 적으로 날아온 상담과 누가기록을 모읍니다."
                 actions={<button type="button" className="btn-primary" onClick={() => setModal(true)}><Plus size={16} /> 기록</button>}
             />
             <div className="flex gap-1" role="group" aria-label="상담 종류">
@@ -390,7 +390,7 @@ function TaskDest({ todos, signedIn, author, onChanged, onToast }) {
 
     return (
         <section className="space-y-3">
-            <Header title="업무" hint="쓱적에서 날아온 일과 바로 적은 할 일을 같이 둡니다." />
+            <Header title="업무" hint="쓱, 적에서 날아온 일과 바로 적은 할 일을 같이 둡니다." />
             <div className="card p-4 space-y-3 bg-[#fffaf0]/85">
                 <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr_auto] gap-2">
                     <input type="date" className="field" value={date} onChange={(e) => setDate(e.target.value)} aria-label="할 일 날짜" />

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, LogOut, PenLine, Search, Upload } from 'lucide-react';
+import { Download, LogIn, LogOut, Pencil, Upload } from 'lucide-react';
 import catalog from 'virtual:notebook-catalog';
 import { usePageFields } from './fieldStore.js';
 import { dropSection, loadSection, sectionForPage } from './loadNotebook.js';
-import { fitCanvas } from './layout.js';
 import NotebookShell from './NotebookShell.jsx';
 import PageBody from './PageBody.jsx';
 import SearchDialog from './SearchDialog.jsx';
@@ -11,9 +10,12 @@ import { Modal } from '../components/ui.jsx';
 import SsugeokInbox from '../components/SsugeokInbox.jsx';
 import SsugeokDestinations from '../components/SsugeokDestinations.jsx';
 import { SSUGEOK_VIEWS } from '../lib/ssugeok.js';
-import CaptureFab from './CaptureFab.jsx';
+import DiaryTop from './diary/DiaryTop.jsx';
+import TodayBoard from './diary/TodayBoard.jsx';
+import QuickCapture from './diary/QuickCapture.jsx';
+import { monthOfPage } from './diary/DiaryTop.jsx';
+import { monthPageFor, shiftYm } from './diary/dates.js';
 import { mergeNotes, quarantineSensitive, useSensitiveNotes } from './ssugeokStore.js';
-import AppMenu from './AppMenu.jsx';
 import { canonicalHash, pageFromHash, resolveHash } from './routes.js';
 
 const MAX = catalog.pageCount;
@@ -28,6 +30,8 @@ export default function NotebookApp({
     author,
     signedIn,
     onLogout,
+    onLogin,
+    authReady,
     onExport,
     onImportText,
     inbox,
@@ -54,7 +58,9 @@ export default function NotebookApp({
     const [focusId, setFocusId] = useState(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 700px)').matches);
-    const [box, setBox] = useState(null);
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const swipeRef = useRef(null);
     const stageRef = useRef(null);
     const fileRef = useRef(null);
     const sensitiveNotes = useSensitiveNotes();
@@ -93,19 +99,6 @@ export default function NotebookApp({
         mq.addEventListener('change', onChange);
         return () => mq.removeEventListener('change', onChange);
     }, []);
-
-    useEffect(() => {
-        const el = stageRef.current;
-        if (!el || phone) return undefined;
-        const measure = () => {
-            const rect = el.getBoundingClientRect();
-            setBox(fitCanvas(rect.width - 8, rect.height - 8));
-        };
-        measure();
-        const observer = new ResizeObserver(measure);
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [phone]);
 
     const applyLocation = useCallback(() => {
         const resolved = resolveHash(location.hash, catalog.pages, MAX);
@@ -148,21 +141,39 @@ export default function NotebookApp({
         return () => { stop = true; };
     }, [inbox, signedIn, onChanged]);
 
+    const stepMonth = useCallback((delta) => {
+        const ym = monthOfPage(catalog.pages[page - 1]);
+        const t = shiftYm(ym.y, ym.m, delta);
+        const dest = monthPageFor(t.y, t.m);
+        if (dest) go(dest);
+    }, [go, page]);
+
     useEffect(() => {
         const onKey = (e) => {
             const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
+                setSearchOpen(false);
+                setQuickOpen(true);
+                return;
+            }
+            if (e.altKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's')) {
+                e.preventDefault();
+                const inline = document.querySelector('.nb-body [data-ssu-capture]');
+                if (inline) inline.focus();
+                else setQuickOpen(true);
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
                 setSearchOpen(true);
                 return;
             }
             if (typing) return;
-            if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                if (catalog.pages[page - 1]?.type !== 'month') return;
                 e.preventDefault();
-                go(page + 1);
-            } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-                e.preventDefault();
-                go(page - 1);
+                stepMonth(e.key === 'ArrowRight' ? 1 : -1);
             } else if (e.key === 'Home') {
                 e.preventDefault();
                 go(2);
@@ -170,7 +181,21 @@ export default function NotebookApp({
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [go, page]);
+    }, [go, page, stepMonth]);
+
+    const onTouchStart = (e) => {
+        const t = e.touches[0];
+        swipeRef.current = { x: t.clientX, y: t.clientY };
+    };
+    const onTouchEnd = (e) => {
+        const start = swipeRef.current;
+        swipeRef.current = null;
+        if (!start || catalog.pages[page - 1]?.type !== 'month') return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - start.x;
+        const dy = t.clientY - start.y;
+        if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) stepMonth(dx < 0 ? 1 : -1);
+    };
 
     const onFile = async (event) => {
         const file = event.target.files?.[0];
@@ -184,57 +209,36 @@ export default function NotebookApp({
         onImportText?.(text);
     };
 
-    const canvasStyle = !phone && box?.width ? { width: `${box.width}px`, height: `${box.height}px` } : undefined;
+    const isHome = page === 2;
+    const capProps = { author, signedIn, fromPage: page, onChanged, onToast };
 
     return (
-        <div className={`nb-app ${phone ? 'is-phone' : ''}`}>
-            <p className="sr-only" aria-live="polite">{stub?.title || '교무수첩'} {page}쪽</p>
-            <header className="nb-toolbar">
-                <p className="nb-toolbar-brand">
-                    <PenLine size={16} aria-hidden="true" />
-                    <span className="nb-brand-name">2026 교무수첩</span>
-                    <span className="nb-toolbar-page">{stub?.title}</span>
-                </p>
-                <span className="nb-toolbar-num" aria-label={`${page}쪽, 전체 ${MAX}쪽`}>{phone ? `p.${page}` : `p.${page}/${MAX}`}</span>
-                <div className="nb-toolbar-actions">
-                    <span className="nb-toolbar-user">{author}{guest ? ' · 이 기기' : ''}</span>
-                    <button type="button" className="btn-secondary nb-toolbtn" onClick={() => setSearchOpen(true)} aria-label="수첩 찾기" aria-keyshortcuts="Control+K">
-                        <Search size={16} />
-                        <span className="nb-toolhide">찾기</span>
-                    </button>
-                    <button type="button" className="btn-secondary nb-toolbtn" onClick={onExport} aria-label="데이터 내보내기">
-                        <Download size={16} />
-                        <span className="nb-toolhide">내보내기</span>
-                    </button>
-                    <button type="button" className="btn-secondary nb-toolbtn" onClick={() => fileRef.current?.click()} aria-label="백업 가져오기">
-                        <Upload size={16} />
-                        <span className="nb-toolhide">가져오기</span>
-                    </button>
-                    <input ref={fileRef} className="sr-only" type="file" accept="application/json,.json" aria-label="백업 JSON 파일" onChange={onFile} />
-                    <button type="button" className="btn-secondary nb-toolbtn" onClick={onLogout} aria-label={user ? '로그아웃' : '나가기'}>
-                        <LogOut size={16} />
-                        <span className="nb-toolhide">{user ? '로그아웃' : '나가기'}</span>
-                    </button>
-                </div>
-            </header>
-            <AppMenu
+        <div className={`nb-app dy-app ${phone ? 'is-phone' : ''}`}>
+            <p className="sr-only" aria-live="polite">{stub?.title || '교무수첩'}</p>
+            <DiaryTop
                 page={page}
                 pages={catalog.pages}
                 onGo={go}
-                onOpenSearch={() => setSearchOpen(true)}
-                closeSignal={navEpoch}
-                capture={phone ? (
-                    <CaptureFab
-                        author={author}
-                        signedIn={signedIn}
-                        fromPage={page}
-                        onChanged={onChanged}
-                        onToast={onToast}
-                    />
-                ) : null}
+                onSearch={() => setSearchOpen(true)}
+                onSettings={() => setSettingsOpen(true)}
+                signedIn={signedIn}
             />
 
-            <div className="nb-stage-wrap" ref={stageRef}>
+            <div className="nb-stage-wrap dy-stage" ref={stageRef} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+                {isHome ? (
+                    <TodayBoard
+                        pages={catalog.pages}
+                        onGo={go}
+                        notes={ssugeokNotes}
+                        signedIn={signedIn}
+                        author={author}
+                        onChanged={onChanged}
+                        onToast={onToast}
+                        fields={fields}
+                        setField={setField}
+                        phone={phone}
+                    />
+                ) : (
                 <NotebookShell
                     page={page}
                     pageRec={pageRec || { ...stub, topNav: [], links: [], extra: stub?.extra || {} }}
@@ -242,7 +246,6 @@ export default function NotebookApp({
                     onGo={go}
                     showChrome={showChrome}
                     phone={phone}
-                    style={canvasStyle}
                 >
                     {sectionError ? (
                         <div className="nb-load-error">
@@ -286,16 +289,48 @@ export default function NotebookApp({
                         <p className="nb-hint">쪽을 불러오는 중입니다…</p>
                     )}
                 </NotebookShell>
+                )}
             </div>
 
-            {!phone && (
-                <CaptureFab
-                    author={author}
-                    signedIn={signedIn}
-                    fromPage={page}
-                    onChanged={onChanged}
-                    onToast={onToast}
-                />
+            {phone && !quickOpen && (
+                <button type="button" className="dy-fab" onClick={() => setQuickOpen(true)} aria-label="쓱, 적 적기">
+                    <Pencil size={24} strokeWidth={1.8} />
+                </button>
+            )}
+
+            {quickOpen && <QuickCapture {...capProps} onClose={() => setQuickOpen(false)} />}
+
+            {settingsOpen && (
+                <Modal title="설정" onClose={() => setSettingsOpen(false)}>
+                    <div className="dy-settings">
+                        <section>
+                            <h3 className="dy-h3">계정 · 동기화</h3>
+                            {user ? (
+                                <>
+                                    <p className="dy-muted">{user.email || author} 로 로그인했어요. 여러 기기에 기록이 맞춰집니다.</p>
+                                    <button type="button" className="dy-btn-ghost" onClick={onLogout}><LogOut size={16} /> 로그아웃</button>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="dy-muted">지금은 이 기기에만 저장돼요. Google로 로그인하면 여러 기기에 맞춰집니다.{authReady ? '' : ' (로그인 상태를 확인하는 중)'}</p>
+                                    <button type="button" className="dy-btn-primary" onClick={onLogin}><LogIn size={16} /> Google 계정으로 로그인</button>
+                                </>
+                            )}
+                        </section>
+                        <section>
+                            <h3 className="dy-h3">백업</h3>
+                            <div className="dy-row">
+                                <button type="button" className="dy-btn-ghost" onClick={onExport}><Download size={16} /> 내보내기</button>
+                                <button type="button" className="dy-btn-ghost" onClick={() => fileRef.current?.click()}><Upload size={16} /> 가져오기</button>
+                            </div>
+                            <input ref={fileRef} className="sr-only" type="file" accept="application/json,.json" aria-label="백업 JSON 파일" onChange={onFile} />
+                        </section>
+                        <section>
+                            <h3 className="dy-h3">단축키</h3>
+                            <p className="dy-muted">⌘K · Ctrl+K 쓱, 적 · ⌘/ 찾기 · 월간에서 ← → 달 넘기기</p>
+                        </section>
+                    </div>
+                </Modal>
             )}
 
             {searchOpen && (
@@ -303,9 +338,9 @@ export default function NotebookApp({
             )}
 
             {hub && (
-                <Modal title="쓱적 허브 · 날려보내기" onClose={() => setHub(null)} wide>
+                <Modal title="쓱, 적 허브 · 날려보내기" onClose={() => setHub(null)} wide>
                     <p className="text-sm text-stone-600 mb-3">
-                        PDF 쓰 쪽의 줄 메모는 그대로 두고, 받은함 카드를 학생·출결·상담·주간·업무로 나눕니다. 수첩 탭·링크는 닫아도 유지됩니다.
+                        받은함 카드를 학생·출결·상담·주간·업무로 나눕니다. 수첩 탭·링크는 닫아도 유지됩니다.
                     </p>
                     <div className="flex gap-1 overflow-x-auto pb-2 mb-3">
                         {SSUGEOK_VIEWS.filter((v) => v.id !== 'cal').map((t) => (
