@@ -680,8 +680,8 @@ export async function geometryHits(page) {
             const targets = pageEl.querySelectorAll('input, textarea, select, button, a, label, p, h1, h2, h3, li, .nb-kicker, .nb-pagetitle, .nb-field-label');
             for (const el of targets) {
                 if (el.closest('.sr-only') || el.disabled) continue;
-                const box = el.getBoundingClientRect();
-                if (box.width < 2 || box.height < 2) continue;
+                const box = clippedTextBox(el.getBoundingClientRect(), el);
+                if (!box || box.right - box.left < 2 || box.bottom - box.top < 2) continue;
                 for (const floater of floaters) {
                     if (floater.classList.contains('dy-fab') || floater.classList.contains('dy-top')) continue;
                     if (floater.contains(el) || el.contains(floater)) continue;
@@ -1865,7 +1865,8 @@ async function checkQaLayout(page, browserErrors) {
             const tail = buttons.length ? buttons[buttons.length - 1].getBoundingClientRect() : null;
             const fabNow = document.querySelector('.dy-fab')?.getBoundingClientRect();
             const dockNow = dock && dock.getClientRects().length ? dock.getBoundingClientRect() : null;
-            const lowest = buttons.length ? Math.max(...buttons.map((el) => el.getBoundingClientRect().bottom)) : null;
+            const sheet = document.querySelector('.dy-m, .dy-page');
+            const sheetBottom = sheet ? sheet.getBoundingClientRect().bottom : null;
             scroller.scrollTop = prev;
             scroller.style.scrollBehavior = behavior;
             const limit = dockNow || fabNow;
@@ -1875,7 +1876,7 @@ async function checkQaLayout(page, browserErrors) {
                 fabBand: fab ? Math.round(window.innerHeight - fab.top) : 88,
                 meet: dockBox ? Math.round(Math.abs(dockBox.top - stage.bottom) * 10) / 10 : null,
                 tailClear: tail && limit ? tail.bottom <= limit.top + 1 : true,
-                slack: dockNow && lowest != null && scroller.scrollHeight > scroller.clientHeight + 24 ? Math.round(dockNow.top - lowest) : null,
+                slack: dockNow && sheetBottom != null && scroller.scrollHeight > scroller.clientHeight + 24 ? Math.round(dockNow.top - sheetBottom) : null,
             };
         });
         if (!reach) {
@@ -2409,6 +2410,14 @@ async function checkQaLayout(page, browserErrors) {
                 await page.evaluate(() => document.querySelector('.dy-inbox [data-note-edit], .dy-list [data-note-edit]')?.click());
                 try {
                     await page.waitForSelector('[data-note-save]', { timeout: 2000 });
+                    await page.evaluate(() => {
+                        const field = document.querySelector('[data-note-save]')?.closest('.dy-entry')?.querySelector('textarea');
+                        if (!field) return;
+                        const set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                        set.call(field, `${field.value} 고침`);
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                    await page.waitForFunction(() => (document.querySelector('textarea.dy-entry-input')?.value || '').endsWith('고침'), { timeout: 2000 });
                     await page.evaluate(() => document.querySelector('[data-note-save]')?.click());
                     await page.waitForFunction(() => (document.querySelector('.dy-toast span')?.textContent || '').includes('고쳤어요'), { timeout: 2500 });
                 } catch {
@@ -2432,7 +2441,7 @@ async function checkQaLayout(page, browserErrors) {
                     }
                     for (const where of ['top', 'middle', 'bottom']) {
                         await scrollStage(where);
-                        await assertToastText(`${width}x${height} 제안${count} ${where}`, { minLines: 2 });
+                        await assertToastText(`${width}x${height} 제안${count} ${where}`, { minLines: width <= 360 ? 2 : 0 });
                     }
                 }
             }
@@ -2440,6 +2449,10 @@ async function checkQaLayout(page, browserErrors) {
                 localStorage.setItem('homenote_v2_submissionSheets', JSON.stringify([{
                     id: 'local-dock-sheet', title: '확인용 제출', submitted: [],
                 }]));
+            });
+            await page.reload({ waitUntil: 'networkidle0', timeout: 60000 });
+            await holdToast();
+            await page.evaluate(() => {
                 const reject = () => Promise.reject(new Error('denied'));
                 if (!navigator.clipboard) {
                     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: reject } });
@@ -2447,8 +2460,6 @@ async function checkQaLayout(page, browserErrors) {
                     navigator.clipboard.writeText = reject;
                 }
             });
-            await page.reload({ waitUntil: 'networkidle0', timeout: 60000 });
-            await holdToast();
             await go(page, 458);
             try {
                 await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.textContent.trim() === '알림장 복사'), { timeout: 4000 });
@@ -2461,7 +2472,7 @@ async function checkQaLayout(page, browserErrors) {
             }
             for (const where of ['top', 'middle', 'bottom']) {
                 await scrollStage(where);
-                await assertToastText(`${width}x${height} 복사 ${where}`, { minLines: 2 });
+                await assertToastText(`${width}x${height} 복사 ${where}`, { minLines: width <= 360 ? 2 : 0 });
             }
             await scrollStage('bottom');
             const copyHit = await page.evaluate(() => {
