@@ -29,7 +29,7 @@ jobs:
       - name: 설치하고 빌드
         env:
           VITE_BASE: ./
-          VITE_FIREBASE_CONFIG: ${{ github.event_name != 'pull_request' && secrets.VITE_FIREBASE_CONFIG || '' }}
+          VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
         run: |
           npm install
           npm run check:links
@@ -43,6 +43,7 @@ jobs:
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./
+          VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
         run: npm run check:browser
       - name: 빌드 결과 올리기
         if: github.event_name != 'pull_request'
