@@ -70,17 +70,22 @@ function check(ok, message) {
     if (!ok) failures.push(message);
 }
 
+setTimeout(() => {
+    console.error('브라우저 검사가 4분을 넘겨 멈춰서 끝냅니다.');
+    preview.kill('SIGKILL');
+    process.exit(1);
+}, 4 * 60 * 1000).unref();
+
 let browser = null;
 
 async function launchBrowser() {
     const next = await puppeteer.launch({
         executablePath: chrome,
         headless: true,
-        pipe: true,
-        timeout: 60000,
-        protocolTimeout: 180000,
+        timeout: 45000,
+        protocolTimeout: 45000,
         dumpio: false,
-        args: chromeArgs,
+        args: [...chromeArgs, '--no-zygote'],
     });
     next.on('disconnected', () => {
         if (browser === next) browser = null;
