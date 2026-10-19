@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { loadFirebase } from './firebase.js';
+import { finishRedirectSignIn, isIosHomeScreenApp, signInWithGoogle } from './lib/googleLogin.js';
 import { Modal, Toast } from './components/ui.jsx';
 import { applyBackupLocal, BACKUP_LABELS, buildExportPayload, validateBackup } from './lib/backup.js';
 import { reportSaveFailure } from './lib/saveNotice.js';
@@ -42,6 +43,10 @@ export default function App() {
         loadFirebase().then(async ({ auth }) => {
             const { onAuthStateChanged } = await import('firebase/auth');
             if (cancelled) return;
+            finishRedirectSignIn(auth).catch((err) => {
+                console.error(err);
+                if (!cancelled) notify('Google 로그인을 마치지 못했어요. 설정에서 한 번 더 눌러 주세요.');
+            });
             unsub = onAuthStateChanged(auth, (u) => {
                 if (cancelled) return;
                 setUser(u);
@@ -98,13 +103,13 @@ export default function App() {
     const loginGoogle = async () => {
         try {
             const { auth } = await loadFirebase();
-            const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-            await signInWithPopup(auth, provider);
+            await signInWithGoogle(auth);
         } catch (err) {
             console.error(err);
-            notify('Google 로그인에 실패했습니다. 이 기기에서만 쓰기를 선택할 수 있습니다.');
+            if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') return;
+            notify(isIosHomeScreenApp()
+                ? '아이폰 홈 화면 앱에서 Google 로그인이 잘 안 됐어요. 그동안은 Safari에서 열어 로그인해 주세요.'
+                : 'Google 로그인에 실패했습니다. 이 기기에서만 쓰기를 선택할 수 있습니다.');
         }
     };
 

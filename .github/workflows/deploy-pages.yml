@@ -29,6 +29,8 @@ jobs:
       - name: Install and build
         env:
           VITE_BASE: ./
+          # 비어 있으면 sambong-world-2026.firebaseapp.com을 그대로 써요. 저장소 변수(Variables)에서 바꿔요.
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
         run: |
           npm install
           npm run check:links
@@ -42,6 +44,8 @@ jobs:
       - name: Browser overlap, clipped buttons, and 14px table text
         env:
           VITE_BASE: ./
+          # 비어 있으면 sambong-world-2026.firebaseapp.com을 그대로 써요. 저장소 변수(Variables)에서 바꿔요.
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
         run: npm run check:browser
       - name: Upload artifact
         if: github.event_name != 'pull_request'

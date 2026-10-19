@@ -18,10 +18,15 @@ function readViteEnv(read) {
 
 const firebaseFromEnv = readViteEnv(() => import.meta.env.VITE_FIREBASE_CONFIG);
 const appFromEnv = readViteEnv(() => import.meta.env.VITE_APP_ID);
+// 로그인 도우미 주소. 배포에서 dmlwjd85.github.io로 두면 앱과 같은 주소에서 로그인해요(아이폰 홈 화면 앱용).
+const authDomainFromEnv = readViteEnv(() => import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
 
-export const firebaseConfig = firebaseFromEnv
+const baseConfig = firebaseFromEnv
     ? JSON.parse(firebaseFromEnv)
     : fallbackConfig;
+export const firebaseConfig = authDomainFromEnv
+    ? { ...baseConfig, authDomain: authDomainFromEnv }
+    : baseConfig;
 
 export const appId = appFromEnv || 'home-note-app';
 
