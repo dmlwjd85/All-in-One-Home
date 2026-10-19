@@ -1,27 +1,30 @@
 /** @type {import('tailwindcss').Config} */
 export default {
     content: ['./index.html', './src/**/*.{js,jsx}'],
+    darkMode: 'class',
     theme: {
         extend: {
             colors: {
-                ink: {
-                    50: '#f8f6f2',
-                    100: '#f1ece3',
-                    200: '#e4d9c8',
-                    700: '#4a4036',
-                    800: '#2c241c',
-                    900: '#1a1612',
-                },
+                bg: 'var(--bg)',
+                ink: 'var(--ink)',
+                'ink-sub': 'var(--ink-sub)',
+                primary: 'var(--primary)',
+                'on-primary': 'var(--on-primary)',
+                solid: 'var(--solid)',
+                line: 'var(--line)',
             },
             fontFamily: {
-                sans: ['"Pretendard Variable"', 'Pretendard', '"Hakgyoansim Dunggeunmiso"', 'system-ui', 'sans-serif'],
-                serif: ['"Hakgyoansim Geurimilgi"', 'Georgia', 'serif'],
+                title: 'var(--font-title)',
+                body: 'var(--font-body)',
             },
-            minHeight: {
-                tap: '44px',
+            borderRadius: {
+                sm: '10px',
+                md: '16px',
+                lg: '24px',
+                xl: '28px',
             },
-            minWidth: {
-                tap: '44px',
+            boxShadow: {
+                glass: 'var(--shadow)',
             },
         },
     },

@@ -1,33 +1,18 @@
 {
-    "id": "/All-in-One-Home/",
-    "name": "2026 교무수첩",
-    "short_name": "교무수첩",
-    "description": "초등 담임 교무수첩. 칸을 채우고 이 기기와 백업으로 기록을 보관합니다.",
+    "id": "./",
+    "name": "쓱 교무수첩",
+    "short_name": "쓱 교무수첩",
+    "description": "열자마자 쓱, 적. 초등 담임 교무수첩.",
     "lang": "ko",
     "dir": "ltr",
-    "start_url": "/All-in-One-Home/",
-    "scope": "/All-in-One-Home/",
+    "start_url": "./",
+    "scope": "./",
     "display": "standalone",
-    "background_color": "#f4e7da",
-    "theme_color": "#4a3f3a",
+    "background_color": "#F6F4FF",
+    "theme_color": "#6D4AFF",
     "icons": [
-        {
-            "src": "./pwa-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "./pwa-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any"
-        },
-        {
-            "src": "./pwa-maskable-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
-        }
+        { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
     ]
 }

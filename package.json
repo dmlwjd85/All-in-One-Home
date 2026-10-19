@@ -17,7 +17,7 @@
     "check:hits": "node scripts/check-hit-targets.mjs",
     "check:storage": "node scripts/check-storage-paths.mjs",
     "check:quality": "node scripts/check-quality.mjs",
-    "check:browser": "node scripts/check-quality.mjs --browser"
+    "check:browser": "node scripts/check-browser.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",
@@ -26,6 +26,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",

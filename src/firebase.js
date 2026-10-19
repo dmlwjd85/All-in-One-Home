@@ -1,46 +1,132 @@
-const fallbackConfig = {
-    apiKey: 'AIzaSyAsih-sfnIZ_gX_1l7SAVZHCAhk3KzmiP8',
-    authDomain: 'sambong-world-2026.firebaseapp.com',
-    projectId: 'sambong-world-2026',
-    storageBucket: 'sambong-world-2026.firebasestorage.app',
-    messagingSenderId: '',
-    appId: '1:728320769100:web:7510c9a77cca6b87a788e9',
-    measurementId: 'G-H1RGMJHGTV',
-};
+/** 새 프로젝트 ssug-gyomu 설정은 환경 변수로만 받습니다. 값이 없으면 이 기기 저장만 씁니다. */
 
-function readViteEnv(read) {
+function readConfig(raw) {
+    if (!raw || !String(raw).trim()) return null;
     try {
-        return read();
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        if (!parsed.apiKey || !parsed.projectId || !parsed.authDomain) return null;
+        return parsed;
     } catch {
-        return undefined;
+        return null;
     }
 }
 
-const firebaseFromEnv = readViteEnv(() => import.meta.env.VITE_FIREBASE_CONFIG);
-const appFromEnv = readViteEnv(() => import.meta.env.VITE_APP_ID);
-// 로그인 도우미 주소. 배포에서 dmlwjd85.github.io로 두면 앱과 같은 주소에서 로그인해요(아이폰 홈 화면 앱용).
-const authDomainFromEnv = readViteEnv(() => import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
+function viteValue(name) {
+    try {
+        if (name === 'VITE_FIREBASE_CONFIG') return import.meta.env.VITE_FIREBASE_CONFIG;
+        if (name === 'VITE_LEGACY_FIREBASE_CONFIG') return import.meta.env.VITE_LEGACY_FIREBASE_CONFIG;
+        if (name === 'VITE_FIREBASE_AUTH_DOMAIN') return import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
+    } catch {
+        return '';
+    }
+    return '';
+}
 
-const baseConfig = firebaseFromEnv
-    ? JSON.parse(firebaseFromEnv)
-    : fallbackConfig;
-export const firebaseConfig = authDomainFromEnv
-    ? { ...baseConfig, authDomain: authDomainFromEnv }
-    : baseConfig;
+export function newFirebaseConfig() {
+    const config = readConfig(viteValue('VITE_FIREBASE_CONFIG'));
+    if (!config) return null;
+    if (config.projectId !== 'ssug-gyomu') return null;
+    const domain = String(viteValue('VITE_FIREBASE_AUTH_DOMAIN') || '').trim();
+    if (domain && /^[A-Za-z0-9.-]+$/.test(domain)) return { ...config, authDomain: domain };
+    return config;
+}
 
-export const appId = appFromEnv || 'home-note-app';
+export function legacyFirebaseConfig() {
+    const config = readConfig(viteValue('VITE_LEGACY_FIREBASE_CONFIG'));
+    if (!config || config.projectId !== 'sambong-world-2026') return null;
+    return config;
+}
+
+export function loginHint(error) {
+    if (!error || error.code === 'no-config' || error.code === 'auth/invalid-api-key') {
+        return '아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.';
+    }
+    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        return '로그인 창을 닫으셨어요. 다시 눌러 주세요.';
+    }
+    return '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.';
+}
+
+export function cloudReady() {
+    return Boolean(newFirebaseConfig());
+}
 
 let bundle = null;
 
-/** Firebase SDK는 로그인·동기화가 필요할 때만 불러옵니다. */
-export async function loadFirebase() {
-    if (bundle) return bundle;
-    const [{ initializeApp, getApps }, { getAuth }, { getFirestore }] = await Promise.all([
+export async function loadFirebase({ memoryOnly = false } = {}) {
+    const config = newFirebaseConfig();
+    if (!config) return null;
+    if (bundle && bundle.memoryOnly === memoryOnly) return bundle;
+    const [{ initializeApp, getApps }, { getAuth }, firestore] = await Promise.all([
         import('firebase/app'),
         import('firebase/auth'),
         import('firebase/firestore'),
     ]);
-    const app = getApps()[0] || initializeApp(firebaseConfig);
-    bundle = { app, auth: getAuth(app), db: getFirestore(app), appId };
+    const app = getApps().find((item) => item.name === '[DEFAULT]') || initializeApp(config);
+    let cache;
+    try {
+        cache = memoryOnly
+            ? firestore.memoryLocalCache()
+            : firestore.persistentLocalCache({ tabManager: firestore.persistentMultipleTabManager() });
+    } catch {
+        cache = firestore.memoryLocalCache();
+    }
+    let db;
+    try {
+        db = firestore.initializeFirestore(app, { localCache: cache });
+    } catch {
+        db = firestore.getFirestore(app);
+    }
+    bundle = { app, auth: getAuth(app), db, memoryOnly };
     return bundle;
+}
+
+export async function signInGoogle() {
+    const ready = await loadFirebase();
+    if (!ready) {
+        const error = new Error('설정 없음');
+        error.code = 'no-config';
+        throw error;
+    }
+    const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth');
+    const { pickLoginMode } = await import('./lib/googleLogin.js');
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const mode = pickLoginMode({
+        authDomain: ready.auth?.config?.authDomain || '',
+        host: location.host,
+        nav: navigator,
+        win: window,
+    });
+    if (mode === 'redirect') {
+        await signInWithRedirect(ready.auth, provider);
+        return null;
+    }
+    try {
+        return await signInWithPopup(ready.auth, provider);
+    } catch (error) {
+        if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/operation-not-supported-in-this-environment') {
+            await signInWithRedirect(ready.auth, provider);
+            return null;
+        }
+        throw error;
+    }
+}
+
+export async function finishRedirectSignIn() {
+    const ready = await loadFirebase();
+    if (!ready) return null;
+    const { getRedirectResult } = await import('firebase/auth');
+    try {
+        return await getRedirectResult(ready.auth);
+    } catch {
+        return null;
+    }
+}
+
+export async function signOutFirebase() {
+    if (!bundle) return;
+    const { signOut } = await import('firebase/auth');
+    await signOut(bundle.auth);
 }

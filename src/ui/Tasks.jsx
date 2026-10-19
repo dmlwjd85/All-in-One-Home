@@ -1,0 +1,134 @@
+import { useState } from 'react';
+import { addDaysYmd, startOfWeekMon } from '../lib/date.js';
+import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { useUi } from './context.jsx';
+import { Btn } from './bits.jsx';
+
+export function Tasks() {
+    const { data, clock, showToast } = useUi();
+    const [title, setTitle] = useState('');
+    const todos = joined(data, 'todos');
+    const notes = joined(data, 'notes');
+    const follows = joinedRecords(data).filter((row) => row.follow);
+    const start = startOfWeekMon(clock.ymd);
+    const end = addDaysYmd(start, 6);
+    const groups = [
+        ['오늘', todos.filter((row) => !row.due || row.due <= clock.ymd)],
+        ['이번 주', todos.filter((row) => row.due > clock.ymd && row.due <= end)],
+        ['나중에', todos.filter((row) => row.due > end)],
+    ];
+    return (
+        <div>
+            <form onSubmit={async (event) => {
+                event.preventDefault();
+                if (!title.trim()) return;
+                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: title.trim(), done: false, due: clock.ymd, source: 'app' });
+                setTitle('');
+                showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
+            }}>
+                <input className="field" aria-label="할 일" placeholder="할 일을 적고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
+            </form>
+            {groups.map(([label, rows]) => (
+                <section key={label} style={{ marginTop: 16 }}>
+                    <h3 style={{ marginBottom: 8 }}>{label}</h3>
+                    {!rows.length && <p className="muted">없어요.</p>}
+                    {rows.map((row) => (
+                        <article key={row.id} className="glass" style={{ padding: 12, marginBottom: 8 }}>
+                            <Btn block style={{ justifyContent: 'space-between', display: 'flex', fontWeight: 800 }} onClick={() => toggleTodo(row.id)}>
+                                <span>{row.done ? '☑' : '☐'} {row.localOnly ? '🔒 ' : ''}{row.title}</span>
+                            </Btn>
+                            {row.of ? <p className="num" style={{ margin: '8px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {(row.pendingNos || []).map((no) => {
+                                    const student = data.students.find((item) => item.no === no);
+                                    return <Btn key={no} className="chip" onClick={() => receiveOne(row.id, no)}>{no} {student?.name || ''} 받음</Btn>;
+                                })}
+                            </div>
+                            <Btn className="chip" style={{ marginTop: 8 }} onClick={() => removeItem('todos', row.id)}>지우기</Btn>
+                        </article>
+                    ))}
+                </section>
+            ))}
+            {follows.length > 0 && (
+                <section>
+                    <h3>다시 볼 상담</h3>
+                    {follows.map((row) => <p key={row.id}>{row.follow} · {row.text}</p>)}
+                </section>
+            )}
+            <h3>메모</h3>
+            <NoteBox />
+            {notes.map((row) => (
+                <article key={row.id} className="solid-card" style={{ padding: 12, marginBottom: 8 }}>
+                    <p style={{ marginTop: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.pinned ? '📌 ' : ''}{row.text}</p>
+                    <Btn className="chip" onClick={() => removeItem('notes', row.id)}>지우기</Btn>
+                </article>
+            ))}
+            {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
+        </div>
+    );
+}
+
+function NoteBox() {
+    const { showToast } = useUi();
+    const [text, setText] = useState('');
+    return (
+        <form style={{ marginBottom: 12 }} onSubmit={async (event) => {
+            event.preventDefault();
+            if (!text.trim()) return;
+            const result = await saveTextItem('notes', { id: `note-${Date.now()}`, text: text.trim(), date: '', pinned: true, source: 'app' });
+            setText('');
+            showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '메모로 남겼어요.', true);
+        }}>
+            <textarea className="field" rows={3} aria-label="메모" placeholder="잠깐 적어 둘 말" value={text} onChange={(event) => setText(event.target.value)} />
+            <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>메모 남기기</Btn>
+        </form>
+    );
+}
+
+export function Notice() {
+    const { data, clock, route, showToast, go } = useUi();
+    const date = route.params.date || addDaysYmd(clock.ymd, 1);
+    const notices = joined(data, 'notices');
+    const current = notices.find((row) => row.date === date);
+    const [text, setText] = useState(current?.text || '');
+    const events = joined(data, 'events').filter((row) => row.date === date);
+
+    async function save(next) {
+        const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() });
+        showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
+    }
+
+    return (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Btn className="icon-btn" aria-label="이전 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, -1)}`); }}>‹</Btn>
+                <strong>{date === addDaysYmd(clock.ymd, 1) ? '내일' : date}</strong>
+                <Btn className="icon-btn" aria-label="다음 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, 1)}`); }}>›</Btn>
+            </div>
+            <textarea className="field" rows={8} aria-label="알림장" style={{ marginTop: 12 }} value={text} onChange={(event) => setText(event.target.value)} placeholder="내일 알림장을 적어 주세요" />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <Btn className="chip" onClick={() => {
+                    if (!events.length) { showToast('그 날 일정이 없어요.'); return; }
+                    const block = events.map((row) => `· ${row.title}${row.memo ? ` (${row.memo})` : ''}`).join('\n');
+                    setText((prev) => prev ? `${prev}\n${block}` : block);
+                }}>그날 일정 넣기</Btn>
+                <Btn className="chip" onClick={async () => {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showToast('복사했어요. 다른 앱에 붙여 넣으면 돼요.');
+                    } catch {
+                        showToast('복사하지 못했어요. 글을 선택해 주세요.');
+                    }
+                }}>복사</Btn>
+                <Btn className="primary-btn" style={{ flex: 1 }} onClick={() => save(text)}>저장</Btn>
+            </div>
+            <h3>지난 알림장</h3>
+            {notices.filter((row) => row.date !== date).slice(0, 8).map((row) => (
+                <Btn key={row.id} block className="glass" style={{ marginBottom: 8, padding: 12, textAlign: 'left' }} onClick={() => go(`#/notice/${row.date}`)}>
+                    <strong>{row.date}</strong>
+                    <span className="muted" style={{ display: 'block' }}>{row.text}</span>
+                </Btn>
+            ))}
+        </div>
+    );
+}

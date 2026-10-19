@@ -1,0 +1,93 @@
+/* 쓱 교무수첩 색·글꼴. 쓱 폰트가 오면 --font-title 과 --font-body 두 줄만 바꿉니다. */
+:root {
+    --font-title: 'Gowun Batang', 'Noto Serif KR', serif;
+    --font-body: 'Pretendard Variable', Pretendard, -apple-system, 'Noto Sans KR', sans-serif;
+    --title-effect: none;
+
+    /* 시안 B 라일락. 글자·버튼은 대비 4.5:1 이상. */
+    --bg: #F6F4FF;
+    --surface: rgba(255, 255, 255, .74);
+    --solid: #FFFFFF;
+    --glass-border: rgba(255, 255, 255, .7);
+    --line: rgba(30, 27, 58, .08);
+    --ink: #1E1B3A;
+    --ink-sub: #5B5775;
+    --primary: #6D4AFF;
+    --on-primary: #FFFFFF;
+    --brand: #E58C6F; /* 장식 전용. 글자에 쓰지 않습니다. */
+    --brand-soft: #ECE7FF;
+    --hero-1: #7048F2;
+    --hero-2: #C2457E;
+    --hero-3: #B85A3E;
+    --hero-ink: #FFFFFF;
+    --hero-action: #6D4AFF;
+    --aurora-1: #FFD6E8;
+    --aurora-2: #D6E4FF;
+    --aurora-3: #E3FFF1;
+    --aurora-brand: #E58C6F;
+    --fab-1: #7B5CFF;
+    --fab-2: #E86FA5;
+    --glow: rgba(123, 92, 255, .40);
+    --shadow: 0 8px 24px rgba(60, 40, 140, .10);
+    --toast: #1E1B3A;
+    --toast-ink: #FFFFFF;
+    --toast-action: #C8B8FF;
+
+    --st-present: #1E7A57;
+    --st-absent: #C02B43;
+    --st-late: #9A5B00;
+    --st-early: #2D67C7;
+    --st-out: #7A4BC4;
+    --st-absent-bg: #FCE8EB;
+    --st-late-bg: #FFF1D6;
+    --st-early-bg: #E5EEFC;
+    --st-out-bg: #F0E9FB;
+
+    --k-observe: #FFF1C9;
+    --k-counsel: #DDF3E8;
+    --k-parent: #E6EEFF;
+    --k-praise: #FFE3EC;
+    --k-todo: #EEE8FF;
+
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 28px;
+}
+
+.dark {
+    --bg: #0F0E1A;
+    --surface: rgba(28, 26, 46, .72);
+    --solid: #1C1A2E;
+    --glass-border: rgba(255, 255, 255, .08);
+    --line: rgba(243, 241, 255, .12);
+    --ink: #F3F1FF;
+    --ink-sub: #B4AFCF;
+    --primary: #A994FF;
+    --on-primary: #14112B;
+    --brand-soft: #2A2448;
+    --hero-action: #6D4AFF;
+    --aurora-1: #3A1F4D;
+    --aurora-2: #1E2A5A;
+    --aurora-3: #10332A;
+    --shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    --toast: #F3F1FF;
+    --toast-ink: #14112B;
+    --toast-action: #6D4AFF;
+
+    --st-present: #6FE0B0;
+    --st-absent: #FF8C9C;
+    --st-late: #F4C25B;
+    --st-early: #8DB6FF;
+    --st-out: #C7A6FF;
+    --st-absent-bg: #3D1E24;
+    --st-late-bg: #3A2C12;
+    --st-early-bg: #1C2A44;
+    --st-out-bg: #2C2140;
+
+    --k-observe: #3A3216;
+    --k-counsel: #183429;
+    --k-parent: #1C2740;
+    --k-praise: #3C1F2A;
+    --k-todo: #2A2342;
+}

@@ -1,123 +1,68 @@
-/**
- * localStorage 키와 Firestore 경로가 main과 같은지 확인합니다.
- * 사용자별 경로나 새 키를 넣으면 실패합니다.
- */
-import { execSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+/** 새 앱이 예전 공개 경로와 원본 키에 쓰지 않는지 봅니다. */
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const failures = [];
 
-function walk(dir, acc = []) {
+function walk(dir, out = []) {
     for (const name of readdirSync(dir)) {
-        if (name === 'node_modules' || name === 'dist') continue;
-        const full = join(dir, name);
-        if (statSync(full).isDirectory()) walk(full, acc);
-        else if (/\.(js|jsx|mjs)$/.test(name)) acc.push(full);
+        if (name === 'node_modules' || name === 'dist' || name === '.git') continue;
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path, out);
+        else if (/\.(js|jsx|mjs|py|html|json)$/.test(name)) out.push(path);
     }
-    return acc;
+    return out;
 }
 
-function hasRef(ref) {
-    try {
-        execSync(`git rev-parse --verify --quiet ${ref}^{commit}`, { cwd: root, stdio: 'ignore' });
-        return true;
-    } catch {
-        return false;
+const bannedFiles = [
+    'src/lib/store.js',
+    'src/lib/utils.js',
+    'src/lib/ssugeok.js',
+    'src/lib/saveNotice.js',
+    'src/notebook/data/notebook.json',
+    'src/data/notebook.json',
+];
+for (const rel of bannedFiles) {
+    if (existsSync(join(root, rel))) failures.push(`예전 파일 이 남아 있습니다: ${rel}`);
+}
+if (!existsSync(join(root, 'firestore.rules'))) failures.push('firestore.rules 가 없습니다.');
+
+const publicMarker = ['artifacts', 'home-note-app', 'public', 'data'].join('/');
+const publicTuple = ["'artifacts'", "'home-note-app'", "'public'", "'data'"].join(', ');
+
+for (const file of walk(root)) {
+    const rel = file.slice(root.length + 1);
+    if (rel.startsWith('scripts/check-')) continue;
+    const text = readFileSync(file, 'utf8');
+    if (/localStorage\.setItem\(\s*['"`]homenote_/.test(text) || /localStorage\.setItem\(\s*`homenote_/.test(text)) {
+        failures.push(`${rel}: 예전 키에 씁니다.`);
+    }
+    if (/AIza[0-9A-Za-z_-]{10,}/.test(text)) failures.push(`${rel}: 파이어베이스 키가 들어 있습니다.`);
+    const publicWrite = text.includes(publicTuple) || text.includes(publicMarker);
+    if (publicWrite && !rel.endsWith('src/lib/legacyPublic.js') && !rel.endsWith('firestore.rules') && !rel.startsWith('docs/') && !rel.endsWith('README.md')) {
+        failures.push(`${rel}: 공개 경로를 새 저장소처럼 씁니다.`);
     }
 }
 
-/** PR 체크아웃에는 로컬 main이 없습니다. origin/main과 비교합니다. */
-function mainRef() {
-    if (!hasRef('refs/remotes/origin/main')) {
-        execSync('git fetch --no-tags origin main', { cwd: root, stdio: 'inherit' });
-    }
-    if (!hasRef('refs/remotes/origin/main')) {
-        throw new Error('origin/main 을 찾지 못했습니다. git fetch origin main 이 필요합니다.');
-    }
-    return 'origin/main';
+const legacy = readFileSync(join(root, 'src/lib/legacyPublic.js'), 'utf8');
+if (!legacy.includes("phrase !== CONFIRM_PHRASE") && !legacy.includes('phrase !== CONFIRM_PHRASE')) {
+    failures.push('공개 경로 삭제가 확인 문장 없이 열릴 수 있습니다.');
 }
+if (!legacy.includes('지우기')) failures.push('공개 경로 확인 문장이 없습니다.');
 
-function gitFiles() {
-    const ref = mainRef();
-    const list = execSync(`git ls-tree -r --name-only ${ref}`, { cwd: root, encoding: 'utf8' })
-        .split('\n')
-        .filter((name) => name.startsWith('src/') && /\.(js|jsx)$/.test(name));
-    const map = {};
-    for (const name of list) {
-        map[name] = execSync(`git show ${ref}:${name}`, { cwd: root, encoding: 'utf8' });
-    }
-    return map;
-}
+const firebase = readFileSync(join(root, 'src/firebase.js'), 'utf8');
+if (!firebase.includes('sambong-world-2026')) failures.push('새 설정이 예전 프로젝트를 거절하지 않습니다.');
+if (/apiKey\s*:\s*['"][^'"]+['"]/.test(firebase)) failures.push('firebase.js 에 키 값이 있습니다.');
 
-function tokensOf(sources) {
-    const tokens = new Set();
-    const collections = [];
-    const records = [];
-    let pathHits = 0;
-    const text = Object.values(sources).join('\n');
-    for (const match of text.matchAll(/homenote_[A-Za-z0-9_]+/g)) tokens.add(match[0]);
-    for (const src of Object.values(sources)) {
-        for (const match of src.matchAll(/useSharedList\(\s*'([^']+)'/g)) collections.push(match[1]);
-        for (const match of src.matchAll(/useSharedRecord\(\s*'([^']+)'/g)) records.push(match[1]);
-        pathHits += [...src.matchAll(/'artifacts'\s*,\s*appId\s*,\s*'public'\s*,\s*'data'/g)].length;
-    }
-    return {
-        tokens: [...tokens].sort(),
-        collections: collections.sort(),
-        records: records.sort(),
-        pathHits,
-    };
-}
+const rules = readFileSync(join(root, 'firestore.rules'), 'utf8');
+if (!rules.includes("rules_version = '2'")) failures.push('보안 규칙 버전이 없습니다.');
+if (!rules.includes('match /users/{uid}')) failures.push('사용자 경로 규칙이 없습니다.');
+if (/match\s+\/\{document=\*\*\}/.test(rules)) failures.push('와일드카드 일치가 있습니다.');
+if (/allow\s+read\s*,\s*write\s*:\s*if\s+true/.test(rules)) failures.push('전체 허용이 있습니다.');
 
-const mainMap = gitFiles();
-const workFiles = walk(join(root, 'src'));
-const workMap = {};
-for (const file of workFiles) {
-    const rel = file.slice(root.length).replace(/^[/\\]/, '');
-    workMap[rel] = readFileSync(file, 'utf8');
-}
-
-const mainInfo = tokensOf(mainMap);
-const workInfo = tokensOf(workMap);
-const errors = [];
-const same = (a, b, label) => {
-    if (JSON.stringify(a) !== JSON.stringify(b)) errors.push(`${label}\nmain ${JSON.stringify(a)}\nwork ${JSON.stringify(b)}`);
-};
-
-same(mainInfo.tokens, workInfo.tokens, 'localStorage 키 토큰');
-same(mainInfo.collections, workInfo.collections, 'Firestore 목록 이름');
-same(mainInfo.records, workInfo.records, 'Firestore 문서 이름');
-
-if (!workInfo.pathHits) errors.push('Firestore 경로 artifacts/appId/public/data 가 없습니다.');
-const joined = Object.values(workMap).join('\n');
-if (/firestore\.rules|per-user|doc\(\s*db\s*,\s*'users'|collection\(\s*db\s*,\s*'users'/.test(joined)) {
-    errors.push('사용자별 Firestore 경로가 들어 있습니다.');
-}
-if (!joined.includes('homenote_v2_notebookFields_p')) errors.push('쪽 칸 키가 없습니다.');
-if (!joined.includes('homenote_v2_ssugeokSensitive')) errors.push('민감 메모 키가 없습니다.');
-if (!joined.includes("'board'")) errors.push('board 문서 이름이 없습니다.');
-if (!joined.includes("'notebookFields'") || !joined.includes('`p${page}`')) errors.push('notebookFields/p쪽 문서 모양이 없습니다.');
-
-const rules = join(root, 'firestore.rules');
-try {
-    statSync(rules);
-    errors.push('firestore.rules 파일이 있습니다.');
-} catch {
-    /* main과 같이 규칙 파일은 없습니다. */
-}
-
-console.log(JSON.stringify({
-    tokens: workInfo.tokens,
-    collections: workInfo.collections,
-    records: workInfo.records,
-    pathHits: workInfo.pathHits,
-    mainPathHits: mainInfo.pathHits,
-}, null, 2));
-
-if (errors.length) {
-    console.error(errors.join('\n'));
+if (failures.length) {
+    console.error(failures.join('\n'));
     process.exit(1);
 }
-console.log('storage 경로 검사 통과');
+console.log('저장 경로 검사를 통과했습니다.');

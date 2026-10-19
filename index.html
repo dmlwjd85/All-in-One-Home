@@ -3,26 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#4a3f3a">
-    <meta name="description" content="2026학년도 교무수첩 — PDF와 같은 탭·링크로 움직이고, 칸은 마우스와 키보드로 채우는 초등 담임 수첩">
+    <meta name="theme-color" content="#F6F4FF">
+    <meta name="description" content="쓱 교무수첩. 열자마자 쓱, 적. 초등 담임이 오늘 필요한 출결·기록·할 일을 한 화면에서 남깁니다.">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="교무수첩">
-    <title>2026 교무수첩</title>
+    <meta name="apple-mobile-web-app-title" content="쓱 교무수첩">
+    <title>쓱 교무수첩</title>
     <link rel="manifest" href="./manifest.webmanifest">
-    <link rel="icon" href="./favicon.ico" sizes="16x16 24x24 32x32 48x48">
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    <link rel="icon" href="./icon-192.png">
+    <link rel="apple-touch-icon" href="./icon-192.png">
     <link rel="stylesheet" href="./fonts/fonts.css">
+    <script>
+        try {
+            var q = new URLSearchParams(location.search);
+            if (q.get('mode') === 'dark' || q.get('mode') === 'light') localStorage.setItem('ssug-gyomu-theme', q.get('mode'));
+            var saved = localStorage.getItem('ssug-gyomu-theme');
+            var dark = saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+            if (dark) document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta && dark) meta.setAttribute('content', '#0F0E1A');
+        } catch (e) {}
+    </script>
 </head>
-<body class="bg-ink-50 text-ink-900">
+<body>
     <div id="root">
-        <p style="padding:2rem;font-family:sans-serif;font-size:1.125rem;font-weight:700;">교무수첩을 불러오는 중입니다…</p>
+        <p style="padding:2rem;font-size:1.125rem;font-weight:700;">쓱 교무수첩을 열고 있어요.</p>
     </div>
     <noscript>
-        <p style="padding:2rem;font-family:sans-serif;">교무수첩을 쓰려면 브라우저에서 JavaScript를 켜 주세요.</p>
+        <p style="padding:2rem;">쓱 교무수첩을 쓰려면 브라우저에서 자바스크립트를 켜 주세요.</p>
     </noscript>
     <script type="module" src="/src/main.jsx"></script>
 </body>
