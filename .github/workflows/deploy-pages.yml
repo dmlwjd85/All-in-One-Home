@@ -4,6 +4,7 @@ name: 깃허브 페이지에 배포
 on:
   push:
     branches: [main, master]
+  # 초안에서는 검사가 안 돌 수 있어, 리뷰 준비로 바꾼 뒤의 커밋과 준비 이벤트에서 돌립니다.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
