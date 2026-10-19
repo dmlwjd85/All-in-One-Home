@@ -174,17 +174,34 @@ button, input, textarea { font-family: inherit; }
     line-height: 1;
 }
 .tip-bubble {
-    position: fixed;
-    z-index: 32;
-    right: 16px;
-    bottom: calc(92px + env(safe-area-inset-bottom));
-    max-width: min(280px, calc(100vw - 32px));
+    position: relative;
+    z-index: 1;
+    margin: 0 0 12px;
+    max-width: 100%;
     background: var(--solid);
     color: var(--ink);
     border-radius: 16px;
-    padding: 12px 12px 12px 14px;
+    padding: 10px 12px 10px 14px;
     box-shadow: var(--shadow);
     border: 1px solid var(--line);
+}
+.tip-bubble::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 18px;
+    border-width: 0 7px 8px 7px;
+    border-style: solid;
+    border-color: transparent transparent var(--line) transparent;
+}
+.tip-bulb {
+    width: 44px;
+    height: 44px;
+    margin: 0 0 12px;
+    border-radius: 14px;
+    background: var(--solid);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
 }
 .sheet-back {
     position: fixed;
@@ -238,7 +255,7 @@ button, input, textarea { font-family: inherit; }
         height: 100dvh;
     }
     .main { padding: 20px 24px 40px; }
-    .tabbar, .tip-bubble { display: none; }
+    .tabbar, .tip-bubble, .tip-bulb { display: none; }
     .sheet {
         left: 50%;
         right: auto;

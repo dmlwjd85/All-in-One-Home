@@ -19,8 +19,8 @@ service cloud.firestore {
     }
     function hm(v) { return v is string && v.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'); }
     function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,40}$'); }
-    // 민감 낱말 2차 차단(앱이 먼저 이 기기 전용으로 돌림). 오탐이 나면 앱이 '이 기기에만 저장'으로 안내
-    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|분리 ?급식).*'); }
+    // 민감 낱말 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 같아야 합니다.
+    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식).*'); }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {
       return t is list && t.size() <= 10

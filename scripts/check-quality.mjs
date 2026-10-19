@@ -2,7 +2,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseNote } from '../src/lib/parse.js';
-import { isSensitiveText } from '../src/lib/sensitive.js';
+import { isSensitiveText, rulesSafeTextBody } from '../src/lib/sensitive.js';
 import { planMigration, storageFromMap } from '../src/lib/migrate.js';
 import { readLegacyStorage } from '../src/lib/migrate.js';
 import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
@@ -25,7 +25,11 @@ check(parsed.tags.includes('학습'), '#학습 태그를 못 읽었습니다.');
 check(parsed.detectedDate === '2026-10-20', '내일이 다음 날이 아닙니다.');
 check(parseNote('2026-10-22에 가요', now).detectedDate === '2026-10-22', '날짜를 숫자보다 말로 먼저 읽습니다.');
 check(isSensitiveText('알레르기 없는 간식'), '민감 낱말을 놓쳤습니다.');
+check(isSensitiveText('건강 특이') && isSensitiveText('보건실 메모'), '건강·보건을 민감으로 보지 않습니다.');
 check(!isSensitiveText('발표를 끝까지 했어요'), '평범한 기록을 민감으로 봤습니다.');
+const rulesText = readFileSync(`${root}/firestore.rules`, 'utf8');
+const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
+check(rulesText.includes(safeLine), '규칙의 safeText가 앱 민감 낱말과 다릅니다.');
 
 const period = periodStatus('08:42', DEFAULT_PERIODS, ['국어', '수학']);
 check(period.minutes === 18 && period.text.includes('국어') && period.text.includes('18분'), `1교시까지 18분이 아닙니다: ${period.text}`);
@@ -84,6 +88,11 @@ const absent = toCloudRow('attendance', { date: '2026-10-19', sid: 's3', status:
 check(absent?.body.status === 'absent' && absent.body.reason === 'sick' && !('source' in absent.body), '출결이 규칙 형식이 아닙니다.');
 check(fromCloudRow('attendance', absent.id, absent.body)?.status === '결석', '출결이 한국어로 돌아오지 않습니다.');
 check(toCloudRow('records', { id: 'rec-1', date: '2026-10-19', kind: '관찰', text: '알레르기 있음', source: 'app' }) === null, '민감 기록이 클라우드로 나갑니다.');
+const sensitiveStudent = toCloudRow('students', { id: 's3', no: 3, name: '박서준', memo: '건강 특이', source: 'app' });
+check(sensitiveStudent?.body?.name === '박서준' && sensitiveStudent.body.no === 3 && !('memo' in sensitiveStudent.body) && sensitiveStudent.clear?.includes('memo'), '민감한 학생 메모가 학생 전체를 빼거나 메모를 올립니다.');
+const plainStudent = toCloudRow('students', { id: 's4', no: 4, name: '윤채원', memo: '반장', source: 'app' });
+check(plainStudent?.body?.memo === '반장' && !plainStudent.clear?.length, '평범한 학생 메모를 빼 둡니다.');
+check(toCloudRow('students', { id: 's5', no: 5, name: '강민우', memo: '보건', source: 'app' })?.body?.name === '강민우', '보건 메모 때문에 학생이 빠집니다.');
 check(toCloudRow('records', { id: 'demo-1', date: '2026-10-19', kind: '관찰', text: '발표를 했어요', source: 'demo' }) === null, '예시 학급이 클라우드로 나갑니다.');
 const cloudRecord = toCloudRow('records', { id: 'rec-1', date: '2026-10-19', kind: '상담', sid: 's12', text: '이야기를 들었어요', tags: ['교우'], neis: true, neisMoved: true, source: 'app' });
 check(cloudRecord?.body.kind === 'counsel' && !('neisMoved' in cloudRecord.body), '기록 칸이 규칙과 다릅니다.');

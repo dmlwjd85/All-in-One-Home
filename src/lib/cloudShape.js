@@ -53,10 +53,11 @@ export function fromCloudProfile(data = {}) {
 
 export function toCloudRow(collection, row) {
     if (!row || row.source === 'demo') return null;
+    // 학생 메모만 민감하면 이름·번호는 올리고 메모만 빼 둡니다.
+    if (collection === 'students') return toStudent(row);
     if (isSensitiveText(row.text, row.tags) || isSensitiveText(row.title) || isSensitiveText(row.note) || isSensitiveText(row.memo) || isSensitiveText(row.raw)) {
         return null;
     }
-    if (collection === 'students') return toStudent(row);
     if (collection === 'attendance') return toAttendance(row);
     if (collection === 'records') return toRecord(row);
     if (collection === 'events') return toEvent(row);
@@ -74,8 +75,10 @@ function toStudent(row) {
     const body = { no: Number(row.no), name: String(row.name).trim().slice(0, 20), active: row.active !== false };
     if (SEX_TO[row.sex]) body.sex = SEX_TO[row.sex];
     if (/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(row.birthday || '')) body.birthday = row.birthday;
+    const clear = [];
     if (row.memo && !isSensitiveText(row.memo)) body.memo = String(row.memo).slice(0, 200);
-    return { id, body, stamps: stamps(['updatedAt']) };
+    else if (isSensitiveText(row.memo)) clear.push('memo');
+    return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
 function toAttendance(row) {

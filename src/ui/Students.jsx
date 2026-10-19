@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { joinedRecords, saveQuick } from '../lib/db.js';
+import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 
@@ -56,6 +57,12 @@ export function Student() {
                     <p className="muted" style={{ margin: 0 }}>{student.no}번 · {data.profile.className}</p>
                 </div>
             </div>
+            {student.memo ? (
+                <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
+                    <p style={{ margin: 0 }}>{student.memo}</p>
+                    {isSensitiveText(student.memo) && <p style={{ margin: '6px 0 0' }}>{MEMO_LOCAL_HINT}</p>}
+                </div>
+            ) : null}
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {stats.map(([label, value]) => <span key={label} className="chip">{label} {value}</span>)}
             </div>

@@ -44,6 +44,7 @@ export default function App() {
     const [locked, setLocked] = useState(false);
     const [online, setOnline] = useState(() => navigator.onLine);
     const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
+    const [tipFolded, setTipFolded] = useState(false);
     const toastTimer = useRef(0);
 
     useEffect(() => {
@@ -149,6 +150,14 @@ export default function App() {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [quick, data?.profile.started]);
+
+    const todayTipId = (!quick && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
+    useEffect(() => {
+        if (!todayTipId) return undefined;
+        setTipFolded(false);
+        const timer = window.setTimeout(() => setTipFolded(true), 5000);
+        return () => window.clearTimeout(timer);
+    }, [todayTipId]);
 
     function showToast(message, undoable = false) {
         clearTimeout(toastTimer.current);
@@ -263,6 +272,17 @@ export default function App() {
                             import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next }));
                         }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
                     </header>
+                    {tip && !tipFolded && (
+                        <div className="tip-bubble" role="status">
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
+                                <Btn aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
+                            </div>
+                        </div>
+                    )}
+                    {tip && tipFolded && (
+                        <Btn className="tip-bulb" aria-label="팁 다시 보기" onClick={() => setTipFolded(false)}>💡</Btn>
+                    )}
                     <div data-screen={route.name}>{screen}</div>
                 </div>
                 <nav className="tabbar" aria-label="주요 메뉴">
@@ -279,14 +299,6 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                {tip && (
-                    <div className="tip-bubble" role="status">
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                            <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
-                            <Btn aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
-                        </div>
-                    </div>
-                )}
                 {quick && <QuickSheet initial={quick} onClose={() => setQuick(null)} />}
                 {menu && <MenuSheet onClose={() => setMenu(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}

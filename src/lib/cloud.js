@@ -20,8 +20,8 @@ function retryable(error) {
     return RETRYABLE.some((item) => code.includes(item));
 }
 
-function fingerprint(body) {
-    return JSON.stringify(body);
+function fingerprint(body, clear = []) {
+    return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
 
 async function stamp(firestore, body, names, previous) {
@@ -47,13 +47,15 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true, hashes, pending: 0 };
     const firestore = await import('firebase/firestore');
-    const { doc, setDoc } = firestore;
+    const { doc, setDoc, deleteField } = firestore;
     const nextHashes = { ...hashes };
     let pending = 0;
     const write = async (name, id, shaped, migratedAt) => {
         const body = await stamp(firestore, shaped.body, shaped.stamps, migratedAt);
+        const clear = shaped.clear || [];
+        clear.forEach((key) => { body[key] = deleteField(); });
         const key = `${name}/${id}`;
-        const mark = fingerprint(shaped.body);
+        const mark = fingerprint(shaped.body, clear);
         if (nextHashes[key] === mark) return;
         try {
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
