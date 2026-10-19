@@ -1,0 +1,297 @@
+rules_version = '2';
+// 쓱 교무수첩. 기본은 거부입니다. users/{uid} 밖은 규칙이 없어 모두 막힙니다.
+// 와일드카드 허용은 두지 않습니다. 민감 낱말은 앱이 먼저 거르고, 서버가 한 번 더 막습니다.
+// 에뮬레이터 시험은 이 초안을 넣은 뒤 다시 돌리지 않았습니다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function owner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function data() {
+      return request.resource.data;
+    }
+    function hasAll(keys) {
+      return data().keys().hasAll(keys);
+    }
+    function only(keys) {
+      return data().keys().hasOnly(keys);
+    }
+    function dirty(value) {
+      return value is string && value.matches('.*(건강|보건|알레르기|투약|복약|민원|학폭|학교폭력|분리급식|분리 급식).*');
+    }
+    function clean(value) {
+      return !(value is string) || !dirty(value);
+    }
+    function fieldClean(key) {
+      return !data().keys().hasAny([key]) || clean(data()[key]);
+    }
+    function textClean() {
+      return fieldClean('text') && fieldClean('title') && fieldClean('memo') && fieldClean('note') && fieldClean('name') && fieldClean('className') && fieldClean('raw');
+    }
+    function leap(year) {
+      return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+    }
+    function monthDays(year, month) {
+      return month == 2
+        ? (leap(year) ? 29 : 28)
+        : (month == 4 || month == 6 || month == 9 || month == 11 ? 30 : 31);
+    }
+    function isYmd(value) {
+      return value is string
+        && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && int(value[8:10]) >= 1
+        && int(value[8:10]) <= monthDays(int(value[0:4]), int(value[5:7]));
+    }
+    function isHm(value) {
+      return value is string && value.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+    function birthdayOk(value) {
+      return value is string
+        && value.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && !value.matches('^(02-3[0-9]|04-31|06-31|09-31|11-31)$');
+    }
+    function shortText(value, max) {
+      return value is string && value.size() >= 1 && value.size() <= max && clean(value);
+    }
+    function optText(key, max) {
+      return !data().keys().hasAny([key]) || (data()[key] is string && data()[key].size() <= max && clean(data()[key]));
+    }
+    function optBool(key) {
+      return !data().keys().hasAny([key]) || data()[key] is bool;
+    }
+    function optInt(key, min, max) {
+      return !data().keys().hasAny([key]) || (data()[key] is int && data()[key] >= min && data()[key] <= max);
+    }
+    function sourceOk() {
+      return !data().keys().hasAny(['source']) || data().source in ['app', 'demo', 'legacy', 'legacy-conflict'];
+    }
+    function atOk() {
+      return optText('at', 40);
+    }
+    function tagItem(value) {
+      return value is string && value.size() >= 1 && value.size() <= 12 && !dirty(value);
+    }
+    function tagsOk(value) {
+      return value is list && value.size() <= 10
+        && (value.size() < 1 || tagItem(value[0]))
+        && (value.size() < 2 || tagItem(value[1]))
+        && (value.size() < 3 || tagItem(value[2]))
+        && (value.size() < 4 || tagItem(value[3]))
+        && (value.size() < 5 || tagItem(value[4]))
+        && (value.size() < 6 || tagItem(value[5]))
+        && (value.size() < 7 || tagItem(value[6]))
+        && (value.size() < 8 || tagItem(value[7]))
+        && (value.size() < 9 || tagItem(value[8]))
+        && (value.size() < 10 || tagItem(value[9]));
+    }
+    function optTags(key) {
+      return !data().keys().hasAny([key]) || tagsOk(data()[key]);
+    }
+    function sidOk(value) {
+      return value is string && value.matches('^s([1-9]|[1-4][0-9]|50)$');
+    }
+    function periodList(value) {
+      return value is list && value.size() <= 8
+        && (value.size() < 1 || isHm(value[0]))
+        && (value.size() < 2 || isHm(value[1]))
+        && (value.size() < 3 || isHm(value[2]))
+        && (value.size() < 4 || isHm(value[3]))
+        && (value.size() < 5 || isHm(value[4]))
+        && (value.size() < 6 || isHm(value[5]))
+        && (value.size() < 7 || isHm(value[6]))
+        && (value.size() < 8 || isHm(value[7]));
+    }
+    function nosOk(value) {
+      return value is list && value.size() <= 50;
+    }
+
+    function profileOk() {
+      return hasAll(['displayName', 'className', 'schoolYear', 'classSize', 'theme', 'periodStart', 'migratedAt', 'migrationVersion'])
+        && only(['displayName', 'className', 'schoolYear', 'classSize', 'theme', 'periodStart', 'migratedAt', 'migrationVersion'])
+        && data().displayName is string && data().displayName.size() <= 80 && clean(data().displayName)
+        && data().className is string && data().className.size() <= 30 && clean(data().className)
+        && data().schoolYear is int && data().schoolYear >= 2000 && data().schoolYear <= 2100
+        && data().classSize is int && data().classSize >= 0 && data().classSize <= 50
+        && data().theme in ['system', 'light', 'dark']
+        && periodList(data().periodStart)
+        && data().migratedAt is string && data().migratedAt.size() <= 40
+        && data().migrationVersion is int
+        && textClean();
+    }
+    function studentOk() {
+      return hasAll(['no', 'name'])
+        && only(['no', 'name', 'sex', 'birthday', 'active', 'memo', 'source'])
+        && data().no is int && data().no >= 1 && data().no <= 50
+        && shortText(data().name, 20)
+        && optText('sex', 2) && (!data().keys().hasAny(['sex']) || data().sex in ['남', '여', ''])
+        && (!data().keys().hasAny(['birthday']) || birthdayOk(data().birthday))
+        && optBool('active')
+        && optText('memo', 200)
+        && sourceOk()
+        && textClean();
+    }
+    function attendOk(id) {
+      return hasAll(['date', 'sid', 'status'])
+        && only(['date', 'sid', 'status', 'reason', 'period', 'paper', 'note', 'source'])
+        && isYmd(data().date)
+        && sidOk(data().sid)
+        && id == data().date + '_' + data().sid
+        && data().status in ['결석', '지각', '조퇴', '결과']
+        && (!data().keys().hasAny(['reason']) || data().reason in ['질병', '미인정', '출석인정', '기타'])
+        && optInt('period', 1, 8)
+        && optBool('paper')
+        && optText('note', 100)
+        && sourceOk()
+        && textClean();
+    }
+    function recordOk() {
+      return hasAll(['date', 'kind', 'text'])
+        && only(['date', 'kind', 'sid', 'text', 'tags', 'neis', 'follow', 'minutes', 'source', 'at', 'neisMoved'])
+        && isYmd(data().date)
+        && data().kind in ['관찰', '상담', '보호자', '칭찬']
+        && (!data().keys().hasAny(['sid']) || data().sid == '' || sidOk(data().sid))
+        && shortText(data().text, 2000)
+        && optTags('tags')
+        && optBool('neis')
+        && optBool('neisMoved')
+        && (!data().keys().hasAny(['follow']) || isYmd(data().follow))
+        && optInt('minutes', 0, 300)
+        && sourceOk()
+        && atOk()
+        && textClean();
+    }
+    function eventOk() {
+      return hasAll(['date', 'title'])
+        && only(['date', 'end', 'time', 'title', 'kind', 'memo', 'source', 'at'])
+        && isYmd(data().date)
+        && (!data().keys().hasAny(['end']) || isYmd(data().end))
+        && (!data().keys().hasAny(['time']) || isHm(data().time))
+        && shortText(data().title, 60)
+        && (!data().keys().hasAny(['kind']) || data().kind in ['학급', '학교', '휴일', '내 일정'])
+        && optText('memo', 500)
+        && sourceOk()
+        && atOk()
+        && textClean();
+    }
+    function todoOk() {
+      return hasAll(['title', 'done'])
+        && only(['title', 'done', 'due', 'got', 'of', 'order', 'doneAt', 'pendingNos', 'source', 'at'])
+        && shortText(data().title, 100)
+        && data().done is bool
+        && (!data().keys().hasAny(['due']) || isYmd(data().due))
+        && optInt('got', 0, 50)
+        && optInt('of', 0, 50)
+        && optInt('order', 0, 5000)
+        && optText('doneAt', 40)
+        && (!data().keys().hasAny(['pendingNos']) || nosOk(data().pendingNos))
+        && sourceOk()
+        && atOk()
+        && textClean();
+    }
+    function noteOk() {
+      return hasAll(['text'])
+        && only(['text', 'date', 'tags', 'pinned', 'source', 'at'])
+        && shortText(data().text, 2000)
+        && (!data().keys().hasAny(['date']) || isYmd(data().date))
+        && optTags('tags')
+        && optBool('pinned')
+        && sourceOk()
+        && atOk()
+        && textClean();
+    }
+    function noticeOk(id) {
+      return hasAll(['text', 'date'])
+        && only(['date', 'text', 'copiedAt', 'source', 'at'])
+        && isYmd(data().date)
+        && id == data().date
+        && shortText(data().text, 2000)
+        && optText('copiedAt', 40)
+        && sourceOk()
+        && atOk()
+        && textClean();
+    }
+    function slotOk(key) {
+      return !data().keys().hasAny([key]) || (data()[key] is string && data()[key].size() <= 20 && clean(data()[key]));
+    }
+    function tableOk() {
+      return only(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'])
+        && slotOk('p1') && slotOk('p2') && slotOk('p3') && slotOk('p4') && slotOk('p5') && slotOk('p6') && slotOk('p7') && slotOk('p8')
+        && slotOk('s1') && slotOk('s2') && slotOk('s3') && slotOk('s4') && slotOk('s5') && slotOk('s6') && slotOk('s7') && slotOk('s8')
+        && textClean();
+    }
+    function rawOk(value) {
+      return (value is string && value.size() <= 200000 && clean(value))
+        || (value is map && value.size() <= 400)
+        || (value is list && value.size() <= 400);
+    }
+    function legacyOk() {
+      return hasAll(['kind', 'raw', 'at'])
+        && only(['kind', 'raw', 'title', 'at'])
+        && data().kind is string && data().kind.size() <= 20
+        && rawOk(data().raw)
+        && optText('title', 80)
+        && data().at is string && data().at.size() <= 40
+        && textClean();
+    }
+    function importOk() {
+      return hasAll(['from', 'count', 'at'])
+        && only(['from', 'count', 'skipped', 'localOnly', 'at'])
+        && data().from is string && data().from.size() <= 40
+        && data().count is int && data().count >= 0
+        && optInt('skipped', 0, 100000)
+        && optInt('localOnly', 0, 100000)
+        && data().at is string && data().at.size() <= 40;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid) && profileOk();
+
+      match /students/{sid} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && studentOk() && sid == 's' + string(data().no);
+      }
+      match /attendance/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && attendOk(id);
+      }
+      match /records/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && recordOk();
+      }
+      match /events/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && eventOk();
+      }
+      match /todos/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && todoOk();
+      }
+      match /notes/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && noteOk();
+      }
+      match /notices/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && noticeOk(id);
+      }
+      match /timetable/{id} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && tableOk() && (id in ['mon', 'tue', 'wed', 'thu', 'fri'] || isYmd(id));
+      }
+      match /legacy/{id} {
+        allow read, delete: if owner(uid);
+        allow create: if owner(uid) && legacyOk();
+        allow update: if false;
+      }
+      match /imports/{id} {
+        allow read, delete: if owner(uid);
+        allow create: if owner(uid) && importOk();
+        allow update: if false;
+      }
+    }
+  }
+}

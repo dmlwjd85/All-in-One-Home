@@ -1,236 +1,154 @@
-import { readFileSync, statSync } from 'node:fs';
-import { applyBackupLocal, BACKUP_LISTS, BACKUP_RECORD, mergeById, mergePlain, validateBackup } from '../src/lib/backup.js';
-import { paperFace } from '../src/notebook/labels.js';
-import { seoulYmd } from '../src/lib/utils.js';
-import { fitCanvas, PAGE_H } from '../src/notebook/layout.js';
-import { monthPage } from '../src/notebook/nav.js';
-import { isLocalOnlyPage } from '../src/notebook/localPages.js';
-import { SECTION_RANGES, sectionForPage } from '../src/notebook/sections.js';
-import { sumBudget } from '../src/notebook/budget.js';
-import { monthDayMap } from '../src/notebook/linkParts.js';
-import { deadlinesInRange } from '../src/notebook/boardsModel.js';
-import { MENU_ITEMS, VIEW_PAGES, canonicalHash, menuKeyForPage, pageFromHash, parseRange, resolveHash } from '../src/notebook/routes.js';
+/** 파싱, 옮기기, 대비, 공휴일, 글꼴, 화면 문구를 확인합니다. */
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseNote } from '../src/lib/parse.js';
+import { isSensitiveText } from '../src/lib/sensitive.js';
+import { planMigration, storageFromMap } from '../src/lib/migrate.js';
+import { readLegacyStorage } from '../src/lib/migrate.js';
+import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
+import { resolveHash } from '../src/lib/routes.js';
+import { isPublicHoliday } from '../src/lib/holidays.js';
+import { parseRoster } from '../src/lib/roster.js';
+import { validateBackupText } from '../src/lib/backup.js';
 
-const errors = [];
-const ok = (cond, msg) => { if (!cond) errors.push(msg); };
-
-ok(PAGE_H === 820, '용지 높이');
-ok(monthPage(3, 2026) === 34, '3월');
-ok(monthPage(1, 2027) === 44, '1월');
-ok(monthPage(2, 2027) === 45, '2월');
-ok(monthPage(0) === null, '0월은 이동하지 않음');
-ok(monthPage(13) === null, '13월은 이동하지 않음');
-ok(monthPage(1.5) === null, '소수 달은 이동하지 않음');
-ok(monthPage('3월') === null, '글자 달은 이동하지 않음');
-
-for (const [w, h] of [[1920, 1080], [1366, 768], [1180, 820], [1024, 768]]) {
-    const box = fitCanvas(w - 16, h - 64);
-    const ratio = box.width / box.height;
-    ok(box.width <= w && box.height <= h - 48, `${w}x${h}가 화면을 넘음 ${box.width}x${box.height}`);
-    ok(Math.abs(ratio - 16 / 9) < 0.02, `${w}x${h} 비율 ${ratio}`);
-}
-ok(fitCanvas(0, 100).width === 0, '빈 화면');
-
-const localOnly = [];
-for (let page = 1; page <= 580; page += 1) if (isLocalOnlyPage(page)) localOnly.push(page);
-ok(JSON.stringify(localOnly) === JSON.stringify([19, 20, 21, 22, 157, 158, 323, 324, 325, 326, 327, 328, 329, 330, 331, 332, 333, 334]), `로컬 전용 쪽 ${localOnly}`);
-
-let cursor = 1;
-for (const [name, from, to] of SECTION_RANGES) {
-    ok(from === cursor, `${name} 시작 ${from}`);
-    ok(sectionForPage(from) === name && sectionForPage(to) === name, name);
-    cursor = to + 1;
-}
-ok(cursor === 581, `마지막 쪽 ${cursor - 1}`);
-
-const sum = sumBudget((page) => ({ budget: page === 470 ? '1,000원' : '0', used: page === 470 ? '250' : '' }));
-ok(sum.budget === 1000 && sum.used === 250 && sum.left === 750 && sum.rows.length === 14, `예산 합계 ${sum.budget}/${sum.used}`);
-
-const good = validateBackup(JSON.stringify({
-    exportedAt: '2026-03-01T00:00:00.000Z',
-    inbox: [{ id: 'a', text: '안녕' }],
-    praiseBoard: { goal: 3 },
-    notebookFields: { 154: { name1: '김가람' } },
-    ssugeokSensitive: [],
-}));
-ok(good.ok && good.counts.inbox === 1 && good.counts.notebookFields === 1, `정상 백업 ${good.errors}`);
-ok(!validateBackup('[]').ok, '배열 거부');
-const broken = validateBackup('{');
-ok(!broken.ok && /JSON/.test(broken.errors.join(' ')), `깨진 JSON 안내 ${broken.errors}`);
-ok(!validateBackup(JSON.stringify({ inbox: { bad: true } })).ok, '목록 형식');
-ok(!validateBackup(JSON.stringify({ notebookFields: { 999: {} } })).ok, '쪽 범위');
-ok(!validateBackup('x'.repeat(8 * 1024 * 1024 + 1)).ok, '용량');
-
-const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
-const lists = [...app.matchAll(/useSharedList\(\s*'([^']+)'/g)].map((m) => m[1]).sort();
-const records = [...app.matchAll(/useSharedRecord\(\s*'([^']+)'/g)].map((m) => m[1]);
-ok(JSON.stringify(lists) === JSON.stringify(Object.values(BACKUP_LISTS).sort()), '백업 목록 이름이 화면 컬렉션과 같음');
-ok(records.length === 1 && records[0] === BACKUP_RECORD, '칭찬 보드 이름');
-
-const mergedRows = mergeById(
-    [{ id: 'a', text: '기존' }, { id: 'b', text: '남김' }],
-    [{ id: 'a', text: '백업' }, { id: 'c', text: '추가' }],
-);
-ok(mergedRows.length === 3 && mergedRows[0].text === '백업' && mergedRows[1].text === '남김' && mergedRows[2].text === '추가', '목록 합치기');
-ok(mergePlain({ goal: '사이좋게', extra: '유지' }, { goal: '새 목표' }).extra === '유지', '칸 합치기');
-ok(paperFace('월').title === '월간 노트' && paperFace('월').title.length > 1, '월 제목');
-for (const name of ['Pretendard-Regular.woff2', 'Pretendard-Bold.woff2']) {
-    const size = statSync(new URL(`../public/fonts/${name}`, import.meta.url)).size;
-    ok(size >= 80 * 1024 && size <= 220 * 1024, `${name} 크기 ${size}`);
-}
-{
-    const span = parseRange('2026. 5. 4 ~ 2026. 5. 10');
-    const due = deadlinesInRange([
-        { id: 'a', title: '공문마감', deadline: '2026-05-06', status: 'todo' },
-        { id: 'b', title: '다른주', deadline: '2026-05-20', status: 'todo' },
-        { id: 'c', title: '끝난일', deadline: '2026-05-08', status: 'done' },
-        { id: 'd', title: '날짜없음', deadline: '', status: 'todo' },
-    ], span?.start, span?.end);
-    ok(span?.start === '2026-05-04' && span?.end === '2026-05-10', `주간 범위 ${span?.start}`);
-    ok(due.map((item) => item.id).join(',') === 'a,c', `이번 주 기한 ${due.map((item) => item.id).join(',')}`);
-}
-ok(seoulYmd(new Date('2026-03-01T23:30:00.000Z')) === '2026-03-02', '한국 날짜는 UTC 전날이 아님');
-ok(seoulYmd(new Date('2026-03-01T00:30:00.000Z')) === '2026-03-01', '한국 오전은 같은 날');
-ok(paperFace('무지  1').title === '무지 노트 1' && paperFace('무지  2').title === '무지 노트 2', '무지 제목');
-
-{
-    const mem = new Map();
-    globalThis.localStorage = {
-        getItem: (key) => (mem.has(key) ? mem.get(key) : null),
-        setItem: (key, value) => mem.set(key, String(value)),
-        removeItem: (key) => mem.delete(key),
-    };
-    globalThis.CustomEvent = class CustomEvent {
-        constructor(type, init) { this.type = type; this.detail = init?.detail; }
-    };
-    globalThis.window = { dispatchEvent() {} };
-    localStorage.setItem('homenote_v2_ssugeokInbox', JSON.stringify([{ id: 'local', text: '기기' }]));
-    localStorage.setItem('homenote_v2_notebookFields_p2', JSON.stringify({ goal: '사이좋게', keep: '남김' }));
-    applyBackupLocal({
-        inbox: [{ id: 'local', text: '백업' }, { id: 'new', text: '추가' }],
-        notebookFields: { 2: { goal: '새 목표' } },
-    }, { mode: 'merge' });
-    const inbox = JSON.parse(localStorage.getItem('homenote_v2_ssugeokInbox'));
-    const page = JSON.parse(localStorage.getItem('homenote_v2_notebookFields_p2'));
-    ok(inbox.length === 2 && inbox[0].text === '백업' && page.keep === '남김' && page.goal === '새 목표', '합치기 저장');
-    applyBackupLocal({ inbox: [{ id: 'only', text: '덮음' }] }, { mode: 'overwrite' });
-    const overwritten = JSON.parse(localStorage.getItem('homenote_v2_ssugeokInbox'));
-    ok(overwritten.length === 1 && overwritten[0].id === 'only', '덮어쓰기 저장');
+const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+const failures = [];
+function check(ok, message) {
+    if (!ok) failures.push(message);
 }
 
-{
-    const notebook = JSON.parse(readFileSync(new URL('../src/notebook/data/notebook.json', import.meta.url), 'utf8'));
-    const pages = notebook.pages.map((page) => ({
-        n: page.n,
-        type: page.type,
-        title: page.title,
-        extra: page.extra || {},
-    }));
-    const keys = new Set(MENU_ITEMS.map((item) => item.key));
-    ok(keys.size === MENU_ITEMS.length, '메뉴 키가 겹침');
-    for (let n = 1; n <= 580; n += 1) {
-        const hash = canonicalHash(n, pages);
-        const back = pageFromHash(hash, pages);
-        ok(back === n, `주소 왕복 ${n} ${hash} → ${back}`);
-        const legacy = pageFromHash(`#p${n}`, pages);
-        ok(legacy === n, `예전 주소 #p${n} → ${legacy}`);
-        const key = menuKeyForPage(n);
-        ok(keys.has(key), `메뉴 없는 쪽 ${n}`);
+const now = new Date('2026-10-19T08:42:00+09:00');
+const parsed = parseNote('@12 #학습 내일 발표를 맡았어요', now);
+check(parsed.studentNo === 12, '@12 번호를 못 읽었습니다.');
+check(parsed.tags.includes('학습'), '#학습 태그를 못 읽었습니다.');
+check(parsed.detectedDate === '2026-10-20', '내일이 다음 날이 아닙니다.');
+check(parseNote('2026-10-22에 가요', now).detectedDate === '2026-10-22', '날짜를 숫자보다 말로 먼저 읽습니다.');
+check(isSensitiveText('알레르기 없는 간식'), '민감 낱말을 놓쳤습니다.');
+check(!isSensitiveText('발표를 끝까지 했어요'), '평범한 기록을 민감으로 봤습니다.');
+
+const period = periodStatus('08:42', DEFAULT_PERIODS, ['국어', '수학']);
+check(period.minutes === 18 && period.text.includes('국어') && period.text.includes('18분'), `1교시까지 18분이 아닙니다: ${period.text}`);
+
+const roster = parseRoster('12 이하은\n황보람');
+check(roster.students.some((row) => row.no === 12 && row.name === '이하은'), '명단 붙여넣기를 못 읽었습니다.');
+check(roster.students.some((row) => row.name === '황보람'), '성 두 글자를 못 읽었습니다.');
+
+check(resolveHash('#p154', '2026-10-19').name === 'students', '명렬표 쪽이 학생 화면이 아닙니다.');
+check(resolveHash('#/cards/3', '2026-10-19').params.no === 3, '카드 주소가 학생으로 이어지지 않습니다.');
+check(!isPublicHoliday('2026-10-19'), '10월 19일을 공휴일로 봤습니다.');
+check(isPublicHoliday('2026-03-01'), '삼일절이 빠졌습니다.');
+check(isPublicHoliday('2026-02-17'), '설날이 빠졌습니다.');
+check(isPublicHoliday('2026-05-05') && isPublicHoliday('2026-10-03') && isPublicHoliday('2026-12-25'), '공휴일이 빠졌습니다.');
+
+const bag = {
+    pages: {
+        154: { name1: '김하늘', sex1: '남', note1: '알레르기 주의' },
+        160: { d0: '2026-10-01', a0: '학습', t0: '발표를 끝까지 했어요', n0: '1' },
+        19: { memo: '보건 일지' },
+        232: { s1_1: '결석' },
+        141: { t1_0: '국어', t4_0: '체육 전담' },
+        34: { d3: '학부모 상담' },
+    },
+    lists: {
+        teacherContacts: [{ id: 'c1', name: '보호자', phone: '010' }],
+        teacherTodos: [{ id: 't1', title: '알림장 올리기', done: false }],
+    },
+    sensitive: [{ id: 's1', text: '투약 기록' }],
+    praise: {},
+    extra: {},
+};
+const plan = planMigration(bag, { now, titles: { 19: '보건' } });
+const sum = plan.counts.moved + plan.counts.archived + plan.counts.localOnly;
+check(sum === plan.counts.original, `옮기기 개수 ${plan.counts.original} / ${sum}`);
+const cloudText = [...plan.records, ...plan.notes, ...plan.events, ...plan.todos].map((row) => `${row.text || ''} ${row.title || ''}`).join('\n');
+check(!isSensitiveText(cloudText), '민감 기록이 클라우드로 갈 자리에 있습니다.');
+check(plan.local.records.some((row) => String(row.text).includes('알레르기')), '알레르기 기록이 이 기기에 남지 않았습니다.');
+check(plan.local.notes.some((row) => String(row.text).includes('투약')), '투약 기록이 이 기기에 남지 않았습니다.');
+check(plan.timetable.mon?.p1 === '국어' && plan.timetable.mon?.s4 === '전담', '시간표를 못 옮겼습니다.');
+check(plan.attendance.length === 0, '주간 출결을 하루 출결로 바꿨습니다.');
+check(plan.students.some((row) => row.name === '김하늘'), '명단을 못 옮겼습니다.');
+
+const fake = storageFromMap({
+    homenote_v2_classRoster: JSON.stringify([{ id: '1', name: '김하늘' }]),
+    homenote_guest: '1',
+});
+const before = fake.getItem('homenote_v2_classRoster');
+readLegacyStorage(fake);
+check(fake.getItem('homenote_v2_classRoster') === before, '원본 키를 고쳤습니다.');
+
+const badBackup = validateBackupText('{"__proto__":{"x":1},"format":"ssug-gyomu"}');
+check(!badBackup.ok, '위험한 백업 키를 받았습니다.');
+
+function lum(hex) {
+    const n = Number.parseInt(hex.slice(1), 16);
+    const parts = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((value) => {
+        const c = value / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+}
+function contrast(a, b) {
+    const left = lum(a);
+    const right = lum(b);
+    const [hi, lo] = left > right ? [left, right] : [right, left];
+    return (hi + 0.05) / (lo + 0.05);
+}
+function mix(base, top, alpha) {
+    const nb = Number.parseInt(base.slice(1), 16);
+    const nt = Number.parseInt(top.slice(1), 16);
+    const channel = (shift) => Math.round(((nt >> shift) & 255) * alpha + ((nb >> shift) & 255) * (1 - alpha));
+    return `#${[channel(16), channel(8), channel(0)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}
+const pairs = [
+    ['본문', '#1E1B3A', '#F6F4FF'],
+    ['보조', '#5B5775', '#FFFFFF'],
+    ['버튼', '#FFFFFF', '#6D4AFF'],
+    ['히어로 글자', '#FFFFFF', '#B85A3E'],
+    ['히어로 버튼', '#6D4AFF', '#FFFFFF'],
+    ['다크 본문', '#F3F1FF', '#0F0E1A'],
+    ['다크 보조', '#B4AFCF', '#1C1A2E'],
+    ['다크 버튼', '#14112B', '#A994FF'],
+];
+for (const [label, fg, bg] of pairs) {
+    const ratio = contrast(fg, bg);
+    check(ratio >= 4.5, `${label} 대비 ${ratio.toFixed(2)} 가 4.5보다 낮습니다.`);
+}
+const pill = mix('#B85A3E', '#200C30', 0.38);
+const pillRatio = contrast('#FFFFFF', pill);
+check(pillRatio >= 4.5, `히어로 알약 대비 ${pillRatio.toFixed(2)} 가 4.5보다 낮습니다.`);
+
+function walk(dir, out = []) {
+    for (const name of readdirSync(dir)) {
+        if (name === 'node_modules' || name === 'dist' || name === '.git') continue;
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path, out);
+        else out.push(path);
     }
-    ok(pageFromHash('#/month/2026/4', pages) === 35, '4월 주소');
-    ok(pageFromHash('#/month/2027/1', pages) === 44, '2027 1월 주소');
-    ok(pageFromHash('#/year', pages) === 32, '연간 주소');
-    ok(pageFromHash('#/weeks', pages) === 46, '주간 목차 주소');
-    ok(pageFromHash('#/schedule', pages) === 33, '학사 주소');
-    ok(pageFromHash('#/days', pages) === 99, '하루 목차 주소');
-    ok(pageFromHash('', pages) === 1, '빈 주소는 표지');
-    const legacy = resolveHash('#p154', pages);
-    ok(legacy.exact && legacy.page === 154 && legacy.canonical === '#/students', `예전 주소 표준 ${legacy.canonical}`);
-    const missing = resolveHash('#p0', pages);
-    ok(!missing.exact && missing.page === 1 && missing.canonical === '#/cover', '없는 쪽 번호');
-    const tooFar = resolveHash('#p999', pages);
-    ok(!tooFar.exact && tooFar.page === 580 && tooFar.canonical === '#/p/580', `큰 쪽 번호 ${tooFar.page} ${tooFar.canonical}`);
-    const card = resolveHash('#/cards/2', pages);
-    ok(card.exact && card.page === 161 && card.canonical === '#/cards/2' && canonicalHash(161, pages) === '#/cards/2', '2번 학생 카드');
-    for (const bad of ['#/cards/abc', '#/cards/-1', '#/cards/2.5', '#/cards/0', '#/cards/33']) {
-        const missedCard = resolveHash(bad, pages);
-        ok(!missedCard.exact && missedCard.page === 159 && missedCard.canonical === '#/cards', `잘못된 학생 카드 ${bad} → ${missedCard.canonical} p${missedCard.page}`);
+    return out;
+}
+const fontAllow = new Set(['src/styles/tokens.css', 'public/fonts/fonts.css']);
+for (const file of walk(root)) {
+    const rel = file.slice(root.length + 1);
+    if (!/\.(css|js|jsx|html)$/.test(rel) || fontAllow.has(rel)) continue;
+    const text = readFileSync(file, 'utf8');
+    if (/Gowun|Pretendard|Noto Serif|Noto Sans/.test(text)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
+    for (const match of text.matchAll(/font-family\s*:\s*([^;}{]+)/g)) {
+        const value = match[1];
+        if (!/var\(--font-|inherit/.test(value)) failures.push(`${rel}: 글꼴을 변수 밖에서 지정했습니다.`);
     }
-    ok(!resolveHash('#/nonsense', pages).exact && resolveHash('#/zzz', pages).page === 1, '없는 이름');
-    ok(!resolveHash('#/week/0', pages).exact && resolveHash('#/week/0', pages).canonical === '#/weeks', '없는 주');
-    ok(!resolveHash('#/week/53', pages).exact && resolveHash('#/day/41', pages).canonical === '#/days', '없는 하루');
-    const shifted = resolveHash('#/month/2026/2', pages);
-    ok(!shifted.exact && shifted.page === 45 && shifted.canonical === '#/month/2027/2', `어긋난 달 ${shifted.canonical}`);
-    const kept = resolveHash('#/date/2026-04-13', pages);
-    ok(kept.exact && kept.preserve && kept.page === 53 && kept.canonical === '#/date/2026-04-13', '날짜 주소는 유지');
-    const far = resolveHash('#/date/2025-01-01', pages);
-    ok(!far.exact && !far.preserve && far.canonical === '#/weeks', '범위 밖 날짜');
-    const css = readFileSync(new URL('../src/notebook/notebook.css', import.meta.url), 'utf8');
-    const hexOf = (value) => {
-        const found = String(value || '').match(/#([0-9a-fA-F]{6})\b/);
-        return found ? `#${found[1].toLowerCase()}` : '';
-    };
-    const rel = (hex) => {
-        const n = Number.parseInt(hex.slice(1), 16);
-        const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
-            const s = c / 255;
-            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-        });
-        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
-    };
-    const colorsFor = (needle) => {
-        const re = /([^{}]+)\{([^{}]+)\}/g;
-        let found = null;
-        let matched;
-        while ((matched = re.exec(css))) {
-            const parts = matched[1].split(',').map((part) => part.trim().replace(/\s+/g, ' '));
-            if (!parts.includes(needle)) continue;
-            const bg = hexOf((matched[2].match(/background:\s*([^;]+)/) || [])[1]);
-            const fg = hexOf((matched[2].match(/(^|[;])\s*color:\s*([^;]+)/) || [])[2]);
-            if (bg && fg) found = { bg, fg };
+    if (rel.endsWith('.jsx')) {
+        for (const match of text.matchAll(/>([^<{]+)</g)) {
+            const value = match[1].trim();
+            if (/^[A-Za-z][A-Za-z\s]{2,}$/.test(value)) failures.push(`${rel}: 영어 화면 문구 “${value}”`);
         }
-        return found;
-    };
-    ok(!/\.nb-right \.nb-tab \{[^}]*saturate\(/.test(css), '오른쪽 달 탭이 회색 필터');
-    const rightText = ((css.match(/\.nb-right \.nb-tab \{[^}]*color:\s*(#[0-9a-fA-F]{6})/) || [])[1] || '').toLowerCase();
-    const monthRule = /\.nb-right \.nb-tab:nth-child\((\d+)\)\s*\{([^}]+)\}/g;
-    let monthHit;
-    let monthCount = 0;
-    while ((monthHit = monthRule.exec(css))) {
-        const bg = hexOf(monthHit[2]);
-        const own = ((monthHit[2].match(/color:\s*(#[0-9a-fA-F]{6})/) || [])[1] || rightText).toLowerCase();
-        const pair = bg && own ? (Math.max(rel(bg), rel(own)) + 0.05) / (Math.min(rel(bg), rel(own)) + 0.05) : 0;
-        ok(pair >= 6, `오른쪽 탭 ${monthHit[1]} 대비 ${pair.toFixed(2)} ${own} on ${bg}`);
-        monthCount += 1;
-    }
-    ok(monthCount === 13, `오른쪽 탭 색 ${monthCount}`);
-    for (const needle of ['.nb-navbtn.is-on', '.nb-left .nb-tab.is-on']) {
-        const colors = colorsFor(needle);
-        const ratio = colors ? (Math.max(rel(colors.bg), rel(colors.fg)) + 0.05) / (Math.min(rel(colors.bg), rel(colors.fg)) + 0.05) : 0;
-        ok(ratio >= 4.5, `${needle} 대비 ${ratio.toFixed(2)} ${colors?.fg || ''} on ${colors?.bg || ''}`);
-    }
-    const seen = new Set(Object.values(VIEW_PAGES));
-    ok(seen.size === Object.keys(VIEW_PAGES).length, '이름 있는 주소가 같은 쪽을 가리킴');
-    for (const page of notebook.pages) {
-        if (page.type !== 'month') continue;
-        const { days } = monthDayMap(page.links);
-        const year = page.extra.year;
-        const month = page.extra.month;
-        for (const [day, dest] of days) {
-            const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const via = pageFromHash(`#/date/${ymd}`, pages);
-            ok(via === dest, `날짜 ${ymd} ${via} ≠ ${dest}`);
+        for (const word of ['Save', 'Cancel', 'Delete', 'Settings', 'Loading', 'Submit', 'Login', 'Logout']) {
+            if (new RegExp(`['"\`]${word}['"\`]`).test(text)) failures.push(`${rel}: 영어 낱말 ${word}`);
         }
     }
 }
 
-if (errors.length) {
-    console.error(errors.join('\n'));
+if (failures.length) {
+    console.error(failures.join('\n'));
     process.exit(1);
 }
-console.log('quality 검사 통과');
-
-if (process.argv.includes('--browser')) {
-    const { runBrowserQuality } = await import('./check-browser.mjs');
-    await runBrowserQuality();
-}
+console.log('품질 검사를 통과했습니다.');

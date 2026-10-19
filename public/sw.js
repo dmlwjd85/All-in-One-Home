@@ -1,6 +1,7 @@
-/* GitHub Pages 하위 경로에서도 동작하도록, 워커 파일 위치를 기준으로 범위를 잡습니다.
-   프리캐시 목록은 빌드가 dist/precache-manifest.js 로 넣습니다. */
-const CACHE = 'homenote-shell-v5';
+/* 설치한 앱이 같은 주소의 sw.js 를 받아 갈아타도록 파일 이름을 유지합니다.
+   프리캐시 목록은 빌드가 dist/precache-manifest.js 로 넣습니다.
+   로컬 저장은 지우지 않습니다. */
+const CACHE = 'ssug-gyomu-shell-v1';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts('./precache-manifest.js');
@@ -13,7 +14,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))).then(() => self.clients.claim())
+        caches.keys().then((keys) => Promise.all(keys
+            .filter((key) => key !== CACHE || key.startsWith('homenote-shell'))
+            .map((key) => caches.delete(key))))
+            .then(() => self.clients.claim())
     );
 });
 
@@ -28,17 +32,13 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE);
         try {
             const response = await fetch(request);
-            if (response && response.ok && response.type === 'basic') {
-                cache.put(request, response.clone());
-            }
+            if (response && response.ok && response.type === 'basic') cache.put(request, response.clone());
             return response;
         } catch {
             const cached = await cache.match(request) || await cache.match(url.pathname.replace(SCOPE_URL.pathname, './'));
             if (cached) return cached;
-            if (request.mode === 'navigate') {
-                return (await cache.match('./index.html')) || (await cache.match('./'));
-            }
-            return new Response('오프라인입니다.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+            if (request.mode === 'navigate') return (await cache.match('./index.html')) || (await cache.match('./'));
+            return new Response('인터넷이 끊겼어요. 잠시 후 다시 열어 주세요.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
         }
     })());
 });

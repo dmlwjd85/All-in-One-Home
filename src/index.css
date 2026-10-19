@@ -1,258 +1,274 @@
+@import './styles/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-    color-scheme: light;
-    --tap: 44px;
-}
-
 html {
     font-size: 16px;
-    -webkit-text-size-adjust: 100%;
+    color-scheme: light;
+    background: var(--bg);
 }
+
+html.dark { color-scheme: dark; }
 
 body {
-    font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
-    overscroll-behavior-y: none;
+    margin: 0;
     min-height: 100dvh;
+    color: var(--ink);
+    background: var(--bg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 500;
+    word-break: keep-all;
+    overflow-wrap: break-word;
 }
 
-#root {
+button, input, textarea { font-family: inherit; }
+
+#root { min-height: 100dvh; }
+
+.app-bg {
     min-height: 100dvh;
-    line-height: 1.65;
-    -webkit-font-smoothing: antialiased;
+    background:
+        radial-gradient(60% 42% at 8% -4%, var(--aurora-1) 0%, transparent 62%),
+        radial-gradient(48% 36% at 100% 0%, var(--aurora-2) 0%, transparent 60%),
+        radial-gradient(54% 40% at 70% 100%, var(--aurora-3) 0%, transparent 62%),
+        radial-gradient(28% 22% at 92% 78%, color-mix(in srgb, var(--aurora-brand) 35%, transparent) 0%, transparent 70%),
+        var(--bg);
 }
 
-:focus-visible {
-    outline: 3px solid #0f766e;
-    outline-offset: 2px;
+.app-frame { min-height: 100dvh; }
+.main { min-width: 0; padding: 12px 16px 124px; }
+.side { display: none; }
+
+.glass, .solid-card {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+}
+.glass {
+    background: var(--surface);
+    backdrop-filter: blur(16px) saturate(160%);
+}
+.solid-card { background: var(--solid); }
+@supports not (backdrop-filter: blur(1px)) {
+    .glass { background: var(--solid); }
 }
 
-.skip-link {
-    position: fixed;
-    left: 0.75rem;
-    top: 0;
-    z-index: 100;
-    transform: translateY(-120%);
-    border-radius: 0.75rem;
-    background: #1a1612;
-    color: #fff;
-    padding: 0.75rem 1rem;
+.hero {
+    color: var(--hero-ink);
+    background: linear-gradient(135deg, var(--hero-1) 0%, var(--hero-2) 58%, var(--hero-3) 100%);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--shadow);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
+.hero-kicker, .hero-pill {
+    background: rgba(32, 12, 48, .38);
+    border: 1px solid rgba(255, 255, 255, .28);
+    border-radius: 999px;
+}
+.hero-action {
+    background: #fff;
+    color: var(--hero-action);
+    text-shadow: none;
+    border-radius: 999px;
     font-weight: 800;
 }
 
-.skip-link:focus,
-.skip-link:focus-visible {
-    top: 0.75rem;
-    transform: none;
+.title-font { font-family: var(--font-title); font-weight: 700; text-shadow: var(--title-effect); }
+.muted { color: var(--ink-sub); }
+.num { font-variant-numeric: tabular-nums; }
+
+.tap {
+    min-height: 44px;
+    min-width: 44px;
+    box-sizing: border-box;
+    border: 0;
+    cursor: pointer;
+    color: inherit;
+    background: transparent;
+}
+.tap.block { width: 100%; min-width: 0; }
+.icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: var(--solid);
+    border: 1px solid var(--line);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+}
+.field {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: var(--solid);
+    color: var(--ink);
+    padding: 10px 14px;
+    font-size: 16px;
+    line-height: 22px;
+}
+.field:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
+.primary-btn {
+    background: var(--primary);
+    color: var(--on-primary);
+    border-radius: 16px;
+    font-weight: 800;
+    min-height: 52px;
+}
+.chip {
+    min-height: 44px;
+    border-radius: 999px;
+    padding: 0 14px;
+    background: var(--brand-soft);
+    color: var(--ink);
+    font-weight: 700;
+}
+.chip.on { background: var(--primary); color: var(--on-primary); }
+
+.symbol {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, var(--hero-1), var(--hero-2) 55%, var(--hero-3));
+    font-family: var(--font-title);
+    font-size: 16px;
+    text-shadow: none;
+}
+
+.tabbar {
+    position: fixed;
+    z-index: 30;
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    height: 64px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: center;
+    padding: 0 4px;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--solid) 92%, transparent);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(16px);
+}
+.tabbar button { min-width: 0; }
+.fab {
+    width: 56px;
+    height: 56px;
+    margin-top: -28px;
+    border-radius: 999px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--fab-1), var(--fab-2));
+    box-shadow: 0 10px 24px var(--glow);
+    font-size: 32px;
+    line-height: 1;
+}
+.tip-bubble {
+    position: fixed;
+    z-index: 32;
+    right: 16px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    max-width: min(280px, calc(100vw - 32px));
+    background: var(--solid);
+    color: var(--ink);
+    border-radius: 16px;
+    padding: 12px 12px 12px 14px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+}
+.sheet-back {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(16, 12, 28, .46);
+}
+.sheet {
+    position: fixed;
+    z-index: 41;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: min(92dvh, 820px);
+    overflow: auto;
+    background: var(--solid);
+    border-radius: 28px 28px 0 0;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.toast {
+    position: fixed;
+    z-index: 50;
+    left: 16px;
+    right: 16px;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    background: var(--toast);
+    color: var(--toast-ink);
+    border-radius: 16px;
+    padding: 12px 14px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+}
+.cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+@media (min-width: 900px) {
+    .app-frame { display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+    .side {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 16px 12px;
+        position: sticky;
+        top: 0;
+        height: 100dvh;
+    }
+    .main { padding: 20px 24px 40px; }
+    .tabbar, .tip-bubble { display: none; }
+    .sheet {
+        left: 50%;
+        right: auto;
+        top: 50%;
+        bottom: auto;
+        width: min(440px, calc(100vw - 48px));
+        transform: translate(-50%, -50%);
+        border-radius: 28px;
+        max-height: min(86dvh, 820px);
+    }
+    .toast { left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
+    .home-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);
+        gap: 12px;
+        align-items: start;
+    }
+    .home-hero { grid-column: 1; grid-row: 1; }
+    .home-quick { grid-column: 2 / -1; grid-row: 1; }
+    .home-time { grid-column: 1; grid-row: 2; }
+    .home-todo { grid-column: 2; grid-row: 2; }
+    .home-event { grid-column: 3; grid-row: 2; }
+    .home-recent { grid-column: 1 / -1; grid-row: 3; }
+    .cell-grid.wide { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .attend-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; align-items: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
-}
-
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #a8a29e;
-    border-radius: 999px;
-}
-
-.field {
-    @apply w-full min-h-tap rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-base text-ink-900 placeholder:text-stone-500;
-}
-
-.btn {
-    @apply inline-flex min-h-tap min-w-tap items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-extrabold transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-}
-
-.btn-primary {
-    @apply btn bg-teal-800 text-white hover:bg-teal-900;
-}
-
-.btn-secondary {
-    @apply btn bg-white text-ink-800 border border-stone-300 hover:bg-stone-50;
-}
-
-.btn-danger {
-    @apply btn bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100;
-}
-
-.card {
-    @apply rounded-3xl border border-stone-200 bg-white shadow-sm;
-}
-
-/* 책상 위 따뜻한 바탕. 노트북 용지와 살짝 구분되도록 결만 살림 */
-.paper-app {
-    background-color: #c9b48a;
-    background-image:
-        radial-gradient(ellipse at 14% -8%, rgba(255, 236, 196, 0.28), transparent 46%),
-        radial-gradient(ellipse at 100% 110%, rgba(70, 42, 16, 0.16), transparent 44%),
-        repeating-linear-gradient(
-            135deg,
-            rgba(96, 68, 32, 0.05) 0 1px,
-            transparent 1px 6px
-        );
-}
-
-/* 실제 고급 노트처럼 보이게 하되, 좌우 장식은 얇게 유지해 본문 폭을 넓힘 */
-.notebook-shell {
-    --notebook-spine: 11px;
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-    background-color: #f3e6cc;
-    background-image:
-        /* 오른쪽 용지 끝 두께감 — 폭을 거의 빼앗지 않음 */
-        linear-gradient(270deg, rgba(86, 56, 20, 0.1), transparent 14px),
-        /* 제본 골 음영 */
-        linear-gradient(90deg, rgba(68, 34, 10, 0.16) 0, rgba(68, 34, 10, 0.05) 12px, transparent 28px),
-        /* 위쪽 빛 */
-        linear-gradient(180deg, rgba(255, 252, 244, 0.38), transparent 52px),
-        /* 빨간 마진선: 용지 시작 직후. 본문을 안쪽으로 밀어 넣지 않음 */
-        linear-gradient(90deg, transparent 0 8px, rgba(176, 38, 38, 0.58) 8px 9.5px, transparent 9.5px),
-        /* 가로 줄눈 */
-        repeating-linear-gradient(
-            transparent 0 25px,
-            rgba(52, 86, 136, 0.22) 25px 26px
-        ),
-        /* 거친 종이 결 */
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E"),
-        /* 더 고운 섬유 결 */
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.35' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)' opacity='0.055'/%3E%3C/svg%3E");
-    background-size: auto, auto, auto, auto, auto, 160px 160px, 220px 220px;
-    border: 1px solid #c2aa7a;
-    border-left-width: var(--notebook-spine);
-    border-left-style: solid;
-    border-left-color: #3c2214;
-    border-radius: 2px 8px 8px 3px;
-    box-shadow:
-        inset 7px 0 8px -7px rgba(46, 18, 6, 0.38),
-        inset 0 1px 0 rgba(255, 252, 244, 0.72),
-        inset 0 -12px 18px -16px rgba(78, 48, 16, 0.1),
-        /* 얇은 속지 가장자리 — 예전 18px 오프셋 적층 그림자는 오른쪽을 낭비함 */
-        1px 0 0 #eadcc0,
-        2px 1px 0 #d8c49a,
-        3px 2px 0 #c6b080,
-        0 8px 22px rgba(56, 34, 12, 0.18);
-}
-
-/* 가죽/천 등뼈 + 실 스티치. 클릭은 통과시킴 */
-.notebook-shell::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--notebook-spine));
-    top: 0;
-    bottom: 0;
-    width: var(--notebook-spine);
-    pointer-events: none;
-    border-radius: 2px 0 0 3px;
-    background:
-        repeating-linear-gradient(
-            180deg,
-            transparent 0 15px,
-            rgba(255, 228, 190, 0.3) 15px 16.5px,
-            transparent 16.5px 30px,
-            rgba(16, 6, 0, 0.32) 30px 31.5px
-        ),
-        radial-gradient(circle at 50% 10px, rgba(18, 6, 0, 0.42) 1.15px, transparent 1.55px),
-        linear-gradient(
-            90deg,
-            #26140c 0%,
-            #5a3320 36%,
-            #a06a40 50%,
-            #4e2c18 66%,
-            #24130c 100%
-        );
-    background-size: auto, 100% 42px, auto;
-}
-
-/* 모서리 빛·마모. 본문 위를 덮지만 이벤트를 가로채지 않음 */
-.notebook-shell::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    border-radius: inherit;
-    background:
-        radial-gradient(ellipse at 0% 0%, rgba(255, 255, 255, 0.14), transparent 30%),
-        radial-gradient(ellipse at 100% 100%, rgba(86, 54, 20, 0.08), transparent 38%);
-    box-shadow: inset -1px 0 0 rgba(255, 250, 238, 0.32);
-}
-
-.notebook-page {
-    position: relative;
-    z-index: 1;
-    padding: 0.75rem 0.65rem 0.95rem 0.8rem;
-}
-
-@media (min-width: 768px) {
-    .notebook-shell {
-        --notebook-spine: 12px;
-    }
-
-    .notebook-page {
-        padding: 0.9rem 0.85rem 1.05rem 0.95rem;
-    }
-}
-
-@media (max-width: 639px) {
-    .notebook-shell {
-        --notebook-spine: 9px;
-    }
-
-    .notebook-page {
-        padding: 0.7rem 0.55rem 0.9rem 0.7rem;
-    }
-}
-
-.icon-tab {
-    @apply flex flex-col items-center justify-center gap-1 min-h-tap min-w-[3.4rem] px-2 py-2 rounded-2xl border text-[11px] font-extrabold;
-}
-
-.cal-cell {
-    min-height: 5.5rem;
-    border: 1px solid rgba(140, 110, 70, 0.28);
-    background: rgba(255, 252, 245, 0.55);
-}
-
-.cal-cell-holiday {
-    background: rgba(255, 228, 230, 0.72);
-}
-
-.cal-cell-memorial {
-    background: rgba(255, 243, 220, 0.8);
-}
-
-.hub-tile {
-    @apply flex flex-col items-center justify-center gap-2 min-h-[6.5rem] rounded-2xl border border-amber-900/20 bg-[#fffaf0]/80 shadow-sm font-black;
-}
-
-/* 쓱, 적 카드: 세로 스크롤은 살리고, 가로로 밀어 날려보냅니다. */
-.flick-card {
-    touch-action: pan-y;
-    user-select: none;
-    -webkit-user-select: none;
-    transition: transform 0.18s ease;
-}
-
-.flick-card-dragging {
-    transition: none;
-    cursor: grabbing;
-    touch-action: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .flick-card {
-        transition: none;
     }
 }

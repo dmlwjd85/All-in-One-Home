@@ -1,5 +1,5 @@
-# 저장소 루트가 이 프로젝트일 때 GitHub Pages에 배포합니다.
-name: Deploy to GitHub Pages
+# 저장소 루트가 이 프로젝트일 때 깃허브 페이지에 배포합니다.
+name: 깃허브 페이지에 배포
 
 on:
   push:
@@ -21,12 +21,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fetch origin/main for storage comparison
+      - name: 기준 가지 가져오기
         run: git fetch --no-tags origin main
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install and build
+      - name: 설치하고 빌드
         env:
           VITE_BASE: ./
         run: |
@@ -39,11 +39,11 @@ jobs:
           sudo apt-get update
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
-      - name: Browser overlap, clipped buttons, and 14px table text
+      - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./
         run: npm run check:browser
-      - name: Upload artifact
+      - name: 빌드 결과 올리기
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
@@ -60,6 +60,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - name: 페이지에 배포
         id: deployment
         uses: actions/deploy-pages@v4

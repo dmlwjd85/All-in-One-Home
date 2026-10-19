@@ -17,7 +17,7 @@
     "check:hits": "node scripts/check-hit-targets.mjs",
     "check:storage": "node scripts/check-storage-paths.mjs",
     "check:quality": "node scripts/check-quality.mjs",
-    "check:browser": "node scripts/check-quality.mjs --browser"
+    "check:browser": "node scripts/check-browser.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

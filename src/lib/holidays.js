@@ -1,4 +1,4 @@
-import { addDaysYmd, fromYmd } from './utils.js';
+import { addDaysYmd, fromYmd } from './date.js';
 
 /** 음력 명절을 양력으로 적은 범위 (한국 월력요항 기준) */
 export const LUNAR_YEAR_MIN = 2020;
