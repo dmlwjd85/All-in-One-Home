@@ -1,6 +1,6 @@
 /** 360·390·1280에서 넘침과 버튼 크기, 주요 흐름을 확인하고 화면을 저장합니다. */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
@@ -45,8 +45,10 @@ const chromeArgs = [
     '--metrics-recording-only',
 ];
 
-const preview = spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+const viteBin = resolve(root, 'node_modules/vite/bin/vite.js');
+const preview = spawn(process.execPath, [viteBin, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
     cwd: root,
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, CI: '1', BROWSER: 'none' },
 });
@@ -70,11 +72,59 @@ function check(ok, message) {
     if (!ok) failures.push(message);
 }
 
-setTimeout(() => {
+let settled = false;
+
+function descendants(pid, found = []) {
+    let names = [];
+    try { names = readdirSync('/proc'); } catch { return found; }
+    for (const name of names) {
+        if (!/^\d+$/.test(name)) continue;
+        try {
+            const stat = readFileSync(`/proc/${name}/stat`, 'utf8');
+            const after = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+            const parent = Number(after[1]);
+            if (parent !== pid) continue;
+            const child = Number(name);
+            descendants(child, found);
+            found.push(child);
+        } catch { /* 프로세스가 이미 없습니다. */ }
+    }
+    return found;
+}
+
+function killTree(child) {
+    const pid = child?.pid;
+    if (!pid) return;
+    for (const id of descendants(pid)) {
+        try { process.kill(id, 'SIGKILL'); } catch { /* 이미 끝났습니다. */ }
+    }
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* 프로세스 그룹이 없습니다. */ }
+    try { process.kill(pid, 'SIGKILL'); } catch { /* 이미 끝났습니다. */ }
+}
+
+async function shutdown(code) {
+    if (settled) return;
+    settled = true;
+    clearTimeout(watchdog);
+    const chromeProc = browser?.process?.();
+    await Promise.race([
+        browser?.close().catch(() => {}),
+        delay(2000),
+    ]);
+    killTree(chromeProc);
+    browser = null;
+    try {
+        preview.stdout?.destroy();
+        preview.stderr?.destroy();
+    } catch { /* 파이프가 이미 닫혔습니다. */ }
+    killTree(preview);
+    process.exit(code);
+}
+
+const watchdog = setTimeout(() => {
     console.error('브라우저 검사가 4분을 넘겨 멈춰서 끝냅니다.');
-    preview.kill('SIGKILL');
-    process.exit(1);
-}, 4 * 60 * 1000).unref();
+    shutdown(1);
+}, 4 * 60 * 1000);
 
 let browser = null;
 
@@ -352,14 +402,12 @@ try {
     });
 } catch (error) {
     failures.push(error?.message || String(error));
-} finally {
-    await resetBrowser();
-    preview.kill('SIGTERM');
 }
 
 if (failures.length) {
     console.error(failures.join('\n'));
-    if (log) console.error(log.slice(-2000));
-    process.exit(1);
+    if (log && !/AIza|apiKey|VITE_FIREBASE/.test(log)) console.error(log.slice(-2000));
+    await shutdown(1);
 }
 console.log(`브라우저 검사를 통과했습니다. 화면은 ${shots} 에 있습니다.`);
+await shutdown(0);
