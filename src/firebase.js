@@ -16,6 +16,7 @@ function viteValue(name) {
     try {
         if (name === 'VITE_FIREBASE_CONFIG') return import.meta.env.VITE_FIREBASE_CONFIG;
         if (name === 'VITE_LEGACY_FIREBASE_CONFIG') return import.meta.env.VITE_LEGACY_FIREBASE_CONFIG;
+        if (name === 'VITE_FIREBASE_AUTH_DOMAIN') return import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
     } catch {
         return '';
     }
@@ -26,6 +27,8 @@ export function newFirebaseConfig() {
     const config = readConfig(viteValue('VITE_FIREBASE_CONFIG'));
     if (!config) return null;
     if (config.projectId !== 'ssug-gyomu') return null;
+    const domain = String(viteValue('VITE_FIREBASE_AUTH_DOMAIN') || '').trim();
+    if (domain && /^[A-Za-z0-9.-]+$/.test(domain)) return { ...config, authDomain: domain };
     return config;
 }
 
@@ -87,8 +90,19 @@ export async function signInGoogle() {
         throw error;
     }
     const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth');
+    const { pickLoginMode } = await import('./lib/googleLogin.js');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    const mode = pickLoginMode({
+        authDomain: ready.auth?.config?.authDomain || '',
+        host: location.host,
+        nav: navigator,
+        win: window,
+    });
+    if (mode === 'redirect') {
+        await signInWithRedirect(ready.auth, provider);
+        return null;
+    }
     try {
         return await signInWithPopup(ready.auth, provider);
     } catch (error) {
