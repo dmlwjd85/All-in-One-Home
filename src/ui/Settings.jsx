@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
-import { cloudReady, signOutFirebase } from '../firebase.js';
+import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
+import { setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { DEFAULT_PERIODS, isHm } from '../lib/period.js';
 import { useUi } from './context.jsx';
@@ -149,7 +150,19 @@ export function Settings() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정과 기록</h2>
-                {cloudReady() && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
+                {!cloudReady() && <p>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
+                {cloudReady() && !data.auth?.uid && <Btn className="chip" onClick={async () => {
+                    try {
+                        const cred = await signInGoogle();
+                        if (!cred?.user) return;
+                        await setAuth({ uid: cred.user.uid, name: cred.user.displayName || '', email: cred.user.email || '' });
+                        showToast('구글 계정으로 연결했어요. 기록은 선생님 자리에만 올라가요.');
+                    } catch (error) {
+                        showToast(loginHint(error));
+                    }
+                }}>구글 로그인</Btn>}
+                {data.auth?.uid && <p>{data.auth.name ? `${data.auth.name} 선생님으로 연결됐어요.` : '구글 계정으로 연결됐어요.'}</p>}
+                {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
                 <Btn className="chip" onClick={() => loadDemo().then(() => showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'))}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
                 <input className="field" aria-label="삭제 확인" value={wipe} onChange={(event) => setWipe(event.target.value)} placeholder="삭제" />

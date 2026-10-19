@@ -12,21 +12,37 @@ function readConfig(raw) {
     }
 }
 
-function envOf(name) {
-    return import.meta.env?.[name];
+function viteValue(name) {
+    try {
+        if (name === 'VITE_FIREBASE_CONFIG') return import.meta.env.VITE_FIREBASE_CONFIG;
+        if (name === 'VITE_LEGACY_FIREBASE_CONFIG') return import.meta.env.VITE_LEGACY_FIREBASE_CONFIG;
+    } catch {
+        return '';
+    }
+    return '';
 }
 
 export function newFirebaseConfig() {
-    const config = readConfig(envOf('VITE_FIREBASE_CONFIG'));
+    const config = readConfig(viteValue('VITE_FIREBASE_CONFIG'));
     if (!config) return null;
-    if (config.projectId === 'sambong-world-2026') return null;
+    if (config.projectId !== 'ssug-gyomu') return null;
     return config;
 }
 
 export function legacyFirebaseConfig() {
-    const config = readConfig(envOf('VITE_LEGACY_FIREBASE_CONFIG'));
+    const config = readConfig(viteValue('VITE_LEGACY_FIREBASE_CONFIG'));
     if (!config || config.projectId !== 'sambong-world-2026') return null;
     return config;
+}
+
+export function loginHint(error) {
+    if (!error || error.code === 'no-config' || error.code === 'auth/invalid-api-key') {
+        return '아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.';
+    }
+    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        return '로그인 창을 닫으셨어요. 다시 눌러 주세요.';
+    }
+    return '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.';
 }
 
 export function cloudReady() {
@@ -70,10 +86,29 @@ export async function signInGoogle() {
         error.code = 'no-config';
         throw error;
     }
-    const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+    const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    return signInWithPopup(ready.auth, provider);
+    try {
+        return await signInWithPopup(ready.auth, provider);
+    } catch (error) {
+        if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/operation-not-supported-in-this-environment') {
+            await signInWithRedirect(ready.auth, provider);
+            return null;
+        }
+        throw error;
+    }
+}
+
+export async function finishRedirectSignIn() {
+    const ready = await loadFirebase();
+    if (!ready) return null;
+    const { getRedirectResult } = await import('firebase/auth');
+    try {
+        return await getRedirectResult(ready.auth);
+    } catch {
+        return null;
+    }
 }
 
 export async function signOutFirebase() {

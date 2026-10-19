@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import titles from '../data/legacyTitles.json';
-import { applyLegacy, finishSetup, loadDemo, previewLegacy } from '../lib/db.js';
-import { cloudReady, signInGoogle } from '../firebase.js';
-import { setAuth } from '../lib/db.js';
+import { applyLegacy, finishSetup, loadDemo, previewLegacy, setAuth, snapshot } from '../lib/db.js';
+import { cloudReady, loginHint, signInGoogle } from '../firebase.js';
 import { useUi } from './context.jsx';
 import { Btn, Symbol } from './bits.jsx';
 
@@ -39,13 +38,19 @@ export function Start() {
                     <Btn className="chip block" style={{ marginTop: 8 }} disabled={!cloudReady()} onClick={async () => {
                         try {
                             const cred = await signInGoogle();
+                            if (!cred?.user) return;
                             await setAuth({ uid: cred.user.uid, name: cred.user.displayName || '', email: cred.user.email || '' });
+                            const current = snapshot();
+                            if (current.profile.started && current.students.length) {
+                                go('#/today');
+                                return;
+                            }
                             await afterChoice();
                         } catch (error) {
-                            showToast(error.code === 'no-config' ? '클라우드 연결은 아직 준비 중이에요.' : '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.');
+                            showToast(loginHint(error));
                         }
                     }}>구글 로그인</Btn>
-                    {!cloudReady() && <p className="muted">클라우드 로그인은 연결을 기다리는 중이에요. 그때까지는 이 기기에만 남아요.</p>}
+                    {!cloudReady() && <p className="muted">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                 </div>
             )}
             {step === 'migrate' && plan && (

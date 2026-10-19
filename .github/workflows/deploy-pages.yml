@@ -29,6 +29,7 @@ jobs:
       - name: 설치하고 빌드
         env:
           VITE_BASE: ./
+          VITE_FIREBASE_CONFIG: ${{ github.event_name != 'pull_request' && secrets.VITE_FIREBASE_CONFIG || '' }}
         run: |
           npm install
           npm run check:links

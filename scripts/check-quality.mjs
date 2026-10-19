@@ -10,6 +10,7 @@ import { resolveHash } from '../src/lib/routes.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { validateBackupText } from '../src/lib/backup.js';
+import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const failures = [];
@@ -78,6 +79,20 @@ check(fake.getItem('homenote_v2_classRoster') === before, '원본 키를 고쳤�
 
 const badBackup = validateBackupText('{"__proto__":{"x":1},"format":"ssug-gyomu"}');
 check(!badBackup.ok, '위험한 백업 키를 받았습니다.');
+
+const absent = toCloudRow('attendance', { date: '2026-10-19', sid: 's3', status: '결석', reason: '질병', note: '감기', paper: false, source: 'app' });
+check(absent?.body.status === 'absent' && absent.body.reason === 'sick' && !('source' in absent.body), '출결이 규칙 형식이 아닙니다.');
+check(fromCloudRow('attendance', absent.id, absent.body)?.status === '결석', '출결이 한국어로 돌아오지 않습니다.');
+check(toCloudRow('records', { id: 'rec-1', date: '2026-10-19', kind: '관찰', text: '알레르기 있음', source: 'app' }) === null, '민감 기록이 클라우드로 나갑니다.');
+check(toCloudRow('records', { id: 'demo-1', date: '2026-10-19', kind: '관찰', text: '발표를 했어요', source: 'demo' }) === null, '예시 학급이 클라우드로 나갑니다.');
+const cloudRecord = toCloudRow('records', { id: 'rec-1', date: '2026-10-19', kind: '상담', sid: 's12', text: '이야기를 들었어요', tags: ['교우'], neis: true, neisMoved: true, source: 'app' });
+check(cloudRecord?.body.kind === 'counsel' && !('neisMoved' in cloudRecord.body), '기록 칸이 규칙과 다릅니다.');
+const cloudTodo = toCloudRow('todos', { id: 'todo-1', title: '동의서 걷기', done: false, got: 22, of: 27, pendingNos: [25], source: 'app' });
+check(cloudTodo && !('pendingNos' in cloudTodo.body), '걷기 번호가 규칙 밖 칸으로 나갑니다.');
+const cloudProfile = toCloudProfile({ profile: { className: '6학년 3반', schoolYear: 2026, classSize: 27, theme: 'light', periodStarts: ['09:00', '09:40'] }, auth: { name: '선생님' }, students: [] });
+check(!('periodStart' in cloudProfile.body), '교시 목록이 규칙이 받지 않는 칸으로 나갑니다.');
+const legacy = toCloudRow('legacy', { id: 'praiseBoard', kind: 'record', title: '칭찬', raw: { sticker: 1 } });
+check(legacy?.id === 'board-praise' && typeof legacy.body.raw === 'string', '보관함 형식이 규칙과 다릅니다.');
 
 function lum(hex) {
     const n = Number.parseInt(hex.slice(1), 16);

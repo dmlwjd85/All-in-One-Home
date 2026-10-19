@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { boot, snapshot, subscribe, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, snapshot, subscribe, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
 import { resolveHash } from './lib/routes.js';
 import { closeTip, tipForToday } from './lib/tips.js';
 import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
+import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, HOME_KINDS, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
 import { Home } from './ui/Home.jsx';
@@ -47,24 +48,29 @@ export default function App() {
 
     useEffect(() => {
         let stop = () => {};
-        boot(location.search).then(() => {
+        let unsub = () => {};
+        let alive = true;
+        boot(location.search).then(async () => {
+            if (!alive) return;
             setClock(seoulParts());
             setData(snapshot());
             stop = subscribe(setData);
+            unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
         });
-        return () => stop();
-    }, []);
-
-    useEffect(() => {
-        let unsub = () => {};
-        watchAuth((user) => setAuth(user)).then((fn) => { unsub = fn || (() => {}); });
-        return () => unsub();
+        return () => {
+            alive = false;
+            stop();
+            unsub();
+        };
     }, []);
 
     useEffect(() => {
         const timer = setInterval(() => setClock(seoulParts()), 30000);
         const onHash = () => setHash(location.hash || '#/today');
-        const onLine = () => setOnline(navigator.onLine);
+        const onLine = () => {
+            setOnline(navigator.onLine);
+            if (navigator.onLine) flushCloud().catch(() => {});
+        };
         window.addEventListener('hashchange', onHash);
         window.addEventListener('online', onLine);
         window.addEventListener('offline', onLine);
@@ -107,7 +113,10 @@ export default function App() {
         let timer = 0;
         const arm = () => {
             clearTimeout(timer);
-            timer = setTimeout(() => setLocked(true), 30 * 60 * 1000);
+            timer = setTimeout(() => {
+                setLocked(true);
+                signOutFirebase().catch(() => {});
+            }, 30 * 60 * 1000);
         };
         arm();
         window.addEventListener('pointerdown', arm);
@@ -235,7 +244,8 @@ export default function App() {
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>어디서든 / 키를 누르면 바로 적을 수 있어요. 엔터로 저장돼요.</p>
                 </aside>
                 <div className="main">
-                    {!online && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 저장해 두고 연결되면 올릴게요.</p>}
+                    {!cloudReady() && <p className="muted" style={{ marginTop: 0 }}>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
+                    {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
                     <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                         {route.name === 'student' || route.name === 'legacy' ? (

@@ -5,7 +5,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { pushUserData } from './cloud.js';
+import { pullUserData, pushUserData, syncAvailable } from './cloud.js';
 import { seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
@@ -52,6 +52,8 @@ let undoStack = [];
 const listeners = new Set();
 let persistQueue = Promise.resolve();
 let memoryOnly = false;
+let cloudHashes = {};
+let connectTask = null;
 
 function emit() {
     const snap = snapshot();
@@ -98,9 +100,62 @@ export async function update(recipe, { undoable = false } = {}) {
     mirrorTheme(state.profile.theme);
     emit();
     await persist();
-    if (state.auth?.uid) {
-        pushUserData(state.auth.uid, state, { memoryOnly: state.profile.sharedPc }).catch(() => {});
+    flushCloud().catch(() => {});
+}
+
+export async function flushCloud() {
+    if (!state.auth?.uid || !syncAvailable()) return { skipped: true };
+    const result = await pushUserData(state.auth.uid, state, {
+        memoryOnly: memoryOnly || state.profile.sharedPc,
+        hashes: cloudHashes,
+    });
+    if (result?.hashes) {
+        cloudHashes = result.hashes;
+        if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
+    return result;
+}
+
+function unionById(local = [], remote = []) {
+    const map = new Map(local.map((row) => [String(row.id), row]));
+    remote.forEach((row) => {
+        if (!row?.id || map.has(String(row.id))) return;
+        map.set(String(row.id), row);
+    });
+    return [...map.values()];
+}
+
+function absorbCloud(draft, remote) {
+    const remoteHas = (remote.students || []).length || (remote.records || []).length;
+    if (draft.profile.demo && remoteHas) {
+        const keep = (row) => row.source !== 'demo';
+        draft.students = draft.students.filter(keep);
+        draft.records = draft.records.filter(keep);
+        draft.attendance = draft.attendance.filter(keep);
+        draft.events = draft.events.filter(keep);
+        draft.todos = draft.todos.filter(keep);
+        draft.notices = draft.notices.filter(keep);
+        draft.notes = draft.notes.filter(keep);
+        draft.profile.demo = false;
+    }
+    draft.students = unionById(draft.students, remote.students);
+    draft.attendance = unionById(draft.attendance, remote.attendance);
+    draft.records = unionById(draft.records, remote.records);
+    draft.events = unionById(draft.events, remote.events);
+    draft.todos = unionById(draft.todos, remote.todos);
+    draft.notes = unionById(draft.notes, remote.notes);
+    draft.notices = unionById(draft.notices, remote.notices);
+    draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
+    for (const [day, value] of Object.entries(remote.timetable || {})) {
+        if (!draft.timetable[day] || !Object.keys(draft.timetable[day]).length) draft.timetable[day] = value;
+    }
+    if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
+    if (remote.profile?.classSize && !draft.profile.classSize) draft.profile.classSize = remote.profile.classSize;
+    if ((remote.students || []).length || remote.profile?.className) {
+        draft.profile.started = true;
+        draft.profile.guest = false;
+    }
+    return draft;
 }
 
 export async function undo() {
@@ -148,8 +203,23 @@ export async function boot(query = '') {
         if (localStorage.getItem(SHARED_KEY) === '1') state.profile.sharedPc = true;
         const savedTheme = localStorage.getItem(THEME_KEY);
         if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') state.profile.theme = savedTheme;
+        if (localStorage.getItem(SHARED_KEY) === '1') {
+            memoryOnly = true;
+            const theme = state.profile.theme;
+            state = emptyState();
+            state.profile.theme = theme;
+            state.profile.sharedPc = true;
+        }
     } catch {
         /* 팁 저장이 없어도 됩니다. */
+    }
+    if (!memoryOnly) {
+        try {
+            const savedHashes = await mainVault.get('cloudHashes');
+            if (savedHashes && typeof savedHashes === 'object') cloudHashes = savedHashes;
+        } catch {
+            /* 해시가 없어도 다시 올리면 됩니다. */
+        }
     }
     if (!state.profile.started && params.get('demo') === '1' && !legacyAvailable()) {
         await loadDemo();
@@ -349,6 +419,17 @@ export async function patchProfile(patch) {
         draft.profile = { ...draft.profile, ...patch };
         return draft;
     });
+    if (patch.sharedPc === true) {
+        memoryOnly = true;
+        try {
+            await mainVault.remove('state');
+            await localVault.remove('state');
+            await mainVault.remove('cloudHashes');
+        } catch {
+            /* 공용 컴퓨터에서는 기록을 남겨 두지 않습니다. */
+        }
+    }
+    if (patch.sharedPc === false) memoryOnly = false;
 }
 
 export async function replaceRoster(text) {
@@ -508,9 +589,28 @@ export async function importText(text, mode) {
     return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
 }
 
+async function connectCloud(uid) {
+    await flushCloud();
+    const remote = await pullUserData(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
+    if (!remote) return;
+    const hasRemote = remote.profile?.className || (remote.students || []).length || (remote.records || []).length;
+    if (!hasRemote) return;
+    await update((draft) => absorbCloud(draft, remote));
+}
+
 export async function setAuth(auth) {
-    state = { ...state, auth };
+    const next = auth?.uid ? { uid: auth.uid, name: auth.name || '', email: auth.email || '' } : null;
+    state = { ...state, auth: next };
+    if (next) state.profile.guest = false;
     emit();
+    if (!next?.uid) {
+        connectTask = null;
+        return;
+    }
+    if (connectTask?.uid === next.uid) return connectTask.promise;
+    const promise = connectCloud(next.uid).catch(() => {});
+    connectTask = { uid: next.uid, promise };
+    return promise;
 }
 
 export async function clearAll() {
