@@ -14,7 +14,8 @@ export function Schedule() {
     const [picked, setPicked] = useState(clock.ymd);
     const weekStart = startOfWeekMon(clock.ymd);
     const events = joined(data, 'events');
-    const week = events.filter((row) => row.date >= weekStart && row.date <= addDaysYmd(weekStart, 6));
+    const weekEnd = addDaysYmd(weekStart, 6);
+    const week = events.filter((row) => coversDay(row, weekStart, weekEnd));
     const specialist = [];
     DAYS.forEach(([key, label]) => {
         const row = data.timetable[key] || {};
@@ -33,7 +34,7 @@ export function Schedule() {
                     {Array.from({ length: 7 }, (_, index) => {
                         const date = addDaysYmd(weekStart, index);
                         const holiday = holidayCaption(date);
-                        const mine = week.filter((row) => row.date === date);
+                        const mine = week.filter((row) => onDay(row, date));
                         return (
                             <section key={date} className="glass" style={{ padding: 12 }}>
                                 <strong>{formatKoDate(date, { today: clock.ymd })} {holiday?.isHoliday ? `· ${holiday.primary.name}` : ''}</strong>
@@ -57,7 +58,7 @@ export function Schedule() {
                         {['월', '화', '수', '목', '금', '토', '일'].map((label) => <div key={label} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800 }}>{label}</div>)}
                         {monthCells(ym).map((cell) => {
                             const holiday = holidayCaption(cell.ymd);
-                            const has = events.some((row) => row.date === cell.ymd);
+                            const has = events.some((row) => onDay(row, cell.ymd));
                             return (
                                 <Btn key={cell.ymd} className="block" onClick={() => setPicked(cell.ymd)} style={{ background: cell.ymd === clock.ymd ? 'var(--primary)' : 'var(--solid)', color: cell.ymd === clock.ymd ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 10, opacity: cell.inMonth ? 1 : 0.45, minHeight: 44 }}>
                                     <span className="num" style={{ fontWeight: 800 }}>{cell.day}</span>
@@ -69,14 +70,26 @@ export function Schedule() {
                     </div>
                     <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
                         <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
-                        {events.filter((row) => row.date === picked).map((row) => <p key={row.id}>{row.title}</p>)}
-                        {!events.some((row) => row.date === picked) && <p className="muted">이 날 일정은 없어요.</p>}
+                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{row.title}</p>)}
+                        {!events.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
                     </div>
                 </div>
             )}
             {mode === '시간표' && <Timetable data={data} todayKey={dayKeyFromYmd(clock.ymd)} />}
         </div>
     );
+}
+
+function eventEnd(row) {
+    return row.end && row.end >= row.date ? row.end : row.date;
+}
+
+function onDay(row, date) {
+    return row.date <= date && date <= eventEnd(row);
+}
+
+function coversDay(row, start, end) {
+    return row.date <= end && eventEnd(row) >= start;
 }
 
 function shift(ym, delta) {

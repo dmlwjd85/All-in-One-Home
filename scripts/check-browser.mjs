@@ -566,6 +566,64 @@ try {
             await delay(200);
         }
         check(!undone, '되돌리기 뒤에도 메시지 항목이 남아 있습니다.');
+
+        await openPlus(page);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        const four = [
+            '[안내] 1. 10월 30일(금) 3~4교시 학급 사진 촬영',
+            '11월 12일까지 공개수업 지도안 제출',
+            '가정통신문',
+            '학부모 상담주간: 11월 2일(월)~11월 6일(금)',
+            '김교사 출장으로 5,6교시 보결',
+        ].join('\n');
+        await page.focus('[data-screen="message"] textarea');
+        await page.keyboard.type(four);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        const previewReady = await page.waitForFunction(() => document.body.innerText.includes('4개 등록') && document.body.innerText.includes('11/2~11/6'), { timeout: 8000 }).catch(() => null);
+        if (!previewReady) {
+            const body = await page.evaluate(() => document.body.innerText.slice(0, 700));
+            failures.push(`4건 미리보기가 열리지 않았습니다. ${body}`);
+        } else {
+        const summary = await page.evaluate(() => {
+            const sheet = document.querySelector('[data-screen="message"]');
+            const foot = document.querySelector('.sheet-foot');
+            const bg = getComputedStyle(foot).backgroundColor;
+            const calendar = document.querySelector('[aria-label="날짜"]');
+            const select = document.querySelector('[data-screen="message"] select');
+            return {
+                height: sheet.scrollHeight,
+                cards: document.querySelectorAll('.msg-card').length,
+                calendar: Boolean(calendar),
+                select: Boolean(select),
+                bg,
+            };
+        });
+        check(summary.cards === 4, `4건이 ${summary.cards}장으로 나왔습니다.`);
+        check(summary.height < 2200, `미리보기가 ${summary.height}px로 너무 깁니다.`);
+        check(!summary.calendar, '접힌 카드에 달력이 펼쳐져 있습니다.');
+        check(!summary.select, '미리보기에 드롭다운이 있습니다.');
+        check(summary.bg && summary.bg !== 'transparent' && summary.bg !== 'rgba(0, 0, 0, 0)', '등록 버튼 배경이 비칩니다.');
+        await page.screenshot({ path: resolve(shots, 'after_message_summary_390.png') });
+        await page.evaluate(() => [...document.querySelectorAll('[aria-label="날짜 고치기"]')].find((el) => el.innerText.includes('10월'))?.click());
+        await page.waitForSelector('[aria-label="날짜"]');
+        const opened = await page.evaluate(() => !document.querySelector('[data-screen="message"] select'));
+        check(opened, '날짜를 펼쳤는데 드롭다운이 있습니다.');
+        await page.screenshot({ path: resolve(shots, 'after_message_date_390.png') });
+        await page.evaluate(() => [...document.querySelectorAll('[aria-label="시각 고치기"]')][0]?.click());
+        await page.waitForSelector('[aria-label="시각"]');
+        const clocks = await page.evaluate(() => [...document.querySelectorAll('[aria-label="시각"] button')].map((el) => el.innerText.trim()));
+        check(clocks.includes('14:00') && clocks.includes('13:10') && !clocks.includes('2:00') && !clocks.includes('2:30'), `시각 표기가 섞여 있습니다: ${clocks.join(', ')}`);
+        const covered = await page.evaluate(() => {
+            const sheet = document.querySelector('[data-screen="message"]');
+            sheet.scrollTop = sheet.scrollHeight;
+            const foot = document.querySelector('.sheet-foot');
+            const rect = foot.getBoundingClientRect();
+            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 20);
+            return foot.contains(hit);
+        });
+        check(covered, '등록 버튼 아래로 카드가 비칩니다.');
+        }
     }, 844);
 
     await withDemo(1280, 'light', async (page) => {
@@ -594,6 +652,8 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만'), { timeout: 8000 });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이 기기에서만'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예전 교무수첩'));
+        const legacyText = await page.evaluate(() => document.body.innerText);
+        check(legacyText.includes('학생 1명'), '예전 명단을 읽지 못했습니다.');
         const still = await page.evaluate(() => localStorage.getItem('homenote_v2_classRoster'));
         check(still && still.includes('김하늘'), '시작 화면이 원본 키를 지웠습니다.');
     });

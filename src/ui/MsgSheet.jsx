@@ -8,6 +8,67 @@ import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 
 const KIND_OPTIONS = [{ id: '할 일', label: '할 일' }, { id: '일정', label: '일정' }];
 
+function dateLabel(ymd, end) {
+    if (!ymd) return '날짜 없음';
+    if (end && end > ymd) {
+        return `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8))}~${Number(end.slice(5, 7))}/${Number(end.slice(8))}`;
+    }
+    return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
+}
+
+function periodLabel(item) {
+    if (item.period && item.periodEnd) return `${item.period}~${item.periodEnd}교시`;
+    if (item.period) return `${item.period}교시`;
+    return '교시 없음';
+}
+
+function MsgCard({ item, clock, periods, onPatch }) {
+    const [open, setOpen] = useState('');
+    function toggle(name) {
+        setOpen((value) => (value === name ? '' : name));
+    }
+    return (
+        <article className={item.low ? 'msg-card low-card' : 'msg-card'}>
+            <ChoiceGrid label="할 일 또는 일정" value={item.kind} options={KIND_OPTIONS} onPick={(id) => onPatch(item.id, { kind: id, eventKind: id === '일정' ? (item.eventKind || '학급') : '' })} />
+            {item.kind === '일정' && (
+                <div style={{ marginTop: 8 }}>
+                    <ChoiceGrid label="일정 종류" value={item.eventKind || '학급'} options={EVENT_KINDS.map((id) => ({ id, label: id }))} onPick={(id) => onPatch(item.id, { eventKind: id })} />
+                </div>
+            )}
+            {item.warning && <p style={{ fontWeight: 800 }}>{item.warning}</p>}
+            {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 빼 두었어요.</p>}
+            {item.sensitive && <p style={{ fontWeight: 800 }}>이 내용은 이 기기에만 남겨 둘게요.</p>}
+            <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => onPatch(item.id, { title: event.target.value })} />
+            <div className="msg-summary">
+                <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{dateLabel(item.date, item.end)}</Btn>
+                <Btn className={open === 'period' ? 'chip on' : 'chip'} aria-label="교시 고치기" onClick={() => toggle('period')}>{periodLabel(item)}</Btn>
+                <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{item.time || '시각 없음'}</Btn>
+            </div>
+            {open === 'date' && (
+                <div style={{ marginTop: 8 }}>
+                    <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => { onPatch(item.id, { date: ymd }); setOpen(''); }} />
+                </div>
+            )}
+            {open === 'period' && (
+                <div style={{ marginTop: 8 }}>
+                    <PeriodRow value={item.period} onPick={(n) => {
+                        onPatch(item.id, { period: n, periodEnd: 0, time: periods[n - 1] || item.time });
+                        setOpen('');
+                    }} />
+                    <Btn className="choice-tile" style={{ marginTop: 8 }} onClick={() => { onPatch(item.id, { period: 0, periodEnd: 0 }); setOpen(''); }}>교시 없음</Btn>
+                </div>
+            )}
+            {open === 'time' && (
+                <div style={{ marginTop: 8 }}>
+                    <TimeChips value={item.time} onPick={(hm) => { onPatch(item.id, { time: hm }); setOpen(''); }} />
+                </div>
+            )}
+            <input className="field" style={{ marginTop: 8 }} aria-label="메모" placeholder="장소나 메모" value={item.memo || ''} onChange={(event) => onPatch(item.id, { memo: event.target.value })} />
+            <Btn className={item.include === false ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={() => onPatch(item.id, { include: item.include === false }, true)}>{item.include === false ? '빼 둠' : '넣을게요'}</Btn>
+        </article>
+    );
+}
+
 export function MsgSheet({ onClose }) {
     const { data, clock, showToast } = useUi();
     const [phase, setPhase] = useState('paste');
@@ -82,33 +143,13 @@ export function MsgSheet({ onClose }) {
                     <>
                         <p className="muted" style={{ marginTop: 0 }}>노란 카드는 한 번만 확인해 주세요. 칩을 누르면 바로 바뀌어요.</p>
                         {items.map((item) => (
-                            <article key={item.id} className={item.low ? 'msg-card low-card' : 'msg-card'}>
-                                <ChoiceGrid label="할 일 또는 일정" value={item.kind} options={KIND_OPTIONS} onPick={(id) => patch(item.id, { kind: id, eventKind: id === '일정' ? (item.eventKind || '학급') : '' })} />
-                                {item.kind === '일정' && (
-                                    <div style={{ marginTop: 8 }}>
-                                        <ChoiceGrid label="일정 종류" value={item.eventKind || '학급'} options={EVENT_KINDS.map((id) => ({ id, label: id }))} onPick={(id) => patch(item.id, { eventKind: id })} />
-                                    </div>
-                                )}
-                                {item.warning && <p style={{ fontWeight: 800 }}>{item.warning}</p>}
-                                {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 빼 두었어요.</p>}
-                                {item.sensitive && <p style={{ fontWeight: 800 }}>이 내용은 이 기기에만 남겨 둘게요.</p>}
-                                <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => patch(item.id, { title: event.target.value })} />
-                                <div style={{ marginTop: 8 }}>
-                                    <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => patch(item.id, { date: ymd })} />
-                                </div>
-                                <div style={{ marginTop: 8 }}>
-                                    <PeriodRow value={item.period} onPick={(n) => {
-                                        const starts = data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS;
-                                        patch(item.id, { period: n, periodEnd: 0, time: starts[n - 1] || item.time });
-                                    }} />
-                                    <Btn className={item.period ? 'chip' : 'chip on'} style={{ marginTop: 8 }} onClick={() => patch(item.id, { period: 0, periodEnd: 0 })}>교시 없음</Btn>
-                                </div>
-                                <div style={{ marginTop: 8 }}>
-                                    <TimeChips value={item.time} onPick={(hm) => patch(item.id, { time: hm })} />
-                                </div>
-                                <input className="field" style={{ marginTop: 8 }} aria-label="메모" placeholder="장소나 메모" value={item.memo || ''} onChange={(event) => patch(item.id, { memo: event.target.value })} />
-                                <Btn className={item.include === false ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={() => patch(item.id, { include: item.include === false }, true)}>{item.include === false ? '빼 둠' : '넣을게요'}</Btn>
-                            </article>
+                            <MsgCard
+                                key={item.id}
+                                item={item}
+                                clock={clock}
+                                periods={data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS}
+                                onPatch={patch}
+                            />
                         ))}
                         <div className="sheet-foot">
                             <Btn className="primary-btn block" onClick={save}>{count}개 등록</Btn>

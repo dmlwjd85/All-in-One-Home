@@ -95,7 +95,7 @@ export function findDates(text, now = new Date()) {
         if (month < 1 || month > 12 || day < 1 || day > 31) return;
         pushSpan(spans, match, isValidYmd(fixSchoolYear(month, day, today)) ? fixSchoolYear(month, day, today) : '', { explicit: true, weekday: match[3] || '' });
     });
-    eachMatch(/(?<!\d)(\d{1,2})\s*([./])\s*(\d{1,2})\s*\.?(?:\s*[.(（]\s*([월화수목금토일])\s*[)）])?(?!\d)/g, raw, (match) => {
+    eachMatch(/(?<!\d)(\d{1,2})\s*([./])\s*(\d{1,2})\s*\.?(?!\s*월)(?:\s*[.(（]\s*([월화수목금토일])\s*[)）])?(?!\d)/g, raw, (match) => {
         const month = Number(match[1]);
         const day = Number(match[3]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;

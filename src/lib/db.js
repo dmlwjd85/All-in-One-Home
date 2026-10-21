@@ -393,6 +393,7 @@ export async function saveParsed(items, now = new Date()) {
                     memo: memo.slice(0, 300),
                 };
                 if (item.time) row.time = item.time;
+                if (item.end && item.end > date) row.end = item.end;
                 put(sensitive ? draft.local.events : draft.events, row);
             } else {
                 const title = item.time && !String(item.title).includes(item.time)

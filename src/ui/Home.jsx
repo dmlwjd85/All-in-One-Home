@@ -15,7 +15,12 @@ export function Home() {
     const count = data.profile.classSize || data.students.length;
     const todos = joined(data, 'todos');
     const left = todos.filter((row) => !row.done).length;
-    const events = joined(data, 'events').filter((row) => row.date >= startOfWeekMon(clock.ymd) && row.date <= addDaysYmd(startOfWeekMon(clock.ymd), 6));
+    const weekStart = startOfWeekMon(clock.ymd);
+    const weekEnd = addDaysYmd(weekStart, 6);
+    const events = joined(data, 'events').filter((row) => {
+        const end = row.end && row.end >= row.date ? row.end : row.date;
+        return row.date <= weekEnd && end >= weekStart;
+    });
     const feed = [
         ...joinedRecords(data).map((row) => ({ id: row.id, at: row.at || row.date, title: `${data.students.find((item) => item.id === row.sid)?.no || ''} ${studentName(data.students, row.sid)} · ${row.kind}`.trim(), text: row.text, emoji: '👀' })),
         ...joined(data, 'notices').map((row) => ({ id: row.id, at: row.at || row.date, title: row.date === addDaysYmd(clock.ymd, 1) ? '내일 알림장' : '알림장', text: row.text, emoji: '📢' })),
@@ -94,7 +99,7 @@ export function Home() {
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
                         <div key={row.id}>
-                            <strong>{weekdayKo(row.date)} {Number(row.date.slice(5, 7))}/{Number(row.date.slice(8))} · {row.title}</strong>
+                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.title}</strong>
                             {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
                         </div>
                     ))}
