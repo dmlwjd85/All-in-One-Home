@@ -62,6 +62,27 @@ function schoolYearYmd(namedYear, month, day, weekday) {
     return primary;
 }
 
+function addMonths(year, month, delta) {
+    const total = year * 12 + (month - 1) + delta;
+    return { year: Math.floor(total / 12), month: (total % 12) + 1 };
+}
+
+function monthShift(which) {
+    return /다음|내달/.test(which) ? 1 : 0;
+}
+
+/** '이번 달 말', '다음 달 초', '월말'을 그 달의 하루로 바꿉니다. */
+function monthEdgeYmd(which, edge, today) {
+    const shifted = addMonths(Number(today.slice(0, 4)), Number(today.slice(5, 7)), monthShift(which));
+    const day = edge === '초' ? 1 : new Date(shifted.year, shifted.month, 0).getDate();
+    return ymdOf(shifted.year, shifted.month, day);
+}
+
+function monthDayYmd(which, day, today) {
+    const shifted = addMonths(Number(today.slice(0, 4)), Number(today.slice(5, 7)), monthShift(which));
+    return ymdOf(shifted.year, shifted.month, day);
+}
+
 /** 일만 있으면 아직 안 지난 날이면 이번 달, 지났으면 다음 달입니다. */
 function dayOnlyYmd(day, today) {
     const year = Number(today.slice(0, 4));
@@ -88,7 +109,7 @@ function weekYmd(which, weekdayName, today) {
     return ymd;
 }
 
-function pushSpan(spans, match, ymd, { explicit, weekday = '' }) {
+function pushSpan(spans, match, ymd, { explicit, weekday = '', bare = false }) {
     if (!ymd) return;
     const index = match.index;
     spans.push({
@@ -97,8 +118,36 @@ function pushSpan(spans, match, ymd, { explicit, weekday = '' }) {
         ymd,
         explicit,
         weekday,
+        bare,
         warning: weekdayWarning(ymd, weekday),
     });
+}
+
+/** '12월 8일~10일'처럼 끝의 월이 빠지면 시작 달의 그 날입니다. 시작 날보다 앞이면 다음 달입니다. */
+function inheritRangeMonth(spans, raw) {
+    for (let i = 1; i < spans.length; i += 1) {
+        const prev = spans[i - 1];
+        const next = spans[i];
+        if (!next.bare || !prev.ymd) continue;
+        const between = raw.slice(prev.index + prev.length, next.index);
+        if (!/^\s*[~～\-–—]\s*$/.test(between) && !/^\s*부터\s*$/.test(between)) continue;
+        const day = Number(next.ymd.slice(8, 10));
+        let year = Number(prev.ymd.slice(0, 4));
+        let month = Number(prev.ymd.slice(5, 7));
+        const startDay = Number(prev.ymd.slice(8, 10));
+        if (day < startDay) {
+            month += 1;
+            if (month > 12) {
+                month = 1;
+                year += 1;
+            }
+        }
+        const ymd = ymdOf(year, month, day);
+        if (!ymd) continue;
+        next.ymd = ymd;
+        next.warning = weekdayWarning(ymd, next.weekday);
+        next.bare = false;
+    }
 }
 
 export function weekdayWarning(ymd, weekday) {
@@ -143,10 +192,21 @@ export function findDates(text, now = new Date()) {
         const ymd = fixSchoolYear(month, day, today);
         pushSpan(spans, match, isValidYmd(ymd) ? ymd : '', { explicit: true, weekday: match[4] || match[5] || '' });
     });
+    eachMatch(new RegExp(`(?<![가-힣])(이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
+        const day = Number(match[2]);
+        if (day < 1 || day > 31) return;
+        pushSpan(spans, match, monthDayYmd(match[1], day, today), { explicit: true, weekday: match[3] || match[4] || '' });
+    });
+    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(초|말)/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd(match[1], match[2], today), { explicit: true });
+    });
+    eachMatch(/(?<![가-힣\d])월(초|말)/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd('이번달', match[1], today), { explicit: true });
+    });
     eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const day = Number(match[1]);
         if (day < 1 || day > 31) return;
-        pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '' });
+        pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '', bare: true });
     });
     eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일/g, raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
@@ -166,6 +226,7 @@ export function findDates(text, now = new Date()) {
         if (prev && span.index < prev.index + prev.length) continue;
         kept.push(span);
     }
+    inheritRangeMonth(kept, raw);
     return kept;
 }
 

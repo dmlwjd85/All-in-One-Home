@@ -733,6 +733,19 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('2025년 11월 3일') && document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
         const past = await page.evaluate(() => Boolean(document.querySelector('.low-card')));
         check(past, '지난 참고 자료가 노란 카드가 아닙니다.');
+        await pasteNext('방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.');
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('11월 5일'));
+        const moved = await page.evaluate(() => ({
+            chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
+            titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
+            low: document.querySelectorAll('.low-card').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+        }));
+        check(moved.chips.includes('11월 5일') && moved.chips.includes('10월 29일') && moved.titles.some((title) => title.includes('축구반 수업')) && moved.low >= 1 && moved.aside >= 1 && moved.kept === 1, `연기 카드가 ${JSON.stringify(moved)} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_move_date_390.png') });
+        await pasteNext('겨울 독서 주간 12월 8일(화)~10일(목)');
+        await page.waitForFunction(() => document.body.innerText.includes('12월 8일') && document.body.innerText.includes('12월 10일') && document.body.innerText.includes('1개 등록'));
         await audit(page, '다른 해 날짜');
     }, 844);
 

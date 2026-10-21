@@ -6,6 +6,7 @@ import { MSG_BLIND } from '../src/lib/msgBlind.js';
 import { MSG_FRESH } from '../src/lib/msgFresh.js';
 import { MSG_UNSEEN } from '../src/lib/msgUnseen.js';
 import { MSG_YEAR } from '../src/lib/msgYear.js';
+import { MSG_MOVE } from '../src/lib/msgMove.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -142,6 +143,14 @@ must('학년도', '2027학년도 학부모총회 3월 18일(목) 오후 2시', q
 must('지난 참고', '2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.', qaNow, (items) => items.length === 1 && items[0].date === '2025-11-03' && items[0].low === true && items[0].include === false);
 must('개강', '2027. 1. 4.(월) 방학 중 방과후학교 개강', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-01-04' && items[0].time === '' && items[0].title.includes('개강'));
 must('휴무', '2027년 1월 1일 신정 휴무', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].eventKind === '휴일' && items[0].date === '2027-01-01');
+must('수업 연기', '방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-11-05' && item.title === '방과후 축구반 수업') && items.some((item) => item.date === '2026-10-29' && item.include === false && item.low === true));
+must('상담 변경', '윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-10-28' && item.time === '15:30' && item.title === '윤서 어머님 상담') && items.some((item) => item.date === '2026-10-27' && item.include === false));
+must('끝 월 생략', '12월 8일(화)~10일(목)', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-12-08' && items[0].end === '2026-12-10');
+must('결혼 잡담', '다음달 7일에 저 결혼해요!! 청첩장 드릴게요 ㅎㅎ', qaNow, (items) => items.length === 1 && items[0].date === '2026-11-07' && items[0].include === false && items[0].low === true);
+must('탑재 마감', '10월 30일 17:00까지 수행평가 계획 탑재', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-30' && items[0].time === '17:00' && items[0].title.includes('탑재'));
+must('검사 차례', '11월 2일 1차, 11월 16일 2차 독서기록장 검사', qaNow, (items) => items.length === 2 && items.every((item) => item.kind === '일정' && item.include !== false) && items[0].date === '2026-11-02' && items[0].title === '독서기록장 검사 1차' && items[1].date === '2026-11-16' && items[1].title === '독서기록장 검사 2차');
+must('이번 달 말', '이번 달 말까지 가정통신문 회신 바랍니다', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].title === '가정통신문 회신');
+must('다음 달 초', '다음 달 초 교직원 연수', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '교직원 연수');
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -274,3 +283,21 @@ MSG_YEAR.forEach((row) => {
 const yearPct = year.n ? Math.round((year.ok / year.n) * 1000) / 10 : 0;
 console.log(`연도 표기를 섞어 한 번만 본 예문 ${year.ok}/${year.n} (${yearPct}%)`);
 if (year.miss.length) console.log(JSON.stringify(year.miss, null, 2));
+
+const move = { n: 0, ok: 0, miss: [] };
+MSG_MOVE.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    move.n += 1;
+    if (row.ok(items)) move.ok += 1;
+    else {
+        move.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, low: item.low,
+            })),
+        });
+    }
+});
+const movePct = move.n ? Math.round((move.ok / move.n) * 1000) / 10 : 0;
+console.log(`날짜 이동과 상대 날짜를 한 번만 본 예문 ${move.ok}/${move.n} (${movePct}%)`);
+if (move.miss.length) console.log(JSON.stringify(move.miss, null, 2));

@@ -227,4 +227,39 @@ export const MSG_SAMPLES = [
     { text: '2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.', items: [{ kind: '할 일', date: '2025-11-03', time: '', title: '학교폭력 실태조사 결과 공유', include: false, low: true, sensitive: true }] },
     { text: '2027. 1. 4.(월) 방학 중 방과후학교 개강', items: [{ kind: '일정', date: '2027-01-04', time: '', title: '방학 중 방과후학교 개강', include: true }] },
     { text: '2027년 1월 1일 신정 휴무', items: [{ kind: '일정', date: '2027-01-01', time: '', title: '신정 휴무', eventKind: '휴일', include: true }] },
+    { text: '방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.', items: [
+        { kind: '일정', date: '2026-11-05', time: '', title: '방과후 축구반 수업', include: true },
+        { kind: '일정', date: '2026-10-29', time: '', title: '방과후 축구반 수업', include: false, low: true },
+    ] },
+    { text: '윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경', items: [
+        { kind: '일정', date: '2026-10-28', time: '15:30', title: '윤서 어머님 상담', include: true },
+        { kind: '일정', date: '2026-10-27', time: '', title: '윤서 어머님 상담', include: false, low: true },
+    ] },
+    { text: '과학 실험은 10/30(금)에서 11/6(금)로 미뤄집니다', items: [
+        { kind: '일정', date: '2026-11-06', time: '', title: '과학 실험', include: true },
+        { kind: '일정', date: '2026-10-30', time: '', title: '과학 실험', include: false, low: true },
+    ] },
+    { text: '합창 발표를 11/2(월) → 11/9(월)로 바꿉니다', items: [
+        { kind: '일정', date: '2026-11-09', time: '', title: '합창 발표', include: true },
+        { kind: '일정', date: '2026-11-02', time: '', title: '합창 발표', include: false, low: true },
+    ] },
+    { text: '겨울 독서 주간 12월 8일(화)~10일(목)', items: [{ kind: '일정', date: '2026-12-08', end: '2026-12-10', time: '', title: '겨울 독서 주간', include: true }] },
+    { text: '12월 8일(화)~10일(목)', items: [{ kind: '일정', date: '2026-12-08', end: '2026-12-10', time: '', title: '일정', include: true }] },
+    { text: '12월 28일~3일 겨울 방학', items: [{ kind: '일정', date: '2026-12-28', end: '2027-01-03', time: '', title: '겨울 방학', include: true }] },
+    { text: '다음달 7일에 저 결혼해요!! 청첩장 드릴게요 ㅎㅎ', items: [{ kind: '할 일', date: '2026-11-07', time: '', title: '저 결혼해요', include: false, low: true }] },
+    { text: '10월 30일 17:00까지 수행평가 계획 탑재', items: [{ kind: '할 일', date: '2026-10-30', time: '17:00', title: '수행평가 계획 탑재', include: true }] },
+    { text: '11월 20일 17:00까지 수행평가 채점 기준 탑재', items: [{ kind: '할 일', date: '2026-11-20', time: '17:00', title: '수행평가 채점 기준 탑재', include: true }] },
+    { text: '11월 2일 1차, 11월 16일 2차 독서기록장 검사', items: [
+        { kind: '일정', date: '2026-11-02', time: '', title: '독서기록장 검사 1차', include: true },
+        { kind: '일정', date: '2026-11-16', time: '', title: '독서기록장 검사 2차', include: true },
+    ] },
+    { text: '독서기록장 검사는 11월 9일 1차, 11월 23일 2차입니다', items: [
+        { kind: '일정', date: '2026-11-09', time: '', title: '독서기록장 검사 1차', include: true },
+        { kind: '일정', date: '2026-11-23', time: '', title: '독서기록장 검사 2차', include: true },
+    ] },
+    { text: '이번 달 말까지 가정통신문 회신 바랍니다', items: [{ kind: '할 일', date: SAT, time: '', title: '가정통신문 회신', include: true }] },
+    { text: '월말까지 독후감 제출', items: [{ kind: '할 일', date: SAT, time: '', title: '독후감 제출', include: true }] },
+    { text: '다음 달 초 교직원 연수', items: [{ kind: '일정', date: '2026-11-01', time: '', title: '교직원 연수', eventKind: '학교', include: true }] },
+    { text: '다음달 25일 학년 회의', items: [{ kind: '일정', date: '2026-11-25', time: '', title: '학년 회의', include: true }] },
+    { text: '이번 달 초 교직원 연수', items: [{ kind: '일정', date: '2026-10-01', time: '', title: '교직원 연수', eventKind: '학교', include: false, low: true }] },
 ];
