@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PERIODS } from '../lib/period.js';
 import { clipboardHint, EVENT_KINDS, parseSchoolMessages, readClipboard } from '../lib/msgParse.js';
 import { saveParsed } from '../lib/db.js';
@@ -21,9 +21,24 @@ function periodLabel(item) {
 
 function MsgCard({ item, clock, periods, onPatch }) {
     const [open, setOpen] = useState('');
+    const calRef = useRef(null);
     function toggle(name) {
         setOpen((value) => (value === name ? '' : name));
     }
+    useEffect(() => {
+        if (open !== 'date' && open !== 'start' && open !== 'end') return undefined;
+        const frame = requestAnimationFrame(() => {
+            const node = calRef.current;
+            const sheet = node?.closest('[data-screen="message"]');
+            const foot = sheet?.querySelector('.sheet-foot');
+            if (!node || !sheet || !foot) return;
+            const margin = 12;
+            const footTop = foot.getBoundingClientRect().top - margin;
+            const bottom = node.getBoundingClientRect().bottom;
+            if (bottom > footTop) sheet.scrollTop += bottom - footTop;
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
     const ranged = Boolean(item.end && item.date && item.end >= item.date);
     function pickBound(which, ymd) {
         let date = item.date;
@@ -62,20 +77,15 @@ function MsgCard({ item, clock, periods, onPatch }) {
                 <Btn className={open === 'period' ? 'chip on' : 'chip'} aria-label="교시 고치기" onClick={() => toggle('period')}>{periodLabel(item)}</Btn>
                 <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{item.time || '시각 없음'}</Btn>
             </div>
-            {open === 'date' && (
-                <div style={{ marginTop: 8 }}>
-                    <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => { onPatch(item.id, { date: ymd }); setOpen(''); }} />
-                </div>
-            )}
-            {open === 'start' && (
-                <div style={{ marginTop: 8 }}>
-                    <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => pickBound('start', ymd)} />
-                </div>
-            )}
-            {open === 'end' && (
-                <div style={{ marginTop: 8 }}>
-                    <DateGrid value={item.end || item.date} today={clock.ymd} onPick={(ymd) => pickBound('end', ymd)} />
-                </div>
+            {(open === 'date' || open === 'start' || open === 'end') && (
+                <>
+                    <div ref={calRef} style={{ marginTop: 8 }}>
+                        {open === 'date' && <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => { onPatch(item.id, { date: ymd }); setOpen(''); }} />}
+                        {open === 'start' && <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => pickBound('start', ymd)} />}
+                        {open === 'end' && <DateGrid value={item.end || item.date} today={clock.ymd} onPick={(ymd) => pickBound('end', ymd)} />}
+                    </div>
+                    <div className="cal-scroll-room" aria-hidden="true" />
+                </>
             )}
             {open === 'period' && (
                 <div style={{ marginTop: 8 }}>

@@ -1,6 +1,7 @@
 /** 학교 메시지 예문을 읽고 유형·날짜·시각·제목 정확도를 확인합니다. */
 import { gradeMessages, parseSchoolMessages } from '../src/lib/msgParse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
+import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -100,6 +101,15 @@ must('일정 제목', '일정: 11/4 수학여행', qaNow, (items) => items.lengt
 must('조사 제목', '다음 주 금요일에 학부모 상담', qaNow, (items) => items.length === 1 && items[0].title === '학부모 상담' && items[0].date === '2026-10-30' && !items[0].title.startsWith('에'));
 must('인사 제목', '수고 많으십니다. 커피는 교무실에 있어요', qaNow, (items) => items.length === 1 && items[0].include === false && !items[0].title.includes('많으') && !items[0].title.startsWith('수고'));
 must('수학 글자', '11/6 수학여행', qaNow, (items) => items.length === 1 && items[0].title === '수학여행' && items[0].date === '2026-11-06');
+must('급식 잡담', '오늘 급식 진짜 맛있네요 ㅎㅎ 다들 점심 맛있게 드세요~', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].time === '12:10');
+must('우산 잡담', '오늘 비 온대요 우산 챙기세요 ㅠㅠ', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].date === '2026-10-22');
+must('방과후 로봇', '방과후 로봇과학 강사님 11/4(수)부터 교체됩니다', qaNow, (items) => items.length === 1 && items[0].time === '' && items[0].title.includes('방과후') && items[0].title.includes('로봇과학') && items[0].date === '2026-11-04');
+must('방과후 시간', '내일 방과후 시간에 학부모 상담', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].time === '16:00' && items[0].title === '학부모 상담' && items[0].date === '2026-10-23');
+must('방과후에', '방과후에 학급 회의', qaNow, (items) => items.length === 1 && items[0].time === '16:00' && items[0].title === '학급 회의');
+must('검진 제목', '검진일: 11/12 교직원 건강검진', qaNow, (items) => items.length === 1 && items[0].title === '교직원 건강검진' && items[0].date === '2026-11-12');
+must('동의서 제목', '현장학습 동의서\n11/3까지 제출', qaNow, (items) => items.length === 1 && items[0].title === '현장학습 동의서 제출');
+must('요일 제목', '수 학교운영위원회는 11/4입니다', qaNow, (items) => items.length === 1 && items[0].title === '학교운영위원회' && !items[0].title.startsWith('수'));
+must('상담 일정', '10/27 학부모 상담 2명', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-27' && items[0].title.includes('상담'));
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -142,3 +152,21 @@ if (legacy.getItem('homenote_v2_classRoster') !== legacyRaw || !plan.students.so
     process.exit(1);
 }
 console.log('채점 시각 10/22와 예전 명단 읽기도 확인했습니다.');
+
+const hold = { n: 0, ok: 0, by: {} };
+MSG_HOLDOUT.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    const passed = row.ok(items);
+    hold.n += 1;
+    hold.by[row.principle] = hold.by[row.principle] || { n: 0, ok: 0 };
+    hold.by[row.principle].n += 1;
+    if (passed) {
+        hold.ok += 1;
+        hold.by[row.principle].ok += 1;
+    } else {
+        console.error('확인 예문', row.principle, row.text, items.map((item) => item.title));
+    }
+});
+const holdPct = Math.round((hold.ok / hold.n) * 1000) / 10;
+console.log(`따로 둔 예문 ${hold.ok}/${hold.n} (${holdPct}%) ${Object.entries(hold.by).map(([key, value]) => `${key} ${value.ok}/${value.n}`).join(', ')}`);
+if (hold.ok !== hold.n) process.exit(1);

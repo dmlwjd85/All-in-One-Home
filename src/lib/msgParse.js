@@ -123,10 +123,18 @@ function hasScheduledExam(text) {
     return findDates(text).length > 0 || /\d\s*교시/.test(text);
 }
 
+function hasCounseling(text) {
+    if (!/상담/.test(text)) return false;
+    if (/상담\s*(?:기록|일지|내용|노트|희망)/.test(text)) return false;
+    if (!/상담/.test(String(text).replace(/상담실/g, ''))) return false;
+    return findDates(text).length > 0;
+}
+
 function hasEvent(text) {
     if (EVENT_WORD.test(text)) return true;
     if (hasTrip(text) && findDates(text).length) return true;
     if (hasScheduledExam(text)) return true;
+    if (hasCounseling(text)) return true;
     if (/\d\s*[~～\-]\s*\d\s*교시/.test(text)) return true;
     if (/\d\s*교시/.test(text) && !/까지/.test(text)) return true;
     return false;
@@ -137,9 +145,17 @@ function guessEventKind(text) {
     return '학급';
 }
 
-/** 방과후가 시각이면 참, 신청서·학교처럼 명사에 붙으면 거짓입니다. */
+const AFTER_SCHOOL_EVENT = /^(?:학부모|상담|회의|연수|행사|돌봄)$/;
+
+/** 방과후는 '방과후에', '방과후 시간', 상담·회의 앞의 때 표현일 때만 시각입니다. 바로 뒤 명사가 과목·강사·서류면 제목에 남깁니다. */
 function afterSchoolIsClock(text) {
-    return /방과\s*후(?!\s*(?:신청서|서류|양식|안내문|가정통신문|프로그램|학교|부|강사|교육|수업안|지도안|부서))/.test(String(text || ''));
+    const src = String(text || '');
+    if (!/방과\s*후/.test(src)) return false;
+    if (/방과\s*후(?:에|까지)|방과\s*후\s*시간/.test(src)) return true;
+    const next = src.match(/방과\s*후\s*([가-힣]{1,12})/);
+    if (!next) return false;
+    const word = next[1].replace(/(?:은|는|이|가|을|를|도|만|님)$/, '');
+    return AFTER_SCHOOL_EVENT.test(word);
 }
 
 export function tidyTitle(text) {
@@ -156,8 +172,10 @@ export function tidyTitle(text) {
     t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
+    t = t.replace(/ㅎㅎ|ㅋㅋ|ㅠㅠ|ㅜㅜ|ㅋ{2,}|ㅎ{2,}/g, ' ');
+    t = t.replace(/(?<![\d~～])[~～]+(?![\d~～])/g, ' ');
     t = t.replace(/점심\s*시간|점심/g, ' ');
-    if (afterSchoolIsClock(t)) t = t.replace(/방과\s*후/g, ' ');
+    if (afterSchoolIsClock(t)) t = t.replace(/방과\s*후(?:\s*에|\s*까지)?(?:\s*시간)?(?:에|까지)?/g, ' ');
     t = t.replace(/\d\s*[~～\-–—]\s*\d\s*교시/g, ' ');
     t = t.replace(/\d(?:\s*[,·]\s*\d)+\s*교시/g, ' ');
     t = t.replace(/\d\s*교시(?:\s*까지)?/g, ' ');
@@ -178,11 +196,13 @@ export function tidyTitle(text) {
     const polite = t.replace(/하실래요|드세요|먹을까요|갈까요/g, ' ').replace(/\s+/g, ' ').trim();
     if (polite.replace(/\s+/g, '').length >= 4) t = polite;
     let guard = 0;
-    while (guard < 4 && /^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/.test(t)) {
-        t = t.replace(/^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/, '');
+    while (guard < 4 && /^(?:일시|기간|일정|검진일|검사일|실시일|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/.test(t)) {
+        t = t.replace(/^(?:일시|기간|일정|검진일|검사일|실시일|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/, '');
         guard += 1;
     }
-    t = t.replace(/(?:^|\s)(?:일시|기간|일정)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+    t = t.replace(/(?:^|\s)(?:일시|기간|일정|검진일|검사일|실시일)(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:[월화수목금토일]|에)(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)부터(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
     t = t.replace(/(?<=[가-힣])(?:을|를|은|는|에)$/g, '').trim();
     if (t.length > 40) {
         const cut = t.slice(0, 40);
@@ -208,7 +228,7 @@ function salvageTitle(text) {
     t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`(?<!\\d)\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일에?/g, ' ');
-    t = t.replace(/글피|모레|내일|오늘/g, ' ');
+    t = t.replace(/글피|모레|내일|오늘|까지/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
@@ -221,20 +241,33 @@ function salvageTitle(text) {
 
 function pickTitle(body, source) {
     let title = tidyTitle(body);
-    if (weakTitle(title) || clippedWord(title, source)) {
+    if (badTitle(title, source)) {
         const again = salvageTitle(source);
-        if (!weakTitle(again) && !clippedWord(again, source)) title = again;
+        if (again && !badTitle(again, source)) title = again;
     }
-    if (weakTitle(title) || clippedWord(title, source)) return '';
-    return title;
+    if (!badTitle(title, source)) return title;
+    const verb = tidyTitle(body).replace(/\s+/g, '');
+    if (/^(?:제출|회신|작성|입력|업로드|마감|회수)$/.test(verb)) {
+        const words = salvageTitle(source).split(/\s+/).filter((word) => word && word !== verb);
+        if (!words.length) return verb;
+    }
+    return '';
 }
 
-const WEAK_TITLE = /^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|안내|수|월|화|목|금|토|일|에|은|는|이|가|을|를|와|과|의|로|으로|많으|\d*박\d*일)$/;
+const WEAK_TITLE = /^(?:일시|기간|일정|검진일|검사일|실시일|시간|날짜|장소|위치|대상|내용|참고|안내|제출|회신|작성|입력|업로드|마감|회수|수|월|화|목|금|토|일|에|은|는|이|가|을|를|와|과|의|로|으로|많으|\d*박\d*일)$/;
 
 function weakTitle(title) {
     const text = String(title || '').replace(/\s+/g, '');
     if (text.length < 2) return true;
     return WEAK_TITLE.test(text);
+}
+
+function badTitle(title, source) {
+    if (weakTitle(title) || clippedWord(title, source)) return true;
+    const raw = String(title || '').trim();
+    if (/^(?:[월화수목금토일])(?:\s|$)/.test(raw)) return true;
+    if (/(?:^|\s)[월화수목금토일]$/.test(raw)) return true;
+    return false;
 }
 
 function placeMemo(text) {
@@ -338,10 +371,19 @@ function isDeadlineSubmission(text) {
     return true;
 }
 
+const CASUAL_RE = /맛있|챙기|화이팅|우산|미세먼지|날씨|예쁘|기대|드세|한잔|커피|쉬어|하늘|비\s*온|산책|목도리|맑/;
+const EMOTICON_RE = /ㅎㅎ|ㅋㅋ|ㅠㅠ|ㅜㅜ|ㅋ{2,}|ㅎ{2,}|(?<![\d~～])[~～](?![\d~～])|[~～]\s*$/;
+
+function casualTalk(text) {
+    const src = String(text || '');
+    if (hasTodo(src) || hasEvent(src) || /\d\s*교시/.test(src)) return false;
+    return EMOTICON_RE.test(src) || CASUAL_RE.test(src);
+}
+
 function actionable(text) {
+    if (casualTalk(text)) return false;
     if (hasTodo(text) || hasEvent(text)) return true;
-    const when = detectWhen(text);
-    if (when.period) return true;
+    if (detectWhen(text).period) return true;
     if (findDates(text).length) return true;
     return false;
 }
@@ -361,9 +403,13 @@ function sideNote(chunk) {
     return '';
 }
 
+function bareVerb(chunk) {
+    return /^(?:제출|회신|작성|입력|업로드|마감|회수)$/.test(tidyTitle(chunk).replace(/\s+/g, ''));
+}
+
 function dateCarrier(chunk) {
     if (!findDates(chunk).length) return false;
-    const stripped = String(chunk).replace(/^(?:일시|기간|일정|시간|날짜)\s*[:：]\s*/, '');
+    const stripped = String(chunk).replace(/^(?:일시|기간|일정|시간|날짜|검진일|검사일|실시일)\s*[:：]\s*/, '');
     return weakTitle(tidyTitle(stripped));
 }
 
@@ -382,6 +428,10 @@ function foldChunks(chunks) {
         const heading = tidyTitle(chunk);
         if (blocks.length && dateCarrier(blocks[blocks.length - 1].text) && heading && !weakTitle(heading) && !findDates(chunk).length && !hasTodo(chunk)) {
             blocks[blocks.length - 1].text = `${chunk}\n${blocks[blocks.length - 1].text}`;
+            return;
+        }
+        if (bareVerb(chunk) && blocks.length && !bareVerb(blocks[blocks.length - 1].text)) {
+            blocks[blocks.length - 1].text = `${blocks[blocks.length - 1].text}\n${chunk}`;
             return;
         }
         blocks.push({ text: chunk, notes: [] });
@@ -414,7 +464,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = []) {
     const chatter = !actionable(source);
     const assumed = when.assumedPm ? '오전·오후가 없어 오후로 봤어요.' : '';
     const missing = date || chatter ? '' : '날짜가 없어요. 달력에서 골라 주세요.';
-    const aside = chatter ? '부탁이나 날짜가 없어 빼 두었어요.' : '';
+    const aside = chatter ? '업무로 볼 말이 없어 빼 두었어요.' : '';
     const notes = [warning, assumed, missing, aside].filter(Boolean);
     let score = 0.45;
     if (date?.explicit) score += 0.25;

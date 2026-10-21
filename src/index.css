@@ -318,6 +318,7 @@ button, input, textarea { font-family: inherit; }
 .msg-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .msg-summary.range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .msg-summary .tap { min-width: 0; width: 100%; padding: 0 6px; white-space: normal; line-height: 18px; }
+.cal-scroll-room { height: 180px; }
 .sheet-foot {
     position: sticky;
     bottom: 0;

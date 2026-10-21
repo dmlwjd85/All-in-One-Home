@@ -622,7 +622,21 @@ try {
         await page.screenshot({ path: resolve(shots, 'after_range_bounds_390.png') });
         await page.evaluate(() => document.querySelector('[aria-label="시작일 고치기"]')?.click());
         await page.waitForSelector('[aria-label="날짜"]');
+        const calendarClear = await page.waitForFunction(() => {
+            const sheet = document.querySelector('[data-screen="message"]');
+            const foot = document.querySelector('.sheet-foot');
+            const days = [...document.querySelectorAll('[aria-label="날짜"] button')];
+            if (!sheet || !foot || days.length < 28) return false;
+            const top = sheet.getBoundingClientRect().top;
+            const footTop = foot.getBoundingClientRect().top;
+            return days.every((el) => {
+                const rect = el.getBoundingClientRect();
+                return rect.top >= top - 1 && rect.bottom <= footTop + 1 && rect.height >= 43.5;
+            });
+        }, { timeout: 3000 }).then(() => true).catch(() => false);
+        check(calendarClear, '펼친 달력의 아래 줄이 등록 버튼에 가립니다.');
         await page.screenshot({ path: resolve(shots, 'after_range_start_390.png') });
+        await page.screenshot({ path: resolve(shots, 'after_calendar_clear_390.png') });
         await page.evaluate(() => document.querySelector('[aria-label="2026-11-03"]')?.click());
         const started = await page.evaluate(() => ({
             start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
