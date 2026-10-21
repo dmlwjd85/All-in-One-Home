@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, formatKoDate, monthCells, monthTitle, startOfWeekMon } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
-import { joined, saveTextItem, setTimetable } from '../lib/db.js';
+import { joined, setTimetable } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
 export function Schedule() {
-    const { data, clock, showToast } = useUi();
+    const { data, clock } = useUi();
     const [mode, setMode] = useState('주');
     const [ym, setYm] = useState(clock.ymd.slice(0, 7));
     const [picked, setPicked] = useState(clock.ymd);
@@ -43,7 +43,7 @@ export function Schedule() {
                         );
                     })}
                     {specialist.slice(0, 3).map((line) => <p key={line} className="muted">{line}</p>)}
-                    <AddEvent onAdd={async (row) => { const result = await saveTextItem('events', row); showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '일정을 넣었어요.', true); }} today={clock.ymd} />
+                    <AddEvent />
                 </div>
             )}
             {mode === '달력' && (
@@ -85,17 +85,9 @@ function shift(ym, delta) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function AddEvent({ onAdd, today }) {
-    const [title, setTitle] = useState('');
-    const [date, setDate] = useState(today);
-    return (
-        <form className="solid-card" style={{ padding: 12 }} onSubmit={(event) => { event.preventDefault(); if (!title.trim()) return; onAdd({ id: `event-${Date.now()}`, title: title.trim(), date, kind: '학급', source: 'app' }); setTitle(''); }}>
-            <strong>일정 더하기</strong>
-            <input className="field" style={{ marginTop: 8 }} aria-label="일정 제목" placeholder="현장체험, 상담…" value={title} onChange={(event) => setTitle(event.target.value)} />
-            <input className="field" style={{ marginTop: 8 }} aria-label="날짜" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-            <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={() => { if (title.trim()) onAdd({ id: `event-${Date.now()}`, title: title.trim(), date, kind: '학급', source: 'app' }); setTitle(''); }}>일정 넣기</Btn>
-        </form>
-    );
+function AddEvent() {
+    const { openFlow } = useUi();
+    return <Btn className="primary-btn block" onClick={() => openFlow({ id: 'quick', kind: '일정' })}>일정 더하기</Btn>;
 }
 
 function Timetable({ data, todayKey }) {

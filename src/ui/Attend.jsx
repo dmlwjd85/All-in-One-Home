@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
-import { cycleAttendance, markChecked, patchAttendance } from '../lib/db.js';
+import { markChecked, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
+import { ChoiceGrid, PeriodRow } from './pickers.jsx';
 
 const REASONS = ['질병', '미인정', '출석인정', '기타'];
 
@@ -35,7 +36,7 @@ export function Attend() {
                     </div>
                 ))}
             </div>
-            <p className="muted" style={{ marginTop: 0 }}>안 온 친구만 눌러 주세요. 한 번 누르면 결석, 또 누르면 지각·조퇴·결과로 바뀌어요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>친구를 누르면 출석·결석·지각·조퇴·결과 중에서 바로 고릅니다.</p>
             <div style={{ display: 'flex', gap: 8 }}>
                 <Btn className={month ? 'chip' : 'chip on'} onClick={() => setMonth(false)}>오늘</Btn>
                 <Btn className={month ? 'chip on' : 'chip'} onClick={() => setMonth(true)}>이번 달</Btn>
@@ -69,55 +70,83 @@ export function Attend() {
     );
 }
 
-function Seat({ student, mark, onOpen, date }) {
-    const skip = useRef(false);
-    const timer = useRef(0);
+const STATUSES = [
+    { id: '출석', label: '출석' },
+    { id: '결석', label: '결석' },
+    { id: '지각', label: '지각' },
+    { id: '조퇴', label: '조퇴' },
+    { id: '결과', label: '결과' },
+];
+
+function Seat({ student, mark, onOpen }) {
     return (
-        <Btn
-            block
-            className="solid-card"
-            style={{ minHeight: 64, background: mark ? statusBg(mark.status) : 'var(--solid)', fontWeight: 800 }}
-            onPointerDown={() => { timer.current = setTimeout(() => { skip.current = true; onOpen(); }, 480); }}
-            onPointerUp={() => clearTimeout(timer.current)}
-            onPointerLeave={() => clearTimeout(timer.current)}
-            onClick={() => {
-                if (skip.current) { skip.current = false; return; }
-                cycleAttendance(date, student.id);
-            }}
-        >
+        <Btn block className="solid-card" style={{ minHeight: 64, background: mark ? statusBg(mark.status) : 'var(--solid)', fontWeight: 800 }} onClick={onOpen}>
             <span style={{ display: 'grid', justifyItems: 'center' }}>
                 <span className="num muted" style={{ fontSize: 12 }}>{student.no}</span>
                 <span>{student.name}</span>
-                {mark && <span style={{ color: statusColor(mark.status), fontSize: 11 }}>{mark.status}</span>}
+                {mark && <span style={{ color: statusColor(mark.status), fontSize: 12 }}>{mark.status}</span>}
             </span>
         </Btn>
     );
 }
 
 function ReasonSheet({ student, mark, date, onClose }) {
-    const [reason, setReason] = useState(mark?.reason || '질병');
+    useEffect(() => {
+        const onKey = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+    const [step, setStep] = useState('status');
+    const [status, setStatus] = useState(mark?.status || '');
     const [note, setNote] = useState(mark?.note || '');
     const [paper, setPaper] = useState(Boolean(mark?.paper));
-    if (!mark) {
-        return (
-            <div className="sheet-back" onClick={onClose}>
-                <div className="sheet" role="dialog" aria-modal="true" aria-label="사유" onClick={(event) => event.stopPropagation()}>
-                    <p>먼저 출결 칸을 눌러 결석이나 지각으로 바꿔 주세요.</p>
-                    <Btn className="primary-btn block" onClick={onClose}>알겠어요</Btn>
-                </div>
-            </div>
-        );
+    const [period, setPeriod] = useState(Number(mark?.period) || 0);
+    const extra = () => ({ note, paper, period });
+
+    async function chooseStatus(next) {
+        setStatus(next);
+        if (next === '출석') {
+            await setAttendance(date, student.id, '');
+            onClose();
+            return;
+        }
+        await setAttendance(date, student.id, next, extra());
+        setStep(next === '조퇴' || next === '결과' ? 'period' : 'reason');
     }
+
+    async function choosePeriod(n) {
+        setPeriod(n);
+        await setAttendance(date, student.id, status, { ...extra(), period: n });
+        setStep('reason');
+    }
+
+    async function chooseReason(next) {
+        await setAttendance(date, student.id, status, { ...extra(), reason: next });
+        onClose();
+    }
+
     return (
         <div className="sheet-back" onClick={onClose}>
-            <div className="sheet" role="dialog" aria-modal="true" aria-label="사유" onClick={(event) => event.stopPropagation()}>
-                <h2 className="title-font" style={{ marginTop: 8 }}>{student.no}번 {student.name} · {mark.status}</h2>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {REASONS.map((item) => <Btn key={item} className={reason === item ? 'chip on' : 'chip'} onClick={() => setReason(item)}>{item}</Btn>)}
-                </div>
-                <input className="field" style={{ marginTop: 12 }} aria-label="메모" placeholder="감기, 병원…" value={note} onChange={(event) => setNote(event.target.value)} />
-                <Btn className={paper ? 'chip on' : 'chip'} style={{ marginTop: 8 }} onClick={() => setPaper((value) => !value)}>서류 받음</Btn>
-                <Btn className="primary-btn block" style={{ marginTop: 12 }} onClick={async () => { await patchAttendance(date, student.id, { reason, note, paper }); onClose(); }}>저장</Btn>
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="출결" data-screen="attend-status" onClick={(event) => event.stopPropagation()}>
+                <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
+                <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{student.no}번 {student.name}{status ? ` · ${status}` : ''}</h2>
+                {step === 'status' && <ChoiceGrid label="출결 상태" value={status} options={STATUSES} onPick={chooseStatus} />}
+                {step === 'period' && (
+                    <>
+                        <p style={{ fontWeight: 800, marginTop: 0 }}>몇 교시에 나갔나요?</p>
+                        <PeriodRow value={period} onPick={choosePeriod} />
+                        <Btn className="choice-tile" style={{ marginTop: 8 }} onClick={() => choosePeriod(0)}>교시 없음</Btn>
+                    </>
+                )}
+                {step === 'reason' && (
+                    <>
+                        <input className="field" aria-label="메모" placeholder="메모가 있으면 먼저 적고 사유를 누르세요" value={note} onChange={(event) => setNote(event.target.value)} />
+                        <Btn className={paper ? 'chip on' : 'chip'} style={{ margin: '8px 0' }} onClick={() => setPaper((value) => !value)}>{paper ? '서류 받음' : '서류 아직'}</Btn>
+                        <ChoiceGrid label="사유" options={REASONS.map((item) => ({ id: item, label: item }))} onPick={chooseReason} />
+                    </>
+                )}
             </div>
         </div>
     );

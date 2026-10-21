@@ -319,7 +319,19 @@ export async function saveQuick(input, now = new Date()) {
             put(local ? draft.local.todos : draft.todos, row);
             message = '할 일에 넣었어요.';
         } else if (kind === '일정') {
-            const row = { ...base, id: nid('event'), date, title: (stripTokens(text) || text).slice(0, 60), kind: '학급', memo: '' };
+            const eventKind = ['학급', '학교', '휴일', '내 일정'].includes(input.eventKind) ? input.eventKind : '학급';
+            const bits = [];
+            if (input.memo) bits.push(String(input.memo));
+            if (input.period) bits.push(input.periodEnd ? `${input.period}~${input.periodEnd}교시` : `${input.period}교시`);
+            const row = {
+                ...base,
+                id: nid('event'),
+                date,
+                title: (stripTokens(text) || text).slice(0, 60),
+                kind: eventKind,
+                memo: bits.join(' · ').slice(0, 300),
+            };
+            if (input.time) row.time = input.time;
             put(local ? draft.local.events : draft.events, row);
             message = '일정에 넣었어요.';
         } else if (kind === '알림장') {
@@ -338,6 +350,99 @@ export async function saveQuick(input, now = new Date()) {
 }
 
 const CYCLE = ['결석', '지각', '조퇴', '결과'];
+const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
+
+/**
+ * 메시지에서 고른 일정·할 일을 기존 put()으로 넣습니다.
+ * 기기 기록의 source는 msg입니다. 클라우드 규칙이 app·legacy·file만 받으므로
+ * 올릴 때는 기존 sourceOf가 app으로 바꿉니다. 아이디 msg… 는 그대로라 중복을 다시 막습니다.
+ */
+export async function saveParsed(items, now = new Date()) {
+    const chosen = (items || []).filter((item) => item && item.include !== false && String(item.title || '').trim());
+    if (!chosen.length) return { ok: false, message: '등록할 항목이 없어요.', count: 0 };
+    let count = 0;
+    let skipped = 0;
+    let sensitiveCount = 0;
+    let filled = 0;
+    await update((draft) => {
+        const seen = new Set([
+            ...draft.todos, ...draft.local.todos, ...draft.events, ...draft.local.events,
+        ].map((row) => row.id));
+        for (const item of chosen) {
+            if (!item.id || seen.has(item.id)) {
+                skipped += 1;
+                continue;
+            }
+            const blob = `${item.title || ''} ${item.memo || ''} ${item.raw || ''}`;
+            const sensitive = isSensitiveText(blob);
+            if (sensitive) sensitiveCount += 1;
+            const base = { source: 'msg', at: now.toISOString(), id: String(item.id).slice(0, 40) };
+            if (item.kind === '일정') {
+                let date = item.date || '';
+                if (!date) {
+                    date = seoulYmd(now);
+                    filled += 1;
+                }
+                const periodLabel = item.period ? (item.periodEnd ? `${item.period}~${item.periodEnd}교시` : `${item.period}교시`) : '';
+                const memo = [item.memo, periodLabel && !String(item.memo || '').includes(periodLabel) ? periodLabel : ''].filter(Boolean).join(' · ');
+                const row = {
+                    ...base,
+                    date,
+                    title: String(item.title).trim().slice(0, 60),
+                    kind: EVENT_KINDS.includes(item.eventKind) ? item.eventKind : '학급',
+                    memo: memo.slice(0, 300),
+                };
+                if (item.time) row.time = item.time;
+                put(sensitive ? draft.local.events : draft.events, row);
+            } else {
+                const title = item.time && !String(item.title).includes(item.time)
+                    ? `${item.time} ${item.title}`.trim().slice(0, 100)
+                    : String(item.title).trim().slice(0, 100);
+                put(sensitive ? draft.local.todos : draft.todos, { ...base, title, done: false, due: item.date || '' });
+            }
+            seen.add(item.id);
+            count += 1;
+        }
+        return draft;
+    }, { undoable: true });
+    if (!count && skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped };
+    let message = `${count}개 등록했어요.`;
+    if (skipped) message += ` 겹친 ${skipped}개는 빼 두었어요.`;
+    if (filled) message += ' 날짜가 비어 있던 일정은 오늘로 넣었어요.';
+    if (sensitiveCount) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
+    return { ok: true, message, count, skipped, sensitiveCount };
+}
+
+export async function setAttendance(date, sid, status, extra = {}) {
+    await update((draft) => {
+        const id = `${date}_${sid}`;
+        const index = draft.attendance.findIndex((row) => row.id === id);
+        if (!status || status === '출석') {
+            if (index >= 0) draft.attendance.splice(index, 1);
+        } else if (index >= 0) {
+            draft.attendance[index] = {
+                ...draft.attendance[index],
+                status,
+                reason: extra.reason ?? draft.attendance[index].reason ?? '',
+                note: extra.note ?? draft.attendance[index].note ?? '',
+                paper: extra.paper != null ? Boolean(extra.paper) : Boolean(draft.attendance[index].paper),
+                period: extra.period != null ? extra.period : (draft.attendance[index].period || ''),
+            };
+        } else {
+            draft.attendance.unshift({
+                id, date, sid, status,
+                reason: extra.reason || '',
+                note: extra.note || '',
+                paper: Boolean(extra.paper),
+                period: extra.period || '',
+                source: 'app',
+            });
+        }
+        if (!draft.profile.checkedDates.includes(date)) draft.profile.checkedDates.push(date);
+        return draft;
+    }, { undoable: true });
+}
+
 
 export async function cycleAttendance(date, sid) {
     await update((draft) => {
