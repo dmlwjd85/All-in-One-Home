@@ -196,4 +196,17 @@ export const MSG_SAMPLES = [
     { text: '안녕 선생님들 (필독) 11/20(금) 소방 대피 훈련이 있습니다', items: [{ kind: '일정', date: '2026-11-20', time: '', title: '소방 대피 훈련' }] },
     { text: '서연이 아버님께 오늘 중으로 전화 상담 부탁드려요', items: [{ kind: '할 일', date: T, time: '', title: '서연이 아버님 전화 상담' }] },
     { text: '민준이 어머님께 내일 중으로 전화 상담 부탁드려요', items: [{ kind: '할 일', date: D1, time: '', title: '민준이 어머님 전화 상담' }] },
+    { text: '이번주 목요일 5교시 학급 임원 선거 진행해 주세요.', items: [{ kind: '일정', date: '2026-10-22', time: '13:10', title: '학급 임원 선거 진행', memo: '5교시', include: true }] },
+    { text: '모레 1~2교시 보건교육 있으니 학생들 교실 대기 부탁드려요', items: [
+        { kind: '일정', date: D2, time: '09:00', title: '보건교육', memo: '1~2교시', include: true },
+        { kind: '할 일', date: D2, time: '', title: '학생들 교실 대기', include: false, low: true },
+    ] },
+    { text: '2027년 1월 8일(금) 겨울방학 중 돌봄교실 운영 계획서 제출', items: [{ kind: '할 일', date: '2027-01-08', time: '', title: '겨울방학 중 돌봄교실 운영 계획서 제출', include: true }] },
+    { text: '이번주 안으로 가정통신문 회신 바랍니다', items: [{ kind: '할 일', date: D2, time: '', title: '가정통신문 회신' }] },
+    { text: '11월 16일(월)은 재량휴업일입니다.', items: [{ kind: '일정', date: '2026-11-16', time: '', title: '재량휴업일', eventKind: '휴일' }] },
+    { text: '1. 10/27 학년 체육대회', items: [{ kind: '일정', date: '2026-10-27', time: '', title: '학년 체육대회' }] },
+    { text: '통학차량 노선 변경 공지', items: [{ kind: '일정', date: '', time: '', title: '통학차량 노선 변경 공지', low: true, include: true }] },
+    { text: '내일 급식이 11시로 당겨집니다', items: [{ kind: '일정', date: D1, time: '11:00', title: '급식' }] },
+    { text: '2차 상담 신청은 11/4부터 받습니다', items: [{ kind: '일정', date: '2026-11-04', time: '', title: '2차 상담 신청' }] },
+    { text: '준비물은 11/20(금)까지 제출해 주세요. 빠진 물건은 알려 주세요.', items: [{ kind: '할 일', date: '2026-11-20', time: '', title: '준비물 제출', include: true }] },
 ];

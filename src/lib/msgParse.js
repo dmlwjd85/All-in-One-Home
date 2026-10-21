@@ -6,7 +6,7 @@ import { DEFAULT_PERIODS } from './period.js';
 export const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 export const MEET_KINDS = ['학년회의', '교직원회의', '교과협의회', '학부모회의', '연수'];
 
-const TODO_RE = /까지|제출|회신|작성|입력|업로드|확인\s*바랍니다|기한|마감/;
+const TODO_RE = /제출|회신|작성|입력|업로드|확인\s*바랍니다|기한|마감/;
 const EVENT_WORD = /회의(?!록)|연수|공개수업|협의회|행사|출장/;
 
 const NOISE = [
@@ -109,8 +109,19 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
     return out;
 }
 
+function hasDeadline(text) {
+    return /(?:\d|일|요일|교시|시|분|오늘|내일|모레|글피|이번\s*주|다음\s*주|이번주|다음주|금주|차주|주말)(?:\s*[.(（]\s*[월화수목금토일]\s*[)）])?\s*까지/.test(String(text || ''));
+}
+
 function hasTodo(text) {
-    return TODO_RE.test(text);
+    return TODO_RE.test(text) || hasDeadline(text);
+}
+
+/** 계획서·서류 제출의 목적어 안에 들어 있는 운영·실시는 일정이 아닙니다. */
+function documentSubmission(text) {
+    const src = String(text || '');
+    if (!/(제출|회신|작성|입력|업로드)/.test(src)) return false;
+    return /(?:운영|실시|휴강|교체|돌봄|행사|연수|상담|회의)\s*(?:에\s*관한\s*|관련\s*)?(?:계획서|서류)/.test(src);
 }
 
 /** 읽는 사람에게 제출·회신·부탁처럼 무엇을 하라고 시킨 문장입니다. */
@@ -125,11 +136,16 @@ function isRequest(text) {
 /** 어떤 날에 무엇이 있거나 바뀐다는 알림입니다. 운영위원회처럼 단어 안의 운영은 알림이 아닙니다. */
 function isAnnouncement(text) {
     const src = String(text || '');
+    if (documentSubmission(src)) return false;
     if (/(?<![가-힣])실시(?:합니다|해요|함|됩니다)?(?![가-힣])/.test(src)) return true;
     if (/(?<![가-힣])휴강/.test(src)) return true;
     if (/(?<![가-힣])교체(?:됩니다|합니다|해요|함)?(?![가-힣])/.test(src)) return true;
     if (/(?<![가-힣])운영(?:합니다|해요|함|입니다)?(?![가-힣])/.test(src)) return true;
-    if (/있습니다/.test(src) && !isRequest(src)) return true;
+    if (/(?:재량\s*)?휴업일/.test(src)) return true;
+    if (/(?<![가-힣])체육대회/.test(src)) return true;
+    if (/(?<![가-힣])변경(?:됩니다|합니다|했어요|공지)?(?![가-힣])/.test(src)) return true;
+    if (/바뀝니다|바뀌었습니다|바뀌어요|당겨집니다|당겨졌어요/.test(src)) return true;
+    if (/있습니다|없습니다/.test(src) && !isRequest(src)) return true;
     return false;
 }
 
@@ -163,6 +179,7 @@ function hasEvent(text) {
 }
 
 function guessEventKind(text) {
+    if (/휴업|휴일|공휴일/.test(text)) return '휴일';
     if (/교직원|교무\s*회의|교무회의|전교|연수|출장|협의회|직원\s*회의/.test(text)) return '학교';
     return '학급';
 }
@@ -187,6 +204,7 @@ function stripBoilerplate(text) {
     t = t.replace(/안녕하세요|안녕하십니까/g, ' ');
     t = t.replace(/안녕\s*선생님들?/g, ' ');
     t = t.replace(/(?:오늘|내일|모레|글피|금일)\s*중(?:으로)?/g, ' ');
+    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*안(?:으로|에)?/g, ' ');
     t = t.replace(/중으로/g, ' ');
     t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, ' ');
     t = t.replace(/께(?=\s|$)/g, ' ');
@@ -204,9 +222,9 @@ export function tidyTitle(text) {
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/글피|모레|내일|오늘/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
-    t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
+    t = t.replace(/(?:이|가)?\s*(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
-    t = t.replace(/(?<!\d)\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
+    t = t.replace(/(?:이|가)?\s*(?<!\d)\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
     t = t.replace(/ㅎㅎ|ㅋㅋ|ㅠㅠ|ㅜㅜ|ㅋ{2,}|ㅎ{2,}/g, ' ');
     t = t.replace(/(?<![\d~～])[~～]+(?![\d~～])/g, ' ');
     t = t.replace(/점심\s*시간|점심/g, ' ');
@@ -222,11 +240,16 @@ export function tidyTitle(text) {
     t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다)/g, ' ');
     t = t.replace(/(?:^|\s)(?:수고|많으)(?=\s|$)/g, ' ');
     t = t.replace(/감사(?:합니다|드립니다|해요)/g, ' ');
-    t = t.replace(/없습니다|있어요|예정입니다|합니다|했어요|하세요|입니다/g, ' ');
+    t = t.replace(/(?:이|가)?\s*(?:없습니다|바뀝니다|바뀌었습니다|바뀌어요|당겨집니다|당겨졌어요)/g, ' ');
+    t = t.replace(/받습니다|받아요/g, ' ');
+    t = t.replace(/없어요|있어요|예정입니다|합니다|했어요|하세요|입니다/g, ' ');
+    t = t.replace(/\d{4}\s*년/g, ' ');
     t = t.replace(/까지/g, ' ');
     t = t.replace(/에서/g, ' ');
     t = t.replace(/[()（）[\]{}·,.!~:：]/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
+    t = t.replace(/(?:이|가)\s+(?:으로|로)(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:으로|로)(?=\s|$)/g, ' ');
     t = t.replace(/(?:은|는|을|를)\s+(제출|회신|작성|입력|업로드|마감|회수|실시|운영|휴강|교체)(?=\s|$)/g, ' $1');
     const polite = t.replace(/하실래요|드세요|먹을까요|갈까요/g, ' ').replace(/\s+/g, ' ').trim();
     if (polite.replace(/\s+/g, '').length >= 4) t = polite;
@@ -293,6 +316,10 @@ function pickTitle(body, source) {
 
 function finishTitle(title, segment, fullText) {
     const compact = String(title || '').replace(/\s+/g, '');
+    if (compact === '상담') {
+        const richer = salvageTitle(`${segment}\n${fullText}`).split(/\s+/).filter((word) => word && word !== '상담' && !FIELD_ONLY.test(word) && !WEAK_TITLE.test(word));
+        if (richer.length) return [...richer, '상담'].slice(0, 6).join(' ');
+    }
     if (title && !FIELD_ONLY.test(compact)) return title;
     const words = salvageTitle(`${segment}\n${fullText}`).split(/\s+/).filter((word) => word && !FIELD_ONLY.test(word) && !WEAK_TITLE.test(word));
     if (words.length) return words.slice(0, 6).join(' ');
@@ -364,7 +391,7 @@ function explodeLine(line) {
 function rangeJoin(text, prev, next) {
     if (!prev || !next || next.ymd <= prev.ymd) return false;
     const between = text.slice(prev.index + prev.length, next.index);
-    return /^\s*[~～\-–—]\s*$/.test(between);
+    return /^\s*[~～\-–—]\s*$/.test(between) || /^\s*부터\s*$/.test(between);
 }
 
 function splitSentences(text) {
@@ -383,6 +410,18 @@ function splitSentences(text) {
     const tail = src.slice(start).trim();
     if (tail) parts.push(tail);
     return parts.length ? parts : [src];
+}
+
+function splitNoticeRequest(sentence, now) {
+    const matched = String(sentence || '').match(/^(.*?)(?:있으니|하니까|니까)\s+(.+)$/);
+    if (!matched) return null;
+    const left = matched[1].trim();
+    const right = matched[2].trim();
+    if (!left || !right || !isRequest(right)) return null;
+    if (!hasEvent(left) && !isAnnouncement(left) && !/\d\s*교시/.test(left)) return null;
+    const prefix = (left.match(/글피|모레|내일|오늘|(?:이번|다음)\s*주\s*[월화수목금토일]요일|(?:이번주|다음주|금주|차주)\s*[월화수목금토일]요일|\d{1,2}\s*월\s*\d{1,2}\s*일|(?<!\d)\d{1,2}\s*[./]\s*\d{1,2}/) || [])[0] || '';
+    const rightText = findDates(right, now).length ? right : `${prefix} ${right}`.trim();
+    return [left, rightText];
 }
 
 function splitClauses(sentence, now) {
@@ -454,6 +493,12 @@ function segmentsOf(text, now) {
             splitSentences(part).forEach((sentence) => {
                 const trimmedSentence = sentence.trim();
                 if (noise(trimmedSentence)) return;
+                const noticed = splitNoticeRequest(trimmedSentence, now);
+                if (noticed) {
+                    chunks.push(noticed[0]);
+                    chunks.push(`\u0001${noticed[1]}`);
+                    return;
+                }
                 splitClauses(trimmedSentence, now).forEach((clause) => chunks.push(clause));
             });
         });
@@ -462,7 +507,7 @@ function segmentsOf(text, now) {
 }
 
 function isDeadlineSubmission(text) {
-    if (!/까지/.test(text)) return false;
+    if (!hasDeadline(text)) return false;
     if (!/(제출|회신|작성|입력|업로드|마감|회수)/.test(text)) return false;
     if (/\d\s*[~～\-–—,·]\s*\d\s*교시(?!\s*까지)/.test(text)) return false;
     if (/(?<![,\d])\d\s*교시(?!\s*까지)/.test(text)) return false;
@@ -625,19 +670,62 @@ function stripEventClause(text) {
         .replace(/\d\s*교시/g, ' ');
 }
 
+function titlesOverlap(left, right) {
+    const a = String(left?.title || '').replace(/\s+/g, '');
+    const b = String(right?.title || '').replace(/\s+/g, '');
+    if (!a || !b || (left?.date || '') !== (right?.date || '')) return false;
+    if (a === b) return true;
+    const shorter = a.length <= b.length ? a : b;
+    const longer = a.length <= b.length ? b : a;
+    return shorter.length >= 4 && longer.includes(shorter);
+}
+
+function markUnsure(item, note) {
+    return {
+        ...item,
+        low: true,
+        include: false,
+        warning: [item.warning, note].filter(Boolean).join(' '),
+    };
+}
+
+function collapsePair(items, segment) {
+    if (items.length < 2) return items;
+    const [first, second] = items;
+    if (!titlesOverlap(first, second)) return [first, markUnsure(second, '같은 문장에서 나눈 내용이라 빼 두었어요.')];
+    const deliverable = /제출|회신|작성|입력|업로드|마감/.test(segment);
+    const kept = deliverable ? (second.kind === '할 일' ? second : first) : (first.kind === '일정' ? first : second);
+    const other = kept === first ? second : first;
+    return [{
+        ...kept,
+        time: kept.time || other.time,
+        period: kept.period || other.period,
+        periodEnd: kept.periodEnd || other.periodEnd,
+        date: kept.date || other.date,
+        end: kept.end || other.end,
+    }];
+}
+
 function classifySegment(segment, now, periods, notes = [], fullText = '') {
+    const unsure = String(segment || '').startsWith('\u0001');
+    segment = String(segment || '').replace(/\u0001/g, '');
     const todo = hasTodo(segment) || isRequest(segment);
-    const event = hasEvent(segment);
+    const event = hasEvent(segment) && !documentSubmission(segment);
     const when = detectWhen(segment, periods);
     const span = dateSpan(segment, now);
     const make = (kind, seq) => buildItem(segment, kind, now, periods, seq, notes, fullText);
-    if (span.range && !isDeadlineSubmission(segment)) return [make('일정', 0)];
-    if (isDeadlineSubmission(segment)) return [make('할 일', 0)];
-    if (todo && event) return [make('일정', 0), make('할 일', 1)];
-    if (event || (when.hm && !todo)) return [make('일정', 0)];
-    if (todo) return [make('할 일', 0)];
-    if (!pickTitle(segment, segment)) return [];
-    return [make('할 일', 0)];
+    const made = (() => {
+        if (documentSubmission(segment)) return [make('할 일', 0)];
+        if (span.range && !isDeadlineSubmission(segment)) return [make('일정', 0)];
+        if (isDeadlineSubmission(segment)) return [make('할 일', 0)];
+        if (todo && event) return collapsePair([make('일정', 0), make('할 일', 1)], segment);
+        if (event || (when.hm && !todo)) return [make('일정', 0)];
+        if (todo) return [make('할 일', 0)];
+        if (!pickTitle(segment, segment)) return [];
+        return [make('할 일', 0)];
+    })();
+    if (!unsure) return made;
+    return made.map((item) => markUnsure(item, '같은 문장에서 나눈 내용이라 빼 두었어요.'));
 }
 
 /** @returns {{ items: object[] }} */
@@ -654,7 +742,8 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
             items.push(n === 1 ? item : { ...item, id: `msg${fnv1a32(`${item.id}#${n}`)}` });
         });
     });
-    return { items };
+    if (!items.some((item) => item.date)) return { items };
+    return { items: items.filter((item) => item.date || item.time) };
 }
 
 export function gradeMessages(samples, now = new Date()) {

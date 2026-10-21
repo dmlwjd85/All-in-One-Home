@@ -3,6 +3,7 @@ import { gradeMessages, parseSchoolMessages } from '../src/lib/msgParse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
 import { MSG_BLIND } from '../src/lib/msgBlind.js';
+import { MSG_FRESH } from '../src/lib/msgFresh.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -110,6 +111,16 @@ must('생신 잡담', '오늘 3반 선생님 생신이래요 🎂 축하 메시�
 must('휴강', '방과후 바이올린반 10/26(월) 휴강입니다.', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-26' && items[0].time === '' && items[0].title.includes('바이올린') && items[0].title.includes('방과후'));
 must('안전점검', '[안내] (필독) 11/9(월) 학교 안전점검의 날 운영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-09' && !items[0].title.includes('안내') && !items[0].title.includes('필독') && items[0].title.includes('안전점검'));
 must('전화 상담', '서연이 아버님께 오늘 중으로 전화 상담 부탁드려요', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-22' && items[0].title === '서연이 아버님 전화 상담');
+must('선거 한 장', '이번주 목요일 5교시 학급 임원 선거 진행해 주세요.', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-22' && items[0].time === '13:10' && items[0].include !== false);
+must('보건 분리', '모레 1~2교시 보건교육 있으니 학생들 교실 대기 부탁드려요', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items[0].kind === '일정' && items[0].title === '보건교육' && items[0].date === '2026-10-24' && items[1]?.include === false && items[1]?.low === true);
+must('계획서 제출', '2027년 1월 8일(금) 겨울방학 중 돌봄교실 운영 계획서 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2027-01-08' && items[0].title.includes('계획서'));
+must('이번주 안', '이번주 안으로 가정통신문 회신 바랍니다', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-23');
+must('재량휴업', '11월 16일(월)은 재량휴업일입니다.', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].eventKind === '휴일' && items[0].date === '2026-11-16');
+must('체육대회', '1. 10/27 학년 체육대회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-27' && items[0].title.includes('체육대회'));
+must('노선 변경', '통학차량 노선 변경 공지', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].title.includes('노선'));
+must('급식 시각', '내일 급식이 11시로 당겨집니다', qaNow, (items) => items.length === 1 && items[0].title === '급식' && !items[0].title.includes('으로') && items[0].time === '11:00');
+must('상담 제목', '2차 상담 신청은 11/4부터 받습니다', qaNow, (items) => items.length === 1 && items[0].title === '2차 상담 신청');
+must('날짜 없는 추가', '준비물은 11/20(금)까지 제출해 주세요. 빠진 물건은 알려 주세요.', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-20');
 must('방과후 시간', '내일 방과후 시간에 학부모 상담', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].time === '16:00' && items[0].title === '학부모 상담' && items[0].date === '2026-10-23');
 must('방과후에', '방과후에 학급 회의', qaNow, (items) => items.length === 1 && items[0].time === '16:00' && items[0].title === '학급 회의');
 must('검진 제목', '검진일: 11/12 교직원 건강검진', qaNow, (items) => items.length === 1 && items[0].title === '교직원 건강검진' && items[0].date === '2026-11-12');
@@ -194,3 +205,21 @@ MSG_BLIND.forEach((row) => {
 const blindPct = blind.n ? Math.round((blind.ok / blind.n) * 1000) / 10 : 0;
 console.log(`규칙을 고치는 동안 보지 않은 예문 ${blind.ok}/${blind.n} (${blindPct}%)`);
 if (blind.miss.length) console.log(JSON.stringify(blind.miss, null, 2));
+
+const fresh = { n: 0, ok: 0, miss: [] };
+MSG_FRESH.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    fresh.n += 1;
+    if (row.ok(items)) fresh.ok += 1;
+    else {
+        fresh.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, eventKind: item.eventKind,
+            })),
+        });
+    }
+});
+const freshPct = fresh.n ? Math.round((fresh.ok / fresh.n) * 1000) / 10 : 0;
+console.log(`새로 둔 예문 ${fresh.ok}/${fresh.n} (${freshPct}%)`);
+if (fresh.miss.length) console.log(JSON.stringify(fresh.miss, null, 2));

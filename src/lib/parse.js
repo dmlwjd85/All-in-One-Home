@@ -112,6 +112,9 @@ export function findDates(text, now = new Date()) {
     eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일/g, raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
     });
+    eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*안(?:으로|에)?/g, raw, (match) => {
+        pushSpan(spans, match, weekYmd(match[1], '금', today), { explicit: true, weekday: '금' });
+    });
     eachMatch(/글피|모레|내일|오늘/g, raw, (match) => {
         const add = match[0] === '글피' ? 3 : match[0] === '모레' ? 2 : match[0] === '내일' ? 1 : 0;
         pushSpan(spans, match, addDaysYmd(today, add), { explicit: false });
