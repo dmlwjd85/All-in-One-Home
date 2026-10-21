@@ -8,8 +8,8 @@ function pad(n) {
 const WEEKDAY = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
 
 /** 날짜 뒤의 요일. 괄호나 '요일'이 있을 때만 붙입니다. '수학'의 '수'는 요일이 아닙니다. */
-export const WEEK_TAIL = '(?:\\s*(?:[.(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]|[월화수목금토일]요일))?';
-const WEEK_TAIL_CAP = '(?:\\s*(?:[.(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）]|([월화수목금토일])요일))?';
+export const WEEK_TAIL = '(?:\\s*\\.?\\s*(?:[.(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]|[월화수목금토일]요일))?';
+const WEEK_TAIL_CAP = '(?:\\s*\\.?\\s*(?:[.(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）]|([월화수목금토일])요일))?';
 
 function eachMatch(re, text, fn) {
     const copy = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
@@ -33,6 +33,33 @@ function fixSchoolYear(month, day, today) {
 function ymdOf(year, month, day) {
     const ymd = `${year}-${pad(month)}-${pad(day)}`;
     return isValidYmd(ymd) ? ymd : '';
+}
+
+/** 70 이상은 1900년대, 그 아래는 2000년대입니다. 27은 2027년입니다. */
+function expandShortYear(yy) {
+    const year = Number(yy);
+    if (year >= 100) return year;
+    return year >= 70 ? 1900 + year : 2000 + year;
+}
+
+function namedSchoolYear(raw, index) {
+    const before = [...String(raw).slice(0, index).matchAll(/(\d{4})\s*학년도/g)];
+    if (before.length) return Number(before[before.length - 1][1]);
+    const after = String(raw).slice(index).match(/(\d{4})\s*학년도/);
+    return after ? Number(after[1]) : 0;
+}
+
+/** 학년도는 3~12월이 그 해, 1~2월이 다음 해입니다. 요일이 적혀 있으면 요일이 맞는 해를 고릅니다. */
+function schoolYearYmd(namedYear, month, day, weekday) {
+    const primaryYear = month >= 3 ? namedYear : namedYear + 1;
+    const primary = ymdOf(primaryYear, month, day);
+    if (!weekday || !primary || weekdayKo(primary) === weekday) return primary;
+    for (const year of [namedYear - 1, namedYear, namedYear + 1]) {
+        if (year === primaryYear) continue;
+        const ymd = ymdOf(year, month, day);
+        if (ymd && weekdayKo(ymd) === weekday) return ymd;
+    }
+    return primary;
 }
 
 /** 일만 있으면 아직 안 지난 날이면 이번 달, 지났으면 다음 달입니다. */
@@ -97,10 +124,19 @@ export function findDates(text, now = new Date()) {
         const day = Number(match[3]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;
         const inferred = fixSchoolYear(month, day, today);
-        const ymd = writtenYear ? ymdOf(writtenYear, month, day) : (isValidYmd(inferred) ? inferred : '');
-        pushSpan(spans, match, ymd, { explicit: true, weekday: match[4] || match[5] || '' });
+        const weekday = match[4] || match[5] || '';
+        const schoolNamed = writtenYear ? 0 : namedSchoolYear(raw, match.index);
+        const school = schoolNamed ? schoolYearYmd(schoolNamed, month, day, weekday) : '';
+        const ymd = writtenYear ? ymdOf(writtenYear, month, day) : (school || (isValidYmd(inferred) ? inferred : ''));
+        pushSpan(spans, match, ymd, { explicit: true, weekday });
     });
-    eachMatch(new RegExp(`(?<!\\d)(\\d{1,2})\\s*([./])\\s*(\\d{1,2})\\s*\\.?(?!\\s*월)${WEEK_TAIL_CAP}(?!\\d)`, 'g'), raw, (match) => {
+    eachMatch(new RegExp(`(?<!\\d)(\\d{2})\\s*[./]\\s*(\\d{1,2})\\s*[./]\\s*(\\d{1,2})\\s*\\.?${WEEK_TAIL_CAP}(?!\\d)`, 'g'), raw, (match) => {
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return;
+        pushSpan(spans, match, ymdOf(expandShortYear(match[1]), month, day), { explicit: true, weekday: match[4] || match[5] || '' });
+    });
+    eachMatch(new RegExp(`(?<!\\d)(\\d{1,2})\\s*([./])\\s*(\\d{1,2})\\s*\\.?(?!\\s*월)(?!\\s*[./]\\s*\\d)${WEEK_TAIL_CAP}(?!\\d)`, 'g'), raw, (match) => {
         const month = Number(match[1]);
         const day = Number(match[3]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;

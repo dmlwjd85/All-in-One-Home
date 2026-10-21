@@ -708,6 +708,31 @@ try {
             chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
         }));
         check(yellow.low && !yellow.chosen, '노란 카드가 기본으로 포함되어 있습니다.');
+        async function pasteNext(text) {
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+            await page.waitForSelector('[data-screen="message"] textarea');
+            await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+            await page.keyboard.down('Control');
+            await page.keyboard.press('KeyA');
+            await page.keyboard.up('Control');
+            await page.keyboard.press('Backspace');
+            await page.keyboard.type(text);
+            await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        }
+        await pasteNext('27.1.11 겨울 영재캠프 운영');
+        await page.waitForFunction(() => document.body.innerText.includes('2027년 1월 11일') && document.body.innerText.includes('1개 등록'));
+        const shortYear = await page.evaluate(() => ({
+            chip: document.querySelector('[aria-label="날짜 고치기"]')?.innerText.trim() || '',
+            title: document.querySelector('[aria-label="제목"]')?.value || '',
+        }));
+        check(shortYear.chip === '2027년 1월 11일' && !/\d/.test(shortYear.title), `두 자리 연도 카드가 ${shortYear.chip} / ${shortYear.title} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_short_year_390.png') });
+        await pasteNext('2027학년도 학부모총회 3월 18일(목) 오후 2시');
+        await page.waitForFunction(() => document.body.innerText.includes('2027년 3월 18일') && document.body.innerText.includes('1개 등록'));
+        await pasteNext('2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.');
+        await page.waitForFunction(() => document.body.innerText.includes('2025년 11월 3일') && document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        const past = await page.evaluate(() => Boolean(document.querySelector('.low-card')));
+        check(past, '지난 참고 자료가 노란 카드가 아닙니다.');
         await audit(page, '다른 해 날짜');
     }, 844);
 

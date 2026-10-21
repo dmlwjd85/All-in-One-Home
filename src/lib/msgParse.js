@@ -1,4 +1,5 @@
 // 학교 문자를 기기 안에서 일정·할 일로 나눕니다. 바깥 AI는 쓰지 않습니다.
+import { seoulYmd } from './date.js';
 import { findDates, WEEK_TAIL } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { DEFAULT_PERIODS } from './period.js';
@@ -143,7 +144,7 @@ function isAnnouncement(text) {
     if (/(?<![가-힣])운영(?:합니다|해요|함|입니다)?(?![가-힣])/.test(src)) return true;
     if (/(?:재량\s*)?휴업일/.test(src)) return true;
     if (/(?<![가-힣])체육대회/.test(src)) return true;
-    if (!/(제출|회신|작성|입력|업로드)/.test(src) && /(?<![가-힣])(?:종업식|졸업식|입학식|방학식|개학식|시업식|수료식)(?![가-힣])/.test(src)) return true;
+    if (!/(제출|회신|작성|입력|업로드)/.test(src) && /(?:개강|개학|휴무|휴업)|(?<![가-힣])(?:종업식|졸업식|입학식|방학식|개학식|시업식|수료식)/.test(src)) return true;
     if (!isRequest(src) && /(?<![가-힣])미운행/.test(src)) return true;
     if (/(?<![가-힣])변경(?:됩니다|합니다|했어요|공지)?(?![가-힣])/.test(src)) return true;
     if (/바뀝니다|바뀌었습니다|바뀌어요|당겨집니다|당겨졌어요/.test(src)) return true;
@@ -186,7 +187,7 @@ function hasEvent(text) {
 }
 
 function guessEventKind(text) {
-    if (/휴업|휴일|공휴일/.test(text)) return '휴일';
+    if (/휴업|휴일|공휴일|휴무/.test(text)) return '휴일';
     if (/교직원|교무\s*회의|교무회의|전교|연수|출장|협의회|직원\s*회의/.test(text)) return '학교';
     return '학급';
 }
@@ -222,7 +223,9 @@ export function tidyTitle(text) {
     let t = stripBoilerplate(text);
     t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
     t = t.replace(/[가-힣A-Za-z0-9]{1,12}(?:교실|실|관|장|터|홀|운동장)\s*에서/g, ' ');
+    t = t.replace(/\d{4}\s*학년도/g, ' ');
     t = t.replace(new RegExp(`\\d{4}\\s*[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`(?<!\\d)\\d{2}\\s*[./]\\s*\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`(?<!\\d)(\\d{1,2})\\s*[./]\\s*(\\d{1,2})\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일에?/g, ' ');
@@ -292,7 +295,9 @@ function salvageTitle(text) {
     let t = stripBoilerplate(text);
     t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
+    t = t.replace(/\d{4}\s*학년도/g, ' ');
     t = t.replace(new RegExp(`\\d{4}\\s*[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`(?<!\\d)\\d{2}\\s*[./]\\s*\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`(?<!\\d)\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일에?/g, ' ');
@@ -648,10 +653,16 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const blob = `${title} ${placed.memo} ${extraNotes.join(' ')} ${source}`;
     const warning = [date?.warning, end?.warning].filter(Boolean).join(' ');
     const chatter = !actionable(source);
+    const todayYmd = seoulYmd(now);
+    const lastDay = end?.ymd || date?.ymd || '';
+    const past = Boolean(lastDay && lastDay < todayYmd);
+    const reference = /참고만|공유합니다/.test(source);
     const assumed = when.assumedPm ? '오전·오후가 없어 오후로 봤어요.' : '';
     const missing = date || chatter ? '' : '날짜가 없어요. 달력에서 골라 주세요.';
     const aside = chatter ? '업무로 볼 말이 없어 빼 두었어요.' : '';
-    const notes = [warning, assumed, missing, aside].filter(Boolean);
+    const stale = past ? '지난 날짜라 빼 두었어요.' : '';
+    const shared = reference ? '참고용이라 빼 두었어요.' : '';
+    const notes = [warning, assumed, missing, aside, stale, shared].filter(Boolean);
     let score = 0.45;
     if (date?.explicit) score += 0.25;
     else if (date) score += 0.15;
@@ -660,7 +671,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     if (when.assumedPm) score -= 0.15;
     if ((kind === '할 일' && (hasTodo(source) || isRequest(source))) || (kind === '일정' && hasEvent(source)) || (kind === '일정' && span.range)) score += 0.2;
     if (warning || chatter) score -= 0.25;
-    const low = chatter || score < 0.7 || Boolean(warning) || when.assumedPm || !date;
+    const low = chatter || score < 0.7 || Boolean(warning) || when.assumedPm || !date || past || reference;
     let cleanTitle = title || (kind === '일정' ? '일정' : '할 일');
     if (FIELD_ONLY.test(String(cleanTitle).replace(/\s+/g, ''))) {
         const rescued = finishTitle('', source, fullText);

@@ -5,6 +5,7 @@ import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
 import { MSG_BLIND } from '../src/lib/msgBlind.js';
 import { MSG_FRESH } from '../src/lib/msgFresh.js';
 import { MSG_UNSEEN } from '../src/lib/msgUnseen.js';
+import { MSG_YEAR } from '../src/lib/msgYear.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -135,6 +136,12 @@ must('종업식', '2027-02-12 종업식', qaNow, (items) => items.length === 1 &
 must('방학식', '2026년 12월 23일(수) 방학식', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-12-23' && items[0].title.includes('방학식'));
 must('미운행', '11월 2일(월) 셔틀버스 미운행합니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-02' && items[0].title.includes('미운행'));
 must('상담 회신 제목', '하준이 담임 상담 요청 들어왔어요. 내일까지 가능한 시간 알려주세요.', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-23' && items[0].title.includes('하준') && items[0].title.includes('상담') && items[0].title.includes('회신'));
+must('두 자리 연도', '27.1.11 겨울 영재캠프 운영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-01-11' && !/\d/.test(items[0].title));
+must('두 자리 마감', '27.02.03까지 학생 생활기록부 최종 점검', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2027-02-03' && !/\d/.test(items[0].title));
+must('학년도', '2027학년도 학부모총회 3월 18일(목) 오후 2시', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-03-18' && items[0].time === '14:00' && !items[0].warning && !items[0].title.includes('학년도'));
+must('지난 참고', '2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.', qaNow, (items) => items.length === 1 && items[0].date === '2025-11-03' && items[0].low === true && items[0].include === false);
+must('개강', '2027. 1. 4.(월) 방학 중 방과후학교 개강', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-01-04' && items[0].time === '' && items[0].title.includes('개강'));
+must('휴무', '2027년 1월 1일 신정 휴무', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].eventKind === '휴일' && items[0].date === '2027-01-01');
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -249,3 +256,21 @@ MSG_UNSEEN.forEach((row) => {
 const unseenPct = unseen.n ? Math.round((unseen.ok / unseen.n) * 1000) / 10 : 0;
 console.log(`이번 규칙 뒤 한 번만 본 예문 ${unseen.ok}/${unseen.n} (${unseenPct}%)`);
 if (unseen.miss.length) console.log(JSON.stringify(unseen.miss, null, 2));
+
+const year = { n: 0, ok: 0, miss: [] };
+MSG_YEAR.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    year.n += 1;
+    if (row.ok(items)) year.ok += 1;
+    else {
+        year.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, time: item.time, title: item.title, include: item.include, low: item.low, eventKind: item.eventKind, warning: item.warning,
+            })),
+        });
+    }
+});
+const yearPct = year.n ? Math.round((year.ok / year.n) * 1000) / 10 : 0;
+console.log(`연도 표기를 섞어 한 번만 본 예문 ${year.ok}/${year.n} (${yearPct}%)`);
+if (year.miss.length) console.log(JSON.stringify(year.miss, null, 2));
