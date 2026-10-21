@@ -4,6 +4,7 @@ import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
 import { MSG_BLIND } from '../src/lib/msgBlind.js';
 import { MSG_FRESH } from '../src/lib/msgFresh.js';
+import { MSG_UNSEEN } from '../src/lib/msgUnseen.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -127,6 +128,13 @@ must('검진 제목', '검진일: 11/12 교직원 건강검진', qaNow, (items) 
 must('동의서 제목', '현장학습 동의서\n11/3까지 제출', qaNow, (items) => items.length === 1 && items[0].title === '현장학습 동의서 제출');
 must('요일 제목', '수 학교운영위원회는 11/4입니다', qaNow, (items) => items.length === 1 && items[0].title === '학교운영위원회' && !items[0].title.startsWith('수'));
 must('상담 일정', '10/27 학부모 상담 2명', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-27' && items[0].title.includes('상담'));
+must('명시 연도', '2027년 3월 4일 봄철 돌봄교실 운영 계획서 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2027-03-04' && items[0].title.includes('계획서'));
+must('노란 빼 둠', '어제 체육대회 다들 수고 많으셨습니다!', qaNow, (items) => items.length === 1 && items[0].low === true && items[0].include === false);
+must('상담 마감', '2차 상담 신청은 다음주 화요일까지 받습니다.', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-27' && items[0].title.includes('상담'));
+must('종업식', '2027-02-12 종업식', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-02-12');
+must('방학식', '2026년 12월 23일(수) 방학식', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-12-23' && items[0].title.includes('방학식'));
+must('미운행', '11월 2일(월) 셔틀버스 미운행합니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-02' && items[0].title.includes('미운행'));
+must('상담 회신 제목', '하준이 담임 상담 요청 들어왔어요. 내일까지 가능한 시간 알려주세요.', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-23' && items[0].title.includes('하준') && items[0].title.includes('상담') && items[0].title.includes('회신'));
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -223,3 +231,21 @@ MSG_FRESH.forEach((row) => {
 const freshPct = fresh.n ? Math.round((fresh.ok / fresh.n) * 1000) / 10 : 0;
 console.log(`새로 둔 예문 ${fresh.ok}/${fresh.n} (${freshPct}%)`);
 if (fresh.miss.length) console.log(JSON.stringify(fresh.miss, null, 2));
+
+const unseen = { n: 0, ok: 0, miss: [] };
+MSG_UNSEEN.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    unseen.n += 1;
+    if (row.ok(items)) unseen.ok += 1;
+    else {
+        unseen.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, low: item.low,
+            })),
+        });
+    }
+});
+const unseenPct = unseen.n ? Math.round((unseen.ok / unseen.n) * 1000) / 10 : 0;
+console.log(`이번 규칙 뒤 한 번만 본 예문 ${unseen.ok}/${unseen.n} (${unseenPct}%)`);
+if (unseen.miss.length) console.log(JSON.stringify(unseen.miss, null, 2));

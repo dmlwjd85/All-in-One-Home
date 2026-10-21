@@ -143,6 +143,8 @@ function isAnnouncement(text) {
     if (/(?<![가-힣])운영(?:합니다|해요|함|입니다)?(?![가-힣])/.test(src)) return true;
     if (/(?:재량\s*)?휴업일/.test(src)) return true;
     if (/(?<![가-힣])체육대회/.test(src)) return true;
+    if (!/(제출|회신|작성|입력|업로드)/.test(src) && /(?<![가-힣])(?:종업식|졸업식|입학식|방학식|개학식|시업식|수료식)(?![가-힣])/.test(src)) return true;
+    if (!isRequest(src) && /(?<![가-힣])미운행/.test(src)) return true;
     if (/(?<![가-힣])변경(?:됩니다|합니다|했어요|공지)?(?![가-힣])/.test(src)) return true;
     if (/바뀝니다|바뀌었습니다|바뀌어요|당겨집니다|당겨졌어요/.test(src)) return true;
     if (/있습니다|없습니다/.test(src) && !isRequest(src)) return true;
@@ -159,8 +161,13 @@ function hasScheduledExam(text) {
     return findDates(text).length > 0 || /\d\s*교시/.test(text);
 }
 
+/** 신청·접수를 언제까지 받는다는 말은 상담이 있는 날이 아니라 마감입니다. */
+function isApplicationDeadline(text) {
+    return hasDeadline(text) && /신청|접수/.test(text) && /받/.test(text);
+}
+
 function hasCounseling(text) {
-    if (isRequest(text)) return false;
+    if (isRequest(text) || isApplicationDeadline(text)) return false;
     if (!/상담/.test(text)) return false;
     if (/상담\s*(?:기록|일지|내용|노트|희망)/.test(text)) return false;
     if (!/상담/.test(String(text).replace(/상담실/g, ''))) return false;
@@ -234,6 +241,7 @@ export function tidyTitle(text) {
     t = t.replace(/\d\s*교시(?:\s*까지)?/g, ' ');
     t = t.replace(/(?:^|\s)\d{1,2}[.)](?=\s)/g, ' ');
     t = t.replace(/(?:을|를)\s*(제출|회신|작성|입력|업로드)/g, ' $1');
+    t = t.replace(/알려\s*주(?:세요|십시요|시기\s*바랍니다)?/g, '회신');
     t = t.replace(/(?:해\s*)?주(?:시기|세요|시길|십시오)/g, ' ');
     t = t.replace(/부탁드려요|부탁\s*드려요|부탁드립니다|확인\s*바랍니다|바랍니다|요망|드립니다|해주세요/g, ' ');
     t = t.replace(/(?:이|가)?\s*있습니다/g, ' ');
@@ -241,6 +249,8 @@ export function tidyTitle(text) {
     t = t.replace(/(?:^|\s)(?:수고|많으)(?=\s|$)/g, ' ');
     t = t.replace(/감사(?:합니다|드립니다|해요)/g, ' ');
     t = t.replace(/(?:이|가)?\s*(?:없습니다|바뀝니다|바뀌었습니다|바뀌어요|당겨집니다|당겨졌어요)/g, ' ');
+    t = t.replace(/(?:요청|부탁)(?:이|가|은|는|을|를)?\s*들어\s*왔(?:어요|습니다|다)/g, ' ');
+    t = t.replace(/가능한/g, '가능');
     t = t.replace(/받습니다|받아요/g, ' ');
     t = t.replace(/없어요|있어요|예정입니다|합니다|했어요|하세요|입니다/g, ' ');
     t = t.replace(/\d{4}\s*년/g, ' ');
@@ -563,6 +573,28 @@ function dateCarrier(chunk) {
     return weakTitle(tidyTitle(stripped));
 }
 
+/** 날짜 없는 앞 문장이 누구의 상담인지 말할 때, 뒤의 회신 요청 제목에 그 이름을 남깁니다. */
+function isPersonContext(text) {
+    const src = String(text || '').trim();
+    if (!src || findDates(src).length || detectWhen(src).hm || detectWhen(src).period) return false;
+    if (hasTodo(src) || isRequest(src) || hasEvent(src)) return false;
+    return /[가-힣]{2,4}(?:이|가)\s/.test(src) && /상담|면담/.test(src);
+}
+
+function attachContext(chunks) {
+    const out = [];
+    for (let i = 0; i < chunks.length; i += 1) {
+        const next = chunks[i + 1];
+        if (next && isPersonContext(chunks[i]) && isRequest(next) && findDates(next).length) {
+            out.push(`${String(chunks[i]).replace(/[.。]\s*$/, '')} ${next}`);
+            i += 1;
+            continue;
+        }
+        out.push(chunks[i]);
+    }
+    return out;
+}
+
 function foldChunks(chunks) {
     const blocks = [];
     chunks.forEach((chunk) => {
@@ -646,7 +678,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         period: when.period || 0,
         periodEnd: when.periodEnd || 0,
         memo: memoBits.join(' · '),
-        include: !chatter,
+        include: !low,
         low,
         warning: notes.join(' '),
         sensitive: isSensitiveText(blob),
@@ -715,7 +747,7 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
     const span = dateSpan(segment, now);
     const make = (kind, seq) => buildItem(segment, kind, now, periods, seq, notes, fullText);
     const made = (() => {
-        if (documentSubmission(segment)) return [make('할 일', 0)];
+        if (documentSubmission(segment) || isApplicationDeadline(segment)) return [make('할 일', 0)];
         if (span.range && !isDeadlineSubmission(segment)) return [make('일정', 0)];
         if (isDeadlineSubmission(segment)) return [make('할 일', 0)];
         if (todo && event) return collapsePair([make('일정', 0), make('할 일', 1)], segment);
@@ -734,7 +766,7 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
     if (!raw) return { items: [] };
     const items = [];
     const seen = new Map();
-    foldChunks(segmentsOf(raw, now)).forEach((block) => {
+    foldChunks(attachContext(segmentsOf(raw, now))).forEach((block) => {
         classifySegment(block.text, now, periods, block.notes, raw).forEach((item) => {
             if (!item.title) return;
             const n = (seen.get(item.id) || 0) + 1;

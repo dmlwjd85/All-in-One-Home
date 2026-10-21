@@ -580,7 +580,7 @@ try {
         await page.focus('[data-screen="message"] textarea');
         await page.keyboard.type(four);
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        const previewReady = await page.waitForFunction(() => document.body.innerText.includes('4개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'), { timeout: 8000 }).catch(() => null);
+        const previewReady = await page.waitForFunction(() => document.body.innerText.includes('3개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'), { timeout: 8000 }).catch(() => null);
         if (!previewReady) {
             const body = await page.evaluate(() => document.body.innerText.slice(0, 700));
             failures.push(`4건 미리보기가 열리지 않았습니다. ${body}`);
@@ -682,6 +682,33 @@ try {
         });
         check(covered, '등록 버튼 아래로 카드가 비칩니다.');
         }
+    }, 844);
+
+    await withDemo(390, 'light', async (page) => {
+        await openPlus(page);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.type('[data-screen="message"] textarea', '2027년 3월 4일 봄철 돌봄교실 운영 계획서 제출');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('2027년 3월 4일') && document.body.innerText.includes('1개 등록'));
+        const yearChip = await page.evaluate(() => document.querySelector('[aria-label="날짜 고치기"]')?.innerText.trim() || '');
+        check(yearChip === '2027년 3월 4일', `다른 해 날짜 칩이 ${yearChip} 입니다.`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('어제 체육대회 다들 수고 많으셨습니다!');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        const yellow = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+        }));
+        check(yellow.low && !yellow.chosen, '노란 카드가 기본으로 포함되어 있습니다.');
+        await audit(page, '다른 해 날짜');
     }, 844);
 
     await withDemo(1280, 'light', async (page) => {

@@ -8,9 +8,11 @@ import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 
 const KIND_OPTIONS = [{ id: '할 일', label: '할 일' }, { id: '일정', label: '일정' }];
 
-function oneDate(ymd) {
+function oneDate(ymd, today = '') {
     if (!ymd) return '날짜 없음';
-    return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
+    const body = `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
+    if (today && ymd.slice(0, 4) !== String(today).slice(0, 4)) return `${ymd.slice(0, 4)}년 ${body}`;
+    return body;
 }
 
 function periodLabel(item) {
@@ -68,11 +70,11 @@ function MsgCard({ item, clock, periods, onPatch }) {
             <div className={ranged ? 'msg-summary range' : 'msg-summary'}>
                 {ranged ? (
                     <>
-                        <Btn className={open === 'start' ? 'chip on' : 'chip'} aria-label="시작일 고치기" onClick={() => toggle('start')}>{oneDate(item.date)}</Btn>
-                        <Btn className={open === 'end' ? 'chip on' : 'chip'} aria-label="끝일 고치기" onClick={() => toggle('end')}>{oneDate(item.end)}</Btn>
+                        <Btn className={open === 'start' ? 'chip on' : 'chip'} aria-label="시작일 고치기" onClick={() => toggle('start')}>{oneDate(item.date, clock.ymd)}</Btn>
+                        <Btn className={open === 'end' ? 'chip on' : 'chip'} aria-label="끝일 고치기" onClick={() => toggle('end')}>{oneDate(item.end, clock.ymd)}</Btn>
                     </>
                 ) : (
-                    <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{oneDate(item.date)}</Btn>
+                    <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{oneDate(item.date, clock.ymd)}</Btn>
                 )}
                 <Btn className={open === 'period' ? 'chip on' : 'chip'} aria-label="교시 고치기" onClick={() => toggle('period')}>{periodLabel(item)}</Btn>
                 <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{item.time || '시각 없음'}</Btn>

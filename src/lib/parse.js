@@ -91,11 +91,14 @@ export function findDates(text, now = new Date()) {
     eachMatch(new RegExp(`(\\d{4})\\s*[.\\-/]\\s*(\\d{1,2})\\s*[.\\-/]\\s*(\\d{1,2})${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         pushSpan(spans, match, ymdOf(Number(match[1]), Number(match[2]), Number(match[3])), { explicit: true, weekday: match[4] || match[5] || '' });
     });
-    eachMatch(new RegExp(`(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
-        const month = Number(match[1]);
-        const day = Number(match[2]);
+    eachMatch(new RegExp(`(?:(\\d{4})\\s*년\\s*)?(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
+        const writtenYear = match[1] ? Number(match[1]) : 0;
+        const month = Number(match[2]);
+        const day = Number(match[3]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;
-        pushSpan(spans, match, isValidYmd(fixSchoolYear(month, day, today)) ? fixSchoolYear(month, day, today) : '', { explicit: true, weekday: match[3] || match[4] || '' });
+        const inferred = fixSchoolYear(month, day, today);
+        const ymd = writtenYear ? ymdOf(writtenYear, month, day) : (isValidYmd(inferred) ? inferred : '');
+        pushSpan(spans, match, ymd, { explicit: true, weekday: match[4] || match[5] || '' });
     });
     eachMatch(new RegExp(`(?<!\\d)(\\d{1,2})\\s*([./])\\s*(\\d{1,2})\\s*\\.?(?!\\s*월)${WEEK_TAIL_CAP}(?!\\d)`, 'g'), raw, (match) => {
         const month = Number(match[1]);
