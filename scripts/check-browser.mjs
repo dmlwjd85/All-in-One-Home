@@ -766,6 +766,24 @@ try {
         }));
         check(span.start === '10월 25일' && span.end === '10월 27일' && span.title === '학년 연구실 공사' && !/\d/.test(span.title) && span.kept === 1, `월 없는 기간이 ${JSON.stringify(span)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_monthless_span_390.png') });
+        await pasteNext('10/23 교직원 회의는 15:40에서 16:10으로 변경');
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('16:10'));
+        const shifted = await page.evaluate(() => ({
+            chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
+            times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+        }));
+        check(shifted.chips.includes('10월 23일') && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.kept === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
+        await pasteNext('학예회 11/2(월) 상담 11/6(금)');
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'));
+        const unsure = await page.evaluate(() => ({
+            chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
+            low: document.querySelectorAll('.low-card').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+        }));
+        check(unsure.chips.includes('11월 2일') && unsure.chips.includes('11월 6일') && unsure.low >= 2 && unsure.aside >= 2 && unsure.kept === 0, `모호한 두 날짜가 ${JSON.stringify(unsure)} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_unsure_dates_390.png') });
         await pasteNext('겨울 독서 주간 12월 8일(화)~10일(목)');
         await page.waitForFunction(() => document.body.innerText.includes('12월 8일') && document.body.innerText.includes('12월 10일') && document.body.innerText.includes('1개 등록'));
         await audit(page, '다른 해 날짜');

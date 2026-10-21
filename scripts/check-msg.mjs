@@ -8,6 +8,7 @@ import { MSG_UNSEEN } from '../src/lib/msgUnseen.js';
 import { MSG_YEAR } from '../src/lib/msgYear.js';
 import { MSG_MOVE } from '../src/lib/msgMove.js';
 import { MSG_SHIFT } from '../src/lib/msgShift.js';
+import { MSG_DOUBT } from '../src/lib/msgDoubt.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -160,6 +161,15 @@ must('취소', '10/30 현장체험학습이 취소되었습니다', qaNow, (item
 must('시간 마감', '다음 달 말까지 연수 30시간 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-30' && items[0].title.includes('30시간') && items[0].title.includes('연수'));
 must('촬영 일정', '다음 달 초 학급 사진 촬영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '학급 사진 촬영');
 must('이번 달 중', '이번 달 중으로 안전교육 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && !items[0].title.includes('중으로'));
+must('시각 이동', '내일 교직원 회의는 15:40에서 16:10으로 변경', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-10-23' && item.time === '16:10' && item.title.includes('회의')));
+must('아니라', '10/30(금)이 아니라 10/31(토)입니다. 정정', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.date === '2026-10-31') && items.some((item) => item.date === '2026-10-30' && item.include === false));
+must('기한 연장', '독서록 제출 기한이 10/23에서 10/30으로 연장', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.kind === '할 일' && item.date === '2026-10-30' && item.title.includes('독서록') && item.title.includes('제출')));
+must('예선 본선', '예선 11/9(월), 본선 11/16(월)', qaNow, (items) => items.filter((item) => item.include !== false && item.kind === '일정').length === 2 && items.some((item) => item.date === '2026-11-09' && item.title.includes('예선')) && items.some((item) => item.date === '2026-11-16' && item.title.includes('본선')));
+must('작년', '작년 10/30 현장학습 사진입니다', qaNow, (items) => items.length >= 1 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2025-10-30'));
+must('대체', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', qaNow, (items) => items.some((item) => item.date === '2026-10-30' && item.include === false) && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-11-06' && item.title.includes('견학')));
+must('모호한 두 날짜', '학예회 11/2(월) 상담 11/6(금)', qaNow, (items) => items.length === 2 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2026-11-02') && items.some((item) => item.date === '2026-11-06'));
+must('대회', '11/12(목) 과학탐구대회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-12' && items[0].include !== false);
+must('5교시', '내일 영어는 5교시 그대로입니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].period === 5 && items[0].time === '13:10' && items[0].title.includes('영어'));
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -328,3 +338,23 @@ MSG_SHIFT.forEach((row) => {
 const shiftPct = shift.n ? Math.round((shift.ok / shift.n) * 1000) / 10 : 0;
 console.log(`날짜를 옮기는 말을 섞어 한 번만 본 예문 ${shift.ok}/${shift.n} (${shiftPct}%)`);
 if (shift.miss.length) console.log(JSON.stringify(shift.miss, null, 2));
+
+const doubt = { n: 0, ok: 0, silent: 0, miss: [] };
+MSG_DOUBT.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    doubt.n += 1;
+    if (row.ok(items)) doubt.ok += 1;
+    else {
+        doubt.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, period: item.period, title: item.title, include: item.include, low: item.low,
+            })),
+        });
+    }
+    if (row.silent(items)) doubt.silent += 1;
+});
+const doubtPct = doubt.n ? Math.round((doubt.ok / doubt.n) * 1000) / 10 : 0;
+console.log(`모호하면 빼 두는 규칙을 한 번만 본 예문 ${doubt.ok}/${doubt.n} (${doubtPct}%)`);
+console.log(`그중 조용히 틀린 문장 ${doubt.silent}개`);
+if (doubt.miss.length) console.log(JSON.stringify(doubt.miss, null, 2));
