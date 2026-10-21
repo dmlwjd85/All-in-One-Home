@@ -157,7 +157,7 @@ export const MSG_SAMPLES = [
     { text: '모레 미세먼지 심하대요 마스크 챙기세요ㅠㅠ', items: [{ kind: '할 일', date: D2, time: '', title: '미세먼지 심하대요 마스크 챙기세요', include: false, low: true }] },
     { text: '오늘 교무실 커피 향 좋네요~ ㅎㅎ', items: [{ kind: '할 일', date: T, time: '', title: '교무실 커피 향 좋네요', include: false, low: true }] },
     { text: '내일 날씨 좋다며 다들 웃어요 ㅋㅋ', items: [{ kind: '할 일', date: D1, time: '', title: '날씨 좋다며 다들 웃어요', include: false, low: true }] },
-    { text: '방과후 로봇과학 강사님 11/4(수)부터 교체됩니다', items: [{ kind: '할 일', date: '2026-11-04', time: '', title: '방과후 로봇과학 강사님 교체됩니다' }] },
+    { text: '방과후 로봇과학 강사님 11/4(수)부터 교체됩니다', items: [{ kind: '일정', date: '2026-11-04', time: '', title: '방과후 로봇과학 강사님 교체됩니다' }] },
     { text: '방과후 수학 부 강사 10/30에 만납니다', items: [{ kind: '할 일', date: '2026-10-30', time: '', title: '방과후 수학 부 강사 만납니다' }] },
     { text: '11월 6일 방과후 코딩 강사가 옵니다', items: [{ kind: '할 일', date: '2026-11-06', time: '', title: '방과후 코딩 강사가 옵니다' }] },
     { text: '차주 화요일 방과후 요리교실이 열립니다', items: [{ kind: '할 일', date: NEXT_TUE, time: '', title: '방과후 요리교실이 열립니다' }] },
@@ -176,4 +176,24 @@ export const MSG_SAMPLES = [
     { text: '10/30 상담 5명', items: [{ kind: '일정', date: '2026-10-30', time: '', title: '상담 5명' }] },
     { text: '모레 오전 9시 학부모 상담', items: [{ kind: '일정', date: D2, time: '09:00', title: '학부모 상담' }] },
     { text: '다음 주 목요일 진학 상담', items: [{ kind: '일정', date: NEXT_THU, time: '', title: '진학 상담' }] },
+    { text: '[교무부] 2학기 2차 지필평가 11.24(화)~11.26(목) 실시합니다. 문항정보표는 11.13(금)까지 제출 바랍니다.', items: [
+        { kind: '일정', date: '2026-11-24', end: '2026-11-26', time: '', title: '2학기 2차 지필평가 실시' },
+        { kind: '할 일', date: '2026-11-13', time: '', title: '문항정보표 제출' },
+    ] },
+    { text: '영어 듣기평가 11/12(목) 실시합니다. 채점 기준은 11/6(금)까지 제출 바랍니다.', items: [
+        { kind: '일정', date: '2026-11-12', time: '', title: '영어 듣기평가 실시' },
+        { kind: '할 일', date: '2026-11-06', time: '', title: '채점 기준 제출' },
+    ] },
+    { text: '체육대회는 10/31(토) 실시하고 준비물은 10/28(수)까지 제출 바랍니다.', items: [
+        { kind: '일정', date: '2026-10-31', time: '', title: '체육대회 실시' },
+        { kind: '할 일', date: '2026-10-28', time: '', title: '준비물 제출' },
+    ] },
+    { text: '오늘 3반 선생님 생신이래요 🎂 축하 메시지 한 마디씩!', items: [{ kind: '할 일', date: T, time: '', title: '3반 선생님 생신이래요 축하 메시지 한 마디씩', include: false, low: true }] },
+    { text: '내일 2반 선생님 생신이에요 🎉 복도에서 축하 인사 나눠요', items: [{ kind: '할 일', date: D1, time: '', title: '2반 선생님 생신이에요 복도 축하 인사 나눠요', include: false, low: true }] },
+    { text: '방과후 바이올린반 10/26(월) 휴강입니다.', items: [{ kind: '일정', date: '2026-10-26', time: '', title: '방과후 바이올린반 휴강' }] },
+    { text: '11/18(수) 방과후 첼로반 휴강입니다.', items: [{ kind: '일정', date: '2026-11-18', time: '', title: '방과후 첼로반 휴강' }] },
+    { text: '[안내] (필독) 11/9(월) 학교 안전점검의 날 운영', items: [{ kind: '일정', date: '2026-11-09', time: '', title: '학교 안전점검의 날 운영' }] },
+    { text: '안녕 선생님들 (필독) 11/20(금) 소방 대피 훈련이 있습니다', items: [{ kind: '일정', date: '2026-11-20', time: '', title: '소방 대피 훈련' }] },
+    { text: '서연이 아버님께 오늘 중으로 전화 상담 부탁드려요', items: [{ kind: '할 일', date: T, time: '', title: '서연이 아버님 전화 상담' }] },
+    { text: '민준이 어머님께 내일 중으로 전화 상담 부탁드려요', items: [{ kind: '할 일', date: D1, time: '', title: '민준이 어머님 전화 상담' }] },
 ];

@@ -2,6 +2,7 @@
 import { gradeMessages, parseSchoolMessages } from '../src/lib/msgParse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
+import { MSG_BLIND } from '../src/lib/msgBlind.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -103,7 +104,12 @@ must('인사 제목', '수고 많으십니다. 커피는 교무실에 있어요'
 must('수학 글자', '11/6 수학여행', qaNow, (items) => items.length === 1 && items[0].title === '수학여행' && items[0].date === '2026-11-06');
 must('급식 잡담', '오늘 급식 진짜 맛있네요 ㅎㅎ 다들 점심 맛있게 드세요~', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].time === '12:10');
 must('우산 잡담', '오늘 비 온대요 우산 챙기세요 ㅠㅠ', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].date === '2026-10-22');
-must('방과후 로봇', '방과후 로봇과학 강사님 11/4(수)부터 교체됩니다', qaNow, (items) => items.length === 1 && items[0].time === '' && items[0].title.includes('방과후') && items[0].title.includes('로봇과학') && items[0].date === '2026-11-04');
+must('방과후 로봇', '방과후 로봇과학 강사님 11/4(수)부터 교체됩니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].time === '' && items[0].title.includes('방과후') && items[0].title.includes('로봇과학') && items[0].date === '2026-11-04');
+must('지필 회귀', '[교무부] 2학기 2차 지필평가 11.24(화)~11.26(목) 실시합니다. 문항정보표는 11.13(금)까지 제출 바랍니다.', qaNow, (items) => items.length === 2 && items[0].kind === '일정' && items[0].date === '2026-11-24' && items[0].end === '2026-11-26' && items[0].title.includes('지필평가') && items[1].kind === '할 일' && items[1].date === '2026-11-13' && items[1].title.includes('문항정보표'));
+must('생신 잡담', '오늘 3반 선생님 생신이래요 🎂 축하 메시지 한 마디씩!', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].date === '2026-10-22');
+must('휴강', '방과후 바이올린반 10/26(월) 휴강입니다.', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-26' && items[0].time === '' && items[0].title.includes('바이올린') && items[0].title.includes('방과후'));
+must('안전점검', '[안내] (필독) 11/9(월) 학교 안전점검의 날 운영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-09' && !items[0].title.includes('안내') && !items[0].title.includes('필독') && items[0].title.includes('안전점검'));
+must('전화 상담', '서연이 아버님께 오늘 중으로 전화 상담 부탁드려요', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-22' && items[0].title === '서연이 아버님 전화 상담');
 must('방과후 시간', '내일 방과후 시간에 학부모 상담', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].time === '16:00' && items[0].title === '학부모 상담' && items[0].date === '2026-10-23');
 must('방과후에', '방과후에 학급 회의', qaNow, (items) => items.length === 1 && items[0].time === '16:00' && items[0].title === '학급 회의');
 must('검진 제목', '검진일: 11/12 교직원 건강검진', qaNow, (items) => items.length === 1 && items[0].title === '교직원 건강검진' && items[0].date === '2026-11-12');
@@ -170,3 +176,21 @@ MSG_HOLDOUT.forEach((row) => {
 const holdPct = Math.round((hold.ok / hold.n) * 1000) / 10;
 console.log(`따로 둔 예문 ${hold.ok}/${hold.n} (${holdPct}%) ${Object.entries(hold.by).map(([key, value]) => `${key} ${value.ok}/${value.n}`).join(', ')}`);
 if (hold.ok !== hold.n) process.exit(1);
+
+const blind = { n: 0, ok: 0, miss: [] };
+MSG_BLIND.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    blind.n += 1;
+    if (row.ok(items)) blind.ok += 1;
+    else {
+        blind.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include,
+            })),
+        });
+    }
+});
+const blindPct = blind.n ? Math.round((blind.ok / blind.n) * 1000) / 10 : 0;
+console.log(`규칙을 고치는 동안 보지 않은 예문 ${blind.ok}/${blind.n} (${blindPct}%)`);
+if (blind.miss.length) console.log(JSON.stringify(blind.miss, null, 2));
