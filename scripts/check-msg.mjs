@@ -7,6 +7,7 @@ import { MSG_FRESH } from '../src/lib/msgFresh.js';
 import { MSG_UNSEEN } from '../src/lib/msgUnseen.js';
 import { MSG_YEAR } from '../src/lib/msgYear.js';
 import { MSG_MOVE } from '../src/lib/msgMove.js';
+import { MSG_SHIFT } from '../src/lib/msgShift.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -151,6 +152,14 @@ must('탑재 마감', '10월 30일 17:00까지 수행평가 계획 탑재', qaNo
 must('검사 차례', '11월 2일 1차, 11월 16일 2차 독서기록장 검사', qaNow, (items) => items.length === 2 && items.every((item) => item.kind === '일정' && item.include !== false) && items[0].date === '2026-11-02' && items[0].title === '독서기록장 검사 1차' && items[1].date === '2026-11-16' && items[1].title === '독서기록장 검사 2차');
 must('이번 달 말', '이번 달 말까지 가정통신문 회신 바랍니다', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].title === '가정통신문 회신');
 must('다음 달 초', '다음 달 초 교직원 연수', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '교직원 연수');
+must('앞당김', '10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-10-27' && item.time === '15:00') && items.some((item) => item.date === '2026-10-29' && item.include === false && item.low === true));
+must('요일 이동', '다음주 월요일에서 수요일로', qaNow, (items) => items.filter((item) => item.include !== false).length === 1 && items.some((item) => item.include !== false && item.date === '2026-10-28') && items.some((item) => item.date === '2026-10-26' && item.include === false));
+must('기간 이동', '11/16~11/20에서 11/23~11/27로', qaNow, (items) => items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-11-23' && item.end === '2026-11-27') && items.some((item) => item.date === '2026-11-16' && item.end === '2026-11-20' && item.include === false));
+must('월 없는 기간', '25~27일 학년 연구실 공사', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-25' && items[0].end === '2026-10-27' && items[0].title === '학년 연구실 공사' && !/\d/.test(items[0].title));
+must('취소', '10/30 현장체험학습이 취소되었습니다', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].low === true && items[0].date === '2026-10-30');
+must('시간 마감', '다음 달 말까지 연수 30시간 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-30' && items[0].title.includes('30시간') && items[0].title.includes('연수'));
+must('촬영 일정', '다음 달 초 학급 사진 촬영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '학급 사진 촬영');
+must('이번 달 중', '이번 달 중으로 안전교육 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && !items[0].title.includes('중으로'));
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -301,3 +310,21 @@ MSG_MOVE.forEach((row) => {
 const movePct = move.n ? Math.round((move.ok / move.n) * 1000) / 10 : 0;
 console.log(`날짜 이동과 상대 날짜를 한 번만 본 예문 ${move.ok}/${move.n} (${movePct}%)`);
 if (move.miss.length) console.log(JSON.stringify(move.miss, null, 2));
+
+const shift = { n: 0, ok: 0, miss: [] };
+MSG_SHIFT.forEach((row) => {
+    const items = parseSchoolMessages(row.text, { now: MSG_NOW }).items;
+    shift.n += 1;
+    if (row.ok(items)) shift.ok += 1;
+    else {
+        shift.miss.push({
+            id: row.id,
+            got: items.map((item) => ({
+                kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, low: item.low,
+            })),
+        });
+    }
+});
+const shiftPct = shift.n ? Math.round((shift.ok / shift.n) * 1000) / 10 : 0;
+console.log(`날짜를 옮기는 말을 섞어 한 번만 본 예문 ${shift.ok}/${shift.n} (${shiftPct}%)`);
+if (shift.miss.length) console.log(JSON.stringify(shift.miss, null, 2));

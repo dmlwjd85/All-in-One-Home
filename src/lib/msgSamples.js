@@ -119,7 +119,7 @@ export const MSG_SAMPLES = [
     { text: '[공지] 1. 내일 조회 회의', items: [{ kind: '일정', date: D1, time: '', title: '조회 회의', eventKind: '학급' }] },
     { text: '5, 6교시 전담 보결', items: [{ kind: '일정', date: '', time: '13:10', title: '전담 보결', memo: '5~6교시', low: true }] },
     { text: '12월 14일~12월 18일 평가 주간', items: [{ kind: '일정', date: '2026-12-14', end: '2026-12-18', time: '', title: '평가 주간', low: false }] },
-    { text: '모레 방과후 돌봄은 그대로입니다', items: [{ kind: '일정', date: D2, time: '16:00', title: '돌봄은 그대로' }] },
+    { text: '모레 방과후 돌봄은 그대로입니다', items: [{ kind: '일정', date: D2, time: '16:00', title: '돌봄' }] },
     { text: '11월 2일(월)~11월 6일(금)까지 상담 희망 시간 회신', items: [{ kind: '할 일', date: '2026-11-06', time: '', title: '상담 희망 시간 회신' }] },
     { text: '제1회 학급 회의는 10월 28일입니다', items: [{ kind: '일정', date: '2026-10-28', time: '', title: '제1회 학급 회의', eventKind: '학급' }] },
     { text: '점심 맛있게 드세요', items: [{ kind: '일정', date: '', time: '12:10', title: '맛있게 드세요', include: false, low: true }] },
@@ -262,4 +262,24 @@ export const MSG_SAMPLES = [
     { text: '다음 달 초 교직원 연수', items: [{ kind: '일정', date: '2026-11-01', time: '', title: '교직원 연수', eventKind: '학교', include: true }] },
     { text: '다음달 25일 학년 회의', items: [{ kind: '일정', date: '2026-11-25', time: '', title: '학년 회의', include: true }] },
     { text: '이번 달 초 교직원 연수', items: [{ kind: '일정', date: '2026-10-01', time: '', title: '교직원 연수', eventKind: '학교', include: false, low: true }] },
+    { text: '가을 소풍이 10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다', items: [
+        { kind: '일정', date: '2026-10-27', time: '15:00', title: '가을 소풍', include: true },
+        { kind: '일정', date: '2026-10-29', time: '', title: '가을 소풍', include: false, low: true },
+    ] },
+    { text: '학예회가 다음주 월요일에서 수요일로 바뀝니다', items: [
+        { kind: '일정', date: '2026-10-28', time: '', title: '학예회', include: true },
+        { kind: '일정', date: '2026-10-26', time: '', title: '학예회', include: false, low: true },
+    ] },
+    { text: '독서 주간이 11/16~11/20에서 11/23~11/27로 연기됩니다', items: [
+        { kind: '일정', date: '2026-11-23', end: '2026-11-27', time: '', title: '독서 주간', include: true },
+        { kind: '일정', date: '2026-11-16', end: '2026-11-20', time: '', title: '독서 주간', include: false, low: true },
+    ] },
+    { text: '25~27일 학년 연구실 공사', items: [{ kind: '일정', date: '2026-10-25', end: '2026-10-27', time: '', title: '학년 연구실 공사', include: true }] },
+    { text: '26~28일 특별실 공사', items: [{ kind: '일정', date: '2026-10-26', end: '2026-10-28', time: '', title: '특별실 공사', include: true }] },
+    { text: '10/30 현장체험학습이 취소되었습니다', items: [{ kind: '할 일', date: '2026-10-30', time: '', title: '현장체험학습이 취소되었습니다', include: false, low: true }] },
+    { text: '11/4 학급 회의가 취소됩니다', items: [{ kind: '일정', date: '2026-11-04', time: '', title: '학급 회의가 취소됩니다', include: false, low: true }] },
+    { text: '다음 달 말까지 연수 30시간 이수 확인', items: [{ kind: '할 일', date: '2026-11-30', time: '', title: '연수 30시간 이수 확인', include: true }] },
+    { text: '현장체험학습 장소 변경', items: [{ kind: '일정', date: '', time: '', title: '현장체험학습 장소 변경', include: false, low: true }] },
+    { text: '다음 달 초 학급 사진 촬영', items: [{ kind: '일정', date: '2026-11-01', time: '', title: '학급 사진 촬영', include: true }] },
+    { text: '이번 달 중으로 안전교육 이수 확인', items: [{ kind: '할 일', date: SAT, time: '', title: '안전교육 이수 확인', include: true }] },
 ];

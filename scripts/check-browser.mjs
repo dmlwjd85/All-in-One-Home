@@ -744,6 +744,28 @@ try {
         }));
         check(moved.chips.includes('11월 5일') && moved.chips.includes('10월 29일') && moved.titles.some((title) => title.includes('축구반 수업')) && moved.low >= 1 && moved.aside >= 1 && moved.kept === 1, `연기 카드가 ${JSON.stringify(moved)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_move_date_390.png') });
+        await pasteNext('가을 소풍이 10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다');
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 27일'));
+        const pulled = await page.evaluate(() => ({
+            chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
+            times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
+            titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
+            low: document.querySelectorAll('.low-card').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+        }));
+        check(pulled.chips.includes('10월 27일') && pulled.chips.includes('10월 29일') && pulled.times.includes('15:00') && pulled.titles.some((title) => title.includes('가을 소풍')) && pulled.low >= 1 && pulled.aside >= 1 && pulled.kept === 1, `앞당김 카드가 ${JSON.stringify(pulled)} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_pull_date_390.png') });
+        await pasteNext('25~27일 학년 연구실 공사');
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 25일') && document.body.innerText.includes('10월 27일'));
+        const span = await page.evaluate(() => ({
+            start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
+            end: document.querySelector('[aria-label="끝일 고치기"]')?.innerText.trim() || '',
+            title: document.querySelector('[aria-label="제목"]')?.value || '',
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+        }));
+        check(span.start === '10월 25일' && span.end === '10월 27일' && span.title === '학년 연구실 공사' && !/\d/.test(span.title) && span.kept === 1, `월 없는 기간이 ${JSON.stringify(span)} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_monthless_span_390.png') });
         await pasteNext('겨울 독서 주간 12월 8일(화)~10일(목)');
         await page.waitForFunction(() => document.body.innerText.includes('12월 8일') && document.body.innerText.includes('12월 10일') && document.body.innerText.includes('1개 등록'));
         await audit(page, '다른 해 날짜');

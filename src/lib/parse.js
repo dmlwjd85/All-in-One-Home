@@ -150,6 +150,36 @@ function inheritRangeMonth(spans, raw) {
     }
 }
 
+function pushRaw(spans, index, length, ymd, weekday = '') {
+    if (!ymd || length <= 0) return;
+    spans.push({
+        index,
+        length,
+        ymd,
+        explicit: true,
+        weekday,
+        bare: false,
+        warning: weekdayWarning(ymd, weekday),
+    });
+}
+
+/** '25~27일'은 이번 달의 두 날입니다. 끝 날이 더 앞이면 다음 달입니다. */
+function sameMonthRangeYmd(startDay, endDay, today) {
+    const year = Number(today.slice(0, 4));
+    const month = Number(today.slice(5, 7));
+    const start = ymdOf(year, month, startDay);
+    let endMonth = month;
+    let endYear = year;
+    if (endDay < startDay) {
+        endMonth += 1;
+        if (endMonth > 12) {
+            endMonth = 1;
+            endYear += 1;
+        }
+    }
+    return { start, end: ymdOf(endYear, endMonth, endDay) };
+}
+
 export function weekdayWarning(ymd, weekday) {
     if (!ymd || !weekday) return '';
     const actual = weekdayKo(ymd);
@@ -200,8 +230,26 @@ export function findDates(text, now = new Date()) {
     eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(초|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd(match[1], match[2], today), { explicit: true });
     });
+    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중(?:으로)?/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd(match[1], '말', today), { explicit: true });
+    });
     eachMatch(/(?<![가-힣\d])월(초|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd('이번달', match[1], today), { explicit: true });
+    });
+    eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*[~～\\-–—]\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
+        const startDay = Number(match[1]);
+        const endDay = Number(match[2]);
+        if (startDay < 1 || startDay > 31 || endDay < 1 || endDay > 31) return;
+        const range = sameMonthRangeYmd(startDay, endDay, today);
+        const tilde = match[0].search(/[~～\-–—]/);
+        const endAt = match.index + tilde + match[0].slice(tilde).search(/\d/);
+        pushRaw(spans, match.index, match[1].length, range.start, '');
+        pushRaw(spans, endAt, match.index + match[0].length - endAt, range.end, match[3] || match[4] || '');
+    });
+    eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일에서\s*([월화수목금토일])요일/g, raw, (match) => {
+        const second = `${match[3]}요일`;
+        const at = match.index + match[0].lastIndexOf(second);
+        pushRaw(spans, at, second.length, weekYmd(match[1], match[3], today), match[3]);
     });
     eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const day = Number(match[1]);
