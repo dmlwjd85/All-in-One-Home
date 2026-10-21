@@ -580,7 +580,7 @@ try {
         await page.focus('[data-screen="message"] textarea');
         await page.keyboard.type(four);
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        const previewReady = await page.waitForFunction(() => document.body.innerText.includes('4개 등록') && document.body.innerText.includes('11/2~11/6'), { timeout: 8000 }).catch(() => null);
+        const previewReady = await page.waitForFunction(() => document.body.innerText.includes('4개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'), { timeout: 8000 }).catch(() => null);
         if (!previewReady) {
             const body = await page.evaluate(() => document.body.innerText.slice(0, 700));
             failures.push(`4건 미리보기가 열리지 않았습니다. ${body}`);
@@ -604,7 +604,51 @@ try {
         check(!summary.calendar, '접힌 카드에 달력이 펼쳐져 있습니다.');
         check(!summary.select, '미리보기에 드롭다운이 있습니다.');
         check(summary.bg && summary.bg !== 'transparent' && summary.bg !== 'rgba(0, 0, 0, 0)', '등록 버튼 배경이 비칩니다.');
+        const bounds = await page.evaluate(() => {
+            const start = document.querySelector('[aria-label="시작일 고치기"]');
+            const end = document.querySelector('[aria-label="끝일 고치기"]');
+            const box = (el) => {
+                if (!el) return null;
+                const rect = el.getBoundingClientRect();
+                return { w: rect.width, h: rect.height, text: el.innerText.trim() };
+            };
+            start?.scrollIntoView({ block: 'center' });
+            return { start: box(start), end: box(end) };
+        });
+        check(bounds.start && bounds.end, '기간 카드에 시작일과 끝일 버튼이 없습니다.');
+        check(bounds.start?.text.includes('11월 2일') && bounds.end?.text.includes('11월 6일'), `기간 날짜가 ${bounds.start?.text}~${bounds.end?.text} 입니다.`);
+        check(bounds.start.w >= 43.5 && bounds.start.h >= 43.5 && bounds.end.w >= 43.5 && bounds.end.h >= 43.5, '시작일·끝일 버튼이 작습니다.');
         await page.screenshot({ path: resolve(shots, 'after_message_summary_390.png') });
+        await page.screenshot({ path: resolve(shots, 'after_range_bounds_390.png') });
+        await page.evaluate(() => document.querySelector('[aria-label="시작일 고치기"]')?.click());
+        await page.waitForSelector('[aria-label="날짜"]');
+        await page.screenshot({ path: resolve(shots, 'after_range_start_390.png') });
+        await page.evaluate(() => document.querySelector('[aria-label="2026-11-03"]')?.click());
+        const started = await page.evaluate(() => ({
+            start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
+            end: document.querySelector('[aria-label="끝일 고치기"]')?.innerText.trim() || '',
+            calendar: Boolean(document.querySelector('[aria-label="날짜"]')),
+            select: Boolean(document.querySelector('[data-screen="message"] select')),
+        }));
+        check(started.start.includes('11월 3일') && started.end.includes('11월 6일') && !started.calendar && !started.select, `시작일을 골라도 끝이 같이 바뀌거나 달력이 남습니다. ${started.start} ${started.end}`);
+        await page.evaluate(() => document.querySelector('[aria-label="끝일 고치기"]')?.click());
+        await page.waitForSelector('[aria-label="날짜"]');
+        await page.screenshot({ path: resolve(shots, 'after_range_end_390.png') });
+        await page.evaluate(() => document.querySelector('[aria-label="2026-11-07"]')?.click());
+        const ended = await page.evaluate(() => ({
+            start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
+            end: document.querySelector('[aria-label="끝일 고치기"]')?.innerText.trim() || '',
+            calendar: Boolean(document.querySelector('[aria-label="날짜"]')),
+        }));
+        check(ended.end.includes('11월 7일') && ended.start.includes('11월 3일') && !ended.calendar, `끝일을 고쳐도 시작일이 바뀝니다. ${ended.start} ${ended.end}`);
+        await page.evaluate(() => document.querySelector('[aria-label="시작일 고치기"]')?.click());
+        await page.waitForSelector('[aria-label="2026-11-10"]');
+        await page.evaluate(() => document.querySelector('[aria-label="2026-11-10"]')?.click());
+        const flipped = await page.evaluate(() => ({
+            start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
+            end: document.querySelector('[aria-label="끝일 고치기"]')?.innerText.trim() || '',
+        }));
+        check(flipped.start.includes('11월 10일') && flipped.end.includes('11월 10일'), `시작일이 끝보다 늦으면 끝이 따라가지 않습니다. ${flipped.start} ${flipped.end}`);
         await page.evaluate(() => [...document.querySelectorAll('[aria-label="날짜 고치기"]')].find((el) => el.innerText.includes('10월'))?.click());
         await page.waitForSelector('[aria-label="날짜"]');
         const opened = await page.evaluate(() => !document.querySelector('[data-screen="message"] select'));

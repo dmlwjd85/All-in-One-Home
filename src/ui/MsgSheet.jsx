@@ -8,11 +8,8 @@ import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 
 const KIND_OPTIONS = [{ id: '할 일', label: '할 일' }, { id: '일정', label: '일정' }];
 
-function dateLabel(ymd, end) {
+function oneDate(ymd) {
     if (!ymd) return '날짜 없음';
-    if (end && end > ymd) {
-        return `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8))}~${Number(end.slice(5, 7))}/${Number(end.slice(8))}`;
-    }
     return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
 }
 
@@ -27,6 +24,20 @@ function MsgCard({ item, clock, periods, onPatch }) {
     function toggle(name) {
         setOpen((value) => (value === name ? '' : name));
     }
+    const ranged = Boolean(item.end && item.date && item.end >= item.date);
+    function pickBound(which, ymd) {
+        let date = item.date;
+        let end = item.end;
+        if (which === 'start') {
+            date = ymd;
+            if (end && date > end) end = date;
+        } else {
+            end = ymd;
+            if (date && end < date) date = end;
+        }
+        onPatch(item.id, { date, end });
+        setOpen('');
+    }
     return (
         <article className={item.low ? 'msg-card low-card' : 'msg-card'}>
             <ChoiceGrid label="할 일 또는 일정" value={item.kind} options={KIND_OPTIONS} onPick={(id) => onPatch(item.id, { kind: id, eventKind: id === '일정' ? (item.eventKind || '학급') : '' })} />
@@ -39,14 +50,31 @@ function MsgCard({ item, clock, periods, onPatch }) {
             {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 빼 두었어요.</p>}
             {item.sensitive && <p style={{ fontWeight: 800 }}>이 내용은 이 기기에만 남겨 둘게요.</p>}
             <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => onPatch(item.id, { title: event.target.value })} />
-            <div className="msg-summary">
-                <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{dateLabel(item.date, item.end)}</Btn>
+            <div className={ranged ? 'msg-summary range' : 'msg-summary'}>
+                {ranged ? (
+                    <>
+                        <Btn className={open === 'start' ? 'chip on' : 'chip'} aria-label="시작일 고치기" onClick={() => toggle('start')}>{oneDate(item.date)}</Btn>
+                        <Btn className={open === 'end' ? 'chip on' : 'chip'} aria-label="끝일 고치기" onClick={() => toggle('end')}>{oneDate(item.end)}</Btn>
+                    </>
+                ) : (
+                    <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{oneDate(item.date)}</Btn>
+                )}
                 <Btn className={open === 'period' ? 'chip on' : 'chip'} aria-label="교시 고치기" onClick={() => toggle('period')}>{periodLabel(item)}</Btn>
                 <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{item.time || '시각 없음'}</Btn>
             </div>
             {open === 'date' && (
                 <div style={{ marginTop: 8 }}>
                     <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => { onPatch(item.id, { date: ymd }); setOpen(''); }} />
+                </div>
+            )}
+            {open === 'start' && (
+                <div style={{ marginTop: 8 }}>
+                    <DateGrid value={item.date} today={clock.ymd} onPick={(ymd) => pickBound('start', ymd)} />
+                </div>
+            )}
+            {open === 'end' && (
+                <div style={{ marginTop: 8 }}>
+                    <DateGrid value={item.end || item.date} today={clock.ymd} onPick={(ymd) => pickBound('end', ymd)} />
                 </div>
             )}
             {open === 'period' && (
@@ -113,7 +141,7 @@ export function MsgSheet({ onClose }) {
             const next = { ...item, ...partial };
             if (!keepLow) {
                 next.low = false;
-                if (partial.date) next.warning = '';
+                if (partial.date || partial.end) next.warning = '';
             }
             return next;
         }));

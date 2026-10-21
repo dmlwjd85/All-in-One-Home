@@ -87,6 +87,19 @@ must('쉼표 교시', '김교사 출장으로 5,6교시 보결 부탁드립니�
 must('잡담', '선생님들 항상 수고 많으십니다. 날씨가 추우니 건강 조심하세요.', qaNow, (items) => items.length === 1 && items[0].include === false);
 must('방과후 명사', '11월 3일까지 방과후 신청서 회수 후 제출', qaNow, (items) => items.length === 1 && items[0].time === '' && items[0].title.includes('방과후'));
 must('교무회의', '내일 오후 2시 교무회의', qaNow, (items) => items.length === 1 && items[0].eventKind === '학교' && items[0].date === '2026-10-23' && items[0].time === '14:00');
+must('점심 잡담', '점심 맛있게 드세요', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].time === '12:10' && items[0].date === '');
+must('점심 커피', '점심시간에 커피 한잔 하실래요', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].title === '커피 한잔' && !items[0].title.startsWith('에'));
+must('시각만', '방과후에 잠깐 쉬어요', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].time === '16:00');
+must('수학여행 장소', '수학여행\n11/4~11/6\n장소: 경주 일대', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-04' && items[0].end === '2026-11-06' && items[0].title === '수학여행' && items[0].memo.includes('경주 일대') && !items.some((item) => item.date === '2026-11-03'));
+must('박 수', '수학여행 11/4~11/6\n2박 3일\n장소: 경주 일대', qaNow, (items) => items.length === 1 && items[0].date === '2026-11-04' && items[0].end === '2026-11-06' && items[0].memo.includes('경주 일대') && items[0].memo.includes('2박 3일') && !items.some((item) => item.date === '2026-11-03' || item.title.includes('2박')));
+must('단원평가', '② 10/28 영어 단원평가', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-28' && items[0].title === '영어 단원평가');
+must('시험', '10/28 국어 시험', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].title === '국어 시험');
+must('수행 입력', '수행평가 내일까지 입력', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-23' && items[0].title.includes('수행평가'));
+must('일시 제목', '일시: 11/4(수)~11/6(금) 수학여행', qaNow, (items) => items.length === 1 && items[0].title === '수학여행' && items[0].date === '2026-11-04' && items[0].end === '2026-11-06');
+must('일정 제목', '일정: 11/4 수학여행', qaNow, (items) => items.length === 1 && items[0].title === '수학여행' && items[0].date === '2026-11-04');
+must('조사 제목', '다음 주 금요일에 학부모 상담', qaNow, (items) => items.length === 1 && items[0].title === '학부모 상담' && items[0].date === '2026-10-30' && !items[0].title.startsWith('에'));
+must('인사 제목', '수고 많으십니다. 커피는 교무실에 있어요', qaNow, (items) => items.length === 1 && items[0].include === false && !items[0].title.includes('많으') && !items[0].title.startsWith('수고'));
+must('수학 글자', '11/6 수학여행', qaNow, (items) => items.length === 1 && items[0].title === '수학여행' && items[0].date === '2026-11-06');
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -100,6 +113,19 @@ const chatter = parseSchoolMessages('선생님들 항상 수고 많으십니다.
 const chatterSave = await saveParsed(chatter.items, MSG_NOW);
 if (chatterSave.ok || snapshot().todos.some((row) => String(row.title).includes('수고'))) {
     console.error('잡담이 등록되었습니다.');
+    process.exit(1);
+}
+const lunch = parseSchoolMessages('점심시간에 커피 한잔 하실래요', { now: qaNow });
+const lunchSave = await saveParsed(lunch.items, qaNow);
+if (lunchSave.ok || snapshot().events.some((row) => row.time === '12:10' && String(row.title).includes('커피'))) {
+    console.error('날짜 없는 점심 잡담이 일정으로 등록되었습니다.');
+    process.exit(1);
+}
+const trip = parseSchoolMessages('수학여행 11/4~11/6\n2박 3일\n장소: 경주 일대', { now: qaNow });
+const tripSave = await saveParsed(trip.items, qaNow);
+const tripRow = snapshot().events.find((row) => row.title === '수학여행');
+if (!tripSave.ok || !tripRow || tripRow.date !== '2026-11-04' || tripRow.end !== '2026-11-06' || !String(tripRow.memo).includes('경주 일대') || snapshot().todos.some((row) => row.date === '2026-11-03')) {
+    console.error('수학여행 장소가 11월 3일 할 일로 남았습니다.');
     process.exit(1);
 }
 

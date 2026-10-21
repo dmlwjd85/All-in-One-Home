@@ -1,5 +1,5 @@
 // 학교 문자를 기기 안에서 일정·할 일로 나눕니다. 바깥 AI는 쓰지 않습니다.
-import { findDates } from './parse.js';
+import { findDates, WEEK_TAIL } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { DEFAULT_PERIODS } from './period.js';
 
@@ -113,8 +113,20 @@ function hasTodo(text) {
     return TODO_RE.test(text);
 }
 
+function hasTrip(text) {
+    return /수학여행|소풍|수련회|운동회/.test(text);
+}
+
+function hasScheduledExam(text) {
+    if (!/(?:단원|수행|지필|듣기|실험)\s*평가|중간\s*고사|기말\s*고사|고사|시험|(?<![가-힣])평가/.test(text)) return false;
+    if (/(제출|입력|작성|업로드|회신|채점)/.test(text)) return false;
+    return findDates(text).length > 0 || /\d\s*교시/.test(text);
+}
+
 function hasEvent(text) {
     if (EVENT_WORD.test(text)) return true;
+    if (hasTrip(text) && findDates(text).length) return true;
+    if (hasScheduledExam(text)) return true;
     if (/\d\s*[~～\-]\s*\d\s*교시/.test(text)) return true;
     if (/\d\s*교시/.test(text) && !/까지/.test(text)) return true;
     return false;
@@ -134,13 +146,13 @@ export function tidyTitle(text) {
     let t = String(text || '');
     t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
     t = t.replace(/[가-힣A-Za-z0-9]{1,12}(?:교실|실|관|장|터|홀|운동장)\s*에서/g, ' ');
-    const weekTail = '(?:\\s*[.(（]?\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]?)?';
-    t = t.replace(new RegExp(`\\d{4}\\s*[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}${weekTail}`, 'g'), ' ');
-    t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${weekTail}`, 'g'), ' ');
-    t = t.replace(new RegExp(`(?<!\\d)(\\d{1,2})\\s*[./]\\s*(\\d{1,2})\\s*\\.?${weekTail}`, 'g'), ' ');
-    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일/g, ' ');
+    t = t.replace(new RegExp(`\\d{4}\\s*[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`(?<!\\d)(\\d{1,2})\\s*[./]\\s*(\\d{1,2})\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일에?/g, ' ');
+    t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/글피|모레|내일|오늘/g, ' ');
-    t = t.replace(new RegExp(`(?<![\\d./월])\\d{1,2}\\s*일${weekTail}`, 'g'), ' ');
+    t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?(?:\s*(?:에|까지))?/g, ' ');
@@ -154,15 +166,83 @@ export function tidyTitle(text) {
     t = t.replace(/(?:해\s*)?주(?:시기|세요|시길|십시오)/g, ' ');
     t = t.replace(/부탁드립니다|확인\s*바랍니다|바랍니다|요망|드립니다|해주세요/g, ' ');
     t = t.replace(/(?:이|가)?\s*있습니다/g, ' ');
-    t = t.replace(/없습니다|있어요|예정입니다|합니다|했어요|하세요|입니다|십니다/g, ' ');
+    t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:수고|많으)(?=\s|$)/g, ' ');
+    t = t.replace(/감사(?:합니다|드립니다|해요)/g, ' ');
+    t = t.replace(/없습니다|있어요|예정입니다|합니다|했어요|하세요|입니다/g, ' ');
     t = t.replace(/까지/g, ' ');
     t = t.replace(/에서/g, ' ');
     t = t.replace(/\[(?:안내|공지|알림|필독|공지사항)\]/g, ' ');
     t = t.replace(/[()（）[\]{}·,.!~:：]/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
-    t = t.replace(/(?<=[가-힣])(?:을|를|은|는)$/g, '').trim();
-    if (t.length > 40) t = t.slice(0, 40).trim();
+    const polite = t.replace(/하실래요|드세요|먹을까요|갈까요/g, ' ').replace(/\s+/g, ' ').trim();
+    if (polite.replace(/\s+/g, '').length >= 4) t = polite;
+    let guard = 0;
+    while (guard < 4 && /^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/.test(t)) {
+        t = t.replace(/^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|에|은|는|이|가|을|를|와|과|의|로|으로)\s+/, '');
+        guard += 1;
+    }
+    t = t.replace(/(?:^|\s)(?:일시|기간|일정)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+    t = t.replace(/(?<=[가-힣])(?:을|를|은|는|에)$/g, '').trim();
+    if (t.length > 40) {
+        const cut = t.slice(0, 40);
+        const space = cut.lastIndexOf(' ');
+        t = (space >= 8 ? cut.slice(0, space) : cut).trim();
+    }
     return t;
+}
+
+const TITLE_STOP = /^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|안내|선생님들?|항상|수고|많으|확인|바랍니다)$/;
+
+function clippedWord(title, source) {
+    const parts = String(title || '').split(/\s+/).filter((part) => part.length >= 2);
+    const words = String(source || '').match(/[가-힣]{2,}/g) || [];
+    return parts.some((part) => words.some((word) => word.length > part.length && word.endsWith(part)));
+}
+
+function salvageTitle(text) {
+    let t = String(text || '');
+    t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
+    t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
+    t = t.replace(new RegExp(`\\d{4}\\s*[.\\-/]\\s*\\d{1,2}\\s*[.\\-/]\\s*\\d{1,2}${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(new RegExp(`(?<!\\d)\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일에?/g, ' ');
+    t = t.replace(/글피|모레|내일|오늘/g, ' ');
+    t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
+    t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
+    t = t.replace(/(?<!\d)\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
+    t = t.replace(/점심\s*시간|\d\s*교시/g, ' ');
+    t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다|으)/g, ' ');
+    const words = t.match(/[가-힣A-Za-z0-9]{2,}/g) || [];
+    return words.filter((word) => !TITLE_STOP.test(word) && !WEAK_TITLE.test(word)).slice(0, 6).join(' ');
+}
+
+function pickTitle(body, source) {
+    let title = tidyTitle(body);
+    if (weakTitle(title) || clippedWord(title, source)) {
+        const again = salvageTitle(source);
+        if (!weakTitle(again) && !clippedWord(again, source)) title = again;
+    }
+    if (weakTitle(title) || clippedWord(title, source)) return '';
+    return title;
+}
+
+const WEAK_TITLE = /^(?:일시|기간|일정|시간|날짜|장소|위치|대상|내용|참고|안내|수|월|화|목|금|토|일|에|은|는|이|가|을|를|와|과|의|로|으로|많으|\d*박\d*일)$/;
+
+function weakTitle(title) {
+    const text = String(title || '').replace(/\s+/g, '');
+    if (text.length < 2) return true;
+    return WEAK_TITLE.test(text);
+}
+
+function placeMemo(text) {
+    const trimmed = String(text || '').trim().replace(/^\d+\s*박\s*\d+\s*일\s*/, '');
+    const labeled = trimmed.match(/^(?:장소|위치|집합(?:\s*장소)?|도착지|행선지)\s*[:：]?\s*(.+)$/);
+    if (labeled && !findDates(labeled[1]).length) return labeled[1].trim();
+    if (/일대$|일원$|지역$/.test(trimmed) && trimmed.length <= 24 && !findDates(trimmed).length && !hasTodo(trimmed)) return trimmed.trim();
+    return '';
 }
 
 function takePlace(text) {
@@ -261,12 +341,55 @@ function isDeadlineSubmission(text) {
 function actionable(text) {
     if (hasTodo(text) || hasEvent(text)) return true;
     const when = detectWhen(text);
-    if (when.hm || when.period) return true;
+    if (when.period) return true;
     if (findDates(text).length) return true;
     return false;
 }
 
-function buildItem(source, kind, now, periods, seq) {
+function sideNote(chunk) {
+    const text = String(chunk || '').trim();
+    if (!text || hasTodo(text) || hasScheduledExam(text)) return '';
+    if (hasTrip(text) && findDates(text).length) return '';
+    if (/^\d+\s*박\s*\d+\s*일$/.test(text)) return text.replace(/\s+/g, ' ');
+    const duration = text.match(/^(\d+\s*박\s*\d+\s*일)\s+(.+)$/);
+    if (duration) {
+        const place = placeMemo(duration[2]);
+        if (place) return `${duration[1].replace(/\s+/g, ' ')} · ${place}`;
+    }
+    const place = placeMemo(text);
+    if (place && !findDates(text).length) return place;
+    return '';
+}
+
+function dateCarrier(chunk) {
+    if (!findDates(chunk).length) return false;
+    const stripped = String(chunk).replace(/^(?:일시|기간|일정|시간|날짜)\s*[:：]\s*/, '');
+    return weakTitle(tidyTitle(stripped));
+}
+
+function foldChunks(chunks) {
+    const blocks = [];
+    chunks.forEach((chunk) => {
+        const note = sideNote(chunk);
+        if (note && blocks.length) {
+            blocks[blocks.length - 1].notes.push(note);
+            return;
+        }
+        if (dateCarrier(chunk) && blocks.length && !findDates(blocks[blocks.length - 1].text).length && !hasTodo(blocks[blocks.length - 1].text)) {
+            blocks[blocks.length - 1].text = `${blocks[blocks.length - 1].text}\n${chunk}`;
+            return;
+        }
+        const heading = tidyTitle(chunk);
+        if (blocks.length && dateCarrier(blocks[blocks.length - 1].text) && heading && !weakTitle(heading) && !findDates(chunk).length && !hasTodo(chunk)) {
+            blocks[blocks.length - 1].text = `${chunk}\n${blocks[blocks.length - 1].text}`;
+            return;
+        }
+        blocks.push({ text: chunk, notes: [] });
+    });
+    return blocks;
+}
+
+function buildItem(source, kind, now, periods, seq, extraNotes = []) {
     const placed = takePlace(source);
     const span = dateSpan(placed.text, now);
     let date = span.date;
@@ -276,11 +399,17 @@ function buildItem(source, kind, now, periods, seq) {
     const body = kind === '일정' || (hasEvent(source) && hasTodo(source) && isDeadlineSubmission(source))
         ? (kind === '일정' ? stripTodoClause(placed.text) : placed.text)
         : (kind === '할 일' && hasEvent(source) ? stripEventClause(placed.text) : placed.text);
-    const title = tidyTitle(body);
+    const title = pickTitle(body, source);
     const memoBits = [];
     if (placed.memo) memoBits.push(placed.memo);
+    const duration = String(source).match(/\d+\s*박\s*\d+\s*일/);
+    if (duration) memoBits.push(duration[0].replace(/\s+/g, ' '));
+    extraNotes.forEach((note) => {
+        const clean = String(note || '').trim();
+        if (clean && !memoBits.includes(clean)) memoBits.push(clean);
+    });
     if (when.period) memoBits.push(when.periodEnd ? `${when.period}~${when.periodEnd}교시` : `${when.period}교시`);
-    const blob = `${title} ${placed.memo} ${source}`;
+    const blob = `${title} ${placed.memo} ${extraNotes.join(' ')} ${source}`;
     const warning = [date?.warning, end?.warning].filter(Boolean).join(' ');
     const chatter = !actionable(source);
     const assumed = when.assumedPm ? '오전·오후가 없어 오후로 봤어요.' : '';
@@ -333,23 +462,19 @@ function stripEventClause(text) {
         .replace(/\d\s*교시/g, ' ');
 }
 
-function classifySegment(segment, now, periods) {
+function classifySegment(segment, now, periods, notes = []) {
     const todo = hasTodo(segment);
     const event = hasEvent(segment);
     const when = detectWhen(segment, periods);
     const span = dateSpan(segment, now);
-    if (span.range && !isDeadlineSubmission(segment)) return [buildItem(segment, '일정', now, periods, 0)];
-    if (isDeadlineSubmission(segment)) return [buildItem(segment, '할 일', now, periods, 0)];
-    if (todo && event) {
-        return [
-            buildItem(segment, '일정', now, periods, 0),
-            buildItem(segment, '할 일', now, periods, 1),
-        ];
-    }
-    if (event || (when.hm && !todo)) return [buildItem(segment, '일정', now, periods, 0)];
-    if (todo) return [buildItem(segment, '할 일', now, periods, 0)];
-    if (!tidyTitle(segment)) return [];
-    return [buildItem(segment, '할 일', now, periods, 0)];
+    const make = (kind, seq) => buildItem(segment, kind, now, periods, seq, notes);
+    if (span.range && !isDeadlineSubmission(segment)) return [make('일정', 0)];
+    if (isDeadlineSubmission(segment)) return [make('할 일', 0)];
+    if (todo && event) return [make('일정', 0), make('할 일', 1)];
+    if (event || (when.hm && !todo)) return [make('일정', 0)];
+    if (todo) return [make('할 일', 0)];
+    if (!pickTitle(segment, segment)) return [];
+    return [make('할 일', 0)];
 }
 
 /** @returns {{ items: object[] }} */
@@ -358,8 +483,8 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
     if (!raw) return { items: [] };
     const items = [];
     const seen = new Map();
-    segmentsOf(raw, now).forEach((segment) => {
-        classifySegment(segment, now, periods).forEach((item) => {
+    foldChunks(segmentsOf(raw, now)).forEach((block) => {
+        classifySegment(block.text, now, periods, block.notes).forEach((item) => {
             if (!item.title) return;
             const n = (seen.get(item.id) || 0) + 1;
             seen.set(item.id, n);

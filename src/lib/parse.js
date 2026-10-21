@@ -7,6 +7,10 @@ function pad(n) {
 
 const WEEKDAY = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
 
+/** 날짜 뒤의 요일. 괄호나 '요일'이 있을 때만 붙입니다. '수학'의 '수'는 요일이 아닙니다. */
+export const WEEK_TAIL = '(?:\\s*(?:[.(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]|[월화수목금토일]요일))?';
+const WEEK_TAIL_CAP = '(?:\\s*(?:[.(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）]|([월화수목금토일])요일))?';
+
 function eachMatch(re, text, fn) {
     const copy = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
     let match = copy.exec(text);
@@ -84,28 +88,26 @@ export function findDates(text, now = new Date()) {
     const raw = String(text || '');
     const today = seoulYmd(now);
     const spans = [];
-    const weekTail = '(?:\\s*[.(（]?\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）]?)?';
-
-    eachMatch(new RegExp(`(\\d{4})\\s*[.\\-/]\\s*(\\d{1,2})\\s*[.\\-/]\\s*(\\d{1,2})${weekTail}`, 'g'), raw, (match) => {
-        pushSpan(spans, match, ymdOf(Number(match[1]), Number(match[2]), Number(match[3])), { explicit: true, weekday: match[4] || '' });
+    eachMatch(new RegExp(`(\\d{4})\\s*[.\\-/]\\s*(\\d{1,2})\\s*[.\\-/]\\s*(\\d{1,2})${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
+        pushSpan(spans, match, ymdOf(Number(match[1]), Number(match[2]), Number(match[3])), { explicit: true, weekday: match[4] || match[5] || '' });
     });
-    eachMatch(new RegExp(`(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일${weekTail}`, 'g'), raw, (match) => {
+    eachMatch(new RegExp(`(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const month = Number(match[1]);
         const day = Number(match[2]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;
-        pushSpan(spans, match, isValidYmd(fixSchoolYear(month, day, today)) ? fixSchoolYear(month, day, today) : '', { explicit: true, weekday: match[3] || '' });
+        pushSpan(spans, match, isValidYmd(fixSchoolYear(month, day, today)) ? fixSchoolYear(month, day, today) : '', { explicit: true, weekday: match[3] || match[4] || '' });
     });
-    eachMatch(/(?<!\d)(\d{1,2})\s*([./])\s*(\d{1,2})\s*\.?(?!\s*월)(?:\s*[.(（]\s*([월화수목금토일])\s*[)）])?(?!\d)/g, raw, (match) => {
+    eachMatch(new RegExp(`(?<!\\d)(\\d{1,2})\\s*([./])\\s*(\\d{1,2})\\s*\\.?(?!\\s*월)${WEEK_TAIL_CAP}(?!\\d)`, 'g'), raw, (match) => {
         const month = Number(match[1]);
         const day = Number(match[3]);
         if (month < 1 || month > 12 || day < 1 || day > 31) return;
         const ymd = fixSchoolYear(month, day, today);
-        pushSpan(spans, match, isValidYmd(ymd) ? ymd : '', { explicit: true, weekday: match[4] || '' });
+        pushSpan(spans, match, isValidYmd(ymd) ? ymd : '', { explicit: true, weekday: match[4] || match[5] || '' });
     });
-    eachMatch(new RegExp(`(?<![\\d./월])(\\d{1,2})\\s*일${weekTail}`, 'g'), raw, (match) => {
+    eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const day = Number(match[1]);
         if (day < 1 || day > 31) return;
-        pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || '' });
+        pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '' });
     });
     eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일/g, raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
