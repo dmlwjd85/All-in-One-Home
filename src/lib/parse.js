@@ -6,6 +6,9 @@ function pad(n) {
 }
 
 const WEEKDAY = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
+/** 다다음주가 다음주보다 앞에 있어야 '다다음주'를 한 주로 자르지 않습니다. */
+export const WEEK_MARK = '다다음\\s*주|다다음주|이번\\s*주|다음\\s*주|이번주|다음주|금주|차주';
+const WEEKDAY_CLOCK = '(?:(?:오전|오후)\\s*)?(?:\\d{1,2}\\s*시(?!간)(?:\\s*\\d{1,2}\\s*분|\\s*반)?)?';
 
 /** 날짜 뒤의 요일. 괄호나 '요일'이 있을 때만 붙입니다. '수학'의 '수'는 요일이 아닙니다. */
 export const WEEK_TAIL = '(?:\\s*\\.?\\s*(?:[.(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]|[월화수목금토일]요일))?';
@@ -105,7 +108,8 @@ function weekYmd(which, weekdayName, today) {
     if (target == null) return '';
     const offset = target === 0 ? 6 : target - 1;
     let ymd = addDaysYmd(startOfWeekMon(today), offset);
-    if (/다음|차주/.test(which)) ymd = addDaysYmd(ymd, 7);
+    if (/다다음/.test(which)) ymd = addDaysYmd(ymd, 14);
+    else if (/다음|차주/.test(which)) ymd = addDaysYmd(ymd, 7);
     return ymd;
 }
 
@@ -254,7 +258,7 @@ export function findDates(text, now = new Date()) {
         pushRaw(spans, match.index, match[1].length, range.start, '');
         pushRaw(spans, endAt, match.index + match[0].length - endAt, range.end, match[3] || match[4] || '');
     });
-    eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일에서\s*([월화수목금토일])요일/g, raw, (match) => {
+    eachMatch(new RegExp(`(${WEEK_MARK})\\s*([월화수목금토일])요일에서\\s*([월화수목금토일])요일`, 'g'), raw, (match) => {
         const second = `${match[3]}요일`;
         const at = match.index + match[0].lastIndexOf(second);
         pushRaw(spans, at, second.length, weekYmd(match[1], match[3], today), match[3]);
@@ -264,13 +268,16 @@ export function findDates(text, now = new Date()) {
         if (day < 1 || day > 31) return;
         pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '', bare: true });
     });
-    eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일/g, raw, (match) => {
+    eachMatch(new RegExp(`(${WEEK_MARK})\\s*([월화수목금토일])요일`, 'g'), raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
     });
-    eachMatch(/(?<![가-힣])([월화수목금토일])요일(?=\s*(?:까지|마감))/g, raw, (match) => {
+    eachMatch(new RegExp(`(?<![가-힣])([월화수목금토일])요일(?=\\s*${WEEKDAY_CLOCK}\\s*(?:까지|마감))`, 'g'), raw, (match) => {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
-    eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*안(?:으로|에)?/g, raw, (match) => {
+    eachMatch(new RegExp(`(?<![가-힣\\d./])[(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）](?=\\s*${WEEKDAY_CLOCK}\\s*까지)`, 'g'), raw, (match) => {
+        pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
+    });
+    eachMatch(new RegExp(`(${WEEK_MARK})\\s*안(?:으로|에)?`, 'g'), raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], '금', today), { explicit: true, weekday: '금' });
     });
     eachMatch(/글피|모레|내일|오늘/g, raw, (match) => {

@@ -9,6 +9,7 @@ import { MSG_YEAR } from '../src/lib/msgYear.js';
 import { MSG_MOVE } from '../src/lib/msgMove.js';
 import { MSG_SHIFT } from '../src/lib/msgShift.js';
 import { MSG_DOUBT } from '../src/lib/msgDoubt.js';
+import { endTimeUploadBlocked, noteEndTimeRejected, prepareEventWrite, resetEndTimeUpload } from '../src/lib/cloud.js';
 import { eventBodyWithoutEndTime, toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
@@ -181,31 +182,49 @@ must('시각 부터까지 일정', '10/30(금) 오전 10시부터 오후 1시까
 must('제출 마감', '10/30(금)까지 독서록 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-10-30' && items[0].title.includes('독서록') && items[0].title.includes('제출') && !items[0].endTime);
 must('금요일 마감', '금요일까지 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-10-23' && items[0].title.includes('제출') && !items[0].endTime);
 const fridayClock = new Date('2026-10-23T09:00:00+09:00');
+const noDa = (title) => !/^다(?:\s|$)/.test(title);
+const noTimeWords = (title) => !/오전|오후|\d\s*시|요일/.test(title);
+const noO = (title) => !title.includes('오는') && !/^오(?:\s|$)/.test(title);
 const weekdayDeadlines = [
-    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '학급 운영비', qaNow],
-    ['금요일까지 제출', '2026-10-23', '제출', qaNow],
-    ['월요일까지 가정통신문 회신해 주세요.', '2026-10-26', '회신', qaNow],
-    ['목요일까지 영수증 제출', '2026-10-22', '영수증', qaNow],
-    ['일요일까지 설문 회신', '2026-10-25', '설문', qaNow],
-    ['토요일까지 계획 작성해 주세요', '2026-10-24', '작성', qaNow],
-    ['수요일까지 자료 업로드', '2026-10-28', '업로드', qaNow],
-    ['금요일 마감 학급 운영비 영수증 제출', '2026-10-23', '영수증', qaNow],
-    ['목요일 마감으로 학급비 제출해 주세요', '2026-10-22', '학급비', qaNow],
-    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '영수증', fridayClock],
+    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '', '학급 운영비', qaNow],
+    ['금요일까지 제출', '2026-10-23', '', '제출', qaNow],
+    ['월요일까지 가정통신문 회신해 주세요.', '2026-10-26', '', '회신', qaNow],
+    ['목요일까지 영수증 제출', '2026-10-22', '', '영수증', qaNow],
+    ['일요일까지 설문 회신', '2026-10-25', '', '설문', qaNow],
+    ['토요일까지 계획 작성해 주세요', '2026-10-24', '', '작성', qaNow],
+    ['수요일까지 자료 업로드', '2026-10-28', '', '업로드', qaNow],
+    ['금요일 마감 학급 운영비 영수증 제출', '2026-10-23', '', '영수증', qaNow],
+    ['목요일 마감으로 학급비 제출해 주세요', '2026-10-22', '', '학급비', qaNow],
+    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '', '영수증', fridayClock],
+    ['다다음주 금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-11-06', '', '학급 운영비', qaNow, noDa],
+    ['다다음 주 금요일까지 제출', '2026-11-06', '', '제출', qaNow, noDa],
+    ['목요일 오후 3시까지 학급 운영비 영수증 제출해 주세요.', '2026-10-22', '15:00', '영수증', qaNow, noTimeWords],
+    ['금요일 오후 5시까지 보고서 제출', '2026-10-23', '17:00', '보고서', qaNow, noTimeWords],
+    ['금요일 오후 5시까지', '2026-10-23', '17:00', '', qaNow, noTimeWords],
+    ['월요일 오전까지 설문 제출', '2026-10-26', '12:00', '설문', qaNow, noTimeWords],
+    ['월요일 오전까지', '2026-10-26', '12:00', '', qaNow, noTimeWords],
+    ['(금)까지 영수증 제출', '2026-10-23', '', '영수증', qaNow, noTimeWords],
+    ['(금)까지', '2026-10-23', '', '', qaNow, noTimeWords],
+    ['오는 수요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-28', '', '학급 운영비', qaNow, noO],
+    ['오는 수요일까지 제출', '2026-10-28', '', '제출', qaNow, noO],
 ];
 let deadlineOk = 0;
-weekdayDeadlines.forEach(([text, date, word, now]) => {
+weekdayDeadlines.forEach(([text, date, time, word, now, clean]) => {
     const items = parseSchoolMessages(text, { now }).items;
+    const title = items[0]?.title || '';
     const hit = items.length === 1
         && items[0].kind === '할 일'
         && items[0].include !== false
+        && !items[0].warning
         && items[0].date === date
-        && items[0].title.includes(word)
+        && (time ? items[0].time === time : !items[0].time)
+        && (word ? title.includes(word) : true)
+        && (!clean || clean(title))
         && !items[0].endTime;
     if (hit) deadlineOk += 1;
     else {
         console.error('요일 마감', text, JSON.stringify(items.map((item) => ({
-            kind: item.kind, date: item.date, title: item.title, include: item.include, low: item.low, warning: item.warning,
+            kind: item.kind, date: item.date, time: item.time, title: item.title, include: item.include, low: item.low, warning: item.warning,
         }))));
     }
 });
@@ -254,6 +273,20 @@ if (!fairSave.ok || fair.items[0]?.kind !== '일정' || fair.items[0]?.include =
 const plain = snapshot().events.find((row) => row.title === '수학여행');
 if (!plain || plain.endTime) {
     console.error('끝 시각이 없는 기존 일정에 endTime이 생겼습니다.');
+    process.exit(1);
+}
+resetEndTimeUpload();
+const spanCloud = toCloudRow('events', {
+    id: 'span1', date: '2026-10-30', title: '학부모 진로 특강', time: '14:00', endTime: '16:00', kind: '학급', memo: '강당', source: 'msg',
+});
+const firstPlan = prepareEventWrite(spanCloud.body);
+noteEndTimeRejected();
+const memoPlan = prepareEventWrite(spanCloud.body);
+const againPlan = prepareEventWrite(spanCloud.body);
+resetEndTimeUpload();
+const restarted = prepareEventWrite(spanCloud.body);
+if (!firstPlan.retryWithoutEndTime || firstPlan.body.endTime !== '16:00' || endTimeUploadBlocked() || memoPlan.retryWithoutEndTime || memoPlan.body.endTime || !String(memoPlan.body.memo).includes('강당') || !String(memoPlan.body.memo).includes('16:00까지') || JSON.stringify(againPlan.body) !== JSON.stringify(memoPlan.body) || restarted.body.endTime !== '16:00' || !restarted.retryWithoutEndTime || endTimeUploadBlocked()) {
+    console.error('끝 시각 거절을 기억하지 못했거나, 다시 시작해도 재시도하지 않습니다.', firstPlan, memoPlan, restarted);
     process.exit(1);
 }
 

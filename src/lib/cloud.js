@@ -24,6 +24,30 @@ function denied(error) {
     return String(error?.code || '').includes('permission-denied');
 }
 
+/** 이번 실행에서 끝 시각 칸이 거절됐는지. 앱을 다시 열면 한 번 더 시도합니다. */
+let endTimeBlocked = false;
+
+export function resetEndTimeUpload() {
+    endTimeBlocked = false;
+}
+
+export function endTimeUploadBlocked() {
+    return endTimeBlocked;
+}
+
+export function noteEndTimeRejected() {
+    endTimeBlocked = true;
+}
+
+/** 거절을 기억한 뒤에는 끝 시각을 빼고 메모로만 올립니다. */
+export function prepareEventWrite(body) {
+    if (endTimeBlocked && body?.endTime) {
+        const memo = eventBodyWithoutEndTime(body);
+        return { body: memo || body, retryWithoutEndTime: false };
+    }
+    return { body, retryWithoutEndTime: Boolean(body?.endTime) };
+}
+
 function fingerprint(body, clear = []) {
     return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
@@ -55,22 +79,24 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const nextHashes = { ...hashes };
     let pending = 0;
     const write = async (name, id, shaped, migratedAt) => {
-        const body = await stamp(firestore, shaped.body, shaped.stamps, migratedAt);
+        const prepared = name === 'events' ? prepareEventWrite(shaped.body) : { body: shaped.body, retryWithoutEndTime: false };
+        const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt);
         const clear = shaped.clear || [];
         clear.forEach((key) => { body[key] = deleteField(); });
         const key = `${name}/${id}`;
-        const mark = fingerprint(shaped.body, clear);
+        const mark = fingerprint(prepared.body, clear);
         if (nextHashes[key] === mark) return;
         try {
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
             nextHashes[key] = mark;
         } catch (error) {
-            const fallback = name === 'events' && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null;
+            const fallback = prepared.retryWithoutEndTime && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null;
             if (fallback) {
+                noteEndTimeRejected();
                 try {
                     const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt);
                     await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });
-                    nextHashes[key] = `fallback:${fingerprint(fallback, clear)}`;
+                    nextHashes[key] = fingerprint(fallback, clear);
                     return;
                 } catch (again) {
                     if (retryable(again)) pending += 1;

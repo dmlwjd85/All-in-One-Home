@@ -1,6 +1,6 @@
 // 학교 문자를 기기 안에서 일정·할 일로 나눕니다. 바깥 AI는 쓰지 않습니다.
 import { isValidYmd, seoulYmd } from './date.js';
-import { findDates, WEEK_TAIL } from './parse.js';
+import { findDates, WEEK_MARK, WEEK_TAIL } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { DEFAULT_PERIODS } from './period.js';
 
@@ -98,6 +98,8 @@ function pickClock(text) {
     }
     const colon = text.match(/(?<!\d)(\d{1,2})\s*:\s*(\d{2})(?!\d)/);
     if (colon) return { hm: padTime(Number(colon[1]), Number(colon[2])), assumedPm: false };
+    const dayPart = text.match(/(오전|오후)\s*까지/);
+    if (dayPart) return { hm: dayPart[1] === '오전' ? '12:00' : '18:00', assumedPm: false };
     const hourOnly = text.match(/(?<!\d)(\d{1,2})\s*시(?!간)(?:\s*(\d{1,2})\s*분|\s*반)?/);
     if (!hourOnly) return null;
     let hour = Number(hourOnly[1]);
@@ -143,7 +145,11 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
 
 function hasDeadline(text) {
     const src = String(text || '').replace(CLOCK_RANGE_RE, ' ');
-    if (/(?:\d|일|요일|교시|시|분|오늘|내일|모레|글피|이번\s*주|다음\s*주|이번주|다음주|금주|차주|주말)(?:\s*[.(（]\s*[월화수목금토일]\s*[)）])?\s*까지/.test(src)) return true;
+    const until = '(?:(?:오전|오후)\\s*)?(?:\\d{1,2}\\s*시(?!간)(?:\\s*\\d{1,2}\\s*분|\\s*반)?)?';
+    if (new RegExp(`(?:\\d|일|요일|교시|시|분|오늘|내일|모레|글피|${WEEK_MARK}|주말)(?:\\s*[.(（]\\s*[월화수목금토일]\\s*[)）])?\\s*까지`).test(src)) return true;
+    if (new RegExp(`[월화수목금토일]요일\\s*${until}\\s*(?:까지|마감)`).test(src)) return true;
+    if (new RegExp(`[(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]\\s*${until}\\s*까지`).test(src)) return true;
+    if (/(?:오전|오후)\s*까지/.test(src)) return true;
     if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말|중(?:으로)?)\s*까지/.test(src)) return true;
     if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중(?:으로)?/.test(src)) return true;
     return /(?<![가-힣\d])월(?:초|말)\s*까지/.test(src);
@@ -259,7 +265,7 @@ function stripBoilerplate(text) {
     t = t.replace(/안녕\s*선생님들?/g, ' ');
     t = t.replace(/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중(?:으로)?/g, ' ');
     t = t.replace(/(?:오늘|내일|모레|글피|금일)\s*중(?:으로)?/g, ' ');
-    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*안(?:으로|에)?/g, ' ');
+    t = t.replace(new RegExp(`(?:${WEEK_MARK})\\s*안(?:으로|에)?`, 'g'), ' ');
     t = t.replace(/중으로/g, ' ');
     t = t.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, ' ');
     t = t.replace(/께(?=\s|$)/g, ' ');
@@ -268,6 +274,8 @@ function stripBoilerplate(text) {
 
 export function tidyTitle(text) {
     let t = stripBoilerplate(text);
+    t = t.replace(/(?:^|\s)오는(?=\s|$)/g, ' ');
+    t = t.replace(/오는(?=[월화수목금토일]요일)/g, '');
     t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
     t = t.replace(/[가-힣A-Za-z0-9]{1,12}(?:교실|실|관|장|터|홀|운동장)\s*에서/g, ' ');
     t = t.replace(/\d{4}\s*학년도/g, ' ');
@@ -275,7 +283,7 @@ export function tidyTitle(text) {
     t = t.replace(new RegExp(`(?<!\\d)\\d{2}\\s*[./]\\s*\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`(?<!\\d)(\\d{1,2})\\s*[./]\\s*(\\d{1,2})\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
-    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일(?:에(?!서))?/g, ' ');
+    t = t.replace(new RegExp(`(?:${WEEK_MARK})\\s*[월화수목금토일]요일(?:에(?!서))?`, 'g'), ' ');
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/글피|모레|내일|오늘/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
@@ -284,6 +292,7 @@ export function tidyTitle(text) {
     t = t.replace(/(?<![\d./월])(?<!박\s*)\d{1,2}\s*[~～\-–—]\s*\d{1,2}\s*일/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:이|가)?\s*(?:오전|오후)\s*\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
+    t = t.replace(/(?:오전|오후)\s*까지/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?:이|가)?\s*(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
     t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
@@ -357,6 +366,8 @@ function clippedWord(title, source) {
 
 function salvageTitle(text) {
     let t = stripBoilerplate(text);
+    t = t.replace(/(?:^|\s)오는(?=\s|$)/g, ' ');
+    t = t.replace(/오는(?=[월화수목금토일]요일)/g, '');
     t = t.replace(/장소\s*[:：]\s*[^\n,]+/g, ' ');
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/\d{4}\s*학년도/g, ' ');
@@ -364,7 +375,8 @@ function salvageTitle(text) {
     t = t.replace(new RegExp(`(?<!\\d)\\d{2}\\s*[./]\\s*\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(new RegExp(`(?<!\\d)\\d{1,2}\\s*[./]\\s*\\d{1,2}\\s*\\.?${WEEK_TAIL}`, 'g'), ' ');
-    t = t.replace(/(?:이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*[월화수목금토일]요일(?:에(?!서))?/g, ' ');
+    t = t.replace(new RegExp(`(?:${WEEK_MARK})\\s*[월화수목금토일]요일(?:에(?!서))?`, 'g'), ' ');
+    t = t.replace(/(?:오전|오후)\s*까지/g, ' ');
     t = t.replace(/글피|모레|내일|오늘|까지/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말)/g, ' ');
@@ -372,6 +384,7 @@ function salvageTitle(text) {
     t = t.replace(/(?<![\d./월])(?<!박\s*)\d{1,2}\s*[~～\-–—]\s*\d{1,2}\s*일/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
     t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
+    t = t.replace(/(?:오전|오후)\s*까지/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
     t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
@@ -425,7 +438,7 @@ function finishTitle(title, segment, fullText) {
     return title || '';
 }
 
-const WEAK_TITLE = /^(?:일시|기간|일정|검진일|검사일|실시일|시간|날짜|장소|위치|대상|내용|참고|안내|제출|회신|작성|입력|업로드|마감|회수|그대로|아니라|정정|대체|연장|입니다|됩니다|합니다|수|월|화|목|금|토|일|에|은|는|이|가|을|를|와|과|의|로|으로|많으|\d*박\d*일)$/;
+const WEAK_TITLE = /^(?:일시|기간|일정|검진일|검사일|실시일|시간|날짜|장소|위치|대상|내용|참고|안내|제출|회신|작성|입력|업로드|마감|회수|그대로|아니라|정정|대체|연장|입니다|됩니다|합니다|오전|오후|수|월|화|목|금|토|일|에|은|는|이|가|을|를|와|과|의|로|으로|많으|\d*박\d*일)$/;
 
 function weakTitle(title) {
     const text = String(title || '').replace(/\s+/g, '');
@@ -522,7 +535,7 @@ function splitNoticeRequest(sentence, now) {
     const right = matched[2].trim();
     if (!left || !right || !isRequest(right)) return null;
     if (!hasEvent(left) && !isAnnouncement(left) && !/\d\s*교시/.test(left)) return null;
-    const prefix = (left.match(/글피|모레|내일|오늘|(?:이번|다음)\s*주\s*[월화수목금토일]요일|(?:이번주|다음주|금주|차주)\s*[월화수목금토일]요일|\d{1,2}\s*월\s*\d{1,2}\s*일|(?<!\d)\d{1,2}\s*[./]\s*\d{1,2}/) || [])[0] || '';
+    const prefix = (left.match(new RegExp(`글피|모레|내일|오늘|(?:${WEEK_MARK})\\s*[월화수목금토일]요일|\\d{1,2}\\s*월\\s*\\d{1,2}\\s*일|(?<!\\d)\\d{1,2}\\s*[./]\\s*\\d{1,2}`)) || [])[0] || '';
     const rightText = findDates(right, now).length ? right : `${prefix} ${right}`.trim();
     return [left, rightText];
 }
