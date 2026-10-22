@@ -93,9 +93,10 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(eid)
           && d().keys().hasAll(['date', 'title'])
-          && d().keys().hasOnly(['date', 'end', 'time', 'title', 'kind', 'memo', 'source', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['date', 'end', 'time', 'endTime', 'title', 'kind', 'memo', 'source', 'createdAt', 'updatedAt'])
           && ymd(d().date) && (!('end' in d()) || (ymd(d().end) && d().end >= d().date))
           && (!('time' in d()) || hm(d().time))
+          && (!('endTime' in d()) || hm(d().endTime))
           && str(d().title, 1, 60) && safeText(d().title)
           && (!('kind' in d()) || d().kind in ['class', 'school', 'holiday', 'mine'])
           && optStr('memo', 300) && (!('memo' in d()) || safeText(d().memo))

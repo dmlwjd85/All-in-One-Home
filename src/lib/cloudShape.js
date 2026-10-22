@@ -121,9 +121,22 @@ function toEvent(row) {
     };
     if (row.end && row.end >= row.date) body.end = row.end;
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
-    // endTime은 기기 일정에만 둡니다. events 규칙의 허용 칸에 없어 올리면 문서 전체가 거절됩니다.
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.endTime || '')) body.endTime = row.endTime;
     if (row.memo) body.memo = String(row.memo).slice(0, 300);
     return { id, body, stamps: stamps(['updatedAt']) };
+}
+
+/** 규칙이 끝 시각을 아직 모르면 그 칸을 빼고 메모에 끝 시각을 붙입니다. */
+export function eventBodyWithoutEndTime(body) {
+    if (!body || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.endTime || '')) return null;
+    const next = { ...body };
+    const end = next.endTime;
+    delete next.endTime;
+    const memo = String(next.memo || '');
+    if (!memo.includes(end)) {
+        next.memo = (memo ? `${memo} ${end}까지` : `${end}까지`).slice(0, 300);
+    }
+    return next;
 }
 
 function toTodo(row) {

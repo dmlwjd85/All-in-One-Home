@@ -9,7 +9,7 @@ import { MSG_YEAR } from '../src/lib/msgYear.js';
 import { MSG_MOVE } from '../src/lib/msgMove.js';
 import { MSG_SHIFT } from '../src/lib/msgShift.js';
 import { MSG_DOUBT } from '../src/lib/msgDoubt.js';
-import { toCloudRow } from '../src/lib/cloudShape.js';
+import { eventBodyWithoutEndTime, toCloudRow } from '../src/lib/cloudShape.js';
 import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
 
@@ -179,7 +179,41 @@ must('시 범위 상속', '10/30(금) 2시~4시 학부모 연수', qaNow, (items
 must('박람회 범위', '10/30(금) 오전 10시~오후 1시 진로 박람회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].include !== false && items[0].low === false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].endTime === '13:00' && items[0].title.includes('박람회'));
 must('시각 부터까지 일정', '10/30(금) 오전 10시부터 오후 1시까지 진로 박람회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].endTime === '13:00' && items[0].title.includes('박람회'));
 must('제출 마감', '10/30(금)까지 독서록 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-10-30' && items[0].title.includes('독서록') && items[0].title.includes('제출') && !items[0].endTime);
-must('금요일 마감', '금요일까지 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && !items[0].endTime);
+must('금요일 마감', '금요일까지 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-10-23' && items[0].title.includes('제출') && !items[0].endTime);
+const fridayClock = new Date('2026-10-23T09:00:00+09:00');
+const weekdayDeadlines = [
+    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '학급 운영비', qaNow],
+    ['금요일까지 제출', '2026-10-23', '제출', qaNow],
+    ['월요일까지 가정통신문 회신해 주세요.', '2026-10-26', '회신', qaNow],
+    ['목요일까지 영수증 제출', '2026-10-22', '영수증', qaNow],
+    ['일요일까지 설문 회신', '2026-10-25', '설문', qaNow],
+    ['토요일까지 계획 작성해 주세요', '2026-10-24', '작성', qaNow],
+    ['수요일까지 자료 업로드', '2026-10-28', '업로드', qaNow],
+    ['금요일 마감 학급 운영비 영수증 제출', '2026-10-23', '영수증', qaNow],
+    ['목요일 마감으로 학급비 제출해 주세요', '2026-10-22', '학급비', qaNow],
+    ['금요일까지 학급 운영비 영수증 제출해 주세요.', '2026-10-23', '영수증', fridayClock],
+];
+let deadlineOk = 0;
+weekdayDeadlines.forEach(([text, date, word, now]) => {
+    const items = parseSchoolMessages(text, { now }).items;
+    const hit = items.length === 1
+        && items[0].kind === '할 일'
+        && items[0].include !== false
+        && items[0].date === date
+        && items[0].title.includes(word)
+        && !items[0].endTime;
+    if (hit) deadlineOk += 1;
+    else {
+        console.error('요일 마감', text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, title: item.title, include: item.include, low: item.low, warning: item.warning,
+        }))));
+    }
+});
+if (deadlineOk !== weekdayDeadlines.length) {
+    console.error(`요일 마감 ${deadlineOk}/${weekdayDeadlines.length}`);
+    process.exit(1);
+}
+console.log(`요일 마감 ${deadlineOk}/${weekdayDeadlines.length}`);
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -212,8 +246,9 @@ const fair = parseSchoolMessages('10/30(금) 오전 10시~오후 1시 진로 박
 const fairSave = await saveParsed(fair.items, qaNow);
 const fairRow = snapshot().events.find((row) => String(row.title).includes('박람회'));
 const fairCloud = toCloudRow('events', fairRow || {});
-if (!fairSave.ok || fair.items[0]?.kind !== '일정' || fair.items[0]?.include === false || !fairRow || fairRow.time !== '10:00' || fairRow.endTime !== '13:00' || fairCloud?.body?.time !== '10:00' || Object.prototype.hasOwnProperty.call(fairCloud?.body || {}, 'endTime')) {
-    console.error('끝 시각이 일정에 없거나 클라우드 허용 칸 밖으로 나갑니다.', fair.items, fairRow, fairCloud);
+const fairFallback = eventBodyWithoutEndTime(fairCloud?.body);
+if (!fairSave.ok || fair.items[0]?.kind !== '일정' || fair.items[0]?.include === false || !fairRow || fairRow.time !== '10:00' || fairRow.endTime !== '13:00' || fairCloud?.body?.time !== '10:00' || fairCloud?.body?.endTime !== '13:00' || !fairFallback || fairFallback.endTime || fairFallback.time !== '10:00' || !String(fairFallback.memo || '').includes('13:00까지')) {
+    console.error('끝 시각이 클라우드 일정에 실리거나, 거절 시 메모로 돌아가지 않습니다.', fair.items, fairRow, fairCloud, fairFallback);
     process.exit(1);
 }
 const plain = snapshot().events.find((row) => row.title === '수학여행');

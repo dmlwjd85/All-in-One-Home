@@ -1,5 +1,5 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { fromCloudProfile, fromCloudRow, toCloudProfile, toCloudRow } from './cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, toCloudProfile, toCloudRow } from './cloudShape.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
 const COLLECTIONS = [
@@ -18,6 +18,10 @@ const RETRYABLE = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'ab
 function retryable(error) {
     const code = String(error?.code || '');
     return RETRYABLE.some((item) => code.includes(item));
+}
+
+function denied(error) {
+    return String(error?.code || '').includes('permission-denied');
 }
 
 function fingerprint(body, clear = []) {
@@ -61,6 +65,18 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
             nextHashes[key] = mark;
         } catch (error) {
+            const fallback = name === 'events' && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null;
+            if (fallback) {
+                try {
+                    const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt);
+                    await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });
+                    nextHashes[key] = `fallback:${fingerprint(fallback, clear)}`;
+                    return;
+                } catch (again) {
+                    if (retryable(again)) pending += 1;
+                    return;
+                }
+            }
             if (retryable(error)) pending += 1;
         }
     };

@@ -851,6 +851,27 @@ try {
     await withDemo(390, 'light', async (page) => { await savedTimeSpan(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await savedTimeSpan(page, '360'); }, 844);
 
+    async function weekdayDeadline(page, label) {
+        await openPlus(page);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.type('[data-screen="message"] textarea', '금요일까지 학급 운영비 영수증 제출해 주세요.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 23일'));
+        const card = await page.evaluate(() => {
+            const node = document.querySelector('.msg-card');
+            const text = node?.innerText || '';
+            const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            return { text, title, include, cards: document.querySelectorAll('.msg-card').length };
+        });
+        check(card.cards === 1 && card.include && card.text.includes('할 일') && card.text.includes('10월 23일') && card.title.includes('학급 운영비') && card.title.includes('영수증') && card.title.includes('제출'), `요일 마감이 ${label}에서 10월 23일 할 일로 보이지 않습니다. ${card.title}`);
+        await audit(page, `요일 마감 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_weekday_due_${label}.png`) });
+    }
+    await withDemo(390, 'light', async (page) => { await weekdayDeadline(page, '390'); }, 844);
+    await withDemo(360, 'light', async (page) => { await weekdayDeadline(page, '360'); }, 844);
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));

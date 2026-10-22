@@ -1,4 +1,4 @@
-import { addDaysYmd, isValidYmd, seoulYmd, startOfWeekMon, weekdayKo } from './date.js';
+import { addDaysYmd, fromYmd, isValidYmd, seoulYmd, startOfWeekMon, weekdayKo } from './date.js';
 import { isSensitiveText } from './sensitive.js';
 
 function pad(n) {
@@ -107,6 +107,14 @@ function weekYmd(which, weekdayName, today) {
     let ymd = addDaysYmd(startOfWeekMon(today), offset);
     if (/다음|차주/.test(which)) ymd = addDaysYmd(ymd, 7);
     return ymd;
+}
+
+/** '금요일까지'처럼 주 표시가 없는 요일은 오늘을 포함한 가장 가까운 그 요일입니다. */
+function nearestWeekdayYmd(weekdayName, today) {
+    const target = WEEKDAY[weekdayName];
+    if (target == null) return '';
+    const delta = (target - fromYmd(today).getDay() + 7) % 7;
+    return addDaysYmd(today, delta);
 }
 
 function pushSpan(spans, match, ymd, { explicit, weekday = '', bare = false }) {
@@ -258,6 +266,9 @@ export function findDates(text, now = new Date()) {
     });
     eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*([월화수목금토일])요일/g, raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
+    });
+    eachMatch(/(?<![가-힣])([월화수목금토일])요일(?=\s*(?:까지|마감))/g, raw, (match) => {
+        pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
     eachMatch(/(이번\s*주|다음\s*주|이번주|다음주|금주|차주)\s*안(?:으로|에)?/g, raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], '금', today), { explicit: true, weekday: '금' });
