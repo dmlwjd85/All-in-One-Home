@@ -74,10 +74,11 @@ function monthShift(which) {
     return /다음|내달/.test(which) ? 1 : 0;
 }
 
-/** '이번 달 말', '다음 달 초', '월말'을 그 달의 하루로 바꿉니다. */
+/** '이번 달 말', '다음 달 초', '중순', '월말'을 그 달의 하루로 바꿉니다. 중순은 15일입니다. */
 function monthEdgeYmd(which, edge, today) {
     const shifted = addMonths(Number(today.slice(0, 4)), Number(today.slice(5, 7)), monthShift(which));
-    const day = edge === '초' ? 1 : new Date(shifted.year, shifted.month, 0).getDate();
+    const last = new Date(shifted.year, shifted.month, 0).getDate();
+    const day = edge === '초' ? 1 : edge === '중순' ? Math.min(15, last) : last;
     return ymdOf(shifted.year, shifted.month, day);
 }
 
@@ -248,8 +249,14 @@ export function findDates(text, now = new Date()) {
     eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(초|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd(match[1], match[2], today), { explicit: true });
     });
-    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중(?:으로)?/g, raw, (match) => {
+    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중으로/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd(match[1], '말', today), { explicit: true });
+    });
+    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중순/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd(match[1], '중순', today), { explicit: true });
+    });
+    eachMatch(/(?<![가-힣\d])월중순/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd('이번달', '중순', today), { explicit: true });
     });
     eachMatch(/(?<![가-힣\d])월(초|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd('이번달', match[1], today), { explicit: true });
@@ -289,6 +296,9 @@ export function findDates(text, now = new Date()) {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
     eachMatch(new RegExp(`(?<![가-힣])([월화수목금토일])요일(?=\\s*(?:에\\s*)?(?:오전|오후|\\d{1,2}\\s*시(?!간)))`, 'g'), raw, (match) => {
+        pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
+    });
+    eachMatch(/(?<![가-힣])([월화수목금토일])요일(?=\s*(?:에\s*)?\d\s*교시)/g, raw, (match) => {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
     eachMatch(new RegExp(`(?<![가-힣\\d./])[(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）](?=\\s*${WEEKDAY_CLOCK}\\s*까지)`, 'g'), raw, (match) => {
