@@ -115,7 +115,7 @@ function Timetable({ data, todayKey }) {
     const [specialOn, setSpecialOn] = useState(false);
     const cells = [<span key="corner" />];
     DAYS.forEach(([key, label]) => {
-        cells.push(<strong key={key} style={{ textAlign: 'center', color: key === todayKey ? 'var(--primary)' : 'inherit' }}>{label}</strong>);
+        cells.push(<strong key={key} style={{ textAlign: 'center', color: key === todayKey ? 'var(--accent)' : 'inherit' }}>{label}</strong>);
     });
     for (let index = 0; index < 6; index += 1) {
         cells.push(<strong key={`h${index}`} style={{ display: 'grid', placeItems: 'center', fontSize: 12 }}>{index + 1}</strong>);

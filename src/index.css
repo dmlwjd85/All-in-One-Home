@@ -254,7 +254,7 @@ button, input, textarea { font-family: inherit; }
         top: 0;
         height: 100dvh;
     }
-    .main { padding: 20px 24px 40px; }
+    .main { padding: 20px 24px 140px; }
     .tabbar, .tip-bubble, .tip-bulb { display: none; }
     .sheet {
         left: 50%;
@@ -354,6 +354,23 @@ button, input, textarea { font-family: inherit; }
 .low-card { background: #FFF6D8; border-color: #E0C56A; color: var(--ink); }
 .dark .low-card { background: #3A3424; border-color: #6A5A32; color: var(--ink); }
 .clay-mark { display: block; margin: 4px auto 8px; max-width: 100%; }
+.capture-summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 20px;
+    background: var(--brand-soft);
+    text-align: left;
+}
+.capture-summary span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
 .msg-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .msg-summary.range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .msg-summary .tap { min-width: 0; width: 100%; padding: 0 6px; white-space: normal; line-height: 18px; }

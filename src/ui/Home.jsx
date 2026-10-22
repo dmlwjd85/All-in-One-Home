@@ -60,7 +60,7 @@ export function Home() {
             <section className="glass home-time" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--primary)', fontWeight: 800 }}>한 주 보기</Btn>
+                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
                 </div>
                 <div className="period-row" style={{ marginTop: 10 }}>
                     {labels.map((label, index) => {
@@ -78,7 +78,7 @@ export function Home() {
             <section className="glass home-todo" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 할 일</h3>
-                    <Btn onClick={() => go('#/todo')} style={{ color: 'var(--primary)', fontWeight: 800 }}>모두 보기</Btn>
+                    <Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
@@ -95,7 +95,7 @@ export function Home() {
             <section className="glass home-event" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>이번 주 학급 일정</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--primary)', fontWeight: 800 }}>달력</Btn>
+                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>달력</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (

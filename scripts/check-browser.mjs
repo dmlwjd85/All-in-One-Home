@@ -1098,14 +1098,18 @@ try {
         await openPlus(page);
         await page.type('[data-screen="plus"] textarea', '12번 이하은 발표를 끝까지 했어요');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '다음')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('학생 기록') && document.querySelector('[aria-label="학생 번호"]'));
+        await page.waitForFunction(() => document.body.innerText.includes('학생 기록') && document.body.innerText.includes('넣을게요'));
+        const folded = await page.evaluate(() => !document.querySelector('[aria-label="학생 번호"]'));
+        check(folded, '미리보기 카드가 접혀 있지 않습니다.');
+        await page.screenshot({ path: resolve(shots, 'after_preview_390.png') });
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.getAttribute('aria-expanded') === 'false')?.click());
+        await page.waitForFunction(() => document.querySelector('[aria-label="학생 번호"]'));
         const card = await page.evaluate(() => ({
             low: document.querySelectorAll('[data-screen="plus"] .low-card').length,
             kind: document.querySelector('[aria-label="종류"] .on')?.innerText.trim() || '',
             select: document.querySelectorAll('[data-screen="plus"] select').length,
         }));
         check(card.low === 0 && card.kind === '학생 기록' && card.select === 0, `학생 기록 미리보기가 ${JSON.stringify(card)} 입니다.`);
-        await page.screenshot({ path: resolve(shots, 'after_preview_390.png') });
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
         await page.waitForFunction(() => !document.querySelector('[data-screen="plus"]'));

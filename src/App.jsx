@@ -295,7 +295,7 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--primary)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--accent)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ color: label === '출결' && checked ? 'var(--st-present)' : 'inherit', fontSize: 16 }}>{icon}</span>
                                     {label}

@@ -16,11 +16,6 @@ export const CAPTURE_KINDS = [
 const ATTEND_STATUS = ['결석', '지각', '조퇴', '결과'];
 const SCHEDULE_HINT = /제출|회신|마감|기한|공개수업|회의|행사|연수|교시|출장|협의회|업로드|탑재|부탁(?:드립니다|드려요|해요)|작성해|가정통신문|상담\s*주간|상담주간|체험|소풍|운동회|현장학습/;
 
-export function speechSupported() {
-    if (typeof window === 'undefined') return false;
-    return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
-}
-
 /** 누가기록에 최근 찍힌 학생 넷. QuickSheet와 같은 순서입니다. */
 export function recentStudents(students, records) {
     const last = new Map();
@@ -101,6 +96,7 @@ function fromParsed(item, studentNo) {
         low: Boolean(item.low),
         warning: item.warning || '',
         raw: item.raw || '',
+        include: item.include !== false,
     });
 }
 

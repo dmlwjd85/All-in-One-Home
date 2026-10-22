@@ -11,6 +11,7 @@ import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { validateBackupText } from '../src/lib/backup.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
+import { captureDrafts } from '../src/ui/capture.js';
 
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const failures = [];
@@ -117,6 +118,18 @@ function contrast(a, b) {
     const [hi, lo] = left > right ? [left, right] : [right, left];
     return (hi + 0.05) / (lo + 0.05);
 }
+const held = new Date('2026-10-23T09:00:00+09:00');
+for (const line of [
+    '네 감사합니다!',
+    '10/21(수) 현장체험학습 사진 올리기',
+    '작년 6학년 담당 선생님은 11/10(화)까지 가정통신문 회신 부탁드려요',
+]) {
+    const drafts = captureDrafts(line, { now: held });
+    check(drafts.length > 0 && drafts.every((item) => item.include === false), `빼 둔 문장이 저장 대상입니다. ${line}`);
+}
+const keptRecord = captureDrafts('12번 이하은 발표를 끝까지 했어요', { now: held, students: [{ id: 's12', no: 12, name: '이하은' }] });
+check(keptRecord.length === 1 && keptRecord[0].include !== false && keptRecord[0].kind === '학생기록', '학생 기록이 빠졌습니다.');
+
 const pairs = [
     ['본문', '#2B3350', '#EEF6FD'],
     ['보조', '#3E4868', '#FFF8E7'],
@@ -134,6 +147,10 @@ const pairs = [
     ['다크 노란 카드', '#F4F7FB', '#3A3424'],
     ['다크 지각', '#F0B89A', '#243044'],
     ['다크 결석', '#FF7D6E', '#243044'],
+    ['강조', '#5B5BD6', '#EEF6FD'],
+    ['강조 카드', '#5B5BD6', '#FFF8E7'],
+    ['다크 강조', '#A994FF', '#1A2333'],
+    ['다크 강조 카드', '#A994FF', '#243044'],
 ];
 for (const [label, fg, bg] of pairs) {
     const ratio = contrast(fg, bg);

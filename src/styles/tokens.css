@@ -15,6 +15,7 @@
     --ink-sub: #3E4868;
     --primary: #5B5BD6;
     --on-primary: #FFFFFF;
+    --accent: #5B5BD6; /* 글자 강조. 버튼 바탕은 --primary 를 씁니다. */
     --brand: #C9B8F0; /* 장식 전용. 글자에 쓰지 않습니다. */
     --brand-soft: #E7DFF8;
     --hero-1: #5B5BD6;
@@ -66,6 +67,7 @@
     --ink-sub: #C5D0E0;
     --primary: #5B5BD6;
     --on-primary: #FFFFFF;
+    --accent: #A994FF; /* 남색 바탕 글자. 대비 4.5 이상. */
     --brand: #C9B8F0;
     --brand-soft: #322C4A;
     --hero-ink: #F4F7FB;
