@@ -369,6 +369,10 @@ export function tidyTitle(text) {
     t = t.replace(/연기(?:됩니다|합니다|해요|됐(?:어요|습니다)|음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
     t = t.replace(/미룹니다|미뤄집니다|미루었습니다/g, ' ');
+    t = t.replace(/다음에\s*(?:하겠(?:습니다)?|합니다|해요|할게요|하자)?/g, ' ');
+    t = t.replace(/(?<![가-힣])추후(?:로|에)?/g, ' ');
+    t = t.replace(/하겠(?:습니다)?/g, ' ');
+    t = t.replace(/(?:^|\s)날짜(?:은|는|이|가)?(?=\s|$)/g, ' ');
     t = t.replace(/[월화수목금토일]요일(?:으로|로)?/g, ' ');
     t = stripTitleNoise(t);
     t = t.replace(/(?:자료|사진|영상)\s*(?:는|은|이|가|을|를)?\s*(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
@@ -463,6 +467,10 @@ function salvageTitle(text) {
     t = t.replace(/연기(?:됩니다|합니다|해요|됐(?:어요|습니다)|음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
     t = t.replace(/미룹니다|미뤄집니다|미루었습니다/g, ' ');
+    t = t.replace(/다음에\s*(?:하겠(?:습니다)?|합니다|해요|할게요|하자)?/g, ' ');
+    t = t.replace(/(?<![가-힣])추후(?:로|에)?/g, ' ');
+    t = t.replace(/하겠(?:습니다)?/g, ' ');
+    t = t.replace(/(?:^|\s)날짜(?:은|는|이|가)?(?=\s|$)/g, ' ');
     t = t.replace(/[월화수목금토일]요일(?:으로|로)?/g, ' ');
     t = stripTitleNoise(t);
     if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
@@ -1190,13 +1198,14 @@ function deadlineClosed(text) {
 }
 
 const OTHER_PERSON = '(?:부장님|부장\\s*님|교감(?:\\s*선생님)?|담임(?:\\s*선생님)?|[가-힣]{1,4}\\s*선생님|[가-힣]{2,10}님)';
-const OTHER_ABSENCE = '(?<![가-힣])(?:출장|연가|연차|휴가|조퇴|부재|병가|외출)(?!\\s*연수)';
+const OTHER_ABSENCE = '(?<![가-힣])(?:출장(?!\\s*연수)|연가|연차|휴가|조퇴|부재|병가|외출|연수)';
+const LEAVE_WORD = '출장|연가|연차|휴가|조퇴|부재|병가|외출|연수';
 
 function looseClauses(text) {
     const src = String(text || '');
     const parts = [];
     let start = 0;
-    const mark = /[,，]|(?:(?<!않)이라서|(?<!아니)라서|(?<!않)이니까|니까|(?<!않)이니|(?<!않)이고|(?<!않)이라)요?(?![가-힣])|(?<=(?:출장|연가|연차|휴가|조퇴|부재|병가|외출))(?:라|니)(?![가-힣])/g;
+    const mark = new RegExp(`[,，]|(?:(?<!않)이라서|(?<!아니)라서|(?<!않)이니까|니까|(?<!않)이시니|(?<!않)이셔서|(?<!않)이시라서|(?<!않)이니|(?<!않)이고|(?<!않)이라|가시니|가셔서|하셔서|하시니)요?(?![가-힣])|(?<=(?:${LEAVE_WORD}))(?:라|니|으로)(?![가-힣])`, 'g');
     let found = mark.exec(src);
     while (found) {
         const chunk = src.slice(start, found.index).trim();
@@ -1209,7 +1218,22 @@ function looseClauses(text) {
     return parts.length ? parts : [src.trim()];
 }
 
+/** 직함 바로 뒤의 연수만 다른 사람의 부재입니다. '직무 연수'처럼 이름이 붙거나 '출장 연수'는 일정입니다. */
+function barePersonTraining(text) {
+    const src = String(text || '');
+    if (/출장\s*연수/.test(src)) return false;
+    if (!new RegExp(OTHER_PERSON).test(src) || !/(?<![가-힣])연수/.test(src)) return false;
+    const stripped = src
+        .replace(new RegExp(OTHER_PERSON, 'g'), ' ')
+        .replace(/께서/g, ' ')
+        .replace(/\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}/g, ' ')
+        .replace(/\d{1,2}\s*\/\s*\d{1,2}(?:\s*[.(（][월화수목금토일][)）])?/g, ' ')
+        .replace(/\d{1,2}\s*월\s*\d{1,2}\s*일/g, ' ');
+    return !/[가-힣]{2,}\s*연수/.test(stripped);
+}
+
 function absenceClause(text) {
+    if (barePersonTraining(text)) return true;
     return new RegExp(OTHER_PERSON).test(text) && new RegExp(OTHER_ABSENCE).test(text);
 }
 
@@ -1229,13 +1253,13 @@ function normalizeRequest(text, now) {
         return `${head ? `${head} 마감` : '마감'} ${token}${clockBit ? ` ${clockBit}` : ''}`.replace(/\s+/g, ' ').trim();
     }
     const verb = (src.match(/제출|회신|작성|입력|업로드/) || [])[0] || '';
-    const noun = ((before.match(/([가-힣]{2,12})\s*(?:은|는|을|를|이|가)\s*$/) || before.match(/([가-힣]{2,12})\s*$/) || [])[1]) || '';
+    const noun = ((before.match(/((?:[가-힣]{2,12}\s+){0,2}[가-힣]{2,12})\s*(?:은|는|을|를|이|가)\s*$/) || before.match(/([가-힣]{2,12})\s*$/) || [])[1] || '').replace(/\s+/g, ' ').trim();
     if (verb) {
         const name = noun && noun !== verb ? `${noun} ${verb}` : verb;
         return `${name} ${token}까지`.replace(/\s+/g, ' ').trim();
     }
     if (/주세요|바랍니다/.test(src) && noun) {
-        if (/^(?:제출|회신|작성|입력|업로드)$/.test(noun)) return `${noun} ${token}까지`;
+        if (/^(?:제출|회신|작성|입력|업로드)$/.test(noun) || /(?:신청|접수|마감)$/.test(noun)) return `${noun} ${token}까지`;
         return `${noun} 제출 ${token}까지`;
     }
     return src;
@@ -1244,7 +1268,33 @@ function normalizeRequest(text, now) {
 const SILENT_ABSENCE = '\u0008';
 
 function clauseCarriesEvent(clause) {
+    if (barePersonTraining(clause)) return false;
     return new RegExp(EVENT_NOUN).test(String(clause || ''));
+}
+
+/** '11/20로 미룹니다'처럼 그 날짜가 옮긴 날이면 그 날을 일정으로 둡니다. '추후로'는 날이 없습니다. */
+function destinationDate(text) {
+    const src = String(text || '');
+    if (/추후\s*(?:으로|로)/.test(src)) return false;
+    if (/(?:으로|로)\s*(?:미룹|미뤄|미루|연기)/.test(src) && findDates(src).length === 1) return true;
+    if (/(?:날짜|일정)\s*(?:은|는)\s*/.test(src) && findDates(src).length >= 1 && /다음에|추후|미룹|미뤄|미루|연기/.test(src)) return true;
+    if (/추후\s*(?:에\s*)?\d/.test(src) && findDates(src).length >= 1) return true;
+    return false;
+}
+
+/** 다음에·추후·연기처럼 새 날이 없으면 그 행사는 열리지 않습니다. */
+function postponedOpen(text) {
+    const src = String(text || '');
+    if (/미루지\s*않|연기(?:하지\s*않|\s*없이)/.test(src) || src.includes('\u0003')) return false;
+    if (destinationDate(src)) return false;
+    if (/다음에\s*(?:하겠|합니|해요|하십|할게|하자)/.test(src)) return true;
+    if (/(?<![가-힣])추후/.test(src)) return true;
+    if (/(?<![가-힣])연기/.test(src)) {
+        const spans = findDates(src);
+        if (spans.length >= 2 && isReschedule(src, spans)) return false;
+        return true;
+    }
+    return false;
 }
 
 /** 미룬다·참석 못 한다·취소는 그 행사를 열지 않습니다. 회신 요청과 '취소하지 않습니다'는 그대로 둡니다. */
@@ -1253,7 +1303,9 @@ function eventCalledOff(text) {
     if (/취소(?:하지|\s*않|\s*없이)/.test(src) || /미루지\s*않/.test(src)) return false;
     if (/(?:잊지|빠지지)\s*못/.test(src)) return false;
     if (/참석(?:을|를)?\s*못|참석하지\s*못|참석하지\s*않/.test(src) && !/회신|제출|연락|알려/.test(src)) return true;
+    if (postponedOpen(src)) return true;
     if (/(?<![가-힣])(?:미룹|미뤄|미루)/.test(src)) {
+        if (destinationDate(src)) return false;
         const spans = findDates(src);
         if (spans.length >= 2 && isReschedule(src, spans)) return false;
         return true;
@@ -1268,7 +1320,7 @@ function othersAbsenceRequest(text, now) {
     if (!src || /출장\s*연수/.test(src)) return null;
     if (/(?<![가-힣])(?:제가|저는|저)(?![가-힣])/.test(src)) return null;
     const tied = new RegExp(`${OTHER_PERSON}.{0,48}${OTHER_ABSENCE}|${OTHER_ABSENCE}.{0,24}${OTHER_PERSON}`);
-    if (!tied.test(src)) return null;
+    if (!tied.test(src) && !barePersonTraining(src)) return null;
     const clauses = looseClauses(src);
     const kept = clauses.filter((clause) => {
         if (!absenceClause(clause)) return true;
@@ -1345,8 +1397,9 @@ function magamDueTitle(clause, eventName) {
             if (name && !/^(?:마감|은|는|이|가)$/.test(name) && !endsWithEvent) title = `${name} 마감`;
         }
         if (title === '마감') {
-            const subject = src.match(/([가-힣]{2,12})\s*(?:은|는)\s+/);
-            if (subject && !/^(?:마감|신청|결과|발표|일정)$/.test(subject[1])) title = `${subject[1]} 마감`;
+            const subject = src.match(/((?:[가-힣]{2,12}\s+){0,2}[가-힣]{2,12})\s*(?:은|는)\s+/);
+            const name = subject ? subject[1].replace(/\s+/g, ' ').trim() : '';
+            if (name && !/^(?:마감|신청|결과|발표|일정)$/.test(name) && !new RegExp(`(?:${EVENT_NOUN})$`).test(name)) title = `${name} 마감`;
         }
     }
     if (eventName && /^(?:(?:참가|참여)\s*)?신청\s*마감$|^(?:참가|참여)\s*접수\s*마감$/.test(title)) title = `${eventName} ${title}`;
@@ -1363,9 +1416,17 @@ function magamPairChunks(text, now) {
     const due = dueRows[0];
     const event = spans.find((span) => span !== due);
     if (!event) return null;
-    const eventName = clauseEventName(clauseAt(text, event), now);
+    const dueClause = clauseAt(text, due);
+    let eventName = clauseEventName(clauseAt(text, event), now);
     if (!eventName) return null;
-    const dueTitle = magamDueTitle(clauseAt(text, due), eventName);
+    if (/^(?:개강|개학|종강|수료)$/.test(eventName)) {
+        const subject = dueClause.match(/((?:[가-힣]{2,12}\s+){0,2}[가-힣]{2,12})\s*(?:은|는)/);
+        const head = subject
+            ? subject[1].replace(/\s+/g, ' ').trim().split(/\s+/).filter((word) => !/^(?:신청|접수|마감)$/.test(word)).join(' ')
+            : '';
+        if (head) eventName = `${head} ${eventName}`;
+    }
+    const dueTitle = magamDueTitle(dueClause, eventName);
     const eventToken = text.slice(event.index, event.index + event.length);
     const dueToken = text.slice(due.index, due.index + due.length);
     const clock = (text.slice(due.index + due.length).match(/^\s*((?:(?:오전|오후)\s*)?\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?)\s*마감/) || [])[1] || '';
@@ -1401,6 +1462,35 @@ function sharedNameChunks(text, now) {
     return spans.map((span) => `\u0007${name} ${text.slice(span.index, span.index + span.length)}`.replace(/\s+/g, ' ').trim());
 }
 
+/** 내 연가·출장과 마감·회의가 한 문장이면 절마다 나눕니다. 내 부재는 일정, 마감은 할 일입니다. */
+function ownDatedAbsence(text, now) {
+    const src = String(text || '').trim();
+    if (!src || /출장\s*연수/.test(src)) return null;
+    if (!/(?<![가-힣])(?:제가|저는|저도|저만|저)(?![가-힣])/.test(src)) return null;
+    const leaveRe = /(?<![가-힣])(출장|병가|연가)(?!\s*(?:연수|신청|접수|마감|교육|복명|결재|대체|계획|사용|명단|자료|양식))/;
+    if (!leaveRe.test(src)) return null;
+    const clauses = looseClauses(src);
+    if (clauses.length < 2) return null;
+    const mine = [];
+    const rest = [];
+    clauses.forEach((clause) => {
+        const leave = clause.match(leaveRe);
+        const withoutLeave = clause.replace(leaveRe, ' ');
+        const ownOnly = leave && findDates(clause, now).length && !hasDeadline(clause) && !/마감|주세요|바랍니다|제출|회신/.test(clause) && !new RegExp(EVENT_NOUN).test(withoutLeave);
+        if (ownOnly) mine.push(clause);
+        else rest.push(clause);
+    });
+    if (!mine.length || !rest.length) return null;
+    const restText = rest.join(', ');
+    const work = rest.some((clause) => hasDeadline(clause) || /마감|까지/.test(clause) || new RegExp(EVENT_NOUN).test(clause) || isRequest(clause));
+    if (!work || !findDates(restText, now).length) return null;
+    const restChunks = rest.map((clause) => (
+        eventCalledOff(clause) ? clause
+            : (/(?:까지|마감|주세요|바랍니다|제출|회신)/.test(clause) ? normalizeRequest(clause, now) : clause)
+    ));
+    return [...mine, ...restChunks];
+}
+
 function segmentsOf(text, now) {
     const lines = String(text || '').replace(/\u00a0/g, ' ').replace(/\r\n/g, '\n').split('\n');
     const chunks = [];
@@ -1415,6 +1505,11 @@ function segmentsOf(text, now) {
                 if (absenceKept === SILENT_ABSENCE) return;
                 if (absenceKept) {
                     chunks.push(absenceKept);
+                    return;
+                }
+                const ownPieces = ownDatedAbsence(trimmedSentence, now);
+                if (ownPieces) {
+                    ownPieces.forEach((piece) => chunks.push(piece));
                     return;
                 }
                 const noticed = splitNoticeRequest(trimmedSentence, now);
@@ -1794,8 +1889,12 @@ function negatedClause(text) {
     if (/(?:열리|개최되|진행되|실시되|개최하|진행하|실시하|(?<![가-힣])하)지\s*못(?:하|합|해|함)/.test(src)) return true;
     if (/열리지\s*않/.test(src)) return true;
     if (eventCancelled(src)) return true;
+    if (postponedOpen(src)) return true;
     if (postponedWithoutDestination(src)) return true;
-    if (!src.includes('\u0003') && !/미루지\s*않/.test(src) && /(?<![가-힣])(?:미룹|미뤄|미루)/.test(src)) return true;
+    if (!src.includes('\u0003') && !/미루지\s*않/.test(src) && /(?<![가-힣])(?:미룹|미뤄|미루)/.test(src)) {
+        if (destinationDate(src)) return false;
+        return true;
+    }
     if (/참석(?:을|를)?\s*못|참석하지\s*못|참석하지\s*않/.test(src) && !/회신|제출|연락|알려/.test(src)) return true;
     if (/(?<![가-힣])안\s*(?:합니다|해요|함)(?![가-힣])/.test(src)) return true;
     const verb = '(?:진행하|실시하|개최하|(?<![가-힣])열|(?<![가-힣])하)';
@@ -2023,6 +2122,7 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
             }
             return [titled];
         }
+        if (new RegExp(EVENT_NOUN).test(segment) && !hasDeadline(segment) && !isDeadlineSubmission(segment) && /미룹|미뤄|미루|다음에|추후|(?<![가-힣])연기/.test(segment)) return [make('일정', 0)];
         if (replacement) return [make('일정', 0)];
         if (deadlineClosed(segment)) return [markUnsure(make('할 일', 0), '이미 마감된 내용이라 빼 두었어요.')];
         if (magamIsDeadline(segment) && !span.range) return [make('할 일', 0)];
@@ -2030,6 +2130,13 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
         const namedMagamLeft = String(segment).replace(new RegExp(`(?<![가-힣])마감\\s+${MAGAM_EVENT_TAIL}`, 'g'), ' ');
         if (/(?<![가-힣])마감(?!되었|됐)/.test(segment) && !magamIsDeadline(segment) && hasEvent(segment) && !hasDeadline(segment) && !isRequest(namedMagamLeft) && !/제출|회신|작성|입력|업로드|탑재/.test(namedMagamLeft)) return [make('일정', 0)];
         if (listed && !isDeadlineSubmission(segment) && !hasDeadline(segment)) {
+            const thisYearSide = /(?:작년|지난해|재작년|지난\s*해)/.test(fullText) && /올해|이번에/.test(fullText) && /(?:합니다|해요)[.。]?\s*$/.test(segment) && !pastPredicate(segment) && !new RegExp(EVENT_NOUN).test(segment);
+            if (thisYearSide) {
+                const item = make('일정', 0);
+                const compact = String(item.title || '').replace(/\s+/g, '');
+                const title = /^(?:일정|할일|합니다|해요)$/.test(compact) ? '올해' : item.title;
+                return [{ ...item, title, include: true, low: false, warning: '' }];
+            }
             const bareName = tidyTitle(segment).replace(/\s+/g, '');
             const bareVerb = !bareName || /^(?:합니다|해요|했습니다|했어요|하였습니다|입니다|예요|에요)$/.test(bareName);
             if (bareVerb && !span.range && !hasEvent(segment) && !new RegExp(EVENT_NOUN).test(segment) && !EVENT_WORD.test(segment)) return [make('할 일', 0)];
@@ -2103,13 +2210,24 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
     return vague.map((item) => markUnsure(item, '같은 문장에서 나눈 내용이라 빼 두었어요.'));
 }
 
-/** 출장 연수 뒤에 적힌 내용·주제는 그 연수의 제목입니다. */
+/** 출장 연수의 괄호·내용·주제가 있으면 그 이름이 제목입니다. */
 function trainingContent(text) {
-    const matched = String(text || '').match(/(?:연수\s*)?(?:내용|주제|연수명)(?:은|는|이|가|:)\s*([가-힣A-Za-z0-9]{2,24}(?:\s+[가-힣A-Za-z0-9]{2,16}){0,3})/);
+    const src = String(text || '');
+    const paren = src.match(/연수\s*[（(]\s*([^)）]{2,30})\s*[)）]/);
+    if (paren) {
+        const name = tidyTitle(paren[1]).replace(/(?:입니다|해요|합니다)$/g, '').trim();
+        if (name && !/^(?:출장\s*연수|연수|출장)$/.test(name)) return name;
+    }
+    const matched = src.match(/(?:연수\s*)?(?:내용|주제|연수명)(?:은|는|이|가|:)\s*([가-힣A-Za-z0-9]{2,24}(?:\s+[가-힣A-Za-z0-9]{2,16}){0,3})/);
     if (!matched) return '';
     const name = tidyTitle(matched[1]).replace(/(?:입니다|해요|합니다)$/g, '').trim();
     if (!name || /^(?:출장\s*연수|연수|출장)$/.test(name)) return '';
     return name;
+}
+
+function renameTripTraining(item) {
+    if (!/출장\s*연수/.test(String(item.title || ''))) return item;
+    return { ...item, title: String(item.title).replace(/출장\s*연수/g, '연수').replace(/\s+/g, ' ').trim() };
 }
 
 const PERSON_ONLY_TITLE = /^(?:부장님|부장\s*님|교감(?:\s*선생님)?|담임(?:\s*선생님)?|교무부장님|행정실장님|학년부장님|연구부장님|[가-힣]{1,4}\s*선생님|[가-힣]{2,10}님)$/;
@@ -2129,13 +2247,14 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
         });
     });
     const content = trainingContent(raw);
-    const titled = content
-        ? items.map((item) => {
-            if (item.kind === '일정' && /출장\s*연수/.test(item.title)) return { ...item, title: content };
-            if (item.kind === '할 일' && item.title.startsWith('출장 연수')) return { ...item, title: item.title.replace(/^출장 연수/, content) };
-            return item;
-        })
-        : items;
+    const titled = items.map((item) => {
+        if (content && /출장\s*연수|연수/.test(String(item.title || ''))) {
+            if (item.kind === '일정') return { ...item, title: content };
+            const tail = (String(item.title).match(/신청|접수|제출|마감/) || [])[0] || '';
+            return { ...item, title: tail ? `${content} ${tail}` : content };
+        }
+        return renameTripTraining(item);
+    });
     const visible = titled.filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
     if (!visible.length && findDates(raw, now).length && !silentOtherAbsence(raw, now)) {
         const card = markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.');
