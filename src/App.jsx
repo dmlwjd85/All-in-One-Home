@@ -8,6 +8,7 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
+import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
@@ -108,7 +109,7 @@ export default function App() {
         document.documentElement.classList.toggle('dark', next);
         document.documentElement.style.colorScheme = next ? 'dark' : 'light';
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', next ? '#0F0E1A' : '#F6F4FF');
+        if (meta) meta.setAttribute('content', next ? '#1A2333' : '#EEF6FD');
         setDark(next);
         try { localStorage.setItem('ssug-gyomu-theme', theme || 'system'); } catch { /* 무시 */ }
     }, [data?.profile.theme]);
@@ -294,7 +295,7 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--primary)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--accent)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ color: label === '출결' && checked ? 'var(--st-present)' : 'inherit', fontSize: 16 }}>{icon}</span>
                                     {label}
@@ -332,6 +333,7 @@ export default function App() {
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
                     <div className="toast" role="status">
+                        {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
                         {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo(); setToast(null); }}>되돌리기</Btn>}
                     </div>

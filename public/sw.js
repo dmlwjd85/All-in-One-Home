@@ -1,7 +1,7 @@
 /* 설치한 앱이 같은 주소의 sw.js 를 받아 갈아타도록 파일 이름을 유지합니다.
    프리캐시 목록은 빌드가 dist/precache-manifest.js 로 넣습니다.
    로컬 저장은 지우지 않습니다. */
-const CACHE = 'ssug-gyomu-shell-v2';
+const CACHE = 'ssug-gyomu-shell-v3';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts('./precache-manifest.js');

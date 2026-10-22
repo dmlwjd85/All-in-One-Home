@@ -58,21 +58,21 @@ button, input, textarea { font-family: inherit; }
 
 .hero {
     color: var(--hero-ink);
-    background: linear-gradient(135deg, var(--hero-1) 0%, var(--hero-2) 58%, var(--hero-3) 100%);
-    border-radius: var(--radius-lg);
+    background: var(--solid);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
     padding: 16px;
     box-shadow: var(--shadow);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
 }
 .hero-kicker, .hero-pill {
-    background: rgba(32, 12, 48, .38);
-    border: 1px solid rgba(255, 255, 255, .28);
+    background: var(--brand-soft);
+    color: var(--ink);
+    border: 1px solid transparent;
     border-radius: 999px;
 }
 .hero-action {
-    background: #fff;
-    color: var(--hero-action);
-    text-shadow: none;
+    background: var(--primary);
+    color: var(--on-primary);
     border-radius: 999px;
     font-weight: 800;
 }
@@ -94,7 +94,7 @@ button, input, textarea { font-family: inherit; }
 .icon-btn {
     width: 44px;
     height: 44px;
-    border-radius: 14px;
+    border-radius: 20px;
     background: var(--solid);
     border: 1px solid var(--line);
     display: inline-flex;
@@ -105,7 +105,7 @@ button, input, textarea { font-family: inherit; }
 .field {
     width: 100%;
     min-height: 44px;
-    border-radius: 16px;
+    border-radius: 20px;
     border: 1px solid var(--line);
     background: var(--solid);
     color: var(--ink);
@@ -117,7 +117,7 @@ button, input, textarea { font-family: inherit; }
 .primary-btn {
     background: var(--primary);
     color: var(--on-primary);
-    border-radius: 16px;
+    border-radius: 22px;
     font-weight: 800;
     min-height: 52px;
 }
@@ -134,11 +134,11 @@ button, input, textarea { font-family: inherit; }
 .symbol {
     width: 36px;
     height: 36px;
-    border-radius: 12px;
+    border-radius: 20px;
     display: grid;
     place-items: center;
     color: #fff;
-    background: linear-gradient(135deg, var(--hero-1), var(--hero-2) 55%, var(--hero-3));
+    background: var(--primary);
     font-family: var(--font-title);
     font-size: 16px;
     text-shadow: none;
@@ -155,7 +155,7 @@ button, input, textarea { font-family: inherit; }
     grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     padding: 0 4px;
-    border-radius: 24px;
+    border-radius: 28px;
     background: color-mix(in srgb, var(--solid) 92%, transparent);
     border: 1px solid var(--glass-border);
     box-shadow: var(--shadow);
@@ -180,7 +180,7 @@ button, input, textarea { font-family: inherit; }
     max-width: 100%;
     background: var(--solid);
     color: var(--ink);
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 10px 12px 10px 14px;
     box-shadow: var(--shadow);
     border: 1px solid var(--line);
@@ -198,7 +198,7 @@ button, input, textarea { font-family: inherit; }
     width: 44px;
     height: 44px;
     margin: 0 0 12px;
-    border-radius: 14px;
+    border-radius: 20px;
     background: var(--solid);
     border: 1px solid var(--line);
     box-shadow: var(--shadow);
@@ -229,7 +229,7 @@ button, input, textarea { font-family: inherit; }
     bottom: calc(96px + env(safe-area-inset-bottom));
     background: var(--toast);
     color: var(--toast-ink);
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 12px 14px;
     display: flex;
     gap: 8px;
@@ -254,7 +254,7 @@ button, input, textarea { font-family: inherit; }
         top: 0;
         height: 100dvh;
     }
-    .main { padding: 20px 24px 40px; }
+    .main { padding: 20px 24px 140px; }
     .tabbar, .tip-bubble, .tip-bulb { display: none; }
     .sheet {
         left: 50%;
@@ -289,7 +289,7 @@ button, input, textarea { font-family: inherit; }
     min-height: 64px;
     min-width: 0;
     width: 100%;
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 8px 10px;
     background: var(--brand-soft);
     font-weight: 800;
@@ -307,7 +307,7 @@ button, input, textarea { font-family: inherit; }
 .num-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .num-tile { flex-direction: column; min-height: 56px; padding: 6px 4px; }
 .num-tile .num { font-size: 18px; line-height: 22px; }
-.num-tile .num-name { font-size: 13px; line-height: 18px; font-weight: 700; }
+.num-tile .num-name { font-size: 13px; line-height: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .period-picks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .period-picks .tap { min-width: 0; width: 100%; padding: 0; }
 .time-picks { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -350,8 +350,27 @@ button, input, textarea { font-family: inherit; }
     50% { opacity: .25; }
 }
 .mic-note { margin: 8px 0 0; }
-.msg-card { border: 1px solid var(--line); border-radius: 16px; margin: 0 0 12px; padding: 8px 0; }
-.low-card { background: #FFF6D8; border-color: #E6C96A; }
+.msg-card { border: 1px solid var(--line); border-radius: 24px; margin: 0 0 12px; padding: 8px 0; background: var(--solid); }
+.low-card { background: #FFF6D8; border-color: #E0C56A; color: var(--ink); }
+.dark .low-card { background: #3A3424; border-color: #6A5A32; color: var(--ink); }
+.clay-mark { display: block; margin: 4px auto 8px; max-width: 100%; }
+.capture-summary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 20px;
+    background: var(--brand-soft);
+    text-align: left;
+}
+.capture-summary span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
 .msg-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .msg-summary.range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .msg-summary .tap { min-width: 0; width: 100%; padding: 0 6px; white-space: normal; line-height: 18px; }

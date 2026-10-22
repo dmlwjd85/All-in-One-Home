@@ -4,6 +4,7 @@ import { holidayCaption } from '../lib/holidays.js';
 import { joined, setTimetable } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
@@ -31,6 +32,12 @@ export function Schedule() {
             </div>
             {mode === '주' && (
                 <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                    {!week.length && (
+                        <div>
+                            <ClayMark />
+                            <p className="muted" style={{ textAlign: 'center', marginTop: 0 }}>이번 주 일정은 아직 없어요.</p>
+                        </div>
+                    )}
                     {Array.from({ length: 7 }, (_, index) => {
                         const date = addDaysYmd(weekStart, index);
                         const holiday = holidayCaption(date);
@@ -60,7 +67,7 @@ export function Schedule() {
                             const holiday = holidayCaption(cell.ymd);
                             const has = events.some((row) => onDay(row, cell.ymd));
                             return (
-                                <Btn key={cell.ymd} className="block" onClick={() => setPicked(cell.ymd)} style={{ background: cell.ymd === clock.ymd ? 'var(--primary)' : 'var(--solid)', color: cell.ymd === clock.ymd ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 10, opacity: cell.inMonth ? 1 : 0.45, minHeight: 44 }}>
+                                <Btn key={cell.ymd} className="block" onClick={() => setPicked(cell.ymd)} style={{ background: cell.ymd === clock.ymd ? 'var(--primary)' : 'var(--solid)', color: cell.ymd === clock.ymd ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 20, opacity: cell.inMonth ? 1 : 0.45, minHeight: 44 }}>
                                     <span className="num" style={{ fontWeight: 800 }}>{cell.day}</span>
                                     {holiday?.isHoliday && <span style={{ display: 'block', fontSize: 11 }}>{holiday.primary.short || '휴일'}</span>}
                                     {has && <span aria-hidden="true">·</span>}
@@ -108,7 +115,7 @@ function Timetable({ data, todayKey }) {
     const [specialOn, setSpecialOn] = useState(false);
     const cells = [<span key="corner" />];
     DAYS.forEach(([key, label]) => {
-        cells.push(<strong key={key} style={{ textAlign: 'center', color: key === todayKey ? 'var(--primary)' : 'inherit' }}>{label}</strong>);
+        cells.push(<strong key={key} style={{ textAlign: 'center', color: key === todayKey ? 'var(--accent)' : 'inherit' }}>{label}</strong>);
     });
     for (let index = 0; index < 6; index += 1) {
         cells.push(<strong key={`h${index}`} style={{ display: 'grid', placeItems: 'center', fontSize: 12 }}>{index + 1}</strong>);

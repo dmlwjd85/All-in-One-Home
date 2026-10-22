@@ -11,6 +11,7 @@ import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { validateBackupText } from '../src/lib/backup.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
+import { captureDrafts } from '../src/ui/capture.js';
 
 const root = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const failures = [];
@@ -117,29 +118,44 @@ function contrast(a, b) {
     const [hi, lo] = left > right ? [left, right] : [right, left];
     return (hi + 0.05) / (lo + 0.05);
 }
-function mix(base, top, alpha) {
-    const nb = Number.parseInt(base.slice(1), 16);
-    const nt = Number.parseInt(top.slice(1), 16);
-    const channel = (shift) => Math.round(((nt >> shift) & 255) * alpha + ((nb >> shift) & 255) * (1 - alpha));
-    return `#${[channel(16), channel(8), channel(0)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+const held = new Date('2026-10-23T09:00:00+09:00');
+for (const line of [
+    '네 감사합니다!',
+    '10/21(수) 현장체험학습 사진 올리기',
+    '작년 6학년 담당 선생님은 11/10(화)까지 가정통신문 회신 부탁드려요',
+]) {
+    const drafts = captureDrafts(line, { now: held });
+    check(drafts.length > 0 && drafts.every((item) => item.include === false), `빼 둔 문장이 저장 대상입니다. ${line}`);
 }
+const keptRecord = captureDrafts('12번 이하은 발표를 끝까지 했어요', { now: held, students: [{ id: 's12', no: 12, name: '이하은' }] });
+check(keptRecord.length === 1 && keptRecord[0].include !== false && keptRecord[0].kind === '학생기록', '학생 기록이 빠졌습니다.');
+
 const pairs = [
-    ['본문', '#1E1B3A', '#F6F4FF'],
-    ['보조', '#5B5775', '#FFFFFF'],
-    ['버튼', '#FFFFFF', '#6D4AFF'],
-    ['히어로 글자', '#FFFFFF', '#B85A3E'],
-    ['히어로 버튼', '#6D4AFF', '#FFFFFF'],
-    ['다크 본문', '#F3F1FF', '#0F0E1A'],
-    ['다크 보조', '#B4AFCF', '#1C1A2E'],
-    ['다크 버튼', '#14112B', '#A994FF'],
+    ['본문', '#2B3350', '#EEF6FD'],
+    ['보조', '#3E4868', '#FFF8E7'],
+    ['버튼', '#FFFFFF', '#5B5BD6'],
+    ['히어로 글자', '#2B3350', '#FFF8E7'],
+    ['히어로 버튼', '#FFFFFF', '#5B5BD6'],
+    ['히어로 알약', '#2B3350', '#E7DFF8'],
+    ['노란 카드', '#2B3350', '#FFF6D8'],
+    ['지각', '#9A5B00', '#FFF8E7'],
+    ['다크 본문', '#F4F7FB', '#1A2333'],
+    ['다크 보조', '#C5D0E0', '#243044'],
+    ['다크 버튼', '#FFFFFF', '#5B5BD6'],
+    ['다크 히어로', '#F4F7FB', '#243044'],
+    ['다크 알약', '#F4F7FB', '#322C4A'],
+    ['다크 노란 카드', '#F4F7FB', '#3A3424'],
+    ['다크 지각', '#F0B89A', '#243044'],
+    ['다크 결석', '#FF7D6E', '#243044'],
+    ['강조', '#5B5BD6', '#EEF6FD'],
+    ['강조 카드', '#5B5BD6', '#FFF8E7'],
+    ['다크 강조', '#A994FF', '#1A2333'],
+    ['다크 강조 카드', '#A994FF', '#243044'],
 ];
 for (const [label, fg, bg] of pairs) {
     const ratio = contrast(fg, bg);
     check(ratio >= 4.5, `${label} 대비 ${ratio.toFixed(2)} 가 4.5보다 낮습니다.`);
 }
-const pill = mix('#B85A3E', '#200C30', 0.38);
-const pillRatio = contrast('#FFFFFF', pill);
-check(pillRatio >= 4.5, `히어로 알약 대비 ${pillRatio.toFixed(2)} 가 4.5보다 낮습니다.`);
 
 function walk(dir, out = []) {
     for (const name of readdirSync(dir)) {

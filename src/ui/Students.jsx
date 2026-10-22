@@ -3,6 +3,7 @@ import { joinedRecords, saveQuick } from '../lib/db.js';
 import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -96,7 +97,12 @@ export function Student() {
                         {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
                     </article>
                 ))}
-                {!filtered.length && <p className="muted">이 칸에는 아직 기록이 없어요.</p>}
+                {!filtered.length && (
+                    <div>
+                        <ClayMark />
+                        <p className="muted" style={{ textAlign: 'center' }}>이 칸에는 아직 기록이 없어요.</p>
+                    </div>
+                )}
             </div>
             <p className="muted">건강·민원처럼 민감한 내용은 자물쇠가 붙고, 클라우드로 보내지 않아요.</p>
         </div>

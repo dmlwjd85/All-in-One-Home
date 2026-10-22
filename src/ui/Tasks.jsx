@@ -3,6 +3,7 @@ import { addDaysYmd, eventClock, startOfWeekMon } from '../lib/date.js';
 import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 export function Tasks() {
     const { data, clock, showToast } = useUi();
@@ -28,6 +29,12 @@ export function Tasks() {
             }}>
                 <input className="field" aria-label="할 일" placeholder="할 일을 적고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
             </form>
+            {!todos.length && !notes.length && (
+                <div>
+                    <ClayMark />
+                    <p className="muted" style={{ textAlign: 'center' }}>아직 적어 둔 할 일이 없어요.</p>
+                </div>
+            )}
             {groups.map(([label, rows]) => (
                 <section key={label} style={{ marginTop: 16 }}>
                     <h3 style={{ marginBottom: 8 }}>{label}</h3>

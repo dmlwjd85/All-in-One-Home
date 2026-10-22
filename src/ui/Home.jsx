@@ -3,6 +3,7 @@ import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, studentName } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 export function Home() {
     const { data, clock, go } = useUi();
@@ -53,20 +54,20 @@ export function Home() {
 
             <section className="glass home-quick" style={{ padding: 14 }}>
                 <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 ＋에서 시작해요</h3>
-                <p className="muted" style={{ margin: 0 }}>회의록, 출결, 메시지 붙여넣기, 기록은 가운데 ＋를 누르면 한 화면에서 고릅니다.</p>
+                <p className="muted" style={{ margin: 0 }}>가운데 ＋에 한 줄을 적으면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--primary)', fontWeight: 800 }}>한 주 보기</Btn>
+                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
                 </div>
                 <div className="period-row" style={{ marginTop: 10 }}>
                     {labels.map((label, index) => {
                         const on = period.index === index;
                         const specialist = table[`s${index + 1}`];
                         return (
-                            <Btn key={index} className="block" onClick={() => go('#/schedule')} style={{ background: on ? 'var(--primary)' : 'var(--solid)', color: on ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 16, border: '1px solid var(--line)', minHeight: 64, fontWeight: 800, fontSize: 13 }}>
+                            <Btn key={index} className="block" onClick={() => go('#/schedule')} style={{ background: on ? 'var(--primary)' : 'var(--solid)', color: on ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 20, border: '1px solid var(--line)', minHeight: 64, fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid' }}><span>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11 }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
                             </Btn>
                         );
@@ -77,7 +78,7 @@ export function Home() {
             <section className="glass home-todo" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 할 일</h3>
-                    <Btn onClick={() => go('#/todo')} style={{ color: 'var(--primary)', fontWeight: 800 }}>모두 보기</Btn>
+                    <Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
@@ -94,7 +95,7 @@ export function Home() {
             <section className="glass home-event" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>이번 주 학급 일정</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--primary)', fontWeight: 800 }}>달력</Btn>
+                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>달력</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
@@ -119,7 +120,12 @@ export function Home() {
                             </div>
                         </div>
                     ))}
-                    {!feed.length && <p className="muted" style={{ margin: 0 }}>아직 기록이 없어요. ＋를 누르면 10초면 남길 수 있어요.</p>}
+                    {!feed.length && (
+                        <div>
+                            <ClayMark />
+                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. ＋에 한 줄이면 누가기록에 쌓을 수 있어요.</p>
+                        </div>
+                    )}
                 </div>
             </section>
         </div>

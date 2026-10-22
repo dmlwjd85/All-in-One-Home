@@ -315,7 +315,7 @@ export async function saveQuick(input, now = new Date()) {
             put(local ? draft.local.records : draft.records, row);
             message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
         } else if (kind === '할 일') {
-            const row = { ...base, id: nid('todo'), title: stripTokens(text) || text, done: false, due: parsed.detectedDate || input.due || '' };
+            const row = { ...base, id: nid('todo'), title: stripTokens(text) || text, done: false, due: input.due != null ? input.due : (parsed.detectedDate || '') };
             put(local ? draft.local.todos : draft.todos, row);
             message = '할 일에 넣었어요.';
         } else if (kind === '일정') {
