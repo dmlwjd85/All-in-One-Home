@@ -943,6 +943,43 @@ try {
         check(asked.low && !asked.chosen && asked.text.includes('질문'), `질문 문장이 ${label}에서 노란 카드가 아닙니다.`);
         await audit(page, `질문 카드 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_question_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('이번 달 말까지 학급문고 정리 부탁드려요');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 31일'));
+        const monthEnd = await page.evaluate(() => {
+            const node = document.querySelector('.msg-card');
+            const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
+        });
+        check(monthEnd.cards === 1 && monthEnd.include && monthEnd.title.includes('학급문고') && monthEnd.text.includes('할 일'), `이번 달 말까지가 ${label}에서 10월 31일 할 일로 들어가지 않습니다. ${monthEnd.title}`);
+        await audit(page, `말일 마감 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_month_end_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('11/12(목) 운동회는 열지 않기로 했습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        const closed = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            text: document.body.innerText,
+        }));
+        check(closed.low && !closed.chosen && closed.text.includes('11월 12일'), `열지 않기로가 ${label}에서 노란 카드가 아닙니다.`);
+        await audit(page, `열지 않기로 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_not_held_${label}.png`) });
     }
     await withDemo(390, 'light', async (page) => { await periodAndQuestion(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await periodAndQuestion(page, '360'); }, 844);

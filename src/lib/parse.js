@@ -74,6 +74,16 @@ function monthShift(which) {
     return /다음|내달/.test(which) ? 1 : 0;
 }
 
+/** '11월 말', '3월 초', '11월 중순'을 그 달의 하루로 바꿉니다. */
+function numberedMonthEdge(month, edge, today) {
+    const probe = fixSchoolYear(month, 1, today);
+    if (!probe) return '';
+    const year = Number(probe.slice(0, 4));
+    const last = new Date(year, month, 0).getDate();
+    const day = edge === '초' ? 1 : edge === '중순' ? Math.min(15, last) : last;
+    return ymdOf(year, month, day);
+}
+
 /** '이번 달 말', '다음 달 초', '중순', '월말'을 그 달의 하루로 바꿉니다. 중순은 15일입니다. */
 function monthEdgeYmd(which, edge, today) {
     const shifted = addMonths(Number(today.slice(0, 4)), Number(today.slice(5, 7)), monthShift(which));
@@ -261,6 +271,11 @@ export function findDates(text, now = new Date()) {
     eachMatch(/(?<![가-힣\d])월(초|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd('이번달', match[1], today), { explicit: true });
     });
+    eachMatch(/(\d{1,2})\s*월\s*(초|중순|말)(?!인)(?![가-힣])/g, raw, (match) => {
+        const month = Number(match[1]);
+        if (month < 1 || month > 12) return;
+        pushSpan(spans, match, numberedMonthEdge(month, match[2], today), { explicit: true });
+    });
     eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*[~～\\-–—]\\s*(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const startDay = Number(match[1]);
         const endDay = Number(match[2]);
@@ -298,7 +313,7 @@ export function findDates(text, now = new Date()) {
     eachMatch(new RegExp(`(?<![가-힣])([월화수목금토일])요일(?=\\s*(?:에\\s*)?(?:오전|오후|\\d{1,2}\\s*시(?!간)))`, 'g'), raw, (match) => {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
-    eachMatch(/(?<![가-힣])([월화수목금토일])요일(?=\s*(?:에\s*)?\d\s*교시)/g, raw, (match) => {
+    eachMatch(/(?<!매주\s*)(?<!격주\s*)(?<![가-힣])([월화수목금토일])요일(?=\s*(?:에\s*)?\d\s*교시)/g, raw, (match) => {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
     eachMatch(new RegExp(`(?<![가-힣\\d./])[(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）](?=\\s*${WEEKDAY_CLOCK}\\s*까지)`, 'g'), raw, (match) => {
