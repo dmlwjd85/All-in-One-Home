@@ -259,6 +259,9 @@ export function findDates(text, now = new Date()) {
     eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(초|말일|말)/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd(match[1], match[2] === '말일' ? '말' : match[2], today), { explicit: true });
     });
+    eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*마지막\s*날/g, raw, (match) => {
+        pushSpan(spans, match, monthEdgeYmd(match[1], '말', today), { explicit: true });
+    });
     eachMatch(/(?<![가-힣])(이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중으로/g, raw, (match) => {
         pushSpan(spans, match, monthEdgeYmd(match[1], '말', today), { explicit: true });
     });

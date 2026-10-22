@@ -1126,6 +1126,41 @@ try {
         check(trip.low && !trip.chosen && trip.text.includes('10월 24일'), `제주 잡담이 ${label}에서 노란 카드가 아닙니다.`);
         await audit(page, `제주 잡담 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_personal_trip_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('11월 20일(금) 교직원 체육대회가 열리지 못합니다.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 20일'));
+        const cannot = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+        }));
+        check(cannot.low && !cannot.chosen, `열리지 못합니다가 ${label}에서 노란 카드가 아닙니다.`);
+        await audit(page, `열리지 못합니다 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_cannot_hold_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('저 11/2~11/3 연차예요. 급한 일은 학년부장님께 부탁드려요.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 2일'));
+        const leave = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            cards: document.querySelectorAll('.msg-card').length,
+        }));
+        check(leave.low && !leave.chosen && leave.cards === 1, `본인 연차가 ${label}에서 노란 카드 한 장이 아닙니다.`);
+        await audit(page, `본인 연차 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_personal_leave_${label}.png`) });
     }
     await withDemo(390, 'light', async (page) => { await periodAndQuestion(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await periodAndQuestion(page, '360'); }, 844);

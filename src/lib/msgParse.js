@@ -233,7 +233,7 @@ function hasEvent(text) {
     if (hasInspection(text)) return true;
     if (/(?<![가-힣])(?:촬영|공사)/.test(text)) return true;
     if (hasCounseling(text)) return true;
-    if (/(?:대회|(?<![가-힣])(?:현장체험학습|현장학습))/.test(text) && !isRequest(text) && !isDeadlineSubmission(text)) return true;
+    if (/(?:대회|축제|(?<![가-힣])(?:현장체험학습|현장학습))/.test(text) && !isRequest(text) && !isDeadlineSubmission(text)) return true;
     if (/장소\s*변경/.test(text) && !isRequest(text)) return true;
     if (isAnnouncement(text)) return true;
     if (/\d\s*[~～\-]\s*\d\s*교시/.test(text)) return true;
@@ -280,7 +280,7 @@ function stripBoilerplate(text) {
 /** 제목에 남는 조사·연도·대략 조각. 취소되었다는 말 자체는 제목에 둡니다. */
 function stripTitleNoise(text) {
     let s = String(text || '');
-    s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|처럼|과\s*달리|와\s*달리)?/g, ' ');
+    s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|엔|처럼|과\s*달리|와\s*달리)?/g, ' ');
     s = s.replace(/(?:올해|이번에)(?:는|은)?/g, ' ');
     s = s.replace(/이었(?:는데|고|습니다|어요|음)?/g, ' ');
     s = s.replace(/(?:^|\s)이니(?=\s|$)/g, ' ');
@@ -292,6 +292,7 @@ function stripTitleNoise(text) {
     s = s.replace(/잊지\s*않으셨(?:죠|지요)\s*[?？]?/g, ' ');
     s = s.replace(/(?:^|\s)(?:꼭|독려|예정대로|우천\s*시에도)(?=\s|$)/g, ' ');
     s = s.replace(/하지\s*않고/g, ' ');
+    s = s.replace(/빠지지\s*말고/g, ' ');
     s = s.replace(/(?:^|\s)기간(?:은|는|이|가)?(?=\s|$)/g, ' ');
     s = s.replace(/강당에서/g, ' ');
     return s;
@@ -313,6 +314,7 @@ export function tidyTitle(text) {
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/글피|모레|내일|오늘/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*마지막\s*날/g, ' ');
     t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/(?<![가-힣\d])월(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)\s*인/g, ' ');
@@ -418,6 +420,7 @@ function salvageTitle(text) {
     t = t.replace(/(?:오전|오후)\s*까지/g, ' ');
     t = t.replace(/글피|모레|내일|오늘|까지/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
+    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*마지막\s*날/g, ' ');
     t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/(?<![가-힣\d])월(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)\s*인/g, ' ');
@@ -924,23 +927,29 @@ function yearRestartChunks(text, now) {
     return [leftText.replace(/\s+/g, ' ').trim(), `\u0007${rightText.replace(/\s+/g, ' ').trim()}`];
 }
 
-/** '까지이니'로 끝나는 기간은 기간 일정과 마지막 날 할 일을 같이 만듭니다. */
+/** 기간 뒤의 '이니'가 제출·회신을 시키면 기간 일정과 마지막 날 할 일을 같이 만듭니다. */
 function untilIniChunks(text, now) {
-    if (!/까지\s*이니/.test(text)) return null;
     const spans = findDates(text, now);
     const range = temporalUnits(text, spans).find((unit) => unit.spans.length > 1);
     if (!range) return null;
     const start = range.spans[0];
     const end = range.spans[range.spans.length - 1];
+    const after = text.slice(end.index + end.length);
+    if (!/(?:까지\s*)?이니/.test(after)) return null;
     const when = text.slice(start.index, end.index + end.length);
     const head = tidyTitle(text.slice(0, start.index));
-    const tail = tidyTitle(text.slice(end.index + end.length).replace(/까지\s*이니/g, ' '));
+    const tailRaw = after.replace(/(?:까지\s*)?이니/g, ' ');
+    const tail = tidyTitle(tailRaw);
     const name = head || tail;
     if (!name) return null;
-    const submission = /제출|회신|작성|입력|업로드|마감/.test(tail);
-    const dueName = submission
-        ? [String(head || '').replace(/(?:^|\s)공모(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim(), tail].filter(Boolean).join(' ')
-        : name;
+    const handed = tailRaw.match(/([가-힣]{1,12})\s*(?:을|를)?\s*내\s*(?:주세요|주세|세요)/);
+    const verbSubmit = /제출|회신|작성|입력|업로드|마감/.test(tail);
+    if (!handed && !verbSubmit && !/까지\s*이니/.test(text)) return null;
+    const dueName = handed
+        ? `${handed[1]} 제출`
+        : (verbSubmit
+            ? [String(head || '').replace(/(?:^|\s)공모(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim(), tail].filter(Boolean).join(' ')
+            : name);
     const endToken = text.slice(end.index, end.index + end.length);
     return [
         `\u0007${name} ${when}`.replace(/\s+/g, ' ').trim(),
@@ -1026,12 +1035,15 @@ function hasWorkCue(text) {
     return Boolean(when.hmEnd && findDates(src).length);
 }
 
-/** 일인칭으로 다녀오겠다는 말은 날짜가 있어도 업무가 아닙니다. */
+/** 저·제가 본인 휴가·연차·출장을 말하는 것은 부탁이 뒤에 있어도 업무 일정이 아닙니다. */
 function personalAside(text) {
     const src = String(text || '');
+    const speaker = /(?<![가-힣])(?:제가|저(?:는|도|만)?)(?![가-힣])/.test(src);
+    if (!speaker) return false;
+    const own = src.replace(/수학여행|현장체험학습|체험학습/g, ' ');
+    if (/(?<![가-힣])(?:연차|병가|조퇴|휴가|여행|출장)/.test(own)) return true;
     if (hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src)) return false;
-    const speaker = /(?<![가-힣])저(?:는|도|만)?(?![가-힣])/.test(src);
-    return speaker && /(?:가요|갈게요|올게요|사올|다녀올)/.test(src);
+    return /(?:가요|갈게요|올게요|사올|다녀올)/.test(src);
 }
 
 function casualTalk(text) {
@@ -1141,16 +1153,24 @@ function textBeforeSpan(fullText, source, span) {
     return full.slice(0, Math.max(0, at - lead + span.index));
 }
 
-/** 작년이 담임·선생님처럼 사람을 꾸미면 날짜의 해가 아닙니다. */
-function personYear(before) {
-    return String(before || '').replace(/(?:재작년|작년|지난해|지난\s*해)\s*(?:담임|선생님|교사|교원|부장|교감|교장|장학사)/g, ' ');
+/** 사람·자료를 꾸미는 작년은 그 날짜의 해가 아닙니다. 바로 뒤의 날짜와 행사 이름만 해를 바꿉니다. */
+function blocksYearShift(before) {
+    const src = String(before || '');
+    const at = src.search(/재작년|작년|지난해|지난\s*해/);
+    if (at < 0) return false;
+    const rest = src.slice(at).replace(/^(?:재작년|작년|지난해|지난\s*해)/, '');
+    if (/^(?:에는|에도|엔|에|는|은|의)?\s*$/.test(rest)) return false;
+    if (/(?:님|담당|교사|선생|께서)/.test(rest)) return true;
+    if (/(?:자료|문서|기록)/.test(rest)) return true;
+    return false;
 }
 
 /** 올해·이번에 다시 열리기 전의 작년·지난해·재작년. 지난주는 해가 아닙니다. */
 function lastYearShift(before) {
-    const comparable = personYear(before).replace(/작년처럼|지난해처럼|작년과\s*달리|지난해와\s*달리|작년와\s*달리|지난해과\s*달리/g, ' ');
+    const comparable = String(before || '').replace(/작년처럼|지난해처럼|작년과\s*달리|지난해와\s*달리|작년와\s*달리|지난해과\s*달리/g, ' ');
     const cut = Math.max(comparable.lastIndexOf('올해'), comparable.lastIndexOf('이번에'));
     const scope = cut >= 0 ? comparable.slice(cut).replace(/^(?:올해|이번에)/, '') : comparable;
+    if (blocksYearShift(scope)) return null;
     if (/재작년/.test(scope)) return 2;
     if (/(?:작년|지난해|지난\s*해)/.test(scope)) return 1;
     return null;
@@ -1194,13 +1214,22 @@ function postponedWithoutDestination(text) {
     return !(spans.length >= 2 && isReschedule(src, spans));
 }
 
-/** 행사 동사에 바로 붙은 부정·취소·무산만 빼 둡니다. '없이', '하지 않고', 운행·조회 알림은 그대로 둡니다. */
+/** 행사를 없앤다는 취소만 해당합니다. '취소하지 않습니다'와 '취소 없이'는 그대로 둡니다. */
+function eventCancelled(text) {
+    const src = String(text || '');
+    if (/취소(?:하지|\s*않|\s*없이)/.test(src)) return false;
+    return /(?<![가-힣])취소/.test(src);
+}
+
+/** 행사 명사·동사에 붙은 무산·못함·어려움·취소만 빼 둡니다. 잊지 못하게, 빠지지 말고, 못 오시는 회신은 그대로 둡니다. */
 function negatedClause(text) {
     const src = String(text || '');
     if (/미실시|미개최/.test(src)) return true;
-    if (/취소(?!\s*없이)/.test(src)) return true;
     if (/(?<![가-힣])무산/.test(src)) return true;
-    if (/열리지\s*못하|개최되지\s*못하|진행되지\s*못하|실시되지\s*못하/.test(src)) return true;
+    if (/(?:진행|실시|개최|열리|운영)(?:이|가|은|는)?\s*어렵/.test(src)) return true;
+    if (/(?:열리|개최되|진행되|실시되|하)지\s*못(?:하|합|해|함)/.test(src)) return true;
+    if (/열리지\s*않/.test(src)) return true;
+    if (eventCancelled(src)) return true;
     if (postponedWithoutDestination(src)) return true;
     if (/(?<![가-힣])안\s*(?:합니다|해요|함)(?![가-힣])/.test(src)) return true;
     const verb = '(?:진행하|실시하|개최하|열|하)';
@@ -1279,7 +1308,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const aside = chatter ? '업무로 볼 말이 없어 빼 두었어요.' : '';
     const stale = past ? '지난 날짜라 빼 두었어요.' : '';
     const shared = reference ? '참고용이라 빼 두었어요.' : '';
-    const cancelled = /취소(?!\s*없이)/.test(source);
+    const cancelled = eventCancelled(source);
     const dropped = cancelled ? '취소된 내용이라 빼 두었어요.' : '';
     const recalled = remembered ? '지난 이야기라 빼 두었어요.' : '';
     const askedNote = asked ? '질문이라 빼 두었어요.' : '';
@@ -1400,6 +1429,7 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
         if (/(?:학예회|설명회|상담\s*주간)/.test(segment) && !isDeadlineSubmission(segment)) return [make('일정', 0)];
         if (span.range && !isDeadlineSubmission(segment)) return [make('일정', 0)];
         if (isDeadlineSubmission(segment) || (hasDeadline(segment) && !span.range)) return [make('할 일', 0)];
+        if (todo && event && !isDeadlineSubmission(segment) && /참석|참여/.test(segment) && !/(?:제출|회신|작성|입력|업로드|마감|회수|탑재)/.test(segment)) return [make('일정', 0)];
         if (todo && event) return collapsePair([make('일정', 0), make('할 일', 1)], segment);
         if (event || (when.hm && !todo)) return [make('일정', 0)];
         if (todo) return [make('할 일', 0)];
