@@ -837,12 +837,38 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('1개 등록'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
         await page.evaluate(() => { location.hash = '#/schedule'; });
-        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강') && document.body.innerText.includes('08:50'));
-        const week = await page.evaluate(() => document.body.innerText);
-        check(week.includes('과학관') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
+        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
+        let week = await page.evaluate(() => document.body.innerText);
+        if (!(week.includes('08:50') && week.includes('과학관'))) {
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForSelector('.cal-grid');
+            let found = false;
+            for (let hop = 0; hop < 3 && !found; hop += 1) {
+                const count = await page.evaluate(() => document.querySelectorAll('.cal-grid button').length);
+                for (let index = 0; index < count; index += 1) {
+                    const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
+                    if (!marked) continue;
+                    await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n].click(), index);
+                    const body = await page.evaluate(() => document.body.innerText);
+                    if (body.includes('과학관') && body.includes('08:50')) {
+                        week = body;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) await page.click('[aria-label="다음 달"]');
+            }
+            check(found, `현장체험 시각을 ${label} 달력에서 찾지 못했습니다.`);
+        }
+        check(week.includes('과학관') && week.includes('08:50') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
         await audit(page, `주간 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        for (let hop = 0; hop < 3; hop += 1) {
+            const here = await page.evaluate(() => document.body.innerText.includes('2026년 10월'));
+            if (here) break;
+            await page.click('[aria-label="이전 달"]');
+        }
         await page.waitForFunction(() => document.body.innerText.includes('2026년 10월'));
         await page.evaluate(() => [...document.querySelectorAll('.cal-grid button')].find((el) => el.innerText.trim().startsWith('23'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));

@@ -70,7 +70,7 @@ export function Schedule() {
                     </div>
                     <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
                         <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
-                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{row.endTime ? `${eventClock(row)} ` : ''}{row.title}</p>)}
+                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}</p>)}
                         {!events.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
                     </div>
                 </div>
