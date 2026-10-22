@@ -106,7 +106,8 @@ const icons = await page.evaluate(async (src, plate) => {
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = side;
     maskCanvas.height = side;
-    const maskCtx = maskCanvas.getContext('2d');
+    const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    maskCtx.imageSmoothingEnabled = false;
     const draw = Math.round(side * maskScale);
     const ox = Math.floor((side - draw) / 2);
     const oy = Math.floor((side - draw) / 2);
@@ -117,6 +118,9 @@ const icons = await page.evaluate(async (src, plate) => {
     if (ox > 0) maskCtx.drawImage(maskCanvas, ox, 0, 1, side, 0, 0, ox, side);
     const right = ox + draw;
     if (right < side) maskCtx.drawImage(maskCanvas, right - 1, 0, 1, side, right, 0, side - right, side);
+    const maskPixels = maskCtx.getImageData(0, 0, side, side);
+    for (let i = 3; i < maskPixels.data.length; i += 4) maskPixels.data[i] = 255;
+    maskCtx.putImageData(maskPixels, 0, 0);
 
     function png(source, size) {
         const out = document.createElement('canvas');
@@ -155,6 +159,18 @@ function quantize(path) {
     else if (existsSync(tmp)) rmSync(tmp);
 }
 
+/** pngquant가 남긴 팔레트 투명도를 없앱니다. 어두운 배경에 회색 줄이 비치지 않게 알파를 255로 고정합니다. */
+function flattenOpaque(path) {
+    const script = `
+from PIL import Image
+im = Image.open(${JSON.stringify(path)}).convert('RGBA')
+im.putalpha(Image.new('L', im.size, 255))
+im.convert('RGB').save(${JSON.stringify(path)}, format='PNG')
+`;
+    const result = spawnSync('python3', ['-c', script], { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(result.stderr || 'maskable 아이콘을 불투명하게 만들지 못했습니다.');
+}
+
 const outputs = [
     ['favicon-32.png', icons.any32],
     ['apple-touch-icon.png', icons.any180],
@@ -167,5 +183,9 @@ for (const [name, url] of outputs) {
     const path = resolve(root, 'public', name);
     writePng(name, url);
     quantize(path);
+    if (name.startsWith('icon-maskable-')) {
+        flattenOpaque(path);
+        quantize(path);
+    }
 }
 console.log(`아이콘을 저장했습니다. maskable scale ${icons.scale.toFixed(3)}`);

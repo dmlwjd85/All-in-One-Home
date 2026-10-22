@@ -4,6 +4,26 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
+import { addDaysYmd, fromYmd, monthTitle, seoulYmd, startOfWeekMon, weekdayKo } from '../src/lib/date.js';
+
+/** '금요일까지'와 같은 규칙입니다. 오늘을 포함한 가장 가까운 그 요일입니다. */
+function nearestWeekdayYmd(today, weekday) {
+    const delta = (weekday - fromYmd(today).getDay() + 7) % 7;
+    return addDaysYmd(today, delta);
+}
+
+function koMonthDay(ymd) {
+    return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
+}
+
+const todayYmd = seoulYmd();
+const fridayYmd = nearestWeekdayYmd(todayYmd, 5);
+const fridayLabel = koMonthDay(fridayYmd);
+const fridaySlash = `${Number(fridayYmd.slice(5, 7))}/${Number(fridayYmd.slice(8, 10))}`;
+const fridayWeek = weekdayKo(fridayYmd);
+const fridayMonthLabel = monthTitle(fridayYmd.slice(0, 7));
+const fridayDay = Number(fridayYmd.slice(8, 10));
+const lastFridayLabel = koMonthDay(addDaysYmd(addDaysYmd(startOfWeekMon(todayYmd), 4), -7));
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const shots = prepareShots();
@@ -766,14 +786,14 @@ try {
         }));
         check(span.start === '10월 25일' && span.end === '10월 27일' && span.title === '학년 연구실 공사' && !/\d/.test(span.title) && span.kept === 1, `월 없는 기간이 ${JSON.stringify(span)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_monthless_span_390.png') });
-        await pasteNext('10/23 교직원 회의는 15:40에서 16:10으로 변경');
-        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('16:10'));
+        await pasteNext(`${fridaySlash} 교직원 회의는 15:40에서 16:10으로 변경`);
+        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('16:10') && document.body.innerText.includes(label), {}, fridayLabel);
         const shifted = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
             kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
         }));
-        check(shifted.chips.includes('10월 23일') && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.kept === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
+        check(shifted.chips.includes(fridayLabel) && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.kept === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
         await pasteNext('학예회 11/2(월) 상담 11/6(금)');
         await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'));
         const unsure = await page.evaluate(() => ({
@@ -830,7 +850,7 @@ try {
         await openPlus(page);
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
         await page.waitForSelector('[data-screen="message"] textarea');
-        await page.type('[data-screen="message"] textarea', '10/23(금) 오후 2시~4시 학부모 진로 특강 (강당)');
+        await page.type('[data-screen="message"] textarea', `${fridaySlash}(${fridayWeek}) 오후 2시~4시 학부모 진로 특강 (강당)`);
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('14:00–16:00'));
         await audit(page, `시각 범위 카드 ${label}`);
@@ -864,13 +884,20 @@ try {
         await audit(page, `주간 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
-        for (let hop = 0; hop < 3; hop += 1) {
-            const here = await page.evaluate(() => document.body.innerText.includes('2026년 10월'));
-            if (here) break;
-            await page.click('[aria-label="이전 달"]');
+        for (let hop = 0; hop < 8; hop += 1) {
+            const title = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
+            if (title === fridayMonthLabel) break;
+            const year = Number((title.match(/(\d{4})년/) || [])[1] || 0);
+            const month = Number((title.match(/(\d{1,2})월/) || [])[1] || 0);
+            const targetYear = Number((fridayMonthLabel.match(/(\d{4})년/) || [])[1] || 0);
+            const targetMonth = Number((fridayMonthLabel.match(/(\d{1,2})월/) || [])[1] || 0);
+            await page.click(year * 12 + month < targetYear * 12 + targetMonth ? '[aria-label="다음 달"]' : '[aria-label="이전 달"]');
         }
-        await page.waitForFunction(() => document.body.innerText.includes('2026년 10월'));
-        await page.evaluate(() => [...document.querySelectorAll('.cal-grid button')].find((el) => el.innerText.trim().startsWith('23'))?.click());
+        await page.waitForFunction((label) => document.body.innerText.includes(label), {}, fridayMonthLabel);
+        await page.evaluate((day) => {
+            const hit = [...document.querySelectorAll('.cal-grid button')].find((el) => Number(el.style.opacity || '1') >= 1 && Number(el.querySelector('.num')?.textContent) === day);
+            hit?.click();
+        }, fridayDay);
         await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
         await audit(page, `달력 일정 ${label}`);
     }
@@ -883,7 +910,7 @@ try {
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '금요일까지 학급 운영비 영수증 제출해 주세요.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 23일'));
+        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes(label), {}, fridayLabel);
         const card = await page.evaluate(() => {
             const node = document.querySelector('.msg-card');
             const text = node?.innerText || '';
@@ -891,7 +918,7 @@ try {
             const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
             return { text, title, include, cards: document.querySelectorAll('.msg-card').length };
         });
-        check(card.cards === 1 && card.include && card.text.includes('할 일') && card.text.includes('10월 23일') && card.title.includes('학급 운영비') && card.title.includes('영수증') && card.title.includes('제출'), `요일 마감이 ${label}에서 10월 23일 할 일로 보이지 않습니다. ${card.title}`);
+        check(card.cards === 1 && card.include && card.text.includes('할 일') && card.text.includes(fridayLabel) && card.title.includes('학급 운영비') && card.title.includes('영수증') && card.title.includes('제출'), `요일 마감이 ${label}에서 ${fridayLabel} 할 일로 보이지 않습니다. ${card.title}`);
         await audit(page, `요일 마감 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_weekday_due_${label}.png`) });
     }
@@ -904,14 +931,14 @@ try {
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '금요일 오후 3시 학년 협의회');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 23일') && document.body.innerText.includes('15:00'));
+        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes(label) && document.body.innerText.includes('15:00'), {}, fridayLabel);
         const meet = await page.evaluate(() => {
             const node = document.querySelector('.msg-card');
             const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
             const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
             return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
         });
-        check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정'), `요일 일정이 ${label}에서 10월 23일 15:00으로 보이지 않습니다. ${meet.title}`);
+        check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정'), `요일 일정이 ${label}에서 ${fridayLabel} 15:00으로 보이지 않습니다. ${meet.title}`);
         await audit(page, `요일 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_weekday_event_${label}.png`) });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
@@ -923,7 +950,7 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('지난주 금요일까지 학급 운영비 영수증 제출해 주세요.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('10월 16일') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes(label) && document.body.innerText.includes('빼 둠'), {}, lastFridayLabel);
         const pastWeek = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
             chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
