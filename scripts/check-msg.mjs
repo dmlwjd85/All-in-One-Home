@@ -170,6 +170,12 @@ must('대체', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체'
 must('모호한 두 날짜', '학예회 11/2(월) 상담 11/6(금)', qaNow, (items) => items.length === 2 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2026-11-02') && items.some((item) => item.date === '2026-11-06'));
 must('대회', '11/12(목) 과학탐구대회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-12' && items[0].include !== false);
 must('5교시', '내일 영어는 5교시 그대로입니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].period === 5 && items[0].time === '13:10' && items[0].title.includes('영어'));
+must('시각 범위', '10/30(금) 오후 2시~4시 학부모 진로 특강 (강당)', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].timeEnd === '16:00' && String(items[0].memo).includes('강당') && items[0].title.includes('특강') && !items[0].title.includes('강당'));
+must('시각 물결', '13:00~16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
+must('시각 줄표', '13:00-16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
+must('시각 부터까지', '13:00부터 16:00까지 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
+must('오전 오후 범위', '10/30(금) 오전 10시~오후 1시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].timeEnd === '13:00' && items[0].title.includes('연수'));
+must('시 범위 상속', '10/30(금) 2시~4시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].timeEnd === '16:00' && items[0].title.includes('연수'));
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });

@@ -784,6 +784,25 @@ try {
         }));
         check(unsure.chips.includes('11월 2일') && unsure.chips.includes('11월 6일') && unsure.low >= 2 && unsure.aside >= 2 && unsure.kept === 0, `모호한 두 날짜가 ${JSON.stringify(unsure)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_unsure_dates_390.png') });
+        await pasteNext('10/30(금) 오후 2시~4시 학부모 진로 특강 (강당)');
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 30일') && document.body.innerText.includes('14:00'));
+        const rangedTime = await page.evaluate(() => ({
+            cards: document.querySelectorAll('.msg-card').length,
+            chip: document.querySelector('[aria-label="시각 고치기"]')?.innerText.trim() || '',
+            date: document.querySelector('[aria-label="날짜 고치기"]')?.innerText.trim() || '',
+            memo: document.querySelector('[aria-label="메모"]')?.value || '',
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            low: document.querySelectorAll('.low-card').length,
+        }));
+        check(rangedTime.cards === 1 && rangedTime.date === '10월 30일' && rangedTime.chip === '14:00–16:00' && rangedTime.memo.includes('강당') && rangedTime.kept === 1 && rangedTime.low === 0, `시각 범위가 ${JSON.stringify(rangedTime)} 입니다.`);
+        await page.screenshot({ path: resolve(shots, 'after_time_range_390.png') });
+        await pasteNext('13:00~16:00 교육과정 워크숍');
+        await page.waitForFunction(() => document.body.innerText.includes('13:00') && document.body.innerText.includes('16:00'));
+        const workshop = await page.evaluate(() => ({
+            cards: document.querySelectorAll('.msg-card').length,
+            chip: document.querySelector('[aria-label="시각 고치기"]')?.innerText.trim() || '',
+        }));
+        check(workshop.cards === 1 && workshop.chip === '13:00–16:00', `워크숍 시각 범위가 ${JSON.stringify(workshop)} 입니다.`);
         await pasteNext('겨울 독서 주간 12월 8일(화)~10일(목)');
         await page.waitForFunction(() => document.body.innerText.includes('12월 8일') && document.body.innerText.includes('12월 10일') && document.body.innerText.includes('1개 등록'));
         await audit(page, '다른 해 날짜');

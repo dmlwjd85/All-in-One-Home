@@ -21,6 +21,11 @@ function periodLabel(item) {
     return '교시 없음';
 }
 
+function timeLabel(item) {
+    if (item.time && item.timeEnd) return `${item.time}–${item.timeEnd}`;
+    return item.time || '시각 없음';
+}
+
 function MsgCard({ item, clock, periods, onPatch }) {
     const [open, setOpen] = useState('');
     const calRef = useRef(null);
@@ -77,7 +82,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
                     <Btn className={open === 'date' ? 'chip on' : 'chip'} aria-label="날짜 고치기" onClick={() => toggle('date')}>{oneDate(item.date, clock.ymd)}</Btn>
                 )}
                 <Btn className={open === 'period' ? 'chip on' : 'chip'} aria-label="교시 고치기" onClick={() => toggle('period')}>{periodLabel(item)}</Btn>
-                <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{item.time || '시각 없음'}</Btn>
+                <Btn className={open === 'time' ? 'chip on' : 'chip'} aria-label="시각 고치기" onClick={() => toggle('time')}>{timeLabel(item)}</Btn>
             </div>
             {(open === 'date' || open === 'start' || open === 'end') && (
                 <>
@@ -92,7 +97,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
             {open === 'period' && (
                 <div style={{ marginTop: 8 }}>
                     <PeriodRow value={item.period} onPick={(n) => {
-                        onPatch(item.id, { period: n, periodEnd: 0, time: periods[n - 1] || item.time });
+                        onPatch(item.id, { period: n, periodEnd: 0, time: periods[n - 1] || item.time, timeEnd: '' });
                         setOpen('');
                     }} />
                     <Btn className="choice-tile" style={{ marginTop: 8 }} onClick={() => { onPatch(item.id, { period: 0, periodEnd: 0 }); setOpen(''); }}>교시 없음</Btn>
@@ -100,7 +105,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
             )}
             {open === 'time' && (
                 <div style={{ marginTop: 8 }}>
-                    <TimeChips value={item.time} onPick={(hm) => { onPatch(item.id, { time: hm }); setOpen(''); }} />
+                    <TimeChips value={item.time} onPick={(hm) => { onPatch(item.id, { time: hm, timeEnd: '' }); setOpen(''); }} />
                 </div>
             )}
             <input className="field" style={{ marginTop: 8 }} aria-label="메모" placeholder="장소나 메모" value={item.memo || ''} onChange={(event) => onPatch(item.id, { memo: event.target.value })} />

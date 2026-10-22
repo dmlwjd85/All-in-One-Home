@@ -57,7 +57,37 @@ function padTime(hour, minute) {
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
+const CLOCK_PART = '(?:(오전|오후)\\s*)?(\\d{1,2})\\s*(?:시(?!간)(?:\\s*(\\d{1,2})\\s*분|\\s*(반))?|:(\\d{2}))';
+const CLOCK_RANGE_RE = new RegExp(`${CLOCK_PART}\\s*(?:[~～–—-]|부터)\\s*${CLOCK_PART}(?:\\s*까지)?`);
+
+function clockSide(marker, hourRaw, minuteRaw, half, colonMin, inherited) {
+    const colon = colonMin != null && colonMin !== '';
+    let hour = Number(hourRaw);
+    const minute = colon ? Number(colonMin) : (minuteRaw != null && minuteRaw !== '' ? Number(minuteRaw) : half ? 30 : 0);
+    const mark = marker || inherited || '';
+    let assumed = false;
+    if (mark === '오후' && hour < 12) hour += 12;
+    else if (mark === '오전' && hour === 12) hour = 0;
+    else if (!colon && !mark && hour >= 1 && hour <= 6) {
+        hour += 12;
+        assumed = true;
+    }
+    return { hm: padTime(hour, minute), assumed };
+}
+
+/** 물결·줄표·부터까지로 이어진 시작과 끝은 시각 하나입니다. 끝만 적힌 시는 시작의 오전·오후를 따릅니다. */
+function clockSpan(text) {
+    const matched = String(text || '').match(CLOCK_RANGE_RE);
+    if (!matched) return null;
+    const start = clockSide(matched[1], matched[2], matched[3], matched[4], matched[5], '');
+    const end = clockSide(matched[6], matched[7], matched[8], matched[9], matched[10], matched[6] ? '' : (matched[1] || ''));
+    if (!start.hm || !end.hm) return null;
+    return { hm: start.hm, hmEnd: end.hm, assumedPm: Boolean(start.assumed || end.assumed) };
+}
+
 function pickClock(text) {
+    const range = clockSpan(text);
+    if (range) return range;
     const ampm = text.match(/(오전|오후)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분|\s*반)?/);
     if (ampm) {
         let hour = Number(ampm[2]);
@@ -83,7 +113,7 @@ function pickClock(text) {
 export function detectWhen(text, periods = DEFAULT_PERIODS) {
     const src = String(text || '');
     const starts = (periods && periods.length ? periods : DEFAULT_PERIODS);
-    const out = { hm: '', period: 0, periodEnd: 0, assumedPm: false, label: '' };
+    const out = { hm: '', hmEnd: '', period: 0, periodEnd: 0, assumedPm: false, label: '' };
     const range = src.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/) || src.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
     const one = src.match(/(\d)\s*교시/);
     if (range) {
@@ -99,6 +129,7 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
     const clock = pickClock(src);
     if (clock?.hm) {
         out.hm = clock.hm;
+        out.hmEnd = clock.hmEnd || '';
         out.assumedPm = clock.assumedPm;
     } else if (afterSchoolIsClock(src)) {
         out.hm = '16:00';
@@ -255,6 +286,7 @@ export function tidyTitle(text) {
     t = t.replace(/(?:이|가)?\s*(?:오전|오후)\s*\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?:이|가)?\s*(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
+    t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
     t = t.replace(/ㅎㅎ|ㅋㅋ|ㅠㅠ|ㅜㅜ|ㅋ{2,}|ㅎ{2,}/g, ' ');
     t = t.replace(/(?<![\d~～])[~～]+(?![\d~～])/g, ' ');
     t = t.replace(/점심\s*시간|점심/g, ' ');
@@ -342,6 +374,7 @@ function salvageTitle(text) {
     t = t.replace(/(?:오전|오후)\s*\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
+    t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
     t = t.replace(/점심\s*시간|\d\s*교시/g, ' ');
     t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다|으)/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
@@ -423,6 +456,11 @@ function takePlace(text) {
     if (labeled) {
         places.push(labeled[1].trim());
         next = next.replace(labeled[0], ' ');
+    }
+    const paren = next.match(/[（(]\s*([가-힣A-Za-z0-9]{1,12}(?:교실|운동장|실|관|당|장|터|홀))\s*[)）]/);
+    if (paren) {
+        places.push(paren[1]);
+        next = next.replace(paren[0], ' ');
     }
     const at = next.match(/([가-힣A-Za-z0-9]{1,12}(?:교실|실|관|장|터|홀|운동장))\s*에서/);
     if (at) {
@@ -716,6 +754,7 @@ function listChunks(text, now) {
     const ampm = /오전/.test(text) && /오후/.test(text);
     const heat = /예선/.test(text) && /본선/.test(text);
     if (!commaBetween && !ampm && !heat) return null;
+    if (!/,/.test(text) && ampm && clockSpan(text)) return null;
     let parts;
     if (/,/.test(text) && (commaBetween || ampm || heat)) parts = text.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
     else {
@@ -760,6 +799,7 @@ function unsureChunks(text, now) {
     }
     const clocks = clockMatches(text);
     if (clocks.length < 2) return null;
+    if (clocks.length === 2 && clockSpan(text)) return null;
     const bare = text.replace(new RegExp(TIME_BIT, 'g'), ' ');
     return clocks.map((match) => `\u0001${bare} ${match[0]}`.replace(/\s+/g, ' ').trim());
 }
@@ -827,7 +867,8 @@ function casualTalk(text) {
 function actionable(text) {
     if (casualTalk(text)) return false;
     if (hasTodo(text) || hasEvent(text)) return true;
-    if (detectWhen(text).period) return true;
+    const when = detectWhen(text);
+    if (when.period || when.hmEnd) return true;
     if (findDates(text).length) return true;
     return false;
 }
@@ -923,6 +964,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const title = finishTitle(pickTitle(body, source), source, fullText);
     const memoBits = [];
     if (placed.memo) memoBits.push(placed.memo);
+    if (when.hm && when.hmEnd) memoBits.push(`${when.hm}~${when.hmEnd}`);
     const duration = String(source).match(/\d+\s*박\s*\d+\s*일/);
     if (duration) memoBits.push(duration[0].replace(/\s+/g, ' '));
     extraNotes.forEach((note) => {
@@ -966,7 +1008,8 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         const rescued = finishTitle('', source, fullText);
         if (rescued && !FIELD_ONLY.test(rescued.replace(/\s+/g, ''))) cleanTitle = rescued;
     }
-    const key = `${kind}|${date?.ymd || ''}|${end?.ymd || ''}|${when.hm}|${cleanTitle}|${source.replace(/\s+/g, '')}|${seq}`;
+    const clockKey = when.hmEnd ? `${when.hm}-${when.hmEnd}` : (when.hm || '');
+    const key = `${kind}|${date?.ymd || ''}|${end?.ymd || ''}|${clockKey}|${cleanTitle}|${source.replace(/\s+/g, '')}|${seq}`;
     return {
         id: `msg${fnv1a32(key)}`,
         kind,
@@ -975,6 +1018,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         date: dateYmd,
         end: end?.ymd || '',
         time: when.hm || '',
+        timeEnd: when.hmEnd || '',
         period: when.period || 0,
         periodEnd: when.periodEnd || 0,
         memo: memoBits.join(' · '),
@@ -1031,6 +1075,7 @@ function collapsePair(items, segment) {
     return [{
         ...kept,
         time: kept.time || other.time,
+        timeEnd: kept.timeEnd || other.timeEnd,
         period: kept.period || other.period,
         periodEnd: kept.periodEnd || other.periodEnd,
         date: kept.date || other.date,
