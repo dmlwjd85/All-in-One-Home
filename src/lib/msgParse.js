@@ -366,9 +366,13 @@ export function tidyTitle(text) {
     t = t.replace(/(?:이|가)?\s*다가\s*(?:옴|옵니다|와요|왔습니다)/g, ' ');
     t = t.replace(/마감\s*(?:되었(?:습니다|어요)?|됐습니다|됐어요|됨)|마감됐(?:어요|습니다)?/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
+    t = t.replace(/연기된|연기한|미뤄진|미루어진/g, ' ');
     t = t.replace(/연기(?:됩니다|합니다|해요|됐(?:어요|습니다)|음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
-    t = t.replace(/미룹니다|미뤄집니다|미루었습니다|미룸/g, ' ');
+    t = t.replace(/미룹니다|미뤄집니다|미루었습니다|미뤘(?:습니다|어요)?|미룸/g, ' ');
+    t = t.replace(/[가-힣]{1,8}\s*선생님(?:이|께서)?\s*진행하는/g, ' ');
+    t = t.replace(/(?:을|를)?\s*직접(?=\s|$)/g, ' ');
+    t = t.replace(/(?:을|를)?\s*진행하(?:십니다|세요)/g, ' ');
     t = t.replace(/다음에\s*(?:하겠(?:습니다)?|합니다|해요|할게요|하자)?/g, ' ');
     t = t.replace(/(?<![가-힣])추후(?:로|에)?/g, ' ');
     t = t.replace(/하겠(?:습니다)?/g, ' ');
@@ -399,6 +403,7 @@ export function tidyTitle(text) {
     t = t.replace(/연장(?:됩니다|합니다|되었(?:습니다|어요)|됐어요|됨)?/g, ' ');
     t = t.replace(/[()（）[\]{}·,.!~:：]/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
+    t = t.replace(/(?:에\s*)?참석$/g, '').trim();
     t = t.replace(/(?:이|가)\s+(?:으로|로)(?=\s|$)/g, ' ');
     t = t.replace(/(?:^|\s)(?:으로|로)(?=\s|$)/g, ' ');
     t = t.replace(/(?:은|는|을|를)\s+(제출|회신|작성|입력|업로드|마감|회수|실시|운영|휴강|교체|탑재|삭제)(?=\s|$)/g, ' $1');
@@ -468,9 +473,13 @@ function salvageTitle(text) {
     t = t.replace(/점심\s*시간|\d\s*교시/g, ' ');
     t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다|으)/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
+    t = t.replace(/연기된|연기한|미뤄진|미루어진/g, ' ');
     t = t.replace(/연기(?:됩니다|합니다|해요|됐(?:어요|습니다)|음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
-    t = t.replace(/미룹니다|미뤄집니다|미루었습니다|미룸/g, ' ');
+    t = t.replace(/미룹니다|미뤄집니다|미루었습니다|미뤘(?:습니다|어요)?|미룸/g, ' ');
+    t = t.replace(/[가-힣]{1,8}\s*선생님(?:이|께서)?\s*진행하는/g, ' ');
+    t = t.replace(/(?:을|를)?\s*직접(?=\s|$)/g, ' ');
+    t = t.replace(/(?:을|를)?\s*진행하(?:십니다|세요)/g, ' ');
     t = t.replace(/다음에\s*(?:하겠(?:습니다)?|합니다|해요|할게요|하자)?/g, ' ');
     t = t.replace(/(?<![가-힣])추후(?:로|에)?/g, ' ');
     t = t.replace(/하겠(?:습니다)?/g, ' ');
@@ -1213,7 +1222,7 @@ function looseClauses(text) {
     const src = String(text || '');
     const parts = [];
     let start = 0;
-    const mark = new RegExp(`[,，]|(?:(?<!않)이라서|(?<!아니)라서|(?<!않)이니까|니까|(?<!않)이시니|(?<!않)이셔서|(?<!않)이시라서|(?<!않)이니|(?<!않)이고|(?<!않)이라|가시니|가셔서|하셔서|하시니)요?(?![가-힣])|(?:셔서|시므로|시기에)요?(?![가-힣])|(?<=(?:${LEAVE_WORD}))(?:라|니|으로)(?![가-힣])`, 'g');
+    const mark = new RegExp(`[,，]|(?:(?<!않)이라서|(?<!아니)라서|(?<!않)이니까|니까|(?<!않)이시니|(?<!않)이셔서|(?<!않)이시라서|(?<!않)이니|(?<!않)이고|(?<!않)이라|가시는데|내시는데|하시는데|오시는데|가시니|가셔서|하셔서|하시니)요?(?![가-힣])|(?:셔서|시므로|시기에|는데)요?(?![가-힣])|(?<=(?:${LEAVE_WORD}))(?:라|니|으로|인데)(?![가-힣])`, 'g');
     let found = mark.exec(src);
     while (found) {
         const chunk = src.slice(start, found.index).trim();
@@ -1238,6 +1247,21 @@ function trainingEventName(text) {
     return /연수\s*(?:결과\s*)?(?:공유회|보고회|발표회|회의|협의회|설명회|리허설|전시회|행사)/.test(src);
 }
 
+/** 부재·연수 단어 뒤에 전달·공유·회의·진행·참석 요청이 오면 그 절은 일정입니다. */
+function eventAfterLeave(text) {
+    const src = String(text || '');
+    const speech = '전달|공유회|내용\\s*공유|공유\\s*회의|회의|보고회|진행|개최|엽니다|참석해\\s*주';
+    return looseClauses(src).some((clause) => new RegExp(`(?:${LEAVE_WORD}).{0,24}(?:${speech})`).test(clause));
+}
+
+/** '연기된 회의를 엽니다'처럼 수식어 뒤의 행사는 열립니다. 미뤘습니다·연기되었습니다는 아닙니다. */
+function heldAfterModifier(text) {
+    const src = String(text || '');
+    if (!/(?:연기된|연기한|미뤄진|미루어진)/.test(src)) return false;
+    if (/(?:미룹니다|미뤘(?:습니다|어요|다)?|미루었|미뤄졌(?:습니다|어요)|연기(?:합니다|됩니다|되었|됐어요|했어요|함|됨))/.test(src)) return false;
+    return /(?:엽니다|합니다|해요|있습니다|진행하|개최)/.test(src);
+}
+
 /** 직함 바로 뒤의 연수만 다른 사람의 부재입니다. '출장 연수'와 행사 이름은 일정입니다. */
 function barePersonTraining(text) {
     const src = withoutGenericTeacher(text);
@@ -1252,28 +1276,53 @@ function barePersonTraining(text) {
     return !/[가-힣]{2,}\s*연수/.test(stripped);
 }
 
-/** 다른 사람이 연수에 가거나 받는 말은 이름이 붙어도 부재입니다. 내 연수와 출장 연수, 행사명은 일정입니다. */
-function otherAttendsTraining(text) {
-    const src = withoutGenericTeacher(text);
-    if (/출장\s*연수/.test(src) || trainingEventName(src)) return false;
+const ABSENCE_TAIL = '입니다|이에요|예요|에요|가십니다|받으십니다|가시는데|내시는데|하시는데|오시는데|가셔서|내셔서|가시므로|가시기에|가시니|내셔서요|이시니|이셔서|이시라서|이라|라|니|으로|인데|이고|고';
+
+/** 직함 주어의 절이 부재·연수 단어와 허용된 어미로만 끝나면 그 절은 카드가 없습니다. */
+function pureAbsenceClause(text) {
+    const src = withoutGenericTeacher(String(text || '')).replace(/[.。]\s*$/g, '').trim();
+    if (!src || /(?<![가-힣])(?:제가|저는|저도|저만|저)(?![가-힣])/.test(src)) return false;
+    if (eventAfterLeave(src) || trainingEventName(src) || heldAfterModifier(src)) return false;
+    if (/까지|마감|제출|회신|주세요|바랍니다|받으세요|참석|진행|전달|신청|결재/.test(src)) return false;
+    if (/(?:회의|보고회|협의회|설명회|총회|공유회|발표회)/.test(src)) return false;
+    if (!new RegExp(OTHER_PERSON).test(src)) return false;
+    if (!new RegExp(OTHER_ABSENCE).test(src) && !/부재중|안\s*계십/.test(src)) return false;
+    let rest = src.replace(new RegExp(OTHER_PERSON, 'g'), ' ').replace(/께서/g, ' ');
+    rest = rest.replace(/(?:^|\s)(?:이|가|은|는|을|를)(?=\s|$)/g, ' ');
+    rest = rest.replace(/\d{4}\s*[./-]\s*\d{1,2}\s*[./-]\s*\d{1,2}/g, ' ');
+    rest = rest.replace(/\d{1,2}\s*\/\s*\d{1,2}(?:\s*[.(（][월화수목금토일][)）])?/g, ' ');
+    rest = rest.replace(/\d{1,2}\s*월\s*\d{1,2}\s*일(?:\s*[.(（][월화수목금토일][)）])?/g, ' ');
+    rest = rest.replace(/[().。,，~～\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+    rest = rest.replace(new RegExp(`(?:${LEAVE_WORD})\\s*(?:가시|내시|하시|오시|가|내|하)$`), (bit) => bit.replace(/\s*(?:가시|내시|하시|오시|가|내|하)$/, ''));
+    const one = new RegExp(`^(?:(?:직무|원격|온라인|집합)\\s+)?(?:${LEAVE_WORD})(?:\\s*(?:${ABSENCE_TAIL}))?$`);
+    const chain = new RegExp(`^(?:(?:직무|원격|온라인|집합)\\s+)?(?:${LEAVE_WORD})\\s*(?:이라|라|니|으로|인데)\\s*(?:부재중입니다|안\\s*계십니다)$`);
+    return one.test(rest) || chain.test(rest);
+}
+
+/** 문장 전체가 직함의 부재·연수 서술로만 끝날 때만 카드 0장입니다. */
+export function pureTitledAbsence(text) {
+    const src = String(text || '').trim();
+    if (!src) return false;
+    if (eventAfterLeave(src) || trainingEventName(src) || heldAfterModifier(src)) return false;
+    if (hasDeadline(src) || /까지|마감|제출|회신|주세요|바랍니다|받으세요|신청|결재|참석|진행|전달/.test(src)) return false;
+    if (/(?:회의|보고회|협의회|설명회|총회|공유회|발표회)/.test(src)) return false;
     if (/(?<![가-힣])(?:제가|저는|저도|저만|저)(?![가-힣])/.test(src)) return false;
-    if (/참석해\s*주|모두\s*참석/.test(src) && !/(?:가십|받으십|안\s*계십)/.test(src)) return false;
-    return new RegExp(OTHER_PERSON).test(src) && /(?<![가-힣])연수/.test(src);
+    if (!new RegExp(OTHER_PERSON).test(withoutGenericTeacher(src))) return false;
+    const clauses = looseClauses(src);
+    return clauses.length > 0 && clauses.every((clause) => pureAbsenceClause(clause) || absenceRestatement(clause));
 }
 
 function absenceClause(text) {
-    if (trainingEventName(text)) return false;
-    if (otherAttendsTraining(text) || barePersonTraining(text)) return true;
-    const src = withoutGenericTeacher(text);
-    return new RegExp(OTHER_PERSON).test(src) && new RegExp(OTHER_ABSENCE).test(src);
+    if (trainingEventName(text) || eventAfterLeave(text) || heldAfterModifier(text)) return false;
+    return pureAbsenceClause(text);
 }
 
-/** '안 계십니다'처럼 날짜 없는 부재의 뒷말은 할 일이 아닙니다. */
+/** '안 계십니다'·'부재중입니다'처럼 날짜 없는 부재의 뒷말은 할 일이 아닙니다. */
 function absenceRestatement(text) {
     const src = String(text || '').trim();
     if (!src || findDates(src).length) return false;
     if (/까지|마감|제출|회신|주세요|바랍니다|결재|서류|회의|협의회|계획|보고|신청/.test(src)) return false;
-    return /안\s*계(?:십|세)|자리를?\s*비|나오시지\s*않|못\s*나오/.test(src);
+    return /안\s*계(?:십|세)|자리를?\s*비|나오시지\s*않|못\s*나오|부재중/.test(src);
 }
 
 function normalizeRequest(text, now) {
@@ -1307,30 +1356,40 @@ function normalizeRequest(text, now) {
 const SILENT_ABSENCE = '\u0008';
 
 function clauseCarriesEvent(clause) {
-    if (trainingEventName(clause)) return true;
-    if (otherAttendsTraining(clause) || barePersonTraining(clause)) return false;
+    if (trainingEventName(clause) || eventAfterLeave(clause) || heldAfterModifier(clause)) return true;
+    if (pureAbsenceClause(clause) || barePersonTraining(clause)) return false;
     return new RegExp(EVENT_NOUN).test(String(clause || ''));
 }
 
-/** '11/20로 미룹니다'처럼 그 날짜가 옮긴 날이면 그 날을 일정으로 둡니다. '추후로'는 날이 없습니다. */
+/** 날짜 바로 뒤의 '로 미룹니다'만 옮긴 날입니다. '다음으로'·'추후로'는 날이 없습니다. */
+function realMove(text) {
+    return /(?:\d|[)）])\s*(?:으로|로)\s*(?:미룹|미뤄|미루|미룸|미뤘|미루었|연기)/.test(String(text || ''));
+}
+
 function destinationDate(text) {
     const src = String(text || '');
-    if (/추후\s*(?:으로|로)/.test(src)) return false;
-    if (/(?:으로|로)\s*(?:미룹|미뤄|미루|미룸|연기)/.test(src) && findDates(src).length === 1) return true;
-    if (/(?:날짜|일정)\s*(?:은|는)\s*/.test(src) && findDates(src).length >= 1 && /다음에|추후|미룹|미뤄|미루|미룸|연기/.test(src)) return true;
+    if (heldAfterModifier(src)) return false;
+    if (realMove(src) && findDates(src).length === 1) return true;
+    if (/(?:날짜|일정)\s*(?:은|는)/.test(src) && /미룹|미뤄|미루|미룸|미뤘|미루었|연기|다음에|추후/.test(src)) {
+        const after = src.split(/날짜|일정/).slice(1).join(' ');
+        if (findDates(after).length >= 1) return true;
+    }
     if (/추후\s*(?:에\s*)?\d/.test(src) && findDates(src).length >= 1) return true;
     return false;
 }
 
-/** 다음에·추후·연기처럼 새 날이 없으면 그 행사는 열리지 않습니다. */
+/** 다음에·추후·연기처럼 새 날이 없으면 그 행사는 열리지 않습니다. '연기된'은 수식어입니다. */
 function postponedOpen(text) {
     const src = String(text || '');
+    if (heldAfterModifier(src)) return false;
     if (/미루지\s*않|연기(?:하지\s*않|\s*없이)/.test(src) || src.includes('\u0003')) return false;
     if (destinationDate(src)) return false;
     if (/다음에\s*(?:하겠|합니|해요|하십|할게|하자)/.test(src)) return true;
+    if (/다음\s*으로\s*(?:미룹|미뤄|미루|미룸|미뤘|미루었)/.test(src)) return true;
     if (/(?<![가-힣])추후/.test(src)) return true;
     if (/(?<![가-힣])미룸/.test(src)) return true;
-    if (/(?<![가-힣])연기/.test(src)) {
+    if (/(?<![가-힣])(?:미룹|미뤄|미루|미뤘|미루었)/.test(src) && !realMove(src)) return true;
+    if (/(?<![가-힣])연기(?!된|한)/.test(src)) {
         const spans = findDates(src);
         if (spans.length >= 2 && isReschedule(src, spans)) return false;
         return true;
@@ -1344,9 +1403,10 @@ function eventCalledOff(text) {
     if (/취소(?:하지|\s*않|\s*없이)/.test(src) || /미루지\s*않/.test(src)) return false;
     if (/(?:잊지|빠지지)\s*못/.test(src)) return false;
     if (/참석(?:을|를)?\s*못|참석하지\s*못|참석하지\s*않/.test(src) && !/회신|제출|연락|알려/.test(src)) return true;
+    if (heldAfterModifier(src)) return false;
     if (postponedOpen(src)) return true;
-    if (/(?<![가-힣])(?:미룹|미뤄|미루|미룸)/.test(src)) {
-        if (destinationDate(src)) return false;
+    if (/(?<![가-힣])(?:미룹|미뤄|미루|미룸|미뤘|미루었)/.test(src)) {
+        if (destinationDate(src) || heldAfterModifier(src)) return false;
         const spans = findDates(src);
         if (spans.length >= 2 && isReschedule(src, spans)) return false;
         return true;
@@ -1355,44 +1415,41 @@ function eventCalledOff(text) {
     return negatedClause(src);
 }
 
-/** 새 날이 없는 미룸·다음에·추후는 카드를 만들지 않습니다. 날짜를 옮기는 말과 '연기되었습니다'는 그대로 둡니다. */
+/** 새 날이 없는 미룸·미뤘·다음에·추후·다음으로 미룸은 카드를 만들지 않습니다. '연기된'과 '연기되었습니다'는 그대로 둡니다. */
 export function silentPostponement(text, now = new Date()) {
     const src = String(text || '');
     if (!src || hasDeadline(src) || src.includes('\u0003')) return false;
     if (/미루지\s*않|연기(?:하지\s*않|\s*없이)/.test(src)) return false;
+    if (heldAfterModifier(src)) return false;
     const spans = findDates(src, now);
     if (spans.length >= 2 && isReschedule(src, spans)) return false;
     if (destinationDate(src)) return false;
     if (/(?<![가-힣])미룸/.test(src)) return true;
     if (/다음에\s*(?:하겠|합니|해요|하십|할게|하자)/.test(src)) return true;
+    if (/다음\s*으로\s*(?:미룹|미뤄|미루|미룸|미뤘|미루었)/.test(src)) return true;
     if (/(?<![가-힣])추후/.test(src) && !/추후\s*(?:에\s*)?\d/.test(src)) return true;
-    if (spans.length <= 1 && /(?<![가-힣])(?:미룹|미뤄|미루)/.test(src) && !/(?:으로|로)\s*(?:미룹|미뤄|미루|미룸)/.test(src)) return true;
+    if (spans.length <= 1 && /(?<![가-힣])(?:미룹|미뤄|미루|미룸|미뤘|미루었)/.test(src) && !realMove(src)) return true;
     return false;
 }
 
-/** 다른 사람의 부재·병가·출장·연가는 그 절만 빼고, 같은 문장의 마감·회의·요청은 남깁니다. 행사 없는 부재만 있으면 카드를 만들지 않습니다. */
+/** 다른 사람의 부재·연수는 그 절이 직함+부재 어미로만 끝날 때만 뺍니다. 마감·요청·행사 말은 남깁니다. */
 function othersAbsenceRequest(text, now) {
     const src = String(text || '').trim();
     if (!src || /출장\s*연수/.test(src)) return null;
     if (/(?<![가-힣])(?:제가|저는|저)(?![가-힣])/.test(src)) return null;
+    if (pureTitledAbsence(src)) return SILENT_ABSENCE;
+    const requestLeft = src.replace(/참석해\s*주(?:세요|십시요)/g, ' ');
+    if ((eventAfterLeave(src) || heldAfterModifier(src)) && !hasDeadline(src) && !/까지|마감|제출|회신|바랍니다|받으세요/.test(requestLeft)) return null;
     const personText = withoutGenericTeacher(src);
     const tied = new RegExp(`${OTHER_PERSON}.{0,48}${OTHER_ABSENCE}|${OTHER_ABSENCE}.{0,24}${OTHER_PERSON}`);
-    if (!tied.test(personText) && !barePersonTraining(personText) && !otherAttendsTraining(personText)) return null;
+    if (!tied.test(personText) && !barePersonTraining(personText)) return null;
     const clauses = looseClauses(src);
-    const kept = clauses.filter((clause) => {
-        if (!absenceClause(clause)) return true;
-        if (!clauseCarriesEvent(clause)) return false;
-        if (eventCalledOff(clause)) return findDates(clause, now).length > 0;
-        return true;
-    });
+    const kept = clauses.filter((clause) => !pureAbsenceClause(clause) && !absenceRestatement(clause));
+    if (!kept.length) return null;
     const body = kept.join(', ').trim();
-    if (!body) return SILENT_ABSENCE;
-    if (!findDates(body, now).length) {
-        if (kept.some((clause) => eventCalledOff(clause)) || eventCalledOff(src) || kept.every((clause) => absenceRestatement(clause))) return SILENT_ABSENCE;
-        return null;
-    }
+    if (!findDates(body, now).length) return null;
     return kept.map((clause) => {
-        if (eventCalledOff(clause) || trainingEventName(clause)) return clause;
+        if (eventCalledOff(clause) || trainingEventName(clause) || eventAfterLeave(clause) || heldAfterModifier(clause)) return clause;
         if (/(?:까지|마감|주세요|바랍니다|제출|회신|받으세요)/.test(clause)) return normalizeRequest(clause, now);
         return clause;
     }).join(', ');
@@ -1412,9 +1469,9 @@ function missedAttendanceRequest(text, now) {
     return normalizeRequest(tail, now);
 }
 
-/** 다른 사람의 부재만 있는 문장이면 노란 카드도 만들지 않습니다. */
+/** 직함 주어가 부재·연수 어미로만 끝나는 문장만 카드 0장입니다. 그 밖의 빈 결과는 노란 카드로 남깁니다. */
 export function silentOtherAbsence(text, now = new Date()) {
-    return othersAbsenceRequest(text, now) === SILENT_ABSENCE;
+    return pureTitledAbsence(text, now);
 }
 
 function magamIsDeadline(text) {
@@ -1967,9 +2024,10 @@ function negatedClause(text) {
     if (/(?:열리|개최되|진행되|실시되|개최하|진행하|실시하|(?<![가-힣])하)지\s*못(?:하|합|해|함)/.test(src)) return true;
     if (/열리지\s*않/.test(src)) return true;
     if (eventCancelled(src)) return true;
+    if (heldAfterModifier(src)) return false;
     if (postponedOpen(src)) return true;
     if (postponedWithoutDestination(src)) return true;
-    if (!src.includes('\u0003') && !/미루지\s*않/.test(src) && /(?<![가-힣])(?:미룹|미뤄|미루|미룸)/.test(src)) {
+    if (!heldAfterModifier(src) && !src.includes('\u0003') && !/미루지\s*않/.test(src) && /(?<![가-힣])(?:미룹|미뤄|미루|미룸|미뤘|미루었)/.test(src)) {
         if (destinationDate(src)) return false;
         return true;
     }
@@ -2139,6 +2197,17 @@ function titlesOverlap(left, right) {
     return shorter.length >= 4 && longer.includes(shorter);
 }
 
+function bareTimeTitle(title) {
+    const compact = String(title || '').replace(/\s+/g, '');
+    const stripped = compact.replace(/(?:입니다|해요|합니다|했어요|했습니다|하였습니다|이에요|예요|에요|하는)$/g, '');
+    return /^(?:올해|작년|이번|다음|이번주|다음주|다다음주)(?:는|은)?$/.test(stripped);
+}
+
+function scrubTimeTitle(item) {
+    if (!item || !bareTimeTitle(item.title)) return item;
+    return markUnsure({ ...item, title: '할 일' }, '행사명이 없어 빼 두었어요.');
+}
+
 function markUnsure(item, note) {
     return {
         ...item,
@@ -2200,7 +2269,11 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
             }
             return [titled];
         }
-        if (new RegExp(EVENT_NOUN).test(segment) && !hasDeadline(segment) && !isDeadlineSubmission(segment) && /미룸|미룹|미뤄|미루|다음에|추후|(?<![가-힣])연기/.test(segment)) return [make('일정', 0)];
+        if (!heldAfterModifier(segment) && new RegExp(EVENT_NOUN).test(segment) && !hasDeadline(segment) && !isDeadlineSubmission(segment) && /미룸|미룹|미뤄|미루|미뤘|미루었|다음에|추후|(?<![가-힣])연기(?!된|한)/.test(segment)) return [make('일정', 0)];
+        if (/엽니다|개최합니다|개최해요/.test(segment) && !hasDeadline(segment) && !isDeadlineSubmission(segment) && !negatedClause(segment)) {
+            const openedName = tidyTitle(segment).replace(/\s+/g, '');
+            if (openedName && !/^(?:일정|할일|합니다|해요|엽니다)$/.test(openedName) && !bareTimeTitle(openedName)) return [make('일정', 0)];
+        }
         if (replacement) return [make('일정', 0)];
         if (deadlineClosed(segment)) return [markUnsure(make('할 일', 0), '이미 마감된 내용이라 빼 두었어요.')];
         if (magamIsDeadline(segment) && !span.range) return [make('할 일', 0)];
@@ -2270,8 +2343,8 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
         }
         const title = String(next.title || '').trim();
         const compact = title.replace(/\s+/g, '');
-        if (/^(?:올해|작년|이번|다음)$/.test(compact)) {
-            next = markUnsure({ ...next, title: next.kind === '일정' ? '일정' : '할 일' }, '행사명이 없어 빼 두었어요.');
+        if (bareTimeTitle(compact) || bareTimeTitle(next.title)) {
+            next = markUnsure({ ...next, title: '할 일' }, '행사명이 없어 빼 두었어요.');
         }
         const titled = String(next.title || '').trim();
         const compactTitle = titled.replace(/\s+/g, '');
@@ -2342,9 +2415,9 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
         }
         return renameTripTraining(item);
     });
-    const visible = titled.filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
+    const visible = titled.map(scrubTimeTitle).filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
     if (!visible.length && findDates(raw, now).length && !silentOtherAbsence(raw, now) && !silentPostponement(raw, now)) {
-        const card = markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.');
+        const card = scrubTimeTitle(markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.'));
         if (card.date && !PERSON_ONLY_TITLE.test(String(card.title || '').trim())) return { items: [{ ...card, title: card.title || '할 일' }] };
     }
     if (!visible.some((item) => item.date)) return { items: visible };
