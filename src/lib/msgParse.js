@@ -9,6 +9,7 @@ export const MEET_KINDS = ['학년회의', '교직원회의', '교과협의회',
 
 const TODO_RE = /제출|회신|작성|입력|업로드|탑재|확인\s*바랍니다|기한|마감/;
 const EVENT_WORD = /회의(?!록)|연수|공개수업|협의회|행사|출장/;
+const MAGAM_EVENT_TAIL = '(?:시간\\s+)?(?:안내\\s+)?(?:회의|리허설|설명회|학예회|협의회|공개수업|체육대회|운동회|현장학습|체험학습|전시회|발표회|박람회|수련회|축제|대회|연수|행사|상담|강연)';
 
 const NOISE = [
     /^(?:안녕하세요|안녕하십니까)[\s!.~]*$/,
@@ -226,7 +227,7 @@ function hasInspection(text) {
 }
 
 function hasEvent(text) {
-    if (/(?<![가-힣])(?:학예회|설명회|박람회)|상담\s*주간/.test(text)) return true;
+    if (/(?<![가-힣])(?:학예회|설명회|박람회|리허설|전시회)|상담\s*주간/.test(text)) return true;
     if (EVENT_WORD.test(text)) return true;
     if (hasTrip(text) && findDates(text).length) return true;
     if (hasScheduledExam(text)) return true;
@@ -368,6 +369,8 @@ export function tidyTitle(text) {
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
     t = t.replace(/[월화수목금토일]요일(?:으로|로)?/g, ' ');
     t = stripTitleNoise(t);
+    t = t.replace(/(?:자료|사진|영상)\s*(?:는|은|이|가|을|를)?\s*(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
+    t = t.replace(/(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
     if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
@@ -961,11 +964,12 @@ function roleNear(text, span) {
     const after = text.slice(span.index + span.length, span.index + span.length + 24);
     const before = text.slice(Math.max(0, span.index - 18), span.index);
     const clock = '(?:(?:오전|오후)\\s*)?(?:\\d{1,2}\\s*시(?:\\s*\\d{1,2}\\s*분|\\s*반)?\\s*)?';
-    if (new RegExp(`^\\s*${clock}(?:까지|마감(?!되었|됐))`).test(after) || /(?:마감(?!되었|됐)|까지)\s*(?:은|는|이|가|인)?\s*$/.test(before)) return 'due';
+    const namedMagam = new RegExp(`^\\s*${clock}마감(?!되었|됐)\\s+${MAGAM_EVENT_TAIL}`).test(after);
+    if (!namedMagam && (new RegExp(`^\\s*${clock}(?:까지|마감(?!되었|됐))`).test(after) || /(?:마감(?!되었|됐)|까지)\s*(?:은|는|이|가|인)?\s*$/.test(before))) return 'due';
     if (/^\s*(?:에\s*)?안내/.test(after) || /안내(?:하는|는|은)?\s*$/.test(before)) return 'notice';
     const afterWord = (after.match(/^\s*([가-힣]+)/) || [])[1] || '';
-    if (/^(?:연차|연가|병가|조퇴|휴가|외출|공가|출장)/.test(afterWord)) return 'absence';
-    if (/(?:연차|연가|병가|조퇴|휴가|외출|공가|출장)\s*(?:이고|이라|라서|이니|인)?\s*$/.test(before)) return 'absence';
+    if (/^(?:연차|연가|병가|조퇴|휴가|외출|공가|출장|부재)/.test(afterWord)) return 'absence';
+    if (/(?:연차|연가|병가|조퇴|휴가|외출|공가|출장|부재)\s*(?:이고|이라|라서|이니|인)?\s*$/.test(before)) return 'absence';
     return '';
 }
 
@@ -1176,8 +1180,8 @@ function deadlineClosed(text) {
     return /마감\s*(?:되었|됐습니다|됐어요|되었어요|됨)|마감됐/.test(String(text || ''));
 }
 
-const OTHER_PERSON = '(?:부장님|부장\\s*님|교감(?:\\s*선생님)?|담임(?:\\s*선생님)?|[가-힣]{1,4}\\s*선생님)';
-const OTHER_ABSENCE = '(?<![가-힣])(?:출장|연가|연차|휴가|조퇴)(?!\\s*연수)';
+const OTHER_PERSON = '(?:부장님|부장\\s*님|교감(?:\\s*선생님)?|담임(?:\\s*선생님)?|[가-힣]{1,4}\\s*선생님|[가-힣]{2,10}님)';
+const OTHER_ABSENCE = '(?<![가-힣])(?:출장|연가|연차|휴가|조퇴|부재|병가|외출)(?!\\s*연수)';
 
 function looseClauses(text) {
     const src = String(text || '');
@@ -1228,26 +1232,36 @@ function normalizeRequest(text, now) {
     return src;
 }
 
-/** 다른 사람의 출장·연가·연차·휴가·조퇴는 빼고, 같은 문장의 마감·요청만 할 일로 남깁니다. */
+/** 다른 사람의 부재·병가·출장·연가는 빼고, 남은 날짜의 마감·요청·행사만 남깁니다. */
 function othersAbsenceRequest(text, now) {
     const src = String(text || '').trim();
     if (!src || /출장\s*연수/.test(src)) return null;
     if (/(?<![가-힣])(?:제가|저는|저)(?![가-힣])/.test(src)) return null;
-    const tied = new RegExp(`${OTHER_PERSON}.{0,40}${OTHER_ABSENCE}|${OTHER_ABSENCE}.{0,24}${OTHER_PERSON}`);
+    const tied = new RegExp(`${OTHER_PERSON}.{0,48}${OTHER_ABSENCE}|${OTHER_ABSENCE}.{0,24}${OTHER_PERSON}`);
     if (!tied.test(src)) return null;
-    if (!/(?:까지|마감|주세요|바랍니다|제출|회신)/.test(src)) return null;
     const kept = looseClauses(src).filter((clause) => !absenceClause(clause));
     const body = kept.join(', ').trim();
-    if (!body || !findDates(body, now).length) return null;
-    if (!/(?:까지|마감|주세요|바랍니다|제출|회신)/.test(body)) return null;
-    return normalizeRequest(body, now);
+    if (!body) return `\u0001${src}`;
+    if (!findDates(body, now).length) return null;
+    return kept.map((clause) => (
+        /(?:까지|마감|주세요|바랍니다|제출|회신)/.test(clause) ? normalizeRequest(clause, now) : clause
+    )).join(', ');
+}
+
+function magamIsDeadline(text) {
+    const src = String(text || '');
+    if (deadlineClosed(src) || !/(?<![가-힣])마감(?!되었|됐)/.test(src)) return false;
+    const stripped = src.replace(new RegExp(`(?<![가-힣])마감\\s+${MAGAM_EVENT_TAIL}`, 'g'), ' ');
+    return /(?<![가-힣])마감(?!되었|됐)/.test(stripped);
 }
 
 function magamDate(text, span) {
     if (!span || deadlineClosed(text)) return false;
-    const after = text.slice(span.index + span.length, span.index + span.length + 24);
+    const after = text.slice(span.index + span.length, span.index + span.length + 36);
     const before = text.slice(Math.max(0, span.index - 18), span.index);
-    if (/^\s*(?:(?:오전|오후)\s*)?(?:\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?\s*)?마감(?!되었|됐)/.test(after)) return true;
+    const clock = '(?:(?:오전|오후)\\s*)?(?:\\d{1,2}\\s*시(?:\\s*\\d{1,2}\\s*분|\\s*반)?\\s*)?';
+    if (new RegExp(`^\\s*${clock}마감(?!되었|됐)\\s+${MAGAM_EVENT_TAIL}`).test(after)) return false;
+    if (new RegExp(`^\\s*${clock}마감(?!되었|됐)`).test(after)) return true;
     return /마감(?:은|는|이|가|인)?\s*$/.test(before);
 }
 
@@ -1305,6 +1319,17 @@ function magamPairChunks(text, now) {
         `\u0007${eventName} ${eventToken}`.replace(/\s+/g, ' ').trim(),
         `${dueTitle} ${dueToken}${clock ? ` ${clock.trim()}` : ''}`.replace(/\s+/g, ' ').trim(),
     ];
+}
+
+/** '또는 … 중 하루'는 어느 날인지 모르므로 날짜마다 노란 카드입니다. */
+function alternativeDayChunks(text, now) {
+    if (!/또는/.test(text) || !/중\s*(?:하루|하나)/.test(text)) return null;
+    const spans = realDateSpans(text, now);
+    if (spans.length < 2 || isRangePair(text, spans) || isReschedule(text, spans)) return null;
+    const tail = text.slice(spans[spans.length - 1].index + spans[spans.length - 1].length).replace(/중\s*(?:하루|하나)/g, ' ');
+    const head = text.slice(0, spans[0].index).replace(/중\s*(?:하루|하나)/g, ' ');
+    const name = tidyTitle(tail.replace(/(?:을|를)?\s*(?:갑니다|가요|입니다)[.。]?\s*$/g, ' ')) || tidyTitle(head) || '일정';
+    return spans.map((span) => `\u0001${name} ${text.slice(span.index, span.index + span.length)}`.replace(/\s+/g, ' ').trim());
 }
 
 /** 이음말만 있는 여러 날짜는 문장 끝의 행사명을 같이 씁니다. */
@@ -1375,6 +1400,8 @@ function segmentsOf(text, now) {
         if (paired) return paired;
         const magam = magamPairChunks(prepared, now);
         if (magam) return magam;
+        const choice = alternativeDayChunks(prepared, now);
+        if (choice) return choice;
         const shared = sharedNameChunks(prepared, now);
         if (shared) return shared;
         const listed = ordinalChunks(prepared, now) || listChunks(prepared, now);
@@ -1414,7 +1441,10 @@ function personalAside(text) {
     if (!speaker) return false;
     const own = src.replace(/수학여행|현장체험학습|체험학습/g, ' ');
     const ownAbsence = /(?<![가-힣])(?:연차|연가|병가|조퇴|휴가|외출|공가|여행|출장)(?!\s*(?:신청|접수|마감|연수|교육|복명|결재|대체|계획|사용|명단|자료|양식))\s*(?:이라서요|라서요|이니까|니까|이라서|이어서|라서|여서|이라|라|입니다|이에요|예요|에요|에는|쓰는|인(?![가-힣])|하고|고(?![가-힣])|니(?![가-힣])|가요|갈게요|갑니다|갈\s*거|쓸게요|씁니다|합니다|해요)/.test(own);
-    if (ownAbsence) return true;
+    if (ownAbsence) {
+        const ownTrip = /(?<![가-힣])출장(?!\s*연수)\s*(?:갑니다|가요)/.test(own) && !/(?:이라|라서|이니|니까)/.test(own);
+        if (!ownTrip) return true;
+    }
     if (hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src)) return false;
     return /(?:가요|갈게요|올게요|사올|다녀올)/.test(src);
 }
@@ -1571,13 +1601,15 @@ function scheduleAnchor(text) {
 function materialAfterDate(text) {
     const src = String(text || '');
     if (hasDeadline(src) || isRequest(src)) return false;
+    if (/(?:회의|협의회|연수|설명회|학예회|상담)\s*자료/.test(src) && /(?:씁니다|써요|사용|준비)/.test(src)) return false;
+    if (/(?:재작년|작년|지난해|지난\s*해)\s*(?:양식|서식|형식)/.test(src) && /(?:씁니다|써요|사용|준비)/.test(src)) return false;
     const word = '(?:녹화본|결과물|자료집|사진첩|녹화|자료|사진|영상|링크|첨부|파일)';
     const tail = '(?:은|는|이|가|을|를|도|만)?(?:입니다|이에요|예요|에요|합니다|해요)?(?![가-힣])';
     const dates = findDates(src);
     return dates.some((span, index) => {
         const after = src.slice(span.index + span.length);
         const nextAt = dates[index + 1] ? dates[index + 1].index - (span.index + span.length) : after.length;
-        const window = after.slice(0, Math.min(nextAt, 48));
+        const window = after.slice(0, Math.min(nextAt, 48)).replace(/결과물\s*전시회/g, '전시회');
         if (new RegExp(`^\\s*[)）]?\\s*${word}${tail}`).test(window)) return true;
         if (/^\s*[)）]?\s*결과(?!물|발표)(?:은|는|이|가|을|를|도|만)?(?:입니다|이에요|예요|에요|합니다|해요)?(?![가-힣])/.test(window)) return true;
         return new RegExp(`${word}${tail}`).test(window);
@@ -1596,7 +1628,7 @@ function bareYearNoun(text) {
 function pastEventYears(segment, contrastPast = false) {
     const src = String(segment || '').replace(/\u0006/g, '');
     const comparativeRe = /(?:재작년|작년|지난해|지난\s*해)(?:보다|처럼|과\s*달리|와\s*달리)/;
-    const bare = src.replace(comparativeRe, ' ');
+    const bare = src.replace(comparativeRe, ' ').replace(/(?:재작년|작년|지난해|지난\s*해)(?:의|은|는)?\s*(?:양식|서식|형식)/g, ' ');
     const found = bare.match(/재작년|작년|지난해|지난\s*해/);
     if (found) {
         if (!pastPredicate(src) && !materialAfterDate(src) && !contrastPast) return 0;
@@ -1758,7 +1790,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const remembered = startShift.remembered || endShift.remembered || taleYears > 0 || toldPast;
     const lastDay = endYmd || dateYmd || '';
     const past = Boolean(lastDay && lastDay < todayYmd);
-    const reference = /참고만/.test(source) || (/공유합니다/.test(source) && !/(?:회의|협의회)에서\s*공유합니다/.test(source));
+    const reference = /참고만/.test(source) || (/공유합니다/.test(source) && !/(?:회의|협의회)에서\s*공유합니다/.test(source) && !thisYearRecording(source));
     const asked = asksQuestion(source);
     const closed = negatedClause(source);
     const approx = approximateWhen(source);
@@ -1813,9 +1845,14 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     };
 }
 
+function thisYearRecording(text) {
+    const src = String(text || '');
+    return /(?:녹화본|녹화)/.test(src) && /공유/.test(src) && !/(?:재작년|작년|지난해|지난\s*해)/.test(src);
+}
+
 function stripTodoClause(text) {
     return String(text || '')
-        .replace(/[가-힣A-Za-z0-9]{0,16}\s*(?:을|를|은|는|이|가)?\s*(?:제출|회신|작성|입력|업로드|마감)(?:\s*해\s*주(?:시기|세요|시길|십시오)|\s*바랍니다|\s*해주세요|\s*합니다)?/g, ' ')
+        .replace(new RegExp(`[가-힣A-Za-z0-9]{0,16}\\s*(?:을|를|은|는|이|가)?\\s*(?:제출|회신|작성|입력|업로드|마감(?!\\s+${MAGAM_EVENT_TAIL}))(?:\\s*해\\s*주(?:시기|세요|시길|십시오)|\\s*바랍니다|\\s*해주세요|\\s*합니다)?`, 'g'), ' ')
         .replace(/확인\s*바랍니다/g, ' ');
 }
 
@@ -1868,10 +1905,10 @@ function collapsePair(items, segment) {
 
 function namedEvent(text) {
     const src = String(text || '');
-    const match = src.match(/((?:[가-힣A-Za-z0-9]{1,12}\s+){0,4}(?:연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연|상담\s*주간))/);
+    const match = src.match(/((?:[가-힣A-Za-z0-9]{1,12}\s+){0,4}(?:체험학습|현장학습|체육대회|공개수업|설명회|발표회|학예회|박람회|운동회|수련회|협의회|리허설|전시회|연수|대회|축제|강연|회의|발표|상담\s*주간))/);
     if (!match) return '';
     const name = tidyTitle(match[1]);
-    if (!name || weakTitle(name) || /^(?:일정|또는|신청|마감은|할 일|마감)$/.test(name)) return '';
+    if (!name || weakTitle(name) || /^(?:일정|또는|신청|마감은|할 일|마감|있습니다|합니다)$/.test(name)) return '';
     return name;
 }
 
@@ -1892,7 +1929,10 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
     const made = (() => {
         if (replacement) return [make('일정', 0)];
         if (deadlineClosed(segment)) return [markUnsure(make('할 일', 0), '이미 마감된 내용이라 빼 두었어요.')];
-        if (/(?<![가-힣])마감(?!되었|됐)/.test(segment) && !span.range) return [make('할 일', 0)];
+        if (magamIsDeadline(segment) && !span.range) return [make('할 일', 0)];
+        if (thisYearRecording(segment)) return [make('할 일', 0)];
+        const namedMagamLeft = String(segment).replace(new RegExp(`(?<![가-힣])마감\\s+${MAGAM_EVENT_TAIL}`, 'g'), ' ');
+        if (/(?<![가-힣])마감(?!되었|됐)/.test(segment) && !magamIsDeadline(segment) && hasEvent(segment) && !hasDeadline(segment) && !isRequest(namedMagamLeft) && !/제출|회신|작성|입력|업로드|탑재/.test(namedMagamLeft)) return [make('일정', 0)];
         if (listed && !isDeadlineSubmission(segment) && !hasDeadline(segment)) return [make('일정', 0)];
         if ((moved || oldDate) && !isDeadlineSubmission(segment)) {
             if (/제출|회신|작성|입력|업로드|마감|회수|탑재|기한/.test(segment)) return [make('할 일', 0)];
@@ -1927,17 +1967,25 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
     const named = hasTodo(segment) || hasTrip(segment) || EVENT_WORD.test(segment) || /\d\s*교시/.test(segment) || /(?:대회|(?<![가-힣])(?:현장체험학습|현장학습|촬영|공사|상담|검사|평가|시험|소풍|발표))/.test(segment);
     const vague = made.map((item) => {
         let next = item;
-        const compact = String(next.title || '').replace(/\s+/g, '');
-        if (/^(?:일정|또는|신청|마감은)$/.test(compact) || (compact === '할 일' && next.kind === '일정')) {
+        const compact0 = String(next.title || '').replace(/\s+/g, '');
+        const thinVerb = /^(?:있습니다|합니다|해요|갑니다|엽니다|봅니다|봐요|드립니다|주세요|했어요|했습니다|입니다)$/;
+        if (/^(?:일정|또는|신청|마감은)$/.test(compact0) || thinVerb.test(compact0) || (compact0 === '할일' && next.kind === '일정')) {
             const rescued = namedEvent(segment) || namedEvent(fullText);
-            if (rescued) next = { ...next, title: rescued };
+            if (rescued) next = { ...next, title: compact0 === '신청' ? `${rescued} 신청` : rescued };
+        }
+        if (String(next.title || '').replace(/\s+/g, '') === '마감') {
+            const rescued = namedEvent(segment) || namedEvent(fullText);
+            if (rescued && !/마감/.test(rescued)) next = { ...next, title: `${rescued} 마감` };
         }
         const title = String(next.title || '').trim();
-        const bare = /^(?:일정|또는|신청|마감은|할 일)$/.test(title.replace(/\s+/g, ''));
-        const namedInText = /연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연/.test(`${segment}\n${fullText}`);
+        const compact = title.replace(/\s+/g, '');
+        const bare = /^(?:일정|또는|신청|마감은|할 일)$/.test(compact);
+        const namedInText = /연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연|발표/.test(`${segment}\n${fullText}`);
         if (bare && next.include !== false && !span.range && !moved && !replacement && !oldDate && namedInText) return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
+        const stillThin = /^(?:신청|있습니다|합니다|해요|갑니다|엽니다|봅니다|봐요|드립니다|주세요|했어요|했습니다)$/.test(compact);
+        if (stillThin && next.include !== false && !span.range && !moved && !replacement && !oldDate) return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
         const generic = /^(?:일정|할 일)$/.test(title) && !moved && !listed && !replacement && !oldDate && !span.range && !named;
-        const leftover = /^(?:그대로|아니라|정정|졌습니다|됐습니다)$/.test(title.replace(/\s+/g, ''));
+        const leftover = /^(?:그대로|아니라|정정|졌습니다|됐습니다)$/.test(compact);
         if (!generic && !leftover) return next;
         if (next.low) return next;
         return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
