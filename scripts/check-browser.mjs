@@ -6,6 +6,30 @@ import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
 import { addDaysYmd, fromYmd, monthTitle, seoulYmd, startOfWeekMon, weekdayKo } from '../src/lib/date.js';
 
+/**
+ * 브라우저 시계. 서울 평일 오전(2026-10-23 금 08:42)으로 고정합니다.
+ * 실제 시계와 자정을 쓰지 않아, 주말·자정에도 같은 주를 봅니다.
+ * 다른 브랜치로 옮길 때는 이 상수, pinBrowserClock, withPage·withDemo의 호출만 가져가면 됩니다.
+ */
+const FIXED_NOW = '2026-10-23T08:42:00+09:00';
+
+async function pinBrowserClock(page) {
+    await page.evaluateOnNewDocument((iso) => {
+        const fixed = new Date(iso).valueOf();
+        const NativeDate = Date;
+        function FrozenDate(...args) {
+            if (!new.target) return new NativeDate(fixed).toString();
+            if (args.length === 0) return new NativeDate(fixed);
+            return new NativeDate(...args);
+        }
+        FrozenDate.now = () => fixed;
+        FrozenDate.parse = NativeDate.parse;
+        FrozenDate.UTC = NativeDate.UTC;
+        FrozenDate.prototype = NativeDate.prototype;
+        window.Date = FrozenDate;
+    }, FIXED_NOW);
+}
+
 /** '금요일까지'와 같은 규칙입니다. 오늘을 포함한 가장 가까운 그 요일입니다. */
 function nearestWeekdayYmd(today, weekday) {
     const delta = (weekday - fromYmd(today).getDay() + 7) % 7;
@@ -16,7 +40,7 @@ function koMonthDay(ymd) {
     return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일`;
 }
 
-const todayYmd = seoulYmd();
+const todayYmd = seoulYmd(new Date(FIXED_NOW));
 const fridayYmd = nearestWeekdayYmd(todayYmd, 5);
 const fridayLabel = koMonthDay(fridayYmd);
 const fridaySlash = `${Number(fridayYmd.slice(5, 7))}/${Number(fridayYmd.slice(8, 10))}`;
@@ -194,6 +218,7 @@ async function withPage(width, fn) {
             const page = await context.newPage();
             page.setDefaultTimeout(20000);
             page.setDefaultNavigationTimeout(30000);
+            await pinBrowserClock(page);
             await page.setViewport({ width, height: 800, deviceScaleFactor: 1 });
             await fn(page);
             await context.close().catch(() => {});
@@ -218,6 +243,7 @@ async function withDemo(width, mode, fn, height = 800) {
             const page = await context.newPage();
             page.setDefaultTimeout(20000);
             page.setDefaultNavigationTimeout(30000);
+            await pinBrowserClock(page);
             await page.setViewport({ width, height, deviceScaleFactor: 1 });
             const query = mode === 'dark' ? 'demo=1&at=08:42&mode=dark' : 'demo=1&at=08:42&mode=light';
             await page.goto(`${origin}?${query}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
