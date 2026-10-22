@@ -121,6 +121,7 @@ function toEvent(row) {
     };
     if (row.end && row.end >= row.date) body.end = row.end;
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
+    // endTime은 기기 일정에만 둡니다. events 규칙의 허용 칸에 없어 올리면 문서 전체가 거절됩니다.
     if (row.memo) body.memo = String(row.memo).slice(0, 300);
     return { id, body, stamps: stamps(['updatedAt']) };
 }
@@ -223,6 +224,7 @@ export function fromCloudRow(collection, id, data = {}) {
             date: data.date,
             end: data.end || '',
             time: data.time || '',
+            endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(data.endTime || '') ? data.endTime : '',
             title: data.title || '',
             kind: EVENT_FROM[data.kind] || '학급',
             memo: data.memo || '',

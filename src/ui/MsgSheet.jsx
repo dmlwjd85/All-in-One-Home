@@ -22,7 +22,7 @@ function periodLabel(item) {
 }
 
 function timeLabel(item) {
-    if (item.time && item.timeEnd) return `${item.time}–${item.timeEnd}`;
+    if (item.time && item.endTime) return `${item.time}–${item.endTime}`;
     return item.time || '시각 없음';
 }
 
@@ -97,7 +97,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
             {open === 'period' && (
                 <div style={{ marginTop: 8 }}>
                     <PeriodRow value={item.period} onPick={(n) => {
-                        onPatch(item.id, { period: n, periodEnd: 0, time: periods[n - 1] || item.time, timeEnd: '' });
+                        onPatch(item.id, { period: n, periodEnd: 0, time: periods[n - 1] || item.time, endTime: '' });
                         setOpen('');
                     }} />
                     <Btn className="choice-tile" style={{ marginTop: 8 }} onClick={() => { onPatch(item.id, { period: 0, periodEnd: 0 }); setOpen(''); }}>교시 없음</Btn>
@@ -105,7 +105,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
             )}
             {open === 'time' && (
                 <div style={{ marginTop: 8 }}>
-                    <TimeChips value={item.time} onPick={(hm) => { onPatch(item.id, { time: hm, timeEnd: '' }); setOpen(''); }} />
+                    <TimeChips value={item.time} onPick={(hm) => { onPatch(item.id, { time: hm, endTime: '' }); setOpen(''); }} />
                 </div>
             )}
             <input className="field" style={{ marginTop: 8 }} aria-label="메모" placeholder="장소나 메모" value={item.memo || ''} onChange={(event) => onPatch(item.id, { memo: event.target.value })} />

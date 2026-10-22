@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, formatKoDate, monthCells, monthTitle, startOfWeekMon } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, monthCells, monthTitle, startOfWeekMon } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
 import { joined, setTimetable } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -38,7 +38,7 @@ export function Schedule() {
                         return (
                             <section key={date} className="glass" style={{ padding: 12 }}>
                                 <strong>{formatKoDate(date, { today: clock.ymd })} {holiday?.isHoliday ? `· ${holiday.primary.name}` : ''}</strong>
-                                {mine.map((row) => <p key={row.id} style={{ marginBottom: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.time ? `${row.time} ` : ''}{row.title} {row.memo || ''}</p>)}
+                                {mine.map((row) => <p key={row.id} style={{ marginBottom: 0 }}>{row.localOnly ? '🔒 ' : ''}{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title} {row.memo || ''}</p>)}
                                 {!mine.length && !holiday?.isHoliday && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
                             </section>
                         );
@@ -70,7 +70,7 @@ export function Schedule() {
                     </div>
                     <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
                         <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
-                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{row.title}</p>)}
+                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{row.endTime ? `${eventClock(row)} ` : ''}{row.title}</p>)}
                         {!events.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
                     </div>
                 </div>

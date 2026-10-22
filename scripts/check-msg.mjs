@@ -170,12 +170,16 @@ must('대체', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체'
 must('모호한 두 날짜', '학예회 11/2(월) 상담 11/6(금)', qaNow, (items) => items.length === 2 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2026-11-02') && items.some((item) => item.date === '2026-11-06'));
 must('대회', '11/12(목) 과학탐구대회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-12' && items[0].include !== false);
 must('5교시', '내일 영어는 5교시 그대로입니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].period === 5 && items[0].time === '13:10' && items[0].title.includes('영어'));
-must('시각 범위', '10/30(금) 오후 2시~4시 학부모 진로 특강 (강당)', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].timeEnd === '16:00' && String(items[0].memo).includes('강당') && items[0].title.includes('특강') && !items[0].title.includes('강당'));
-must('시각 물결', '13:00~16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
-must('시각 줄표', '13:00-16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
-must('시각 부터까지', '13:00부터 16:00까지 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].timeEnd === '16:00' && items[0].title.includes('워크숍'));
-must('오전 오후 범위', '10/30(금) 오전 10시~오후 1시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].timeEnd === '13:00' && items[0].title.includes('연수'));
-must('시 범위 상속', '10/30(금) 2시~4시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].timeEnd === '16:00' && items[0].title.includes('연수'));
+must('시각 범위', '10/30(금) 오후 2시~4시 학부모 진로 특강 (강당)', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].endTime === '16:00' && String(items[0].memo).includes('강당') && items[0].title.includes('특강') && !items[0].title.includes('강당'));
+must('시각 물결', '13:00~16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].endTime === '16:00' && items[0].title.includes('워크숍'));
+must('시각 줄표', '13:00-16:00 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].time === '13:00' && items[0].endTime === '16:00' && items[0].title.includes('워크숍'));
+must('시각 부터까지', '13:00부터 16:00까지 교육과정 워크숍', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].time === '13:00' && items[0].endTime === '16:00' && items[0].title.includes('워크숍'));
+must('오전 오후 범위', '10/30(금) 오전 10시~오후 1시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].endTime === '13:00' && items[0].title.includes('연수'));
+must('시 범위 상속', '10/30(금) 2시~4시 학부모 연수', qaNow, (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].time === '14:00' && items[0].endTime === '16:00' && items[0].title.includes('연수'));
+must('박람회 범위', '10/30(금) 오전 10시~오후 1시 진로 박람회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].include !== false && items[0].low === false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].endTime === '13:00' && items[0].title.includes('박람회'));
+must('시각 부터까지 일정', '10/30(금) 오전 10시부터 오후 1시까지 진로 박람회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].include !== false && items[0].date === '2026-10-30' && items[0].time === '10:00' && items[0].endTime === '13:00' && items[0].title.includes('박람회'));
+must('제출 마감', '10/30(금)까지 독서록 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-10-30' && items[0].title.includes('독서록') && items[0].title.includes('제출') && !items[0].endTime);
+must('금요일 마감', '금요일까지 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && !items[0].endTime);
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
@@ -202,6 +206,19 @@ const tripSave = await saveParsed(trip.items, qaNow);
 const tripRow = snapshot().events.find((row) => row.title === '수학여행');
 if (!tripSave.ok || !tripRow || tripRow.date !== '2026-11-04' || tripRow.end !== '2026-11-06' || !String(tripRow.memo).includes('경주 일대') || snapshot().todos.some((row) => row.date === '2026-11-03')) {
     console.error('수학여행 장소가 11월 3일 할 일로 남았습니다.');
+    process.exit(1);
+}
+const fair = parseSchoolMessages('10/30(금) 오전 10시~오후 1시 진로 박람회', { now: qaNow });
+const fairSave = await saveParsed(fair.items, qaNow);
+const fairRow = snapshot().events.find((row) => String(row.title).includes('박람회'));
+const fairCloud = toCloudRow('events', fairRow || {});
+if (!fairSave.ok || fair.items[0]?.kind !== '일정' || fair.items[0]?.include === false || !fairRow || fairRow.time !== '10:00' || fairRow.endTime !== '13:00' || fairCloud?.body?.time !== '10:00' || Object.prototype.hasOwnProperty.call(fairCloud?.body || {}, 'endTime')) {
+    console.error('끝 시각이 일정에 없거나 클라우드 허용 칸 밖으로 나갑니다.', fair.items, fairRow, fairCloud);
+    process.exit(1);
+}
+const plain = snapshot().events.find((row) => row.title === '수학여행');
+if (!plain || plain.endTime) {
+    console.error('끝 시각이 없는 기존 일정에 endTime이 생겼습니다.');
     process.exit(1);
 }
 

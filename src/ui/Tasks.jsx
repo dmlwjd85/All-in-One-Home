@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addDaysYmd, startOfWeekMon } from '../lib/date.js';
+import { addDaysYmd, eventClock, startOfWeekMon } from '../lib/date.js';
 import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
@@ -109,7 +109,7 @@ export function Notice() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <Btn className="chip" onClick={() => {
                     if (!events.length) { showToast('그 날 일정이 없어요.'); return; }
-                    const block = events.map((row) => `· ${row.title}${row.memo ? ` (${row.memo})` : ''}`).join('\n');
+                    const block = events.map((row) => `· ${row.endTime ? `${eventClock(row)} ` : ''}${row.title}${row.memo ? ` (${row.memo})` : ''}`).join('\n');
                     setText((prev) => prev ? `${prev}\n${block}` : block);
                 }}>그날 일정 넣기</Btn>
                 <Btn className="chip" onClick={async () => {

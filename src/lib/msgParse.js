@@ -142,7 +142,7 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
 }
 
 function hasDeadline(text) {
-    const src = String(text || '');
+    const src = String(text || '').replace(CLOCK_RANGE_RE, ' ');
     if (/(?:\d|일|요일|교시|시|분|오늘|내일|모레|글피|이번\s*주|다음\s*주|이번주|다음주|금주|차주|주말)(?:\s*[.(（]\s*[월화수목금토일]\s*[)）])?\s*까지/.test(src)) return true;
     if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말|중(?:으로)?)\s*까지/.test(src)) return true;
     if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중(?:으로)?/.test(src)) return true;
@@ -854,7 +854,9 @@ const SOCIAL_RE = /생신|생일|축하|결혼|청첩장|결혼식|🎂|🎉|�
 
 function hasWorkCue(text) {
     const src = String(text || '');
-    return hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src);
+    if (hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src)) return true;
+    const when = detectWhen(src);
+    return Boolean(when.hmEnd && findDates(src).length);
 }
 
 function casualTalk(text) {
@@ -964,7 +966,6 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const title = finishTitle(pickTitle(body, source), source, fullText);
     const memoBits = [];
     if (placed.memo) memoBits.push(placed.memo);
-    if (when.hm && when.hmEnd) memoBits.push(`${when.hm}~${when.hmEnd}`);
     const duration = String(source).match(/\d+\s*박\s*\d+\s*일/);
     if (duration) memoBits.push(duration[0].replace(/\s+/g, ' '));
     extraNotes.forEach((note) => {
@@ -1018,7 +1019,7 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         date: dateYmd,
         end: end?.ymd || '',
         time: when.hm || '',
-        timeEnd: when.hmEnd || '',
+        endTime: when.hmEnd || '',
         period: when.period || 0,
         periodEnd: when.periodEnd || 0,
         memo: memoBits.join(' · '),
@@ -1075,7 +1076,7 @@ function collapsePair(items, segment) {
     return [{
         ...kept,
         time: kept.time || other.time,
-        timeEnd: kept.timeEnd || other.timeEnd,
+        endTime: kept.endTime || other.endTime,
         period: kept.period || other.period,
         periodEnd: kept.periodEnd || other.periodEnd,
         date: kept.date || other.date,

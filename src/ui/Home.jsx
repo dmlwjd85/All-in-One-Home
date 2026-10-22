@@ -1,4 +1,4 @@
-import { addDaysYmd, dayKeyFromYmd, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -99,7 +99,7 @@ export function Home() {
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
                         <div key={row.id}>
-                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.title}</strong>
+                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
                             {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
                         </div>
                     ))}

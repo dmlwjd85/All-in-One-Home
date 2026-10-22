@@ -58,6 +58,14 @@ export function monthCells(ym) {
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
+/** 일정 시각. endTime이 있으면 14:00–16:00, 없으면 시작 시각만. */
+export function eventClock(row) {
+    const time = String(row?.time || '');
+    const end = String(row?.endTime || '');
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time) && /^([01]\d|2[0-3]):[0-5]\d$/.test(end)) return `${time}–${end}`;
+    return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : '';
+}
+
 export function weekdayKo(ymd) {
     return WEEK[fromYmd(ymd).getDay()];
 }

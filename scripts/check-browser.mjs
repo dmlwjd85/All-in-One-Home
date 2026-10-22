@@ -826,6 +826,31 @@ try {
         await page.screenshot({ path: resolve(shots, 'after_message_16x9.png') });
     }, 720);
 
+    async function savedTimeSpan(page, label) {
+        await openPlus(page);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.type('[data-screen="message"] textarea', '10/23(금) 오후 2시~4시 학부모 진로 특강 (강당)');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('14:00–16:00'));
+        await audit(page, `시각 범위 카드 ${label}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('1개 등록'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
+        await page.evaluate(() => { location.hash = '#/schedule'; });
+        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강') && document.body.innerText.includes('08:50'));
+        const week = await page.evaluate(() => document.body.innerText);
+        check(week.includes('과학관') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
+        await audit(page, `주간 일정 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('2026년 10월'));
+        await page.evaluate(() => [...document.querySelectorAll('.cal-grid button')].find((el) => el.innerText.trim().startsWith('23'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
+        await audit(page, `달력 일정 ${label}`);
+    }
+    await withDemo(390, 'light', async (page) => { await savedTimeSpan(page, '390'); }, 844);
+    await withDemo(360, 'light', async (page) => { await savedTimeSpan(page, '360'); }, 844);
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));

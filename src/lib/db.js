@@ -332,6 +332,7 @@ export async function saveQuick(input, now = new Date()) {
                 memo: bits.join(' · ').slice(0, 300),
             };
             if (input.time) row.time = input.time;
+            if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
             put(local ? draft.local.events : draft.events, row);
             message = '일정에 넣었어요.';
         } else if (kind === '알림장') {
@@ -393,6 +394,7 @@ export async function saveParsed(items, now = new Date()) {
                     memo: memo.slice(0, 300),
                 };
                 if (item.time) row.time = item.time;
+                if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '')) row.endTime = item.endTime;
                 if (item.end && item.end > date) row.end = item.end;
                 put(sensitive ? draft.local.events : draft.events, row);
             } else {
