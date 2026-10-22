@@ -1,6 +1,8 @@
 /* 글꼴은 이 사이트와 함께 제공합니다.
-   Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다.
-   제목은 고운바탕 굵게 한 벌만 씁니다. */
+   본문 Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다. SIL OFL 1.1.
+   제목 나눔스퀘어라운드 Bold도 KS X 1001 서브셋이며 SIL OFL 1.1입니다.
+   Copyright 2017 NAVER Corporation. Font designed by Sandoll Communications Inc.
+   카페24 글꼴은 쓰지 않습니다. */
 @font-face {
     font-family: 'Pretendard Variable';
     font-style: normal;
@@ -33,11 +35,10 @@
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
-/* 제목: 고운바탕 굵게(KS X 1001 서브셋). 본문: Pretendard. */
 @font-face {
-    font-family: 'Gowun Batang';
+    font-family: 'NanumSquareRound';
     font-style: normal;
     font-weight: 400 900;
     font-display: swap;
-    src: url('./GowunBatang-Bold.woff2') format('woff2');
+    src: url('./NanumSquareRound-Bold.woff2') format('woff2');
 }

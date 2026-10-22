@@ -117,28 +117,29 @@ function contrast(a, b) {
     const [hi, lo] = left > right ? [left, right] : [right, left];
     return (hi + 0.05) / (lo + 0.05);
 }
-function mix(base, top, alpha) {
-    const nb = Number.parseInt(base.slice(1), 16);
-    const nt = Number.parseInt(top.slice(1), 16);
-    const channel = (shift) => Math.round(((nt >> shift) & 255) * alpha + ((nb >> shift) & 255) * (1 - alpha));
-    return `#${[channel(16), channel(8), channel(0)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
-}
 const pairs = [
-    ['본문', '#1E1B3A', '#F6F4FF'],
-    ['보조', '#5B5775', '#FFFFFF'],
-    ['버튼', '#FFFFFF', '#6D4AFF'],
-    ['히어로 글자', '#FFFFFF', '#B85A3E'],
-    ['히어로 버튼', '#6D4AFF', '#FFFFFF'],
-    ['다크 본문', '#F3F1FF', '#0F0E1A'],
-    ['다크 보조', '#B4AFCF', '#1C1A2E'],
-    ['다크 버튼', '#14112B', '#A994FF'],
+    ['본문', '#2B3350', '#EEF6FD'],
+    ['보조', '#3E4864', '#FFF8E7'],
+    ['버튼', '#FFFFFF', '#5B5BD6'],
+    ['히어로 글자', '#2B3350', '#FFF8E7'],
+    ['히어로 버튼', '#FFFFFF', '#5B5BD6'],
+    ['칩', '#2B3350', '#E4DCFB'],
+    ['노란 카드', '#2B3350', '#FFF6D8'],
+    ['다크 본문', '#F4F7FB', '#121826'],
+    ['다크 보조', '#C5D0E4', '#1B2436'],
+    ['다크 버튼', '#FFFFFF', '#5B5BD6'],
+    ['다크 칩', '#F4F7FB', '#2C2848'],
+    ['다크 노란 카드', '#F4F7FB', '#3A3428'],
+    ['토스트', '#FFFFFF', '#2B3350'],
+    ['토스트 동작', '#D9D4F8', '#2B3350'],
+    ['다크 토스트', '#1A2030', '#F4F7FB'],
+    ['다크 토스트 동작', '#3C3CAA', '#F4F7FB'],
 ];
 for (const [label, fg, bg] of pairs) {
     const ratio = contrast(fg, bg);
     check(ratio >= 4.5, `${label} 대비 ${ratio.toFixed(2)} 가 4.5보다 낮습니다.`);
 }
-const pill = mix('#B85A3E', '#200C30', 0.38);
-const pillRatio = contrast('#FFFFFF', pill);
+const pillRatio = contrast('#2B3350', '#E4DCFB');
 check(pillRatio >= 4.5, `히어로 알약 대비 ${pillRatio.toFixed(2)} 가 4.5보다 낮습니다.`);
 
 function walk(dir, out = []) {
@@ -155,7 +156,7 @@ for (const file of walk(root)) {
     const rel = file.slice(root.length + 1);
     if (!/\.(css|js|jsx|html)$/.test(rel) || fontAllow.has(rel)) continue;
     const text = readFileSync(file, 'utf8');
-    if (/Gowun|Pretendard|Noto Serif|Noto Sans/.test(text)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
+    if (/Gowun|Pretendard|Noto Serif|Noto Sans|NanumSquareRound|나눔스퀘어라운드|Cafe24|카페24/.test(text)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
     for (const match of text.matchAll(/font-family\s*:\s*([^;}{]+)/g)) {
         const value = match[1];
         if (!/var\(--font-|inherit/.test(value)) failures.push(`${rel}: 글꼴을 변수 밖에서 지정했습니다.`);

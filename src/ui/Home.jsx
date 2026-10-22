@@ -3,6 +3,7 @@ import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, studentName } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 export function Home() {
     const { data, clock, go } = useUi();
@@ -53,7 +54,7 @@ export function Home() {
 
             <section className="glass home-quick" style={{ padding: 14 }}>
                 <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 ＋에서 시작해요</h3>
-                <p className="muted" style={{ margin: 0 }}>회의록, 출결, 메시지 붙여넣기, 기록은 가운데 ＋를 누르면 한 화면에서 고릅니다.</p>
+                <p className="muted" style={{ margin: 0 }}>한 줄로 적거나, 출결·상담·할 일·일정을 바로 고릅니다. 회의록과 메시지는 더보기에 있어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
@@ -119,7 +120,12 @@ export function Home() {
                             </div>
                         </div>
                     ))}
-                    {!feed.length && <p className="muted" style={{ margin: 0 }}>아직 기록이 없어요. ＋를 누르면 10초면 남길 수 있어요.</p>}
+                    {!feed.length && (
+                        <div>
+                            <ClayMark />
+                            <p className="muted" style={{ margin: 0 }}>아직 기록이 없어요. ＋를 누르면 10초면 남길 수 있어요.</p>
+                        </div>
+                    )}
                 </div>
             </section>
         </div>

@@ -18,8 +18,8 @@ export default {
                 body: 'var(--font-body)',
             },
             borderRadius: {
-                sm: '10px',
-                md: '16px',
+                sm: '20px',
+                md: '22px',
                 lg: '24px',
                 xl: '28px',
             },

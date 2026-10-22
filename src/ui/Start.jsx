@@ -4,6 +4,7 @@ import { applyLegacy, finishSetup, loadDemo, previewLegacy, setAuth, snapshot } 
 import { cloudReady, loginHint, signInGoogle } from '../firebase.js';
 import { useUi } from './context.jsx';
 import { Btn, Symbol } from './bits.jsx';
+import { ClayMark } from './ClayMark.jsx';
 
 export function Start() {
     const { showToast, go } = useUi();
@@ -29,6 +30,7 @@ export function Start() {
                 <Symbol />
                 <strong className="title-font" style={{ fontSize: 18 }}>쓱</strong>
             </div>
+            <ClayMark />
             <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>쓱 교무수첩</h1>
             <p style={{ fontSize: 16 }}>열자마자 쓱, 적. 담임의 하루가 한 화면에 있어요.</p>
             {step === 'choose' && (
