@@ -8,6 +8,7 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
+import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
@@ -108,7 +109,7 @@ export default function App() {
         document.documentElement.classList.toggle('dark', next);
         document.documentElement.style.colorScheme = next ? 'dark' : 'light';
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', next ? '#0F0E1A' : '#F6F4FF');
+        if (meta) meta.setAttribute('content', next ? '#121826' : '#EEF6FD');
         setDark(next);
         try { localStorage.setItem('ssug-gyomu-theme', theme || 'system'); } catch { /* 무시 */ }
     }, [data?.profile.theme]);
@@ -332,7 +333,8 @@ export default function App() {
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
                     <div className="toast" role="status">
-                        <span>{toast.message}</span>
+                        {toast.undoable && <ClayMark compact />}
+                        <span className="toast-text">{toast.message}</span>
                         {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo(); setToast(null); }}>되돌리기</Btn>}
                     </div>
                 )}

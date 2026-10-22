@@ -416,6 +416,114 @@ export async function saveParsed(items, now = new Date()) {
     return { ok: true, message, count, skipped, sensitiveCount };
 }
 
+/** ＋ 미리보기 카드를 기존 기록·출결·일정·할 일·메모 칸에 넣습니다. 학생기록은 관찰(누가)입니다. */
+export async function saveCompose(cards, now = new Date()) {
+    const chosen = (cards || []).filter((card) => card && card.include !== false);
+    if (!chosen.length) return { ok: false, message: '남길 내용이 없어요.' };
+    let saved = 0;
+    let attend = 0;
+    let sensitive = false;
+    const recordNames = [];
+    await update((draft) => {
+        const clock = seoulParts(now);
+        for (const card of chosen) {
+            const text = String(card.text || card.title || '').trim();
+            const kind = card.kind;
+            const parsed = parseNote(text, now);
+            const tags = [...new Set(parsed.tags || [])].filter(Boolean).slice(0, 10);
+            const sens = parsed.sensitive || isSensitiveText(`${text} ${card.memo || ''}`, tags);
+            if (sens) sensitive = true;
+            const no = Number(card.no || parsed.studentNo || 0);
+            const student = draft.students.find((row) => row.no === no);
+            const date = card.date || parsed.detectedDate || clock.ymd;
+            const base = { source: 'app', at: now.toISOString() };
+            if (kind === '출결') {
+                if (!student) continue;
+                const status = ['결석', '지각', '조퇴', '결과'].includes(card.status) ? card.status : '결석';
+                const id = `${date}_${student.id}`;
+                const index = draft.attendance.findIndex((row) => row.id === id);
+                const row = {
+                    id,
+                    date,
+                    sid: student.id,
+                    status,
+                    reason: '',
+                    note: text.slice(0, 100),
+                    paper: false,
+                    period: card.period || '',
+                    source: 'app',
+                };
+                if (index >= 0) draft.attendance[index] = { ...draft.attendance[index], ...row };
+                else draft.attendance.unshift(row);
+                if (!draft.profile.checkedDates.includes(date)) draft.profile.checkedDates.push(date);
+                attend += 1;
+                saved += 1;
+                continue;
+            }
+            if (!text) continue;
+            const local = sens;
+            if (kind === '학생기록' || kind === '상담') {
+                const storeKind = kind === '상담' ? '상담' : '관찰';
+                const chosenTags = tags.length ? tags : (storeKind === '관찰' ? ['학습'] : ['교우']);
+                const row = {
+                    ...base,
+                    id: nid('rec'),
+                    date,
+                    kind: storeKind,
+                    sid: student?.id || '',
+                    text,
+                    tags: chosenTags,
+                    neis: storeKind === '관찰',
+                };
+                if (storeKind === '상담' && parsed.detectedDate && text.includes('다시')) row.follow = parsed.detectedDate;
+                put(local ? draft.local.records : draft.records, row);
+                if (student) recordNames.push(student.name);
+                saved += 1;
+                continue;
+            }
+            if (kind === '할 일') {
+                put(local ? draft.local.todos : draft.todos, {
+                    ...base,
+                    id: nid('todo'),
+                    title: (stripTokens(text) || text).slice(0, 100),
+                    done: false,
+                    due: date || '',
+                });
+                saved += 1;
+                continue;
+            }
+            if (kind === '일정') {
+                const eventKind = EVENT_KINDS.includes(card.eventKind) ? card.eventKind : '학급';
+                const bits = [];
+                if (card.memo) bits.push(String(card.memo));
+                if (card.period) bits.push(card.periodEnd ? `${card.period}~${card.periodEnd}교시` : `${card.period}교시`);
+                const row = {
+                    ...base,
+                    id: nid('event'),
+                    date,
+                    title: (card.title || stripTokens(text) || text).slice(0, 60),
+                    kind: eventKind,
+                    memo: bits.join(' · ').slice(0, 300),
+                };
+                if (card.time) row.time = card.time;
+                if (/^([01]\d|2[0-3]):[0-5]\d$/.test(card.endTime || '')) row.endTime = card.endTime;
+                if (card.end && card.end > date) row.end = card.end;
+                put(local ? draft.local.events : draft.events, row);
+                saved += 1;
+                continue;
+            }
+            put(local ? draft.local.notes : draft.notes, { ...base, id: nid('note'), text, date, pinned: false });
+            saved += 1;
+        }
+        return draft;
+    }, { undoable: true });
+    if (!saved) return { ok: false, message: '누구인지 번호를 눌러 주세요.' };
+    let message = recordNames.length === 1 && saved === 1 ? `${recordNames[0]} 기록에 넣었어요.` : `${saved}개 남겼어요.`;
+    if (attend === saved && saved === 1) message = '출결에 남겼어요.';
+    if (sensitive) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
+    return { ok: true, message };
+}
+
 export async function setAttendance(date, sid, status, extra = {}) {
     await update((draft) => {
         const id = `${date}_${sid}`;

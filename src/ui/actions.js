@@ -7,3 +7,12 @@ export const PLUS_ACTIONS = [
     { id: 'message', label: '메시지 붙여넣기', emoji: '✉' },
     ...KINDS.map((kind) => ({ id: `quick:${kind.id}`, label: kind.label, emoji: kind.emoji, kind: kind.id })),
 ];
+
+/** 입력창 아래 네 칸. 나머지는 더보기에 그대로 둡니다. */
+export const FREQUENT_IDS = ['attend', 'quick:상담', 'quick:할 일', 'quick:일정'];
+
+export function splitPlusActions() {
+    const frequent = FREQUENT_IDS.map((id) => PLUS_ACTIONS.find((item) => item.id === id)).filter(Boolean);
+    const more = PLUS_ACTIONS.filter((item) => !FREQUENT_IDS.includes(item.id));
+    return { frequent, more };
+}

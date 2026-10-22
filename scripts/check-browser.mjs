@@ -259,6 +259,35 @@ async function openPlus(page) {
     await page.waitForSelector('[data-screen="plus"]');
 }
 
+async function clickPlusLabel(page, label) {
+    const clicked = await page.evaluate((wanted) => {
+        const visible = (el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 8 && rect.height > 8;
+        };
+        const fits = (text) => (wanted === '일정' ? text.includes('일정') && !text.includes('알림') : text.includes(wanted));
+        const hit = [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => fits(el.innerText.replace(/\s+/g, ' ')) && visible(el));
+        if (!hit) return false;
+        hit.click();
+        return true;
+    }, label);
+    if (clicked) return;
+    await page.evaluate(() => {
+        [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click();
+    });
+    await page.waitForFunction((wanted) => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => {
+        const text = el.innerText.replace(/\s+/g, ' ');
+        return wanted === '일정' ? text.includes('일정') && !text.includes('알림') : text.includes(wanted);
+    }), {}, label);
+    await page.evaluate((wanted) => {
+        const hit = [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => {
+            const text = el.innerText.replace(/\s+/g, ' ');
+            return wanted === '일정' ? text.includes('일정') && !text.includes('알림') : text.includes(wanted);
+        });
+        hit?.click();
+    }, label);
+}
+
 async function choiceFit(page, screen, scope = '') {
     return page.evaluate((name, scopeSelector) => {
         const sheetRoot = document.querySelector(`[data-screen="${name}"]`);
@@ -396,8 +425,10 @@ try {
         check(homeText.includes('1교시') && homeText.includes('18분'), '홈에 다음 교시 18분이 없습니다.');
         check(homeText.includes('박서준') && homeText.includes('결석'), '홈에 결석이 없습니다.');
         await page.click('[aria-label="할 일 고르기"]');
-        await page.waitForFunction(() => document.body.innerText.includes('회의록 작성'));
-        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('관찰'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('더보기'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.includes('관찰')));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('관찰'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('누구'));
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());
         await page.waitForSelector('textarea');
@@ -456,18 +487,24 @@ try {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await page.screenshot({ path: resolve(shots, 'after_home_390.png') });
         await openPlus(page);
-        await page.waitForFunction(() => document.body.innerText.includes('메시지 붙여넣기') && document.body.innerText.includes('보호자'));
+        await page.waitForFunction(() => document.body.innerText.includes('출결 체크') && document.body.innerText.includes('더보기'));
         const plus = await choiceFit(page, 'plus');
         reportChoice('＋ 메뉴 390', plus);
-        const need = ['회의록 작성', '출결 체크', '메시지 붙여넣기', '할 일', '일정', '관찰', '상담', '알림장', '메모', '칭찬', '보호자'];
-        for (const label of need) {
+        const frequent = ['출결 체크', '상담', '할 일', '일정'];
+        for (const label of frequent) {
             if (!plus.labels?.some((item) => item.includes(label))) failures.push(`＋ 메뉴에 ${label}이 없습니다.`);
         }
         const confirm = await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => /^(확인|선택|완료)$/.test(el.innerText.trim())));
         check(!confirm, '＋ 메뉴에 확인 버튼이 있습니다.');
         await page.screenshot({ path: resolve(shots, 'after_plus_390.png') });
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('회의록 작성') && document.body.innerText.includes('메시지 붙여넣기') && document.body.innerText.includes('보호자'));
+        const moreLabels = await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
+        for (const label of ['회의록 작성', '메시지 붙여넣기', '관찰', '알림장', '메모', '칭찬', '보호자']) {
+            if (!moreLabels.some((item) => item.includes(label))) failures.push(`더보기에 ${label}이 없습니다.`);
+        }
 
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('일정') && !el.innerText.includes('알림'))?.click());
+        await clickPlusLabel(page, '일정');
         await page.waitForSelector('[data-screen="flow"]');
         await page.waitForFunction(() => document.body.innerText.includes('일정 종류'));
         const eventKind = await choiceFit(page, 'flow');
@@ -483,7 +520,7 @@ try {
         await page.waitForFunction(() => !document.querySelector('[data-screen="flow"]'));
 
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('회의록 작성'))?.click());
+        await clickPlusLabel(page, '회의록 작성');
         await page.waitForFunction(() => document.body.innerText.includes('회의 종류'));
         const meet = await choiceFit(page, 'flow');
         reportChoice('회의록 종류 390', meet);
@@ -518,7 +555,7 @@ try {
         await page.waitForFunction(() => !document.querySelector('[data-screen="attend-status"]'));
 
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '내일 5교시 공개수업이 있습니다. 가정통신문 내일까지 회신 바랍니다.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -568,7 +605,7 @@ try {
         check(!undone, '되돌리기 뒤에도 메시지 항목이 남아 있습니다.');
 
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         const four = [
             '[안내] 1. 10월 30일(금) 3~4교시 학급 사진 촬영',
@@ -686,7 +723,7 @@ try {
 
     await withDemo(390, 'light', async (page) => {
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '2027년 3월 4일 봄철 돌봄교실 운영 계획서 제출');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -816,7 +853,7 @@ try {
         reportChoice('＋ 메뉴 16:9', plus);
         await audit(page, '＋ 16:9');
         await page.screenshot({ path: resolve(shots, 'after_plus_16x9.png') });
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '내일 5교시 공개수업이 있습니다');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -828,7 +865,7 @@ try {
 
     async function savedTimeSpan(page, label) {
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '10/23(금) 오후 2시~4시 학부모 진로 특강 (강당)');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -837,9 +874,11 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('1개 등록'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
         await page.evaluate(() => { location.hash = '#/schedule'; });
-        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강') && document.body.innerText.includes('08:50'));
+        await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
         const week = await page.evaluate(() => document.body.innerText);
-        check(week.includes('과학관') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
+        // 현장체험(오늘+3, 08:50)은 금·토·일이면 이번 주 밖에 있어 주간 화면에 없습니다.
+        check(!week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
+        if (week.includes('08:50')) check(week.includes('과학관'), `끝 시각 없는 일정이 ${label}에서 과학관과 함께 보이지 않습니다.`);
         await audit(page, `주간 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
@@ -853,7 +892,7 @@ try {
 
     async function weekdayDeadline(page, label) {
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '금요일까지 학급 운영비 영수증 제출해 주세요.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -874,7 +913,7 @@ try {
 
     async function weekdaySchedule(page, label) {
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '금요일 오후 3시 학년 협의회');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -911,7 +950,7 @@ try {
 
     async function periodAndQuestion(page, label) {
         await openPlus(page);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await clickPlusLabel(page, '메시지 붙여넣기');
         await page.waitForSelector('[data-screen="message"] textarea');
         await page.type('[data-screen="message"] textarea', '화요일 2교시 학급 회의');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
@@ -1015,6 +1054,7 @@ try {
     });
 } catch (error) {
     failures.push(error?.message || String(error));
+    console.error(error?.stack || error);
 }
 
 if (failures.length) {

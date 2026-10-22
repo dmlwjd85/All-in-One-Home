@@ -1,93 +1,96 @@
-/* 쓱 교무수첩 색·글꼴. 쓱 폰트가 오면 --font-title 과 --font-body 두 줄만 바꿉니다. */
+/* 쓱 교무수첩 색·글꼴. 본문 Pretendard, 제목 나눔스퀘어라운드. 둘 다 SIL OFL 1.1. */
 :root {
-    --font-title: 'Gowun Batang', 'Noto Serif KR', serif;
-    --font-body: 'Pretendard Variable', Pretendard, -apple-system, 'Noto Sans KR', sans-serif;
+    --font-title: 'NanumSquareRound', 'Pretendard Variable', Pretendard, sans-serif;
+    --font-body: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
     --title-effect: none;
 
-    /* 시안 B 라일락. 글자·버튼은 대비 4.5:1 이상. */
-    --bg: #F6F4FF;
-    --surface: rgba(255, 255, 255, .74);
-    --solid: #FFFFFF;
-    --glass-border: rgba(255, 255, 255, .7);
-    --line: rgba(30, 27, 58, .08);
-    --ink: #1E1B3A;
-    --ink-sub: #5B5775;
-    --primary: #6D4AFF;
+    /* 파스텔 하늘·크림·라벤더. 글자는 #2B3350, 노랑·핑크는 글자에 쓰지 않습니다. */
+    --bg: #EEF6FD;
+    --surface: rgba(255, 248, 231, .94);
+    --solid: #FFF8E7;
+    --field: #FFFFFF;
+    --glass-border: rgba(255, 255, 255, .8);
+    --line: rgba(43, 51, 80, .10);
+    --ink: #2B3350;
+    --ink-sub: #3E4864;
+    --primary: #5B5BD6;
     --on-primary: #FFFFFF;
-    --brand: #E58C6F; /* 장식 전용. 글자에 쓰지 않습니다. */
-    --brand-soft: #ECE7FF;
-    --hero-1: #7048F2;
-    --hero-2: #C2457E;
-    --hero-3: #B85A3E;
-    --hero-ink: #FFFFFF;
-    --hero-action: #6D4AFF;
-    --aurora-1: #FFD6E8;
-    --aurora-2: #D6E4FF;
-    --aurora-3: #E3FFF1;
-    --aurora-brand: #E58C6F;
-    --fab-1: #7B5CFF;
-    --fab-2: #E86FA5;
-    --glow: rgba(123, 92, 255, .40);
-    --shadow: 0 8px 24px rgba(60, 40, 140, .10);
-    --toast: #1E1B3A;
+    --brand: #C9B8F0; /* 장식 전용. 글자에 쓰지 않습니다. */
+    --brand-soft: #E4DCFB;
+    --hero-1: #C9B8F0;
+    --hero-2: #8EC4F0;
+    --hero-3: #5B5BD6;
+    --hero-ink: #2B3350;
+    --hero-action: #5B5BD6;
+    --aurora-1: #E7DFFB;
+    --aurora-2: #D7EBFA;
+    --aurora-3: #E5F4EA;
+    --aurora-brand: #C9B8F0;
+    --fab-1: #5B5BD6;
+    --fab-2: #5B5BD6;
+    --glow: rgba(91, 91, 214, .32);
+    --shadow: 0 1px 2px rgba(43, 51, 80, .06), 0 12px 28px rgba(70, 96, 140, .12);
+    --toast: #2B3350;
     --toast-ink: #FFFFFF;
-    --toast-action: #C8B8FF;
+    --toast-action: #D9D4F8;
 
     --st-present: #1E7A57;
     --st-absent: #C02B43;
     --st-late: #9A5B00;
     --st-early: #2D67C7;
-    --st-out: #7A4BC4;
+    --st-out: #5B4A9A;
     --st-absent-bg: #FCE8EB;
     --st-late-bg: #FFF1D6;
     --st-early-bg: #E5EEFC;
     --st-out-bg: #F0E9FB;
 
-    --k-observe: #FFF1C9;
-    --k-counsel: #DDF3E8;
-    --k-parent: #E6EEFF;
-    --k-praise: #FFE3EC;
-    --k-todo: #EEE8FF;
+    --k-observe: #FFF3D6;
+    --k-counsel: #E5F6EE;
+    --k-parent: #E5F0FC;
+    --k-praise: #EDE6FB;
+    --k-todo: #EEF0FA;
 
-    --radius-sm: 10px;
-    --radius-md: 16px;
+    --radius-sm: 20px;
+    --radius-md: 22px;
     --radius-lg: 24px;
     --radius-xl: 28px;
 }
 
 .dark {
-    --bg: #0F0E1A;
-    --surface: rgba(28, 26, 46, .72);
-    --solid: #1C1A2E;
+    --bg: #121826;
+    --surface: rgba(28, 36, 54, .90);
+    --solid: #1B2436;
+    --field: #243049;
     --glass-border: rgba(255, 255, 255, .08);
-    --line: rgba(243, 241, 255, .12);
-    --ink: #F3F1FF;
-    --ink-sub: #B4AFCF;
-    --primary: #A994FF;
-    --on-primary: #14112B;
-    --brand-soft: #2A2448;
-    --hero-action: #6D4AFF;
-    --aurora-1: #3A1F4D;
-    --aurora-2: #1E2A5A;
-    --aurora-3: #10332A;
-    --shadow: 0 8px 24px rgba(0, 0, 0, .35);
-    --toast: #F3F1FF;
-    --toast-ink: #14112B;
-    --toast-action: #6D4AFF;
+    --line: rgba(238, 246, 253, .12);
+    --ink: #F4F7FB;
+    --ink-sub: #C5D0E4;
+    --primary: #5B5BD6;
+    --on-primary: #FFFFFF;
+    --brand-soft: #2C2848;
+    --hero-ink: #F4F7FB;
+    --hero-action: #5B5BD6;
+    --aurora-1: #2A2444;
+    --aurora-2: #1A2C44;
+    --aurora-3: #163028;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .40);
+    --toast: #F4F7FB;
+    --toast-ink: #1A2030;
+    --toast-action: #3C3CAA;
 
-    --st-present: #6FE0B0;
-    --st-absent: #FF8C9C;
-    --st-late: #F4C25B;
-    --st-early: #8DB6FF;
-    --st-out: #C7A6FF;
-    --st-absent-bg: #3D1E24;
-    --st-late-bg: #3A2C12;
+    --st-present: #8EDEC0;
+    --st-absent: #F3B7B0;
+    --st-late: #E4CDB4;
+    --st-early: #A9C7F5;
+    --st-out: #C9B8F0;
+    --st-absent-bg: #3D2428;
+    --st-late-bg: #3A3228;
     --st-early-bg: #1C2A44;
-    --st-out-bg: #2C2140;
+    --st-out-bg: #2C2848;
 
     --k-observe: #3A3216;
     --k-counsel: #183429;
     --k-parent: #1C2740;
-    --k-praise: #3C1F2A;
-    --k-todo: #2A2342;
+    --k-praise: #2C2848;
+    --k-todo: #24283A;
 }

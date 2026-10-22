@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseNote } from '../lib/parse.js';
+import { recentStudents } from '../lib/recent.js';
 import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick } from '../lib/db.js';
 import { joinedRecords } from '../lib/db.js';
@@ -19,14 +20,7 @@ export function QuickSheet({ initial, onClose }) {
     const chosenNo = parsed.studentNo || no;
     const student = data.students.find((row) => row.no === Number(chosenNo));
     const sensitive = parsed.sensitive || isSensitiveText(text, tags);
-    const recent = useMemo(() => {
-        const records = joinedRecords(data);
-        const last = new Map();
-        records.forEach((row) => {
-            if (row.sid && (!last.has(row.sid) || String(row.at || row.date) > last.get(row.sid))) last.set(row.sid, String(row.at || row.date));
-        });
-        return [...data.students].sort((a, b) => String(last.get(b.id) || '').localeCompare(String(last.get(a.id) || '')) || a.no - b.no).slice(0, 4);
-    }, [data]);
+    const recent = useMemo(() => recentStudents(data.students, joinedRecords(data), 4), [data]);
 
     useEffect(() => { box.current?.focus(); }, []);
     useEffect(() => {

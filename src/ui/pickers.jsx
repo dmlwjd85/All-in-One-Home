@@ -71,14 +71,14 @@ export function DateGrid({ value, today, onPick }) {
     );
 }
 
-export function NumberGrid({ students, onPick }) {
+export function NumberGrid({ students, value = 0, onPick }) {
     if (!students.length) {
         return <Btn className="choice-tile" onClick={() => onPick(0)}>학생 없이 적기</Btn>;
     }
     return (
         <div className="num-grid" role="group" aria-label="학생 번호">
             {students.map((row) => (
-                <Btn key={row.id} className="choice-tile num-tile" aria-label={`${row.no}번 ${row.name}`} onClick={() => onPick(row.no)}>
+                <Btn key={row.id} className={Number(value) === row.no ? 'choice-tile num-tile on' : 'choice-tile num-tile'} aria-label={`${row.no}번 ${row.name}`} onClick={() => onPick(row.no)}>
                     <span className="num">{row.no}</span>
                     <span className="num-name">{row.name}</span>
                 </Btn>
