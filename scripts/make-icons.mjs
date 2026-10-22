@@ -95,91 +95,48 @@ const icons = await page.evaluate(async (src, plate) => {
         }
     }
 
-    function hueSat(r, g, b) {
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const d = max - min;
-        let hue = 0;
-        if (d !== 0) {
-            if (max === r) hue = ((g - b) / d) % 6;
-            else if (max === g) hue = (b - r) / d + 2;
-            else hue = (r - g) / d + 4;
-            hue *= 60;
-            if (hue < 0) hue += 360;
-        }
-        return [hue, d];
-    }
+    const anyCanvas = document.createElement('canvas');
+    anyCanvas.width = side;
+    anyCanvas.height = side;
+    anyCanvas.getContext('2d').putImageData(master, 0, 0);
 
-    let farthest = 0;
-    const cx = (side - 1) / 2;
-    const cy = (side - 1) / 2;
-    for (let y = 0; y < side; y += 1) {
-        for (let x = 0; x < side; x += 1) {
-            const i = (y * side + x) * 4;
-            const r = master.data[i];
-            const g = master.data[i + 1];
-            const b = master.data[i + 2];
-            const [hue, sat] = hueSat(r, g, b);
-            const bluePlate = hue > 185 && hue < 245 && sat < 75 && b > r + 8;
-            if (bluePlate || sat <= 28) continue;
-            const rad = Math.hypot((x - cx) / side, (y - cy) / side);
-            if (rad > farthest) farthest = rad;
-        }
-    }
-    // 안전 영역은 지름이 아이콘의 80%인 원입니다. 그림이 그 안에 남도록 조금 안쪽에 맞춥니다.
-    const scale = Math.min(1, 0.39 / farthest);
+    // maskable은 같은 도안을 가운데 0.75배로 둡니다.
+    // 0.8배면 사과 가장자리가 안전 영역(지름 80% 원) 밖으로 나가 원형 마스크에 잘립니다.
+    const maskScale = 0.75;
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = side;
+    maskCanvas.height = side;
+    const maskCtx = maskCanvas.getContext('2d');
+    const draw = Math.round(side * maskScale);
+    const ox = Math.floor((side - draw) / 2);
+    const oy = Math.floor((side - draw) / 2);
+    maskCtx.drawImage(anyCanvas, ox, oy, draw, draw);
+    if (oy > 0) maskCtx.drawImage(maskCanvas, ox, oy, draw, 1, 0, 0, side, oy);
+    const bottom = oy + draw;
+    if (bottom < side) maskCtx.drawImage(maskCanvas, ox, bottom - 1, draw, 1, 0, bottom, side, side - bottom);
+    if (ox > 0) maskCtx.drawImage(maskCanvas, ox, 0, 1, side, 0, 0, ox, side);
+    const right = ox + draw;
+    if (right < side) maskCtx.drawImage(maskCanvas, right - 1, 0, 1, side, right, 0, side - right, side);
 
-    function png(size, mode) {
+    function png(source, size) {
         const out = document.createElement('canvas');
         out.width = size;
         out.height = size;
         const octx = out.getContext('2d');
-        if (mode === 'any') {
-            const srcCanvas = document.createElement('canvas');
-            srcCanvas.width = side;
-            srcCanvas.height = side;
-            srcCanvas.getContext('2d').putImageData(master, 0, 0);
-            octx.imageSmoothingEnabled = true;
-            octx.imageSmoothingQuality = 'high';
-            octx.drawImage(srcCanvas, 0, 0, size, size);
-            return out.toDataURL('image/png');
-        }
-        const img = octx.createImageData(size, size);
-        for (let y = 0; y < size; y += 1) {
-            for (let x = 0; x < size; x += 1) {
-                let mx = (x - (size - 1) / 2) / scale + (side - 1) / 2;
-                let my = (y - (size - 1) / 2) / scale + (side - 1) / 2;
-                mx = Math.max(0, Math.min(side - 1, mx));
-                my = Math.max(0, Math.min(side - 1, my));
-                const x1 = Math.max(0, Math.min(side - 2, Math.floor(mx)));
-                const y1 = Math.max(0, Math.min(side - 2, Math.floor(my)));
-                const tx = mx - x1;
-                const ty = my - y1;
-                const at = (px, py) => {
-                    const i = (py * side + px) * 4;
-                    return [master.data[i], master.data[i + 1], master.data[i + 2]];
-                };
-                const c00 = at(x1, y1);
-                const c10 = at(x1 + 1, y1);
-                const c01 = at(x1, y1 + 1);
-                const c11 = at(x1 + 1, y1 + 1);
-                const o = (y * size + x) * 4;
-                for (let c = 0; c < 3; c += 1) {
-                    img.data[o + c] = c00[c] * (1 - tx) * (1 - ty) + c10[c] * tx * (1 - ty) + c01[c] * (1 - tx) * ty + c11[c] * tx * ty;
-                }
-                img.data[o + 3] = 255;
-            }
-        }
-        octx.putImageData(img, 0, 0);
+        octx.imageSmoothingEnabled = true;
+        octx.imageSmoothingQuality = 'high';
+        octx.drawImage(source, 0, 0, size, size);
         return out.toDataURL('image/png');
     }
 
     return {
-        scale,
-        any192: png(192, 'any'),
-        any512: png(512, 'any'),
-        mask192: png(192, 'maskable'),
-        mask512: png(512, 'maskable'),
+        scale: maskScale,
+        any32: png(anyCanvas, 32),
+        any180: png(anyCanvas, 180),
+        any192: png(anyCanvas, 192),
+        any512: png(anyCanvas, 512),
+        mask192: png(maskCanvas, 192),
+        mask512: png(maskCanvas, 512),
     };
 }, dataUrl, PLATE);
 await page.close();
@@ -199,6 +156,8 @@ function quantize(path) {
 }
 
 const outputs = [
+    ['favicon-32.png', icons.any32],
+    ['apple-touch-icon.png', icons.any180],
     ['icon-192.png', icons.any192],
     ['icon-512.png', icons.any512],
     ['icon-maskable-192.png', icons.mask192],
