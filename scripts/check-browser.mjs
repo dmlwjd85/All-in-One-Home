@@ -971,8 +971,11 @@ try {
                 for (let index = 0; index < count; index += 1) {
                     const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
                     if (!marked) continue;
-                    await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n].click(), index);
-                    const body = await page.evaluate(() => document.body.innerText);
+                    const body = await page.evaluate(async (n) => {
+                        document.querySelectorAll('.cal-grid button')[n].click();
+                        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                        return document.body.innerText;
+                    }, index);
                     if (body.includes('과학관') && body.includes('08:50')) {
                         week = body;
                         found = true;
