@@ -612,7 +612,7 @@ const r36Cases = [
     ['지난해 운동회', '지난해 운동회는 10/30에 운동장에서 열렸어요.', (items) => pastOut(items, '2025-10-30')],
     ['작년 학예회 진행', '작년 학예회는 11/19 강당에서 진행되었습니다.', (items) => pastOut(items, '2025-11-19')],
     ['지난해 사진 참고', '지난해 현장학습 11/5 사진은 참고하세요.', (items) => pastOut(items, '2025-11-05')],
-    ['작년 축제 사진', '작년 축제 사진은 11/12에 올립니다.', (items) => pastOut(items, '2025-11-12')],
+    ['작년 축제 사진', '작년 축제 사진은 11/12에 올립니다.', (items) => included(items).some((item) => item.date === '2026-11-12') && !items.some((item) => String(item.date).startsWith('2025'))],
     ['재작년 수련회', '재작년 수련회는 5/8에 다녀왔습니다.', (items) => pastOut(items, '2024-05-08')],
     ['지난 해 설명회', '지난 해 입학 설명회는 11/21에 강당에서 열렸습니다.', (items) => pastOut(items, '2025-11-21')],
     ['올해 제출 유지', '지난해 안전 점검 결과를 11/24(화)까지 제출 바랍니다.', (items) => included(items).length === 1 && included(items)[0].kind === '할 일' && included(items)[0].date === '2026-11-24' && included(items)[0].title.includes('점검')],
@@ -660,6 +660,69 @@ if (r36Ok !== r36Cases.length) {
     process.exit(1);
 }
 console.log(`r36 원문 ${r36Ok}/${r36Cases.length}`);
+
+const keptThisYear = (items, date) => included(items).some((item) => item.kind === '일정' && item.date === date) && !items.some((item) => String(item.date || '').startsWith('2025') || String(item.date || '').startsWith('2024'));
+const daySpan = (items, date, end, title) => included(items).length === 1 && included(items)[0].kind === '일정' && included(items)[0].date === date && included(items)[0].end === end && included(items)[0].title.includes(title);
+const r37Cases = [
+    ['영상 봅니다', '작년 학예회 영상은 11/10(화) 학년 회의에서 같이 봅니다.', (items) => keptThisYear(items, '2026-11-10')],
+    ['결과 공유합니다', '작년도 학교폭력 실태조사 결과는 11/4(수) 회의에서 공유합니다.', (items) => keptThisYear(items, '2026-11-04')],
+    ['강연 교시입니다', '작년 졸업생 초청 강연 11/26(목) 5교시입니다.', (items) => keptThisYear(items, '2026-11-26')],
+    ['명단 확인합니다', '작년 수상자 명단은 11/16(월) 회의 때 확인합니다.', (items) => keptThisYear(items, '2026-11-16')],
+    ['체험학습 갑니다', '작년에 못 간 체험학습을 11/19(목)에 갑니다.', (items) => keptThisYear(items, '2026-11-19')],
+    ['멘토링 진행합니다', '작년 졸업생 멘토링 11/25(수) 6교시에 진행합니다.', (items) => keptThisYear(items, '2026-11-25')],
+    ['협의회 합니다', '작년 담임 선생님들과 11/12(목) 협의회 합니다.', (items) => keptThisYear(items, '2026-11-12')],
+    ['영상 봐요', '지난해 학예회 영상을 11/17(화) 학년 회의에서 봐요.', (items) => keptThisYear(items, '2026-11-17')],
+    ['결과 공유해요', '재작년 실태조사 결과는 11/6(금) 직원 회의에서 공유해요.', (items) => keptThisYear(items, '2026-11-06')],
+    ['강연 교시', '작년 졸업생 강연은 11/27(금) 3교시입니다.', (items) => keptThisYear(items, '2026-11-27')],
+    ['명단 확인해요', '지난해 수상자 명단을 11/20(금) 회의 때 확인해요.', (items) => keptThisYear(items, '2026-11-20')],
+    ['현장학습 갑니다', '작년에 못 본 현장학습을 11/13(금)에 갑니다.', (items) => keptThisYear(items, '2026-11-13')],
+    ['조퇴하고', '저는 11/9(월) 조퇴하고 병원 갑니다.', (items) => absentOn(items, '2026-11-09')],
+    ['휴가니까', '저 다음주 수요일 휴가니까 급한 건 미리 주세요.', (items) => absentOn(items, '2026-10-28')],
+    ['연가하고', '제가 11/13(금) 연가하고 집에 있습니다.', (items) => absentOn(items, '2026-11-13')],
+    ['병가고', '저는 11/18(수) 병가고 오전에 쉽니다.', (items) => absentOn(items, '2026-11-18')],
+    ['외출이니까', '제가 11/11(수) 외출이니까 오후에 돌아옵니다.', (items) => absentOn(items, '2026-11-11')],
+    ['공가라서요', '저 11/4(수) 공가라서요.', (items) => absentOn(items, '2026-11-04')],
+    ['조퇴니', '저는 11/25(수) 조퇴니 수업은 바꿉니다.', (items) => absentOn(items, '2026-11-25')],
+    ['경시 마감', '11/27(금) 수학 경시대회 참가 접수 11/13(금) 마감.', (items) => fairPair(items, '2026-11-27', '2026-11-13', '수학 경시대회', '수학 경시대회 참가 접수')],
+    ['과학 경시 마감', '11/26(목) 과학 경시대회 참가 접수는 11/12(목) 마감입니다.', (items) => fairPair(items, '2026-11-26', '2026-11-12', '과학 경시대회', '과학 경시대회 참가 접수')],
+    ['독서 접수 마감', '11/21(토) 독서 대회 접수 마감은 11/14(토)입니다.', (items) => fairPair(items, '2026-11-21', '2026-11-14', '독서 대회', '독서 대회 접수')],
+    ['까지 접수', '11/19(목) 영어 말하기 대회 11/6(금)까지 접수.', (items) => fairPair(items, '2026-11-19', '2026-11-06', '영어 말하기 대회', '영어 말하기 대회 접수')],
+    ['경시 신청 마감', '11/28(토) 수학 경시대회 신청 11/18(수) 마감.', (items) => fairPair(items, '2026-11-28', '2026-11-18', '수학 경시대회', '수학 경시대회 신청')],
+    ['박람회 접수 마감', '11/24(화) 체험 박람회 참가 접수 11/10(화) 마감.', (items) => fairPair(items, '2026-11-24', '2026-11-10', '체험 박람회', '체험 박람회 참가 접수')],
+    ['이틀 체육대회', '11/2(월)과 11/3(화) 이틀간 교내 체육대회를 합니다.', (items) => daySpan(items, '2026-11-02', '2026-11-03', '교내 체육대회') && included(items)[0].title === '교내 체육대회'],
+    ['이틀 과학 축제', '11/5(목)와 11/6(금) 이틀간 과학 축제를 합니다.', (items) => daySpan(items, '2026-11-05', '2026-11-06', '과학 축제')],
+    ['이틀 학예회', '11/9(월)과 11/10(화) 이틀 동안 학예회를 엽니다.', (items) => daySpan(items, '2026-11-09', '2026-11-10', '학예회')],
+    ['양일 독서', '11/16(월)과 11/17(화) 양일간 독서 행사를 진행합니다.', (items) => daySpan(items, '2026-11-16', '2026-11-17', '독서 행사')],
+    ['이틀 현장학습', '11/19(목)와 11/20(금) 이틀간 현장학습을 갑니다.', (items) => daySpan(items, '2026-11-19', '2026-11-20', '현장학습')],
+    ['이틀 체육 합니다', '11/26(목)과 11/27(금) 이틀간 교내 체육대회 합니다.', (items) => daySpan(items, '2026-11-26', '2026-11-27', '교내 체육대회')],
+];
+const r37Groups = {
+    tense: r37Cases.slice(0, 12),
+    absence: r37Cases.slice(12, 19),
+    deadline: r37Cases.slice(19, 25),
+    span: r37Cases.slice(25),
+};
+Object.entries(r37Groups).forEach(([name, rows]) => {
+    if (rows.length < 6) {
+        console.error(`r37 ${name} 변형이 6개보다 적습니다.`);
+        process.exit(1);
+    }
+});
+let r37Ok = 0;
+r37Cases.forEach(([label, text, ok]) => {
+    const items = parseSchoolMessages(text, { now: qaNow }).items;
+    if (ok(items)) r37Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, low: item.low, warning: item.warning,
+        }))));
+    }
+});
+if (r37Ok !== r37Cases.length) {
+    console.error(`r37 원문 ${r37Ok}/${r37Cases.length}`);
+    process.exit(1);
+}
+console.log(`r37 원문 ${r37Ok}/${r37Cases.length}`);
 
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
