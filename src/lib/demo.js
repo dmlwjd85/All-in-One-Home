@@ -1,4 +1,4 @@
-import { addDaysYmd, dayKeyFromYmd, startOfWeekMon } from './date.js';
+import { addDaysYmd, dayKeyFromYmd, fromYmd, startOfWeekMon, weekdayKo } from './date.js';
 import { DEFAULT_PERIODS } from './period.js';
 
 export const DEMO_NAMES = [
@@ -27,12 +27,32 @@ function table() {
     return out;
 }
 
+function weekend(ymd) {
+    const day = fromYmd(ymd).getDay();
+    return day === 0 || day === 6;
+}
+
+/** 기준 시각 이후, 출발 시각이 지나지 않은 가장 가까운 평일. */
+export function nextOpenWeekday(today, hm = '00:00', at = '08:50') {
+    let cursor = today;
+    if (weekend(today) || String(hm || '00:00') >= at) cursor = addDaysYmd(today, 1);
+    while (weekend(cursor)) cursor = addDaysYmd(cursor, 1);
+    return cursor;
+}
+
+/** 체험보다 앞선 동의서 마감. 오늘이 체험보다 전이면 오늘, 아니면 직전 평일. */
+export function consentBefore(today, trip) {
+    let due = today < trip ? today : addDaysYmd(trip, -1);
+    while (weekend(due) || due >= trip) due = addDaysYmd(due, -1);
+    return due;
+}
+
 /** 목업과 같은 6학년 3반. 날짜는 오늘을 기준으로 잡습니다. */
 export function buildDemo(clock) {
     const today = clock.ymd;
     const tomorrow = addDaysYmd(today, 1);
-    // 이번 주 수요일. 오늘에서 사흘 뒤는 금요일이면 다음 주라 주간 일정에서 빠집니다.
-    const trip = addDaysYmd(startOfWeekMon(today), 2);
+    const trip = nextOpenWeekday(today, clock.hm || '00:00', '08:50');
+    const consentDue = consentBefore(today, trip);
     const consult = addDaysYmd(today, 4);
     const friday = addDaysYmd(startOfWeekMon(today), 4);
     const students = DEMO_NAMES.map((name, index) => ({
@@ -155,13 +175,13 @@ export function buildDemo(clock) {
             { id: 'demo-consult', date: consult, time: '11:20', title: '학부모 상담 2가정', kind: '학급', memo: '4교시 체육 전담 시간', source: 'demo' },
         ],
         todos: [
-            { id: 'demo-consent', title: '현장체험학습 동의서 걷기', done: false, due: today, got: 22, of: 27, pendingNos: [23, 24, 25, 26, 27], source: 'demo' },
+            { id: 'demo-consent', title: '현장체험학습 동의서 걷기', done: false, due: consentDue, got: 22, of: 27, pendingNos: [23, 24, 25, 26, 27], source: 'demo' },
             { id: 'demo-neis', title: '국어 수행평가 나이스 입력', done: false, due: friday, source: 'demo' },
             { id: 'demo-done', title: '상담 주간 안내 알림장 올리기', done: true, due: today, source: 'demo' },
         ],
         notes: [],
         notices: [
-            { id: tomorrow, date: tomorrow, text: '실내화 가방 챙기기, 목요일 도시락 준비', source: 'demo', at: `${today}T08:20:00` },
+            { id: tomorrow, date: tomorrow, text: `실내화 가방 챙기기, ${weekdayKo(trip)}요일 도시락 준비`, source: 'demo', at: `${today}T08:20:00` },
         ],
         timetable: table(),
         legacyPages: [],

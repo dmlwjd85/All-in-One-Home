@@ -115,8 +115,8 @@ export function appendSpeech(existing, spoken) {
     const right = String(spoken ?? '').replace(/^\s+/, '').replace(/\s+$/, '');
     if (!right) return left;
     if (!left) return right;
-    if (/\s$/.test(left)) return `${left}${right}`;
-    return `${left} ${right}`;
+    if (left.endsWith('\n')) return `${left}${right}`;
+    return `${left}\n${right}`;
 }
 
 export function dictationText(base, results) {
