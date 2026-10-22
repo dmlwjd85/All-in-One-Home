@@ -226,7 +226,7 @@ function hasInspection(text) {
 }
 
 function hasEvent(text) {
-    if (/(?<![가-힣])(?:학예회|설명회)|상담\s*주간/.test(text)) return true;
+    if (/(?<![가-힣])(?:학예회|설명회|박람회)|상담\s*주간/.test(text)) return true;
     if (EVENT_WORD.test(text)) return true;
     if (hasTrip(text) && findDates(text).length) return true;
     if (hasScheduledExam(text)) return true;
@@ -349,7 +349,7 @@ export function tidyTitle(text) {
     t = t.replace(/가능한/g, '가능');
     t = t.replace(/받습니다|받아요/g, ' ');
     t = t.replace(/(?:제가|저는|저도|저)\s*참석(?:하는|합니다|해요)/g, ' ');
-    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|하세요|입니다|엽니다/g, ' ');
+    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|했습니다|하세요|입니다|엽니다/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
     t = t.replace(/연기(?:됩니다|합니다|해요|됐(?:어요|습니다)|음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?/g, ' ');
@@ -462,6 +462,8 @@ function salvageTitle(text) {
 const FIELD_ONLY = /^(?:일정|일시|기간|검진일|검사일|실시일|시간|날짜|장소|위치|안내|할일)$/;
 
 function pickTitle(body, source) {
+    const fair = String(source || body || '').match(/([가-힣]{1,8})\s*박람회/);
+    if (fair) return `${fair[1]} 박람회`;
     let title = tidyTitle(body);
     if (badTitle(title, source)) {
         const again = salvageTitle(source);
@@ -1000,7 +1002,7 @@ function segmentsOf(text, now) {
         const trimmed = cleanLine(line);
         if (noise(trimmed)) return;
         explodeLine(trimmed).forEach((part) => {
-            bindTrailingDates(splitSentences(part), now).forEach((sentence) => {
+                bindTrailingDates(toldDeadline(splitSentences(part), now), now).forEach((sentence) => {
                 const trimmedSentence = sentence.trim();
                 if (noise(trimmedSentence)) return;
                 const noticed = splitNoticeRequest(trimmedSentence, now);
@@ -1067,7 +1069,7 @@ function personalAside(text) {
     const speaker = /(?<![가-힣])(?:제가|저(?:는|도|만)?)(?![가-힣])/.test(src);
     if (!speaker) return false;
     const own = src.replace(/수학여행|현장체험학습|체험학습/g, ' ');
-    const ownAbsence = /(?<![가-힣])(?:연차|병가|조퇴|휴가|여행|출장)(?!\s*(?:신청|접수|마감|연수|교육|복명|결재|대체|계획|사용|명단|자료))(?:입니다|이에요|예요|에요|\s*(?:가요|갈게요|갑니다|갈\s*거|쓸게요|씁니다|합니다|해요))/.test(own);
+    const ownAbsence = /(?<![가-힣])(?:연차|병가|조퇴|휴가|여행|출장)(?!\s*(?:신청|접수|마감|연수|교육|복명|결재|대체|계획|사용|명단|자료|양식))(?:라서|이라|에는|이에요|예요|에요|입니다|\s*쓰는|\s*(?:가요|갈게요|갑니다|갈\s*거|쓸게요|씁니다|합니다|해요))/.test(own);
     if (ownAbsence) return true;
     if (hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src)) return false;
     return /(?:가요|갈게요|올게요|사올|다녀올)/.test(src);
@@ -1178,6 +1180,39 @@ function textBeforeSpan(fullText, source, span) {
     const at = full.indexOf(trimmed);
     if (at < 0) return local;
     return full.slice(0, Math.max(0, at - lead + span.index));
+}
+
+/** 공유했다는 지난 말은 빼고, 뒤의 마감에는 서류 이름만 붙입니다. */
+function toldDeadline(parts, now) {
+    const out = [];
+    for (let i = 0; i < parts.length; i += 1) {
+        const cur = String(parts[i] || '');
+        const next = parts[i + 1];
+        const told = /공유\s*드렸|공유했(?:습니다|어요)?/.test(cur);
+        if (told && next && hasDeadline(next) && /제출|회신|작성|입력|업로드/.test(next) && findDates(cur, now).length) {
+            const named = cur.match(/((?:[가-힣]{2,8}\s+)?)복명서/);
+            const noun = named ? named[0].replace(/\s+/g, ' ').trim() : tidyTitle(cur.replace(/공유[\s\S]*$/, ' '));
+            out.push(`${noun} ${next}`.replace(/\s+/g, ' ').trim());
+            i += 1;
+            continue;
+        }
+        out.push(cur);
+    }
+    return out;
+}
+
+/** 작년이 있는 절이 올해와 대비되거나 과거형이면 그 날짜는 지난 행사입니다. */
+function pastYearTale(segment, fullText) {
+    const src = String(segment || '');
+    const comparable = src.replace(/(?:재작년|작년|지난해|지난\s*해)(?:보다|처럼|과\s*달리|와\s*달리)/g, ' ');
+    if (!/(?:재작년|작년|지난해|지난\s*해)/.test(comparable)) return false;
+    if (/(?:했습니다|했어요|였습니다|였어요|이었습니다)/.test(src)) return true;
+    const full = String(fullText || '');
+    const fullComparable = full.replace(/(?:재작년|작년|지난해|지난\s*해)(?:보다|처럼|과\s*달리|와\s*달리)/g, ' ');
+    const yearAt = fullComparable.search(/재작년|작년|지난해|지난\s*해/);
+    const restart = fullComparable.search(/올해|이번에/);
+    if (yearAt < 0 || restart < yearAt) return false;
+    return !/(?:올해|이번에)/.test(src);
 }
 
 /** 작년·지난해·재작년 바로 다음이 날짜일 때만 해를 바꿉니다. 조사만 허용하고, 그 사이 말은 올해로 둡니다. */
@@ -1318,7 +1353,8 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const endShift = end?.ymd ? shiftYear(end.ymd, cueFor(end.ymd)) : { ymd: '', remembered: false };
     const dateYmd = startShift.ymd;
     const endYmd = endShift.ymd;
-    const remembered = startShift.remembered || endShift.remembered;
+    const toldPast = /공유\s*드렸|공유했(?:습니다|어요)?/.test(source) && !hasDeadline(source);
+    const remembered = startShift.remembered || endShift.remembered || pastYearTale(source, fullText) || toldPast;
     const lastDay = endYmd || dateYmd || '';
     const past = Boolean(lastDay && lastDay < todayYmd);
     const reference = /참고만|공유합니다/.test(source);
