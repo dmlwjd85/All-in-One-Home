@@ -1231,6 +1231,10 @@ try {
             select: document.querySelectorAll('[data-screen="plus"] select').length,
         }));
         check(card.low === 0 && card.kind === '학생 기록' && card.select === 0, `학생 기록 미리보기가 ${JSON.stringify(card)} 입니다.`);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '넣을게요')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '빼 둠'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '빼 둠')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '넣을게요'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
         await page.waitForFunction(() => !document.querySelector('[data-screen="plus"]'));

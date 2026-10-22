@@ -122,7 +122,7 @@ const held = new Date('2026-10-23T09:00:00+09:00');
 for (const line of [
     '네 감사합니다!',
     '10/21(수) 현장체험학습 사진 올리기',
-    '작년 6학년 담당 선생님은 11/10(화)까지 가정통신문 회신 부탁드려요',
+    '작년 학예회는 11/10 강당에서 했습니다.',
 ]) {
     const drafts = captureDrafts(line, { now: held });
     check(drafts.length > 0 && drafts.every((item) => item.include === false), `빼 둔 문장이 저장 대상입니다. ${line}`);
