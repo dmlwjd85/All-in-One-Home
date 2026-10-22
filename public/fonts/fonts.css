@@ -1,6 +1,6 @@
 /* 글꼴은 이 사이트와 함께 제공합니다.
    Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다.
-   제목은 고운바탕 굵게 한 벌만 씁니다. */
+   제목은 나눔스퀘어라운드 굵게입니다. */
 @font-face {
     font-family: 'Pretendard Variable';
     font-style: normal;
@@ -33,7 +33,15 @@
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
-/* 제목: 고운바탕 굵게(KS X 1001 서브셋). 본문: Pretendard. */
+/* 제목: 나눔스퀘어라운드 굵게. 본문: Pretendard. 고운바탕은 아이콘 그림에만 남아 있습니다. */
+@font-face {
+    font-family: 'NanumSquareRound';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./NanumSquareRoundB.woff2') format('woff2');
+}
+
 @font-face {
     font-family: 'Gowun Batang';
     font-style: normal;

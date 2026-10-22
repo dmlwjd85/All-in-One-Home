@@ -117,29 +117,28 @@ function contrast(a, b) {
     const [hi, lo] = left > right ? [left, right] : [right, left];
     return (hi + 0.05) / (lo + 0.05);
 }
-function mix(base, top, alpha) {
-    const nb = Number.parseInt(base.slice(1), 16);
-    const nt = Number.parseInt(top.slice(1), 16);
-    const channel = (shift) => Math.round(((nt >> shift) & 255) * alpha + ((nb >> shift) & 255) * (1 - alpha));
-    return `#${[channel(16), channel(8), channel(0)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
-}
 const pairs = [
-    ['본문', '#1E1B3A', '#F6F4FF'],
-    ['보조', '#5B5775', '#FFFFFF'],
-    ['버튼', '#FFFFFF', '#6D4AFF'],
-    ['히어로 글자', '#FFFFFF', '#B85A3E'],
-    ['히어로 버튼', '#6D4AFF', '#FFFFFF'],
-    ['다크 본문', '#F3F1FF', '#0F0E1A'],
-    ['다크 보조', '#B4AFCF', '#1C1A2E'],
-    ['다크 버튼', '#14112B', '#A994FF'],
+    ['본문', '#2B3350', '#EEF6FD'],
+    ['보조', '#3E4868', '#FFF8E7'],
+    ['버튼', '#FFFFFF', '#5B5BD6'],
+    ['히어로 글자', '#2B3350', '#FFF8E7'],
+    ['히어로 버튼', '#FFFFFF', '#5B5BD6'],
+    ['히어로 알약', '#2B3350', '#E7DFF8'],
+    ['노란 카드', '#2B3350', '#FFF6D8'],
+    ['지각', '#9A5B00', '#FFF8E7'],
+    ['다크 본문', '#F4F7FB', '#1A2333'],
+    ['다크 보조', '#C5D0E0', '#243044'],
+    ['다크 버튼', '#FFFFFF', '#5B5BD6'],
+    ['다크 히어로', '#F4F7FB', '#243044'],
+    ['다크 알약', '#F4F7FB', '#322C4A'],
+    ['다크 노란 카드', '#F4F7FB', '#3A3424'],
+    ['다크 지각', '#F0B89A', '#243044'],
+    ['다크 결석', '#FF7D6E', '#243044'],
 ];
 for (const [label, fg, bg] of pairs) {
     const ratio = contrast(fg, bg);
     check(ratio >= 4.5, `${label} 대비 ${ratio.toFixed(2)} 가 4.5보다 낮습니다.`);
 }
-const pill = mix('#B85A3E', '#200C30', 0.38);
-const pillRatio = contrast('#FFFFFF', pill);
-check(pillRatio >= 4.5, `히어로 알약 대비 ${pillRatio.toFixed(2)} 가 4.5보다 낮습니다.`);
 
 function walk(dir, out = []) {
     for (const name of readdirSync(dir)) {
