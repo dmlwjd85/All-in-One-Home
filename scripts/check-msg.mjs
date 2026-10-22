@@ -403,6 +403,33 @@ if (r31Ok !== r31Cases.length) {
 }
 console.log(`r31 원문 ${r31Ok}/${r31Cases.length}`);
 
+const r32Cases = [
+    ['열리지 못하게', '11월 6일(금) 학년 체육대회는 열리지 못하게 되었습니다.', (items) => items.length === 1 && items[0].date === '2026-11-06' && items[0].include === false && items[0].low === true && /열리지 않는/.test(items[0].warning) && !quietCard(items)],
+    ['제주 잡담', '저 10/24~10/25 제주도 가요~ 귤 사올게요', (items) => items.length >= 1 && items.every((item) => item.include === false) && items.some((item) => item.date === '2026-10-24' && /업무로 볼 말이 없어/.test(item.warning)) && !quietCard(items)],
+    ['무산', '11월 6일(금) 학년 체육대회는 무산되었습니다.', (items) => items.length === 1 && items[0].date === '2026-11-06' && items[0].include === false && /열리지 않는/.test(items[0].warning)],
+    ['날짜 없는 연기', '11월 6일(금) 학년 체육대회는 연기되었습니다.', (items) => items.length === 1 && items[0].date === '2026-11-06' && items[0].include === false && /열리지 않는/.test(items[0].warning)],
+    ['잊지 못하게', '내일까지 잊지 못하게 제출해 주세요', (items) => included(items).length === 1 && included(items)[0].kind === '할 일' && included(items)[0].date === '2026-10-23' && included(items)[0].title.includes('제출') && !/열리지/.test(included(items)[0].warning || '')],
+    ['이달 말일', '이달 말일까지 학급 일지 제출', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].include !== false && items[0].title.includes('학급 일지') && !/대략/.test(items[0].warning || '')],
+    ['11월 말일', '11월 말일까지 독후감 제출', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-30' && items[0].include !== false && items[0].title.includes('독후감') && !/대략/.test(items[0].warning || '')],
+    ['작년 담임', '작년 담임 선생님들께서는 11/6(금)까지 자료를 제출해 주세요.', (items) => included(items).length === 1 && included(items)[0].kind === '할 일' && included(items)[0].date === '2026-11-06' && included(items)[0].title.includes('제출') && !items.some((item) => item.date.startsWith('2025'))],
+    ['작년 날짜', '작년 11/6(금)까지 자료를 제출해 주세요.', (items) => yellowDated(items, '2025-11-06') && !quietCard(items)],
+];
+let r32Ok = 0;
+r32Cases.forEach(([label, text, ok]) => {
+    const items = parseSchoolMessages(text, { now: qaNow }).items;
+    if (ok(items)) r32Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, end: item.end, time: item.time, title: item.title, include: item.include, low: item.low, warning: item.warning,
+        }))));
+    }
+});
+if (r32Ok !== r32Cases.length) {
+    console.error(`r32 원문 ${r32Ok}/${r32Cases.length}`);
+    process.exit(1);
+}
+console.log(`r32 원문 ${r32Ok}/${r32Cases.length}`);
+
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
 const savedRange = await saveParsed(ranged.items, MSG_NOW);

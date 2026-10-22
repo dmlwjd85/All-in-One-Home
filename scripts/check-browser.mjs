@@ -915,6 +915,7 @@ try {
         await page.evaluate(() => { location.hash = '#/schedule'; });
         await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
         let week = await page.evaluate(() => document.body.innerText);
+        check(week.includes('14:00–16:00') && week.includes('학부모 진로 특강'), `끝 시각이 ${label} 주간에 보이지 않습니다.`);
         if (!(week.includes('08:50') && week.includes('과학관'))) {
             await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
             await page.waitForSelector('.cal-grid');
@@ -1089,6 +1090,42 @@ try {
         check(closed.low && !closed.chosen && closed.text.includes('11월 12일'), `열지 않기로가 ${label}에서 노란 카드가 아닙니다.`);
         await audit(page, `열지 않기로 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_not_held_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('11월 6일(금) 학년 체육대회는 열리지 못하게 되었습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        const fell = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            text: document.body.innerText,
+        }));
+        check(fell.low && !fell.chosen && fell.text.includes('11월 6일'), `열리지 못하게가 ${label}에서 노란 카드가 아닙니다.`);
+        await audit(page, `열리지 못하게 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_not_opened_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('저 10/24~10/25 제주도 가요~ 귤 사올게요');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        const trip = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            text: document.body.innerText,
+        }));
+        check(trip.low && !trip.chosen && trip.text.includes('10월 24일'), `제주 잡담이 ${label}에서 노란 카드가 아닙니다.`);
+        await audit(page, `제주 잡담 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_personal_trip_${label}.png`) });
     }
     await withDemo(390, 'light', async (page) => { await periodAndQuestion(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await periodAndQuestion(page, '360'); }, 844);

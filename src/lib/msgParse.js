@@ -150,10 +150,11 @@ function hasDeadline(text) {
     if (new RegExp(`[월화수목금토일]요일\\s*${until}\\s*(?:까지|마감)`).test(src)) return true;
     if (new RegExp(`[(（]\\s*[월화수목금토일]\\s*(?:요일)?\\s*[)）]\\s*${until}\\s*까지`).test(src)) return true;
     if (/(?:오전|오후)\s*까지/.test(src)) return true;
-    if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말|중순)\s*까지/.test(src)) return true;
+    if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말일|말|중순)\s*까지/.test(src)) return true;
+    if (/\d{1,2}\s*월\s*(?:초|중순|말일|말)\s*까지/.test(src)) return true;
     if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*중으로/.test(src)) return true;
     if (/마지막\s*날\s*까지/.test(src)) return true;
-    return /(?<![가-힣\d])월(?:초|말|중순)\s*까지/.test(src);
+    return /(?<![가-힣\d])월(?:초|말일|말|중순)\s*까지/.test(src);
 }
 
 function hasTodo(text) {
@@ -312,10 +313,10 @@ export function tidyTitle(text) {
     t = t.replace(/\d+\s*박\s*\d+\s*일/g, ' ');
     t = t.replace(/글피|모레|내일|오늘/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
-    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말|중순)/g, ' ');
-    t = t.replace(/(?<![가-힣\d])월(?:초|말|중순)/g, ' ');
+    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말일|말|중순)/g, ' ');
+    t = t.replace(/(?<![가-힣\d])월(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)\s*인/g, ' ');
-    t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)(?![가-힣])/g, ' ');
+    t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말일|말)(?=\s*까지|(?![가-힣]))/g, ' ');
     t = t.replace(/(?<![가-힣])중순(?![가-힣])/g, ' ');
     t = t.replace(/(?<![\d./월])(?<!박\s*)\d{1,2}\s*[~～\-–—]\s*\d{1,2}\s*일/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
@@ -417,10 +418,10 @@ function salvageTitle(text) {
     t = t.replace(/(?:오전|오후)\s*까지/g, ' ');
     t = t.replace(/글피|모레|내일|오늘|까지/g, ' ');
     t = t.replace(new RegExp(`(?<![가-힣])(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
-    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말|중순)/g, ' ');
-    t = t.replace(/(?<![가-힣\d])월(?:초|말|중순)/g, ' ');
+    t = t.replace(/(?<![가-힣])(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|말일|말|중순)/g, ' ');
+    t = t.replace(/(?<![가-힣\d])월(?:초|말일|말|중순)/g, ' ');
     t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)\s*인/g, ' ');
-    t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말)(?![가-힣])/g, ' ');
+    t = t.replace(/\d{1,2}\s*월\s*(?:초|중순|말일|말)(?=\s*까지|(?![가-힣]))/g, ' ');
     t = t.replace(/(?<![가-힣])중순(?![가-힣])/g, ' ');
     t = t.replace(/(?<![\d./월])(?<!박\s*)\d{1,2}\s*[~～\-–—]\s*\d{1,2}\s*일/g, ' ');
     t = t.replace(new RegExp(`(?<![\\d./월])(?<!박\\s*)\\d{1,2}\\s*일${WEEK_TAIL}`, 'g'), ' ');
@@ -1025,8 +1026,17 @@ function hasWorkCue(text) {
     return Boolean(when.hmEnd && findDates(src).length);
 }
 
+/** 일인칭으로 다녀오겠다는 말은 날짜가 있어도 업무가 아닙니다. */
+function personalAside(text) {
+    const src = String(text || '');
+    if (hasTodo(src) || isRequest(src) || hasEvent(src) || /\d\s*교시/.test(src)) return false;
+    const speaker = /(?<![가-힣])저(?:는|도|만)?(?![가-힣])/.test(src);
+    return speaker && /(?:가요|갈게요|올게요|사올|다녀올)/.test(src);
+}
+
 function casualTalk(text) {
     const src = String(text || '');
+    if (personalAside(src)) return true;
     if (hasWorkCue(src)) return false;
     if (SOCIAL_RE.test(src)) return true;
     return EMOTICON_RE.test(src) || CASUAL_RE.test(src);
@@ -1131,9 +1141,14 @@ function textBeforeSpan(fullText, source, span) {
     return full.slice(0, Math.max(0, at - lead + span.index));
 }
 
+/** 작년이 담임·선생님처럼 사람을 꾸미면 날짜의 해가 아닙니다. */
+function personYear(before) {
+    return String(before || '').replace(/(?:재작년|작년|지난해|지난\s*해)\s*(?:담임|선생님|교사|교원|부장|교감|교장|장학사)/g, ' ');
+}
+
 /** 올해·이번에 다시 열리기 전의 작년·지난해·재작년. 지난주는 해가 아닙니다. */
 function lastYearShift(before) {
-    const comparable = String(before || '').replace(/작년처럼|지난해처럼|작년과\s*달리|지난해와\s*달리|작년와\s*달리|지난해과\s*달리/g, ' ');
+    const comparable = personYear(before).replace(/작년처럼|지난해처럼|작년과\s*달리|지난해와\s*달리|작년와\s*달리|지난해과\s*달리/g, ' ');
     const cut = Math.max(comparable.lastIndexOf('올해'), comparable.lastIndexOf('이번에'));
     const scope = cut >= 0 ? comparable.slice(cut).replace(/^(?:올해|이번에)/, '') : comparable;
     if (/재작년/.test(scope)) return 2;
@@ -1170,11 +1185,23 @@ function asksQuestion(text) {
     return /(?:나요|가요|까요)[\s?？.。!！]*$/.test(src);
 }
 
-/** 행사 동사에 바로 붙은 부정·취소만 빼 둡니다. '없이', '하지 않고', 운행·조회 알림은 그대로 둡니다. */
+/** 새 날짜 없이 행사를 미루기만 하면 그 날은 열리지 않습니다. '연기하지 않고'와 날짜 이동은 그대로 둡니다. */
+function postponedWithoutDestination(text) {
+    const src = String(text || '');
+    if (/연기(?:하지\s*않|\s*없이)/.test(src)) return false;
+    if (!/(?<![가-힣])연기(?:되었|됐습니다|됩니다|합니다|했어요|함|됨|됐어요|되었어요)/.test(src)) return false;
+    const spans = findDates(src);
+    return !(spans.length >= 2 && isReschedule(src, spans));
+}
+
+/** 행사 동사에 바로 붙은 부정·취소·무산만 빼 둡니다. '없이', '하지 않고', 운행·조회 알림은 그대로 둡니다. */
 function negatedClause(text) {
     const src = String(text || '');
     if (/미실시|미개최/.test(src)) return true;
     if (/취소(?!\s*없이)/.test(src)) return true;
+    if (/(?<![가-힣])무산/.test(src)) return true;
+    if (/열리지\s*못하|개최되지\s*못하|진행되지\s*못하|실시되지\s*못하/.test(src)) return true;
+    if (postponedWithoutDestination(src)) return true;
     if (/(?<![가-힣])안\s*(?:합니다|해요|함)(?![가-힣])/.test(src)) return true;
     const verb = '(?:진행하|실시하|개최하|열|하)';
     if (new RegExp(`${verb}지\\s*않(?:습니다|아요|는다|기로)`).test(src)) return true;
@@ -1183,12 +1210,13 @@ function negatedClause(text) {
     return false;
 }
 
-/** 까지가 없는 초·중순·말과 경·쯤은 정확한 날이 아닙니다. 말까지와 중으로, 경주는 그대로 둡니다. */
+/** 까지가 없는 초·중순·말과 경·쯤은 정확한 날이 아닙니다. 말일까지와 중으로, 경주는 그대로 둡니다. */
 function approximateWhen(text) {
     const src = String(text || '');
-    if (/(?:이번\s*달|이번달|이달|금월|다음\s*달|다음달|내달)\s*(?:초|중순|말)(?!\s*까지)/.test(src)) return true;
-    if (/(?<![가-힣\d])월(?:초|중순|말)(?!\s*까지)/.test(src)) return true;
-    if (/\d{1,2}\s*월\s*(?:초|중순|말)(?!\s*까지)(?!\s*인)(?![가-힣])/.test(src)) return true;
+    const edge = '(?:초|중순|말일|말(?!일))';
+    if (new RegExp(`(?:이번\\s*달|이번달|이달|금월|다음\\s*달|다음달|내달)\\s*${edge}(?!\\s*까지)`).test(src)) return true;
+    if (new RegExp(`(?<![가-힣\\d])월${edge}(?!\\s*까지)`).test(src)) return true;
+    if (new RegExp(`\\d{1,2}\\s*월\\s*${edge}(?!\\s*까지)(?!\\s*인)(?![가-힣])`).test(src)) return true;
     if (/(?:일|\d|[)）]|요일)\s*경(?![가-힣])/.test(src)) return true;
     if (/쯤/.test(src)) return true;
     return false;
