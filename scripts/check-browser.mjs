@@ -872,6 +872,43 @@ try {
     await withDemo(390, 'light', async (page) => { await weekdayDeadline(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await weekdayDeadline(page, '360'); }, 844);
 
+    async function weekdaySchedule(page, label) {
+        await openPlus(page);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('메시지 붙여넣기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.type('[data-screen="message"] textarea', '금요일 오후 3시 학년 협의회');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('10월 23일') && document.body.innerText.includes('15:00'));
+        const meet = await page.evaluate(() => {
+            const node = document.querySelector('.msg-card');
+            const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
+        });
+        check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정'), `요일 일정이 ${label}에서 10월 23일 15:00으로 보이지 않습니다. ${meet.title}`);
+        await audit(page, `요일 일정 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_weekday_event_${label}.png`) });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
+        await page.waitForSelector('[data-screen="message"] textarea');
+        await page.click('[data-screen="message"] textarea', { clickCount: 3 });
+        await page.keyboard.down('Control');
+        await page.keyboard.press('KeyA');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('지난주 금요일까지 학급 운영비 영수증 제출해 주세요.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('10월 16일') && document.body.innerText.includes('빼 둠'));
+        const pastWeek = await page.evaluate(() => ({
+            low: Boolean(document.querySelector('.low-card')),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+        }));
+        check(pastWeek.low && !pastWeek.chosen, `지난주 금요일 마감이 ${label}에서 노란 카드가 아닙니다.`);
+        await audit(page, `지난주 마감 ${label}`);
+        await page.screenshot({ path: resolve(shots, `after_last_week_${label}.png`) });
+    }
+    await withDemo(390, 'light', async (page) => { await weekdaySchedule(page, '390'); }, 844);
+    await withDemo(360, 'light', async (page) => { await weekdaySchedule(page, '360'); }, 844);
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));

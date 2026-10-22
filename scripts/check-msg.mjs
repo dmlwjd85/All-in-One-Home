@@ -234,6 +234,59 @@ if (deadlineOk !== weekdayDeadlines.length) {
 }
 console.log(`요일 마감 ${deadlineOk}/${weekdayDeadlines.length}`);
 
+const quiet = (items) => items.some((item) => item.include !== false && !item.warning);
+const r29Cases = [
+    ['Y15 지난해', '지난해 11월 5일 현장학습', (items) => items.length === 1 && items[0].date === '2025-11-05' && items[0].include === false && items[0].low === true && /지난/.test(items[0].warning) && !quiet(items)],
+    ['Y15 지난 해', '지난 해 11월 5일 현장학습', (items) => items.length === 1 && items[0].date === '2025-11-05' && items[0].include === false && /지난/.test(items[0].warning)],
+    ['Y15 지난 11월', '지난 11월 5일 현장학습', (items) => items.length === 1 && items[0].date === '2025-11-05' && items[0].include === false && items[0].title === '현장학습' && /지난/.test(items[0].warning)],
+    ['Y15 지난 1월', '지난 1월 8일 시업식', (items) => items.length === 1 && items[0].date === '2026-01-08' && items[0].include === false && /지난/.test(items[0].warning)],
+    ['Y15 지난 9월', '지난 9월 15일 현장학습', (items) => items.length === 1 && items[0].date === '2026-09-15' && items[0].include === false && /지난 날짜/.test(items[0].warning)],
+    ['Y15 지난달', '지난달 15일 현장학습', (items) => items.length === 1 && items[0].date === '2026-09-15' && items[0].include === false && items[0].title === '현장학습' && /지난 날짜/.test(items[0].warning)],
+    ['Y15 지난 달', '지난 달 15일 현장학습', (items) => items.length === 1 && items[0].date === '2026-09-15' && items[0].include === false],
+    ['Y15 재작년', '재작년 5월 8일 현장학습', (items) => items.length === 1 && items[0].date === '2024-05-08' && items[0].include === false && /지난/.test(items[0].warning)],
+    ['Y15 올해 11월', '11월 5일 현장학습', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-05' && items[0].include !== false && !items[0].warning],
+    ['Z6 인가요', '10/30 협의회인가요?', (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].include === false && /질문/.test(items[0].warning) && !quiet(items)],
+    ['Z6 할까요', '10/30 소풍 할까요?', (items) => items.length === 1 && items[0].include === false && /질문/.test(items[0].warning)],
+    ['Z6 되나요', '10/30 견학 되나요?', (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].include === false && /질문/.test(items[0].warning)],
+    ['Z6 요일 질문', '금요일 오후 3시 학년 협의회인가요?', (items) => items.length === 1 && items[0].date === '2026-10-23' && items[0].time === '15:00' && items[0].include === false && /질문/.test(items[0].warning)],
+    ['Z7 안 합니다', '10/30 체육대회 안 합니다', (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].include === false && /열리지 않는/.test(items[0].warning) && !quiet(items)],
+    ['Z7 미실시', '10/30 체육대회는 미실시', (items) => items.length === 1 && items[0].include === false && /열리지 않는/.test(items[0].warning)],
+    ['Z7 행사 없습니다', '10/30 행사가 없습니다', (items) => items.length === 1 && items[0].include === false && /열리지 않는/.test(items[0].warning)],
+    ['Z7 소풍 없습니다', '10/30 소풍은 없습니다', (items) => items.length === 1 && items[0].include === false && /열리지 않는/.test(items[0].warning)],
+    ['Z7 운행 유지', '차주 수요일 통학차량 운행이 없습니다', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-28' && items[0].include !== false && items[0].title.includes('통학')],
+    ['Z7 조회 유지', '11/6(금) 전교 조회는 없습니다.', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-06' && items[0].include !== false && items[0].title.includes('조회')],
+    ['Z7 대체 유지', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', (items) => items.some((item) => item.date === '2026-10-30' && item.include === false) && items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-11-06' && item.title.includes('견학'))],
+    ['N9 잠정', '잠정 10/30 체육대회', (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].include === false && /확신/.test(items[0].warning) && !quiet(items)],
+    ['N9 미정', '미정으로 10/30 소풍', (items) => items.length === 1 && items[0].include === false && /확신/.test(items[0].warning)],
+    ['X8 아마도', '아마도 10/30 협의회', (items) => items.length === 1 && items[0].include === false && /확신/.test(items[0].warning) && !quiet(items)],
+    ['X8 미확정', '미확정 10/30 대회', (items) => items.length === 1 && items[0].include === false && /확신/.test(items[0].warning)],
+    ['경계 아닌 대회', '10/30 체육대회', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-30' && items[0].include !== false && !items[0].warning],
+    ['지난주 금요일', '지난주 금요일까지 학급 운영비 영수증 제출해 주세요.', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-16' && items[0].include === false && /지난 날짜/.test(items[0].warning) && items[0].title.includes('영수증') && !/지난주|저번주|금요일/.test(items[0].title)],
+    ['저번주 금요일', '저번주 금요일까지 제출', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-16' && items[0].include === false && /지난 날짜/.test(items[0].warning) && !/저번/.test(items[0].title)],
+    ['지난 주 금요일', '지난 주 금요일까지 제출', (items) => items.length === 1 && items[0].date === '2026-10-16' && items[0].include === false && /지난 날짜/.test(items[0].warning)],
+    ['저번 주 금요일', '저번 주 금요일까지', (items) => items.length === 1 && items[0].date === '2026-10-16' && items[0].include === false && /지난 날짜/.test(items[0].warning)],
+    ['다음주 유지', '다음주 금요일까지 제출', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-30' && items[0].include !== false && !items[0].warning],
+    ['금요일 협의회', '금요일 오후 3시 학년 협의회', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-23' && items[0].time === '15:00' && items[0].include !== false && items[0].title === '학년 협의회' && !items[0].warning],
+    ['월요일 회의', '월요일 오전 학년 회의', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-26' && items[0].time === '' && items[0].include !== false && items[0].title === '학년 회의' && !items[0].warning],
+    ['당일 금요일 협의회', '금요일 오후 3시 학년 협의회', (items) => items.length === 1 && items[0].date === '2026-10-23' && items[0].time === '15:00' && items[0].include !== false && items[0].title === '학년 협의회'],
+];
+let r29Ok = 0;
+r29Cases.forEach(([label, text, ok], index) => {
+    const now = label.startsWith('당일') ? fridayClock : qaNow;
+    const items = parseSchoolMessages(text, { now }).items;
+    if (ok(items)) r29Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, time: item.time, title: item.title, include: item.include, low: item.low, warning: item.warning,
+        }))));
+    }
+    if (index === r29Cases.length - 1 && r29Ok !== r29Cases.length) {
+        console.error(`무음 오류와 요일 ${r29Ok}/${r29Cases.length}`);
+        process.exit(1);
+    }
+});
+console.log(`무음 오류와 요일 ${r29Ok}/${r29Cases.length}`);
+
 await clearAll();
 const ranged = parseSchoolMessages('가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', { now: MSG_NOW });
 const savedRange = await saveParsed(ranged.items, MSG_NOW);

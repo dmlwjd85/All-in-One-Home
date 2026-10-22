@@ -6,8 +6,8 @@ function pad(n) {
 }
 
 const WEEKDAY = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
-/** 다다음주가 다음주보다 앞에 있어야 '다다음주'를 한 주로 자르지 않습니다. */
-export const WEEK_MARK = '다다음\\s*주|다다음주|이번\\s*주|다음\\s*주|이번주|다음주|금주|차주';
+/** 다다음주가 다음주보다 앞에 있어야 '다다음주'를 한 주로 자르지 않습니다. 지난주·저번주도 다음주보다 앞에 둡니다. */
+export const WEEK_MARK = '다다음\\s*주|다다음주|지난\\s*주|지난주|저번\\s*주|저번주|이번\\s*주|다음\\s*주|이번주|다음주|금주|차주';
 const WEEKDAY_CLOCK = '(?:(?:오전|오후)\\s*)?(?:\\d{1,2}\\s*시(?!간)(?:\\s*\\d{1,2}\\s*분|\\s*반)?)?';
 
 /** 날짜 뒤의 요일. 괄호나 '요일'이 있을 때만 붙입니다. '수학'의 '수'는 요일이 아닙니다. */
@@ -86,6 +86,11 @@ function monthDayYmd(which, day, today) {
     return ymdOf(shifted.year, shifted.month, day);
 }
 
+function prevMonthDayYmd(day, today) {
+    const shifted = addMonths(Number(today.slice(0, 4)), Number(today.slice(5, 7)), -1);
+    return ymdOf(shifted.year, shifted.month, day);
+}
+
 /** 일만 있으면 아직 안 지난 날이면 이번 달, 지났으면 다음 달입니다. */
 function dayOnlyYmd(day, today) {
     const year = Number(today.slice(0, 4));
@@ -109,6 +114,7 @@ function weekYmd(which, weekdayName, today) {
     const offset = target === 0 ? 6 : target - 1;
     let ymd = addDaysYmd(startOfWeekMon(today), offset);
     if (/다다음/.test(which)) ymd = addDaysYmd(ymd, 14);
+    else if (/지난|저번/.test(which)) ymd = addDaysYmd(ymd, -7);
     else if (/다음|차주/.test(which)) ymd = addDaysYmd(ymd, 7);
     return ymd;
 }
@@ -268,10 +274,21 @@ export function findDates(text, now = new Date()) {
         if (day < 1 || day > 31) return;
         pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '', bare: true });
     });
+    eachMatch(/(?<![가-힣])지난\s*달\s*(\d{1,2})\s*일/g, raw, (match) => {
+        const day = Number(match[1]);
+        if (day < 1 || day > 31) return;
+        pushSpan(spans, match, prevMonthDayYmd(day, today), { explicit: true });
+    });
     eachMatch(new RegExp(`(${WEEK_MARK})\\s*([월화수목금토일])요일`, 'g'), raw, (match) => {
         pushSpan(spans, match, weekYmd(match[1], match[2], today), { explicit: true, weekday: match[2] });
     });
+    eachMatch(/(?<![가-힣])(?:지난|저번)(?!\s*주)\s*([월화수목금토일])요일/g, raw, (match) => {
+        pushSpan(spans, match, weekYmd('지난주', match[1], today), { explicit: true, weekday: match[1] });
+    });
     eachMatch(new RegExp(`(?<![가-힣])([월화수목금토일])요일(?=\\s*${WEEKDAY_CLOCK}\\s*(?:까지|마감))`, 'g'), raw, (match) => {
+        pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
+    });
+    eachMatch(new RegExp(`(?<![가-힣])([월화수목금토일])요일(?=\\s*(?:에\\s*)?(?:오전|오후|\\d{1,2}\\s*시(?!간)))`, 'g'), raw, (match) => {
         pushSpan(spans, match, nearestWeekdayYmd(match[1], today), { explicit: true, weekday: match[1] });
     });
     eachMatch(new RegExp(`(?<![가-힣\\d./])[(（]\\s*([월화수목금토일])\\s*(?:요일)?\\s*[)）](?=\\s*${WEEKDAY_CLOCK}\\s*까지)`, 'g'), raw, (match) => {
