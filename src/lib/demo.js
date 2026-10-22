@@ -31,7 +31,8 @@ function table() {
 export function buildDemo(clock) {
     const today = clock.ymd;
     const tomorrow = addDaysYmd(today, 1);
-    const trip = addDaysYmd(today, 3);
+    // 이번 주 수요일. 오늘에서 사흘 뒤는 금요일이면 다음 주라 주간 일정에서 빠집니다.
+    const trip = addDaysYmd(startOfWeekMon(today), 2);
     const consult = addDaysYmd(today, 4);
     const friday = addDaysYmd(startOfWeekMon(today), 4);
     const students = DEMO_NAMES.map((name, index) => ({

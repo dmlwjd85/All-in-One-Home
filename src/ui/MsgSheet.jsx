@@ -5,6 +5,26 @@ import { saveParsed } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Area, Btn } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
+import { useSpeechDictation } from './useSpeechDictation.js';
+
+function MicIcon() {
+    return (
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M6 11a6 6 0 0 0 12 0" />
+            <path d="M12 17v4" />
+            <path d="M8 21h8" />
+        </svg>
+    );
+}
+
+function StopIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
+        </svg>
+    );
+}
 
 const KIND_OPTIONS = [{ id: '할 일', label: '할 일' }, { id: '일정', label: '일정' }];
 
@@ -120,6 +140,7 @@ export function MsgSheet({ onClose }) {
     const [raw, setRaw] = useState('');
     const [hint, setHint] = useState('메시지를 붙여 넣으세요.');
     const [items, setItems] = useState([]);
+    const speech = useSpeechDictation(raw, setRaw);
 
     useEffect(() => {
         let alive = true;
@@ -136,6 +157,7 @@ export function MsgSheet({ onClose }) {
     }, []);
 
     function apply(text) {
+        speech.stop();
         const periods = data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS;
         const parsed = parseSchoolMessages(text, { now: new Date(), periods });
         setRaw(text);
@@ -180,7 +202,22 @@ export function MsgSheet({ onClose }) {
                 {phase === 'paste' && (
                     <>
                         <p className="muted" style={{ marginTop: 0 }}>{hint}</p>
-                        <Area rows={8} aria-label="메시지" placeholder="카톡이나 문자에 온 안내를 붙여 넣으세요" value={raw} onChange={(event) => setRaw(event.target.value)} />
+                        <div className="msg-compose">
+                            <Area rows={8} aria-label="메시지" placeholder="카톡이나 문자에 온 안내를 붙여 넣으세요" value={raw} onChange={(event) => speech.onEdit(event.target.value)} />
+                            {speech.available && (
+                                <Btn
+                                    className={speech.listening ? 'icon-btn mic-btn is-on' : 'icon-btn mic-btn'}
+                                    aria-label={speech.listening ? '받아쓰기 멈추기' : '말로 적기'}
+                                    aria-pressed={speech.listening}
+                                    onClick={speech.toggle}
+                                >
+                                    {speech.listening ? <StopIcon /> : <MicIcon />}
+                                    {speech.listening && <span className="mic-dot" aria-hidden="true" />}
+                                </Btn>
+                            )}
+                        </div>
+                        {speech.note && <p className="muted mic-note" role="status">{speech.note}</p>}
+                        {speech.needConfirm && <Btn className="chip block" style={{ marginTop: 8 }} onClick={speech.confirm}>알고 시작할게요</Btn>}
                         <Btn className="primary-btn block" style={{ marginTop: 12 }} onClick={() => apply(raw)}>이 메시지 읽기</Btn>
                     </>
                 )}

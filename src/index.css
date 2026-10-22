@@ -313,6 +313,43 @@ button, input, textarea { font-family: inherit; }
 .time-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 .time-picks .tap { padding: 0 12px; }
 .cal-grid .tap { min-width: 0; padding: 0; }
+.msg-compose {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.msg-compose .field {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
+.mic-btn {
+    position: relative;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+}
+.mic-btn.is-on {
+    color: var(--st-absent);
+    border-color: var(--st-absent);
+    background: var(--st-absent-bg);
+}
+.mic-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 99px;
+    background: var(--st-absent);
+    animation: mic-blink 1s ease-in-out infinite;
+}
+@keyframes mic-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .25; }
+}
+.mic-note { margin: 8px 0 0; }
 .msg-card { border: 1px solid var(--line); border-radius: 16px; margin: 0 0 12px; padding: 8px 0; }
 .low-card { background: #FFF6D8; border-color: #E6C96A; }
 .msg-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
