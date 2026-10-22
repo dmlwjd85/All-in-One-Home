@@ -1,5 +1,5 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { fromCloudProfile, fromCloudRow, toCloudProfile, toCloudRow } from './cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, toCloudProfile, toCloudRow } from './cloudShape.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
 const COLLECTIONS = [
@@ -18,6 +18,34 @@ const RETRYABLE = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'ab
 function retryable(error) {
     const code = String(error?.code || '');
     return RETRYABLE.some((item) => code.includes(item));
+}
+
+function denied(error) {
+    return String(error?.code || '').includes('permission-denied');
+}
+
+/** 이번 실행에서 끝 시각 칸이 거절됐는지. 앱을 다시 열면 한 번 더 시도합니다. */
+let endTimeBlocked = false;
+
+export function resetEndTimeUpload() {
+    endTimeBlocked = false;
+}
+
+export function endTimeUploadBlocked() {
+    return endTimeBlocked;
+}
+
+export function noteEndTimeRejected() {
+    endTimeBlocked = true;
+}
+
+/** 거절을 기억한 뒤에는 끝 시각을 빼고 메모로만 올립니다. */
+export function prepareEventWrite(body) {
+    if (endTimeBlocked && body?.endTime) {
+        const memo = eventBodyWithoutEndTime(body);
+        return { body: memo || body, retryWithoutEndTime: false };
+    }
+    return { body, retryWithoutEndTime: Boolean(body?.endTime) };
 }
 
 function fingerprint(body, clear = []) {
@@ -51,16 +79,30 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const nextHashes = { ...hashes };
     let pending = 0;
     const write = async (name, id, shaped, migratedAt) => {
-        const body = await stamp(firestore, shaped.body, shaped.stamps, migratedAt);
+        const prepared = name === 'events' ? prepareEventWrite(shaped.body) : { body: shaped.body, retryWithoutEndTime: false };
+        const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt);
         const clear = shaped.clear || [];
         clear.forEach((key) => { body[key] = deleteField(); });
         const key = `${name}/${id}`;
-        const mark = fingerprint(shaped.body, clear);
+        const mark = fingerprint(prepared.body, clear);
         if (nextHashes[key] === mark) return;
         try {
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
             nextHashes[key] = mark;
         } catch (error) {
+            const fallback = prepared.retryWithoutEndTime && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null;
+            if (fallback) {
+                noteEndTimeRejected();
+                try {
+                    const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt);
+                    await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });
+                    nextHashes[key] = fingerprint(fallback, clear);
+                    return;
+                } catch (again) {
+                    if (retryable(again)) pending += 1;
+                    return;
+                }
+            }
             if (retryable(error)) pending += 1;
         }
     };

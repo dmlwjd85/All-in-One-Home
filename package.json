@@ -17,6 +17,8 @@
     "check:hits": "node scripts/check-hit-targets.mjs",
     "check:storage": "node scripts/check-storage-paths.mjs",
     "check:quality": "node scripts/check-quality.mjs",
+    "check:msg": "node scripts/check-msg.mjs",
+    "check:rules": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-rules.mjs\"",
     "check:browser": "node scripts/check-browser.mjs"
   },
   "dependencies": {

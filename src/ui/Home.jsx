@@ -1,11 +1,11 @@
-import { addDaysYmd, dayKeyFromYmd, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Btn, HOME_KINDS, studentName } from './bits.jsx';
+import { Btn, studentName } from './bits.jsx';
 
 export function Home() {
-    const { data, clock, openQuick, go } = useUi();
+    const { data, clock, go } = useUi();
     const day = dayKeyFromYmd(clock.ymd);
     const table = data.timetable[day] || {};
     const labels = [1, 2, 3, 4, 5, 6].map((index) => table[`p${index}`] || '');
@@ -15,7 +15,12 @@ export function Home() {
     const count = data.profile.classSize || data.students.length;
     const todos = joined(data, 'todos');
     const left = todos.filter((row) => !row.done).length;
-    const events = joined(data, 'events').filter((row) => row.date >= startOfWeekMon(clock.ymd) && row.date <= addDaysYmd(startOfWeekMon(clock.ymd), 6));
+    const weekStart = startOfWeekMon(clock.ymd);
+    const weekEnd = addDaysYmd(weekStart, 6);
+    const events = joined(data, 'events').filter((row) => {
+        const end = row.end && row.end >= row.date ? row.end : row.date;
+        return row.date <= weekEnd && end >= weekStart;
+    });
     const feed = [
         ...joinedRecords(data).map((row) => ({ id: row.id, at: row.at || row.date, title: `${data.students.find((item) => item.id === row.sid)?.no || ''} ${studentName(data.students, row.sid)} · ${row.kind}`.trim(), text: row.text, emoji: '👀' })),
         ...joined(data, 'notices').map((row) => ({ id: row.id, at: row.at || row.date, title: row.date === addDaysYmd(clock.ymd, 1) ? '내일 알림장' : '알림장', text: row.text, emoji: '📢' })),
@@ -47,17 +52,8 @@ export function Home() {
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
-                <Btn block className="field" style={{ display: 'flex', alignItems: 'center', textAlign: 'left', gap: 8 }} onClick={() => openQuick('관찰')}>
-                    <span aria-hidden="true">✏️</span> 쓱, 적어 두세요
-                </Btn>
-                <div className="shortcut-grid" style={{ marginTop: 10 }}>
-                    {HOME_KINDS.map((kind) => (
-                        <Btn key={kind.id} className="solid-card block" style={{ minHeight: 72, fontWeight: 800 }} onClick={() => openQuick(kind.id)}>
-                            <span style={{ display: 'grid', justifyItems: 'center', gap: 4 }}><span aria-hidden="true">{kind.emoji}</span>{kind.label}</span>
-                        </Btn>
-                    ))}
-                </div>
-                <p className="muted" style={{ margin: '10px 4px 0', fontSize: 13 }}>@3처럼 번호를 붙이면 그 친구 기록으로 바로 들어가요.</p>
+                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 ＋에서 시작해요</h3>
+                <p className="muted" style={{ margin: 0 }}>회의록, 출결, 메시지 붙여넣기, 기록은 가운데 ＋를 누르면 한 화면에서 고릅니다.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
@@ -103,7 +99,7 @@ export function Home() {
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
                         <div key={row.id}>
-                            <strong>{weekdayKo(row.date)} {Number(row.date.slice(5, 7))}/{Number(row.date.slice(8))} · {row.title}</strong>
+                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
                             {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
                         </div>
                     ))}

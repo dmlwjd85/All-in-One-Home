@@ -7,9 +7,11 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, HOME_KINDS, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
+import { Btn, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
 import { Home } from './ui/Home.jsx';
-import { QuickSheet } from './ui/QuickSheet.jsx';
+import { PlusSheet } from './ui/PlusSheet.jsx';
+import { FlowSheet } from './ui/FlowSheet.jsx';
+import { MsgSheet } from './ui/MsgSheet.jsx';
 import { Attend } from './ui/Attend.jsx';
 import { Neis, Student, Students } from './ui/Students.jsx';
 import { Schedule } from './ui/Schedule.jsx';
@@ -38,7 +40,9 @@ export default function App() {
     const [hash, setHash] = useState(() => location.hash || '#/today');
     const [clock, setClock] = useState(() => seoulParts());
     const [toast, setToast] = useState(null);
-    const [quick, setQuick] = useState(null);
+    const [plus, setPlus] = useState(false);
+    const [flow, setFlow] = useState(null);
+    const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
     const [search, setSearch] = useState(false);
     const [locked, setLocked] = useState(false);
@@ -93,7 +97,7 @@ export default function App() {
 
     useEffect(() => {
         if (!data?.profile.started) return;
-        if (route.openQuick) setQuick((prev) => prev || { kind: '관찰' });
+        if (route.openQuick) setFlow((prev) => prev || { id: 'quick', kind: '관찰' });
         if (route.notice) setToast({ message: route.notice, undoable: false });
     }, [route.openQuick, route.notice, data?.profile.started]);
 
@@ -135,23 +139,21 @@ export default function App() {
             const typing = tag === 'INPUT' || tag === 'TEXTAREA';
             if (event.key === '/' && !typing && data?.profile.started) {
                 event.preventDefault();
-                setQuick({ kind: '관찰' });
+                setPlus(true);
             }
             if (event.key === 'Escape') {
-                setQuick(null);
+                setPlus(false);
+                setFlow(null);
+                setMsg(false);
                 setSearch(false);
                 setMenu(false);
-            }
-            if (quick && !typing && event.key >= '1' && event.key <= '6') {
-                const kind = HOME_KINDS[Number(event.key) - 1]?.id;
-                if (kind) setQuick((prev) => ({ ...(prev || {}), kind }));
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [quick, data?.profile.started]);
+    }, [data?.profile.started]);
 
-    const todayTipId = (!quick && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
+    const todayTipId = (!flow && !plus && !msg && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
     useEffect(() => {
         if (!todayTipId) return undefined;
         setTipFolded(false);
@@ -186,7 +188,9 @@ export default function App() {
         clock,
         dark,
         showToast,
-        openQuick: (kind, extra = {}) => setQuick({ kind: kind || '관찰', ...extra }),
+        openQuick: (kind, extra = {}) => setFlow({ id: 'quick', kind: kind || '관찰', ...extra }),
+        openFlow: (next) => setFlow(next),
+        openPlus: () => setPlus(true),
         go,
         route,
     };
@@ -207,7 +211,7 @@ export default function App() {
         ['기록', '#/students', '✎'],
         ['일정', '#/schedule', '📅'],
     ];
-    const tip = quick ? null : tipForToday(clock.ymd, data.tip);
+    const tip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
     const checked = data.profile.checkedDates.includes(clock.ymd);
 
     let screen = <Home />;
@@ -250,7 +254,7 @@ export default function App() {
                     {MENU.map(([label, href]) => (
                         <Btn key={label} block className="chip" style={{ justifyContent: 'flex-start', background: (location.hash || '#/today') === href ? 'var(--primary)' : 'transparent', color: (location.hash || '#/today') === href ? 'var(--on-primary)' : 'var(--ink)' }} onClick={() => go(href)}>{label}</Btn>
                     ))}
-                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>어디서든 / 키를 누르면 바로 적을 수 있어요. 엔터로 저장돼요.</p>
+                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 ＋와 같은 일 고르기가 열려요.</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted" style={{ marginTop: 0 }}>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
@@ -288,7 +292,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="쓱, 적" onClick={() => setQuick({ kind: '관찰' })}>+</Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--primary)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -299,7 +303,31 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                {quick && <QuickSheet initial={quick} onClose={() => setQuick(null)} />}
+                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
+                {plus && (
+                    <PlusSheet
+                        onClose={() => setPlus(false)}
+                        onPick={(action) => {
+                            setPlus(false);
+                            if (!action) return;
+                            if (action.id === 'attend') {
+                                go(`#/attend/${clock.ymd}`);
+                                return;
+                            }
+                            if (action.id === 'message') {
+                                setMsg(true);
+                                return;
+                            }
+                            if (action.id === 'minutes') {
+                                setFlow({ id: 'minutes' });
+                                return;
+                            }
+                            if (action.kind) setFlow({ id: 'quick', kind: action.kind });
+                        }}
+                    />
+                )}
+                {flow && <FlowSheet flow={flow} onClose={() => setFlow(null)} />}
+                {msg && <MsgSheet onClose={() => setMsg(false)} />}
                 {menu && <MenuSheet onClose={() => setMenu(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (

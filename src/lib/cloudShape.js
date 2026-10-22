@@ -121,8 +121,22 @@ function toEvent(row) {
     };
     if (row.end && row.end >= row.date) body.end = row.end;
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.endTime || '')) body.endTime = row.endTime;
     if (row.memo) body.memo = String(row.memo).slice(0, 300);
     return { id, body, stamps: stamps(['updatedAt']) };
+}
+
+/** 규칙이 끝 시각을 아직 모르면 그 칸을 빼고 메모에 끝 시각을 붙입니다. */
+export function eventBodyWithoutEndTime(body) {
+    if (!body || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.endTime || '')) return null;
+    const next = { ...body };
+    const end = next.endTime;
+    delete next.endTime;
+    const memo = String(next.memo || '');
+    if (!memo.includes(end)) {
+        next.memo = (memo ? `${memo} ${end}까지` : `${end}까지`).slice(0, 300);
+    }
+    return next;
 }
 
 function toTodo(row) {
@@ -223,6 +237,7 @@ export function fromCloudRow(collection, id, data = {}) {
             date: data.date,
             end: data.end || '',
             time: data.time || '',
+            endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(data.endTime || '') ? data.endTime : '',
             title: data.title || '',
             kind: EVENT_FROM[data.kind] || '학급',
             memo: data.memo || '',
