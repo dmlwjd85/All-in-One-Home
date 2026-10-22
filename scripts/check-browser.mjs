@@ -995,7 +995,7 @@ try {
             const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
             return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
         });
-        check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정'), `요일 일정이 ${label}에서 ${fridayLabel} 15:00으로 보이지 않습니다. ${meet.title}`);
+        check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정') && meet.text.includes(fridayLabel), `요일 일정이 ${label}에서 ${fridayLabel} 15:00으로 보이지 않습니다. ${meet.title}`);
         await audit(page, `요일 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_weekday_event_${label}.png`) });
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('메시지 다시 붙이기'))?.click());
