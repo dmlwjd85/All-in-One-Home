@@ -316,28 +316,22 @@ a.chip,
     padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 24px rgba(46, 42, 43, .16);
 }
-.toast-notice { pointer-events: none; }
-.toast-notice .tap { pointer-events: auto; }
-.toast-notice > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast {
     position: fixed;
     z-index: 50;
-    /* 날짜와 클라우드 안내 아래, 팁 위에 둡니다. 본문 여백은 안내가 있어도 그대로입니다. */
-    top: calc(140px + env(safe-area-inset-top));
     left: 16px;
     right: 16px;
-    bottom: auto;
+    bottom: calc(96px + env(safe-area-inset-bottom));
     background: var(--toast);
     color: var(--toast-ink);
     border-radius: 16px;
-    padding: 8px 12px;
+    padding: 12px 14px;
     display: flex;
     gap: 8px;
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 8px 18px var(--neo-shadow);
 }
-.toast-notice { min-height: 44px; padding: 0 12px 0 14px; }
 .cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -379,7 +373,7 @@ a.chip,
         border-radius: 24px;
         max-height: min(86dvh, 820px);
     }
-    .toast { top: auto; left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
+    .toast { left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);

@@ -1475,49 +1475,49 @@ try {
     await withDemo(390, 'light', async (page) => {
         const initial = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-sound'));
         check(initial === null, '콕 소리 기본값이 켜져 있지 않습니다.');
-        await page.click('[aria-label="할 일 고르기"]');
-        await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
-        const notice = await page.evaluate(() => ({
-            text: document.querySelector('.toast')?.innerText || '',
-            off: [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '끄기'),
-        }));
-        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off, '처음 소리 안내가 없습니다.');
-        await page.evaluate(() => {
-            const button = [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.getBoundingClientRect().width > 40);
-            button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+        const notice = await page.evaluate(() => {
+            const tip = document.querySelector('.tip-bubble');
+            return {
+                text: tip?.innerText || '',
+                off: [...(tip?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '끄기'),
+                toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+            };
         });
+        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
+        await page.click('[aria-label="할 일 고르기"]');
         await delay(80);
-        const stillOne = await page.evaluate(() => document.querySelectorAll('.toast').length === 1 && document.body.innerText.includes('누를 때 소리가 나요'));
-        check(stillOne, '소리 안내가 한 번보다 많이 나옵니다.');
-        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
-        await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
+        const during = await page.evaluate(() => ({
+            toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+            seen: localStorage.getItem('ssug-gyomu-key-sound-notice'),
+        }));
+        check(!during.toast && during.seen !== '1', '소리 안내가 토스트로 뜨거나 한 번보다 많이 나옵니다.');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => (document.querySelector('.tip-bubble')?.innerText || '').includes('누를 때 소리가 나요'));
+        await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
         const saved = await page.evaluate(() => ({
             sound: localStorage.getItem('ssug-gyomu-key-sound'),
             seen: localStorage.getItem('ssug-gyomu-key-sound-notice'),
+            toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
         }));
-        check(saved.sound === '0' && saved.seen === '1', '소리 끄기가 저장되지 않았습니다.');
+        check(saved.sound === '0' && saved.seen === '1' && !saved.toast, '소리 끄기가 저장되지 않았습니다.');
     });
 
     for (const mode of ['light', 'dark']) {
-        for (const width of [360, 390]) {
+        for (const width of [360, 390, 1920]) {
             await withDemo(width, mode, async (page) => {
                 await page.evaluate(() => document.fonts?.ready);
-                const resting = await page.evaluate(() => ({
-                    sixth: Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top),
-                    cls: window.__cls || 0,
-                }));
-                await page.evaluate(() => {
-                    const button = document.querySelector('.period-row button');
-                    button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
-                });
-                await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
-                const overlap = await page.evaluate(() => {
+                const layout = await page.evaluate(() => {
                     const hits = (a, b) => Boolean(
                         a && b && a.width > 0 && b.width > 0
                         && a.left < b.right - 0.5 && a.right > b.left + 0.5
                         && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
                     );
-                    const toast = document.querySelector('.toast')?.getBoundingClientRect();
+                    const tip = document.querySelector('.tip-bubble');
+                    const tipBox = tip?.getBoundingClientRect();
+                    const visible = Boolean(tipBox && tipBox.width > 0 && tipBox.height > 0);
+                    const quick = document.querySelector('.home-quick')?.getBoundingClientRect();
+                    const closeBtn = tip?.querySelector('[aria-label="팁 닫기"]')?.getBoundingClientRect();
+                    const offBtn = [...(tip?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '끄기')?.getBoundingClientRect();
                     const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
                     const sixth = cells[5];
                     const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
@@ -1525,41 +1525,72 @@ try {
                     const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
                     const banner = [...document.querySelectorAll('p')].find((el) => el.textContent.includes('아직 클라우드'))?.getBoundingClientRect();
                     const date = document.querySelector('.date-block')?.getBoundingClientRect();
+                    const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                    const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
-                    const sixthOnScreen = Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0 && sixth.right > 0);
                     return {
-                        coversSixth: hits(toast, sixth),
-                        coversAnyPeriod: cells.some((cell) => hits(toast, cell)),
-                        coversHero: hits(toast, hero) || hits(toast, kicker),
-                        coversTab: hits(toast, tab),
-                        coversBanner: hits(toast, banner),
-                        coversDate: hits(toast, date),
+                        visible,
+                        text: tip?.innerText || '',
+                        toast,
+                        coversQuick: hits(tipBox, quick),
+                        coversSixth: hits(tipBox, sixth) || cells.some((cell) => hits(tipBox, cell)),
+                        coversHero: hits(tipBox, hero) || hits(tipBox, kicker),
+                        coversTab: hits(tipBox, tab),
+                        coversBanner: hits(tipBox, banner),
+                        coversDate: hits(tipBox, date),
+                        coversFab: hits(tipBox, fab) || hits(offBtn, fab) || hits(closeBtn, fab),
+                        coversClose: hits(offBtn, closeBtn),
                         sixthUnderTab: hits(sixth, tab),
-                        sixthOnScreen,
-                        toastTop: Math.round(toast?.top ?? -1),
-                        toastBottom: Math.round(toast?.bottom ?? -1),
+                        sixthOnScreen: Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0),
+                        quickTop: Math.round(quick?.top ?? -1),
                         sixthTop: Math.round(sixth?.top ?? -1),
-                        sixthBottom: Math.round(sixth?.bottom ?? -1),
-                        tabTop: Math.round(tab?.top ?? -1),
-                        bannerTop: Math.round(banner?.top ?? -1),
                         cls: window.__cls || 0,
                     };
                 });
-                check(
-                    overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversHero && !overlap.coversTab && !overlap.sixthUnderTab && !overlap.coversBanner && !overlap.coversDate,
-                    `${width} ${mode}에서 소리 안내가 오늘 화면이나 클라우드 안내, 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
-                );
-                check(overlap.sixthTop === resting.sixth, `${width} ${mode}에서 소리 안내가 뜨며 화면이 밀립니다: ${resting.sixth} → ${overlap.sixthTop}`);
-                check(resting.cls < 0.001 && overlap.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${resting.cls} → ${overlap.cls}`);
-                await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
-                await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
-                const after = await page.evaluate(() => ({
-                    sixth: Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top),
-                    cls: window.__cls || 0,
-                }));
-                check(after.sixth === resting.sixth, `${width} ${mode}에서 소리 안내가 닫히며 화면이 밀립니다: ${resting.sixth} → ${after.sixth}`);
-                check(after.cls < 0.001, `${width} ${mode}에서 소리 안내가 닫히며 레이아웃이 밀립니다: ${after.cls}`);
-            }, 800);
+                check(!layout.toast, `${width} ${mode}에서 소리 안내 토스트가 있습니다.`);
+                check(layout.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${layout.cls}`);
+                if (width < 900) {
+                    check(
+                        layout.visible && layout.text.includes('콕') && layout.text.includes('누를 때 소리가 나요')
+                        && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
+                        && !layout.coversBanner && !layout.coversDate && !layout.coversClose
+                        && layout.sixthOnScreen && !layout.sixthUnderTab,
+                        `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
+                    );
+                    await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
+                    const after = await page.evaluate(() => ({
+                        quick: Math.round(document.querySelector('.home-quick')?.getBoundingClientRect().top ?? -1),
+                        sixth: Math.round(document.querySelectorAll('.period-row button')[5]?.getBoundingClientRect().top ?? -1),
+                        cls: window.__cls || 0,
+                        toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+                    }));
+                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls}`);
+                } else {
+                    check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
+                    await page.evaluate(() => { location.hash = '#/settings'; });
+                    await page.waitForFunction(() => document.body.innerText.includes('콕, 누를 때 소리가 나요'));
+                    const settings = await page.evaluate(() => {
+                        const hits = (a, b) => Boolean(
+                            a && b && a.width > 0 && b.width > 0
+                            && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                            && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                        );
+                        const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('누를 때 소리'));
+                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('콕, 누를 때 소리가 나요'));
+                        note?.scrollIntoView({ block: 'end' });
+                        const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                        const noteBox = note?.getBoundingClientRect();
+                        const buttonBox = button?.getBoundingClientRect();
+                        return {
+                            phrase: note?.innerText.includes('콕, 누를 때 소리가 나요') || false,
+                            off: Boolean(button),
+                            under: hits(buttonBox, fab) || hits(noteBox, fab),
+                            aboveFab: Boolean(noteBox && fab && noteBox.bottom <= fab.top + 0.5),
+                        };
+                    });
+                    check(settings.phrase && settings.off && !settings.under && settings.aboveFab, `${width} ${mode} 설정에서 소리 안내가 버튼을 가리거나 없습니다: ${JSON.stringify(settings)}`);
+                }
+            }, width >= 900 ? 1080 : 800);
         }
     }
 

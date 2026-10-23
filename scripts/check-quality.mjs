@@ -228,7 +228,8 @@ const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 
 check(bits.includes('viewBox="0 0 1652 1774"'), '콕 글자 틀이 가계부와 다릅니다.');
 check(bits.includes(ledgerPath), '콕 글자 윤곽이 가계부와 다릅니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
-check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes("label: '끄기'"), '소리 안내 문구가 없습니다.');
+check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('>끄기<'), '소리 안내 문구가 없습니다.');
+check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(sw.includes("const CACHE = 'ssug-gyomu-shell-v11'"), '캐시 판이 올라가지 않았습니다.');

@@ -8,7 +8,7 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
-import { playKey, setKeySound, setKeySoundAnnouncer } from './ui/keyfeel.js';
+import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs } from './ui/keyfeel.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -184,21 +184,16 @@ export default function App() {
 
     useEffect(() => subscribeStorageIssue((message) => showToast(message)), []);
 
-    useEffect(() => {
-        setKeySoundAnnouncer(() => {
-            showToast('콕, 누를 때 소리가 나요', false, {
-                label: '끄기',
-                passThrough: true,
-                onClick: () => {
-                    setKeySound(false);
-                    showToast('');
-                },
-            });
-        });
-        return () => setKeySoundAnnouncer(null);
-    }, []);
+    const [soundTip, setSoundTip] = useState(() => keySoundNoticePending());
+    const [soundSilenced, setSoundSilenced] = useState(() => !keySoundEnabled());
+    useEffect(() => subscribeKeyPrefs(() => {
+        if (!keySoundEnabled()) setSoundSilenced(true);
+    }), []);
 
-    const todayTipId = (!flow && !plus && !msg && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
+    const showSoundTip = Boolean(soundTip && !flow && !plus && !msg && data?.profile?.started);
+    const todayTipId = !data?.profile?.started || flow || plus || msg
+        ? ''
+        : (showSoundTip ? 'key-sound' : (tipForToday(clock.ymd, data.tip)?.id || ''));
     useEffect(() => {
         if (!todayTipId) return undefined;
         setTipFolded(false);
@@ -260,7 +255,8 @@ export default function App() {
         ['기록', '#/students', '✎'],
         ['일정', '#/schedule', '📅'],
     ];
-    const tip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
+    const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
+    const tip = showSoundTip ? { id: 'key-sound', text: '콕, 누를 때 소리가 나요', sound: true } : dailyTip;
     const checked = data.profile.checkedDates.includes(clock.ymd);
 
     let screen = <Home />;
@@ -338,9 +334,23 @@ export default function App() {
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
-                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => { saveTip(closeTip(data.tip, tip.id, clock.ymd)); }}>✕</Btn>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <p style={{ margin: 0, flex: 1, minWidth: 0 }}>{tip.text}</p>
+                                {tip.sound && (
+                                    <Btn className={soundSilenced ? 'chip' : 'chip on'} aria-pressed={soundSilenced ? 'false' : 'true'} onClick={() => {
+                                        setKeySound(false);
+                                        rememberKeySoundNotice();
+                                        setSoundSilenced(true);
+                                    }}>끄기</Btn>
+                                )}
+                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => {
+                                    if (tip.sound) {
+                                        rememberKeySoundNotice();
+                                        setSoundTip(false);
+                                        return;
+                                    }
+                                    saveTip(closeTip(data.tip, tip.id, clock.ymd));
+                                }}>✕</Btn>
                             </div>
                         </div>
                     )}
@@ -391,7 +401,7 @@ export default function App() {
                 {menu && <MenuSheet onClose={() => setMenu(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
-                    <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
+                    <div className="toast" role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
                         {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => { if (ok) setToast(null); }); }}>되돌리기</Btn>}

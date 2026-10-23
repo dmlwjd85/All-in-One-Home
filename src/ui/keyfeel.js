@@ -10,8 +10,6 @@ let buffer = null;
 let playing = null;
 let token = 0;
 let muted = false;
-let announce = null;
-let noticeTold = false;
 const prefListeners = new Set();
 
 export function setKeyMuted(on) {
@@ -35,10 +33,6 @@ function readOn(key, storage) {
     } catch {
         return true;
     }
-}
-
-export function setKeySoundAnnouncer(fn) {
-    announce = typeof fn === 'function' ? fn : null;
 }
 
 export function subscribeKeyPrefs(fn) {
@@ -144,17 +138,6 @@ export function playKey() {
         try { navigator.vibrate(8); } catch { /* 진동이 없어도 누르기는 됩니다. */ }
     }
     if (!sound) return;
-    if (!noticeTold && keySoundNoticePending()) {
-        if (announce) {
-            noticeTold = true;
-            rememberKeySoundNotice();
-            const tell = announce;
-            setTimeout(() => {
-                try { tell(); } catch { /* 안내가 없어도 다음 누름은 소리가 납니다. */ }
-            }, 0);
-            return;
-        }
-    }
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const mine = ++token;

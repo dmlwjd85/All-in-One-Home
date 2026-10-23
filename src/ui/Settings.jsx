@@ -95,7 +95,7 @@ export function Settings() {
                         setVibeOn(next);
                     }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
                 </div>
-                <p className="muted">버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
 
