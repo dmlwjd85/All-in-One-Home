@@ -276,7 +276,7 @@ export const MSG_SAMPLES = [
     ] },
     { text: '25~27일 학년 연구실 공사', items: [{ kind: '일정', date: '2026-10-25', end: '2026-10-27', time: '', title: '학년 연구실 공사', include: true }] },
     { text: '26~28일 특별실 공사', items: [{ kind: '일정', date: '2026-10-26', end: '2026-10-28', time: '', title: '특별실 공사', include: true }] },
-    { text: '10/30 현장체험학습이 취소되었습니다', items: [{ kind: '일정', date: '2026-10-30', time: '', title: '현장체험학습이 취소되었습니다', include: false, low: true }] },
+    { text: '10/30 현장체험학습이 취소되었습니다', items: [{ kind: '일정', date: '2026-10-30', time: '', title: '현장체험학습이 취소', include: false, low: true }] },
     { text: '11/4 학급 회의가 취소됩니다', items: [{ kind: '일정', date: '2026-11-04', time: '', title: '학급 회의가 취소됩니다', include: false, low: true }] },
     { text: '다음 달 말까지 연수 30시간 이수 확인', items: [{ kind: '할 일', date: '2026-11-30', time: '', title: '연수 30시간 이수 확인', include: true }] },
     { text: '현장체험학습 장소 변경', items: [{ kind: '일정', date: '', time: '', title: '현장체험학습 장소 변경', include: false, low: true }] },
