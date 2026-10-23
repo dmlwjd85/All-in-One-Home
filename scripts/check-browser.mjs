@@ -1462,6 +1462,8 @@ try {
 
     for (const width of [360, 390]) {
         await withDemo(width, 'light', async (page) => {
+            await page.evaluate(() => document.fonts?.ready);
+            const restingTop = await page.evaluate(() => Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top));
             await page.evaluate(() => {
                 const button = document.querySelector('.period-row button');
                 button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
@@ -1499,6 +1501,11 @@ try {
                 overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversHero && !overlap.coversTab && !overlap.sixthUnderTab,
                 `${width}에서 소리 안내가 오늘 화면이나 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
             );
+            check(overlap.sixthTop === restingTop, `${width}에서 소리 안내가 뜨며 화면이 밀립니다: ${restingTop} → ${overlap.sixthTop}`);
+            await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
+            await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
+            const after = await page.evaluate(() => Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top));
+            check(after === restingTop, `${width}에서 소리 안내가 닫히며 화면이 밀립니다: ${restingTop} → ${after}`);
         }, 800);
     }
 

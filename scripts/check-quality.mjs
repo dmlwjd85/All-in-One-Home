@@ -417,14 +417,16 @@ await (async () => {
 
     const heard = [];
     const stopListen = subscribeStorageIssue((message) => heard.push(message));
-    let ordinaryFailed = false;
-    try {
-        await saveQuick({ text: '남지 않을 할 일', kind: '할 일' });
-    } catch (error) {
-        ordinaryFailed = Boolean(error?.storageFailed);
-    }
+    const leaks = [];
+    const onLeak = (reason) => leaks.push(reason);
+    process.on('unhandledRejection', onLeak);
+    const ordinary = await saveQuick({ text: '남지 않을 할 일', kind: '할 일' });
+    saveQuick({ text: '처리되지 않을 할 일', kind: '할 일' }).then(() => undefined);
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    process.off('unhandledRejection', onLeak);
     stopListen();
-    check(ordinaryFailed, '일반 저장이 저장 실패를 조용히 넘겼습니다.');
+    check(ordinary?.storageFailed && ordinary.ok === false, '일반 저장이 저장 실패를 조용히 넘겼습니다.');
+    check(leaks.length === 0, `저장 실패가 처리되지 않은 오류로 남습니다: ${leaks.map((item) => item?.message).join(' / ')}`);
     check(heard.some((message) => message.includes('저장 공간이 가득 차서')), `일반 저장 실패를 알리지 않았습니다: ${heard.join(' / ')}`);
     check(fingerprint(snapshot()) === kept, '일반 저장에 실패했는데 화면에 새 기록이 남았습니다.');
     check(!JSON.stringify(mainStore.dump()).includes('남지 않을 할 일'), '실패한 일반 저장이 메인 저장소에 남았습니다.');

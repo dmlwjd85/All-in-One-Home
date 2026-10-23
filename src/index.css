@@ -34,7 +34,7 @@ button, input, textarea { font-family: inherit; }
 }
 
 .app-frame { min-height: 100dvh; }
-.main { min-width: 0; padding: 16px 16px 136px; }
+.main { min-width: 0; padding: 36px 16px 136px; }
 .side { display: none; }
 
 .glass, .solid-card {
@@ -330,8 +330,6 @@ a.chip,
     box-shadow: 0 8px 18px var(--neo-shadow);
 }
 .toast-notice { min-height: 44px; padding: 0 12px 0 14px; }
-.app-frame.has-toast .main { padding-top: calc(56px + env(safe-area-inset-top)); }
-.app-frame.has-toast .home-hero { padding-top: 8px; padding-bottom: 8px; }
 .cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -366,8 +364,6 @@ a.chip,
         max-height: min(86dvh, 820px);
     }
     .toast { top: auto; left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
-    .app-frame.has-toast .main { padding-top: 20px; }
-    .app-frame.has-toast .home-hero { padding-top: 16px; padding-bottom: 16px; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);

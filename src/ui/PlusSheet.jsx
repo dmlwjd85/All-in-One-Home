@@ -149,7 +149,8 @@ export function PlusSheet({ onClose, onPick }) {
                     showToast('학생 번호를 골라 주세요.');
                     return;
                 }
-                await setAttendance(item.date || clock.ymd, student.id, item.status, { period: item.period || '' });
+                const saved = await setAttendance(item.date || clock.ymd, student.id, item.status, { period: item.period || '' });
+                if (saved?.storageFailed) return;
                 message = `${student.name} 출결을 남겼어요.`;
                 continue;
             }

@@ -294,7 +294,7 @@ export default function App() {
 
     return (
         <Ui.Provider value={ui}>
-            <div className={`app-bg app-frame${toast ? ' has-toast' : ''}`} data-ready="1">
+            <div className="app-bg app-frame" data-ready="1">
                 <aside className="side">
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
                         <Symbol />
@@ -332,7 +332,7 @@ export default function App() {
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
                             <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
                                 const next = dark ? 'light' : 'dark';
-                                import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next }));
+                                import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
                         </div>
                     </header>
@@ -340,7 +340,7 @@ export default function App() {
                         <div className="tip-bubble" role="status">
                             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                 <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
-                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
+                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => { saveTip(closeTip(data.tip, tip.id, clock.ymd)); }}>✕</Btn>
                             </div>
                         </div>
                     )}
@@ -394,7 +394,7 @@ export default function App() {
                     <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
-                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo(); setToast(null); }}>되돌리기</Btn>}
+                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => { if (ok) setToast(null); }); }}>되돌리기</Btn>}
                         {toast.action && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => toast.action.onClick?.()}>{toast.action.label}</Btn>}
                     </div>
                 )}

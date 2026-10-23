@@ -177,9 +177,10 @@ export async function update(recipe, { undoable = false } = {}) {
         await revertMemory(previous, undoable);
         const message = error?.storageFailed ? error.message : storageIssueMessage(error);
         tellStorageIssue(message);
-        throw error;
+        return { storageFailed: true, message };
     }
     flushCloud().catch(() => {});
+    return null;
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
@@ -260,7 +261,7 @@ export async function undo() {
         mirrorTheme(state.profile.theme);
         emit();
         tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
-        throw error;
+        return false;
     }
     return true;
 }
@@ -328,7 +329,7 @@ export async function boot(query = '') {
 
 export async function loadDemo() {
     const demo = buildDemo(seoulParts());
-    await update((draft) => ({
+    return update((draft) => ({
         ...draft,
         ...demo,
         profile: { ...draft.profile, ...demo.profile, theme: draft.profile.theme },
@@ -347,7 +348,7 @@ export async function beginGuest() {
 
 export async function finishSetup({ className, rosterText, skip }) {
     const parsed = parseRoster(rosterText || '');
-    await update((draft) => {
+    const failed = await update((draft) => {
         draft.profile.started = true;
         draft.profile.guest = true;
         draft.profile.demo = false;
@@ -367,6 +368,7 @@ export async function finishSetup({ className, rosterText, skip }) {
         }
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     return parsed;
 }
 
@@ -390,7 +392,7 @@ export async function saveQuick(input, now = new Date()) {
     const clock = seoulParts(now);
     const date = input.date || parsed.detectedDate || clock.ymd;
     let message = '남겼어요.';
-    await update((draft) => {
+    const failed = await update((draft) => {
         const student = draft.students.find((row) => row.no === Number(no));
         const sid = student?.id || '';
         const kind = input.kind || '메모';
@@ -443,6 +445,7 @@ export async function saveQuick(input, now = new Date()) {
         }
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
     if (sensitive) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
     return { ok: true, message };
 }
@@ -462,7 +465,7 @@ export async function saveParsed(items, now = new Date()) {
     let skipped = 0;
     let sensitiveCount = 0;
     let filled = 0;
-    await update((draft) => {
+    const failed = await update((draft) => {
         const seen = new Set([
             ...draft.todos, ...draft.local.todos, ...draft.events, ...draft.local.events,
         ].map((row) => row.id));
@@ -505,6 +508,7 @@ export async function saveParsed(items, now = new Date()) {
         }
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
     if (!count && skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped };
     let message = `${count}개 등록했어요.`;
     if (skipped) message += ` 겹친 ${skipped}개는 빼 두었어요.`;
@@ -514,7 +518,7 @@ export async function saveParsed(items, now = new Date()) {
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
-    await update((draft) => {
+    return update((draft) => {
         const id = `${date}_${sid}`;
         const index = draft.attendance.findIndex((row) => row.id === id);
         if (!status || status === '출석') {
@@ -603,11 +607,12 @@ export async function receiveOne(id, no) {
 
 export async function saveTextItem(bucket, row) {
     const sensitive = isSensitiveText(row.text || row.title || '', row.tags);
-    await update((draft) => {
+    const failed = await update((draft) => {
         const target = sensitive ? draft.local[bucket] : draft[bucket];
         put(target, { ...row, source: row.source || 'app' });
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, sensitive };
     return { sensitive };
 }
 
@@ -620,10 +625,11 @@ export async function removeItem(bucket, id) {
 }
 
 export async function patchProfile(patch) {
-    await update((draft) => {
+    const failed = await update((draft) => {
         draft.profile = { ...draft.profile, ...patch };
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     if (patch.sharedPc === true) {
         memoryOnly = true;
         try {
@@ -640,7 +646,7 @@ export async function patchProfile(patch) {
 export async function replaceRoster(text) {
     const parsed = parseRoster(text);
     if (!parsed.students.length) return parsed;
-    await update((draft) => {
+    const failed = await update((draft) => {
         const old = new Map(draft.students.map((row) => [row.no, row]));
         draft.students = parsed.students.map((row) => ({
             id: old.get(row.no)?.id || `s${row.no}`,
@@ -655,11 +661,12 @@ export async function replaceRoster(text) {
         draft.profile.classSize = parsed.students.length;
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     return parsed;
 }
 
 export async function setTimetable(day, period, subject, specialist) {
-    await update((draft) => {
+    return update((draft) => {
         const table = { ...draft.timetable };
         const row = { ...(table[day] || {}) };
         if (subject != null) row[`p${period}`] = subject;
@@ -677,13 +684,14 @@ export function previewLegacy(titles) {
 }
 
 export async function applyLegacy(plan) {
-    await update((draft) => {
+    const kept = await update((draft) => {
         draft.local.backup = plan.backup;
         return draft;
     });
+    if (kept?.storageFailed) return kept;
     const fileDate = seoulYmd();
     downloadJson(`교무수첩-원본백업-${fileDate}.json`, plan.backup.payload);
-    await update((draft) => {
+    const moved = await update((draft) => {
         const merge = (current, incoming) => {
             const map = new Map((current || []).map((item) => [item.id, item]));
             for (const item of incoming || []) map.set(item.id, item);
@@ -713,10 +721,11 @@ export async function applyLegacy(plan) {
         draft.profile.migrateLater = false;
         return draft;
     });
+    return moved?.storageFailed ? moved : null;
 }
 
 export async function forgetLegacyImports() {
-    await update((draft) => {
+    return update((draft) => {
         const keep = (list) => (list || []).filter((item) => item.source !== 'legacy' && item.source !== 'legacy-conflict');
         draft.students = keep(draft.students);
         draft.records = keep(draft.records);
@@ -791,18 +800,15 @@ export async function importText(text, mode, hooks = {}) {
     if (!checked.ok) return checked;
     if (checked.kind === 'legacy') {
         const plan = planMigration(oldBackupToBag(checked.data), { now: new Date() });
-        await applyLegacy(plan);
+        const moved = await applyLegacy(plan);
+        if (moved?.storageFailed) return { ok: false, errors: [moved.message] };
         return { ok: true, kind: 'legacy', summary: plan.summary };
     }
     const data = checked.data;
     const sensitive = splitSensitive(data.records || []);
     if (mode !== 'replace') {
-        try {
-            await update((draft) => applyIncoming(draft, data, sensitive, mode));
-        } catch (error) {
-            if (error?.storageFailed) return { ok: false, errors: [error.message] };
-            throw error;
-        }
+        const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        if (failed?.storageFailed) return { ok: false, errors: [failed.message] };
         return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
     }
     let previous;
@@ -856,13 +862,14 @@ export async function setAuth(auth) {
 }
 
 export async function clearAll() {
-    await update((draft) => {
+    const failed = await update((draft) => {
         const theme = draft.profile.theme;
         const next = emptyState();
         next.profile.theme = theme;
         next.tip = { hidden: [], seen: [], closes: {}, snooze: '' };
         return next;
     });
+    if (failed?.storageFailed) return failed;
     try {
         await mainVault.remove('state');
         await localVault.remove('state');
@@ -872,7 +879,7 @@ export async function clearAll() {
 }
 
 export async function saveTip(tip) {
-    await update((draft) => {
+    return update((draft) => {
         draft.tip = tip;
         return draft;
     });

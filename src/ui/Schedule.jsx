@@ -141,7 +141,8 @@ function Timetable({ data, todayKey }) {
                 <form className="solid-card" style={{ padding: 12, marginTop: 12 }} onSubmit={async (event) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
-                    await setTimetable(edit.day, edit.period, String(form.get('subject') || ''), specialOn ? '전담' : '');
+                    const saved = await setTimetable(edit.day, edit.period, String(form.get('subject') || ''), specialOn ? '전담' : '');
+                    if (saved?.storageFailed) return;
                     setEdit(null);
                 }}>
                     <strong>{edit.period}교시</strong>
