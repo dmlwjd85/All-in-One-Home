@@ -42,8 +42,8 @@ for (const [hash, name] of must) {
     const route = resolveHash(hash, today);
     if (route.name !== name) failures.push(`${hash} 는 ${name} 이어야 하는데 ${route.name} 입니다.`);
 }
-if (!resolveHash('#/write', today).openQuick) failures.push('쓰기 주소에서 쓱, 적이 열리지 않습니다.');
-if (!resolveHash('#p496', today).openQuick) failures.push('496쪽에서 쓱, 적이 열리지 않습니다.');
+if (!resolveHash('#/write', today).openQuick) failures.push('쓰기 주소에서 콕, 적이 열리지 않습니다.');
+if (!resolveHash('#p496', today).openQuick) failures.push('496쪽에서 콕, 적이 열리지 않습니다.');
 const unknown = resolveHash('#/없는화면', today);
 if (!unknown.notice) failures.push('없는 주소 안내가 없습니다.');
 if (resolveHash('#/students/99', today).notice === '' && resolveHash('#/students/99', today).name === 'student') {

@@ -7,7 +7,7 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
+import { Btn, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -169,7 +169,7 @@ export default function App() {
     }
 
     if (!data) {
-        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>쓱 교무수첩을 열고 있어요.</p></div>;
+        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>콕 교무수첩을 열고 있어요.</p></div>;
     }
 
     if (locked) {
@@ -250,12 +250,12 @@ export default function App() {
                 <aside className="side">
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
                         <Symbol />
-                        <strong className="title-font" style={{ fontSize: 18 }}>쓱 교무수첩</strong>
+                        <strong className="title-font" style={{ fontSize: 18 }}>콕 교무수첩</strong>
                     </div>
                     {MENU.map(([label, href]) => (
                         <Btn key={label} block className="chip" style={{ justifyContent: 'flex-start', background: (location.hash || '#/today') === href ? 'var(--primary)' : 'transparent', color: (location.hash || '#/today') === href ? 'var(--on-primary)' : 'var(--ink)' }} onClick={() => go(href)}>{label}</Btn>
                     ))}
-                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 ＋와 같은 일 고르기가 열려요.</p>
+                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 콕과 같은 일 고르기가 열려요.</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted" style={{ marginTop: 0 }}>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
@@ -293,7 +293,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--accent)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -304,7 +304,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
+                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
                 {plus && (
                     <PlusSheet
                         onClose={() => setPlus(false)}

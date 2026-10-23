@@ -49,9 +49,9 @@ export function QuickSheet({ initial, onClose }) {
 
     return (
         <div className="sheet-back" onClick={onClose}>
-            <div className="sheet" role="dialog" aria-modal="true" aria-label="쓱, 적" onClick={(event) => event.stopPropagation()} data-screen="quick">
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="콕, 적" onClick={(event) => event.stopPropagation()} data-screen="quick">
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>쓱, 적</h2>
+                <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>콕, 적</h2>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {KINDS.map((item) => (
                         <Btn key={item.id} className={kind === item.id ? 'chip on' : 'chip'} onClick={() => setKind(item.id)}>{item.emoji} {item.label}</Btn>

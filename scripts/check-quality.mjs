@@ -171,7 +171,8 @@ for (const file of walk(root)) {
     const rel = file.slice(root.length + 1);
     if (!/\.(css|js|jsx|html)$/.test(rel) || fontAllow.has(rel)) continue;
     const text = readFileSync(file, 'utf8');
-    if (/Gowun|Pretendard|Noto Serif|Noto Sans/.test(text)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
+    const uncommented = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    if (/Gowun|Pretendard|Noto Serif|Noto Sans/.test(uncommented)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
     for (const match of text.matchAll(/font-family\s*:\s*([^;}{]+)/g)) {
         const value = match[1];
         if (!/var\(--font-|inherit/.test(value)) failures.push(`${rel}: 글꼴을 변수 밖에서 지정했습니다.`);

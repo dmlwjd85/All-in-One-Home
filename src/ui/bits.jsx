@@ -13,7 +13,20 @@ export const Area = forwardRef(function Area(props, ref) {
 });
 
 export function Symbol({ label = '메뉴' }) {
-    return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '쓱' : label}</span>;
+    return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '콕' : label}</span>;
+}
+
+/** 하단 버튼 '콕'. Pretendard Bold(굵기 700) U+CF55 윤곽을 패스로 옮겼습니다.
+    Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
+    with Reserved Font Name Pretendard.
+    SIL Open Font License 1.1. 전문은 public/fonts/OFL-Pretendard.txt
+    글꼴 파일을 더 받지 않고 패스만 넣어 오프라인에서도 같습니다. */
+export function KokMark() {
+    return (
+        <svg className="kok-mark" viewBox="0 0 1669 1790" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M1356 213H194V8H1356ZM1661 1036H8V834H1661ZM882 979H625V629H882ZM1423 759 1171 743Q1194 636 1205 541Q1216 446 1218.5 371Q1221 296 1221 178V8H1474V178Q1474 296 1471.5 374.5Q1469 453 1457.5 552Q1446 651 1423 759ZM1462 1782H1208V1373H177V1174H1462ZM175 565 144 358 1297 333V518Z" />
+        </svg>
+    );
 }
 
 export function IconSearch() {

@@ -644,7 +644,7 @@ export async function forgetLegacyImports() {
 
 export function exportFile(includeLocal) {
     const data = buildExport(state, { includeLocal, at: new Date().toISOString() });
-    downloadJson(`쓱교무수첩-${seoulYmd()}.json`, data);
+    downloadJson(`콕교무수첩-${seoulYmd()}.json`, data);
     return data;
 }
 
@@ -669,7 +669,7 @@ export async function importText(text, mode) {
             draft.local.backup = { exportedAt: new Date().toISOString(), payload: buildExport(draft, { includeLocal: true, at: new Date().toISOString() }) };
             return draft;
         });
-        downloadJson(`쓱교무수첩-바꾸기전-${seoulYmd()}.json`, state.local.backup.payload);
+        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, state.local.backup.payload);
     }
     await update((draft) => {
         const merge = (current, incoming) => {
