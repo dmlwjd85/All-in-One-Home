@@ -104,7 +104,7 @@ export const MSG_SAMPLES = [
     { text: '[안내] 1. 10월 30일(금) 3~4교시 학급 사진 촬영이 있습니다. 장소: 강당', items: [{ kind: '일정', date: '2026-10-30', time: '10:30', title: '학급 사진 촬영', memo: '강당 · 3~4교시', eventKind: '학급', low: false, include: true }] },
     { text: '11월 12일까지 공개수업 지도안 제출', items: [{ kind: '할 일', date: '2026-11-12', time: '', title: '공개수업 지도안 제출', include: true }] },
     { text: '가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', items: [{ kind: '일정', date: '2026-11-02', end: '2026-11-06', time: '', title: '학부모 상담주간', eventKind: '학급', low: false, include: true }] },
-    { text: '김교사 출장으로 5,6교시 보결 부탁드립니다', items: [{ kind: '일정', date: '', time: '13:10', title: '김교사 출장으로 보결', memo: '5~6교시', eventKind: '학교', low: true, include: false }] },
+    { text: '김교사 출장으로 5,6교시 보결 부탁드립니다', items: [{ kind: '일정', date: '', time: '13:10', title: '5,6교시 보결', memo: '5~6교시', eventKind: '학교', low: true, include: false }] },
     { text: '선생님들 항상 수고 많으십니다. 날씨가 추우니 건강 조심하세요.', items: [{ kind: '할 일', date: '', time: '', title: '날씨가 추우니 건강 조심', include: false, low: true, sensitive: true }] },
     { text: '11월 3일까지 방과후 신청서 회수 후 제출', items: [{ kind: '할 일', date: '2026-11-03', time: '', title: '방과후 신청서 회수 후 제출' }] },
     { text: '내일 오후 2시 교무회의', items: [{ kind: '일정', date: D1, time: '14:00', title: '교무회의', eventKind: '학교', low: false }] },

@@ -2649,21 +2649,37 @@ function dedupeTargets(items) {
 
 const PERSON_ONLY_TITLE = /^(?:부장님|부장\s*님|교감(?:\s*선생님)?|담임(?:\s*선생님)?|교무부장님|행정실장님|학년부장님|연구부장님|[가-힣]{1,4}\s*선생님|[가-힣]{2,10}님)$/;
 
-/** 제목 끝의 조사·요청어를 떼고, 보내·내는 제출로 둡니다. 저는·제가와 다른 절의 말은 뺍니다. */
-function polishTitle(title) {
+const REASON_TAIL = /(?:출장|연수|병가|연가|휴가|공가|외출|반차)(?:으로|로)/;
+
+/** 제목 끝의 조사·요청어를 떼고, 문장 끝의 내·보내 주세요만 제출로 둡니다. */
+function polishTitle(title, segment = '', full = '') {
     let t = String(title || '').replace(/\s+/g, ' ').trim();
     if (!t) return t;
     const hadCooperate = /협조/.test(t);
+    const seg = String(segment || '');
+    const wide = `${seg}\n${full || ''}`;
     t = t.replace(/^(?:제가|저는|저도|저만)\s+/, '');
     t = t.replace(/(?:^|\s)[가-힣]{1,16}(?:이신데|이라서|이라)(?=\s|$)/g, ' ');
-    t = t.replace(/([가-힣]{2,})(?:을|를)\s+(?:보내|내)(?=\s|$)/g, '$1 제출');
-    t = t.replace(/(?:^|\s)(?:보내|내)(?=\s|$)/g, ' 제출');
+    t = t.replace(/\s*보내\s*드려요$/g, '').trim();
+    if (/(?:보내|내)\s*(?:주세요|주세|주시기|주십시오)/.test(seg)) {
+        t = t.replace(/([가-힣]{2,})(?:을|를)\s+(?:보내|내)(?=\s|$)/g, '$1 제출');
+        t = t.replace(/(?:^|\s)(?:보내|내)(?=\s|$)/g, ' 제출');
+    }
+    if (/양식/.test(seg) && /제출/.test(wide) && /(?:^|\s)양식(?:으로|로|으)?$/.test(t)) {
+        t = t.replace(/(?:^|\s)양식(?:으로|로|으)?$/, ' 제출');
+    }
+    if (/바뀌|바꿉|변경/.test(seg)) {
+        t = t.replace(/([가-힣]{2,})(?:이|가)\s+((?:\d+\s*층)|[가-힣]{1,12})으로$/g, '$1 $2');
+        t = t.replace(/([가-힣]{2,})(?:이|가)\s+((?:\d+\s*층)|[가-힣]{1,12})(?<!으)로$/g, '$1 $2');
+    }
     t = t.replace(/\s+/g, ' ').trim();
     let guard = 0;
     while (guard < 6) {
         const next = t
             .replace(/(?:^|\s)(?:협조|오시기|보내|내|주|부탁)$/g, '')
-            .replace(/([가-힣]{2,})(?:으로|로|에|를|을)$/g, '$1')
+            .replace(/([가-힣]{2,})으로$/g, '$1')
+            .replace(/([가-힣]{2,})(?<!으)로$/g, '$1')
+            .replace(/([가-힣]{2,})(?:에|를|을)$/g, '$1')
             .replace(/\s+/g, ' ')
             .trim();
         if (!next || next === t) break;
@@ -2671,6 +2687,24 @@ function polishTitle(title) {
         guard += 1;
     }
     if (hadCooperate) t = t.replace(/(?:^|\s)운영$/g, '').replace(/\s+/g, ' ').trim();
+    if (REASON_TAIL.test(t)) {
+        t = t.replace(/(?:^|\s)[가-힣]{0,12}\s*(?:출장|연수|병가|연가|휴가|공가|외출|반차)(?:으로|로)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    if (/보결/.test(seg) && REASON_TAIL.test(seg) && !/교시/.test(t)) {
+        const comma = seg.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
+        const tilde = seg.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/);
+        const one = seg.match(/(\d)\s*교시/);
+        const bit = comma ? `${comma[1]},${comma[2]}교시` : (tilde ? `${tilde[1]}~${tilde[2]}교시` : (one ? `${one[1]}교시` : ''));
+        if (bit) t = `${bit} ${t || '보결'}`.replace(/\s+/g, ' ').trim();
+    }
+    if (/제출하지\s*못한/.test(t) && /다시\s*올려/.test(t)) t = '다시 올리기';
+    return t;
+}
+
+/** 기한 할 일의 제목이 연수만 남으면 신청서 제출로 붙입니다. 일정 제목은 그대로 둡니다. */
+function shapeTitle(title, segment, full, kind) {
+    const t = polishTitle(title, segment, full);
+    if (kind === '할 일' && /신청서/.test(full) && /까지/.test(full) && /^(?:출장\s*)?연수$/.test(t)) return '연수 신청서 제출';
     return t;
 }
 
@@ -2698,12 +2732,12 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
                 next = { ...item, title: tail ? `${content} ${tail}` : content };
             }
         } else next = approvalTitle(renameTripTraining(item));
-        return { ...next, title: polishTitle(next.title) };
+        return { ...next, title: shapeTitle(next.title, next.raw, raw, next.kind) };
     });
     const visible = dedupeTargets(titled.map(scrubTimeTitle)).filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
     if (!visible.length && findDates(raw, now).length && !silentOtherAbsence(raw, now)) {
         const card = scrubTimeTitle(markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.'));
-        if (card.date && !PERSON_ONLY_TITLE.test(String(card.title || '').trim())) return { items: [{ ...card, title: polishTitle(card.title) || '할 일' }] };
+        if (card.date && !PERSON_ONLY_TITLE.test(String(card.title || '').trim())) return { items: [{ ...card, title: shapeTitle(card.title, card.raw, raw, card.kind) || '할 일' }] };
     }
     if (!visible.some((item) => item.date)) return { items: visible };
     return { items: visible.filter((item) => item.date || item.time || /취소/.test(item.warning)) };

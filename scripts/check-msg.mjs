@@ -94,7 +94,7 @@ function must(label, text, now, ok) {
 must('번호 목록', '[안내] 1. 10월 30일(금) 3~4교시 학급 사진 촬영이 있습니다. 장소: 강당', qaNow, (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].title === '학급 사진 촬영' && items[0].low === false && items[0].time === '10:30');
 must('기한 제출', '11월 12일까지 공개수업 지도안 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].title.includes('공개수업') && items[0].date === '2026-11-12');
 must('상담주간', '가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-02' && items[0].end === '2026-11-06' && items[0].title === '학부모 상담주간');
-must('쉼표 교시', '김교사 출장으로 5,6교시 보결 부탁드립니다', qaNow, (items) => items.length === 1 && items[0].time === '13:10' && items[0].period === 5 && items[0].periodEnd === 6 && !items[0].title.includes(' 5'));
+must('쉼표 교시', '김교사 출장으로 5,6교시 보결 부탁드립니다', qaNow, (items) => items.length === 1 && items[0].time === '13:10' && items[0].period === 5 && items[0].periodEnd === 6 && items[0].title === '5,6교시 보결');
 must('잡담', '선생님들 항상 수고 많으십니다. 날씨가 추우니 건강 조심하세요.', qaNow, (items) => items.length === 1 && items[0].include === false);
 must('방과후 명사', '11월 3일까지 방과후 신청서 회수 후 제출', qaNow, (items) => items.length === 1 && items[0].time === '' && items[0].title.includes('방과후'));
 must('교무회의', '내일 오후 2시 교무회의', qaNow, (items) => items.length === 1 && items[0].eventKind === '학교' && items[0].date === '2026-10-23' && items[0].time === '14:00');
@@ -1430,6 +1430,7 @@ function dirtyTitle(title) {
     const t = String(title || '').trim();
     if (/^(?:저는|제가)/.test(t)) return true;
     if (/(?:^|\s)(?:협조|오시기|보내|내|주|부탁)$/.test(t)) return true;
+    if (/으$/.test(t)) return true;
     return /[가-힣]{2,}(?:으로|로|에|를|을)$/.test(t);
 }
 const r48Todo = (items, date, title) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === date && items[0].title === title && !dirtyTitle(items[0].title);
@@ -1513,9 +1514,85 @@ if (r48Ok !== r48Cases.length) {
 }
 console.log(`r48 원문 ${r48Ok}/${r48Cases.length}, 변형 ${r48Var}`);
 
+const r49One = (items, title, extra = () => true) => items.length === 1 && items[0].title === title && !dirtyTitle(items[0].title) && extra(items[0]);
+const r49Has = (items, date, title) => items.some((item) => item.date === date && item.title === title) && items.every((item) => !dirtyTitle(item.title));
+const r49Cases = [
+    ['쉼표 보결', '김교사 출장으로 5,6교시 보결 부탁드립니다', (items) => r49One(items, '5,6교시 보결', (item) => item.period === 5 && item.periodEnd === 6)],
+    ['연수 보결', '11/20(금) 이선생님 연수로 3교시 보결 부탁드립니다.', (items) => r49One(items, '3교시 보결', (item) => item.kind === '일정' && item.date === '2026-11-20' && item.include !== false)],
+    ['장소 3층', '11/2(월) 협의회 장소가 3층으로 바뀌었습니다.', (items) => r49One(items, '협의회 장소 3층', (item) => item.kind === '일정' && item.date === '2026-11-02' && item.include !== false)],
+    ['양식 복명서', '제가 보낸 11/5(목) 출장 복명서 양식으로 11/9(월)까지 제출해 주세요.', (items) => r49Has(items, '2026-11-09', '출장 복명서 제출')],
+    ['기한 내', '기한 내 제출하지 못한 분은 10/30(금)까지 다시 올려 주세요.', (items) => r49One(items, '다시 올리기', (item) => item.kind === '할 일' && item.date === '2026-10-30' && item.include !== false && !/제출/.test(item.title))],
+    ['결과물', '지난해 과학전람회(11/10) 결과물 보내 드려요.', (items) => r49One(items, '과학전람회 결과물', (item) => item.include === false && item.date === '2025-11-10' && !/제출/.test(item.title))],
+    ['A5 원문', '제가 11/10(화) 출장 연수 신청서 모아서 냅니다. 11/6(금)까지 주세요.', (items) => dueTodo(items, '2026-11-06', '연수 신청서 제출') && items.every((item) => !dirtyTitle(item.title))],
+];
+[
+    ['박교사 병가로 1,2교시 보결 부탁드립니다', '', '1,2교시 보결'],
+    ['11/18(수) 김선생님 연가로 4교시 보결 부탁드립니다.', '2026-11-18', '4교시 보결'],
+    ['최교사 공가로 2교시 보결 부탁드립니다', '', '2교시 보결'],
+    ['11/23(월) 학년부장님 출장으로 5~6교시 보결 부탁드립니다.', '2026-11-23', '5~6교시 보결'],
+    ['11/25(수) 행정실장님 외출로 6교시 보결 부탁드립니다.', '2026-11-25', '6교시 보결'],
+    ['11/27(금) 연구부장님 반차로 1교시 보결 부탁드립니다.', '2026-11-27', '1교시 보결'],
+].forEach(([text, date, title], index) => {
+    r49Cases.push([`변형 보결 ${index + 1}`, text, (items) => r49One(items, title, (item) => item.kind === '일정' && (date ? item.date === date : true))]);
+});
+[
+    ['11/4(수) 교직원 회의 장소가 강당으로 바뀌었습니다.', '2026-11-04', '교직원 회의 장소 강당'],
+    ['11/6(금) 연수 장소가 과학실로 바뀌었습니다.', '2026-11-06', '연수 장소 과학실'],
+    ['11/9(월) 상담 장소가 도서관으로 바뀌어요.', '2026-11-09', '상담 장소 도서관'],
+    ['11/12(목) 학년 회의 장소가 2층으로 바뀌었습니다.', '2026-11-12', '학년 회의 장소 2층'],
+    ['11/19(목) 설명회 장소가 시청각실로 바뀌었습니다.', '2026-11-19', '설명회 장소 시청각실'],
+].forEach(([text, date, title], index) => {
+    r49Cases.push([`변형 장소 ${index + 1}`, text, (items) => r49One(items, title, (item) => item.kind === '일정' && item.date === date && item.include !== false)]);
+});
+[
+    ['제가 보낸 11/12(목) 체험학습 계획서 양식으로 11/16(월)까지 제출해 주세요.', '2026-11-16', '체험학습 계획서 제출'],
+    ['제가 보낸 11/18(수) 가정통신문 양식으로 11/17(화)까지 제출해 주세요.', '2026-11-17', '가정통신문 제출'],
+].forEach(([text, date, title], index) => {
+    r49Cases.push([`변형 양식 ${index + 1}`, text, (items) => r49Has(items, date, title)]);
+});
+[
+    ['기한 내 제출하지 못한 분은 11/3(화)까지 다시 올려 주세요.', '2026-11-03'],
+    ['기한 내 제출하지 못한 분은 11/6(금)까지 다시 올려 주세요.', '2026-11-06'],
+].forEach(([text, date], index) => {
+    r49Cases.push([`변형 기한 ${index + 1}`, text, (items) => r49One(items, '다시 올리기', (item) => item.kind === '할 일' && item.date === date && item.include !== false)]);
+});
+[
+    ['작년 학예회(11/12) 사진 보내 드려요.', '2025-11-12', '학예회 사진'],
+    ['지난해 축제(11/18) 영상 보내 드려요.', '2025-11-18', '축제 영상'],
+    ['재작년 운동회(11/8) 녹화본 보내 드려요.', '2024-11-08', '운동회 녹화본'],
+].forEach(([text, date, title], index) => {
+    r49Cases.push([`변형 자료 ${index + 1}`, text, (items) => r49One(items, title, (item) => item.include === false && item.date === date && !/제출/.test(item.title))]);
+});
+[
+    ['제가 11/13(금) 출장 연수 신청서 모아서 냅니다. 11/11(수)까지 주세요.', '2026-11-11'],
+    ['제가 11/17(화) 출장 연수 신청서 모아서 냅니다. 11/13(금)까지 주세요.', '2026-11-13'],
+].forEach(([text, date], index) => {
+    r49Cases.push([`변형 신청서 ${index + 1}`, text, (items) => dueTodo(items, date, '연수 신청서 제출') && items.every((item) => !dirtyTitle(item.title))]);
+});
+const r49Var = r49Cases.length - 7;
+if (r49Var < 15) {
+    console.error('r49 변형이 15개보다 적습니다.');
+    process.exit(1);
+}
+let r49Ok = 0;
+r49Cases.forEach(([label, text, ok]) => {
+    const items = parseSchoolMessages(text, { now: qaNow }).items;
+    if (ok(items)) r49Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, title: item.title, include: item.include,
+        }))));
+    }
+});
+if (r49Ok !== r49Cases.length) {
+    console.error(`r49 원문 ${r49Ok}/${r49Cases.length}`);
+    process.exit(1);
+}
+console.log(`r49 원문 ${r49Ok}/${r49Cases.length}, 변형 ${r49Var}`);
+
 const includeCountRows = [
     ['r34', r34Cases], ['r35', r35Cases], ['r36', r36Cases], ['r37', r37Cases], ['r38', r38Cases],
-    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases],
+    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases], ['r49', r49Cases],
 ];
 const includeCountPath = new URL('./include-counts.json', import.meta.url);
 const includeCountNow = {};
@@ -1873,7 +1950,7 @@ const invariantTexts = [
     ...MSG_DOUBT,
 ].map((row) => row.text);
 [
-    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases,
+    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases, r49Cases,
 ].forEach((rows) => rows.forEach((row) => invariantTexts.push(row[1])));
 let datedSentences = 0;
 let emptySentences = 0;
@@ -1997,14 +2074,14 @@ invariantTexts.forEach((text) => {
     parseSchoolMessages(text, { now }).items.forEach((item) => {
         if (!dirtyTitle(item.title)) return;
         dirtyTitles += 1;
-        console.error('제목이 조사·요청어로 끝나거나 저는·제가로 시작합니다.', item.title, text);
+        console.error('제목이 조사·요청어로 끝나거나 저는·제가로 시작하거나 으로 끝납니다.', item.title, text);
     });
 });
 if (dirtyTitles) {
     console.error(`정리되지 않은 제목 ${dirtyTitles}개`);
     process.exit(1);
 }
-console.log('제목이 조사·요청어로 끝나거나 저는·제가로 시작하지 않습니다.');
+console.log('제목이 조사·요청어로 끝나거나 저는·제가로 시작하거나 으로 끝나지 않습니다.');
 const timeOnlyTitle = /^(?:올해|작년|이번|다음|이번주|다음주|다다음주)(?:는|은)?(?:입니다|해요|합니다|했어요|했습니다|이에요|예요|에요)?$/;
 let timeTitles = 0;
 invariantTexts.forEach((text) => {
