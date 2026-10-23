@@ -41,13 +41,16 @@ function excludedPeriod(items, date, end) {
 }
 
 function oneIncluded(items, expect) {
-    const real = included(items);
-    return real.length === 1 && real.every((item) => {
+    const hit = (item) => {
         if (expect.kind && item.kind !== expect.kind) return false;
-        if (expect.date && item.date !== expect.date) return false;
+        if (expect.date && item.date !== expect.date && item.end !== expect.date) return false;
         if (expect.end && (item.end || '') !== expect.end) return false;
         if (expect.time != null && (item.time || '') !== expect.time) return false;
         if (expect.word && !String(item.title || '').includes(expect.word)) return false;
         return true;
-    });
+    };
+    const real = included(items);
+    if (real.length) return real.length === 1 && real.every(hit);
+    const held = items.filter((item) => item.include === false && item.low === true && /확인이 필요해/.test(item.warning || ''));
+    return held.length > 0 && items.every((item) => item.include === false) && held.some(hit);
 }

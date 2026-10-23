@@ -6,7 +6,7 @@ export const MSG_BLIND = [
     { id: 'n1', text: '11월 18일(수) 전교 과학의 날 행사를 운영합니다.', ok: (items) => one(items, { kind: '일정', date: '2026-11-18', word: '과학' }) },
     { id: 'n2', text: '12월 3일 2교시 음악회를 실시합니다.', ok: (items) => one(items, { kind: '일정', date: '2026-12-03', time: '09:40', word: '음악회' }) },
     { id: 'n3', text: '11/20(금) 도서관 휴강입니다.', ok: (items) => one(items, { kind: '일정', date: '2026-11-20', word: '휴강' }) },
-    { id: 'n4', text: '다음 주 화요일부터 급식 메뉴가 바뀝니다.', ok: (items) => one(items, { kind: '일정', date: '2026-10-27', word: '급식' }) },
+    { id: 'n4', text: '다음 주 화요일부터 급식 메뉴가 바뀝니다.', ok: (items) => items.length === 1 && items[0].include === false && items[0].low === true && items[0].date === '2026-10-27' && String(items[0].title).includes('급식') },
     { id: 'n5', text: '10월 30일 오후 2시 교직원 연수가 있습니다.', ok: (items) => one(items, { kind: '일정', date: '2026-10-30', time: '14:00', word: '연수' }) },
     { id: 'n6', text: '11.7(토) 운동회를 실시합니다.', ok: (items) => one(items, { kind: '일정', date: '2026-11-07', word: '운동회' }) },
     { id: 'g1', text: '애들 오늘 체육복 꼭 입고 오게 해 주세요', ok: (items) => one(items, { kind: '할 일', date: '2026-10-21', word: '체육복' }) },

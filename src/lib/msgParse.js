@@ -3054,6 +3054,162 @@ function shapeTitle(title, segment, full, kind) {
     return t;
 }
 
+/** 취소 없이·연기하지 않고처럼 부정된 말은 변경 표현으로 세지 않습니다. */
+function textWithoutSafeChange(text) {
+    return String(text || '')
+        .replace(/취소(?:하지|\s*않|\s*없이)/g, ' ')
+        .replace(/연기(?:하지\s*않|\s*없이)/g, ' ')
+        .replace(/미루지\s*않/g, ' ')
+        .replace(/변경\s*없이/g, ' ')
+        .replace(/잊지\s*못하게/g, ' ')
+        .replace(/빠지지\s*못/g, ' ');
+}
+
+/** 연기·변경·원래·당초·기존·변경 전/후·취소·옮김은 확인이 필요합니다. 바뀌는 행사명은 제외합니다. */
+function hasChangeCue(text) {
+    const src = textWithoutSafeChange(text);
+    return /(?:변경\s*전|변경\s*후|(?<![가-힣])원래|(?<![가-힣])당초|(?<![가-힣])기존|(?<![가-힣])연기(?!된|한)|(?<![가-힣])변경|(?<![가-힣])취소|(?<![가-힣])옮|(?<![가-힣])미루(?!지)|(?<![가-힣])미룹|(?<![가-힣])미뤄|(?<![가-힣])앞당|(?<![가-힣])바꿉|(?<![가-힣])바꿔|(?<![가-힣])바뀝)/.test(src);
+}
+
+/** 물결·부터·N일간으로 이어진 날은 한 기간입니다. 같은 날을 두 번 적어도 하나입니다. */
+function dateGroupCount(text, now) {
+    const spans = findDates(text, now);
+    const groups = [];
+    for (let i = 0; i < spans.length; i += 1) {
+        const next = spans[i + 1];
+        if (next && spans[i].ymd === next.ymd) continue;
+        const around = next ? text.slice(spans[i].index, next.index + next.length + 8) : '';
+        if (next && (rangeJoin(text, spans[i], next) || /이틀간|사흘간|나흘간|양일간|\d+\s*일간/.test(around))) {
+            groups.push(`${spans[i].ymd}~${next.ymd}`);
+            i += 1;
+            continue;
+        }
+        groups.push(spans[i].ymd);
+    }
+    return new Set(groups).size;
+}
+
+function needsConfirm(text, now) {
+    return hasChangeCue(text) || dateGroupCount(text, now) >= 2;
+}
+
+const DEST_AFTER = /^\s*(?:(?:오전|오후)\s*)?(?:\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})?\s*(?:으로|로)\s*(?:연기|변경|옮|미루|미뤄|미룹|바꿉|바꿔|바뀝|앞당)/;
+
+/** '(날짜)로 연기/변경/옮깁니다'의 그 날짜입니다. 시각이 끼어 있어도 봅니다. */
+function destinationYmd(text, now) {
+    let found = '';
+    findDates(text, now).forEach((span) => {
+        const after = text.slice(span.index + span.length, span.index + span.length + 48);
+        if (DEST_AFTER.test(after)) found = span.ymd;
+    });
+    return found;
+}
+
+function confirmPieces(text) {
+    const pieces = [];
+    String(text || '').split('\n').forEach((line) => {
+        splitSentences(line).forEach((sentence) => {
+            const trimmed = sentence.trim();
+            if (trimmed) pieces.push(trimmed);
+        });
+    });
+    return pieces;
+}
+
+/**
+ * 변경·예전 값·날짜가 여럿이면 넣지 않고 원문 노란 카드로 둡니다.
+ * 새 날짜가 '(날짜)로 연기/변경/옮깁니다'로 분명하면 그 날짜를 기본값으로 채웁니다.
+ */
+function confirmUncertain(text, items, now) {
+    const note = '확인이 필요해 빼 두었어요.';
+    let next = items.map((item) => ({ ...item }));
+    const paint = (index, title) => {
+        const item = next[index];
+        const warning = String(item.warning || '').includes(note) ? item.warning : [item.warning, note].filter(Boolean).join(' ');
+        next[index] = { ...item, title, include: false, low: true, warning };
+    };
+    confirmPieces(text).forEach((sentence) => {
+        if (!needsConfirm(sentence, now)) return;
+        const title = sentence.replace(/\s+/g, ' ').trim();
+        const spans = findDates(sentence, now);
+        const ymds = new Set(spans.map((span) => span.ymd));
+        const dest = destinationYmd(sentence, now);
+        const onlyPiece = confirmPieces(text).length === 1;
+        const related = [];
+        next.forEach((item, index) => {
+            if (onlyPiece || ymds.has(item.date) || (item.end && ymds.has(item.end))) related.push(index);
+        });
+        if (!related.length) {
+            const compact = title.replace(/\s+/g, '');
+            next.forEach((item, index) => {
+                if (item.date) return;
+                const raw = String(item.raw || '').replace(/\s+/g, '');
+                if (raw && (compact.includes(raw) || raw.includes(compact))) related.push(index);
+            });
+            related.forEach((index) => paint(index, title));
+            return;
+        }
+        const hasDest = dest && related.some((index) => next[index].date === dest || next[index].end === dest);
+        if (dest && !hasDest && related.length === 1) {
+            const index = related[0];
+            const item = next[index];
+            next[index] = { ...item, date: dest, end: item.end && ymds.has(item.end) ? item.end : '' };
+            paint(index, title);
+            return;
+        }
+        related.forEach((index) => paint(index, title));
+        if (!dest) {
+            ymds.forEach((ymd) => {
+                const monthDay = ymd.slice(4);
+                if (next.some((item) => item.date === ymd || item.end === ymd || String(item.date || '').slice(4) === monthDay)) return;
+                const seed = related.length ? next[related[0]] : null;
+                next.push({
+                    id: `msg${fnv1a32(`confirm|${ymd}|${title}`)}`,
+                    kind: seed?.kind || '일정',
+                    eventKind: '',
+                    title,
+                    date: ymd,
+                    end: '',
+                    time: '',
+                    endTime: '',
+                    period: 0,
+                    periodEnd: 0,
+                    memo: '',
+                    include: false,
+                    low: true,
+                    warning: note,
+                    sensitive: false,
+                    confidence: 0.4,
+                    assumedPm: false,
+                    raw: title,
+                });
+            });
+        }
+    });
+    return next.map((item) => {
+        if (item.include === false) return item;
+        const last = String(item.title || '').trim().split(/\s+/).pop() || '';
+        if (last === '들어' || /^계신(?:\s*[?？])?$/.test(last)) return markUnsure(item, '제목이 어간으로 끝나 빼 두었어요.');
+        return item;
+    });
+}
+
+/** 확인이 필요한 문장이 원문 노란 카드로 남았는지 봅니다. 확실한 문장은 false입니다. */
+export function confirmShapeOk(text, items, now = new Date()) {
+    const pieces = confirmPieces(text);
+    const unsure = pieces.filter((piece) => needsConfirm(piece, now));
+    if (!unsure.length) return false;
+    if (!items.length || items.some((item) => item.include !== false)) return false;
+    const titles = new Set(pieces.map((piece) => piece.replace(/\s+/g, ' ').trim()));
+    titles.add(String(text || '').replace(/\s+/g, ' ').trim());
+    if (!items.every((item) => titles.has(String(item.title || '').replace(/\s+/g, ' ').trim()))) return false;
+    return unsure.every((piece) => {
+        const dest = destinationYmd(piece, now);
+        if (!dest) return true;
+        return items.some((item) => item.date === dest || item.end === dest);
+    });
+}
+
 /** @returns {{ items: object[] }} */
 export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_PERIODS } = {}) {
     const raw = String(text || '').trim();
@@ -3080,7 +3236,7 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
         } else next = approvalTitle(renameTripTraining(item));
         return { ...next, title: shapeTitle(next.title, next.raw, raw, next.kind) };
     });
-    const visible = dedupeTargets(titled.map(scrubTimeTitle)).filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
+    const visible = confirmUncertain(raw, dedupeTargets(titled.map(scrubTimeTitle)), now).filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
     if (!visible.length && findDates(raw, now).length && !silentOtherAbsence(raw, now)) {
         const card = scrubTimeTitle(markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.'));
         if (card.date && !PERSON_ONLY_TITLE.test(String(card.title || '').trim())) return { items: [{ ...card, title: shapeTitle(card.title, card.raw, raw, card.kind) || '할 일' }] };

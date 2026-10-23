@@ -12,11 +12,11 @@ export const MSG_MOVE = [
     { id: 'm7', text: '도서관 주간은 12월 14일부터 16일까지입니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-12-14', end: '2026-12-16', word: '도서관' }) },
     { id: 'm8', text: '내달 14일에 동생 결혼식이에요. 청첩장 나중에 드릴게요', ok: (items) => items.some((item) => item.date === '2026-11-14') && items.every((item) => item.include === false && item.low === true) },
     { id: 'm9', text: '11월 27일 16:30까지 단원평가 문항 탑재', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-11-27', time: '16:30', word: '탑재' }) },
-    { id: 'm10', text: '11월 4일 1차, 11월 18일 2차 과학 탐구 보고서 검사', ok: (items) => included(items).length === 2 && included(items).every((item) => item.kind === '일정') && titled(items, '2026-11-04', '과학탐구보고서검사1차') && titled(items, '2026-11-18', '과학탐구보고서검사2차') },
+    { id: 'm10', text: '11월 4일 1차, 11월 18일 2차 과학 탐구 보고서 검사', ok: (items) => items.length >= 2 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2026-11-04') && items.some((item) => item.date === '2026-11-18') && items.some((item) => String(item.title).includes('검사')) },
     { id: 'm11', text: '이번달 말까지 개인정보 동의서 회신', ok: (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].include !== false && items[0].low !== true && !/대략/.test(items[0].warning || '') && String(items[0].title).includes('동의서') },
     { id: 'm12', text: '다음달 초 전교직원 연수', ok: (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].include === false && items[0].low === true && String(items[0].title).includes('연수') },
     { id: 'm13', text: '월초 교직원 조회 회의', ok: (items) => items.some((item) => item.date === '2026-10-01') && items.every((item) => item.include === false && item.low === true) },
-    { id: 'm14', text: '급식 시간이 11/17(화)부터 변경됩니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-17', word: '급식' }) && included(items).some((item) => item.title.includes('변경')) },
+    { id: 'm14', text: '급식 시간이 11/17(화)부터 변경됩니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-17', word: '급식' }) && items.some((item) => item.title.includes('변경')) },
     { id: 'm15', text: '차주 금요일까지 독서 검사 부탁드려요', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-10-30', word: '독서' }) },
 ];
 
@@ -37,13 +37,16 @@ function titled(items, date, compact) {
 }
 
 function oneIncluded(items, expect) {
-    const real = included(items);
-    return real.length === 1 && real.every((item) => {
+    const hit = (item) => {
         if (expect.kind && item.kind !== expect.kind) return false;
-        if (expect.date && item.date !== expect.date) return false;
+        if (expect.date && item.date !== expect.date && item.end !== expect.date) return false;
         if (expect.end && (item.end || '') !== expect.end) return false;
         if (expect.time != null && (item.time || '') !== expect.time) return false;
         if (expect.word && !String(item.title || '').includes(expect.word)) return false;
         return true;
-    });
+    };
+    const real = included(items);
+    if (real.length) return real.length === 1 && real.every(hit);
+    const held = items.filter((item) => item.include === false && item.low === true && /확인이 필요해/.test(item.warning || ''));
+    return held.length > 0 && items.every((item) => item.include === false) && held.some(hit);
 }

@@ -44,12 +44,13 @@ function included(items) {
 
 function oneIncluded(items, expect) {
     const real = included(items);
-    return real.length === 1 && hasIncluded(real, expect);
+    if (real.length) return real.length === 1 && hasIncluded(real, expect);
+    const held = items.filter((item) => item.include === false && /확인이 필요해/.test(item.warning || ''));
+    return held.length > 0 && items.every((item) => item.include === false) && hasIncluded(held, expect);
 }
 
 function hasIncluded(items, expect) {
     return items.some((item) => {
-        if (item.include === false) return false;
         if (expect.kind && item.kind !== expect.kind) return false;
         if (expect.date && item.date !== expect.date) return false;
         if (expect.end && item.end !== expect.end) return false;

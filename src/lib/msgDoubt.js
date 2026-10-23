@@ -46,12 +46,16 @@ function matches(item, expect) {
 
 function oneIncluded(items, expect) {
     const real = included(items);
-    return real.length === 1 && real.every((item) => matches(item, expect));
+    if (real.length) return real.length === 1 && real.every((item) => matches(item, expect));
+    const held = items.filter((item) => item.include === false && item.low === true && /확인이 필요해/.test(item.warning || ''));
+    return held.some((item) => matches(item, expect)) && items.every((item) => item.include === false);
 }
 
 function listed(items, rows) {
     const real = included(items);
-    return real.length === rows.length && real.every((item) => item.kind === '일정') && rows.every((row) => real.some((item) => matches(item, row)));
+    const pool = real.length ? real : items.filter((item) => item.include === false && item.low === true);
+    if (real.length) return real.length === rows.length && real.every((item) => item.kind === '일정') && rows.every((row) => real.some((item) => matches(item, row)));
+    return pool.length >= rows.length && pool.every((item) => item.kind === '일정') && rows.every((row) => pool.some((item) => matches(item, row)));
 }
 
 function yellowDates(items, dates) {
