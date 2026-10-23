@@ -855,8 +855,9 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('2025년 11월 3일') && document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
         const past = await page.evaluate(() => Boolean(document.querySelector('.low-card')));
         check(past, '지난 참고 자료가 노란 카드가 아닙니다.');
-        await pasteNext(`방과후 축구반 ${delayedFrom.slash} 수업은 ${delayedTo.slash}로 연기됩니다.`);
-        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes(label), {}, delayedTo.label);
+        const postpone = `방과후 축구반 ${delayedFrom.slash} 수업은 ${delayedTo.slash}로 연기됩니다.`;
+        await pasteNext(postpone);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes(label), {}, delayedTo.label);
         const moved = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
@@ -864,10 +865,11 @@ try {
             aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
             kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
         }));
-        check(moved.chips.includes(delayedTo.label) && moved.chips.includes(delayedFrom.label) && moved.titles.some((title) => title.includes('축구반 수업')) && moved.low >= 1 && moved.aside >= 1 && moved.kept === 1, `연기 카드가 ${JSON.stringify(moved)} 입니다.`);
+        check(moved.chips.includes(delayedTo.label) && moved.chips.includes(delayedFrom.label) && moved.titles.length >= 2 && moved.titles.every((title) => title === postpone) && moved.low >= 2 && moved.aside >= 2 && moved.kept === 0, `연기 카드가 ${JSON.stringify(moved)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_move_date_390.png') });
-        await pasteNext(`가을 소풍이 ${pulledFrom.slash}에서 ${pulledTo.slash} 15:00로 앞당겨졌습니다`);
-        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes(label), {}, pulledTo.label);
+        const pulledText = `가을 소풍이 ${pulledFrom.slash}에서 ${pulledTo.slash} 15:00로 앞당겨졌습니다`;
+        await pasteNext(pulledText);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes(label) && document.body.innerText.includes('15:00'), {}, pulledTo.label);
         const pulled = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
@@ -876,7 +878,7 @@ try {
             aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
             kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
         }));
-        check(pulled.chips.includes(pulledTo.label) && pulled.chips.includes(pulledFrom.label) && pulled.times.includes('15:00') && pulled.titles.some((title) => title.includes('가을 소풍')) && pulled.low >= 1 && pulled.aside >= 1 && pulled.kept === 1, `앞당김 카드가 ${JSON.stringify(pulled)} 입니다.`);
+        check(pulled.chips.includes(pulledTo.label) && pulled.chips.includes(pulledFrom.label) && pulled.times.includes('15:00') && pulled.titles.length >= 2 && pulled.titles.every((title) => title === pulledText) && pulled.low >= 2 && pulled.aside >= 2 && pulled.kept === 0, `앞당김 카드가 ${JSON.stringify(pulled)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_pull_date_390.png') });
         await pasteNext(`${bareSpan.text} 학년 연구실 공사`);
         await page.waitForFunction((start, end) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes(start) && document.body.innerText.includes(end), {}, bareSpan.start, bareSpan.end);
@@ -888,14 +890,17 @@ try {
         }));
         check(span.start === bareSpan.start && span.end === bareSpan.end && span.title === '학년 연구실 공사' && !/\d/.test(span.title) && span.kept === 1, `월 없는 기간이 ${JSON.stringify(span)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_monthless_span_390.png') });
-        await pasteNext(`${fridaySlash} 교직원 회의는 15:40에서 16:10으로 변경`);
-        await page.waitForFunction((label) => document.body.innerText.includes('1개 등록') && document.body.innerText.includes('16:10') && document.body.innerText.includes(label), {}, fridayLabel);
+        const shiftedText = `${fridaySlash} 교직원 회의는 15:40에서 16:10으로 변경`;
+        await pasteNext(shiftedText);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes('16:10') && document.body.innerText.includes(label), {}, fridayLabel);
         const shifted = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
+            titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
             kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            low: document.querySelectorAll('.low-card').length,
         }));
-        check(shifted.chips.includes(fridayLabel) && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.kept === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
+        check(shifted.chips.includes(fridayLabel) && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.titles.length === 1 && shifted.titles[0] === shiftedText && shifted.kept === 0 && shifted.low === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
         await pasteNext('학예회 11/2(월) 상담 11/6(금)');
         await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 2일') && document.body.innerText.includes('11월 6일'));
         const unsure = await page.evaluate(() => ({
