@@ -1,15 +1,38 @@
 /* 설치한 앱이 같은 주소의 sw.js 를 받아 갈아타도록 파일 이름을 유지합니다.
    프리캐시 목록은 빌드가 dist/precache-manifest.js 로 넣습니다.
-   로컬 저장은 지우지 않습니다. */
-const CACHE = 'ssug-gyomu-shell-v4';
+   로컬 저장은 지우지 않습니다.
+   GitHub Pages는 HTML에 max-age=600을 붙입니다. 페이지와 미리 저장은
+   cache:'no-cache'로 받아서, 브라우저가 10분짜리 사본을 새 파일인 것처럼 쓰지 않게 합니다. */
+const CACHE = 'ssug-gyomu-shell-v5';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts('./precache-manifest.js');
 
 const PRECACHE = Array.isArray(self.__NB_PRECACHE__) ? self.__NB_PRECACHE__ : [];
 
+function isPageRequest(request) {
+    if (request.mode === 'navigate' || request.destination === 'document') return true;
+    const path = new URL(request.url).pathname;
+    return path.endsWith('/') || path.endsWith('.html');
+}
+
+async function storeResponse(response) {
+    if (!response.redirected) return response;
+    return new Response(await response.blob(), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+    });
+}
+
 self.addEventListener('install', (event) => {
-    event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));
+    event.waitUntil(caches.open(CACHE).then(async (cache) => {
+        await Promise.all(PRECACHE.map(async (url) => {
+            const response = await fetch(new Request(url, { cache: 'no-cache' }));
+            if (!response || !response.ok) throw new Error(url);
+            await cache.put(url, await storeResponse(response));
+        }));
+    }).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -31,8 +54,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
         const cache = await caches.open(CACHE);
         try {
-            const response = await fetch(request);
-            if (response && response.ok && response.type === 'basic') cache.put(request, response.clone());
+            const response = isPageRequest(request)
+                ? await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin', redirect: 'follow' })
+                : await fetch(request);
+            if (response && response.ok && response.type === 'basic') {
+                const stored = response.redirected
+                    ? await storeResponse(response.clone())
+                    : response.clone();
+                cache.put(request, stored).catch(() => {});
+            }
             return response;
         } catch {
             const cached = await cache.match(request) || await cache.match(url.pathname.replace(SCOPE_URL.pathname, './'));

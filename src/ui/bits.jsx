@@ -16,6 +16,18 @@ export function Symbol({ label = '메뉴' }) {
     return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '쓱' : label}</span>;
 }
 
+/** 파스텔 하늘 클레이 앱 아이콘에는 글자가 없습니다.
+    쓱 가계부 앱 아이콘(favicon)의 '쓱' 획을 그대로 둡니다. 글꼴 파일 없이 보여서 오프라인에서도 같습니다. */
+export function SsugMark() {
+    return (
+        <svg className="ssug-mark" viewBox="-18.75 -14.5 139.5 139.5" aria-hidden="true" focusable="false">
+            <path d="M15 28 Q22.5 10 28 7 Q33.5 10 41 28 M61 28 Q68.5 10 74 7 Q79.5 10 87 28" fill="none" stroke="currentColor" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M9 49 Q51 63 93 49" fill="none" stroke="currentColor" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M21 78 H70 Q81 78 81 89 V103" fill="none" stroke="currentColor" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
 export function IconSearch() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2">

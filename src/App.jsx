@@ -7,7 +7,7 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMoon, IconSearch, IconSun, Symbol } from './ui/bits.jsx';
+import { Btn, IconMoon, IconSearch, IconSun, SsugMark, Symbol } from './ui/bits.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -293,7 +293,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><SsugMark /></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--accent)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -304,7 +304,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}>+</Btn>
+                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><SsugMark /></Btn>
                 {plus && (
                     <PlusSheet
                         onClose={() => setPlus(false)}

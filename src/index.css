@@ -172,6 +172,18 @@ button, input, textarea { font-family: inherit; }
     box-shadow: 0 10px 24px var(--glow);
     font-size: 32px;
     line-height: 1;
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+.ssug-mark {
+    width: 46px;
+    height: 46px;
+    display: block;
+}
+.desk-fab .ssug-mark {
+    width: 52px;
+    height: 52px;
 }
 .tip-bubble {
     position: relative;
