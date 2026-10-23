@@ -34,7 +34,14 @@ button, input, textarea { font-family: inherit; }
 }
 
 .app-frame { min-height: 100dvh; }
-.main { min-width: 0; padding: 36px 16px 136px; }
+.main { min-width: 0; padding: 16px 16px 136px; }
+.cloud-note {
+    margin-top: 0;
+    line-height: 22px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .side { display: none; }
 
 .glass, .solid-card {
@@ -315,7 +322,8 @@ a.chip,
 .toast {
     position: fixed;
     z-index: 50;
-    top: calc(8px + env(safe-area-inset-top));
+    /* 날짜와 클라우드 안내 아래, 팁 위에 둡니다. 본문 여백은 안내가 있어도 그대로입니다. */
+    top: calc(140px + env(safe-area-inset-top));
     left: 16px;
     right: 16px;
     bottom: auto;
@@ -351,7 +359,15 @@ a.chip,
         height: 100dvh;
         background: var(--bg);
     }
-    .main { padding: 20px 24px 140px; }
+    .app-frame { height: 100dvh; overflow: hidden; }
+    .main {
+        align-self: start;
+        height: calc(100dvh - 104px);
+        overflow: auto;
+        padding: 20px 24px 28px;
+        scroll-padding-bottom: 28px;
+        box-sizing: border-box;
+    }
     .tabbar, .tip-bubble, .tip-bulb { display: none; }
     .sheet {
         left: 50%;

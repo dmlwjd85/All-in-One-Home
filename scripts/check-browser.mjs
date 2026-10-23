@@ -28,6 +28,18 @@ async function pinBrowserClock(page) {
         FrozenDate.prototype = NativeDate.prototype;
         window.Date = FrozenDate;
     }, FIXED_NOW);
+    await page.evaluateOnNewDocument(() => {
+        window.__cls = 0;
+        try {
+            new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (!entry.hadRecentInput) window.__cls += entry.value;
+                }
+            }).observe({ type: 'layout-shift', buffered: true });
+        } catch {
+            /* 레이아웃 이동을 못 재도 다른 검사는 이어집니다. */
+        }
+    });
 }
 
 /** '금요일까지'와 같은 규칙입니다. 오늘을 포함한 가장 가까운 그 요일입니다. */
@@ -590,6 +602,32 @@ try {
             await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
             await page.waitForFunction(() => [...document.querySelectorAll('button.solid-card')].some((el) => el.innerText.includes('김하늘')));
             await controlBoxes(page, 'button.solid-card:not([aria-pressed])', `이번 달 ${width}`);
+            if (width >= 900) {
+                const underFab = await page.evaluate(() => {
+                    const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                    const mainBottom = document.querySelector('.main')?.getBoundingClientRect().bottom ?? window.innerHeight;
+                    const hit = (a, b) => Boolean(
+                        a && b && a.width > 0 && b.width > 0
+                        && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                        && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                    );
+                    const rows = [...document.querySelectorAll('button.solid-card')].filter((el) => /^(16|17)\s/.test(el.innerText.trim()));
+                    for (const row of rows) row.scrollIntoView({ block: 'end' });
+                    return rows.map((el) => {
+                        const box = el.getBoundingClientRect();
+                        return {
+                            text: el.innerText.replace(/\s+/g, ' ').trim().slice(0, 14),
+                            top: Math.round(box.top),
+                            bottom: Math.round(box.bottom),
+                            under: hit(box, fab) && box.top < mainBottom + 0.5,
+                        };
+                    });
+                });
+                check(
+                    underFab.length === 2 && underFab.every((row) => !row.under),
+                    `1920에서 출결 16·17번 줄이 할 일 고르기 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
+                );
+            }
             await audit(page, `출결 너비 ${width}`);
         }, width >= 900 ? 1080 : 800);
     }
@@ -1460,53 +1498,69 @@ try {
         check(saved.sound === '0' && saved.seen === '1', '소리 끄기가 저장되지 않았습니다.');
     });
 
-    for (const width of [360, 390]) {
-        await withDemo(width, 'light', async (page) => {
-            await page.evaluate(() => document.fonts?.ready);
-            const restingTop = await page.evaluate(() => Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top));
-            await page.evaluate(() => {
-                const button = document.querySelector('.period-row button');
-                button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
-            });
-            await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
-            const overlap = await page.evaluate(() => {
-                const hits = (a, b) => Boolean(
-                    a && b && a.width > 0 && b.width > 0
-                    && a.left < b.right - 0.5 && a.right > b.left + 0.5
-                    && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+    for (const mode of ['light', 'dark']) {
+        for (const width of [360, 390]) {
+            await withDemo(width, mode, async (page) => {
+                await page.evaluate(() => document.fonts?.ready);
+                const resting = await page.evaluate(() => ({
+                    sixth: Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top),
+                    cls: window.__cls || 0,
+                }));
+                await page.evaluate(() => {
+                    const button = document.querySelector('.period-row button');
+                    button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+                });
+                await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
+                const overlap = await page.evaluate(() => {
+                    const hits = (a, b) => Boolean(
+                        a && b && a.width > 0 && b.width > 0
+                        && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                        && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                    );
+                    const toast = document.querySelector('.toast')?.getBoundingClientRect();
+                    const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
+                    const sixth = cells[5];
+                    const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                    const hero = document.querySelector('.hero-action')?.getBoundingClientRect();
+                    const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
+                    const banner = [...document.querySelectorAll('p')].find((el) => el.textContent.includes('아직 클라우드'))?.getBoundingClientRect();
+                    const date = document.querySelector('.date-block')?.getBoundingClientRect();
+                    const viewBottom = window.innerHeight;
+                    const sixthOnScreen = Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0 && sixth.right > 0);
+                    return {
+                        coversSixth: hits(toast, sixth),
+                        coversAnyPeriod: cells.some((cell) => hits(toast, cell)),
+                        coversHero: hits(toast, hero) || hits(toast, kicker),
+                        coversTab: hits(toast, tab),
+                        coversBanner: hits(toast, banner),
+                        coversDate: hits(toast, date),
+                        sixthUnderTab: hits(sixth, tab),
+                        sixthOnScreen,
+                        toastTop: Math.round(toast?.top ?? -1),
+                        toastBottom: Math.round(toast?.bottom ?? -1),
+                        sixthTop: Math.round(sixth?.top ?? -1),
+                        sixthBottom: Math.round(sixth?.bottom ?? -1),
+                        tabTop: Math.round(tab?.top ?? -1),
+                        bannerTop: Math.round(banner?.top ?? -1),
+                        cls: window.__cls || 0,
+                    };
+                });
+                check(
+                    overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversHero && !overlap.coversTab && !overlap.sixthUnderTab && !overlap.coversBanner && !overlap.coversDate,
+                    `${width} ${mode}에서 소리 안내가 오늘 화면이나 클라우드 안내, 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
                 );
-                const toast = document.querySelector('.toast')?.getBoundingClientRect();
-                const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
-                const sixth = cells[5];
-                const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
-                const hero = document.querySelector('.hero-action')?.getBoundingClientRect();
-                const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
-                const viewBottom = window.innerHeight;
-                const sixthOnScreen = Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0 && sixth.right > 0);
-                return {
-                    coversSixth: hits(toast, sixth),
-                    coversAnyPeriod: cells.some((cell) => hits(toast, cell)),
-                    coversHero: hits(toast, hero) || hits(toast, kicker),
-                    coversTab: hits(toast, tab),
-                    sixthUnderTab: hits(sixth, tab),
-                    sixthOnScreen,
-                    toastTop: Math.round(toast?.top ?? -1),
-                    toastBottom: Math.round(toast?.bottom ?? -1),
-                    sixthTop: Math.round(sixth?.top ?? -1),
-                    sixthBottom: Math.round(sixth?.bottom ?? -1),
-                    tabTop: Math.round(tab?.top ?? -1),
-                };
-            });
-            check(
-                overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversHero && !overlap.coversTab && !overlap.sixthUnderTab,
-                `${width}에서 소리 안내가 오늘 화면이나 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
-            );
-            check(overlap.sixthTop === restingTop, `${width}에서 소리 안내가 뜨며 화면이 밀립니다: ${restingTop} → ${overlap.sixthTop}`);
-            await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
-            await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
-            const after = await page.evaluate(() => Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top));
-            check(after === restingTop, `${width}에서 소리 안내가 닫히며 화면이 밀립니다: ${restingTop} → ${after}`);
-        }, 800);
+                check(overlap.sixthTop === resting.sixth, `${width} ${mode}에서 소리 안내가 뜨며 화면이 밀립니다: ${resting.sixth} → ${overlap.sixthTop}`);
+                check(resting.cls < 0.001 && overlap.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${resting.cls} → ${overlap.cls}`);
+                await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
+                await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
+                const after = await page.evaluate(() => ({
+                    sixth: Math.round(document.querySelectorAll('.period-row button')[5].getBoundingClientRect().top),
+                    cls: window.__cls || 0,
+                }));
+                check(after.sixth === resting.sixth, `${width} ${mode}에서 소리 안내가 닫히며 화면이 밀립니다: ${resting.sixth} → ${after.sixth}`);
+                check(after.cls < 0.001, `${width} ${mode}에서 소리 안내가 닫히며 레이아웃이 밀립니다: ${after.cls}`);
+            }, 800);
+        }
     }
 
     await withDemo(390, 'light', async (page) => {

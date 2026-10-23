@@ -5,7 +5,7 @@
     font-family: 'Pretendard Variable';
     font-style: normal;
     font-weight: 100 500;
-    font-display: swap;
+    font-display: optional;
     src: url('./Pretendard-Regular.woff2') format('woff2');
 }
 
@@ -13,7 +13,7 @@
     font-family: 'Pretendard Variable';
     font-style: normal;
     font-weight: 501 900;
-    font-display: swap;
+    font-display: optional;
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
@@ -21,7 +21,7 @@
     font-family: Pretendard;
     font-style: normal;
     font-weight: 100 500;
-    font-display: swap;
+    font-display: optional;
     src: url('./Pretendard-Regular.woff2') format('woff2');
 }
 
@@ -29,7 +29,7 @@
     font-family: Pretendard;
     font-style: normal;
     font-weight: 501 900;
-    font-display: swap;
+    font-display: optional;
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
@@ -39,7 +39,7 @@
     font-family: 'NanumSquareRound';
     font-style: normal;
     font-weight: 400 900;
-    font-display: swap;
+    font-display: optional;
     src: url('./NanumSquareRoundB.woff2') format('woff2');
 }
 
@@ -47,6 +47,6 @@
     font-family: 'Gowun Batang';
     font-style: normal;
     font-weight: 400 900;
-    font-display: swap;
+    font-display: optional;
     src: url('./GowunBatang-Bold.woff2') format('woff2');
 }
