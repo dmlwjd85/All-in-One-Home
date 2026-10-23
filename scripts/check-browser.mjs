@@ -1518,10 +1518,12 @@ try {
             await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
             await page.evaluate(() => { location.hash = '#/settings'; });
             await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
-            await page.evaluate(() => {
-                document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' });
+            await page.waitForFunction(() => {
+                const el = document.querySelector('[aria-label="누를 때 소리 종류"]');
+                el?.closest('section')?.scrollIntoView({ block: 'start' });
+                const top = el?.getBoundingClientRect().top ?? -1;
+                return top > 80 && top < 420;
             });
-            await delay(80);
             const fit = await keyPickFit(page);
             check(fit.selects === 0, `${width} 소리 고르기에 드롭다운이 있습니다.`);
             check(fit.problems.length === 0, `${width} 소리 칩: ${fit.problems.join(', ')}`);
@@ -1539,7 +1541,7 @@ try {
             await page.click('[aria-label="크게"]');
             await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'click' && localStorage.getItem('ssug-gyomu-key-volume') === 'loud');
             await page.reload({ waitUntil: 'domcontentloaded' });
-            await page.waitForFunction(() => document.body.innerText.includes('오늘 우리 반'));
+            await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
             await page.evaluate(() => { location.hash = '#/settings'; });
             await page.waitForSelector('[aria-label="청축 클릭"]');
             const kept = await page.evaluate(() => ({
