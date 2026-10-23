@@ -8,7 +8,7 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
-import { playKey } from './ui/keyfeel.js';
+import { playKey, setKeySound, setKeySoundAnnouncer } from './ui/keyfeel.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -182,6 +182,20 @@ export default function App() {
         };
     }, []);
 
+    useEffect(() => {
+        setKeySoundAnnouncer(() => {
+            showToast('콕, 누를 때 소리가 나요', false, {
+                label: '끄기',
+                passThrough: true,
+                onClick: () => {
+                    setKeySound(false);
+                    showToast('');
+                },
+            });
+        });
+        return () => setKeySoundAnnouncer(null);
+    }, []);
+
     const todayTipId = (!flow && !plus && !msg && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
     useEffect(() => {
         if (!todayTipId) return undefined;
@@ -190,9 +204,13 @@ export default function App() {
         return () => window.clearTimeout(timer);
     }, [todayTipId]);
 
-    function showToast(message, undoable = false) {
+    function showToast(message, undoable = false, action = null) {
         clearTimeout(toastTimer.current);
-        setToast({ message, undoable });
+        if (!message) {
+            setToast(null);
+            return;
+        }
+        setToast({ message, undoable, action });
         toastTimer.current = setTimeout(() => setToast(null), 5000);
     }
 
@@ -371,10 +389,11 @@ export default function App() {
                 {menu && <MenuSheet onClose={() => setMenu(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
-                    <div className="toast" role="status">
+                    <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
                         {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo(); setToast(null); }}>되돌리기</Btn>}
+                        {toast.action && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => toast.action.onClick?.()}>{toast.action.label}</Btn>}
                     </div>
                 )}
             </div>

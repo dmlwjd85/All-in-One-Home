@@ -1435,6 +1435,32 @@ try {
     });
 
     await withDemo(390, 'light', async (page) => {
+        const initial = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-sound'));
+        check(initial === null, '콕 소리 기본값이 켜져 있지 않습니다.');
+        await page.click('[aria-label="할 일 고르기"]');
+        await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
+        const notice = await page.evaluate(() => ({
+            text: document.querySelector('.toast')?.innerText || '',
+            off: [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '끄기'),
+        }));
+        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off, '처음 소리 안내가 없습니다.');
+        await page.evaluate(() => {
+            const button = [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.getBoundingClientRect().width > 40);
+            button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+        });
+        await delay(80);
+        const stillOne = await page.evaluate(() => document.querySelectorAll('.toast').length === 1 && document.body.innerText.includes('누를 때 소리가 나요'));
+        check(stillOne, '소리 안내가 한 번보다 많이 나옵니다.');
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '끄기')?.click());
+        await page.waitForFunction(() => !document.body.innerText.includes('누를 때 소리가 나요'));
+        const saved = await page.evaluate(() => ({
+            sound: localStorage.getItem('ssug-gyomu-key-sound'),
+            seen: localStorage.getItem('ssug-gyomu-key-sound-notice'),
+        }));
+        check(saved.sound === '0' && saved.seen === '1', '소리 끄기가 저장되지 않았습니다.');
+    });
+
+    await withDemo(390, 'light', async (page) => {
         await page.evaluate(async () => {
             if (!navigator.serviceWorker) return false;
             return Promise.race([

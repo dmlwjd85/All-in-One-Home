@@ -91,28 +91,53 @@ export function validateBackupText(text) {
     return { ok: false, errors: ['아는 백업 형식이 아니에요.'], data: null, kind: '' };
 }
 
-export function buildExport(state, { includeLocal = false, at }) {
+function copyData(value) {
+    if (value == null || typeof value !== 'object') return value;
+    return structuredClone(value);
+}
+
+/** 안전 백업이 방금 만든 내보내기를 다시 품으면 JSON이 순환에서 멈춥니다. 그 고리만 빼니다. */
+function copyBackup(backup) {
+    if (!backup || typeof backup !== 'object') return null;
+    try {
+        return JSON.parse(JSON.stringify(backup));
+    } catch {
+        return null;
+    }
+}
+
+export function buildExport(state, { includeLocal = false, at } = {}) {
+    const profile = state.profile || {};
     const data = {
         format: 'ssug-gyomu',
         version: 1,
         exportedAt: at,
         profile: {
-            className: state.profile.className,
-            schoolYear: state.profile.schoolYear,
-            classSize: state.profile.classSize,
-            periodStarts: state.profile.periodStarts,
+            className: profile.className,
+            schoolYear: profile.schoolYear,
+            classSize: profile.classSize,
+            periodStarts: copyData(profile.periodStarts),
         },
-        students: state.students,
-        attendance: state.attendance,
-        records: state.records,
-        events: state.events,
-        todos: state.todos,
-        notes: state.notes,
-        notices: state.notices,
-        timetable: state.timetable,
-        legacy: state.legacyPages,
+        students: copyData(state.students),
+        attendance: copyData(state.attendance),
+        records: copyData(state.records),
+        events: copyData(state.events),
+        todos: copyData(state.todos),
+        notes: copyData(state.notes),
+        notices: copyData(state.notices),
+        timetable: copyData(state.timetable),
+        legacy: copyData(state.legacyPages),
     };
-    if (includeLocal) data.local = state.local;
+    if (includeLocal) {
+        const source = state.local || {};
+        const previous = source.backup;
+        const rest = { ...source };
+        delete rest.backup;
+        const local = copyData(rest) || {};
+        const safe = copyBackup(previous);
+        if (safe) local.backup = safe;
+        data.local = local;
+    }
     return data;
 }
 
@@ -127,11 +152,18 @@ export function splitSensitive(records) {
 }
 
 export function downloadJson(filename, data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
+    const body = JSON.stringify(data, null, 2);
+    if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return body;
+    try {
+        const blob = new Blob([body], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+    } catch {
+        /* 받기가 막혀도 기록 자체는 호출한 쪽이 지킵니다. */
+    }
+    return body;
 }

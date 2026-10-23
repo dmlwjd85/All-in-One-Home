@@ -309,6 +309,8 @@ a.chip,
     padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 24px rgba(46, 42, 43, .16);
 }
+.toast-notice { pointer-events: none; }
+.toast-notice .tap { pointer-events: auto; }
 .toast {
     position: fixed;
     z-index: 50;

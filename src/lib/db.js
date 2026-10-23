@@ -654,7 +654,42 @@ export function downloadOriginal() {
     return true;
 }
 
-export async function importText(text, mode) {
+function applyIncoming(draft, data, sensitive, mode) {
+    const merge = (current, incoming) => {
+        if (mode === 'replace') return incoming || [];
+        const map = new Map((current || []).map((item) => [item.id, item]));
+        for (const item of incoming || []) map.set(item.id, item);
+        return [...map.values()];
+    };
+    draft.students = merge(draft.students, data.students);
+    draft.attendance = merge(draft.attendance, data.attendance);
+    draft.records = merge(draft.records, sensitive.cloud);
+    draft.events = merge(draft.events, data.events);
+    draft.todos = merge(draft.todos, data.todos);
+    draft.notes = merge(draft.notes, data.notes);
+    draft.notices = merge(draft.notices, data.notices);
+    draft.legacyPages = merge(draft.legacyPages, data.legacy);
+    draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
+    if (data.profile?.className) draft.profile.className = data.profile.className;
+    if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
+    draft.local.records = merge(draft.local.records, [...(data.local?.records || []), ...sensitive.local]);
+    draft.profile.started = true;
+    draft.profile.classSize = draft.students.length || draft.profile.classSize;
+    return draft;
+}
+
+async function restoreState(previous) {
+    state = previous;
+    mirrorTheme(state.profile.theme);
+    emit();
+    try {
+        await persist();
+    } catch {
+        /* 화면에는 원래 기록이 남아 있습니다. */
+    }
+}
+
+export async function importText(text, mode, hooks = {}) {
     const checked = validateBackupText(text);
     if (!checked.ok) return checked;
     if (checked.kind === 'legacy') {
@@ -664,36 +699,32 @@ export async function importText(text, mode) {
     }
     const data = checked.data;
     const sensitive = splitSensitive(data.records || []);
-    if (mode === 'replace') {
-        await update((draft) => {
-            draft.local.backup = { exportedAt: new Date().toISOString(), payload: buildExport(draft, { includeLocal: true, at: new Date().toISOString() }) };
-            return draft;
-        });
-        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, state.local.backup.payload);
+    if (mode !== 'replace') {
+        await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
     }
-    await update((draft) => {
-        const merge = (current, incoming) => {
-            if (mode === 'replace') return incoming || [];
-            const map = new Map((current || []).map((item) => [item.id, item]));
-            for (const item of incoming || []) map.set(item.id, item);
-            return [...map.values()];
-        };
-        draft.students = merge(draft.students, data.students);
-        draft.attendance = merge(draft.attendance, data.attendance);
-        draft.records = merge(draft.records, sensitive.cloud);
-        draft.events = merge(draft.events, data.events);
-        draft.todos = merge(draft.todos, data.todos);
-        draft.notes = merge(draft.notes, data.notes);
-        draft.notices = merge(draft.notices, data.notices);
-        draft.legacyPages = merge(draft.legacyPages, data.legacy);
-        draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
-        if (data.profile?.className) draft.profile.className = data.profile.className;
-        if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
-        draft.local.records = merge(draft.local.records, [...(data.local?.records || []), ...sensitive.local]);
-        draft.profile.started = true;
-        draft.profile.classSize = draft.students.length || draft.profile.classSize;
-        return draft;
-    });
+    let previous;
+    try {
+        previous = structuredClone(state);
+        const exportedAt = new Date().toISOString();
+        const payload = buildExport(state, { includeLocal: true, at: exportedAt });
+        JSON.stringify(payload);
+        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
+        await hooks.onPhase?.('prepared');
+        const next = structuredClone(state);
+        next.local.backup = { exportedAt, payload };
+        applyIncoming(next, data, sensitive, 'replace');
+        await hooks.onPhase?.('ready', next);
+        state = next;
+        mirrorTheme(state.profile.theme);
+        emit();
+        await persist();
+        flushCloud().catch(() => {});
+        await hooks.onPhase?.('applied');
+    } catch {
+        if (previous) await restoreState(previous);
+        return { ok: false, errors: ['기록을 바꾸지 못해 원래대로 돌려 두었어요.'] };
+    }
     return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
 }
 

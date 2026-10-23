@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe } from './keyfeel.js';
+import { useEffect, useState } from 'react';
+import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe, subscribeKeyPrefs } from './keyfeel.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
@@ -45,6 +45,10 @@ export function Settings() {
     const [importMode, setImportMode] = useState('merge');
     const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
     const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
+    useEffect(() => subscribeKeyPrefs(() => {
+        setSoundOn(keySoundEnabled());
+        setVibeOn(keyVibeEnabled());
+    }), []);
 
     return (
         <div style={{ display: 'grid', gap: 12 }}>

@@ -3,27 +3,78 @@
 
 const SOUND_KEY = 'ssug-gyomu-key-sound';
 const VIBE_KEY = 'ssug-gyomu-key-vibrate';
+const NOTICE_KEY = 'ssug-gyomu-key-sound-notice';
 
 let ctx = null;
 let buffer = null;
 let playing = null;
 let token = 0;
 let muted = false;
+let announce = null;
+let noticeTold = false;
+const prefListeners = new Set();
 
 export function setKeyMuted(on) {
     muted = Boolean(on);
 }
 
-function readOn(key) {
+function liveStorage() {
     try {
-        return localStorage.getItem(key) !== '0';
+        if (typeof localStorage === 'undefined') return null;
+        return localStorage;
+    } catch {
+        return null;
+    }
+}
+
+function readOn(key, storage) {
+    try {
+        const store = storage || liveStorage();
+        if (!store) return true;
+        return store.getItem(key) !== '0';
     } catch {
         return true;
     }
 }
 
-export function keySoundEnabled() {
-    return readOn(SOUND_KEY);
+export function setKeySoundAnnouncer(fn) {
+    announce = typeof fn === 'function' ? fn : null;
+}
+
+export function subscribeKeyPrefs(fn) {
+    prefListeners.add(fn);
+    return () => prefListeners.delete(fn);
+}
+
+function emitPrefs() {
+    prefListeners.forEach((fn) => {
+        try { fn(); } catch { /* 구독은 화면만 고칩니다. */ }
+    });
+}
+
+export function keySoundNoticePending(storage) {
+    if (!readOn(SOUND_KEY, storage)) return false;
+    try {
+        const store = storage || liveStorage();
+        if (!store) return true;
+        return store.getItem(NOTICE_KEY) !== '1';
+    } catch {
+        return false;
+    }
+}
+
+export function rememberKeySoundNotice(storage) {
+    try {
+        const store = storage || liveStorage();
+        store?.setItem?.(NOTICE_KEY, '1');
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export function keySoundEnabled(storage) {
+    return readOn(SOUND_KEY, storage);
 }
 
 export function keyVibeEnabled() {
@@ -36,6 +87,7 @@ export function setKeySound(on) {
     } catch {
         /* 저장이 막혀도 이번 화면의 소리는 그대로입니다. */
     }
+    emitPrefs();
 }
 
 export function setKeyVibe(on) {
@@ -44,6 +96,7 @@ export function setKeyVibe(on) {
     } catch {
         /* 저장이 막혀도 이번 화면의 진동은 그대로입니다. */
     }
+    emitPrefs();
 }
 
 function fillBuffer(audio) {
@@ -91,6 +144,17 @@ export function playKey() {
         try { navigator.vibrate(8); } catch { /* 진동이 없어도 누르기는 됩니다. */ }
     }
     if (!sound) return;
+    if (!noticeTold && keySoundNoticePending()) {
+        if (announce) {
+            noticeTold = true;
+            rememberKeySoundNotice();
+            const tell = announce;
+            setTimeout(() => {
+                try { tell(); } catch { /* 안내가 없어도 다음 누름은 소리가 납니다. */ }
+            }, 0);
+            return;
+        }
+    }
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const mine = ++token;
