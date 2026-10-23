@@ -118,7 +118,9 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
     const src = String(text || '');
     const starts = (periods && periods.length ? periods : DEFAULT_PERIODS);
     const out = { hm: '', hmEnd: '', period: 0, periodEnd: 0, assumedPm: false, label: '' };
-    const range = src.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/) || src.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
+    const tilde = src.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/);
+    const comma = src.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
+    const range = tilde || (comma && Math.abs(Number(comma[1]) - Number(comma[2])) === 1 ? comma : null);
     const one = src.match(/(\d)\s*교시/);
     if (range) {
         out.period = Number(range[1]);
@@ -292,8 +294,10 @@ function stripTitleNoise(text) {
         s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|엔|도의|도|에|는|은|의|처럼|보다|과\s*달리|와\s*달리)?/g, ' ');
     }
     s = s.replace(/(?:올해|이번에)(?:는|은)?/g, ' ');
-    s = s.replace(/예정이었던|(?:이었|였)던/g, ' ');
-    s = s.replace(/이었(?:는데|고|습니다|어요|음)?/g, ' ');
+    s = s.replace(/예정이었던/g, ' ');
+    s = s.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
+    s = s.replace(/기존\s*일정대로|기존대로/g, ' ');
+    s = s.replace(/이었(?!던)(?:는데|고|습니다|어요|음)?/g, ' ');
     s = s.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
     s = s.replace(/(?:^|\s)이니(?=\s|$)/g, ' ');
     s = s.replace(/예정이에요/g, ' ');
@@ -364,8 +368,7 @@ export function tidyTitle(text) {
     t = t.replace(/가능한/g, '가능');
     t = t.replace(/받습니다|받아요/g, ' ');
     t = t.replace(/(?:제가|저는|저도|저)\s*참석(?:하는|합니다|해요)/g, ' ');
-    t = t.replace(/진행(?:합니다|해요)(?![가-힣])/g, ' ');
-    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|했습니다|하세요|입니다|엽니다|갑니다|가요/g, ' ');
+    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|했습니다|하세요|입니다|엽니다/g, ' ');
     t = t.replace(/(?:이|가)?\s*임박(?:했습니다|했어요|합니다|해요|이에요|입니다)?/g, ' ');
     t = t.replace(/(?:이|가)?\s*다가\s*(?:옴|옵니다|와요|왔습니다)/g, ' ');
     t = t.replace(/마감\s*(?:되었(?:습니다|어요)?|됐습니다|됐어요|됨)|마감됐(?:어요|습니다)?/g, ' ');
@@ -396,7 +399,7 @@ export function tidyTitle(text) {
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
-    t = t.replace(/(?:이었|였)던/g, ' ');
+    t = t.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     t = t.replace(/마지막\s*날/g, ' ');
     t = t.replace(/쯤/g, ' ');
     t = t.replace(/(?:^|\s)경(?=\s|$)/g, ' ');
@@ -504,7 +507,7 @@ function salvageTitle(text) {
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
-    t = t.replace(/(?:이었|였)던/g, ' ');
+    t = t.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     t = t.replace(/마지막\s*날/g, ' ');
     t = t.replace(/쯤/g, ' ');
     t = t.replace(/(?:^|\s)경(?=\s|$)/g, ' ');
@@ -756,9 +759,35 @@ function applyTimeShift(text) {
 const PERIOD_VERB = '(?:변경|바뀌|바뀐|바꿉|바꿔|바뀝|옮깁|옮겨|옮긴|연기|미룹|미뤄|미룬)';
 const PERIOD_VERB_TAIL = '(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|니다|요|습니다)?';
 
-/** 와·과·쉼표로 이은 교시는 나열입니다. 에서·로가 있을 때만 교시를 바꿉니다. */
+/** 붙어 있는 교시만 범위로 묶습니다. 떨어진 교시는 그대로 두어 카드로 나눕니다. */
 function listPeriodTokens(text) {
-    return String(text || '').replace(/(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g, '$1,$2교시');
+    return String(text || '').replace(/(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g, (all, left, right) => (
+        Math.abs(Number(left) - Number(right)) === 1 ? `${left},${right}교시` : all
+    ));
+}
+
+/** 2교시와 5교시, 2,5교시처럼 사이가 벌어진 교시는 교시마다 문장으로 나눕니다. */
+function splitListedPeriods(text) {
+    const src = String(text || '');
+    const re = /(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))|(\d)\s*[,·，]\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g;
+    let found = null;
+    let match = re.exec(src);
+    while (match) {
+        const left = match[1] || match[3];
+        const right = match[2] || match[4];
+        if (Math.abs(Number(left) - Number(right)) > 1) {
+            found = { match, left, right };
+            break;
+        }
+        match = re.exec(src);
+    }
+    if (!found) return [src];
+    const head = src.slice(0, found.match.index);
+    const tail = src.slice(found.match.index + found.match[0].length);
+    return [
+        ...splitListedPeriods(`${head}${found.left}교시${tail}`),
+        ...splitListedPeriods(`${head}${found.right}교시${tail}`),
+    ];
 }
 
 /** 날짜는 그대로 두고 교시만 바뀌면 뒤 교시가 시각입니다. 날짜가 둘이면 날짜 이동이 교시를 가집니다. */
@@ -877,16 +906,21 @@ function moveSubject(text, spans) {
     t = t.replace(/(?:으로|로)\s*(?:변경|바뀌|바꿉|바꿔)(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|어요|었습니다|니다|요)?/g, ' ');
     t = t.replace(/(?:변경|바뀌|바꿉|바꿔)(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|어요|었습니다|니다)/g, ' ');
     t = t.replace(/(?:되었|됐|이었|였)(?:습니다|어요)/g, ' ');
-    t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
+    t = t.replace(/예정이었던/g, ' ');
+    t = t.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
     t = t.replace(/[()（）]/g, ' ');
-    t = t.replace(/(?:원래대로|일정대로|예정대로)/g, ' ');
+    t = t.replace(/기존\s*일정대로|기존대로|원래대로|일정대로|예정대로/g, ' ');
     t = t.replace(/(?:^|\s)대로(?=\s|$)/g, ' ');
     t = t.replace(/진행(?:합니다|해요)(?![가-힣])/g, ' ');
-    t = t.replace(/(?:갑니다|가요)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:갑니다|가요)(?=\s|$)/g, ' ');
+    t = t.replace(/(?:이었습니다|였습니다|입니다|예요|이에요)/g, ' ');
     t = t.replace(/(?:^|\s)일정(?:은|는|이|가|을|를)?(?=\s|$)/g, ' ');
-    t = t.replace(/변경\s*(?:전|후)\s*[:：]?/g, ' ');
-    t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    t = t.replace(/변경\s*후\s*[:：]?/g, ' ');
+    if (dateModifyingMarker(text)) {
+        t = t.replace(/변경\s*전\s*[:：]?/g, ' ');
+        t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    }
     t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
     t = t.replace(/[/／]/g, ' ');
     t = t.replace(/기한(?:이|은|을|를)?/g, ' ');
@@ -923,11 +957,17 @@ function markBeside(text, unit, units) {
 
 const OLD_VALUE = /(?:원래|당초|기존|변경\s*전|예정이었던)/;
 const NEW_VALUE = /변경\s*후/;
-const AS_PLANNED = /원래대로|일정대로|예정대로/g;
+const AS_PLANNED = /기존\s*일정대로|기존대로|원래대로|일정대로|예정대로/g;
 const DO_VERB = /에\s*(?:합니다|해요|엽니다|갑니다|가요)/;
+const STATE_VERB = /(?:입니다|예요|이에요)/;
 
 function withoutAsPlanned(text) {
     return String(text || '').replace(AS_PLANNED, ' ');
+}
+
+/** 원래·당초·기존·변경 전은 바로 뒤가 날짜일 때만 날짜를 꾸밉니다. */
+function dateModifyingMarker(text) {
+    return /(?:원래|당초|기존|변경\s*전)(?:는|은|의)?\s*[:：]?\s*(?:\(\s*)?(?:\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}\s*월)/.test(withoutAsPlanned(text));
 }
 
 /** 원래·당초·기존·변경 전은 바로 뒤가 날짜이거나, 날짜가 둘 이상일 때만 예전 값입니다. */
@@ -948,6 +988,18 @@ function leeParticle(word) {
     const prev = token.charCodeAt(token.length - 2);
     if (prev < 0xAC00 || prev > 0xD7A3) return false;
     return (prev - 0xAC00) % 28 !== 0;
+}
+
+/** 꼬리를 자른 뒤 어간·조사로 끝나면 그 자르기는 되돌립니다. */
+function endsWithStemOrParticle(title) {
+    const t = String(title || '').replace(/\s+/g, ' ').trim();
+    if (!t) return true;
+    if (/계신\s*[?？]\s*$/.test(t)) return true;
+    const last = t.split(' ').pop() || '';
+    if (/(?:은|는|이|가|을|를|과|와|의|에|로|으로)$/.test(last)) return true;
+    if (/(?:아도|어도|여도|와도|으면|지만|니까)$/.test(last)) return true;
+    if (/^(?:들어|계신)$/.test(last)) return true;
+    return false;
 }
 
 function bareSlashAt(text) {
@@ -984,6 +1036,7 @@ function dateRole(text, unit, units) {
     if (/(?:예정이었던|(?:은|는|이|가|을|를)?\s*(?:이었|였)던)\s*$/.test(bareHead)) return 'old';
     if (discourseOld(bareHead, units.length >= 2)) return 'old';
     if (new RegExp(`^\\s*${DO_VERB.source}`).test(tail)) return 'new';
+    if (/^\s*(?:입니다|예요|이에요)/.test(tail)) return 'new';
     return '';
 }
 
@@ -1323,7 +1376,7 @@ function changeSentence(text, now) {
     const src = String(text || '');
     if (/(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(src) && MOVE_VERB.test(src)) return true;
     if (/변경\s*후/.test(src) && findDates(src, now).length) return true;
-    return findDates(src, now).length === 1 && DO_VERB.test(src) && !oldValueSentence(src, now);
+    return findDates(src, now).length === 1 && (DO_VERB.test(src) || STATE_VERB.test(src)) && !oldValueSentence(src, now);
 }
 
 /** 원래·당초·기존·변경 전 문장은 옮긴 문장과 한 덩어리입니다. 앞뒤는 가리지 않습니다. */
@@ -2106,7 +2159,8 @@ function segmentsOf(text, now) {
         if (String(chunk).startsWith('\u0001')) return splitByDate(chunk, now);
         const peeled = peelFormModifier(String(chunk), now);
         const base = listPeriodTokens(peeled || chunk);
-        const timed = applyTimeShift(base) || base;
+        return splitListedPeriods(base).flatMap((piece) => {
+        const timed = applyTimeShift(piece) || piece;
         const prepared = applyPeriodShift(timed, now) || timed;
         const rain = rainSchedule(String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, ''), now);
         if (rain) return [rain];
@@ -2143,6 +2197,7 @@ function segmentsOf(text, now) {
         const unsure = unsureChunks(prepared, now);
         if (unsure) return unsure;
         return splitByDate(prepared, now);
+        });
     });
 }
 
@@ -2899,7 +2954,7 @@ function polishTitle(title, segment = '', full = '') {
     const hadCooperate = /협조/.test(t);
     const seg = String(segment || '');
     const wide = `${seg}\n${full || ''}`;
-    t = t.replace(/(?:원래대로|일정대로|예정대로)/g, ' ');
+    t = t.replace(/기존\s*일정대로|기존대로|원래대로|일정대로|예정대로/g, ' ');
     t = t.replace(/(?:^|\s)대로(?=\s|$)/g, ' ');
     t = t.replace(/^(?:제가|저는|저도|저만)\s+/, '');
     t = t.replace(/(?:^|\s)[가-힣]{1,16}(?:이신데|이라서|이라)(?=\s|$)/g, ' ');
@@ -2964,17 +3019,21 @@ function polishTitle(title, segment = '', full = '') {
     }
     t = t.replace(/([가-힣]{2,})(?:은|는)\s+(제출|회신|작성|입력|업로드)(?=\s|$)/g, '$1 $2');
     t = t.replace(/(?:되었|됐)(?:습니다|어요)$/g, '');
-    t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
+    t = t.replace(/예정이었던/g, ' ');
+    t = t.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     t = t.replace(/(?:이었|였)(?:습니다|어요)$/g, '');
-    if (dropsOldLabel(seg) || dropsOldLabel(full)) {
-        t = t.replace(/변경\s*(?:전|후)/g, ' ');
+    if (dateModifyingMarker(seg) || dateModifyingMarker(full)) {
+        t = t.replace(/변경\s*전/g, ' ');
         t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
     }
-    t = t.replace(/(?:^|\s)[가-힣]{1,8}던(?=\s)/g, ' ');
+    t = t.replace(/변경\s*후/g, ' ');
+    t = t.replace(/^하던\s+/, '');
     t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
-    t = t.replace(/수업\s*후\s*전/g, ' ');
-    t = t.replace(/(?:^|\s)후\s*전(?=\s|$)/g, ' ');
-    if (/진행(?:합니다|해요)/.test(wide) && !/진행해\s*주/.test(wide)) t = t.replace(/(?:^|\s)진행(?=\s|$)/g, ' ');
+    if (/수업\s*후\s*전/.test(wide)) t = t.replace(/수업\s*후\s*전/g, ' ').replace(/(?:^|\s)후\s*전(?=\s|$)/g, ' ');
+    if (/진행(?:합니다|해요)\s*[.。!！]?\s*$/.test(String(seg || full || '').trim()) && !/진행해\s*주/.test(wide)) {
+        const cut = t.replace(/(?:^|\s)진행$/, '').replace(/(?<=[가-힣])(?:은|는|을|를)$/g, '').replace(/\s+/g, ' ').trim();
+        if (cut && !endsWithStemOrParticle(cut)) t = cut;
+    }
     t = t.replace(/(?:^|\s)(?:갑니다|가요)(?=\s|$)/g, ' ');
     t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
     t = t.replace(/[/／]/g, ' ');
