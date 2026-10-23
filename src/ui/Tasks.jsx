@@ -41,7 +41,7 @@ export function Tasks() {
                     {!rows.length && <p className="muted">없어요.</p>}
                     {rows.map((row) => (
                         <article key={row.id} className="glass" style={{ padding: 12, marginBottom: 8 }}>
-                            <Btn block style={{ justifyContent: 'space-between', display: 'flex', fontWeight: 800 }} onClick={() => toggleTodo(row.id)}>
+                            <Btn block className="neo" style={{ justifyContent: 'space-between', display: 'flex', fontWeight: 800 }} onClick={() => toggleTodo(row.id)}>
                                 <span>{row.done ? '☑' : '☐'} {row.localOnly ? '🔒 ' : ''}{row.title}</span>
                             </Btn>
                             {row.of ? <p className="num" style={{ margin: '8px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}

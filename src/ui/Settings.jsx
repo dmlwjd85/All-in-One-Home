@@ -107,16 +107,14 @@ export function Settings() {
                     <Btn className={importMode === 'merge' ? 'chip on' : 'chip'} onClick={() => setImportMode('merge')}>합치기</Btn>
                     <Btn className={importMode === 'replace' ? 'chip on' : 'chip'} onClick={() => setImportMode('replace')}>바꾸기</Btn>
                 </div>
-                <label className="chip" style={{ display: 'flex', marginTop: 8, alignItems: 'center' }}>
-                    백업 파일 고르기
-                    <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        const text = await file.text();
-                        const result = await importText(text, importMode);
-                        showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
-                    }} />
-                </label>
+                <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => document.getElementById('backup-file')?.click()}>백업 파일 고르기</Btn>
+                <input id="backup-file" type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    const result = await importText(text, importMode);
+                    showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
+                }} />
             </section>
 
             <section className="glass" style={{ padding: 14 }}>

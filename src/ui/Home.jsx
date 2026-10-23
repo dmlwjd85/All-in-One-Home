@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
+import { ReasonSheet } from './Attend.jsx';
 
 export function Home() {
     const { data, clock, go } = useUi();
+    const [attendStudent, setAttendStudent] = useState(null);
     const day = dayKeyFromYmd(clock.ymd);
     const table = data.timetable[day] || {};
     const labels = [1, 2, 3, 4, 5, 6].map((index) => table[`p${index}`] || '');
@@ -41,9 +44,13 @@ export function Home() {
                     {marks.map((row) => {
                         const student = data.students.find((item) => item.id === row.sid);
                         if (!student) return null;
-                        return <span key={row.id} className="hero-pill" style={{ padding: '6px 10px', fontWeight: 700 }}>{student.no} {student.name} {row.status}{row.note ? `·${row.note}` : ''}</span>;
+                        return (
+                            <Btn key={row.id} className="hero-pill" onClick={() => setAttendStudent(student)}>
+                                {student.no} {student.name} {row.status}{row.note ? `·${row.note}` : ''}
+                            </Btn>
+                        );
                     })}
-                    {!marks.length && checked && <span className="hero-pill" style={{ padding: '6px 10px' }}>오늘은 모두 출석이에요</span>}
+                    {!marks.length && checked && <span className="hero-pill">오늘은 모두 출석이에요</span>}
                 </div>
                 {birthdays.length > 0 && <p style={{ marginBottom: 0 }}>🎂 {birthdays.map((row) => row.name).join(', ')} 생일이에요</p>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 14, fontWeight: 700 }}>
@@ -128,6 +135,14 @@ export function Home() {
                     )}
                 </div>
             </section>
+            {attendStudent && (
+                <ReasonSheet
+                    student={attendStudent}
+                    mark={marks.find((row) => row.sid === attendStudent.id)}
+                    date={clock.ymd}
+                    onClose={() => setAttendStudent(null)}
+                />
+            )}
         </div>
     );
 }

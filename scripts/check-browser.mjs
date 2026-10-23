@@ -327,7 +327,7 @@ async function audit(page, label) {
             }
         }
         const small = [];
-        for (const el of document.querySelectorAll('button, a, input, textarea, select')) {
+        for (const el of document.querySelectorAll('button, a, input, textarea, select, [role="button"]')) {
             const style = getComputedStyle(el);
             if (style.display === 'none' || style.visibility === 'hidden') continue;
             const rect = el.getBoundingClientRect();
@@ -336,9 +336,81 @@ async function audit(page, label) {
                 small.push(`${(el.getAttribute('aria-label') || el.innerText || el.tagName).toString().trim().slice(0, 18)} ${Math.round(rect.width)}×${Math.round(rect.height)}`);
             }
         }
-        return { overflow, small: small.slice(0, 12) };
+        function splitShadows(value) {
+            const parts = [];
+            let buf = '';
+            let depth = 0;
+            for (const ch of String(value || '')) {
+                if (ch === '(') depth += 1;
+                else if (ch === ')') depth = Math.max(0, depth - 1);
+                if (ch === ',' && depth === 0) {
+                    if (buf.trim()) parts.push(buf.trim().replace(/\s+/g, ' '));
+                    buf = '';
+                } else buf += ch;
+            }
+            if (buf.trim()) parts.push(buf.trim().replace(/\s+/g, ' '));
+            return parts;
+        }
+        const probe = document.createElement('div');
+        probe.style.position = 'absolute';
+        probe.style.left = '-9999px';
+        document.body.appendChild(probe);
+        const signatures = ['--neo-raise', '--neo-raise-sm'].map((name) => {
+            probe.style.boxShadow = `var(${name})`;
+            return splitShadows(getComputedStyle(probe).boxShadow);
+        }).filter((parts) => parts.length);
+        probe.remove();
+        const raised = [];
+        for (const el of document.querySelectorAll('*')) {
+            const style = getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') continue;
+            const shadow = style.boxShadow;
+            if (!shadow || shadow === 'none') continue;
+            const parts = splitShadows(shadow);
+            const convex = signatures.some((sig) => sig.every((part) => parts.includes(part)));
+            if (!convex) continue;
+            const tag = el.tagName;
+            const role = el.getAttribute('role');
+            if (tag === 'BUTTON' || tag === 'A' || role === 'button') continue;
+            const rect = el.getBoundingClientRect();
+            if (rect.width < 1 || rect.height < 1) continue;
+            const rawClass = el.getAttribute('class') || '';
+            const name = (el.getAttribute('aria-label') || rawClass || tag).toString().trim().slice(0, 28);
+            raised.push(`${tag}.${name}`);
+            if (raised.length > 8) break;
+        }
+        return { overflow, small: small.slice(0, 12), raised };
     });
     if (result.overflow.length) failures.push(`${label} 가로 넘침: ${result.overflow.join(', ')}`);
+    if (result.small.length) failures.push(`${label} 44px 미만: ${result.small.join(', ')}`);
+    if (result.raised.length) failures.push(`${label} 볼록한 그림자인데 버튼·링크·role=button이 아님: ${result.raised.join(', ')}`);
+}
+
+async function controlBoxes(page, selector, label) {
+    const result = await page.evaluate((sel) => {
+        const els = [...document.querySelectorAll(sel)].filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 1 && rect.height > 1;
+        });
+        const overlaps = [];
+        const small = [];
+        els.forEach((el) => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width < 43.5 || rect.height < 43.5) {
+                small.push(`${el.innerText.replace(/\s+/g, ' ').trim().slice(0, 12)} ${Math.round(rect.width)}×${Math.round(rect.height)}`);
+            }
+        });
+        for (let i = 0; i < els.length; i += 1) {
+            for (let j = i + 1; j < els.length; j += 1) {
+                const a = els[i].getBoundingClientRect();
+                const b = els[j].getBoundingClientRect();
+                const hit = a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+                if (hit) overlaps.push(`${els[i].innerText.replace(/\s+/g, ' ').trim().slice(0, 8)}/${els[j].innerText.replace(/\s+/g, ' ').trim().slice(0, 8)}`);
+            }
+        }
+        return { overlaps: overlaps.slice(0, 8), small };
+    }, selector);
+    if (result.overlaps.length) failures.push(`${label} 겹침: ${result.overlaps.join(', ')}`);
     if (result.small.length) failures.push(`${label} 44px 미만: ${result.small.join(', ')}`);
 }
 
@@ -473,6 +545,8 @@ try {
             await prepare(page);
             await delay(250);
             await audit(page, name);
+            if (name.startsWith('home')) await controlBoxes(page, 'button.hero-pill, .home-hero button.hero-action', name);
+            if (name.startsWith('attend')) await controlBoxes(page, 'button[aria-pressed]', name);
             if (name === 'home-360-lilac.png') {
                 const covered = await tipCover(page);
                 if (covered) failures.push(covered);
@@ -507,10 +581,44 @@ try {
         });
     }
 
+    for (const width of [360, 390, 1920]) {
+        await withDemo(width, 'light', async (page) => {
+            await controlBoxes(page, 'button.hero-pill, .home-hero button.hero-action', `홈 칩 ${width}`);
+            await page.evaluate(() => { location.hash = '#/attend'; });
+            await delay(200);
+            await controlBoxes(page, 'button[aria-pressed]', `출결 요약 ${width}`);
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
+            await page.waitForFunction(() => [...document.querySelectorAll('button.solid-card')].some((el) => el.innerText.includes('김하늘')));
+            await controlBoxes(page, 'button.solid-card:not([aria-pressed])', `이번 달 ${width}`);
+            await audit(page, `출결 너비 ${width}`);
+        }, width >= 900 ? 1080 : 800);
+    }
+
     await withDemo(390, 'light', async (page) => {
         const homeText = await page.evaluate(() => document.body.innerText);
         check(homeText.includes('1교시') && homeText.includes('18분'), '홈에 다음 교시 18분이 없습니다.');
         check(homeText.includes('박서준') && homeText.includes('결석'), '홈에 결석이 없습니다.');
+        const pill = await page.evaluate(() => {
+            const hits = [];
+            Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { hits.push(ms); return true; } });
+            const button = [...document.querySelectorAll('button.hero-pill')].find((el) => el.innerText.includes('박서준'));
+            const chip = document.querySelector('button.chip, button.hero-action');
+            button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+            chip?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+            button?.focus();
+            return {
+                hits,
+                tap: Boolean(button?.classList.contains('tap') && button.tagName === 'BUTTON' && button.getAttribute('type') === 'button'),
+                focused: document.activeElement === button,
+            };
+        });
+        check(pill.tap && pill.focused && pill.hits.length === 2 && pill.hits.every((n) => n === 8), '홈 출결 칩이 다른 버튼과 같은 눌림·진동·포커스가 아닙니다.');
+        await page.evaluate(() => [...document.querySelectorAll('button.hero-pill')].find((el) => el.innerText.includes('박서준'))?.click());
+        await page.waitForSelector('[data-screen="attend-status"]');
+        const sheetWho = await page.evaluate(() => document.querySelector('[data-screen="attend-status"]')?.innerText || '');
+        check(sheetWho.includes('박서준'), '홈 출결 칩이 그 학생 시트를 열지 않습니다.');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => !document.querySelector('[data-screen="attend-status"]'));
         await clickPlus(page, '관찰');
         await page.waitForFunction(() => document.body.innerText.includes('누구'));
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());
@@ -525,6 +633,70 @@ try {
                 if (text.includes('되돌리기')) { await button.click(); return; }
             }
         });
+        await page.evaluate(() => { location.hash = '#/attend'; });
+        await page.waitForFunction(() => document.body.innerText.includes('출석·결석'));
+        const feel = await page.evaluate(() => {
+            const hits = [];
+            Object.defineProperty(navigator, 'vibrate', { configurable: true, value: (ms) => { hits.push(ms); return true; } });
+            const summary = document.querySelector('button[aria-pressed]');
+            const chip = [...document.querySelectorAll('button.chip')].find((el) => el.innerText.trim() === '오늘');
+            summary?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+            chip?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+            summary?.focus();
+            return {
+                hits,
+                tap: Boolean(summary?.classList.contains('tap') && summary.getAttribute('type') === 'button'),
+                focused: document.activeElement === summary,
+                pressed: summary?.getAttribute('aria-pressed') || '',
+            };
+        });
+        check(feel.tap && feel.focused && feel.pressed === 'false' && feel.hits.length === 2 && feel.hits.every((n) => n === 8), '출결 요약이 다른 버튼과 같은 콕 진동·포커스·aria가 아닙니다.');
+        const seats = () => page.evaluate(() => [...document.querySelectorAll('.cell-grid button')].map((el) => el.innerText.replace(/\s+/g, ' ')));
+        const pressBox = (name) => page.evaluate((label) => {
+            [...document.querySelectorAll('button[aria-pressed]')].find((el) => el.innerText.includes(label))?.click();
+        }, name);
+        await pressBox('결석');
+        let names = await seats();
+        check(names.length === 1 && names[0].includes('박서준'), '결석 칸이 그 학생만 보여 주지 않습니다.');
+        const pressedShadow = await page.evaluate(() => {
+            const probe = document.createElement('div');
+            document.body.appendChild(probe);
+            probe.style.boxShadow = 'var(--neo-inset)';
+            const inset = getComputedStyle(probe).boxShadow;
+            probe.style.boxShadow = 'var(--neo-raise)';
+            const raise = getComputedStyle(probe).boxShadow;
+            probe.remove();
+            const boxes = [...document.querySelectorAll('button[aria-pressed]')];
+            const absent = boxes.find((el) => el.innerText.includes('결석'));
+            const present = boxes.find((el) => el.innerText.includes('출석'));
+            return {
+                absentOn: absent?.getAttribute('aria-pressed') === 'true' && getComputedStyle(absent).boxShadow === inset,
+                presentOff: present?.getAttribute('aria-pressed') === 'false' && getComputedStyle(present).boxShadow === raise,
+            };
+        });
+        check(pressedShadow.absentOn && pressedShadow.presentOff, '고른 출결 칸이 눌린 모양이 아닙니다.');
+        await pressBox('결석');
+        names = await seats();
+        check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '같은 칸을 다시 눌러도 전체가 나오지 않습니다.');
+        await pressBox('지각');
+        names = await seats();
+        check(names.length === 1 && names[0].includes('정유나'), '지각 칸이 그 학생만 보여 주지 않습니다.');
+        await pressBox('출석');
+        names = await seats();
+        check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '출석 칸을 눌러도 전체가 나오지 않습니다.');
+        await pressBox('출석');
+        names = await seats();
+        check(names.some((item) => item.includes('김하늘')) && !names.some((item) => item.includes('박서준')), '출석만 다시 눌러도 출석 학생만 나오지 않습니다.');
+        await pressBox('출석');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
+        await delay(150);
+        const monthRow = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('button.solid-card')].find((el) => !el.hasAttribute('aria-pressed') && el.innerText.includes('박서준') && el.classList.contains('tap'));
+            button?.click();
+            return Boolean(button);
+        });
+        check(monthRow, '이번 달 학생 줄이 버튼이 아닙니다.');
+        await page.waitForFunction(() => (document.querySelector('h1')?.innerText || '').includes('박서준'));
         await page.evaluate(() => { location.hash = '#/attend'; });
         await page.waitForFunction(() => document.body.innerText.includes('출석·결석'));
         const clicked = await page.evaluate(() => {
