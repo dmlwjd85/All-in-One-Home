@@ -730,7 +730,7 @@ function dateSpan(text, now) {
 }
 
 const MOVE_ARROW = /→|➡|⇨|->/;
-const MOVE_VERB = /연기|미뤄|미루|미룹|앞당|순연|연장|변경|바뀌|바꿉|바꿔|바뀝|옮겨|옮긴/;
+const MOVE_VERB = /연기|미뤄|미루|미룹|앞당|순연|연장|변경|바뀌|바꿉|바꿔|바뀝|옮겨|옮긴|옮깁/;
 const TIME_BIT = '(?:(?:오전|오후)\\s*)?\\d{1,2}\\s*(?:시(?:\\s*\\d{1,2}\\s*분|\\s*반)?|:\\s*\\d{2})';
 const TIME_SHIFT_RE = new RegExp(`(${TIME_BIT})\\s*에서\\s*(${TIME_BIT})\\s*(?:으로|로)`);
 
@@ -820,7 +820,7 @@ function moveSubject(text, spans) {
     t = t.replace(/연기(?:됩니다|합니다|해요|함|됐어요|되었어요|되었음|됨)?/g, ' ');
     t = t.replace(/미뤄(?:졌습니다|졌어요|집니다|요|짐)?|미루(?:어\s*요|어집니다|었습니다|어\s*짐|ㅂ니다)?|미룹니다/g, ' ');
     t = t.replace(/앞당(?:겨(?:졌습니다|졌어요|집니다|요|짐)?|김|긴)?/g, ' ');
-    t = t.replace(/옮겨(?:졌습니다|졌어요|집니다|요)?|옮긴/g, ' ');
+    t = t.replace(/옮겨(?:졌습니다|졌어요|집니다|요)?|옮긴|옮깁니다/g, ' ');
     t = t.replace(/(?:으로|로)\s*(?:변경|바뀌|바꿉|바꿔)(?:됩니다|합니다|했어요|어요|었습니다|니다|요)?/g, ' ');
     t = t.replace(/(?:변경|바뀌|바꿉|바꿔)(?:됩니다|합니다|했어요|어요|었습니다|니다)/g, ' ');
     t = t.replace(/기한(?:이|은|을|를)?/g, ' ');
@@ -1437,10 +1437,11 @@ function destinationDate(text) {
     return false;
 }
 
-/** 우천처럼 조건이 붙으면 원래 날짜의 행사입니다. 옮긴 날이 아닙니다. */
+/** '우천 시'처럼 조건이면 원래 날짜의 행사입니다. '으로 인해'로 이미 옮긴 날은 아닙니다. */
 function rainHold(text) {
     const src = String(text || '');
     if (/연기(?:하지\s*않|\s*없이)|미루지\s*않/.test(src)) return false;
+    if (/(?:으로|로)\s*인해|인하여|때문에/.test(src)) return false;
     return /우천/.test(src) && /(?:로|으로)\s*(?:미룹|미뤄|미루|미뤘|미루었|연기)/.test(src);
 }
 
@@ -1767,6 +1768,26 @@ function plusOneDay(ymd) {
     return `${date.getUTCFullYear()}-${nextMonth}-${nextDay}`;
 }
 
+/** 관형절 '보낸 날짜 … 양식'의 날짜는 양식을 꾸미는 말이라 카드를 만들지 않습니다. */
+function peelFormModifier(text, now) {
+    const src = String(text || '');
+    if (!/양식/.test(src) || /[\u0001-\u0008\u000e]/.test(src)) return '';
+    const formAt = src.search(/양식/);
+    const spans = findDates(src, now);
+    if (spans.length < 2 || formAt < 0) return '';
+    const drop = spans.filter((span) => span.index < formAt && /(?:보낸|올린|공유한|안내한)\s*$/.test(src.slice(0, span.index)));
+    if (!drop.length || drop.length === spans.length) return '';
+    let next = src;
+    [...drop].sort((a, b) => b.index - a.index).forEach((span) => {
+        next = `${next.slice(0, span.index)} ${next.slice(span.index + span.length)}`;
+    });
+    next = next.replace(/(?:제가|저는|저도|저만|저)\s*(?:보낸|올린|공유한|안내한)\s*/g, ' ');
+    next = next.replace(/(?:^|\s)(?:보낸|올린|공유한|안내한)\s+/g, ' ');
+    next = next.replace(/\s+/g, ' ').trim();
+    if (!next || findDates(next, now).length >= spans.length) return '';
+    return next;
+}
+
 function weekdayChar(ymd) {
     const [year, month, day] = String(ymd || '').split('-').map(Number);
     if (!year) return '';
@@ -1788,7 +1809,7 @@ function nextDayChunk(text, now) {
     return `\u0003${name.replace(/\s+/g, ' ').trim()} ${month}/${day}${week ? `(${week})` : ''}`;
 }
 
-/** 우천으로 미루면 적힌 첫 날짜의 행사를 일정으로 둡니다. */
+/** '우천 시'로 미루면 적힌 첫 날짜의 행사를 일정으로 둡니다. */
 function rainSchedule(text, now) {
     const src = String(text || '');
     if (!rainHold(src)) return '';
@@ -1870,7 +1891,8 @@ function segmentsOf(text, now) {
     });
     return chunks.flatMap((chunk) => {
         if (String(chunk).startsWith('\u0001')) return splitByDate(chunk, now);
-        const prepared = applyTimeShift(chunk) || chunk;
+        const peeled = peelFormModifier(String(chunk), now);
+        const prepared = applyTimeShift(peeled || chunk) || peeled || chunk;
         const rain = rainSchedule(String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, ''), now);
         if (rain) return [rain];
         const replaced = replaceChunks(prepared);
@@ -2231,6 +2253,7 @@ function negatedClause(text) {
     if (/(?:진행|실시|개최|열리|운영)(?:이|가|은|는)?\s*어렵/.test(src)) return true;
     if (/(?:열리|개최되|진행되|실시되|개최하|진행하|실시하|(?<![가-힣])하)지\s*못(?:하|합|해|함)/.test(src)) return true;
     if (/열리지\s*않/.test(src)) return true;
+    if (/(?:은|는)\s*쉽니다/.test(src)) return true;
     if (eventCancelled(src)) return true;
     if (heldAfterModifier(src)) return false;
     if (postponedOpen(src)) return true;
@@ -2665,8 +2688,11 @@ function polishTitle(title, segment = '', full = '') {
         t = t.replace(/([가-힣]{2,})(?:을|를)\s+(?:보내|내)(?=\s|$)/g, '$1 제출');
         t = t.replace(/(?:^|\s)(?:보내|내)(?=\s|$)/g, ' 제출');
     }
-    if (/양식/.test(seg) && /제출/.test(wide) && /(?:^|\s)양식(?:으로|로|으)?$/.test(t)) {
-        t = t.replace(/(?:^|\s)양식(?:으로|로|으)?$/, ' 제출');
+    if (/양식/.test(seg) && /제출/.test(wide)) {
+        t = t.replace(/^(?:보낸|올린|공유한|안내한)\s+/, '');
+        t = t.replace(/\s*양식(?:으로|로)(?=\s*제출(?:\s|$))/g, '');
+        if (/(?:^|\s)양식(?:으로|로|으)?$/.test(t)) t = t.replace(/(?:^|\s)양식(?:으로|로|으)?$/, ' 제출');
+        t = t.replace(/\s+/g, ' ').trim();
     }
     if (/바뀌|바꿉|변경/.test(seg)) {
         t = t.replace(/([가-힣]{2,})(?:이|가)\s+((?:\d+\s*층)|[가-힣]{1,12})으로$/g, '$1 $2');
@@ -2690,12 +2716,20 @@ function polishTitle(title, segment = '', full = '') {
     if (REASON_TAIL.test(t)) {
         t = t.replace(/(?:^|\s)[가-힣]{0,12}\s*(?:출장|연수|병가|연가|휴가|공가|외출|반차)(?:으로|로)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    if (/보결/.test(seg) && REASON_TAIL.test(seg) && !/교시/.test(t)) {
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?\s+/, '');
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인하여\s+/, '');
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}\s*때문에\s+/, '');
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인하여(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}\s*때문에(?=\s|$)/g, ' ');
+    t = t.replace(/\s+/g, ' ').trim();
+    if (/(?:은|는)\s*쉽니다/.test(seg)) t = t.replace(/(?:은|는)\s*쉽니다$/g, '').replace(/\s+/g, ' ').trim();
+    if (/보결|보강/.test(seg) && !/교시/.test(t) && /^(?:보결|보강)$/.test(t)) {
         const comma = seg.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
         const tilde = seg.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/);
         const one = seg.match(/(\d)\s*교시/);
         const bit = comma ? `${comma[1]},${comma[2]}교시` : (tilde ? `${tilde[1]}~${tilde[2]}교시` : (one ? `${one[1]}교시` : ''));
-        if (bit) t = `${bit} ${t || '보결'}`.replace(/\s+/g, ' ').trim();
+        if (bit) t = `${bit} ${t}`.replace(/\s+/g, ' ').trim();
     }
     if (/제출하지\s*못한/.test(t) && /다시\s*올려/.test(t)) t = '다시 올리기';
     return t;

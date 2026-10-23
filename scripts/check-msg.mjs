@@ -1590,9 +1590,82 @@ if (r49Ok !== r49Cases.length) {
 }
 console.log(`r49 원문 ${r49Ok}/${r49Cases.length}, 변형 ${r49Var}`);
 
+const r50Live = (items, kind, date, title) => {
+    const live = items.filter((item) => item.include !== false);
+    return live.length === 1 && live[0].kind === kind && live[0].date === date && live[0].title === title && !dirtyTitle(live[0].title);
+};
+const r50Old = (items, date) => !items.some((item) => item.date === date && item.include !== false);
+const r50Cases = [
+    ['운동회 연기', '11/25(수) 우천으로 인해 운동회는 11/27(금)로 연기합니다.', (items) => r50Live(items, '일정', '2026-11-27', '운동회') && r50Old(items, '2026-11-25') && items.every((item) => !dirtyTitle(item.title))],
+    ['날짜 보결', '11/23(월) 5,6교시 보결 부탁드립니다.', (items) => r49One(items, '5,6교시 보결', (item) => item.kind === '일정' && item.date === '2026-11-23' && item.include !== false && item.period === 5 && item.periodEnd === 6)],
+    ['날짜 보강', '11/24(화) 박선생님 병가로 2교시 보강 부탁드립니다.', (items) => r49One(items, '2교시 보강', (item) => item.kind === '일정' && item.date === '2026-11-24' && item.include !== false && item.period === 2)],
+    ['때문에 협의회', '공사 때문에 11/27(금) 협의회는 도서관에서 합니다.', (items) => r49One(items, '협의회', (item) => item.kind === '일정' && item.date === '2026-11-27' && item.include !== false)],
+    ['인해 설문', '학교 행사로 인해 설문은 11/18(수)까지 제출해 주세요.', (items) => r49One(items, '설문 제출', (item) => item.kind === '할 일' && item.date === '2026-11-18' && item.include !== false)],
+    ['양식 복명서 한 장', '제가 보낸 11/5(목) 출장 복명서 양식으로 11/9(월)까지 제출해 주세요.', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-11-09' && items[0].title === '출장 복명서 제출' && !items.some((item) => item.date === '2026-11-05' || item.title === '보낸')],
+    ['동아리 쉼', '11/26(목) 시험 때문에 동아리 활동은 쉽니다.', (items) => items.length === 1 && items[0].include === false && items[0].date === '2026-11-26' && items[0].title === '동아리 활동'],
+];
+[
+    ['11/3(화) 안전교육은 11/6(금)로 연기합니다.', '2026-11-06', '2026-11-03', '안전교육'],
+    ['11/10(화) 학예회는 11/12(목)로 미룹니다.', '2026-11-12', '2026-11-10', '학예회'],
+    ['11/13(금) 설명회는 11/16(월)로 옮깁니다.', '2026-11-16', '2026-11-13', '설명회'],
+    ['11/18(수) 공개수업은 11/20(금)로 연기합니다.', '2026-11-20', '2026-11-18', '공개수업'],
+    ['폭우로 인해 11/4(수) 체육대회는 11/9(월)로 미룹니다.', '2026-11-09', '2026-11-04', '체육대회'],
+].forEach(([text, date, oldDate, title], index) => {
+    r50Cases.push([`변형 연기 ${index + 1}`, text, (items) => r50Live(items, '일정', date, title) && r50Old(items, oldDate) && items.every((item) => item.title === title)]);
+});
+[
+    ['11/2(월) 1,2교시 보결 부탁드립니다.', '2026-11-02', '1,2교시 보결', 1, 2],
+    ['11/6(금) 3~4교시 보결 부탁드립니다.', '2026-11-06', '3~4교시 보결', 3, 4],
+    ['11/9(월) 김선생님 연가로 5교시 보강 부탁드립니다.', '2026-11-09', '5교시 보강', 5, 0],
+    ['11/12(목) 6교시 보강 부탁드립니다.', '2026-11-12', '6교시 보강', 6, 0],
+].forEach(([text, date, title, period, periodEnd], index) => {
+    r50Cases.push([`변형 교시 ${index + 1}`, text, (items) => r49One(items, title, (item) => item.kind === '일정' && item.date === date && item.include !== false && item.period === period && item.periodEnd === periodEnd)]);
+});
+[
+    ['단축수업으로 인해 11/3(화) 회의는 교무실에서 합니다.', '일정', '2026-11-03', '회의'],
+    ['점검으로 인하여 11/10(화) 협의회는 과학실에서 합니다.', '일정', '2026-11-10', '협의회'],
+    ['준비 때문에 11/13(금) 설명회는 강당에서 합니다.', '일정', '2026-11-13', '설명회'],
+    ['연수 때문에 설문은 11/20(금)까지 제출해 주세요.', '할 일', '2026-11-20', '설문 제출'],
+].forEach(([text, kind, date, title], index) => {
+    r50Cases.push([`변형 사유 ${index + 1}`, text, (items) => r49One(items, title, (item) => item.kind === kind && item.date === date && item.include !== false)]);
+});
+[
+    ['제가 올린 11/6(금) 출장 복명서 양식으로 11/10(화)까지 제출해 주세요.', '2026-11-10', '2026-11-06', '출장 복명서 제출'],
+    ['제가 보낸 11/19(목) 가정통신문 양식으로 11/23(월)까지 제출해 주세요.', '2026-11-23', '2026-11-19', '가정통신문 제출'],
+    ['공유한 11/2(월) 안전 점검표 양식으로 11/4(수)까지 제출해 주세요.', '2026-11-04', '2026-11-02', '안전 점검표 제출'],
+].forEach(([text, date, oldDate, title], index) => {
+    r50Cases.push([`변형 양식 ${index + 1}`, text, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === date && items[0].title === title && noDate(items, oldDate) && !/보낸|올린|공유한/.test(items[0].title)]);
+});
+[
+    ['11/30(월) 시험 때문에 방과후 수업은 쉽니다.', '2026-11-30', '방과후 수업'],
+    ['11/27(금) 행사 때문에 동아리 활동은 쉽니다.', '2026-11-27', '동아리 활동'],
+].forEach(([text, date, title], index) => {
+    r50Cases.push([`변형 쉼 ${index + 1}`, text, (items) => items.length === 1 && items[0].include === false && items[0].date === date && items[0].title === title && !/때문에|쉽니다/.test(items[0].title)]);
+});
+const r50Var = r50Cases.length - 7;
+if (r50Var < 15) {
+    console.error('r50 변형이 15개보다 적습니다.');
+    process.exit(1);
+}
+let r50Ok = 0;
+r50Cases.forEach(([label, text, ok]) => {
+    const items = parseSchoolMessages(text, { now: qaNow }).items;
+    if (ok(items)) r50Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, title: item.title, include: item.include,
+        }))));
+    }
+});
+if (r50Ok !== r50Cases.length) {
+    console.error(`r50 원문 ${r50Ok}/${r50Cases.length}`);
+    process.exit(1);
+}
+console.log(`r50 원문 ${r50Ok}/${r50Cases.length}, 변형 ${r50Var}`);
+
 const includeCountRows = [
     ['r34', r34Cases], ['r35', r35Cases], ['r36', r36Cases], ['r37', r37Cases], ['r38', r38Cases],
-    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases], ['r49', r49Cases],
+    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases], ['r49', r49Cases], ['r50', r50Cases],
 ];
 const includeCountPath = new URL('./include-counts.json', import.meta.url);
 const includeCountNow = {};
@@ -1950,7 +2023,7 @@ const invariantTexts = [
     ...MSG_DOUBT,
 ].map((row) => row.text);
 [
-    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases, r49Cases,
+    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases, r49Cases, r50Cases,
 ].forEach((rows) => rows.forEach((row) => invariantTexts.push(row[1])));
 let datedSentences = 0;
 let emptySentences = 0;
