@@ -1,5 +1,5 @@
 rules_version = '2';
-// 쓱 교무수첩 보안 규칙 (rules/firestore.rules 초안을 그대로 가져와 ssug-gyomu에 배포, 2026-10-19)
+// 콕 교무수첩 보안 규칙 (rules/firestore.rules 초안을 그대로 가져와 ssug-gyomu에 배포, 2026-10-19)
 // 원칙: 기본 거부 · users/{uid} 본인만 · 컬렉션마다 허용 필드 목록과 형식·길이 검사 · 와일드카드 쓰기 없음
 // 건강·학폭·민원 기록은 클라우드에 두지 않는다(앱이 이 기기에만 저장). 규칙에서도 대표 낱말이 든 글은 한 번 더 막는다.
 service cloud.firestore {

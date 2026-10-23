@@ -13,17 +13,18 @@ export const Area = forwardRef(function Area(props, ref) {
 });
 
 export function Symbol({ label = '메뉴' }) {
-    return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '쓱' : label}</span>;
+    return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '콕' : label}</span>;
 }
 
-/** 파스텔 하늘 클레이 앱 아이콘에는 글자가 없습니다.
-    쓱 가계부 앱 아이콘(favicon)의 '쓱' 획을 그대로 둡니다. 글꼴 파일 없이 보여서 오프라인에서도 같습니다. */
-export function SsugMark() {
+/** 하단 버튼 '콕'. Pretendard Bold(굵기 700) U+CF55 윤곽을 패스로 옮겼습니다.
+    Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
+    with Reserved Font Name Pretendard.
+    SIL Open Font License 1.1. 전문은 public/fonts/OFL-Pretendard.txt
+    글꼴 파일을 더 받지 않고 패스만 넣어 오프라인에서도 같습니다. */
+export function KokMark() {
     return (
-        <svg className="ssug-mark" viewBox="-18.75 -14.5 139.5 139.5" aria-hidden="true" focusable="false">
-            <path d="M15 28 Q22.5 10 28 7 Q33.5 10 41 28 M61 28 Q68.5 10 74 7 Q79.5 10 87 28" fill="none" stroke="currentColor" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M9 49 Q51 63 93 49" fill="none" stroke="currentColor" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M21 78 H70 Q81 78 81 89 V103" fill="none" stroke="currentColor" strokeWidth="17" strokeLinecap="round" strokeLinejoin="round" />
+        <svg className="kok-mark" viewBox="0 0 1669 1790" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M1356 213H194V8H1356ZM1661 1036H8V834H1661ZM882 979H625V629H882ZM1423 759 1171 743Q1194 636 1205 541Q1216 446 1218.5 371Q1221 296 1221 178V8H1474V178Q1474 296 1471.5 374.5Q1469 453 1457.5 552Q1446 651 1423 759ZM1462 1782H1208V1373H177V1174H1462ZM175 565 144 358 1297 333V518Z" />
         </svg>
     );
 }

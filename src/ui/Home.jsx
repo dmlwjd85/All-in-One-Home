@@ -53,8 +53,8 @@ export function Home() {
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 ＋에서 시작해요</h3>
-                <p className="muted" style={{ margin: 0 }}>가운데 ＋에 한 줄을 적으면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
+                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 콕에서 시작해요</h3>
+                <p className="muted" style={{ margin: 0 }}>가운데 콕에 한 줄을 적으면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
@@ -123,7 +123,7 @@ export function Home() {
                     {!feed.length && (
                         <div>
                             <ClayMark />
-                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. ＋에 한 줄이면 누가기록에 쌓을 수 있어요.</p>
+                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. 콕에 한 줄이면 누가기록에 쌓을 수 있어요.</p>
                         </div>
                     )}
                 </div>

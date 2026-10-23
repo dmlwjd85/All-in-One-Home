@@ -27,10 +27,10 @@ export function Start() {
         <div style={{ maxWidth: 480, margin: '0 auto', padding: 20 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Symbol />
-                <strong className="title-font" style={{ fontSize: 18 }}>쓱</strong>
+                <strong className="title-font" style={{ fontSize: 18 }}>콕</strong>
             </div>
-            <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>쓱 교무수첩</h1>
-            <p style={{ fontSize: 16 }}>열자마자 쓱, 적. 담임의 하루가 한 화면에 있어요.</p>
+            <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>콕 교무수첩</h1>
+            <p style={{ fontSize: 16 }}>열자마자 콕, 적. 담임의 하루가 한 화면에 있어요.</p>
             {step === 'choose' && (
                 <div className="solid-card" style={{ padding: 16 }}>
                     <p style={{ marginTop: 0 }}>학생 기록은 선생님 자리에만 둡니다. 광고는 없어요.</p>

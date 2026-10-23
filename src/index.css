@@ -176,14 +176,14 @@ button, input, textarea { font-family: inherit; }
     place-items: center;
     padding: 0;
 }
-.ssug-mark {
-    width: 46px;
-    height: 46px;
+.kok-mark {
+    width: 36px;
+    height: 39px;
     display: block;
 }
-.desk-fab .ssug-mark {
-    width: 52px;
-    height: 52px;
+.desk-fab .kok-mark {
+    width: 42px;
+    height: 45px;
 }
 .tip-bubble {
     position: relative;
