@@ -96,11 +96,14 @@ function copyData(value) {
     return structuredClone(value);
 }
 
-/** 안전 백업이 방금 만든 내보내기를 다시 품으면 JSON이 순환에서 멈춥니다. 그 고리만 빼니다. */
+/** 안쪽 백업 본문은 뺍니다. 교체할 때마다 파일 안에 이전 파일이 겹치지 않습니다. */
 function copyBackup(backup) {
     if (!backup || typeof backup !== 'object') return null;
+    const rest = { ...backup };
+    delete rest.payload;
+    if (!Object.keys(rest).length) return null;
     try {
-        return JSON.parse(JSON.stringify(backup));
+        return JSON.parse(JSON.stringify(rest));
     } catch {
         return null;
     }

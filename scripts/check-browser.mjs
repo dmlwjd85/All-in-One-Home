@@ -1460,6 +1460,45 @@ try {
         check(saved.sound === '0' && saved.seen === '1', '소리 끄기가 저장되지 않았습니다.');
     });
 
+    for (const width of [360, 390]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate(() => {
+                const button = document.querySelector('.period-row button');
+                button?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }));
+            });
+            await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요'));
+            const overlap = await page.evaluate(() => {
+                const hits = (a, b) => Boolean(
+                    a && b && a.width > 0 && b.width > 0
+                    && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                    && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                );
+                const toast = document.querySelector('.toast')?.getBoundingClientRect();
+                const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
+                const sixth = cells[5];
+                const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                const viewBottom = window.innerHeight;
+                const sixthOnScreen = Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0 && sixth.right > 0);
+                return {
+                    coversSixth: hits(toast, sixth),
+                    coversAnyPeriod: cells.some((cell) => hits(toast, cell)),
+                    coversTab: hits(toast, tab),
+                    sixthUnderTab: hits(sixth, tab),
+                    sixthOnScreen,
+                    toastTop: Math.round(toast?.top ?? -1),
+                    toastBottom: Math.round(toast?.bottom ?? -1),
+                    sixthTop: Math.round(sixth?.top ?? -1),
+                    sixthBottom: Math.round(sixth?.bottom ?? -1),
+                    tabTop: Math.round(tab?.top ?? -1),
+                };
+            });
+            check(
+                overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversTab && !overlap.sixthUnderTab,
+                `${width}에서 소리 안내가 6교시나 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
+            );
+        }, 800);
+    }
+
     await withDemo(390, 'light', async (page) => {
         await page.evaluate(async () => {
             if (!navigator.serviceWorker) return false;

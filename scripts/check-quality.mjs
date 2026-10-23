@@ -11,7 +11,7 @@ import { resolveHash } from '../src/lib/routes.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
-import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot } from '../src/lib/db.js';
+import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
@@ -277,6 +277,7 @@ if (cycledText) {
     const parsedCycle = JSON.parse(cycledText);
     check(parsedCycle.todos?.[0]?.title === '동의서 걷기', '순환 참조 때문에 할 일이 빠집니다.');
     check(parsedCycle.local?.records?.[0]?.text === '알레르기 간식', '순환 참조 때문에 이 기기 기록이 빠집니다.');
+    check(parsedCycle.local?.backup?.payload === undefined, '내보낼 때 안쪽 백업 본문을 빼지 않습니다.');
 }
 
 function fingerprint(current) {
@@ -339,6 +340,95 @@ await (async () => {
     check(fingerprint(snapshot()) === beforeFail, '실패한 교체 뒤에 원래 기록으로 돌아오지 않았습니다.');
     const recovered = exportFile(true);
     check(JSON.stringify(recovered) && recovered.todos.some((row) => row.title.includes('동의서')), '복구 뒤 내보내기가 할 일을 잃었습니다.');
+
+    const sizes = [];
+    for (let round = 0; round < 6; round += 1) {
+        const text = JSON.stringify(exportFile(true));
+        const parsed = JSON.parse(text);
+        check(parsed.local?.backup?.payload === undefined, '교체를 반복해도 안쪽 백업이 파일에 남습니다.');
+        sizes.push(text.length);
+        const brought = await importText(text, 'replace');
+        check(brought.ok, `크기를 재는 교체가 실패했습니다: ${(brought.errors || []).join(' ')}`);
+    }
+    check(sizes.length === 6 && sizes.every((size) => size === sizes[0]), `교체를 반복하면 파일 크기가 커집니다: ${sizes.join(', ')}`);
+    check(snapshot().local.backup?.payload?.local?.backup?.payload === undefined, '기기에 남긴 백업 안에 이전 백업 본문이 겹칩니다.');
+
+    function quotaError() {
+        const error = new Error('QuotaExceededError');
+        error.name = 'QuotaExceededError';
+        return error;
+    }
+    function blockedError() {
+        const error = new Error('blocked');
+        error.name = 'AbortError';
+        return error;
+    }
+    function makeVault() {
+        const bag = new Map();
+        let mode = 'ok';
+        return {
+            failOnce() { mode = 'once'; },
+            failAlways() { mode = 'quota'; },
+            heal() { mode = 'ok'; },
+            async get(key) {
+                return bag.has(key) ? structuredClone(bag.get(key)) : undefined;
+            },
+            async set(key, value) {
+                if (mode === 'quota') throw quotaError();
+                if (mode === 'once') {
+                    mode = 'ok';
+                    throw blockedError();
+                }
+                bag.set(key, structuredClone(value));
+            },
+            async remove(key) {
+                bag.delete(key);
+            },
+            dump() {
+                return bag.has('state') ? structuredClone(bag.get('state')) : undefined;
+            },
+        };
+    }
+
+    const mainStore = makeVault();
+    const localStore = makeVault();
+    useVaultsForTest(mainStore, localStore);
+    await update((draft) => draft);
+    await saveQuick({ text: '섞이면 안 되는 할 일', kind: '할 일' });
+    const kept = fingerprint(snapshot());
+    const mainBefore = JSON.stringify(mainStore.dump());
+    const localBefore = JSON.stringify(localStore.dump());
+    check(mainBefore.includes('섞이면 안 되는 할 일'), '메인 저장소에 새 할 일이 없습니다.');
+    localStore.failOnce();
+    const oneSide = await importText(file, 'replace');
+    check(!oneSide.ok, '한쪽 저장소가 실패했는데 가져오기가 성공했습니다.');
+    check((oneSide.errors || []).some((item) => item.includes('이 기기에 기록을 남기지 못해서')), `한쪽 실패 안내가 없습니다: ${(oneSide.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === kept, '한쪽 저장소만 실패한 뒤 메모리 기록이 섞였습니다.');
+    check(JSON.stringify(mainStore.dump()) === mainBefore, '한쪽이 실패한 뒤 메인 저장소가 새 기록으로 남았습니다.');
+    check(JSON.stringify(localStore.dump()) === localBefore, '한쪽이 실패한 뒤 로컬 저장소가 예전과 다르게 남았습니다.');
+
+    mainStore.failAlways();
+    localStore.failAlways();
+    const full = await importText(file, 'replace');
+    check(!full.ok, '저장 공간이 가득 찼는데 가져오기가 성공했습니다.');
+    check((full.errors || []).join(' ').includes('저장 공간이 가득 차서'), `공간 부족 안내가 없습니다: ${(full.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === kept, '공간이 가득 찬 뒤 메모리 기록이 바뀌었습니다.');
+    check(JSON.stringify(mainStore.dump()) === mainBefore && JSON.stringify(localStore.dump()) === localBefore, '공간이 가득 찬 뒤 저장소가 바뀌었습니다.');
+
+    const heard = [];
+    const stopListen = subscribeStorageIssue((message) => heard.push(message));
+    let ordinaryFailed = false;
+    try {
+        await saveQuick({ text: '남지 않을 할 일', kind: '할 일' });
+    } catch (error) {
+        ordinaryFailed = Boolean(error?.storageFailed);
+    }
+    stopListen();
+    check(ordinaryFailed, '일반 저장이 저장 실패를 조용히 넘겼습니다.');
+    check(heard.some((message) => message.includes('저장 공간이 가득 차서')), `일반 저장 실패를 알리지 않았습니다: ${heard.join(' / ')}`);
+    check(fingerprint(snapshot()) === kept, '일반 저장에 실패했는데 화면에 새 기록이 남았습니다.');
+    check(!JSON.stringify(mainStore.dump()).includes('남지 않을 할 일'), '실패한 일반 저장이 메인 저장소에 남았습니다.');
+    check(JSON.stringify(localStore.dump()) === localBefore, '실패한 일반 저장이 로컬 저장소를 바꿨습니다.');
 })().catch((error) => {
     failures.push(error?.message || String(error));
 });

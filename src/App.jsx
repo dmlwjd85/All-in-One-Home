@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, snapshot, subscribe, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
 import { resolveHash } from './lib/routes.js';
 import { closeTip, tipForToday } from './lib/tips.js';
@@ -182,6 +182,8 @@ export default function App() {
         };
     }, []);
 
+    useEffect(() => subscribeStorageIssue((message) => showToast(message)), []);
+
     useEffect(() => {
         setKeySoundAnnouncer(() => {
             showToast('콕, 누를 때 소리가 나요', false, {
@@ -292,7 +294,7 @@ export default function App() {
 
     return (
         <Ui.Provider value={ui}>
-            <div className="app-bg app-frame" data-ready="1">
+            <div className={`app-bg app-frame${toast ? ' has-toast' : ''}`} data-ready="1">
                 <aside className="side">
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
                         <Symbol />

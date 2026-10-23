@@ -9,8 +9,8 @@ import { pullUserData, pushUserData, syncAvailable } from './cloud.js';
 import { seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
-const mainVault = createVault('ssug-gyomu');
-const localVault = createVault('ssug-gyomu-local');
+let mainVault = createVault('ssug-gyomu');
+let localVault = createVault('ssug-gyomu-local');
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
@@ -79,28 +79,107 @@ function mirrorTheme(theme) {
     }
 }
 
+const storageListeners = new Set();
+
+export function subscribeStorageIssue(fn) {
+    storageListeners.add(fn);
+    return () => storageListeners.delete(fn);
+}
+
+export function storageIssueMessage(error) {
+    const name = `${error?.name || ''} ${error?.message || ''}`;
+    if (/QuotaExceeded/i.test(name)) return '저장 공간이 가득 차서 기록을 남기지 못했어요. 원래대로 돌려 두었어요.';
+    return '이 기기에 기록을 남기지 못해서 원래대로 돌려 두었어요.';
+}
+
+function tellStorageIssue(message) {
+    storageListeners.forEach((fn) => {
+        try { fn(message); } catch { /* 안내는 화면만 고칩니다. */ }
+    });
+}
+
+function markStorage(error) {
+    if (error?.storageFailed) return error;
+    const wrapped = new Error(storageIssueMessage(error));
+    wrapped.name = error?.name || 'Error';
+    wrapped.storageFailed = true;
+    wrapped.cause = error;
+    return wrapped;
+}
+
+async function putState(vault, value) {
+    if (value === undefined) await vault.remove('state');
+    else await vault.set('state', value);
+}
+
+async function restoreVaults(previousMain, previousLocal) {
+    try { await putState(mainVault, previousMain); } catch { /* 되돌리기가 막혀도 처음 오류를 올립니다. */ }
+    try { await putState(localVault, previousLocal); } catch { /* 한쪽만 남아 있지 않게 둘 다 시도합니다. */ }
+}
+
 async function writeVaults(copy) {
     if (memoryOnly) return;
     const local = copy.local;
     const main = { ...copy, local: undefined, auth: null, tip: undefined };
-    await mainVault.set('state', main);
-    await localVault.set('state', local);
+    let previousMain;
+    let previousLocal;
+    try {
+        previousMain = await mainVault.get('state');
+        previousLocal = await localVault.get('state');
+    } catch (error) {
+        throw markStorage(error);
+    }
+    let mainWrote = false;
+    let localWrote = false;
+    try {
+        await mainVault.set('state', main);
+        mainWrote = true;
+        await localVault.set('state', local);
+        localWrote = true;
+    } catch (error) {
+        if (mainWrote || localWrote) await restoreVaults(previousMain, previousLocal);
+        throw markStorage(error);
+    }
 }
 
 function persist() {
     const copy = structuredClone(state);
-    persistQueue = persistQueue.then(() => writeVaults(copy)).catch(() => {});
-    return persistQueue;
+    const run = persistQueue.then(() => writeVaults(copy));
+    persistQueue = run.then(() => undefined, () => undefined);
+    return run;
+}
+
+async function revertMemory(previous, undoable) {
+    if (undoable) undoStack.pop();
+    state = previous;
+    mirrorTheme(state.profile.theme);
+    emit();
 }
 
 export async function update(recipe, { undoable = false } = {}) {
-    if (undoable) undoStack = [...undoStack.slice(-4), structuredClone(state)];
+    const previous = structuredClone(state);
+    if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
     state = next;
     mirrorTheme(state.profile.theme);
     emit();
-    await persist();
+    try {
+        await persist();
+    } catch (error) {
+        await revertMemory(previous, undoable);
+        const message = error?.storageFailed ? error.message : storageIssueMessage(error);
+        tellStorageIssue(message);
+        throw error;
+    }
     flushCloud().catch(() => {});
+}
+
+/** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
+export function useVaultsForTest(nextMain, nextLocal) {
+    mainVault = nextMain;
+    localVault = nextLocal;
+    memoryOnly = false;
+    persistQueue = Promise.resolve();
 }
 
 export async function flushCloud() {
@@ -161,10 +240,20 @@ function absorbCloud(draft, remote) {
 export async function undo() {
     const prev = undoStack.pop();
     if (!prev) return false;
+    const current = state;
     state = prev;
     mirrorTheme(state.profile.theme);
     emit();
-    await persist();
+    try {
+        await persist();
+    } catch (error) {
+        undoStack.push(prev);
+        state = current;
+        mirrorTheme(state.profile.theme);
+        emit();
+        tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
+        throw error;
+    }
     return true;
 }
 
@@ -700,7 +789,12 @@ export async function importText(text, mode, hooks = {}) {
     const data = checked.data;
     const sensitive = splitSensitive(data.records || []);
     if (mode !== 'replace') {
-        await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        try {
+            await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        } catch (error) {
+            if (error?.storageFailed) return { ok: false, errors: [error.message] };
+            throw error;
+        }
         return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
     }
     let previous;
@@ -721,8 +815,9 @@ export async function importText(text, mode, hooks = {}) {
         await persist();
         flushCloud().catch(() => {});
         await hooks.onPhase?.('applied');
-    } catch {
+    } catch (error) {
         if (previous) await restoreState(previous);
+        if (error?.storageFailed) return { ok: false, errors: [error.message] };
         return { ok: false, errors: ['기록을 바꾸지 못해 원래대로 돌려 두었어요.'] };
     }
     return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
