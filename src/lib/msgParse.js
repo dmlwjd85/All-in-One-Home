@@ -1969,13 +1969,14 @@ function magamPairChunks(text, now) {
     ];
 }
 
-/** '또는 … 중 하루'는 어느 날인지 모르므로 날짜마다 노란 카드입니다. */
+/** '또는 … 중 하루', '둘 중 하나'는 어느 날인지 모르므로 날짜마다 노란 카드입니다. */
 function alternativeDayChunks(text, now) {
-    if (!/또는/.test(text) || !/중\s*(?:하루|하나)/.test(text)) return null;
+    const oneOf = /둘\s*중\s*(?:하루|하나)/.test(text);
+    if ((!/또는/.test(text) || !/중\s*(?:하루|하나)/.test(text)) && !oneOf) return null;
     const spans = realDateSpans(text, now);
     if (spans.length < 2 || isRangePair(text, spans) || isReschedule(text, spans)) return null;
-    const tail = text.slice(spans[spans.length - 1].index + spans[spans.length - 1].length).replace(/중\s*(?:하루|하나)/g, ' ');
-    const head = text.slice(0, spans[0].index).replace(/중\s*(?:하루|하나)/g, ' ');
+    const tail = text.slice(spans[spans.length - 1].index + spans[spans.length - 1].length).replace(/둘\s*중\s*(?:하루|하나)/g, ' ').replace(/중\s*(?:하루|하나)/g, ' ');
+    const head = text.slice(0, spans[0].index).replace(/둘\s*중\s*(?:하루|하나)/g, ' ').replace(/중\s*(?:하루|하나)/g, ' ');
     const name = tidyTitle(tail.replace(/(?:을|를)?\s*(?:갑니다|가요|입니다)[.。]?\s*$/g, ' ')) || tidyTitle(head) || '일정';
     return spans.map((span) => `\u0001${name} ${text.slice(span.index, span.index + span.length)}`.replace(/\s+/g, ' ').trim());
 }
@@ -3065,14 +3066,24 @@ function textWithoutSafeChange(text) {
         .replace(/빠지지\s*못/g, ' ');
 }
 
-/** 연기·변경·원래·당초·기존·변경 전/후·취소·옮김은 확인이 필요합니다. 바뀌는 행사명은 제외합니다. */
-function hasChangeCue(text) {
-    const src = textWithoutSafeChange(text);
-    return /(?:변경\s*전|변경\s*후|(?<![가-힣])원래|(?<![가-힣])당초|(?<![가-힣])기존|(?<![가-힣])연기(?!된|한)|(?<![가-힣])변경|(?<![가-힣])취소|(?<![가-힣])옮|(?<![가-힣])미루(?!지)|(?<![가-힣])미룹|(?<![가-힣])미뤄|(?<![가-힣])앞당|(?<![가-힣])바꿉|(?<![가-힣])바꿔|(?<![가-힣])바뀝)/.test(src);
+/**
+ * 연기·변경·취소·옮김·미룸·앞당김은 확인이 필요합니다.
+ * 원래·기존·당초·변경 전/후는 바로 뒤에 날짜가 오거나, 날짜·일정이 그 말을 받거나, 날짜가 둘 이상일 때만입니다.
+ * 원래대로·기존대로는 예정이었던 대로와 같이 변경이 아닙니다. 바꿉·바꿔·바뀝도 새 날짜가 있거나 날짜가 둘일 때만입니다.
+ */
+export function hasChangeCue(text, now) {
+    const src = withoutAsPlanned(textWithoutSafeChange(text));
+    const bare = withoutAsPlanned(textWithoutSafeChange(text));
+    const oldWord = /(?:원래|당초|기존|변경\s*전|변경\s*후)/.test(bare);
+    const oldStatement = /(?:원래|당초|기존|변경\s*전)\s*(?:는|은|의)?\s*(?:날짜|일정)/.test(bare) && findDates(bare, now).length >= 1;
+    const oldCue = oldWord && (dateGroupCount(bare, now) >= 2 || dateModifyingMarker(bare) || oldStatement);
+    const swapCue = /(?<![가-힣])(?:바꿉|바꿔|바뀝)/.test(src) && (dateGroupCount(src, now) >= 2 || Boolean(destinationYmd(src, now)));
+    const moveCue = /(?:(?<![가-힣])연기(?!된|한)|(?<![가-힣])변경(?!\s*전|\s*후)|(?<![가-힣])취소|(?<![가-힣])옮|(?<![가-힣])미루(?!지)|(?<![가-힣])미룹|(?<![가-힣])미뤄|(?<![가-힣])앞당)/.test(src);
+    return oldCue || swapCue || moveCue;
 }
 
 /** 물결·부터·N일간으로 이어진 날은 한 기간입니다. 같은 날을 두 번 적어도 하나입니다. */
-function dateGroupCount(text, now) {
+export function dateGroupCount(text, now) {
     const spans = findDates(text, now);
     const groups = [];
     for (let i = 0; i < spans.length; i += 1) {
@@ -3090,7 +3101,7 @@ function dateGroupCount(text, now) {
 }
 
 function needsConfirm(text, now) {
-    return hasChangeCue(text) || dateGroupCount(text, now) >= 2;
+    return hasChangeCue(text, now);
 }
 
 const DEST_AFTER = /^\s*(?:(?:오전|오후)\s*)?(?:\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})?\s*(?:으로|로)\s*(?:연기|변경|옮|미루|미뤄|미룹|바꿉|바꿔|바뀝|앞당)/;
@@ -3117,8 +3128,9 @@ function confirmPieces(text) {
 }
 
 /**
- * 변경·예전 값·날짜가 여럿이면 넣지 않고 원문 노란 카드로 둡니다.
+ * 변경·예전 값이면 넣지 않고 원문 노란 카드로 둡니다. 날짜만 여럿인 마감과 행사는 그대로 둡니다.
  * 새 날짜가 '(날짜)로 연기/변경/옮깁니다'로 분명하면 그 날짜를 기본값으로 채웁니다.
+ * 우천처럼 조건이 있으면 원래 날짜는 포함으로 남기고, 미룬 날짜만 노란 카드로 더합니다.
  */
 function confirmUncertain(text, items, now) {
     const note = '확인이 필요해 빼 두었어요.';
@@ -3134,6 +3146,31 @@ function confirmUncertain(text, items, now) {
         const spans = findDates(sentence, now);
         const ymds = new Set(spans.map((span) => span.ymd));
         const dest = destinationYmd(sentence, now);
+        if (rainHold(sentence)) {
+            if (dest && !next.some((item) => item.date === dest || item.end === dest)) {
+                next.push({
+                    id: `msg${fnv1a32(`rain|${dest}|${title}`)}`,
+                    kind: '일정',
+                    eventKind: '',
+                    title,
+                    date: dest,
+                    end: '',
+                    time: '',
+                    endTime: '',
+                    period: 0,
+                    periodEnd: 0,
+                    memo: '',
+                    include: false,
+                    low: true,
+                    warning: note,
+                    sensitive: false,
+                    confidence: 0.4,
+                    assumedPm: false,
+                    raw: title,
+                });
+            }
+            return;
+        }
         const onlyPiece = confirmPieces(text).length === 1;
         const related = [];
         next.forEach((item, index) => {
@@ -3153,8 +3190,34 @@ function confirmUncertain(text, items, now) {
         if (dest && !hasDest && related.length === 1) {
             const index = related[0];
             const item = next[index];
+            const kept = [item.date, item.end].filter(Boolean);
             next[index] = { ...item, date: dest, end: item.end && ymds.has(item.end) ? item.end : '' };
             paint(index, title);
+            kept.forEach((ymd) => {
+                if (ymd === dest) return;
+                const monthDay = ymd.slice(4);
+                if (next.some((row) => row.date === ymd || row.end === ymd || String(row.date || '').slice(4) === monthDay)) return;
+                next.push({
+                    id: `msg${fnv1a32(`confirm|${ymd}|${title}`)}`,
+                    kind: item.kind || '일정',
+                    eventKind: item.eventKind || '',
+                    title,
+                    date: ymd,
+                    end: '',
+                    time: '',
+                    endTime: '',
+                    period: 0,
+                    periodEnd: 0,
+                    memo: '',
+                    include: false,
+                    low: true,
+                    warning: note,
+                    sensitive: false,
+                    confidence: 0.4,
+                    assumedPm: false,
+                    raw: title,
+                });
+            });
             return;
         }
         related.forEach((index) => paint(index, title));

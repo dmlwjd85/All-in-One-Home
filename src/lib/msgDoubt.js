@@ -4,7 +4,7 @@
  * silent 는 넣을게요인 카드가 기대와 다른 경우입니다. 노란 카드로 보류한 것은 세지 않습니다.
  */
 export const MSG_DOUBT = [
-    { id: 'd1', text: '조회는 11/10(화) 09:40에서 10:30으로 변경', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-10', time: '10:30', word: '조회' }), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-10', time: '10:30', word: '조회' }) },
+    { id: 'd1', text: '조회는 11/10(화) 09:40에서 10:30으로 변경', ok: (items) => included(items).length === 0 && items.filter((item) => item.include === false).length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-10' && items[0].time === '10:30' && items[0].title === '조회는 11/10(화) 09:40에서 10:30으로 변경', silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-10', time: '10:30', word: '조회' }) },
     { id: 'd2', text: '학예 발표는 11/18(수)이 아니라 11/20(금)입니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-20', word: '발표' }) && excludedDate(items, '2026-11-18'), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-20', word: '발표' }) },
     { id: 'd3', text: '독후감 제출 기한이 11/6(금)에서 11/13(금)으로 연장', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-11-13', word: '독후감' }) && excludedDate(items, '2026-11-06'), silent: (items) => wrongIncluded(items, { kind: '할 일', date: '2026-11-13', word: '독후감' }) },
     { id: 'd4', text: '소방 교육이 12/2(수)에서 12/4(금)로 순연됩니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-12-04', word: '소방' }) && excludedDate(items, '2026-12-02'), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-12-04', word: '소방' }) },
@@ -15,15 +15,15 @@ export const MSG_DOUBT = [
     { id: 'd9', text: '작년 5/8 현장학습 사진', ok: (items) => items.length >= 1 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2025-05-08'), silent: (items) => included(items).length > 0 },
     { id: 'd10', text: '지난번 12/2 학급 회의 자료', ok: (items) => items.length >= 1 && items.every((item) => item.include === false && item.low === true), silent: (items) => included(items).length > 0 },
     { id: 'd11', text: '소풍은 취소되고 박물관 견학으로 대체됩니다. 12/11(금)', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-12-11', word: '견학' }), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-12-11', word: '견학' }) },
-    { id: 'd12', text: '10/28 운동회는 취소되고 11/4 체육대회로 대체', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-04', word: '체육' }) && excludedDate(items, '2026-10-28'), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-04', word: '체육' }) },
+    { id: 'd12', text: '10/28 운동회는 취소되고 11/4 체육대회로 대체', ok: (items) => included(items).length === 0 && items.filter((item) => item.include === false).length === 2 && items.every((item) => item.title === '10/28 운동회는 취소되고 11/4 체육대회로 대체') && items.some((item) => item.date === '2026-11-04') && items.some((item) => item.date === '2026-10-28'), silent: (items) => included(items).length > 0 },
     { id: 'd13', text: '학급 앨범은 11/17(화) 가족 사진은 11/24(화)', ok: (items) => yellowDates(items, ['2026-11-17', '2026-11-24']), silent: (items) => included(items).length > 0 },
     { id: 'd14', text: '회의는 10시와 2시 11/12(목)', ok: (items) => items.length >= 2 && items.every((item) => item.include === false && item.low === true) && items.every((item) => item.date === '2026-11-12'), silent: (items) => included(items).length > 0 },
     { id: 'd15', text: '현장학습 11/5(목) 11/19(목) 둘 중 하나', ok: (items) => yellowDates(items, ['2026-11-05', '2026-11-19']), silent: (items) => included(items).length > 0 },
     { id: 'd16', text: '상담 11/11(수) 혹은 11/18(수)', ok: (items) => yellowDates(items, ['2026-11-11', '2026-11-18']), silent: (items) => included(items).length > 0 },
     { id: 'd17', text: '12/3(목) 발명대회', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-12-03', word: '발명' }), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-12-03', word: '발명' }) },
-    { id: 'd18', text: '11/27(금) 현장학습 장소 변경', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-27', word: '현장' }) && included(items).every((item) => item.title.includes('변경')), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-27', word: '현장' }) },
+    { id: 'd18', text: '11/27(금) 현장학습 장소 변경', ok: (items) => included(items).length === 0 && items.filter((item) => item.include === false).length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-27' && items[0].title === '11/27(금) 현장학습 장소 변경', silent: (items) => included(items).length > 0 },
     { id: 'd19', text: '글피 6교시 음악은 그대로입니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-10-24', time: '14:00', word: '음악' }) && included(items).every((item) => item.period === 6), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-10-24', time: '14:00', word: '음악' }) },
-    { id: 'd20', text: '진로 검사 11/9(월)에서 11/16(월)로 앞당겨졌습니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-16', word: '진로' }) && excludedDate(items, '2026-11-09'), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-11-16', word: '진로' }) },
+    { id: 'd20', text: '진로 검사 11/9(월)에서 11/16(월)로 앞당겨졌습니다', ok: (items) => included(items).length === 0 && items.filter((item) => item.include === false).length === 2 && items.every((item) => item.title === '진로 검사 11/9(월)에서 11/16(월)로 앞당겨졌습니다') && items.some((item) => item.date === '2026-11-16') && items.some((item) => item.date === '2026-11-09'), silent: (items) => included(items).length > 0 },
     { id: 'd21', text: '교직원 연수 12/15(화)이 아니라 12/17(목)', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-12-17', word: '연수' }) && excludedDate(items, '2026-12-15'), silent: (items) => wrongIncluded(items, { kind: '일정', date: '2026-12-17', word: '연수' }) },
     { id: 'd22', text: '과제 제출 기한이 12/18에서 12/22로 연장', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-12-22', word: '과제' }) && excludedDate(items, '2026-12-18'), silent: (items) => wrongIncluded(items, { kind: '할 일', date: '2026-12-22', word: '과제' }) },
 ];
@@ -46,16 +46,12 @@ function matches(item, expect) {
 
 function oneIncluded(items, expect) {
     const real = included(items);
-    if (real.length) return real.length === 1 && real.every((item) => matches(item, expect));
-    const held = items.filter((item) => item.include === false && item.low === true && /확인이 필요해/.test(item.warning || ''));
-    return held.some((item) => matches(item, expect)) && items.every((item) => item.include === false);
+    return real.length === 1 && real.every((item) => matches(item, expect));
 }
 
 function listed(items, rows) {
     const real = included(items);
-    const pool = real.length ? real : items.filter((item) => item.include === false && item.low === true);
-    if (real.length) return real.length === rows.length && real.every((item) => item.kind === '일정') && rows.every((row) => real.some((item) => matches(item, row)));
-    return pool.length >= rows.length && pool.every((item) => item.kind === '일정') && rows.every((row) => pool.some((item) => matches(item, row)));
+    return real.length === rows.length && real.every((item) => item.kind === '일정') && rows.every((row) => real.some((item) => matches(item, row)));
 }
 
 function yellowDates(items, dates) {

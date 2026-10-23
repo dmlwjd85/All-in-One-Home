@@ -12,7 +12,7 @@ export const MSG_FRESH = [
     { id: 'c1', text: '준비물은 11/20(금)까지 제출해 주세요. 빠진 물건은 알려 주세요.', ok: (items) => included(items).length === 1 && included(items)[0].date === '2026-11-20' && included(items).every((item) => item.date) },
     { id: 'c2', text: '이번주 안으로 알림장 검사 부탁드려요', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-10-23', word: '알림장' }) },
     { id: 'c3', text: '금주 안으로 독서 기록장 걷어 주세요', ok: (items) => oneIncluded(items, { kind: '할 일', date: '2026-10-23', word: '독서' }) },
-    { id: 'd1', text: '스쿨버스 노선이 11/3(화)부터 변경됩니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-11-03', word: '노선' }) },
+    { id: 'd1', text: '스쿨버스 노선이 11/3(화)부터 변경됩니다', ok: (items) => included(items).length === 0 && items.filter((item) => item.include === false).length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-03' && items[0].title === '스쿨버스 노선이 11/3(화)부터 변경됩니다' },
     { id: 'd2', text: '2. 10/29 전교 체육대회', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-10-29', word: '체육' }) },
     { id: 'd3', text: '1월 15일(금)은 재량휴업일입니다.', ok: (items) => oneIncluded(items, { kind: '일정', date: '2027-01-15', word: '휴업' }) && included(items)[0].eventKind === '휴일' },
     { id: 'd4', text: '차주 수요일 통학차량 운행이 없습니다', ok: (items) => oneIncluded(items, { kind: '일정', date: '2026-10-28', word: '통학' }) },
@@ -44,13 +44,12 @@ function included(items) {
 
 function oneIncluded(items, expect) {
     const real = included(items);
-    if (real.length) return real.length === 1 && hasIncluded(real, expect);
-    const held = items.filter((item) => item.include === false && /확인이 필요해/.test(item.warning || ''));
-    return held.length > 0 && items.every((item) => item.include === false) && hasIncluded(held, expect);
+    return real.length === 1 && hasIncluded(real, expect);
 }
 
 function hasIncluded(items, expect) {
     return items.some((item) => {
+        if (item.include === false) return false;
         if (expect.kind && item.kind !== expect.kind) return false;
         if (expect.date && item.date !== expect.date) return false;
         if (expect.end && item.end !== expect.end) return false;

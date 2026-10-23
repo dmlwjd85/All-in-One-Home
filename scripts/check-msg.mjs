@@ -1,6 +1,6 @@
 /** 학교 메시지 예문을 읽고 유형·날짜·시각·제목 정확도를 확인합니다. */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { confirmShapeOk, gradeMessages, leakedAbsenceDates, parseSchoolMessages, silentOtherAbsence, silentPostponement } from '../src/lib/msgParse.js';
+import { dateGroupCount, gradeMessages, hasChangeCue, leakedAbsenceDates, parseSchoolMessages, silentOtherAbsence, silentPostponement } from '../src/lib/msgParse.js';
 import { findDates } from '../src/lib/parse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
@@ -83,14 +83,12 @@ console.log('저장 경로와 중복 방지도 확인했습니다.');
 
 const qaNow = new Date('2026-10-22T09:00:00+09:00');
 const mustFails = [];
-const principlePasses = [];
+function cardCounts(items, live, yellow) {
+    return items.filter((item) => item.include !== false).length === live
+        && items.filter((item) => item.include === false).length === yellow;
+}
 function passCase(label, text, items, ok) {
-    if (ok(items)) return true;
-    if (confirmShapeOk(text, items, qaNow)) {
-        principlePasses.push(`${label}: ${text}`);
-        return true;
-    }
-    return false;
+    return ok(items);
 }
 function must(label, text, now, ok) {
     const items = parseSchoolMessages(text, { now }).items;
@@ -159,28 +157,28 @@ must('학년도', '2027학년도 학부모총회 3월 18일(목) 오후 2시', q
 must('지난 참고', '2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.', qaNow, (items) => items.length === 1 && items[0].date === '2025-11-03' && items[0].low === true && items[0].include === false);
 must('개강', '2027. 1. 4.(월) 방학 중 방과후학교 개강', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2027-01-04' && items[0].time === '' && items[0].title.includes('개강'));
 must('휴무', '2027년 1월 1일 신정 휴무', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].eventKind === '휴일' && items[0].date === '2027-01-01');
-must('수업 연기', '방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.', qaNow, (items) => confirmShapeOk('방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.', items, qaNow) && items.some((item) => item.date === '2026-11-05') && items.some((item) => item.date === '2026-10-29'));
-must('상담 변경', '윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경', qaNow, (items) => confirmShapeOk('윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경', items, qaNow) && items.some((item) => item.date === '2026-10-28' && item.time === '15:30') && items.some((item) => item.date === '2026-10-27'));
+must('수업 연기', '방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.', qaNow, (items) => cardCounts(items, 0, 2) && items.every((item) => item.title === '방과후 축구반 10/29(목) 수업은 11/5(목)로 연기됩니다.') && items.some((item) => item.date === '2026-11-05') && items.some((item) => item.date === '2026-10-29'));
+must('상담 변경', '윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경', qaNow, (items) => cardCounts(items, 0, 2) && items.every((item) => item.title === '윤서 어머님 상담 10/27 → 10/28(수) 15:30으로 변경') && items.some((item) => item.date === '2026-10-28' && item.time === '15:30') && items.some((item) => item.date === '2026-10-27'));
 must('끝 월 생략', '12월 8일(화)~10일(목)', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-12-08' && items[0].end === '2026-12-10');
 must('결혼 잡담', '다음달 7일에 저 결혼해요!! 청첩장 드릴게요 ㅎㅎ', qaNow, (items) => items.length === 1 && items[0].date === '2026-11-07' && items[0].include === false && items[0].low === true);
 must('탑재 마감', '10월 30일 17:00까지 수행평가 계획 탑재', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-30' && items[0].time === '17:00' && items[0].title.includes('탑재'));
-must('검사 차례', '11월 2일 1차, 11월 16일 2차 독서기록장 검사', qaNow, (items) => confirmShapeOk('11월 2일 1차, 11월 16일 2차 독서기록장 검사', items, qaNow) && items.some((item) => item.date === '2026-11-02') && items.some((item) => item.date === '2026-11-16'));
+must('검사 차례', '11월 2일 1차, 11월 16일 2차 독서기록장 검사', qaNow, (items) => cardCounts(items, 2, 0) && items.some((item) => item.date === '2026-11-02' && item.title === '독서기록장 검사 1차') && items.some((item) => item.date === '2026-11-16' && item.title === '독서기록장 검사 2차'));
 must('이번 달 말', '이번 달 말까지 가정통신문 회신 바랍니다', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].title === '가정통신문 회신' && items[0].include !== false && !/대략/.test(items[0].warning || ''));
 must('다음 달 초', '다음 달 초 교직원 연수', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '교직원 연수' && items[0].include === false && /대략/.test(items[0].warning));
-must('앞당김', '10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다', qaNow, (items) => confirmShapeOk('10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다', items, qaNow) && items.some((item) => item.date === '2026-10-27' && item.time === '15:00') && items.some((item) => item.date === '2026-10-29'));
-must('요일 이동', '다음주 월요일에서 수요일로', qaNow, (items) => confirmShapeOk('다음주 월요일에서 수요일로', items, qaNow) && items.some((item) => item.date === '2026-10-28') && items.some((item) => item.date === '2026-10-26'));
-must('기간 이동', '11/16~11/20에서 11/23~11/27로', qaNow, (items) => confirmShapeOk('11/16~11/20에서 11/23~11/27로', items, qaNow) && items.some((item) => item.date === '2026-11-23' && item.end === '2026-11-27') && items.some((item) => item.date === '2026-11-16' && item.end === '2026-11-20'));
+must('앞당김', '10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다', qaNow, (items) => cardCounts(items, 0, 2) && items.every((item) => item.title === '10/29(목)에서 10/27(화) 15:00로 앞당겨졌습니다') && items.some((item) => item.date === '2026-10-27' && item.time === '15:00') && items.some((item) => item.date === '2026-10-29'));
+must('요일 이동', '다음주 월요일에서 수요일로', qaNow, (items) => cardCounts(items, 1, 1) && items.some((item) => item.include !== false && item.date === '2026-10-28') && items.some((item) => item.include === false && item.date === '2026-10-26'));
+must('기간 이동', '11/16~11/20에서 11/23~11/27로', qaNow, (items) => cardCounts(items, 1, 1) && items.some((item) => item.include !== false && item.date === '2026-11-23' && item.end === '2026-11-27') && items.some((item) => item.include === false && item.date === '2026-11-16' && item.end === '2026-11-20'));
 must('월 없는 기간', '25~27일 학년 연구실 공사', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-25' && items[0].end === '2026-10-27' && items[0].title === '학년 연구실 공사' && !/\d/.test(items[0].title));
 must('취소', '10/30 현장체험학습이 취소되었습니다', qaNow, (items) => items.length === 1 && items[0].include === false && items[0].low === true && items[0].date === '2026-10-30');
 must('시간 마감', '다음 달 말까지 연수 30시간 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-30' && items[0].title.includes('30시간') && items[0].title.includes('연수') && items[0].include !== false && !/대략/.test(items[0].warning || ''));
 must('촬영 일정', '다음 달 초 학급 사진 촬영', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-01' && items[0].title === '학급 사진 촬영' && items[0].include === false && /대략/.test(items[0].warning));
 must('이번 달 중', '이번 달 중으로 안전교육 이수 확인', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-10-31' && items[0].include !== false && !items[0].title.includes('중으로') && !/대략/.test(items[0].warning || ''));
-must('시각 이동', '내일 교직원 회의는 15:40에서 16:10으로 변경', qaNow, (items) => confirmShapeOk('내일 교직원 회의는 15:40에서 16:10으로 변경', items, qaNow) && items.some((item) => item.date === '2026-10-23' && item.time === '16:10'));
-must('아니라', '10/30(금)이 아니라 10/31(토)입니다. 정정', qaNow, (items) => confirmShapeOk('10/30(금)이 아니라 10/31(토)입니다. 정정', items, qaNow) && items.some((item) => item.date === '2026-10-31') && items.some((item) => item.date === '2026-10-30'));
-must('기한 연장', '독서록 제출 기한이 10/23에서 10/30으로 연장', qaNow, (items) => confirmShapeOk('독서록 제출 기한이 10/23에서 10/30으로 연장', items, qaNow) && items.some((item) => item.kind === '할 일' && item.date === '2026-10-30' && item.title.includes('독서록')));
-must('예선 본선', '예선 11/9(월), 본선 11/16(월)', qaNow, (items) => confirmShapeOk('예선 11/9(월), 본선 11/16(월)', items, qaNow) && items.some((item) => item.date === '2026-11-09') && items.some((item) => item.date === '2026-11-16') && items.some((item) => item.title.includes('예선')) && items.some((item) => item.title.includes('본선')));
+must('시각 이동', '내일 교직원 회의는 15:40에서 16:10으로 변경', qaNow, (items) => cardCounts(items, 0, 1) && items[0].title === '내일 교직원 회의는 15:40에서 16:10으로 변경' && items.some((item) => item.date === '2026-10-23' && item.time === '16:10'));
+must('아니라', '10/30(금)이 아니라 10/31(토)입니다. 정정', qaNow, (items) => cardCounts(items, 1, 1) && items.some((item) => item.include !== false && item.date === '2026-10-31') && items.some((item) => item.include === false && item.date === '2026-10-30'));
+must('기한 연장', '독서록 제출 기한이 10/23에서 10/30으로 연장', qaNow, (items) => cardCounts(items, 1, 1) && items.some((item) => item.include !== false && item.kind === '할 일' && item.date === '2026-10-30' && item.title.includes('독서록')) && items.some((item) => item.include === false && item.date === '2026-10-23'));
+must('예선 본선', '예선 11/9(월), 본선 11/16(월)', qaNow, (items) => cardCounts(items, 2, 0) && items.some((item) => item.date === '2026-11-09' && item.title.includes('예선')) && items.some((item) => item.date === '2026-11-16' && item.title.includes('본선')));
 must('작년', '작년 10/30 현장학습 사진입니다', qaNow, (items) => items.length >= 1 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2025-10-30'));
-must('대체', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', qaNow, (items) => confirmShapeOk('10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', items, qaNow) && items.some((item) => item.date === '2026-10-30') && items.some((item) => item.date === '2026-11-06' && item.title.includes('견학')));
+must('대체', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', qaNow, (items) => cardCounts(items, 0, 2) && items.every((item) => item.title === '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체') && items.some((item) => item.date === '2026-10-30') && items.some((item) => item.date === '2026-11-06'));
 must('모호한 두 날짜', '학예회 11/2(월) 상담 11/6(금)', qaNow, (items) => items.length === 2 && items.every((item) => item.include === false && item.low === true) && items.some((item) => item.date === '2026-11-02') && items.some((item) => item.date === '2026-11-06'));
 must('대회', '11/12(목) 과학탐구대회', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-12' && items[0].include !== false);
 must('5교시', '내일 영어는 5교시 그대로입니다', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].period === 5 && items[0].time === '13:10' && items[0].title.includes('영어'));
@@ -268,7 +266,7 @@ const r29Cases = [
     ['Z7 소풍 없습니다', '10/30 소풍은 없습니다', (items) => items.length === 1 && items[0].include === false && /열리지 않는/.test(items[0].warning)],
     ['Z7 운행 유지', '차주 수요일 통학차량 운행이 없습니다', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-10-28' && items[0].include !== false && items[0].title.includes('통학')],
     ['Z7 조회 유지', '11/6(금) 전교 조회는 없습니다.', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-06' && items[0].include !== false && items[0].title.includes('조회')],
-    ['Z7 대체 유지', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', (items) => confirmShapeOk('10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', items, qaNow) && items.some((item) => item.date === '2026-10-30') && items.some((item) => item.date === '2026-11-06' && item.title.includes('견학'))],
+    ['Z7 대체 유지', '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체', (items) => cardCounts(items, 0, 2) && items.every((item) => item.title === '10/30 소풍은 취소되고 11/6 박물관 견학으로 대체') && items.some((item) => item.date === '2026-10-30') && items.some((item) => item.date === '2026-11-06')],
     ['잠정은 문구로 빼지 않음', '잠정 10/30 체육대회', (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].include !== false && !/확신/.test(items[0].warning || '')],
     ['미정은 문구로 빼지 않음', '미정으로 10/30 소풍', (items) => items.length === 1 && items[0].include !== false && !/확신/.test(items[0].warning || '')],
     ['아마도은 문구로 빼지 않음', '아마도 10/30 협의회', (items) => items.length === 1 && items[0].include !== false && !/확신/.test(items[0].warning || '')],
@@ -1055,7 +1053,7 @@ const r42Cases = [
     ['회의 참석 못', '부장님 11/10(화) 병가라서 회의 참석 못 하십니다.', counted(0, 0, (items) => items.length === 1 && items[0].include === false && items[0].kind === '일정' && noPersonCard(items))],
     ['설명회 미룸', '담임 선생님 11/13(금) 조퇴라 설명회는 미룹니다.', counted(0, 0, (items) => oneYellow(items) && noPersonCard(items))],
     ['보고회 참석 못', '교무부장님 11/12(목) 출장, 11/13(금) 보고회는 참석 못 하십니다.', counted(0, 0, (items) => items.length === 1 && items[0].include === false && items[0].date === '2026-11-13' && noDate(items, '2026-11-12') && noPersonCard(items))],
-    ['상담 미룸', '박 선생님 11/20(금) 외출이라 상담은 11/19(목)로 미룹니다.', counted(0, 1, (items) => eventOn(items, '2026-11-19', '상담') && items.length === 1 && noDate(items, '2026-11-20') && noPersonCard(items))],
+    ['상담 미룸', '박 선생님 11/20(금) 외출이라 상담은 11/19(목)로 미룹니다.', counted(0, 0, (items) => cardCounts(items, 0, 1) && items[0].date === '2026-11-19' && items[0].title === '박 선생님 11/20(금) 외출이라 상담은 11/19(목)로 미룹니다.' && noDate(items, '2026-11-20') && noPersonCard(items))],
     ['보고회 유지', '김 선생님 11/16(월) 출장 보고회에 참석합니다.', counted(0, 1, (items) => included(items).length === 1 && included(items)[0].title.includes('출장 보고회') && !included(items)[0].warning)],
     ['K4 같은 절', '11/20(금) 18시 마감, 결과 발표 11/27(금).', counted(1, 1, (items) => included(items).some((item) => item.kind === '할 일' && item.date === '2026-11-20' && item.time === '18:00' && item.title === '18시 마감') && eventOn(items, '2026-11-27', '결과 발표') && !items.some((item) => item.title === '마감' || item.title === '결과 발표 마감'))],
     ['15시 같은 절', '11/18(수) 15시 마감, 결과 발표 11/25(수).', counted(1, 1, (items) => included(items).some((item) => item.title === '15시 마감' && item.time === '15:00') && eventOn(items, '2026-11-25', '결과 발표') && !items.some((item) => item.title === '마감' || item.title === '결과 발표 마감'))],
@@ -1124,7 +1122,7 @@ const r43Cases = [
     ['다음에 합니다', '11/18(수) 보고회는 다음에 합니다.', counted(0, 0, (items) => oneOrNone(items) && !included(items).some((item) => item.date === '2026-11-18'))],
     ['추후', '11/24(화) 협의회는 추후 하겠습니다.', counted(0, 0, (items) => oneOrNone(items) && items.every((item) => item.title === '협의회'))],
     ['연기', '11/20(금) 설명회는 연기합니다.', counted(0, 0, (items) => oneOrNone(items) && !included(items).length)],
-    ['새 날짜 미룸', '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.', counted(0, 1, (items) => eventOn(items, '2026-11-20', '회의') && noDate(items, '2026-11-12') && noPersonCard(items))],
+    ['새 날짜 미룸', '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.', counted(0, 0, (items) => cardCounts(items, 0, 1) && items[0].date === '2026-11-20' && items[0].title === '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.' && noDate(items, '2026-11-12') && noPersonCard(items))],
     ['추후 날짜', '협의회는 다음에 합니다. 날짜는 11/27(금)입니다.', counted(0, 1, (items) => eventOn(items, '2026-11-27', '협의회'))],
     ['A5 연수 이름', '저도 참석하는 11/11(수) 출장 연수, 신청 11/3(화)까지예요.', counted(1, 1, (items) => eventOn(items, '2026-11-11', '연수') && dueTodo(items, '2026-11-03', '연수 신청서 제출') && !items.some((item) => item.title === '출장 연수'))],
     ['A5 내용 유지', '11/11(수) 출장 연수입니다. 내용은 인공지능 활용입니다.', counted(0, 1, (items) => eventOn(items, '2026-11-11', '인공지능 활용'))],
@@ -1193,7 +1191,7 @@ const r44Cases = [
     ['보고회 미룹니다', '11/18(수) 보고회는 미룹니다.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-18')],
     ['설명회 미룸', '11/13(금) 설명회 미룸.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-13')],
     ['협의회 미룸', '11/25(수) 협의회 미룸.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-25')],
-    ['미룸 새 날짜', '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.', counted(0, 1, (items) => eventOn(items, '2026-11-20', '회의') && noDate(items, '2026-11-12') && !included(items).some((item) => item.kind === '할 일'))],
+    ['미룸 새 날짜', '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.', counted(0, 0, (items) => cardCounts(items, 0, 1) && items[0].date === '2026-11-20' && items[0].title === '부장님 11/12(목) 출장, 회의는 11/20(금)로 미룹니다.' && noDate(items, '2026-11-12') && !items.some((item) => item.kind === '할 일' && item.include !== false))],
     ['미룸 날짜', '설명회는 미룹니다. 날짜는 11/27(금)입니다.', counted(0, 1, (items) => eventOn(items, '2026-11-27', '설명회'))],
     ['H6 총회', '교장선생님께서 11/17(화) 학부모 총회에 참석하십니다. 모두 참석해 주세요.', counted(0, 1, (items) => eventOn(items, '2026-11-17', '학부모 총회'))],
     ['교감 총회', '교감 선생님께서 11/20(금) 학부모 총회에 참석하십니다. 모두 참석해 주세요.', counted(0, 1, (items) => included(items).some((item) => item.kind === '일정' && item.date === '2026-11-20' && item.title.includes('학부모 총회')))],
@@ -1260,7 +1258,7 @@ const r45Cases = [
     ['직무 참석', '11/12(목) 교무부장님이 진행하는 직무 연수에 참석해 주세요.', counted(0, 1, (items) => opened(items, '2026-11-12', '직무 연수'))],
     ['D6 연기된', '11/12(목) 연기된 운영위원회를 엽니다.', counted(0, 1, (items) => eventOn(items, '2026-11-12', '운영위원회'))],
     ['연기된 회의', '11/19(목) 연기된 교직원 회의를 엽니다.', counted(0, 1, (items) => opened(items, '2026-11-19', '회의'))],
-    ['미뤄진 회의', '11/18(수) 미뤄진 회의를 합니다.', counted(0, 1, (items) => eventOn(items, '2026-11-18', '회의') && !included(items).some((item) => item.kind === '할 일'))],
+    ['미뤄진 회의', '11/18(수) 미뤄진 회의를 합니다.', counted(0, 0, (items) => cardCounts(items, 0, 1) && items[0].kind === '일정' && items[0].date === '2026-11-18' && items[0].title === '11/18(수) 미뤄진 회의를 합니다.')],
     ['T4 이번 주', '이번 주는 11/13(금)입니다.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-13' && noTimeTitle(items))],
     ['T6 다음 주', '다음 주 11/16(월)에 해요.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-16' && noTimeTitle(items))],
     ['이번 주만', '이번 주는 11/20(금)에 합니다.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-20' && noTimeTitle(items))],
@@ -1281,7 +1279,7 @@ const r45Cases = [
     ['안전 연수 진행', '교장선생님께서 11/27(금) 안전 연수를 직접 진행하십니다.', counted(0, 1, (items) => eventOn(items, '2026-11-27', '안전 연수'))],
     ['학년 공유 회의', '11/13(금) 학년부장님 연수 내용 공유 회의를 합니다.', counted(0, 1, (items) => opened(items, '2026-11-13', '회의'))],
     ['설문 가시므로', '보건 선생님께서 11/24(화) 연수 가시므로 설문은 11/23(월)까지 제출해 주세요.', counted(1, 0, (items) => dueTodo(items, '2026-11-23', '설문 제출') && noDate(items, '2026-11-24'))],
-    ['미뤄진 설명회', '11/6(금) 미뤄진 설명회를 엽니다.', counted(0, 1, (items) => eventOn(items, '2026-11-06', '설명회'))],
+    ['미뤄진 설명회', '11/6(금) 미뤄진 설명회를 엽니다.', counted(0, 0, (items) => cardCounts(items, 0, 1) && items[0].kind === '일정' && items[0].date === '2026-11-06' && items[0].title === '11/6(금) 미뤄진 설명회를 엽니다.')],
     ['다음 주 이에요', '다음 주는 11/23(월)이에요.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-23' && noTimeTitle(items))],
 ];
 if (r45Cases.length < 20) {
@@ -1332,13 +1330,13 @@ const r46Cases = [
     ['출장 관련 서류', '11/19(목) 교감 선생님 출장 관련 서류를 정리해 주세요.', counted(1, 0, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].date === '2026-11-19')],
     ['D4 노란', '11/26(목) 연수는 다음으로 미룹니다.', counted(0, 0, (items) => yellowOne(items) && items[0].kind === '일정' && items[0].date === '2026-11-26')],
     ['추후 공지', '11/18(수) 설명회는 추후 공지로 미루겠습니다.', counted(0, 0, (items) => yellowOne(items) && items[0].date === '2026-11-18' && items[0].title.includes('설명회'))],
-    ['다음 날', '제가 11/16(월) 병가라서 학년 회의는 다음 날로 미룹니다.', counted(0, 1, (items) => eventOn(items, '2026-11-17', '학년 회의') && noDate(items, '2026-11-16'))],
+    ['다음 날', '제가 11/16(월) 병가라서 학년 회의는 다음 날로 미룹니다.', counted(0, 0, (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '제가 11/16(월) 병가라서 학년 회의는 다음 날로 미룹니다.') && items.some((item) => item.date === '2026-11-17') && items.some((item) => item.date === '2026-11-16'))],
     ['W5 노란', '11/24(화) 교무부장님 출장으로 협의회는 다음에 하겠습니다.', counted(0, 0, (items) => yellowOne(items) && items[0].date === '2026-11-24')],
     ['U7 노란', '11/18(수) 간담회를 미뤘습니다.', counted(0, 0, (items) => yellowOne(items) && items[0].kind === '일정')],
     ['U10 노란', '11/20(금) 회의를 미뤘어요.', counted(0, 0, (items) => yellowOne(items) && items[0].kind === '일정')],
     ['운영위 미룸 노란', '11/20(금) 운영위원회 미룸.', counted(0, 0, (items) => yellowOne(items) && items[0].title.includes('운영위원회'))],
     ['미뤄습니다', '11/18(수) 간담회를 미뤄습니다.', counted(0, 0, (items) => yellowOne(items) && items[0].date === '2026-11-18' && items[0].kind === '일정')],
-    ['우천', '11/20(금) 체육대회인데 우천 시 11/23(월)로 미룹니다.', counted(0, 1, (items) => eventOn(items, '2026-11-20', '체육대회') && noDate(items, '2026-11-23') && items.length === 1)],
+    ['우천', '11/20(금) 체육대회인데 우천 시 11/23(월)로 미룹니다.', counted(0, 1, (items) => cardCounts(items, 1, 1) && eventOn(items, '2026-11-20', '체육대회') && items.some((item) => item.include === false && item.date === '2026-11-23' && item.title.includes('우천')))],
     ['품의 제목', '교장선생님께서 지도하시므로 학부모 공개수업 품의는 11/13(금)까지 부탁드립니다.', counted(1, 0, (items) => dueTodo(items, '2026-11-13', '품의'))],
     ['결재 이번 주', '결재는 이번 주 내 11/13(금)까지 해 주세요.', counted(1, 0, (items) => dueTodo(items, '2026-11-13', '결재'))],
     ['날짜만', '이번 주는 11/13(금)입니다.', counted(0, 0, (items) => yellowOne(items) && items[0].title === '날짜만 있음')],
@@ -1390,14 +1388,14 @@ const r47Cases = [
     ['A8 육아시간', '최 선생님께서 11/16(월) 육아시간 쓰십니다.', (items) => items.length === 0],
     ['B5 행사', '과학 부장님 11/27(금) 연수라 과학의 날 행사는 11/30(월)에 엽니다.', (items) => r47Schedule(items, '2026-11-30', '행사') && noDate(items, '2026-11-27')],
     ['B2 협의', '김 선생님께서 11/20(금) 외출하셔서 학년 협의는 11/23(월)에 합니다.', (items) => r47Schedule(items, '2026-11-23', '학년 협의') && noDate(items, '2026-11-20')],
-    ['U7 바꿉니다', '교장선생님 11/16(월) 연가라 운영위원회는 11/17(화)로 바꿉니다.', (items) => r47Schedule(items, '2026-11-17', '운영위원회') && noDate(items, '2026-11-16')],
-    ['U10 옮겨요', '과학 선생님 11/18(수) 병가라 실험 수업은 11/19(목)로 옮겨요.', (items) => r47Schedule(items, '2026-11-19', '실험 수업') && noDate(items, '2026-11-18')],
+    ['U7 바꿉니다', '교장선생님 11/16(월) 연가라 운영위원회는 11/17(화)로 바꿉니다.', (items) => cardCounts(items, 0, 1) && items[0].kind === '일정' && items[0].date === '2026-11-17' && items[0].title === '교장선생님 11/16(월) 연가라 운영위원회는 11/17(화)로 바꿉니다.' && noDate(items, '2026-11-16')],
+    ['U10 옮겨요', '과학 선생님 11/18(수) 병가라 실험 수업은 11/19(목)로 옮겨요.', (items) => cardCounts(items, 0, 1) && items[0].kind === '일정' && items[0].date === '2026-11-19' && items[0].title === '과학 선생님 11/18(수) 병가라 실험 수업은 11/19(목)로 옮겨요.' && noDate(items, '2026-11-18')],
     ['B3 건강기록부', '보건교사님께서 11/24(화) 공가 쓰시므로 건강기록부는 11/23(월)까지 주세요.', (items) => items.length === 1 && dueTodo(items, '2026-11-23', '건강기록부 제출') && noDate(items, '2026-11-24')],
     ['E3 오세요', '11/24(화) 교감 선생님 주관 연수 결과 보고회에 오세요.', (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-24' && items[0].title.includes('보고회') && !/오세요|에$/.test(items[0].title)],
-    ['C2 조퇴', '제가 11/20(금) 조퇴라 보충수업 11/19(목)까지 바꿔 주세요.', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-11-19' && items[0].title.includes('보충수업')],
+    ['C2 조퇴', '제가 11/20(금) 조퇴라 보충수업 11/19(목)까지 바꿔 주세요.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.kind === '할 일' && item.include === false && item.title === '제가 11/20(금) 조퇴라 보충수업 11/19(목)까지 바꿔 주세요.') && items.some((item) => item.date === '2026-11-19') && items.some((item) => item.date === '2026-11-20')],
     ['공가 협의', '과학 부장님 11/18(수) 공가라 학년 협의는 11/19(목)에 합니다.', (items) => r47Schedule(items, '2026-11-19', '학년 협의') && noDate(items, '2026-11-18')],
     ['파견 회의', '연구부장님께서 11/12(목) 파견이라 교직원 회의는 11/13(금)에 합니다.', (items) => r47Schedule(items, '2026-11-13', '교직원 회의') && noDate(items, '2026-11-12')],
-    ['반차 옮겨', '담임 선생님 11/25(수) 반차라 돌봄 수업은 11/26(목)로 옮겨요.', (items) => r47Schedule(items, '2026-11-26', '돌봄 수업') && noDate(items, '2026-11-25')],
+    ['반차 옮겨', '담임 선생님 11/25(수) 반차라 돌봄 수업은 11/26(목)로 옮겨요.', (items) => cardCounts(items, 0, 1) && items[0].kind === '일정' && items[0].date === '2026-11-26' && items[0].title === '담임 선생님 11/25(수) 반차라 돌봄 수업은 11/26(목)로 옮겨요.' && noDate(items, '2026-11-25')],
 ];
 const r47People = [
     ['교감 선생님', '11/20(금)'],
@@ -1623,7 +1621,7 @@ const r50Live = (items, kind, date, title) => {
 };
 const r50Old = (items, date) => !items.some((item) => item.date === date && item.include !== false);
 const r50Cases = [
-    ['운동회 연기', '11/25(수) 우천으로 인해 운동회는 11/27(금)로 연기합니다.', (items) => r50Live(items, '일정', '2026-11-27', '운동회') && r50Old(items, '2026-11-25') && items.every((item) => !dirtyTitle(item.title))],
+    ['운동회 연기', '11/25(수) 우천으로 인해 운동회는 11/27(금)로 연기합니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.kind === '일정' && item.title === '11/25(수) 우천으로 인해 운동회는 11/27(금)로 연기합니다.') && items.some((item) => item.date === '2026-11-27') && items.some((item) => item.date === '2026-11-25')],
     ['날짜 보결', '11/23(월) 5,6교시 보결 부탁드립니다.', (items) => r49One(items, '5,6교시 보결', (item) => item.kind === '일정' && item.date === '2026-11-23' && item.include !== false && item.period === 5 && item.periodEnd === 6)],
     ['날짜 보강', '11/24(화) 박선생님 병가로 2교시 보강 부탁드립니다.', (items) => r49One(items, '2교시 보강', (item) => item.kind === '일정' && item.date === '2026-11-24' && item.include !== false && item.period === 2)],
     ['때문에 협의회', '공사 때문에 11/27(금) 협의회는 도서관에서 합니다.', (items) => r49One(items, '협의회', (item) => item.kind === '일정' && item.date === '2026-11-27' && item.include !== false)],
@@ -1638,7 +1636,7 @@ const r50Cases = [
     ['11/18(수) 공개수업은 11/20(금)로 연기합니다.', '2026-11-20', '2026-11-18', '공개수업'],
     ['폭우로 인해 11/4(수) 체육대회는 11/9(월)로 미룹니다.', '2026-11-09', '2026-11-04', '체육대회'],
 ].forEach(([text, date, oldDate, title], index) => {
-    r50Cases.push([`변형 연기 ${index + 1}`, text, (items) => r50Live(items, '일정', date, title) && r50Old(items, oldDate) && items.every((item) => item.title === title)]);
+    r50Cases.push([`변형 연기 ${index + 1}`, text, (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.kind === '일정' && item.title === text) && items.some((item) => item.date === date) && items.some((item) => item.date === oldDate)]);
 });
 [
     ['11/2(월) 1,2교시 보결 부탁드립니다.', '2026-11-02', '1,2교시 보결', 1, 2],
@@ -1696,10 +1694,10 @@ const r51Live = (items, date, title, extra = () => true) => {
 };
 const r51Yellow = (items, date) => items.some((item) => item.date === date && item.include === false && item.title && !/원래|기존|였습니다|되었습니다/.test(item.title));
 const r51Cases = [
-    ['원래 운동회', '운동회는 11/27(금)로 연기합니다. 원래는 11/25(수)였습니다.', (items) => r51Live(items, '2026-11-27', '운동회') && r51Yellow(items, '2026-11-25') && !items.some((item) => /원래|였습니다|되었습니다/.test(item.title))],
-    ['기존 운동회', '11/27(금)로 운동회를 미룹니다(기존 11/25).', (items) => r51Live(items, '2026-11-27', '운동회') && r51Yellow(items, '2026-11-25')],
-    ['변경 체험', '미세먼지로 인해 11/20(금) 현장체험학습은 11/27(금)로 변경되었습니다.', (items) => r51Live(items, '2026-11-27', '현장체험학습') && r51Yellow(items, '2026-11-20')],
-    ['교시 옮김', '11/23(월) 3교시 공개수업은 11/24(화) 5교시로 옮깁니다.', (items) => r51Live(items, '2026-11-24', '공개수업', (item) => item.time === '13:10' && item.period === 5) && r51Yellow(items, '2026-11-23')],
+    ['원래 운동회', '운동회는 11/27(금)로 연기합니다. 원래는 11/25(수)였습니다.', (items) => cardCounts(items, 0, 2) && items.some((item) => item.include === false && item.date === '2026-11-27' && item.title === '운동회는 11/27(금)로 연기합니다.') && items.some((item) => item.include === false && item.date === '2026-11-25' && item.title === '원래는 11/25(수)였습니다.')],
+    ['기존 운동회', '11/27(금)로 운동회를 미룹니다(기존 11/25).', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '11/27(금)로 운동회를 미룹니다(기존 11/25).') && items.some((item) => item.date === '2026-11-27') && items.some((item) => item.date === '2026-11-25')],
+    ['변경 체험', '미세먼지로 인해 11/20(금) 현장체험학습은 11/27(금)로 변경되었습니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '미세먼지로 인해 11/20(금) 현장체험학습은 11/27(금)로 변경되었습니다.') && items.some((item) => item.date === '2026-11-27') && items.some((item) => item.date === '2026-11-20')],
+    ['교시 옮김', '11/23(월) 3교시 공개수업은 11/24(화) 5교시로 옮깁니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '11/23(월) 3교시 공개수업은 11/24(화) 5교시로 옮깁니다.') && items.some((item) => item.date === '2026-11-24' && item.time === '13:10' && item.period === 5) && items.some((item) => item.date === '2026-11-23' && item.time === '10:30' && item.period === 3)],
     ['태풍 점검표', '태풍 때문에 안전 점검표는 11/18(수)까지 내 주세요.', (items) => items.length === 1 && items[0].kind === '할 일' && items[0].include !== false && items[0].date === '2026-11-18' && items[0].title === '안전 점검표 제출' && !dirtyTitle(items[0].title)],
     ['관계로 발표회', '시설 점검 관계로 11/25(수) 동아리 발표회는 3층에서 합니다.', (items) => r51Live(items, '2026-11-25', '동아리 발표회')],
     ['이름 속 때문에', '11/26(목) 인공지능 때문에 바뀌는 교육 연수', (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-11-26' && items[0].title === '인공지능 때문에 바뀌는 교육 연수'],
@@ -1711,7 +1709,7 @@ const r51Cases = [
     ['11/12(목) 2교시 협의회는 11/13(금) 4교시로 옮깁니다.', '2026-11-13', '2026-11-12', '협의회', '11:20', 4],
     ['공개수업은 11/20(금)로 미룹니다. 기존 11/18(수)였습니다.', '2026-11-20', '2026-11-18', '공개수업', '', 0],
 ].forEach(([text, date, oldDate, title, time, period], index) => {
-    r51Cases.push([`변형 역할 ${index + 1}`, text, (items) => r51Live(items, date, title, (item) => (time ? item.time === time && item.period === period : true)) && r51Yellow(items, oldDate)]);
+    r51Cases.push([`변형 역할 ${index + 1}`, text, (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.kind === '일정' && text.includes(item.title)) && items.some((item) => item.date === date && (time ? item.time === time && item.period === period : true)) && items.some((item) => item.date === oldDate)]);
 });
 [
     ['폭우 때문에 가정통신문은 11/19(목)까지 보내 주세요.', '할 일', '2026-11-19', '가정통신문 제출'],
@@ -1755,15 +1753,15 @@ const r52Yellow = (items, date, title) => items.some((item) => item.date === dat
 const r52Move = (items, date, oldDate, title, extra = () => true) => r52Live(items, date, title, extra) && r52Yellow(items, oldDate, title);
 const r52Cases = [
     ['교시에서 교시', '11/24(화) 공개수업은 3교시에서 5교시로 바뀝니다.', (items) => r52Live(items, '2026-11-24', '공개수업', (item) => item.time === '13:10' && item.period === 5)],
-    ['교시로 옮김', '내일 2교시 상담은 4교시로 옮깁니다.', (items) => r52Live(items, '2026-10-23', '상담', (item) => item.time === '11:20' && item.period === 4)],
+    ['교시로 옮김', '내일 2교시 상담은 4교시로 옮깁니다.', (items) => cardCounts(items, 0, 1) && items[0].include === false && items[0].date === '2026-10-23' && items[0].time === '11:20' && items[0].period === 4 && items[0].title === '내일 2교시 상담은 4교시로 옮깁니다.'],
     ['이름 속 인해', '11/26(목) 기후 변화로 인해 달라지는 생태 교육 연수', (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-11-26' && items[0].title === '기후 변화로 인해 달라지는 생태 교육 연수'],
-    ['원래 별도', '운동회는 12/4(금)로 변경합니다. 원래 날짜는 12/2(수)입니다.', (items) => r52Move(items, '2026-12-04', '2026-12-02', '운동회')],
-    ['원래 이었던', '운동회는 12/4(금)로 연기합니다. 원래는 12/2(수)이었던 일정입니다.', (items) => r52Move(items, '2026-12-04', '2026-12-02', '운동회')],
-    ['당초 앞', '당초 12/2(수) 운동회는 12/4(금)로 변경합니다.', (items) => r52Move(items, '2026-12-04', '2026-12-02', '운동회')],
-    ['변경 전 괄호', '설명회는 11/16(월)로 변경합니다(변경 전 11/13).', (items) => r52Move(items, '2026-11-16', '2026-11-13', '설명회')],
-    ['변경 전 슬래시', '변경 전: 12/2(수) / 변경 후: 12/4(금) 운동회', (items) => r52Move(items, '2026-12-04', '2026-12-02', '운동회')],
-    ['이었던 주어', '12/2(수)이었던 운동회는 12/4(금)로 바뀝니다.', (items) => r52Move(items, '2026-12-04', '2026-12-02', '운동회')],
-    ['예정이었던', '예정이었던 12/2(수) 현장체험학습은 12/4(금)로 변경되었습니다.', (items) => r52Move(items, '2026-12-04', '2026-12-02', '현장체험학습')],
+    ['원래 별도', '운동회는 12/4(금)로 변경합니다. 원래 날짜는 12/2(수)입니다.', (items) => cardCounts(items, 0, 2) && items.some((item) => item.include === false && item.date === '2026-12-04' && item.title === '운동회는 12/4(금)로 변경합니다.') && items.some((item) => item.include === false && item.date === '2026-12-02' && item.title === '원래 날짜는 12/2(수)입니다.')],
+    ['원래 이었던', '운동회는 12/4(금)로 연기합니다. 원래는 12/2(수)이었던 일정입니다.', (items) => cardCounts(items, 0, 2) && items.some((item) => item.include === false && item.date === '2026-12-04' && item.title === '운동회는 12/4(금)로 연기합니다.') && items.some((item) => item.include === false && item.date === '2026-12-02' && item.title === '원래는 12/2(수)이었던 일정입니다.')],
+    ['당초 앞', '당초 12/2(수) 운동회는 12/4(금)로 변경합니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '당초 12/2(수) 운동회는 12/4(금)로 변경합니다.') && items.some((item) => item.date === '2026-12-04') && items.some((item) => item.date === '2026-12-02')],
+    ['변경 전 괄호', '설명회는 11/16(월)로 변경합니다(변경 전 11/13).', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '설명회는 11/16(월)로 변경합니다(변경 전 11/13).') && items.some((item) => item.date === '2026-11-16') && items.some((item) => item.date === '2026-11-13')],
+    ['변경 전 슬래시', '변경 전: 12/2(수) / 변경 후: 12/4(금) 운동회', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '변경 전: 12/2(수) / 변경 후: 12/4(금) 운동회') && items.some((item) => item.date === '2026-12-04') && items.some((item) => item.date === '2026-12-02')],
+    ['이었던 주어', '12/2(수)이었던 운동회는 12/4(금)로 바뀝니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '12/2(수)이었던 운동회는 12/4(금)로 바뀝니다.') && items.some((item) => item.date === '2026-12-04') && items.some((item) => item.date === '2026-12-02')],
+    ['예정이었던', '예정이었던 12/2(수) 현장체험학습은 12/4(금)로 변경되었습니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '예정이었던 12/2(수) 현장체험학습은 12/4(금)로 변경되었습니다.') && items.some((item) => item.date === '2026-12-04') && items.some((item) => item.date === '2026-12-02')],
 ];
 [
     ['원래 11/6(금) 운동회는 11/9(월)로 변경합니다.', '2026-11-09', '2026-11-06', '운동회'],
@@ -1779,14 +1777,16 @@ const r52Cases = [
     ['설명회는 11/13(금)로 옮깁니다. 당초 날짜는 11/11(수)입니다.', '2026-11-13', '2026-11-11', '설명회'],
     ['학예회는 11/20(금)로 바꿉니다. 변경 전 날짜는 11/18(수)입니다.', '2026-11-20', '2026-11-18', '학예회'],
 ].forEach(([text, date, oldDate, title], index) => {
-    r52Cases.push([`변형 위치 ${index + 1}`, text, (items) => r52Move(items, date, oldDate, title)]);
+    r52Cases.push([`변형 위치 ${index + 1}`, text, (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.kind === '일정' && text.includes(item.title)) && items.some((item) => item.date === date) && items.some((item) => item.date === oldDate)]);
 });
 [
-    ['11/18(수) 협의회는 2교시에서 4교시로 바뀝니다.', '2026-11-18', '11:20', 4, '협의회'],
-    ['내일 3교시 공개수업은 5교시로 변경합니다.', '2026-10-23', '13:10', 5, '공개수업'],
-    ['11/20(금) 1교시 상담은 6교시로 옮깁니다.', '2026-11-20', '14:00', 6, '상담'],
-].forEach(([text, date, time, period, title], index) => {
-    r52Cases.push([`변형 교시 ${index + 1}`, text, (items) => r52Live(items, date, title, (item) => item.time === time && item.period === period)]);
+    ['11/18(수) 협의회는 2교시에서 4교시로 바뀝니다.', '2026-11-18', '11:20', 4, '협의회', true],
+    ['내일 3교시 공개수업은 5교시로 변경합니다.', '2026-10-23', '13:10', 5, '공개수업', false],
+    ['11/20(금) 1교시 상담은 6교시로 옮깁니다.', '2026-11-20', '14:00', 6, '상담', false],
+].forEach(([text, date, time, period, title, live], index) => {
+    r52Cases.push([`변형 교시 ${index + 1}`, text, live
+        ? (items) => r52Live(items, date, title, (item) => item.time === time && item.period === period)
+        : (items) => cardCounts(items, 0, 1) && items[0].include === false && items[0].date === date && items[0].time === time && items[0].period === period && items[0].title === text]);
 });
 r52Cases.push(['변형 에 합니다', '학예회는 11/27(금)에 합니다. 당초 11/25(수)였습니다.', (items) => items.some((item) => item.include !== false && item.kind === '일정' && item.date === '2026-11-27' && item.title === '학예회') && items.some((item) => item.include === false && item.date === '2026-11-25' && item.title.includes('당초'))]);
 r52Cases.push(['변형 이름', '11/27(금) 날씨로 인해 열리는 생태 연수', (items) => items.length === 1 && items[0].include !== false && items[0].date === '2026-11-27' && items[0].title === '날씨로 인해 열리는 생태 연수']);
@@ -1820,7 +1820,7 @@ const r53Cases = [
     ['변경 전 이름', '11/20(금)까지 변경 전 시간표 회수', (items) => items.length === 1 && items[0].kind === '할 일' && r53Live(items, '2026-11-20', '변경 전 시간표 회수')],
     ['원래대로', '학예회는 원래대로 12/2(수)에 합니다.', (items) => items.length === 1 && items[0].kind === '일정' && r53Live(items, '2026-12-02', '학예회')],
     ['예정이었던 에 합니다', '11/19(목) 예정이었던 보건 교육은 11/20(금)에 합니다.', (items) => items.some((item) => item.kind === '일정' && item.include !== false && item.date === '2026-11-20' && item.title === '보건 교육') && r53Yellow(items, '2026-11-19', '보건 교육')],
-    ['에 갑니다', '현장학습은 11/30(월)에 갑니다. 당초 일정은 11/27(금)이었습니다.', (items) => items.some((item) => item.include !== false && item.date === '2026-11-30' && item.title === '현장학습') && items.some((item) => item.include === false && item.date === '2026-11-27' && item.title.includes('당초'))],
+    ['에 갑니다', '현장학습은 11/30(월)에 갑니다. 당초 일정은 11/27(금)이었습니다.', (items) => cardCounts(items, 1, 1) && items.some((item) => item.include !== false && item.date === '2026-11-30' && item.title === '현장학습') && items.some((item) => item.include === false && item.date === '2026-11-27' && item.title.includes('당초'))],
     ['교시 나열', '11/27(금) 2교시와 5교시 보결 부탁드립니다.', (items) => items.length === 2 && items.every((item) => item.kind === '일정' && item.date === '2026-11-27' && item.include !== false && !item.periodEnd && !dirtyTitle(item.title)) && items.some((item) => item.period === 2 && item.time === '09:40' && item.title === '2교시 보결') && items.some((item) => item.period === 5 && item.time === '13:10' && item.title === '5교시 보결')],
     ['작년 였던', '작년엔 11/12였던 학예회, 올해는 11/18(수)입니다.', (items) => r53Yellow(items, '2025-11-12', '학예회') && !items.some((item) => item.date === '2026-11-12')],
 ];
@@ -1856,7 +1856,7 @@ const r54Cases = [
     ['반이었던', '11/30(월) 우리 반이었던 친구 초대 행사', (items) => items.length === 1 && r54Live(items, '2026-11-30', '우리 반이었던 친구 초대 행사')],
     ['원래 모습', '원래 모습 그리기 대회', (items) => items.length === 1 && items[0].title === '원래 모습 그리기 대회' && !dirtyTitle(items[0].title)],
     ['기존 교과서', '기존 교과서 반납', (items) => items.length === 1 && items[0].title === '기존 교과서 반납' && !dirtyTitle(items[0].title)],
-    ['원래 자리 이동', '원래 자리 정리 활동은 11/25(수)에서 11/27(금)로 옮깁니다.', (items) => r54Live(items, '2026-11-27', '원래 자리 정리 활동') && r54Yellow(items, '2026-11-25', '원래 자리 정리 활동')],
+    ['원래 자리 이동', '원래 자리 정리 활동은 11/25(수)에서 11/27(금)로 옮깁니다.', (items) => cardCounts(items, 0, 2) && items.every((item) => item.include === false && item.title === '원래 자리 정리 활동은 11/25(수)에서 11/27(금)로 옮깁니다.') && items.some((item) => item.date === '2026-11-27') && items.some((item) => item.date === '2026-11-25')],
 ];
 [
     ['11/13(금) 2,5교시 보결 부탁드립니다.', '2026-11-13', 2, '09:40', '2교시 보결', 5, '13:10', '5교시 보결'],
@@ -2404,7 +2404,7 @@ if (timeTitles) {
     process.exit(1);
 }
 console.log('넣은 제목과 노란 카드에 올해·작년·이번·다음·이번 주·다음 주만 남지 않습니다.');
-const plainCue = /(?:변경\s*전|변경\s*후|원래|당초|기존|연기|변경|취소|옮|미루|미뤄|미룹|앞당|바꿉|바꿔|바뀝)/;
+const plainCue = /(?:(?<![가-힣])연기(?!된|한)|(?<![가-힣])변경(?!\s*전|\s*후)|(?<![가-힣])취소|(?<![가-힣])옮|(?<![가-힣])미루(?!지)|(?<![가-힣])미룹|(?<![가-힣])미뤄|(?<![가-힣])앞당)/;
 let plainSentences = 0;
 let plainIncluded = 0;
 let plainClear = 0;
@@ -2414,7 +2414,7 @@ invariantTexts.forEach((text) => {
         const dates = findDates(sentence, qaNow);
         const days = new Set(dates.map((span) => span.ymd));
         const nouns = sentence.match(/연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연|발표/g) || [];
-        if (days.size !== 1 || nouns.length !== 1 || plainCue.test(sentence)) return;
+        if (days.size !== 1 || nouns.length !== 1 || plainCue.test(sentence) || hasChangeCue(sentence, qaNow)) return;
         const ymd = [...days][0];
         const items = parseSchoolMessages(sentence, { now: qaNow }).items;
         if (!items.length) return;
@@ -2430,13 +2430,29 @@ invariantTexts.forEach((text) => {
 const plainPct = plainSentences ? Math.round((plainIncluded / plainSentences) * 1000) / 10 : 0;
 const clearPct = plainClear ? Math.round((plainClearIncluded / plainClear) * 1000) / 10 : 0;
 console.log(`평범한 문장(날짜 1개, 행사명 1개, 변경 표현 없음) ${plainIncluded}/${plainSentences} (${plainPct}%)가 포함 카드입니다. 요일 불일치·지난 날짜 같은 다른 경고를 빼면 ${plainClearIncluded}/${plainClear} (${clearPct}%)입니다.`);
-if (plainClear < 20 || clearPct < 90) {
-    console.error('평범한 문장 포함 비율이 낮습니다.');
+if (plainClear < 20 || plainClearIncluded !== plainClear) {
+    console.error('평범한 문장이 노란 카드가 되었습니다.');
     process.exit(1);
 }
-if (principlePasses.length) {
-    console.log(`원칙에 맞춰 노란 카드로 바꾼 기대 ${principlePasses.length}개`);
-    principlePasses.forEach((line) => console.log(`- ${line}`));
+let barePairs = 0;
+let barePairLive = 0;
+const barePairMiss = [];
+invariantTexts.forEach((text) => {
+    messageSentences(text).forEach((sentence) => {
+        if (dateGroupCount(sentence, qaNow) < 2 || hasChangeCue(sentence, qaNow)) return;
+        const items = parseSchoolMessages(sentence, { now: qaNow }).items;
+        if (!items.length) return;
+        barePairs += 1;
+        const live = items.filter((item) => item.include !== false).length;
+        if (live > 0) barePairLive += 1;
+        const onlyConfirm = items.every((item) => item.include === false && /확인이 필요해/.test(item.warning || '') && !/지난|요일|대략|질문|열리지|나누/.test(item.warning || ''));
+        if (live === 0 && onlyConfirm) barePairMiss.push(sentence);
+    });
+});
+console.log(`날짜가 둘이고 변경 표현이 없는 문장 ${barePairLive}/${barePairs}에 포함 카드가 있습니다.`);
+if (barePairMiss.length) {
+    console.error('날짜가 둘이고 변경 표현이 없는데 포함 카드가 없습니다.', barePairMiss.slice(0, 8));
+    process.exit(1);
 }
 if (mustFails.length) {
     console.error(`must 실패 ${mustFails.length}`);

@@ -47,8 +47,8 @@ export const MSG_SAMPLES = [
         { kind: '할 일', date: '2026-11-03', time: '', title: '독후감 제출' },
     ] },
     { text: '① 내일 알림장 작성 ② 모레 현장학습 행사', items: [
-        { kind: '할 일', date: D1, time: '', title: '① 내일 알림장 작성 ② 모레 현장학습 행사', include: false, low: true },
-        { kind: '일정', date: D2, time: '', title: '① 내일 알림장 작성 ② 모레 현장학습 행사', include: false, low: true },
+        { kind: '할 일', date: D1, time: '', title: '알림장 작성' },
+        { kind: '일정', date: D2, time: '', title: '현장학습 행사' },
     ] },
     { text: '내일까지 나이스 입력 바랍니다', items: [{ kind: '할 일', date: D1, time: '', title: '나이스 입력' }] },
     { text: '다음 주 수요일 출장', items: [{ kind: '일정', date: NEXT_WED, time: '', title: '출장', eventKind: '학교' }] },
@@ -185,8 +185,8 @@ export const MSG_SAMPLES = [
         { kind: '할 일', date: '2026-11-06', time: '', title: '채점 기준 제출' },
     ] },
     { text: '체육대회는 10/31(토) 실시하고 준비물은 10/28(수)까지 제출 바랍니다.', items: [
-        { kind: '일정', date: '2026-10-31', time: '', title: '체육대회는 10/31(토) 실시하고 준비물은 10/28(수)까지 제출 바랍니다.', include: false, low: true },
-        { kind: '할 일', date: '2026-10-28', time: '', title: '체육대회는 10/31(토) 실시하고 준비물은 10/28(수)까지 제출 바랍니다.', include: false, low: true },
+        { kind: '일정', date: '2026-10-31', time: '', title: '체육대회 실시' },
+        { kind: '할 일', date: '2026-10-28', time: '', title: '준비물 제출' },
     ] },
     { text: '오늘 3반 선생님 생신이래요 🎂 축하 메시지 한 마디씩!', items: [{ kind: '할 일', date: T, time: '', title: '3반 선생님 생신이래요 축하 메시지 한 마디씩', include: false, low: true }] },
     { text: '내일 2반 선생님 생신이에요 🎉 복도에서 축하 인사 나눠요', items: [{ kind: '할 일', date: D1, time: '', title: '2반 선생님 생신이에요 복도 축하 인사 나눠요', include: false, low: true }] },
@@ -250,12 +250,12 @@ export const MSG_SAMPLES = [
     { text: '10월 30일 17:00까지 수행평가 계획 탑재', items: [{ kind: '할 일', date: '2026-10-30', time: '17:00', title: '수행평가 계획 탑재', include: true }] },
     { text: '11월 20일 17:00까지 수행평가 채점 기준 탑재', items: [{ kind: '할 일', date: '2026-11-20', time: '17:00', title: '수행평가 채점 기준 탑재', include: true }] },
     { text: '11월 2일 1차, 11월 16일 2차 독서기록장 검사', items: [
-        { kind: '일정', date: '2026-11-02', time: '', title: '11월 2일 1차, 11월 16일 2차 독서기록장 검사', include: false, low: true },
-        { kind: '일정', date: '2026-11-16', time: '', title: '11월 2일 1차, 11월 16일 2차 독서기록장 검사', include: false, low: true },
+        { kind: '일정', date: '2026-11-02', time: '', title: '독서기록장 검사 1차', include: true },
+        { kind: '일정', date: '2026-11-16', time: '', title: '독서기록장 검사 2차', include: true },
     ] },
     { text: '독서기록장 검사는 11월 9일 1차, 11월 23일 2차입니다', items: [
-        { kind: '일정', date: '2026-11-09', time: '', title: '독서기록장 검사는 11월 9일 1차, 11월 23일 2차입니다', include: false, low: true },
-        { kind: '일정', date: '2026-11-23', time: '', title: '독서기록장 검사는 11월 9일 1차, 11월 23일 2차입니다', include: false, low: true },
+        { kind: '일정', date: '2026-11-09', time: '', title: '독서기록장 검사 1차', include: true },
+        { kind: '일정', date: '2026-11-23', time: '', title: '독서기록장 검사 2차', include: true },
     ] },
     { text: '이번 달 말까지 가정통신문 회신 바랍니다', items: [{ kind: '할 일', date: SAT, time: '', title: '가정통신문 회신', include: true }] },
     { text: '월말까지 독후감 제출', items: [{ kind: '할 일', date: SAT, time: '', title: '독후감 제출', include: true }] },
