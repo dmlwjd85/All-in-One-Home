@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe } from './keyfeel.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
@@ -42,6 +43,8 @@ export function Settings() {
     const [includeLocal, setIncludeLocal] = useState(false);
     const [publicInfo, setPublicInfo] = useState(null);
     const [importMode, setImportMode] = useState('merge');
+    const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
+    const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
 
     return (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -73,6 +76,19 @@ export function Settings() {
                     ))}
                 </div>
                 <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘콕 교무수첩’으로 보여요.</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn className={soundOn ? 'chip on' : 'chip'} aria-pressed={soundOn} onClick={() => {
+                        const next = !soundOn;
+                        setKeySound(next);
+                        setSoundOn(next);
+                    }}>{soundOn ? '누를 때 소리 켜짐' : '누를 때 소리 꺼짐'}</Btn>
+                    <Btn className={vibeOn ? 'chip on' : 'chip'} aria-pressed={vibeOn} onClick={() => {
+                        const next = !vibeOn;
+                        setKeyVibe(next);
+                        setVibeOn(next);
+                    }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
+                </div>
+                <p className="muted">버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then(() => showToast('팁을 다시 보여 드릴게요.')))}>팁 다시 보기</Btn>
             </section>
 

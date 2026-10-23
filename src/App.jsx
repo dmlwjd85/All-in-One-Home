@@ -7,7 +7,8 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { playKey } from './ui/keyfeel.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -109,7 +110,7 @@ export default function App() {
         document.documentElement.classList.toggle('dark', next);
         document.documentElement.style.colorScheme = next ? 'dark' : 'light';
         const meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute('content', next ? '#1A2333' : '#EEF6FD');
+        if (meta) meta.setAttribute('content', next ? '#2A2627' : '#E8E4DE');
         setDark(next);
         try { localStorage.setItem('ssug-gyomu-theme', theme || 'system'); } catch { /* 무시 */ }
     }, [data?.profile.theme]);
@@ -153,6 +154,33 @@ export default function App() {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [data?.profile.started]);
+
+    useEffect(() => {
+        const hit = (target) => {
+            if (!(target instanceof Element)) return null;
+            const el = target.closest('button, a, label.chip, [role="button"]');
+            if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
+            return el;
+        };
+        const onPointer = (event) => {
+            if (event.button !== 0) return;
+            if (hit(event.target)) playKey();
+        };
+        const onKey = (event) => {
+            if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+            const el = event.target;
+            if (!(el instanceof HTMLElement)) return;
+            if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') return;
+            if (el.hasAttribute('disabled')) return;
+            playKey();
+        };
+        document.addEventListener('pointerdown', onPointer, true);
+        document.addEventListener('keydown', onKey, true);
+        return () => {
+            document.removeEventListener('pointerdown', onPointer, true);
+            document.removeEventListener('keydown', onKey, true);
+        };
+    }, []);
 
     const todayTipId = (!flow && !plus && !msg && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
     useEffect(() => {
@@ -253,7 +281,7 @@ export default function App() {
                         <strong className="title-font" style={{ fontSize: 18 }}>콕 교무수첩</strong>
                     </div>
                     {MENU.map(([label, href]) => (
-                        <Btn key={label} block className="chip" style={{ justifyContent: 'flex-start', background: (location.hash || '#/today') === href ? 'var(--primary)' : 'transparent', color: (location.hash || '#/today') === href ? 'var(--on-primary)' : 'var(--ink)' }} onClick={() => go(href)}>{label}</Btn>
+                        <Btn key={label} block className={(location.hash || '#/today') === href ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(href)}>{label}</Btn>
                     ))}
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 콕과 같은 일 고르기가 열려요.</p>
                 </aside>
@@ -261,27 +289,38 @@ export default function App() {
                     {!cloudReady() && <p className="muted" style={{ marginTop: 0 }}>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
-                    <header style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                        {route.name === 'student' || route.name === 'legacy' ? (
+                    <header className="topbar">
+                        {(route.name === 'student' || route.name === 'legacy') && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={() => history.back()}>‹</Btn>
-                        ) : (
-                            <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)} style={{ padding: 0 }}><Symbol /></Btn>
                         )}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <h1 className="title-font" style={{ fontSize: route.name === 'today' ? 20 : 22, lineHeight: '26px', margin: 0 }}>{heading}</h1>
-                            <p className="muted" style={{ margin: 0, fontSize: 13 }}>{headingSub}</p>
+                        {route.name === 'today' ? (
+                            <div className="date-block">
+                                <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
+                                <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em>{clock.weekday}요일</em></h1>
+                                <p className="muted">{headingSub}</p>
+                            </div>
+                        ) : (
+                            <div className="date-block">
+                                <h1 className="title-font">{heading}</h1>
+                                <p className="muted">{headingSub}</p>
+                            </div>
+                        )}
+                        <div className="top-tools">
+                            {route.name !== 'student' && route.name !== 'legacy' && (
+                                <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
+                            )}
+                            <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
+                            <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
+                                const next = dark ? 'light' : 'dark';
+                                import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next }));
+                            }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
                         </div>
-                        <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
-                        <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
-                            const next = dark ? 'light' : 'dark';
-                            import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next }));
-                        }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">
                             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                 <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
-                                <Btn aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
+                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
                             </div>
                         </div>
                     )}
@@ -295,7 +334,7 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--accent)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 12 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ color: label === '출결' && checked ? 'var(--st-present)' : 'inherit', fontSize: 16 }}>{icon}</span>
                                     {label}
@@ -349,7 +388,7 @@ function MenuSheet({ onClose }) {
             <div className="sheet" role="dialog" aria-modal="true" aria-label="메뉴" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
                 {MENU.map(([label, href]) => (
-                    <Btn key={label} block className="chip" style={{ marginBottom: 8, background: 'var(--brand-soft)' }} onClick={() => { go(href); onClose(); }}>{label}</Btn>
+                    <Btn key={label} block className="chip" style={{ marginBottom: 8, justifyContent: 'flex-start' }} onClick={() => { go(href); onClose(); }}>{label}</Btn>
                 ))}
             </div>
         </div>
@@ -371,7 +410,7 @@ function SearchSheet({ onClose }) {
                         <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(`#/students/${row.no}`); onClose(); }}>{row.no}번 {row.name}</Btn>
                     ))}
                     {records.map((row) => (
-                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start', background: 'var(--solid)' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students'); onClose(); }}>{row.text}</Btn>
+                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students'); onClose(); }}>{row.text}</Btn>
                     ))}
                     {query && !students.length && !records.length && <p className="muted">찾는 말이 기록에 없어요.</p>}
                 </div>

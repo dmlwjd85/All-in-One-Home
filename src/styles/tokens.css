@@ -1,102 +1,118 @@
 /* 콕 교무수첩 색·글꼴.
-   바탕은 하늘, 카드는 크림, 포인트는 라벤더. 제목은 나눔스퀘어라운드, 본문은 프리텐다드.
-   카페24 글꼴은 쓰지 않습니다. 노랑·핑크는 글자색으로 쓰지 않습니다. */
+   바탕은 따뜻한 종이, 카드는 같은 색에서 그림자로만 뜨고, 포인트는 로즈 하나.
+   제목과 본문 모두 프리텐다드. 시안의 #C2577A 는 흰 글자 대비가 4.25,
+   바탕 위 글자 대비가 3.36 이라 버튼·강조는 #A73D74 로 깊혔습니다.
+   보조 글자 #6E6869 는 바탕 대비 4.31 이라 #5E5658 을 씁니다. */
 :root {
-    --font-title: 'NanumSquareRound', 'Pretendard Variable', Pretendard, sans-serif;
-    --font-body: 'Pretendard Variable', Pretendard, -apple-system, 'Noto Sans KR', sans-serif;
+    --font-title: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
+    --font-body: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
     --title-effect: none;
 
-    --bg: #EEF6FD;
-    --surface: rgba(255, 248, 231, .9);
-    --solid: #FFF8E7;
-    --glass-border: rgba(255, 255, 255, .8);
-    --line: rgba(43, 51, 80, .1);
-    --ink: #2B3350;
-    --ink-sub: #3E4868;
-    --primary: #5B5BD6;
+    --bg: #E8E4DE;
+    --surface: #E8E4DE;
+    --solid: #E8E4DE;
+    --glass-border: transparent;
+    --line: #C8C3BB;
+    --ink: #2E2A2B;
+    --ink-sub: #5E5658;
+    --primary: #A73D74;
     --on-primary: #FFFFFF;
-    --accent: #5B5BD6; /* 글자 강조. 버튼 바탕은 --primary 를 씁니다. */
-    --brand: #C9B8F0; /* 장식 전용. 글자에 쓰지 않습니다. */
-    --brand-soft: #E7DFF8;
-    --hero-1: #5B5BD6;
-    --hero-2: #6A6AD8;
-    --hero-3: #3E46A8;
-    --hero-ink: #2B3350;
-    --hero-action: #5B5BD6;
-    --aurora-1: #D9EBFA;
-    --aurora-2: #E4DCF8;
-    --aurora-3: #FFF8E7;
-    --aurora-brand: #C9B8F0;
-    --fab-1: #5B5BD6;
-    --fab-2: #3E46A8;
-    --glow: rgba(91, 91, 214, .32);
-    --shadow: 0 1px 2px rgba(43, 51, 80, .06), 0 12px 28px rgba(91, 91, 214, .12);
-    --toast: #2B3350;
-    --toast-ink: #FFFFFF;
-    --toast-action: #E4D8FF;
+    --accent: #A73D74;
+    --brand: #A73D74;
+    --brand-soft: #E8E4DE;
+    --hero-1: #A73D74;
+    --hero-2: #A73D74;
+    --hero-3: #8A315F;
+    --hero-ink: #2E2A2B;
+    --hero-action: #A73D74;
+    --aurora-1: #E8E4DE;
+    --aurora-2: #E8E4DE;
+    --aurora-3: #E8E4DE;
+    --aurora-brand: #E8E4DE;
+    --fab-1: #A73D74;
+    --fab-2: #A73D74;
+    --glow: rgba(167, 61, 116, .28);
+    --shadow: 6px 6px 14px #C8C3BB, -6px -6px 14px #FFFFFF;
+    --neo-shadow: #C8C3BB;
+    --neo-highlight: #FFFFFF;
+    --neo-raise: 6px 6px 14px #C8C3BB, -6px -6px 14px #FFFFFF;
+    --neo-raise-sm: 4px 4px 8px #C8C3BB, -4px -4px 8px #FFFFFF;
+    --neo-inset: inset 3px 3px 6px #C8C3BB, inset -3px -3px 6px #FFFFFF;
+    --neo-inset-deep: inset 4px 4px 9px #C8C3BB, inset -3px -3px 7px #FFFFFF;
+    --warn: #F2E6C4;
+    --toast: #2E2A2B;
+    --toast-ink: #F6F2EE;
+    --toast-action: #F0A8BA;
 
-    --st-present: #1E7A57;
-    --st-absent: #C02B43;
-    --st-late: #9A5B00;
-    --st-early: #2D67C7;
+    --st-present: #15714E;
+    --st-absent: #BA253D;
+    --st-late: #915200;
+    --st-early: #245EBE;
     --st-out: #5B4B9A;
-    --st-absent-bg: #F8E4E8;
-    --st-late-bg: #F8EFE2;
-    --st-early-bg: #E5EEFC;
-    --st-out-bg: #EEE9F8;
+    --st-absent-bg: #F4E4E7;
+    --st-late-bg: #F3E8D6;
+    --st-early-bg: #E4EAF6;
+    --st-out-bg: #EBE6F4;
 
-    --k-observe: #E7F1FB;
-    --k-counsel: #E5F4EE;
-    --k-parent: #E7EEF8;
-    --k-praise: #EDE6FA;
-    --k-todo: #E6E6F8;
+    --k-observe: #E8E4DE;
+    --k-counsel: #E8E4DE;
+    --k-parent: #E8E4DE;
+    --k-praise: #E8E4DE;
+    --k-todo: #E8E4DE;
 
-    --radius-sm: 20px;
-    --radius-md: 22px;
-    --radius-lg: 24px;
-    --radius-xl: 28px;
+    --radius-sm: 14px;
+    --radius-md: 16px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
 }
 
 .dark {
-    --bg: #1A2333;
-    --surface: rgba(36, 48, 68, .88);
-    --solid: #243044;
-    --glass-border: rgba(255, 255, 255, .08);
-    --line: rgba(238, 246, 253, .12);
-    --ink: #F4F7FB;
-    --ink-sub: #C5D0E0;
-    --primary: #5B5BD6;
+    --bg: #2A2627;
+    --surface: #2A2627;
+    --solid: #2A2627;
+    --glass-border: transparent;
+    --line: #5A5354;
+    --ink: #F6F2EE;
+    --ink-sub: #C9C1BF;
+    --primary: #A73D74;
     --on-primary: #FFFFFF;
-    --accent: #A994FF; /* 남색 바탕 글자. 대비 4.5 이상. */
-    --brand: #C9B8F0;
-    --brand-soft: #322C4A;
-    --hero-ink: #F4F7FB;
+    --accent: #E08B9A;
+    --brand: #E08B9A;
+    --brand-soft: #2A2627;
+    --hero-ink: #F6F2EE;
     --hero-action: #FFFFFF;
-    --aurora-1: #243044;
-    --aurora-2: #2C2844;
-    --aurora-3: #1E2A38;
-    --aurora-brand: #3A3358;
-    --fab-1: #5B5BD6;
-    --fab-2: #3E46A8;
-    --glow: rgba(91, 91, 214, .4);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .4);
-    --toast: #F4F7FB;
-    --toast-ink: #1A2333;
-    --toast-action: #3E46A8;
+    --aurora-1: #2A2627;
+    --aurora-2: #2A2627;
+    --aurora-3: #2A2627;
+    --aurora-brand: #2A2627;
+    --fab-1: #A73D74;
+    --fab-2: #A73D74;
+    --glow: rgba(0, 0, 0, .4);
+    --shadow: 6px 6px 14px #161314, -6px -6px 14px #3E393A;
+    --neo-shadow: #161314;
+    --neo-highlight: #3E393A;
+    --neo-raise: 6px 6px 14px #161314, -6px -6px 14px #3E393A;
+    --neo-raise-sm: 4px 4px 8px #161314, -4px -4px 8px #3E393A;
+    --neo-inset: inset 3px 3px 6px #161314, inset -3px -3px 6px #3E393A;
+    --neo-inset-deep: inset 4px 4px 9px #161314, inset -3px -3px 7px #3E393A;
+    --warn: #3C3424;
+    --toast: #F6F2EE;
+    --toast-ink: #2E2A2B;
+    --toast-action: #A73D74;
 
     --st-present: #8EDEBE;
-    --st-absent: #FF7D6E;
-    --st-late: #F0B89A;
-    --st-early: #8DB6FF;
-    --st-out: #C7A6FF;
+    --st-absent: #FF8B96;
+    --st-late: #F0C08A;
+    --st-early: #9EC0FF;
+    --st-out: #D4B6FF;
     --st-absent-bg: #3D2424;
     --st-late-bg: #3A2E28;
     --st-early-bg: #1C2A44;
     --st-out-bg: #2C2140;
 
-    --k-observe: #243044;
-    --k-counsel: #1E3330;
-    --k-parent: #243044;
-    --k-praise: #322C4A;
-    --k-todo: #2A2A48;
+    --k-observe: #2A2627;
+    --k-counsel: #2A2627;
+    --k-parent: #2A2627;
+    --k-praise: #2A2627;
+    --k-todo: #2A2627;
 }

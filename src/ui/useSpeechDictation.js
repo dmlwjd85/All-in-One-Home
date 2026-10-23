@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { setKeyMuted } from './keyfeel.js';
 import {
     CHROME_SPEECH_NOTICE,
     SPEECH_LISTENING_MESSAGE,
@@ -31,6 +32,11 @@ export function useSpeechDictation(raw, setRaw) {
     const recognitionRef = useRef(null);
     const noticeOkRef = useRef(false);
     rawRef.current = raw;
+
+    useEffect(() => {
+        setKeyMuted(listening);
+        return () => setKeyMuted(false);
+    }, [listening]);
 
     function dropRecognizer() {
         const rec = recognitionRef.current;
