@@ -1,6 +1,6 @@
 /** 학교 메시지 예문을 읽고 유형·날짜·시각·제목 정확도를 확인합니다. */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dateGroupCount, gradeMessages, hasChangeCue, leakedAbsenceDates, parseSchoolMessages, silentOtherAbsence, silentPostponement } from '../src/lib/msgParse.js';
+import { dateGroupCount, gradeMessages, hasChangeCue, isBackupDay, leakedAbsenceDates, parseSchoolMessages, silentOtherAbsence, silentPostponement } from '../src/lib/msgParse.js';
 import { findDates } from '../src/lib/parse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
@@ -1895,9 +1895,48 @@ if (r54Ok !== r54Cases.length) {
 }
 console.log(`r54 원문 ${r54Ok}/${r54Cases.length}, 변형 ${r54Var}`);
 
+function r56Live(items, date, title) {
+    return items.some((item) => item.include !== false && item.date === date && item.title === title && !dirtyTitle(item.title));
+}
+function r56Yellow(items, date, word) {
+    const yellow = items.some((item) => item.include === false && item.date === date && item.warning && String(item.title).includes(word) && !dirtyTitle(item.title));
+    const kept = items.some((item) => item.include !== false && item.date === date);
+    return yellow && !kept;
+}
+const r56Cases = [
+    ['쉼표 우천', '11/18(수) 운동회, 우천 시 11/19(목).', (items) => cardCounts(items, 1, 1) && r56Live(items, '2026-11-18', '운동회') && r56Yellow(items, '2026-11-19', '우천')],
+    ['비 오면', '비 오면 11/23(월).', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-23', '비')],
+    ['우천 갑니다', '우천 시 11/27(금)에 갑니다.', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-27', '우천')],
+    ['우천시 순연', '우천시 11/23(월) 순연.', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-23', '우천')],
+    ['소풍 다음 문장', '소풍입니다. 우천 시 11/24(화).', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-24', '우천')],
+    ['소풍 앞 날짜', '11/21(토) 소풍입니다. 우천 시 11/24(화).', (items) => cardCounts(items, 1, 1) && r56Live(items, '2026-11-21', '소풍') && r56Yellow(items, '2026-11-24', '우천')],
+    ['괄호 우천', '운동회 (우천 시 11/19)', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-19', '우천')],
+    ['괄호 우천 원래', '11/18(수) 운동회 (우천 시 11/19)', (items) => cardCounts(items, 1, 1) && r56Live(items, '2026-11-18', '운동회') && r56Yellow(items, '2026-11-19', '우천')],
+    ['예비일', '체육대회(예비일 11/23)', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-23', '예비일')],
+    ['예비일 원래', '11/20(금) 체육대회(예비일 11/23)', (items) => cardCounts(items, 1, 1) && r56Live(items, '2026-11-20', '체육대회') && r56Yellow(items, '2026-11-23', '예비일')],
+    ['비가 오면', '비가 오면 11/23(월)에 합니다.', (items) => cardCounts(items, 0, 1) && r56Yellow(items, '2026-11-23', '비')],
+    ['비가 오면 앞 문장', '11/20(금) 체육대회입니다. 비가 오면 11/23(월)에 합니다.', (items) => cardCounts(items, 1, 1) && r56Live(items, '2026-11-20', '체육대회') && r56Yellow(items, '2026-11-23', '비')],
+    ['원래 모습 대회', '11/24(화) 학생 상담, 11/25(수) 원래 모습 그리기 대회', (items) => cardCounts(items, 2, 0) && r56Live(items, '2026-11-24', '학생 상담') && r56Live(items, '2026-11-25', '원래 모습 그리기 대회')],
+];
+let r56Ok = 0;
+r56Cases.forEach(([label, text, ok]) => {
+    const items = parseSchoolMessages(text, { now: qaNow }).items;
+    if (passCase(label, text, items, ok)) r56Ok += 1;
+    else {
+        console.error(label, text, JSON.stringify(items.map((item) => ({
+            kind: item.kind, date: item.date, title: item.title, include: item.include, warning: item.warning,
+        }))));
+    }
+});
+if (r56Ok !== r56Cases.length) {
+    console.error(`r56 원문 ${r56Ok}/${r56Cases.length}`);
+    process.exit(1);
+}
+console.log(`r56 원문 ${r56Ok}/${r56Cases.length}`);
+
 const includeCountRows = [
     ['r34', r34Cases], ['r35', r35Cases], ['r36', r36Cases], ['r37', r37Cases], ['r38', r38Cases],
-    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases], ['r49', r49Cases], ['r50', r50Cases],     ['r51', r51Cases], ['r52', r52Cases], ['r53', r53Cases], ['r54', r54Cases],
+    ['r39', r39Cases], ['r40', r40Cases], ['r41', r41Cases], ['r42', r42Cases], ['r43', r43Cases], ['r44', r44Cases], ['r45', r45Cases], ['r46', r46Cases], ['r47', r47Cases], ['r48', r48Cases], ['r49', r49Cases], ['r50', r50Cases],     ['r51', r51Cases], ['r52', r52Cases], ['r53', r53Cases], ['r54', r54Cases], ['r56', r56Cases],
 ];
 const includeCountPath = new URL('./include-counts.json', import.meta.url);
 const includeCountNow = {};
@@ -2255,7 +2294,7 @@ const invariantTexts = [
     ...MSG_DOUBT,
 ].map((row) => row.text);
 [
-    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases, r49Cases, r50Cases, r51Cases, r52Cases, r53Cases, r54Cases,
+    r31Cases, r32Cases, r33Cases, r34Cases, r35Cases, r36Cases, r37Cases, r38Cases, r39Cases, r40Cases, r41Cases, r42Cases, r43Cases, r44Cases, r45Cases, r46Cases, r47Cases, r48Cases, r49Cases, r50Cases, r51Cases, r52Cases, r53Cases, r54Cases, r56Cases,
 ].forEach((rows) => rows.forEach((row) => invariantTexts.push(row[1])));
 let datedSentences = 0;
 let emptySentences = 0;
@@ -2414,7 +2453,7 @@ invariantTexts.forEach((text) => {
         const dates = findDates(sentence, qaNow);
         const days = new Set(dates.map((span) => span.ymd));
         const nouns = sentence.match(/연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연|발표/g) || [];
-        if (days.size !== 1 || nouns.length !== 1 || plainCue.test(sentence) || hasChangeCue(sentence, qaNow)) return;
+        if (days.size !== 1 || nouns.length !== 1 || plainCue.test(sentence) || hasChangeCue(sentence, qaNow) || isBackupDay(sentence)) return;
         const ymd = [...days][0];
         const items = parseSchoolMessages(sentence, { now: qaNow }).items;
         if (!items.length) return;

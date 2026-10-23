@@ -1379,6 +1379,49 @@ function changeSentence(text, now) {
     return findDates(src, now).length === 1 && (DO_VERB.test(src) || STATE_VERB.test(src)) && !oldValueSentence(src, now);
 }
 
+const BACKUP_MARK = /비가\s*오면|비\s*오면|우천|(?<![가-힣])예비일(?![가-힣])|(?<![가-힣])순연(?!됩니다|합니다|되었)/;
+
+/** 우천·비 오면·예비일·순연은 같은 조건입니다. 이미 옮긴 날과 '우천 시에도'는 조건이 아닙니다. */
+export function isBackupDay(text) {
+    const src = String(text || '');
+    if (!src) return false;
+    if (/우천\s*시에도/.test(src)) return false;
+    if (/연기(?:하지\s*않|\s*없이)|미루지\s*않/.test(src)) return false;
+    if (/(?:으로|로)\s*인해|인하여|때문에/.test(src)) return false;
+    if (/에서/.test(src) && /순연(?:됩니다|합니다|되었)/.test(src)) return false;
+    return BACKUP_MARK.test(src);
+}
+
+function backupMarkerAt(text) {
+    const found = String(text || '').match(BACKUP_MARK);
+    return found ? found.index : -1;
+}
+
+/**
+ * 조건 뒤의 날짜는 대체일이라 노란 카드입니다. 조건 앞의 날짜는 원래 행사입니다.
+ * 문장에 원래 날짜가 없으면 대체일만 노란 카드로 남깁니다.
+ */
+function backupChunks(text, now) {
+    const src = String(text || '').replace(/[\u0001-\u0008\u000e]/g, '');
+    if (!isBackupDay(src)) return null;
+    const at = backupMarkerAt(src);
+    if (at < 0) return null;
+    const spans = findDates(src, now);
+    const before = spans.filter((span) => span.index < at);
+    const after = spans.filter((span) => span.index >= at);
+    if (!after.length) return null;
+    const head = src.slice(0, at);
+    const named = namedEvent(head) || tidyTitle(head.replace(/[()（）]/g, ' '));
+    const name = named && !weakTitle(named) ? named : '행사';
+    const chunks = before.map((span) => `\u0007${name} ${src.slice(span.index, span.index + span.length)}`.replace(/\s+/g, ' ').trim());
+    after.forEach((span, index) => {
+        const start = index === 0 ? at : span.index;
+        const phrase = src.slice(start, span.index + span.length);
+        chunks.push(`\u0001${phrase}`.replace(/\s+/g, ' ').trim());
+    });
+    return chunks;
+}
+
 /** 원래·당초·기존·변경 전 문장은 옮긴 문장과 한 덩어리입니다. 앞뒤는 가리지 않습니다. */
 function bindOriginalDate(parts, now) {
     const out = [];
@@ -2163,7 +2206,10 @@ function segmentsOf(text, now) {
         return splitListedPeriods(base).flatMap((piece) => {
         const timed = applyTimeShift(piece) || piece;
         const prepared = applyPeriodShift(timed, now) || timed;
-        const rain = rainSchedule(String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, ''), now);
+        const barePrepared = String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007\u0008\u000e]/g, '');
+        const backup = backupChunks(barePrepared, now);
+        if (backup) return backup;
+        const rain = rainSchedule(barePrepared, now);
         if (rain) return [rain];
         const replaced = replaceChunks(prepared);
         if (replaced) return replaced;
@@ -3067,8 +3113,29 @@ function textWithoutSafeChange(text) {
 }
 
 /**
+ * 날짜 뒤에 붙은 원래·기존·당초는 행사 이름입니다.
+ * 그 말 바로 뒤가 날짜이거나 '날짜·일정'이면 이름을 꾸미는 말이 아닙니다.
+ */
+function oldWordsAreEventNames(text, now) {
+    const bare = String(text || '');
+    const spans = findDates(bare, now);
+    const re = /원래|당초|기존|변경\s*전|변경\s*후/g;
+    let match;
+    let saw = false;
+    while ((match = re.exec(bare))) {
+        saw = true;
+        const after = bare.slice(match.index + match[0].length, match.index + match[0].length + 24);
+        if (/^\s*(?:는|은|의)?\s*[:：]?\s*(?:\(\s*)?(?:\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}\s*월)/.test(after)) return false;
+        if (/^\s*(?:는|은|의)?\s*(?:날짜|일정)/.test(after)) return false;
+        if (!spans.some((span) => span.index + span.length <= match.index)) return false;
+    }
+    return saw;
+}
+
+/**
  * 연기·변경·취소·옮김·미룸·앞당김은 확인이 필요합니다.
  * 원래·기존·당초·변경 전/후는 바로 뒤에 날짜가 오거나, 날짜·일정이 그 말을 받거나, 날짜가 둘 이상일 때만입니다.
+ * 날짜 뒤에서 행사 이름으로 쓰인 원래·기존·당초는 날짜가 둘이라도 변경이 아닙니다.
  * 원래대로·기존대로는 예정이었던 대로와 같이 변경이 아닙니다. 바꿉·바꿔·바뀝도 새 날짜가 있거나 날짜가 둘일 때만입니다.
  */
 export function hasChangeCue(text, now) {
@@ -3076,7 +3143,8 @@ export function hasChangeCue(text, now) {
     const bare = withoutAsPlanned(textWithoutSafeChange(text));
     const oldWord = /(?:원래|당초|기존|변경\s*전|변경\s*후)/.test(bare);
     const oldStatement = /(?:원래|당초|기존|변경\s*전)\s*(?:는|은|의)?\s*(?:날짜|일정)/.test(bare) && findDates(bare, now).length >= 1;
-    const oldCue = oldWord && (dateGroupCount(bare, now) >= 2 || dateModifyingMarker(bare) || oldStatement);
+    const nameOnly = oldWord && dateGroupCount(bare, now) >= 2 && oldWordsAreEventNames(bare, now);
+    const oldCue = oldWord && !nameOnly && (dateGroupCount(bare, now) >= 2 || dateModifyingMarker(bare) || oldStatement);
     const swapCue = /(?<![가-힣])(?:바꿉|바꿔|바뀝)/.test(src) && (dateGroupCount(src, now) >= 2 || Boolean(destinationYmd(src, now)));
     const moveCue = /(?:(?<![가-힣])연기(?!된|한)|(?<![가-힣])변경(?!\s*전|\s*후)|(?<![가-힣])취소|(?<![가-힣])옮|(?<![가-힣])미루(?!지)|(?<![가-힣])미룹|(?<![가-힣])미뤄|(?<![가-힣])앞당)/.test(src);
     return oldCue || swapCue || moveCue;
