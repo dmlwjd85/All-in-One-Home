@@ -211,6 +211,23 @@ a.chip,
     font-weight: 800;
     box-shadow: var(--neo-inset);
 }
+.key-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.key-picks .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 88px;
+    max-width: 168px;
+    min-width: 72px;
+    padding: 0 10px;
+    white-space: nowrap;
+    text-align: center;
+}
 
 .symbol {
     width: 36px;
@@ -316,6 +333,8 @@ a.chip,
     padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 24px rgba(46, 42, 43, .16);
 }
+.toast-notice { pointer-events: none; }
+.toast-notice .tap { pointer-events: auto; }
 .toast {
     position: fixed;
     z-index: 50;
