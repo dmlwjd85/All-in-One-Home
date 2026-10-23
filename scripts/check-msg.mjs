@@ -1266,6 +1266,12 @@ const r45Cases = [
     ['U10 미뤘어요', '11/20(금) 회의를 미뤘어요.', counted(0, 0, (items) => items.length === 0)],
     ['운영위 미뤘다', '11/12(목) 운영위는 미뤘습니다.', counted(0, 0, (items) => items.length === 0)],
     ['다음으로 미뤘다', '11/25(수) 협의회를 다음으로 미뤘습니다.', counted(0, 0, (items) => items.length === 0)],
+    ['병가 가시는데', '학년부장님께서 11/10(화) 병가 가시는데 가정통신문은 11/9(월)까지 내 주세요.', counted(1, 0, (items) => dueTodo(items, '2026-11-09', '가정통신문 제출') && items.length === 1 && noDate(items, '2026-11-10'))],
+    ['안전 연수 진행', '교장선생님께서 11/27(금) 안전 연수를 직접 진행하십니다.', counted(0, 1, (items) => eventOn(items, '2026-11-27', '안전 연수'))],
+    ['학년 공유 회의', '11/13(금) 학년부장님 연수 내용 공유 회의를 합니다.', counted(0, 1, (items) => opened(items, '2026-11-13', '회의'))],
+    ['설문 가시므로', '보건 선생님께서 11/24(화) 연수 가시므로 설문은 11/23(월)까지 제출해 주세요.', counted(1, 0, (items) => dueTodo(items, '2026-11-23', '설문 제출') && noDate(items, '2026-11-24'))],
+    ['미뤄진 설명회', '11/6(금) 미뤄진 설명회를 엽니다.', counted(0, 1, (items) => eventOn(items, '2026-11-06', '설명회'))],
+    ['다음 주 이에요', '다음 주는 11/23(월)이에요.', counted(0, 0, (items) => oneYellow(items) && items[0].date === '2026-11-23' && noTimeTitle(items))],
 ];
 if (r45Cases.length < 20) {
     console.error('r45 변형이 20개보다 적습니다.');
