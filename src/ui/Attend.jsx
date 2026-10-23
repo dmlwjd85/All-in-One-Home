@@ -34,13 +34,7 @@ export function Attend() {
     }
 
     function pickBox(label) {
-        setFilter((cur) => {
-            if (label === '출석') {
-                if (cur && cur !== '출석') return '';
-                return cur === '출석' ? '' : '출석';
-            }
-            return cur === label ? '' : label;
-        });
+        setFilter((cur) => (cur === label ? '' : label));
     }
 
     function openRecord(student) {

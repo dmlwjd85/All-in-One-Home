@@ -683,11 +683,12 @@ try {
         check(names.length === 1 && names[0].includes('정유나'), '지각 칸이 그 학생만 보여 주지 않습니다.');
         await pressBox('출석');
         names = await seats();
-        check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '출석 칸을 눌러도 전체가 나오지 않습니다.');
+        const presentOnly = names.some((item) => item.includes('김하늘')) && !names.some((item) => item.includes('박서준')) && !names.some((item) => item.includes('정유나'));
+        const presentPressed = await page.evaluate(() => [...document.querySelectorAll('button[aria-pressed]')].find((el) => el.innerText.includes('출석'))?.getAttribute('aria-pressed') === 'true');
+        check(presentOnly && presentPressed, '다른 칸을 보다가 출석을 눌러도 출석한 학생만 나오지 않습니다.');
         await pressBox('출석');
         names = await seats();
-        check(names.some((item) => item.includes('김하늘')) && !names.some((item) => item.includes('박서준')), '출석만 다시 눌러도 출석 학생만 나오지 않습니다.');
-        await pressBox('출석');
+        check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '출석 칸을 다시 눌러도 전체가 나오지 않습니다.');
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
         await delay(150);
         const monthRow = await page.evaluate(() => {
