@@ -1300,7 +1300,11 @@ function applicationDeadlineChunks(text, now) {
     const dueSpan = findDates(due, now)[0];
     const token = due.slice(dueSpan.index, dueSpan.index + dueSpan.length);
     return parts.map((part) => {
-        if (part === due) return `${name} 신청 ${token}까지`;
+        if (part === due) {
+        const own = tidyTitle(due);
+        if (/참가\s*신청|참여\s*신청/.test(own)) return `${own} ${token}까지`;
+        return `${name} 신청 ${token}까지`;
+    }
         if (part === eventPart) return `\u0007${part}`;
         return findDates(part, now).length ? `\u0007${part}` : '';
     }).filter(Boolean);
@@ -1379,9 +1383,9 @@ function changeSentence(text, now) {
     return findDates(src, now).length === 1 && (DO_VERB.test(src) || STATE_VERB.test(src)) && !oldValueSentence(src, now);
 }
 
-const BACKUP_MARK = /비가\s*오면|비\s*오면|우천|(?<![가-힣])예비일(?![가-힣])|(?<![가-힣])순연(?!됩니다|합니다|되었)/;
+const BACKUP_MARK = /비가\s*오면|비\s*오면|우천\s*시|(?<![가-힣])예비일(?:은|는|이|가|을|를|의)?(?![가-힣])|(?<![가-힣])순연(?!됩니다|합니다|되었)/;
 
-/** 우천·비 오면·예비일·순연은 같은 조건입니다. 이미 옮긴 날과 '우천 시에도'는 조건이 아닙니다. */
+/** 우천 시·비 오면·예비일·순연은 조건입니다. '우천으로'는 사유이고, 이미 옮긴 날은 조건이 아닙니다. */
 export function isBackupDay(text) {
     const src = String(text || '');
     if (!src) return false;
@@ -1398,28 +1402,36 @@ function backupMarkerAt(text) {
 }
 
 /**
- * 조건 뒤의 날짜는 대체일이라 노란 카드입니다. 조건 앞의 날짜는 원래 행사입니다.
- * 문장에 원래 날짜가 없으면 대체일만 노란 카드로 남깁니다.
+ * 대체일 표지 바로 뒤의 날짜나 기간만 떼어 노란 카드로 둡니다.
+ * 앞의 마감·기간·행사는 그 표지가 없을 때와 같은 분석으로 남습니다.
  */
-function backupChunks(text, now) {
+function cutBackup(text, now) {
     const src = String(text || '').replace(/[\u0001-\u0008\u000e]/g, '');
-    if (!isBackupDay(src)) return null;
+    if (!isBackupDay(src) || rainHold(src)) return null;
     const at = backupMarkerAt(src);
     if (at < 0) return null;
-    const spans = findDates(src, now);
-    const before = spans.filter((span) => span.index < at);
-    const after = spans.filter((span) => span.index >= at);
+    const after = findDates(src, now).filter((span) => span.index >= at);
     if (!after.length) return null;
+    let endSpan = after[0];
+    if (after[1] && rangeJoin(src, after[0], after[1])) endSpan = after[1];
+    let start = at;
+    let end = endSpan.index + endSpan.length;
     const head = src.slice(0, at);
-    const named = namedEvent(head) || tidyTitle(head.replace(/[()（）]/g, ' '));
-    const name = named && !weakTitle(named) ? named : '행사';
-    const chunks = before.map((span) => `\u0007${name} ${src.slice(span.index, span.index + span.length)}`.replace(/\s+/g, ' ').trim());
-    after.forEach((span, index) => {
-        const start = index === 0 ? at : span.index;
-        const phrase = src.slice(start, span.index + span.length);
-        chunks.push(`\u0001${phrase}`.replace(/\s+/g, ' ').trim());
-    });
-    return chunks;
+    const paren = head.match(/[（(]\s*$/);
+    if (paren) {
+        start = at - paren[0].length;
+        const close = src.slice(end).match(/^\s*[)）]/);
+        if (close) end += close[0].length;
+    } else {
+        const comma = head.match(/[,，]\s*$/);
+        if (comma) start = at - comma[0].length;
+    }
+    let rest = `${src.slice(0, start)}${src.slice(end)}`;
+    rest = rest.replace(/\s+/g, ' ').replace(/\s+([.。,，])/g, '$1').trim();
+    rest = rest.replace(/^[,，]\s*/, '').replace(/[,，]\s*$/, '').trim();
+    const phrase = src.slice(at, endSpan.index + endSpan.length).replace(/\s+/g, ' ').trim();
+    if (!phrase) return null;
+    return { rest, yellow: `\u0001${phrase}` };
 }
 
 /** 원래·당초·기존·변경 전 문장은 옮긴 문장과 한 덩어리입니다. 앞뒤는 가리지 않습니다. */
@@ -1751,7 +1763,7 @@ function rainHold(text) {
     const src = String(text || '');
     if (/연기(?:하지\s*않|\s*없이)|미루지\s*않/.test(src)) return false;
     if (/(?:으로|로)\s*인해|인하여|때문에/.test(src)) return false;
-    return /우천/.test(src) && /(?:로|으로)\s*(?:미룹|미뤄|미루|미뤘|미루었|연기)/.test(src);
+    return /우천\s*시/.test(src) && /(?:로|으로)\s*(?:미룹|미뤄|미루|미뤘|미루었|연기)/.test(src);
 }
 
 /** 다음에·추후·연기처럼 새 날이 없으면 그 행사는 열리지 않습니다. '연기된'은 수식어입니다. */
@@ -2207,11 +2219,19 @@ function segmentsOf(text, now) {
         const timed = applyTimeShift(piece) || piece;
         const prepared = applyPeriodShift(timed, now) || timed;
         const barePrepared = String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007\u0008\u000e]/g, '');
-        const backup = backupChunks(barePrepared, now);
-        if (backup) return backup;
         const rain = rainSchedule(barePrepared, now);
         if (rain) return [rain];
-        const replaced = replaceChunks(prepared);
+        const cut = cutBackup(barePrepared, now);
+        const source = cut ? cut.rest : prepared;
+        const yellow = cut ? [cut.yellow] : [];
+        if (cut && !findDates(source, now).length) return yellow;
+        return [...pieceChunks(source, now), ...yellow];
+        });
+    });
+}
+
+function pieceChunks(prepared, now) {
+    const replaced = replaceChunks(prepared);
         if (replaced) return replaced;
         const moved = rescheduleChunks(prepared, now);
         if (moved) return moved;
@@ -2241,11 +2261,9 @@ function segmentsOf(text, now) {
         if (listed) return listed;
         const plain = String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, '');
         if (personalAside(plain)) return [plain];
-        const unsure = unsureChunks(prepared, now);
-        if (unsure) return unsure;
-        return splitByDate(prepared, now);
-        });
-    });
+    const unsure = unsureChunks(prepared, now);
+    if (unsure) return unsure;
+    return splitByDate(prepared, now);
 }
 
 function isDeadlineSubmission(text) {
