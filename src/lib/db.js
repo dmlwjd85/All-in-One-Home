@@ -117,6 +117,10 @@ async function restoreVaults(previousMain, previousLocal) {
     try { await putState(localVault, previousLocal); } catch { /* 한쪽만 남아 있지 않게 둘 다 시도합니다. */ }
 }
 
+function platformHasNoVault(error) {
+    return typeof indexedDB === 'undefined' && /indexedDB is not defined/.test(`${error?.message || ''}`);
+}
+
 async function writeVaults(copy) {
     if (memoryOnly) return;
     const local = copy.local;
@@ -127,6 +131,10 @@ async function writeVaults(copy) {
         previousMain = await mainVault.get('state');
         previousLocal = await localVault.get('state');
     } catch (error) {
+        if (platformHasNoVault(error)) {
+            memoryOnly = true;
+            return;
+        }
         throw markStorage(error);
     }
     let mainWrote = false;

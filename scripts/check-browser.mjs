@@ -1477,11 +1477,14 @@ try {
                 const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
                 const sixth = cells[5];
                 const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                const hero = document.querySelector('.hero-action')?.getBoundingClientRect();
+                const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
                 const viewBottom = window.innerHeight;
                 const sixthOnScreen = Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0 && sixth.right > 0);
                 return {
                     coversSixth: hits(toast, sixth),
                     coversAnyPeriod: cells.some((cell) => hits(toast, cell)),
+                    coversHero: hits(toast, hero) || hits(toast, kicker),
                     coversTab: hits(toast, tab),
                     sixthUnderTab: hits(sixth, tab),
                     sixthOnScreen,
@@ -1493,8 +1496,8 @@ try {
                 };
             });
             check(
-                overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversTab && !overlap.sixthUnderTab,
-                `${width}에서 소리 안내가 6교시나 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
+                overlap.sixthOnScreen && !overlap.coversSixth && !overlap.coversAnyPeriod && !overlap.coversHero && !overlap.coversTab && !overlap.sixthUnderTab,
+                `${width}에서 소리 안내가 오늘 화면이나 하단 바를 가립니다: ${JSON.stringify(overlap)}`,
             );
         }, 800);
     }
