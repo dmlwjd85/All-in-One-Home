@@ -67,8 +67,8 @@ export function Home() {
                         const on = period.index === index;
                         const specialist = table[`s${index + 1}`];
                         return (
-                            <Btn key={index} className="block" onClick={() => go('#/schedule')} style={{ background: on ? 'var(--primary)' : 'var(--solid)', color: on ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 20, border: '1px solid var(--line)', minHeight: 64, fontWeight: 800, fontSize: 13 }}>
-                                <span style={{ display: 'grid' }}><span>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11 }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
+                            <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
+                                <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
                             </Btn>
                         );
                     })}

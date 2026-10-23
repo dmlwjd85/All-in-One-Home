@@ -67,8 +67,8 @@ export function Schedule() {
                             const holiday = holidayCaption(cell.ymd);
                             const has = events.some((row) => onDay(row, cell.ymd));
                             return (
-                                <Btn key={cell.ymd} className="block" onClick={() => setPicked(cell.ymd)} style={{ background: cell.ymd === clock.ymd ? 'var(--primary)' : 'var(--solid)', color: cell.ymd === clock.ymd ? 'var(--on-primary)' : 'var(--ink)', borderRadius: 20, opacity: cell.inMonth ? 1 : 0.45, minHeight: 44 }}>
-                                    <span className="num" style={{ fontWeight: 800 }}>{cell.day}</span>
+                                <Btn key={cell.ymd} className={cell.ymd === picked ? 'block neo-in' : 'block'} onClick={() => setPicked(cell.ymd)} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
+                                    <span className="num" style={{ fontWeight: 800, color: cell.ymd === picked || cell.ymd === clock.ymd ? 'var(--accent)' : 'inherit' }}>{cell.day}</span>
                                     {holiday?.isHoliday && <span style={{ display: 'block', fontSize: 11 }}>{holiday.primary.short || '휴일'}</span>}
                                     {has && <span aria-hidden="true">·</span>}
                                 </Btn>

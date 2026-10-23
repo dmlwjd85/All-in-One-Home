@@ -49,20 +49,18 @@ export function DateGrid({ value, today, onPick }) {
                     return (
                         <Btn
                             key={cell.ymd}
-                            className="block"
+                            className={on ? 'block neo-in' : 'block'}
                             aria-label={cell.ymd}
                             onClick={() => onPick(cell.ymd)}
                             style={{
-                                background: on ? 'var(--primary)' : 'var(--solid)',
-                                color: on ? 'var(--on-primary)' : (cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)'),
-                                borderRadius: 20,
+                                color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)',
+                                borderRadius: 12,
                                 minHeight: 44,
                                 padding: 0,
                                 fontWeight: 800,
-                                boxShadow: cell.ymd === today && !on ? 'inset 0 0 0 2px var(--primary)' : 'none',
                             }}
                         >
-                            <span className="num">{cell.day}</span>
+                            <span className="num" style={{ color: on || cell.ymd === today ? 'var(--accent)' : 'inherit' }}>{cell.day}</span>
                         </Btn>
                     );
                 })}

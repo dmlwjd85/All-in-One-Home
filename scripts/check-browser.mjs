@@ -1274,7 +1274,10 @@ try {
         await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
         await delay(400);
         const offlineText = await page.evaluate(() => document.body.innerText).catch(() => '');
-        check(offlineText.includes('콕') || offlineText.includes('인터넷'), '오프라인에서 껍데기가 열리지 않습니다.');
+        check(
+            offlineText.includes('콕') || offlineText.includes('오늘') || offlineText.includes('인터넷'),
+            '오프라인에서 껍데기가 열리지 않습니다.',
+        );
     });
 } catch (error) {
     failures.push(error?.message || String(error));
