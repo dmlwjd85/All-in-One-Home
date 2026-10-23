@@ -302,7 +302,7 @@ function stripTitleNoise(text) {
     s = s.replace(/기간\s*내\s*응답|(?:^|\s)내\s*응답(?=\s|$)/g, ' ');
     s = s.replace(/(?:결석|취소)\s*없이/g, ' ');
     s = s.replace(/잊지\s*않으셨(?:죠|지요)\s*[?？]?/g, ' ');
-    s = s.replace(/(?:^|\s)(?:꼭|독려|예정대로|우천\s*시에도)(?=\s|$)/g, ' ');
+    s = s.replace(/(?:^|\s)(?:꼭|독려|예정대로|원래대로|일정대로|우천\s*시에도)(?=\s|$)/g, ' ');
     s = s.replace(/하지\s*않고/g, ' ');
     s = s.replace(/빠지지\s*말고/g, ' ');
     s = s.replace(/(?:^|\s)기간(?:은|는|이|가)?(?=\s|$)/g, ' ');
@@ -364,7 +364,8 @@ export function tidyTitle(text) {
     t = t.replace(/가능한/g, '가능');
     t = t.replace(/받습니다|받아요/g, ' ');
     t = t.replace(/(?:제가|저는|저도|저)\s*참석(?:하는|합니다|해요)/g, ' ');
-    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|했습니다|하세요|입니다|엽니다/g, ' ');
+    t = t.replace(/진행(?:합니다|해요)(?![가-힣])/g, ' ');
+    t = t.replace(/없어요|있어요|예정입니다|예정이에요|합니다|했어요|했습니다|하세요|입니다|엽니다|갑니다|가요/g, ' ');
     t = t.replace(/(?:이|가)?\s*임박(?:했습니다|했어요|합니다|해요|이에요|입니다)?/g, ' ');
     t = t.replace(/(?:이|가)?\s*다가\s*(?:옴|옵니다|와요|왔습니다)/g, ' ');
     t = t.replace(/마감\s*(?:되었(?:습니다|어요)?|됐습니다|됐어요|됨)|마감됐(?:어요|습니다)?/g, ' ');
@@ -755,6 +756,11 @@ function applyTimeShift(text) {
 const PERIOD_VERB = '(?:변경|바뀌|바뀐|바꿉|바꿔|바뀝|옮깁|옮겨|옮긴|연기|미룹|미뤄|미룬)';
 const PERIOD_VERB_TAIL = '(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|니다|요|습니다)?';
 
+/** 와·과·쉼표로 이은 교시는 나열입니다. 에서·로가 있을 때만 교시를 바꿉니다. */
+function listPeriodTokens(text) {
+    return String(text || '').replace(/(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g, '$1,$2교시');
+}
+
 /** 날짜는 그대로 두고 교시만 바뀌면 뒤 교시가 시각입니다. 날짜가 둘이면 날짜 이동이 교시를 가집니다. */
 function applyPeriodShift(text, now) {
     const src = String(text || '');
@@ -874,6 +880,11 @@ function moveSubject(text, spans) {
     t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
     t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
     t = t.replace(/[()（）]/g, ' ');
+    t = t.replace(/(?:원래대로|일정대로|예정대로)/g, ' ');
+    t = t.replace(/(?:^|\s)대로(?=\s|$)/g, ' ');
+    t = t.replace(/진행(?:합니다|해요)(?![가-힣])/g, ' ');
+    t = t.replace(/(?:갑니다|가요)/g, ' ');
+    t = t.replace(/(?:^|\s)일정(?:은|는|이|가|을|를)?(?=\s|$)/g, ' ');
     t = t.replace(/변경\s*(?:전|후)\s*[:：]?/g, ' ');
     t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
     t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
@@ -912,6 +923,32 @@ function markBeside(text, unit, units) {
 
 const OLD_VALUE = /(?:원래|당초|기존|변경\s*전|예정이었던)/;
 const NEW_VALUE = /변경\s*후/;
+const AS_PLANNED = /원래대로|일정대로|예정대로/g;
+const DO_VERB = /에\s*(?:합니다|해요|엽니다|갑니다|가요)/;
+
+function withoutAsPlanned(text) {
+    return String(text || '').replace(AS_PLANNED, ' ');
+}
+
+/** 원래·당초·기존·변경 전은 바로 뒤가 날짜이거나, 날짜가 둘 이상일 때만 예전 값입니다. */
+function discourseOld(window, multi) {
+    const bare = withoutAsPlanned(window);
+    if (!/(?:원래|당초|기존|변경\s*전)/.test(bare)) return false;
+    if (multi) return true;
+    return /(?:원래|당초|기존|변경\s*전)\s*[:：]?\s*(?:\(\s*)?(?:\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}\s*월)/.test(bare);
+}
+
+function dropsOldLabel(text) {
+    return discourseOld(text, findDates(withoutAsPlanned(text)).length >= 2);
+}
+
+function leeParticle(word) {
+    const token = String(word || '');
+    if (!/(?<=[가-힣])이$/.test(token) || /(?:어린이|종이|놀이|이야기|송이|거미|나들이)$/.test(token)) return false;
+    const prev = token.charCodeAt(token.length - 2);
+    if (prev < 0xAC00 || prev > 0xD7A3) return false;
+    return (prev - 0xAC00) % 28 !== 0;
+}
 
 function bareSlashAt(text) {
     let at = -1;
@@ -938,19 +975,36 @@ function valueWindow(text, unit, units) {
     return { head, tail };
 }
 
-/** 원래·당초·기존·변경 전·이었던은 예전 값이고, 변경 후·로 변경·에 합니다는 새 값입니다. */
+/** 이었던·예정이었던은 예전 값입니다. 원래·당초·기존·변경 전은 범위를 좁혀 보고, 에 합니다·갑니다는 새 날짜입니다. */
 function dateRole(text, unit, units) {
     const { head, tail } = valueWindow(text, unit, units);
-    if (/^\s*(?:은|는|이|가|을|를)?\s*(?:이었|였)던/.test(tail)) return 'old';
-    if (NEW_VALUE.test(head) && !OLD_VALUE.test(head)) return 'new';
-    if (OLD_VALUE.test(head)) return 'old';
-    if (/^\s*에\s*(?:합니다|해요|엽니다)/.test(tail)) return 'new';
+    const bareHead = withoutAsPlanned(head);
+    if (/^\s*예정이었던/.test(tail) || /^\s*(?:은|는|이|가|을|를)?\s*(?:이었|였)던/.test(tail)) return 'old';
+    if (NEW_VALUE.test(bareHead) && !/(?:원래|당초|기존|변경\s*전)/.test(bareHead)) return 'new';
+    if (/(?:예정이었던|(?:은|는|이|가|을|를)?\s*(?:이었|였)던)\s*$/.test(bareHead)) return 'old';
+    if (discourseOld(bareHead, units.length >= 2)) return 'old';
+    if (new RegExp(`^\\s*${DO_VERB.source}`).test(tail)) return 'new';
     return '';
+}
+
+function yearLead(text, unit) {
+    const before = String(text || '').slice(0, unit.spans[0].index);
+    const found = before.match(/(?:재작년|작년|지난해|지난\s*해|올해|이번에)(?:에는|에도|엔|도의|도|에|는|은|의)?\s*$/);
+    return found ? found[0].trim() : '';
+}
+
+function datedToken(text, unit) {
+    const lead = yearLead(text, unit);
+    const token = unitToken(unit);
+    return lead ? `${lead} ${token}` : token;
 }
 
 function changeSubject(text, spans) {
     const subject = moveSubject(text, spans).replace(/\s+/g, ' ').trim();
-    if (!subject || /^(?:날짜|일정|입니다|였습니다|이었습니다|던)$/.test(subject)) return '날짜만 있음';
+    if (!subject || /^(?:날짜|일정|입니다|였습니다|이었습니다|던)(?:은|는|이|가)?$/.test(subject)) {
+        const named = namedEvent(text);
+        return named || '날짜만 있음';
+    }
     return subject;
 }
 
@@ -969,10 +1023,10 @@ function rescheduleChunks(text, now) {
     const dest = newAt >= 0 ? units[newAt] : (destAt >= 0 ? units[destAt] : units[units.length - 1]);
     const subject = changeSubject(text, spans);
     const beside = markBeside(text, dest, units);
-    const fresh = `\u0003${subject} ${unitToken(dest)} ${beside.period ? `${beside.period}교시` : ''} ${beside.clock}`.replace(/\s+/g, ' ').trim();
+    const fresh = `\u0003${subject} ${datedToken(text, dest)} ${beside.period ? `${beside.period}교시` : ''} ${beside.clock}`.replace(/\s+/g, ' ').trim();
     const old = units.filter((unit) => unit !== dest).map((unit) => {
         const was = markBeside(text, unit, units);
-        return `\u0002${subject} ${unitToken(unit)} ${was.period ? `${was.period}교시` : ''}`.replace(/\s+/g, ' ').trim();
+        return `\u0002${subject} ${datedToken(text, unit)} ${was.period ? `${was.period}교시` : ''}`.replace(/\s+/g, ' ').trim();
     });
     return [fresh, ...old];
 }
@@ -985,7 +1039,7 @@ function oldValueChunks(text, now) {
     const roles = units.map((unit) => dateRole(text, unit, units));
     if (!roles.length || roles.some((role) => role !== 'old')) return null;
     const subject = changeSubject(text, spans);
-    return units.map((unit) => `\u0002${subject} ${unitToken(unit)}`.replace(/\s+/g, ' ').trim());
+    return units.map((unit) => `\u0002${subject} ${datedToken(text, unit)}`.replace(/\s+/g, ' ').trim());
 }
 
 /** '1차, 2차'처럼 같은 대상을 여러 날에 적으면 제목에 대상과 차례를 같이 붙입니다. */
@@ -1259,7 +1313,7 @@ function unsureChunks(text, now) {
 
 /** 부정 문장 뒤에 날짜만 있으면 그 일정의 날짜로 붙입니다. */
 function oldValueSentence(text, now) {
-    const src = String(text || '');
+    const src = withoutAsPlanned(text);
     if (/변경\s*후/.test(src) && findDates(src, now).length) return false;
     if (MOVE_VERB.test(src) && /(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(src)) return false;
     return /(?:원래|당초|기존|변경\s*전|예정이었던|(?:이었|였)던)/.test(src) && (findDates(src, now).length || /\d\s*교시/.test(src));
@@ -1269,7 +1323,7 @@ function changeSentence(text, now) {
     const src = String(text || '');
     if (/(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(src) && MOVE_VERB.test(src)) return true;
     if (/변경\s*후/.test(src) && findDates(src, now).length) return true;
-    return findDates(src, now).length === 1 && /에\s*(?:합니다|해요|엽니다)/.test(src) && !oldValueSentence(src, now);
+    return findDates(src, now).length === 1 && DO_VERB.test(src) && !oldValueSentence(src, now);
 }
 
 /** 원래·당초·기존·변경 전 문장은 옮긴 문장과 한 덩어리입니다. 앞뒤는 가리지 않습니다. */
@@ -2051,7 +2105,8 @@ function segmentsOf(text, now) {
     return chunks.flatMap((chunk) => {
         if (String(chunk).startsWith('\u0001')) return splitByDate(chunk, now);
         const peeled = peelFormModifier(String(chunk), now);
-        const timed = applyTimeShift(peeled || chunk) || peeled || chunk;
+        const base = listPeriodTokens(peeled || chunk);
+        const timed = applyTimeShift(base) || base;
         const prepared = applyPeriodShift(timed, now) || timed;
         const rain = rainSchedule(String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, ''), now);
         if (rain) return [rain];
@@ -2844,6 +2899,8 @@ function polishTitle(title, segment = '', full = '') {
     const hadCooperate = /협조/.test(t);
     const seg = String(segment || '');
     const wide = `${seg}\n${full || ''}`;
+    t = t.replace(/(?:원래대로|일정대로|예정대로)/g, ' ');
+    t = t.replace(/(?:^|\s)대로(?=\s|$)/g, ' ');
     t = t.replace(/^(?:제가|저는|저도|저만)\s+/, '');
     t = t.replace(/(?:^|\s)[가-힣]{1,16}(?:이신데|이라서|이라)(?=\s|$)/g, ' ');
     t = t.replace(/\s*보내\s*드려요$/g, '').trim();
@@ -2909,15 +2966,23 @@ function polishTitle(title, segment = '', full = '') {
     t = t.replace(/(?:되었|됐)(?:습니다|어요)$/g, '');
     t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
     t = t.replace(/(?:이었|였)(?:습니다|어요)$/g, '');
-    t = t.replace(/변경\s*(?:전|후)/g, ' ');
-    t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    if (dropsOldLabel(seg) || dropsOldLabel(full)) {
+        t = t.replace(/변경\s*(?:전|후)/g, ' ');
+        t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    }
+    t = t.replace(/(?:^|\s)[가-힣]{1,8}던(?=\s)/g, ' ');
     t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
+    t = t.replace(/수업\s*후\s*전/g, ' ');
+    t = t.replace(/(?:^|\s)후\s*전(?=\s|$)/g, ' ');
+    if (/진행(?:합니다|해요)/.test(wide) && !/진행해\s*주/.test(wide)) t = t.replace(/(?:^|\s)진행(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:갑니다|가요)(?=\s|$)/g, ' ');
     t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
     t = t.replace(/[/／]/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
     t = t.replace(/(?<=[가-힣])(?:은|는|을|를)$/g, '');
     t = t.replace(/\s+/g, ' ').trim();
     const lastWord = t.split(/\s+/).pop() || '';
+    if (leeParticle(lastWord)) t = t.replace(/이$/, '').trim();
     if (/(?<=[가-힣]{2,})가$/.test(lastWord) && !/(?:평가|휴가|연가|병가|공가|추가|결과|참가|출가)$/.test(lastWord)) t = t.replace(/가$/, '').trim();
     if (/제출하지\s*못한/.test(t) && /다시\s*올려/.test(t)) t = '다시 올리기';
     return t;
