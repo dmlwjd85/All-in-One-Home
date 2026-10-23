@@ -12,6 +12,7 @@ export function Attend() {
     const date = route.params.date || clock.ymd;
     const [month, setMonth] = useState(false);
     const [reasonFor, setReasonFor] = useState(null);
+    const [filter, setFilter] = useState('');
     const marks = data.attendance.filter((row) => row.date === date);
     const byId = new Map(marks.map((row) => [row.sid, row]));
     const size = data.students.length || data.profile.classSize || 0;
@@ -20,6 +21,42 @@ export function Attend() {
     const other = marks.filter((row) => row.status === '조퇴' || row.status === '결과').length;
     const present = Math.max(0, size - new Set(marks.map((row) => row.sid)).size);
     const boxes = [['출석', present, 'var(--st-present)'], ['결석', absent, 'var(--st-absent)'], ['지각', late, 'var(--st-late)'], ['조퇴·결과', other, 'var(--st-out)']];
+
+    useEffect(() => {
+        setFilter('');
+    }, [date]);
+
+    function shown(student) {
+        if (!filter) return true;
+        const status = byId.get(student.id)?.status || '출석';
+        if (filter === '조퇴·결과') return status === '조퇴' || status === '결과';
+        return status === filter;
+    }
+
+    function pickBox(label) {
+        setFilter((cur) => {
+            if (label === '출석') {
+                if (cur && cur !== '출석') return '';
+                return cur === '출석' ? '' : '출석';
+            }
+            return cur === label ? '' : label;
+        });
+    }
+
+    function openRecord(student) {
+        if (student?.no >= 1 && student?.no <= 50) {
+            go(`#/students/${student.no}`);
+            return;
+        }
+        setMonth(false);
+        setReasonFor(student);
+    }
+
+    const visibleStudents = data.students.filter(shown);
+    const shownMarks = marks.filter((row) => {
+        const student = data.students.find((item) => item.id === row.sid);
+        return student && shown(student);
+    });
 
     return (
         <div>
@@ -30,10 +67,10 @@ export function Attend() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8, margin: '12px 0' }}>
                 {boxes.map(([label, value, color]) => (
-                    <div key={label} className="solid-card" style={{ padding: 8, textAlign: 'center', minHeight: 64 }}>
-                        <div className="num title-font" style={{ fontSize: 26, color }}>{value}</div>
-                        <div style={{ fontSize: 12, fontWeight: 800 }}>{label}</div>
-                    </div>
+                    <Btn key={label} block className="solid-card" aria-pressed={filter === label} onClick={() => pickBox(label)} style={{ padding: '8px 4px', textAlign: 'center', minHeight: 64, display: 'grid', alignContent: 'center', justifyItems: 'center' }}>
+                        <span className="num title-font" style={{ fontSize: 26, color, lineHeight: '30px' }}>{value}</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, lineHeight: '16px' }}>{label}</span>
+                    </Btn>
                 ))}
             </div>
             <p className="muted" style={{ marginTop: 0 }}>친구를 누르면 출석·결석·지각·조퇴·결과 중에서 바로 고릅니다.</p>
@@ -41,17 +78,21 @@ export function Attend() {
                 <Btn className={month ? 'chip' : 'chip on'} onClick={() => setMonth(false)}>오늘</Btn>
                 <Btn className={month ? 'chip on' : 'chip'} onClick={() => setMonth(true)}>이번 달</Btn>
             </div>
-            {month ? <MonthTable students={data.students} attendance={data.attendance} ym={date.slice(0, 7)} /> : (
+            {month ? <MonthTable students={visibleStudents} attendance={data.attendance} ym={date.slice(0, 7)} onOpen={openRecord} emptyHint={data.students.length ? '이 상태인 친구가 없어요.' : '명단이 없으면 월 출결을 만들 수 없어요.'} /> : (
                 <div className="attend-layout" style={{ marginTop: 12 }}>
-                    <div className="cell-grid wide">
-                        {data.students.map((student) => (
-                            <Seat key={student.id} student={student} mark={byId.get(student.id)} onOpen={() => setReasonFor(student)} date={date} />
-                        ))}
+                    <div>
+                        <div className="cell-grid wide">
+                            {visibleStudents.map((student) => (
+                                <Seat key={student.id} student={student} mark={byId.get(student.id)} onOpen={() => setReasonFor(student)} date={date} />
+                            ))}
+                        </div>
+                        {filter && !visibleStudents.length && <p className="muted">이 상태인 친구가 없어요.</p>}
                     </div>
                     <aside className="solid-card" style={{ padding: 12, marginTop: 12 }}>
                         <h3 style={{ marginTop: 0 }}>사유와 서류</h3>
-                        {!marks.length && <p className="muted">표시한 친구가 없어요. 모두 출석으로 보면 돼요.</p>}
-                        {marks.map((row) => {
+                        {!shownMarks.length && !filter && <p className="muted">표시한 친구가 없어요. 모두 출석으로 보면 돼요.</p>}
+                        {filter && !shownMarks.length && filter !== '출석' && <p className="muted">이 상태인 친구가 없어요.</p>}
+                        {shownMarks.map((row) => {
                             const student = data.students.find((item) => item.id === row.sid);
                             return (
                                 <Btn key={row.id} block className="chip" style={{ marginBottom: 8, justifyContent: 'flex-start', background: statusBg(row.status), color: 'var(--ink)' }} onClick={() => setReasonFor(student)}>
@@ -90,7 +131,7 @@ function Seat({ student, mark, onOpen }) {
     );
 }
 
-function ReasonSheet({ student, mark, date, onClose }) {
+export function ReasonSheet({ student, mark, date, onClose }) {
     useEffect(() => {
         const onKey = (event) => {
             if (event.key === 'Escape') onClose();
@@ -152,20 +193,20 @@ function ReasonSheet({ student, mark, date, onClose }) {
     );
 }
 
-function MonthTable({ students, attendance, ym }) {
+function MonthTable({ students, attendance, ym, onOpen, emptyHint }) {
     const rows = students.map((student) => {
         const marks = attendance.filter((row) => row.sid === student.id && row.date.startsWith(ym));
         return { student, marks };
     });
     return (
-        <div className="solid-card" style={{ marginTop: 12, minWidth: 0 }}>
+        <div style={{ display: 'grid', gap: 8, marginTop: 12, minWidth: 0 }}>
             {rows.map(({ student, marks }) => (
-                <div key={student.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: 12, borderBottom: '1px solid var(--line)', minWidth: 0 }}>
+                <Btn key={student.id} block className="solid-card" onClick={() => onOpen(student)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '10px 12px', minHeight: 44, textAlign: 'left' }}>
                     <strong style={{ flex: '0 0 auto' }}>{student.no} {student.name}</strong>
                     <span className="muted" style={{ minWidth: 0, textAlign: 'right' }}>{marks.length ? marks.map((row) => `${Number(row.date.slice(8))}일 ${row.status}`).join(', ') : '결석·지각 없음'}</span>
-                </div>
+                </Btn>
             ))}
-            {!students.length && <p style={{ padding: 16 }}>명단이 없으면 월 출결을 만들 수 없어요.</p>}
+            {!students.length && <p style={{ margin: 0 }}>{emptyHint}</p>}
         </div>
     );
 }

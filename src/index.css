@@ -41,7 +41,16 @@ button, input, textarea { font-family: inherit; }
     border-radius: var(--radius-lg);
     border: 0;
     background: var(--bg);
+    box-shadow: var(--neo-inset);
+}
+button.glass, button.solid-card,
+a.glass, a.solid-card,
+[role="button"].glass, [role="button"].solid-card {
     box-shadow: var(--neo-raise);
+}
+button.glass[aria-pressed="true"],
+button.solid-card[aria-pressed="true"] {
+    box-shadow: var(--neo-inset);
 }
 .glass { backdrop-filter: none; }
 .solid-card { background: var(--bg); }
@@ -52,14 +61,27 @@ button, input, textarea { font-family: inherit; }
     border: 0;
     border-radius: var(--radius-xl);
     padding: 16px;
-    box-shadow: var(--neo-raise);
+    box-shadow: var(--neo-inset);
 }
 .hero-kicker, .hero-pill {
     background: var(--bg);
     color: var(--ink);
     border: 0;
     border-radius: 12px;
+    box-shadow: var(--neo-inset);
+    padding: 8px 12px;
+}
+button.hero-pill,
+a.hero-pill,
+[role="button"].hero-pill {
     box-shadow: var(--neo-raise-sm);
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    text-align: left;
+    white-space: normal;
 }
 .hero-action {
     background: var(--primary);
@@ -169,6 +191,11 @@ button, input, textarea { font-family: inherit; }
     background: var(--bg);
     color: var(--ink);
     font-weight: 700;
+    box-shadow: var(--neo-inset);
+}
+button.chip,
+a.chip,
+[role="button"].chip {
     box-shadow: var(--neo-raise-sm);
 }
 .chip.on {
@@ -189,7 +216,7 @@ button, input, textarea { font-family: inherit; }
     font-family: var(--font-title);
     font-size: 16px;
     text-shadow: none;
-    box-shadow: var(--neo-raise-sm);
+    box-shadow: none;
 }
 
 .tabbar {
@@ -249,7 +276,7 @@ button, input, textarea { font-family: inherit; }
     color: var(--ink);
     border-radius: 16px;
     padding: 10px 12px 10px 14px;
-    box-shadow: var(--neo-raise);
+    box-shadow: var(--neo-inset);
     border: 0;
 }
 .tip-bubble::before { display: none; }
@@ -296,7 +323,7 @@ button, input, textarea { font-family: inherit; }
     gap: 8px;
     align-items: center;
     justify-content: space-between;
-    box-shadow: var(--neo-raise);
+    box-shadow: 0 8px 18px var(--neo-shadow);
 }
 .cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
@@ -304,6 +331,8 @@ button, input, textarea { font-family: inherit; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.home-grid { display: grid; gap: 12px; }
 
 @media (min-width: 900px) {
     .app-frame { display: grid; grid-template-columns: 200px minmax(0, 1fr); }
@@ -426,7 +455,7 @@ button, input, textarea { font-family: inherit; }
     margin: 0 0 12px;
     padding: 8px 0;
     background: var(--bg);
-    box-shadow: var(--neo-raise-sm);
+    box-shadow: var(--neo-inset);
 }
 .low-card {
     background: var(--warn);
@@ -497,7 +526,8 @@ button, input, textarea { font-family: inherit; }
     border-radius: 16px;
     background: var(--bg);
 }
-.neo { box-shadow: var(--neo-raise-sm); }
+.neo { box-shadow: var(--neo-inset); }
+button.neo, a.neo, [role="button"].neo { box-shadow: var(--neo-raise-sm); }
 .neo-in {
     color: var(--ink);
     box-shadow: var(--neo-inset);
@@ -518,11 +548,16 @@ button, input, textarea { font-family: inherit; }
 .hero-action:active,
 .tip-bulb:active,
 .capture-summary:active,
+button.hero-pill:active,
 button.solid-card:active,
 button.glass:active,
-.neo:active,
+button.neo:active,
 .tabbar .tap:not(.fab):active {
     box-shadow: var(--neo-inset);
+}
+button.solid-card[aria-pressed="true"]:active,
+button.glass[aria-pressed="true"]:active {
+    box-shadow: var(--neo-inset-deep);
 }
 .primary-btn:active,
 .fab:active,
