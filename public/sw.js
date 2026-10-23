@@ -5,7 +5,7 @@
    cache:'no-cache'로 받아서, 브라우저가 10분짜리 사본을 새 파일인 것처럼 쓰지 않게 합니다.
    목록 주소에도 캐시 이름을 붙입니다. 예전 등록은 importScripts 만 HTTP 캐시를 보므로,
    같은 주소의 옛 목록을 읽으면 없는 파일로 설치가 실패합니다. */
-const CACHE = 'ssug-gyomu-shell-v9';
+const CACHE = 'ssug-gyomu-shell-v11';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts(`./precache-manifest.js?v=${CACHE}`);
@@ -27,6 +27,39 @@ async function storeResponse(response) {
     });
 }
 
+function assetSuffix(pathname) {
+    const marker = '/assets/';
+    const at = String(pathname || '').indexOf(marker);
+    if (at < 0) return '';
+    return pathname.slice(at);
+}
+
+function staleAssetUrls(requests, precache, scopeHref) {
+    const keep = new Set();
+    for (const item of precache || []) {
+        try {
+            const suffix = assetSuffix(new URL(item, scopeHref).pathname);
+            if (suffix) keep.add(suffix);
+        } catch {
+            /* 주소가 아니면 목록에서 뺍니다. */
+        }
+    }
+    const drop = [];
+    for (const requestUrl of requests || []) {
+        let pathname = '';
+        try {
+            pathname = new URL(requestUrl).pathname;
+        } catch {
+            continue;
+        }
+        const suffix = assetSuffix(pathname);
+        if (!suffix || keep.has(suffix)) continue;
+        drop.push(requestUrl);
+    }
+    return drop;
+}
+/* stale-assets-end */
+
 self.addEventListener('install', (event) => {
     event.waitUntil(caches.open(CACHE).then(async (cache) => {
         await Promise.all(PRECACHE.map(async (url) => {
@@ -38,12 +71,17 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((keys) => Promise.all(keys
+    event.waitUntil((async () => {
+        const keys = await caches.keys();
+        await Promise.all(keys
             .filter((key) => key !== CACHE || key.startsWith('homenote-shell'))
-            .map((key) => caches.delete(key))))
-            .then(() => self.clients.claim())
-    );
+            .map((key) => caches.delete(key)));
+        const cache = await caches.open(CACHE);
+        const requests = await cache.keys();
+        const drop = staleAssetUrls(requests.map((request) => request.url), PRECACHE, self.location.href);
+        await Promise.all(drop.map((url) => cache.delete(url)));
+        await self.clients.claim();
+    })());
 });
 
 self.addEventListener('fetch', (event) => {

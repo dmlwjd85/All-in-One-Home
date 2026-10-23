@@ -28,6 +28,18 @@ async function pinBrowserClock(page) {
         FrozenDate.prototype = NativeDate.prototype;
         window.Date = FrozenDate;
     }, FIXED_NOW);
+    await page.evaluateOnNewDocument(() => {
+        window.__cls = 0;
+        try {
+            new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (!entry.hadRecentInput) window.__cls += entry.value;
+                }
+            }).observe({ type: 'layout-shift', buffered: true });
+        } catch {
+            /* 레이아웃 이동을 못 재도 다른 검사는 이어집니다. */
+        }
+    });
 }
 
 /** '금요일까지'와 같은 규칙입니다. 오늘을 포함한 가장 가까운 그 요일입니다. */
@@ -590,6 +602,32 @@ try {
             await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
             await page.waitForFunction(() => [...document.querySelectorAll('button.solid-card')].some((el) => el.innerText.includes('김하늘')));
             await controlBoxes(page, 'button.solid-card:not([aria-pressed])', `이번 달 ${width}`);
+            if (width >= 900) {
+                const underFab = await page.evaluate(() => {
+                    const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                    const mainBottom = document.querySelector('.main')?.getBoundingClientRect().bottom ?? window.innerHeight;
+                    const hit = (a, b) => Boolean(
+                        a && b && a.width > 0 && b.width > 0
+                        && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                        && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                    );
+                    const rows = [...document.querySelectorAll('button.solid-card')].filter((el) => /^(16|17)\s/.test(el.innerText.trim()));
+                    for (const row of rows) row.scrollIntoView({ block: 'end' });
+                    return rows.map((el) => {
+                        const box = el.getBoundingClientRect();
+                        return {
+                            text: el.innerText.replace(/\s+/g, ' ').trim().slice(0, 14),
+                            top: Math.round(box.top),
+                            bottom: Math.round(box.bottom),
+                            under: hit(box, fab) && box.top < mainBottom + 0.5,
+                        };
+                    });
+                });
+                check(
+                    underFab.length === 2 && underFab.every((row) => !row.under),
+                    `1920에서 출결 16·17번 줄이 할 일 고르기 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
+                );
+            }
             await audit(page, `출결 너비 ${width}`);
         }, width >= 900 ? 1080 : 800);
     }
@@ -1433,6 +1471,128 @@ try {
         const still = await page.evaluate(() => localStorage.getItem('homenote_v2_classRoster'));
         check(still && still.includes('김하늘'), '시작 화면이 원본 키를 지웠습니다.');
     });
+
+    await withDemo(390, 'light', async (page) => {
+        const initial = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-sound'));
+        check(initial === null, '콕 소리 기본값이 켜져 있지 않습니다.');
+        const notice = await page.evaluate(() => {
+            const tip = document.querySelector('.tip-bubble');
+            return {
+                text: tip?.innerText || '',
+                off: [...(tip?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '끄기'),
+                toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+            };
+        });
+        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
+        await page.click('[aria-label="할 일 고르기"]');
+        await delay(80);
+        const during = await page.evaluate(() => ({
+            toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+            seen: localStorage.getItem('ssug-gyomu-key-sound-notice'),
+        }));
+        check(!during.toast && during.seen !== '1', '소리 안내가 토스트로 뜨거나 한 번보다 많이 나옵니다.');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(() => (document.querySelector('.tip-bubble')?.innerText || '').includes('누를 때 소리가 나요'));
+        await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
+        const saved = await page.evaluate(() => ({
+            sound: localStorage.getItem('ssug-gyomu-key-sound'),
+            seen: localStorage.getItem('ssug-gyomu-key-sound-notice'),
+            toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+        }));
+        check(saved.sound === '0' && saved.seen === '1' && !saved.toast, '소리 끄기가 저장되지 않았습니다.');
+    });
+
+    for (const mode of ['light', 'dark']) {
+        for (const width of [360, 390, 1920]) {
+            await withDemo(width, mode, async (page) => {
+                await page.evaluate(() => document.fonts?.ready);
+                const layout = await page.evaluate(() => {
+                    const hits = (a, b) => Boolean(
+                        a && b && a.width > 0 && b.width > 0
+                        && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                        && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                    );
+                    const tip = document.querySelector('.tip-bubble');
+                    const tipBox = tip?.getBoundingClientRect();
+                    const visible = Boolean(tipBox && tipBox.width > 0 && tipBox.height > 0);
+                    const quick = document.querySelector('.home-quick')?.getBoundingClientRect();
+                    const closeBtn = tip?.querySelector('[aria-label="팁 닫기"]')?.getBoundingClientRect();
+                    const offBtn = [...(tip?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '끄기')?.getBoundingClientRect();
+                    const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
+                    const sixth = cells[5];
+                    const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                    const hero = document.querySelector('.hero-action')?.getBoundingClientRect();
+                    const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
+                    const banner = [...document.querySelectorAll('p')].find((el) => el.textContent.includes('아직 클라우드'))?.getBoundingClientRect();
+                    const date = document.querySelector('.date-block')?.getBoundingClientRect();
+                    const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                    const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
+                    const viewBottom = window.innerHeight;
+                    return {
+                        visible,
+                        text: tip?.innerText || '',
+                        toast,
+                        coversQuick: hits(tipBox, quick),
+                        coversSixth: hits(tipBox, sixth) || cells.some((cell) => hits(tipBox, cell)),
+                        coversHero: hits(tipBox, hero) || hits(tipBox, kicker),
+                        coversTab: hits(tipBox, tab),
+                        coversBanner: hits(tipBox, banner),
+                        coversDate: hits(tipBox, date),
+                        coversFab: hits(tipBox, fab) || hits(offBtn, fab) || hits(closeBtn, fab),
+                        coversClose: hits(offBtn, closeBtn),
+                        sixthUnderTab: hits(sixth, tab),
+                        sixthOnScreen: Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0),
+                        quickTop: Math.round(quick?.top ?? -1),
+                        sixthTop: Math.round(sixth?.top ?? -1),
+                        cls: window.__cls || 0,
+                    };
+                });
+                check(!layout.toast, `${width} ${mode}에서 소리 안내 토스트가 있습니다.`);
+                check(layout.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${layout.cls}`);
+                if (width < 900) {
+                    check(
+                        layout.visible && layout.text.includes('콕') && layout.text.includes('누를 때 소리가 나요')
+                        && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
+                        && !layout.coversBanner && !layout.coversDate && !layout.coversClose
+                        && layout.sixthOnScreen && !layout.sixthUnderTab,
+                        `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
+                    );
+                    await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
+                    const after = await page.evaluate(() => ({
+                        quick: Math.round(document.querySelector('.home-quick')?.getBoundingClientRect().top ?? -1),
+                        sixth: Math.round(document.querySelectorAll('.period-row button')[5]?.getBoundingClientRect().top ?? -1),
+                        cls: window.__cls || 0,
+                        toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+                    }));
+                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls}`);
+                } else {
+                    check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
+                    await page.evaluate(() => { location.hash = '#/settings'; });
+                    await page.waitForFunction(() => document.body.innerText.includes('콕, 누를 때 소리가 나요'));
+                    const settings = await page.evaluate(() => {
+                        const hits = (a, b) => Boolean(
+                            a && b && a.width > 0 && b.width > 0
+                            && a.left < b.right - 0.5 && a.right > b.left + 0.5
+                            && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
+                        );
+                        const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('누를 때 소리'));
+                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('콕, 누를 때 소리가 나요'));
+                        note?.scrollIntoView({ block: 'end' });
+                        const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
+                        const noteBox = note?.getBoundingClientRect();
+                        const buttonBox = button?.getBoundingClientRect();
+                        return {
+                            phrase: note?.innerText.includes('콕, 누를 때 소리가 나요') || false,
+                            off: Boolean(button),
+                            under: hits(buttonBox, fab) || hits(noteBox, fab),
+                            aboveFab: Boolean(noteBox && fab && noteBox.bottom <= fab.top + 0.5),
+                        };
+                    });
+                    check(settings.phrase && settings.off && !settings.under && settings.aboveFab, `${width} ${mode} 설정에서 소리 안내가 버튼을 가리거나 없습니다: ${JSON.stringify(settings)}`);
+                }
+            }, width >= 900 ? 1080 : 800);
+        }
+    }
 
     await withDemo(390, 'light', async (page) => {
         await page.evaluate(async () => {

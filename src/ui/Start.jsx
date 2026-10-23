@@ -60,9 +60,9 @@ export function Start() {
                     {plan.conflicts?.length > 0 && <p>두 군데 내용이 달라서 둘 다 넣었어요.</p>}
                     <Btn className="primary-btn block" disabled={busy} onClick={async () => {
                         setBusy(true);
-                        await applyLegacy(plan);
+                        const saved = await applyLegacy(plan);
                         setBusy(false);
-                        setStep('done');
+                        if (!saved?.storageFailed) setStep('done');
                     }}>옮기기</Btn>
                     <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => setStep('class')}>나중에</Btn>
                 </div>
@@ -72,9 +72,9 @@ export function Start() {
                     <h2 className="title-font">우리 반</h2>
                     <input className="field" aria-label="학급 이름" placeholder="6학년 3반" value={className} onChange={(event) => setClassName(event.target.value)} />
                     <textarea className="field" style={{ marginTop: 8 }} rows={6} aria-label="명단" placeholder={'한 줄에 한 명씩 적어 주세요.\n1 김하늘\n2 오지호'} value={roster} onChange={(event) => setRoster(event.target.value)} />
-                    <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => { await finishSetup({ className, rosterText: roster }); go('#/today'); }}>이 명단으로 시작</Btn>
-                    <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { await finishSetup({ className, rosterText: '', skip: true }); go('#/today'); }}>나중에 할게요</Btn>
-                    <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { await loadDemo(); go('#/today'); }}>예시 학급으로 둘러보기</Btn>
+                    <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => { const saved = await finishSetup({ className, rosterText: roster }); if (!saved?.storageFailed) go('#/today'); }}>이 명단으로 시작</Btn>
+                    <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { const saved = await finishSetup({ className, rosterText: '', skip: true }); if (!saved?.storageFailed) go('#/today'); }}>나중에 할게요</Btn>
+                    <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { const saved = await loadDemo(); if (!saved?.storageFailed) go('#/today'); }}>예시 학급으로 둘러보기</Btn>
                 </div>
             )}
             {step === 'done' && plan && (

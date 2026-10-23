@@ -24,6 +24,7 @@ export function Tasks() {
                 event.preventDefault();
                 if (!title.trim()) return;
                 const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: title.trim(), done: false, due: clock.ymd, source: 'app' });
+                if (result?.storageFailed) return;
                 setTitle('');
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
             }}>
@@ -83,6 +84,7 @@ function NoteBox() {
             event.preventDefault();
             if (!text.trim()) return;
             const result = await saveTextItem('notes', { id: `note-${Date.now()}`, text: text.trim(), date: '', pinned: true, source: 'app' });
+            if (result?.storageFailed) return;
             setText('');
             showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '메모로 남겼어요.', true);
         }}>
@@ -102,6 +104,7 @@ export function Notice() {
 
     async function save(next) {
         const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() });
+        if (result?.storageFailed) return;
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }
 

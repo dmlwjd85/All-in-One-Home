@@ -65,6 +65,7 @@ export function FlowSheet({ flow, onClose }) {
                 pinned: false,
                 source: 'app',
             });
+            if (result?.storageFailed) return;
             showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요. 회의록을 남겼어요.' : '회의록을 남겼어요.', true);
             onClose();
             return;

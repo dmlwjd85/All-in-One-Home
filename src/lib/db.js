@@ -9,8 +9,8 @@ import { pullUserData, pushUserData, syncAvailable } from './cloud.js';
 import { seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
-const mainVault = createVault('ssug-gyomu');
-const localVault = createVault('ssug-gyomu-local');
+let mainVault = createVault('ssug-gyomu');
+let localVault = createVault('ssug-gyomu-local');
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
@@ -79,28 +79,116 @@ function mirrorTheme(theme) {
     }
 }
 
+const storageListeners = new Set();
+
+export function subscribeStorageIssue(fn) {
+    storageListeners.add(fn);
+    return () => storageListeners.delete(fn);
+}
+
+export function storageIssueMessage(error) {
+    const name = `${error?.name || ''} ${error?.message || ''}`;
+    if (/QuotaExceeded/i.test(name)) return '저장 공간이 가득 차서 기록을 남기지 못했어요. 원래대로 돌려 두었어요.';
+    return '이 기기에 기록을 남기지 못해서 원래대로 돌려 두었어요.';
+}
+
+function tellStorageIssue(message) {
+    storageListeners.forEach((fn) => {
+        try { fn(message); } catch { /* 안내는 화면만 고칩니다. */ }
+    });
+}
+
+function markStorage(error) {
+    if (error?.storageFailed) return error;
+    const wrapped = new Error(storageIssueMessage(error));
+    wrapped.name = error?.name || 'Error';
+    wrapped.storageFailed = true;
+    wrapped.cause = error;
+    return wrapped;
+}
+
+async function putState(vault, value) {
+    if (value === undefined) await vault.remove('state');
+    else await vault.set('state', value);
+}
+
+async function restoreVaults(previousMain, previousLocal) {
+    try { await putState(mainVault, previousMain); } catch { /* 되돌리기가 막혀도 처음 오류를 올립니다. */ }
+    try { await putState(localVault, previousLocal); } catch { /* 한쪽만 남아 있지 않게 둘 다 시도합니다. */ }
+}
+
+function platformHasNoVault(error) {
+    return typeof indexedDB === 'undefined' && /indexedDB is not defined/.test(`${error?.message || ''}`);
+}
+
 async function writeVaults(copy) {
     if (memoryOnly) return;
     const local = copy.local;
     const main = { ...copy, local: undefined, auth: null, tip: undefined };
-    await mainVault.set('state', main);
-    await localVault.set('state', local);
+    let previousMain;
+    let previousLocal;
+    try {
+        previousMain = await mainVault.get('state');
+        previousLocal = await localVault.get('state');
+    } catch (error) {
+        if (platformHasNoVault(error)) {
+            memoryOnly = true;
+            return;
+        }
+        throw markStorage(error);
+    }
+    let mainWrote = false;
+    let localWrote = false;
+    try {
+        await mainVault.set('state', main);
+        mainWrote = true;
+        await localVault.set('state', local);
+        localWrote = true;
+    } catch (error) {
+        if (mainWrote || localWrote) await restoreVaults(previousMain, previousLocal);
+        throw markStorage(error);
+    }
 }
 
 function persist() {
     const copy = structuredClone(state);
-    persistQueue = persistQueue.then(() => writeVaults(copy)).catch(() => {});
-    return persistQueue;
+    const run = persistQueue.then(() => writeVaults(copy));
+    persistQueue = run.then(() => undefined, () => undefined);
+    return run;
+}
+
+async function revertMemory(previous, undoable) {
+    if (undoable) undoStack.pop();
+    state = previous;
+    mirrorTheme(state.profile.theme);
+    emit();
 }
 
 export async function update(recipe, { undoable = false } = {}) {
-    if (undoable) undoStack = [...undoStack.slice(-4), structuredClone(state)];
+    const previous = structuredClone(state);
+    if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
     state = next;
     mirrorTheme(state.profile.theme);
     emit();
-    await persist();
+    try {
+        await persist();
+    } catch (error) {
+        await revertMemory(previous, undoable);
+        const message = error?.storageFailed ? error.message : storageIssueMessage(error);
+        tellStorageIssue(message);
+        return { storageFailed: true, message };
+    }
     flushCloud().catch(() => {});
+    return null;
+}
+
+/** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
+export function useVaultsForTest(nextMain, nextLocal) {
+    mainVault = nextMain;
+    localVault = nextLocal;
+    memoryOnly = false;
+    persistQueue = Promise.resolve();
 }
 
 export async function flushCloud() {
@@ -161,10 +249,20 @@ function absorbCloud(draft, remote) {
 export async function undo() {
     const prev = undoStack.pop();
     if (!prev) return false;
+    const current = state;
     state = prev;
     mirrorTheme(state.profile.theme);
     emit();
-    await persist();
+    try {
+        await persist();
+    } catch (error) {
+        undoStack.push(prev);
+        state = current;
+        mirrorTheme(state.profile.theme);
+        emit();
+        tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
+        return false;
+    }
     return true;
 }
 
@@ -231,7 +329,7 @@ export async function boot(query = '') {
 
 export async function loadDemo() {
     const demo = buildDemo(seoulParts());
-    await update((draft) => ({
+    return update((draft) => ({
         ...draft,
         ...demo,
         profile: { ...draft.profile, ...demo.profile, theme: draft.profile.theme },
@@ -250,7 +348,7 @@ export async function beginGuest() {
 
 export async function finishSetup({ className, rosterText, skip }) {
     const parsed = parseRoster(rosterText || '');
-    await update((draft) => {
+    const failed = await update((draft) => {
         draft.profile.started = true;
         draft.profile.guest = true;
         draft.profile.demo = false;
@@ -270,6 +368,7 @@ export async function finishSetup({ className, rosterText, skip }) {
         }
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     return parsed;
 }
 
@@ -293,7 +392,7 @@ export async function saveQuick(input, now = new Date()) {
     const clock = seoulParts(now);
     const date = input.date || parsed.detectedDate || clock.ymd;
     let message = '남겼어요.';
-    await update((draft) => {
+    const failed = await update((draft) => {
         const student = draft.students.find((row) => row.no === Number(no));
         const sid = student?.id || '';
         const kind = input.kind || '메모';
@@ -346,6 +445,7 @@ export async function saveQuick(input, now = new Date()) {
         }
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
     if (sensitive) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
     return { ok: true, message };
 }
@@ -365,7 +465,7 @@ export async function saveParsed(items, now = new Date()) {
     let skipped = 0;
     let sensitiveCount = 0;
     let filled = 0;
-    await update((draft) => {
+    const failed = await update((draft) => {
         const seen = new Set([
             ...draft.todos, ...draft.local.todos, ...draft.events, ...draft.local.events,
         ].map((row) => row.id));
@@ -408,6 +508,7 @@ export async function saveParsed(items, now = new Date()) {
         }
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
     if (!count && skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped };
     let message = `${count}개 등록했어요.`;
     if (skipped) message += ` 겹친 ${skipped}개는 빼 두었어요.`;
@@ -417,7 +518,7 @@ export async function saveParsed(items, now = new Date()) {
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
-    await update((draft) => {
+    return update((draft) => {
         const id = `${date}_${sid}`;
         const index = draft.attendance.findIndex((row) => row.id === id);
         if (!status || status === '출석') {
@@ -506,11 +607,12 @@ export async function receiveOne(id, no) {
 
 export async function saveTextItem(bucket, row) {
     const sensitive = isSensitiveText(row.text || row.title || '', row.tags);
-    await update((draft) => {
+    const failed = await update((draft) => {
         const target = sensitive ? draft.local[bucket] : draft[bucket];
         put(target, { ...row, source: row.source || 'app' });
         return draft;
     }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, sensitive };
     return { sensitive };
 }
 
@@ -523,10 +625,11 @@ export async function removeItem(bucket, id) {
 }
 
 export async function patchProfile(patch) {
-    await update((draft) => {
+    const failed = await update((draft) => {
         draft.profile = { ...draft.profile, ...patch };
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     if (patch.sharedPc === true) {
         memoryOnly = true;
         try {
@@ -543,7 +646,7 @@ export async function patchProfile(patch) {
 export async function replaceRoster(text) {
     const parsed = parseRoster(text);
     if (!parsed.students.length) return parsed;
-    await update((draft) => {
+    const failed = await update((draft) => {
         const old = new Map(draft.students.map((row) => [row.no, row]));
         draft.students = parsed.students.map((row) => ({
             id: old.get(row.no)?.id || `s${row.no}`,
@@ -558,11 +661,12 @@ export async function replaceRoster(text) {
         draft.profile.classSize = parsed.students.length;
         return draft;
     });
+    if (failed?.storageFailed) return failed;
     return parsed;
 }
 
 export async function setTimetable(day, period, subject, specialist) {
-    await update((draft) => {
+    return update((draft) => {
         const table = { ...draft.timetable };
         const row = { ...(table[day] || {}) };
         if (subject != null) row[`p${period}`] = subject;
@@ -580,13 +684,14 @@ export function previewLegacy(titles) {
 }
 
 export async function applyLegacy(plan) {
-    await update((draft) => {
+    const kept = await update((draft) => {
         draft.local.backup = plan.backup;
         return draft;
     });
+    if (kept?.storageFailed) return kept;
     const fileDate = seoulYmd();
     downloadJson(`교무수첩-원본백업-${fileDate}.json`, plan.backup.payload);
-    await update((draft) => {
+    const moved = await update((draft) => {
         const merge = (current, incoming) => {
             const map = new Map((current || []).map((item) => [item.id, item]));
             for (const item of incoming || []) map.set(item.id, item);
@@ -616,10 +721,11 @@ export async function applyLegacy(plan) {
         draft.profile.migrateLater = false;
         return draft;
     });
+    return moved?.storageFailed ? moved : null;
 }
 
 export async function forgetLegacyImports() {
-    await update((draft) => {
+    return update((draft) => {
         const keep = (list) => (list || []).filter((item) => item.source !== 'legacy' && item.source !== 'legacy-conflict');
         draft.students = keep(draft.students);
         draft.records = keep(draft.records);
@@ -654,46 +760,80 @@ export function downloadOriginal() {
     return true;
 }
 
-export async function importText(text, mode) {
+function applyIncoming(draft, data, sensitive, mode) {
+    const merge = (current, incoming) => {
+        if (mode === 'replace') return incoming || [];
+        const map = new Map((current || []).map((item) => [item.id, item]));
+        for (const item of incoming || []) map.set(item.id, item);
+        return [...map.values()];
+    };
+    draft.students = merge(draft.students, data.students);
+    draft.attendance = merge(draft.attendance, data.attendance);
+    draft.records = merge(draft.records, sensitive.cloud);
+    draft.events = merge(draft.events, data.events);
+    draft.todos = merge(draft.todos, data.todos);
+    draft.notes = merge(draft.notes, data.notes);
+    draft.notices = merge(draft.notices, data.notices);
+    draft.legacyPages = merge(draft.legacyPages, data.legacy);
+    draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
+    if (data.profile?.className) draft.profile.className = data.profile.className;
+    if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
+    draft.local.records = merge(draft.local.records, [...(data.local?.records || []), ...sensitive.local]);
+    draft.profile.started = true;
+    draft.profile.classSize = draft.students.length || draft.profile.classSize;
+    return draft;
+}
+
+async function restoreState(previous) {
+    state = previous;
+    mirrorTheme(state.profile.theme);
+    emit();
+    try {
+        await persist();
+    } catch {
+        /* 화면에는 원래 기록이 남아 있습니다. */
+    }
+}
+
+export async function importText(text, mode, hooks = {}) {
     const checked = validateBackupText(text);
     if (!checked.ok) return checked;
     if (checked.kind === 'legacy') {
         const plan = planMigration(oldBackupToBag(checked.data), { now: new Date() });
-        await applyLegacy(plan);
+        const moved = await applyLegacy(plan);
+        if (moved?.storageFailed) return { ok: false, errors: [moved.message] };
         return { ok: true, kind: 'legacy', summary: plan.summary };
     }
     const data = checked.data;
     const sensitive = splitSensitive(data.records || []);
-    if (mode === 'replace') {
-        await update((draft) => {
-            draft.local.backup = { exportedAt: new Date().toISOString(), payload: buildExport(draft, { includeLocal: true, at: new Date().toISOString() }) };
-            return draft;
-        });
-        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, state.local.backup.payload);
+    if (mode !== 'replace') {
+        const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        if (failed?.storageFailed) return { ok: false, errors: [failed.message] };
+        return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
     }
-    await update((draft) => {
-        const merge = (current, incoming) => {
-            if (mode === 'replace') return incoming || [];
-            const map = new Map((current || []).map((item) => [item.id, item]));
-            for (const item of incoming || []) map.set(item.id, item);
-            return [...map.values()];
-        };
-        draft.students = merge(draft.students, data.students);
-        draft.attendance = merge(draft.attendance, data.attendance);
-        draft.records = merge(draft.records, sensitive.cloud);
-        draft.events = merge(draft.events, data.events);
-        draft.todos = merge(draft.todos, data.todos);
-        draft.notes = merge(draft.notes, data.notes);
-        draft.notices = merge(draft.notices, data.notices);
-        draft.legacyPages = merge(draft.legacyPages, data.legacy);
-        draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
-        if (data.profile?.className) draft.profile.className = data.profile.className;
-        if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
-        draft.local.records = merge(draft.local.records, [...(data.local?.records || []), ...sensitive.local]);
-        draft.profile.started = true;
-        draft.profile.classSize = draft.students.length || draft.profile.classSize;
-        return draft;
-    });
+    let previous;
+    try {
+        previous = structuredClone(state);
+        const exportedAt = new Date().toISOString();
+        const payload = buildExport(state, { includeLocal: true, at: exportedAt });
+        JSON.stringify(payload);
+        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
+        await hooks.onPhase?.('prepared');
+        const next = structuredClone(state);
+        next.local.backup = { exportedAt, payload };
+        applyIncoming(next, data, sensitive, 'replace');
+        await hooks.onPhase?.('ready', next);
+        state = next;
+        mirrorTheme(state.profile.theme);
+        emit();
+        await persist();
+        flushCloud().catch(() => {});
+        await hooks.onPhase?.('applied');
+    } catch (error) {
+        if (previous) await restoreState(previous);
+        if (error?.storageFailed) return { ok: false, errors: [error.message] };
+        return { ok: false, errors: ['기록을 바꾸지 못해 원래대로 돌려 두었어요.'] };
+    }
     return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
 }
 
@@ -722,13 +862,14 @@ export async function setAuth(auth) {
 }
 
 export async function clearAll() {
-    await update((draft) => {
+    const failed = await update((draft) => {
         const theme = draft.profile.theme;
         const next = emptyState();
         next.profile.theme = theme;
         next.tip = { hidden: [], seen: [], closes: {}, snooze: '' };
         return next;
     });
+    if (failed?.storageFailed) return failed;
     try {
         await mainVault.remove('state');
         await localVault.remove('state');
@@ -738,7 +879,7 @@ export async function clearAll() {
 }
 
 export async function saveTip(tip) {
-    await update((draft) => {
+    return update((draft) => {
         draft.tip = tip;
         return draft;
     });

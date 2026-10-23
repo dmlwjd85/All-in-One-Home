@@ -1,6 +1,7 @@
 /** 파싱, 옮기기, 대비, 공휴일, 글꼴, 화면 문구를 확인합니다. */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
 import { parseNote } from '../src/lib/parse.js';
 import { isSensitiveText, rulesSafeTextBody } from '../src/lib/sensitive.js';
 import { planMigration, storageFromMap } from '../src/lib/migrate.js';
@@ -9,7 +10,9 @@ import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
-import { validateBackupText } from '../src/lib/backup.js';
+import { buildExport, validateBackupText } from '../src/lib/backup.js';
+import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
+import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
 
@@ -190,7 +193,7 @@ for (const file of walk(root)) {
     const rel = file.slice(root.length + 1);
     if (!/\.(css|js|jsx|html)$/.test(rel) || fontAllow.has(rel)) continue;
     const text = readFileSync(file, 'utf8');
-    const uncommented = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const uncommented = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\bhref=(["'])[\s\S]*?\1/g, '');
     if (/Gowun|Pretendard|Noto Serif|Noto Sans/.test(uncommented)) failures.push(`${rel}: 글꼴 이름이 토큰 밖에 있습니다.`);
     for (const match of text.matchAll(/font-family\s*:\s*([^;}{]+)/g)) {
         const value = match[1];
@@ -206,6 +209,232 @@ for (const file of walk(root)) {
         }
     }
 }
+
+const memoryStore = {
+    map: new Map(),
+    getItem(key) { return this.map.has(key) ? this.map.get(key) : null; },
+    setItem(key, value) { this.map.set(key, String(value)); },
+};
+check(keySoundEnabled(memoryStore), '콕 소리 기본값이 켜져 있지 않습니다.');
+check(keySoundNoticePending(memoryStore), '처음 소리 안내가 준비되지 않습니다.');
+rememberKeySoundNotice(memoryStore);
+check(!keySoundNoticePending(memoryStore), '소리 안내를 한 번 본 뒤에도 다시 뜹니다.');
+memoryStore.setItem('ssug-gyomu-key-sound', '0');
+memoryStore.map.delete('ssug-gyomu-key-sound-notice');
+check(!keySoundNoticePending(memoryStore), '소리가 꺼져 있는데 안내가 뜹니다.');
+
+const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
+const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';
+check(bits.includes('viewBox="0 0 1652 1774"'), '콕 글자 틀이 가계부와 다릅니다.');
+check(bits.includes(ledgerPath), '콕 글자 윤곽이 가계부와 다릅니다.');
+const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
+check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('>끄기<'), '소리 안내 문구가 없습니다.');
+check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
+
+const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v11'"), '캐시 판이 올라가지 않았습니다.');
+const helperStart = sw.indexOf('function assetSuffix');
+const helperEnd = sw.indexOf('/* stale-assets-end */');
+const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';
+    const sandbox = { URL };
+    if (!helper) failures.push('옛 assets 를 가리는 함수가 없습니다.');
+    else {
+        vm.runInNewContext(`${helper}\nthis.staleAssetUrls = staleAssetUrls;`, sandbox);
+    const scope = 'https://teacher.github.io/All-in-One-Home/sw.js';
+    const drop = sandbox.staleAssetUrls([
+        'https://teacher.github.io/All-in-One-Home/assets/old-abc.js',
+        'https://teacher.github.io/All-in-One-Home/assets/new-def.js',
+        'https://teacher.github.io/All-in-One-Home/assets/new-def.css',
+        'https://teacher.github.io/All-in-One-Home/index.html',
+    ], ['./assets/new-def.js', './index.html', './assets/new-def.css'], scope);
+    check(drop.length === 1 && drop[0].endsWith('/assets/old-abc.js'), `매니페스트에 없는 assets 만 지워야 합니다: ${drop.join(', ')}`);
+}
+
+const cycledTodos = [{ id: 'todo-1', title: '동의서 걷기', done: false, due: '2026-10-23' }];
+const cycledLocal = { records: [{ id: 'r1', text: '알레르기 간식' }], notes: [], events: [], todos: [], notices: [], contacts: [], pages: [], backup: null };
+const cycled = {
+    profile: { className: '6학년 3반', schoolYear: 2026, classSize: 1, periodStarts: ['09:00'] },
+    students: [{ id: 's1', no: 1, name: '김하늘' }],
+    attendance: [],
+    records: [],
+    events: [],
+    todos: cycledTodos,
+    notes: [],
+    notices: [],
+    timetable: { mon: { p1: '국어' } },
+    legacyPages: [],
+    local: cycledLocal,
+};
+const firstExport = buildExport(cycled, { includeLocal: true, at: '2026-10-23T00:00:00.000Z' });
+cycledLocal.backup = { exportedAt: firstExport.exportedAt, payload: firstExport };
+firstExport.local = cycledLocal;
+let cycledText = '';
+try {
+    cycledText = JSON.stringify(buildExport(cycled, { includeLocal: true, at: '2026-10-23T01:00:00.000Z' }));
+} catch (error) {
+    failures.push(`순환 참조를 끊지 못했습니다: ${error.message}`);
+}
+if (cycledText) {
+    const parsedCycle = JSON.parse(cycledText);
+    check(parsedCycle.todos?.[0]?.title === '동의서 걷기', '순환 참조 때문에 할 일이 빠집니다.');
+    check(parsedCycle.local?.records?.[0]?.text === '알레르기 간식', '순환 참조 때문에 이 기기 기록이 빠집니다.');
+    check(parsedCycle.local?.backup?.payload === undefined, '내보낼 때 안쪽 백업 본문을 빼지 않습니다.');
+}
+
+function fingerprint(current) {
+    return JSON.stringify({
+        className: current.profile.className,
+        schoolYear: current.profile.schoolYear,
+        classSize: current.profile.classSize,
+        periodStarts: current.profile.periodStarts,
+        students: current.students,
+        attendance: current.attendance,
+        records: current.records,
+        events: current.events,
+        todos: current.todos,
+        notes: current.notes,
+        notices: current.notices,
+        timetable: current.timetable,
+        legacyPages: current.legacyPages,
+        localRecords: current.local.records,
+        localNotes: current.local.notes,
+        localEvents: current.local.events,
+        localTodos: current.local.todos,
+        localNotices: current.local.notices,
+        localContacts: current.local.contacts,
+        localPages: current.local.pages,
+    });
+}
+
+await (async () => {
+    await boot('');
+    await clearAll();
+    await finishSetup({ className: '6학년 3반', rosterText: '1 김하늘\n2 이하은' });
+    await saveQuick({ text: '동의서 걷기', kind: '할 일' });
+    await saveQuick({ text: '발표를 끝까지 했어요', kind: '관찰', no: 1 });
+    await saveQuick({ text: '알레르기 간식', kind: '관찰', no: 2 });
+    await saveQuick({ text: '현장학습', kind: '일정', date: '2026-10-23' });
+    await setTimetable('mon', 1, '국어');
+    const original = fingerprint(snapshot());
+    check(snapshot().todos.some((row) => row.title.includes('동의서')), '할 일을 만들지 못했습니다.');
+    check(snapshot().local.records.some((row) => String(row.text).includes('알레르기')), '민감 기록이 이 기기에 없습니다.');
+    const file = JSON.stringify(exportFile(true));
+    await saveQuick({ text: '사라질 할 일', kind: '할 일' });
+    check(snapshot().todos.some((row) => row.title.includes('사라질')), '교체 전에 기록을 더하지 못했습니다.');
+    const replaced = await importText(file, 'replace');
+    check(replaced.ok, `교체 불러오기가 실패했습니다: ${(replaced.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === original, '교체 뒤 기록이 백업과 다릅니다.');
+    const again = JSON.stringify(exportFile(true));
+    const reloaded = await importText(again, 'replace');
+    check(reloaded.ok, `다시 불러오기가 실패했습니다: ${(reloaded.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === original, '교체 뒤 다시 내보내고 불러오자 기록이 바뀌었습니다.');
+    check(snapshot().todos.some((row) => row.title.includes('동의서')) && !snapshot().todos.some((row) => row.title.includes('사라질')), '할 일 목록이 비었습니다.');
+
+    const beforeFail = fingerprint(snapshot());
+    const failed = await importText(file, 'replace', {
+        async onPhase(phase, draft) {
+            if (phase === 'ready') draft.todos = [];
+            if (phase === 'applied') throw new Error('중간에 실패');
+        },
+    });
+    check(!failed.ok, '중간에 실패한 교체가 성공으로 끝났습니다.');
+    check(fingerprint(snapshot()) === beforeFail, '실패한 교체 뒤에 원래 기록으로 돌아오지 않았습니다.');
+    const recovered = exportFile(true);
+    check(JSON.stringify(recovered) && recovered.todos.some((row) => row.title.includes('동의서')), '복구 뒤 내보내기가 할 일을 잃었습니다.');
+
+    const sizes = [];
+    for (let round = 0; round < 6; round += 1) {
+        const text = JSON.stringify(exportFile(true));
+        const parsed = JSON.parse(text);
+        check(parsed.local?.backup?.payload === undefined, '교체를 반복해도 안쪽 백업이 파일에 남습니다.');
+        sizes.push(text.length);
+        const brought = await importText(text, 'replace');
+        check(brought.ok, `크기를 재는 교체가 실패했습니다: ${(brought.errors || []).join(' ')}`);
+    }
+    check(sizes.length === 6 && sizes.every((size) => size === sizes[0]), `교체를 반복하면 파일 크기가 커집니다: ${sizes.join(', ')}`);
+    check(snapshot().local.backup?.payload?.local?.backup?.payload === undefined, '기기에 남긴 백업 안에 이전 백업 본문이 겹칩니다.');
+
+    function quotaError() {
+        const error = new Error('QuotaExceededError');
+        error.name = 'QuotaExceededError';
+        return error;
+    }
+    function blockedError() {
+        const error = new Error('blocked');
+        error.name = 'AbortError';
+        return error;
+    }
+    function makeVault() {
+        const bag = new Map();
+        let mode = 'ok';
+        return {
+            failOnce() { mode = 'once'; },
+            failAlways() { mode = 'quota'; },
+            heal() { mode = 'ok'; },
+            async get(key) {
+                return bag.has(key) ? structuredClone(bag.get(key)) : undefined;
+            },
+            async set(key, value) {
+                if (mode === 'quota') throw quotaError();
+                if (mode === 'once') {
+                    mode = 'ok';
+                    throw blockedError();
+                }
+                bag.set(key, structuredClone(value));
+            },
+            async remove(key) {
+                bag.delete(key);
+            },
+            dump() {
+                return bag.has('state') ? structuredClone(bag.get('state')) : undefined;
+            },
+        };
+    }
+
+    const mainStore = makeVault();
+    const localStore = makeVault();
+    useVaultsForTest(mainStore, localStore);
+    await update((draft) => draft);
+    await saveQuick({ text: '섞이면 안 되는 할 일', kind: '할 일' });
+    const kept = fingerprint(snapshot());
+    const mainBefore = JSON.stringify(mainStore.dump());
+    const localBefore = JSON.stringify(localStore.dump());
+    check(mainBefore.includes('섞이면 안 되는 할 일'), '메인 저장소에 새 할 일이 없습니다.');
+    localStore.failOnce();
+    const oneSide = await importText(file, 'replace');
+    check(!oneSide.ok, '한쪽 저장소가 실패했는데 가져오기가 성공했습니다.');
+    check((oneSide.errors || []).some((item) => item.includes('이 기기에 기록을 남기지 못해서')), `한쪽 실패 안내가 없습니다: ${(oneSide.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === kept, '한쪽 저장소만 실패한 뒤 메모리 기록이 섞였습니다.');
+    check(JSON.stringify(mainStore.dump()) === mainBefore, '한쪽이 실패한 뒤 메인 저장소가 새 기록으로 남았습니다.');
+    check(JSON.stringify(localStore.dump()) === localBefore, '한쪽이 실패한 뒤 로컬 저장소가 예전과 다르게 남았습니다.');
+
+    mainStore.failAlways();
+    localStore.failAlways();
+    const full = await importText(file, 'replace');
+    check(!full.ok, '저장 공간이 가득 찼는데 가져오기가 성공했습니다.');
+    check((full.errors || []).join(' ').includes('저장 공간이 가득 차서'), `공간 부족 안내가 없습니다: ${(full.errors || []).join(' ')}`);
+    check(fingerprint(snapshot()) === kept, '공간이 가득 찬 뒤 메모리 기록이 바뀌었습니다.');
+    check(JSON.stringify(mainStore.dump()) === mainBefore && JSON.stringify(localStore.dump()) === localBefore, '공간이 가득 찬 뒤 저장소가 바뀌었습니다.');
+
+    const heard = [];
+    const stopListen = subscribeStorageIssue((message) => heard.push(message));
+    const leaks = [];
+    const onLeak = (reason) => leaks.push(reason);
+    process.on('unhandledRejection', onLeak);
+    const ordinary = await saveQuick({ text: '남지 않을 할 일', kind: '할 일' });
+    saveQuick({ text: '처리되지 않을 할 일', kind: '할 일' }).then(() => undefined);
+    await new Promise((resolve) => { setTimeout(resolve, 20); });
+    process.off('unhandledRejection', onLeak);
+    stopListen();
+    check(ordinary?.storageFailed && ordinary.ok === false, '일반 저장이 저장 실패를 조용히 넘겼습니다.');
+    check(leaks.length === 0, `저장 실패가 처리되지 않은 오류로 남습니다: ${leaks.map((item) => item?.message).join(' / ')}`);
+    check(heard.some((message) => message.includes('저장 공간이 가득 차서')), `일반 저장 실패를 알리지 않았습니다: ${heard.join(' / ')}`);
+    check(fingerprint(snapshot()) === kept, '일반 저장에 실패했는데 화면에 새 기록이 남았습니다.');
+    check(!JSON.stringify(mainStore.dump()).includes('남지 않을 할 일'), '실패한 일반 저장이 메인 저장소에 남았습니다.');
+    check(JSON.stringify(localStore.dump()) === localBefore, '실패한 일반 저장이 로컬 저장소를 바꿨습니다.');
+})().catch((error) => {
+    failures.push(error?.message || String(error));
+});
 
 if (failures.length) {
     console.error(failures.join('\n'));

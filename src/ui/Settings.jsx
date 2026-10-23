@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe } from './keyfeel.js';
+import { useEffect, useState } from 'react';
+import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe, subscribeKeyPrefs } from './keyfeel.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
@@ -45,6 +45,10 @@ export function Settings() {
     const [importMode, setImportMode] = useState('merge');
     const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
     const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
+    useEffect(() => subscribeKeyPrefs(() => {
+        setSoundOn(keySoundEnabled());
+        setVibeOn(keyVibeEnabled());
+    }), []);
 
     return (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -53,8 +57,10 @@ export function Settings() {
                 <input className="field" aria-label="학급 이름" value={className} onChange={(event) => setClassName(event.target.value)} />
                 <textarea className="field" style={{ marginTop: 8 }} rows={6} aria-label="명단" value={roster} onChange={(event) => setRoster(event.target.value)} />
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
-                    await patchProfile({ className: className.trim() });
+                    const saved = await patchProfile({ className: className.trim() });
+                    if (saved?.storageFailed) return;
                     const parsed = await replaceRoster(roster);
+                    if (parsed?.storageFailed) return;
                     showToast(parsed.errors?.[0] || '학급 정보를 저장했어요.');
                 }}>학급 저장</Btn>
                 <h3>교시 시작</h3>
@@ -63,7 +69,8 @@ export function Settings() {
                 ))}
                 <Btn className="chip" style={{ marginTop: 8 }} onClick={async () => {
                     if (periods.some((item) => !isHm(item))) { showToast('시각은 09:00처럼 적어 주세요.'); return; }
-                    await patchProfile({ periodStarts: periods });
+                    const saved = await patchProfile({ periodStarts: periods });
+                    if (saved?.storageFailed) return;
                     showToast('교시 시각을 저장했어요.');
                 }}>시각 저장</Btn>
             </section>
@@ -88,8 +95,8 @@ export function Settings() {
                         setVibeOn(next);
                     }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
                 </div>
-                <p className="muted">버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
-                <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then(() => showToast('팁을 다시 보여 드릴게요.')))}>팁 다시 보기</Btn>
+                <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
 
             <section className="glass" style={{ padding: 14 }}>
@@ -126,10 +133,10 @@ export function Settings() {
                 <Btn className="chip" style={{ marginLeft: 8 }} onClick={() => {
                     const plan = previewLegacy(titles);
                     if (!plan || !plan.counts.original) { showToast('이 기기에서 예전 기록을 찾지 못했어요.'); return; }
-                    applyLegacy(plan).then(() => showToast('예전 기록을 옮겼어요.'));
+                    applyLegacy(plan).then((saved) => { if (!saved?.storageFailed) showToast('예전 기록을 옮겼어요.'); });
                 }}>이 기기 기록 옮기기</Btn>
                 <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => go('#/settings/legacy')}>보관함 보기</Btn>
-                <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => forgetLegacyImports().then(() => showToast('옮긴 것만 지웠어요. 원본은 그대로예요.'))}>옮긴 것 지우기</Btn>
+                <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => forgetLegacyImports().then((saved) => { if (!saved?.storageFailed) showToast('옮긴 것만 지웠어요. 원본은 그대로예요.'); })}>옮긴 것 지우기</Btn>
             </section>
 
             <section className="glass" style={{ padding: 14 }} data-screen="public-path">
@@ -177,10 +184,10 @@ export function Settings() {
                 }}>구글 로그인</Btn>}
                 {data.auth?.uid && <p>{data.auth.name ? `${data.auth.name} 선생님으로 연결됐어요.` : '구글 계정으로 연결됐어요.'}</p>}
                 {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
-                <Btn className="chip" onClick={() => loadDemo().then(() => showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'))}>예시 학급 불러오기</Btn>
+                <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
                 <input className="field" aria-label="삭제 확인" value={wipe} onChange={(event) => setWipe(event.target.value)} placeholder="삭제" />
-                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => clearAll().then(() => showToast('이 앱의 기록을 지웠어요.'))}>계정과 기록 삭제</Btn>
+                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => clearAll().then((saved) => { if (!saved?.storageFailed) showToast('이 앱의 기록을 지웠어요.'); })}>계정과 기록 삭제</Btn>
             </section>
         </div>
     );

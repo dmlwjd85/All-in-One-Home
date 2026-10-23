@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, snapshot, subscribe, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
 import { resolveHash } from './lib/routes.js';
 import { closeTip, tipForToday } from './lib/tips.js';
@@ -8,7 +8,7 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
-import { playKey } from './ui/keyfeel.js';
+import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs } from './ui/keyfeel.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -182,7 +182,18 @@ export default function App() {
         };
     }, []);
 
-    const todayTipId = (!flow && !plus && !msg && data?.profile?.started) ? (tipForToday(clock.ymd, data.tip)?.id || '') : '';
+    useEffect(() => subscribeStorageIssue((message) => showToast(message)), []);
+
+    const [soundTip, setSoundTip] = useState(() => keySoundNoticePending());
+    const [soundSilenced, setSoundSilenced] = useState(() => !keySoundEnabled());
+    useEffect(() => subscribeKeyPrefs(() => {
+        if (!keySoundEnabled()) setSoundSilenced(true);
+    }), []);
+
+    const showSoundTip = Boolean(soundTip && !flow && !plus && !msg && data?.profile?.started);
+    const todayTipId = !data?.profile?.started || flow || plus || msg
+        ? ''
+        : (showSoundTip ? 'key-sound' : (tipForToday(clock.ymd, data.tip)?.id || ''));
     useEffect(() => {
         if (!todayTipId) return undefined;
         setTipFolded(false);
@@ -190,9 +201,13 @@ export default function App() {
         return () => window.clearTimeout(timer);
     }, [todayTipId]);
 
-    function showToast(message, undoable = false) {
+    function showToast(message, undoable = false, action = null) {
         clearTimeout(toastTimer.current);
-        setToast({ message, undoable });
+        if (!message) {
+            setToast(null);
+            return;
+        }
+        setToast({ message, undoable, action });
         toastTimer.current = setTimeout(() => setToast(null), 5000);
     }
 
@@ -240,7 +255,8 @@ export default function App() {
         ['기록', '#/students', '✎'],
         ['일정', '#/schedule', '📅'],
     ];
-    const tip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
+    const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
+    const tip = showSoundTip ? { id: 'key-sound', text: '콕, 누를 때 소리가 나요', sound: true } : dailyTip;
     const checked = data.profile.checkedDates.includes(clock.ymd);
 
     let screen = <Home />;
@@ -286,7 +302,7 @@ export default function App() {
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 콕과 같은 일 고르기가 열려요.</p>
                 </aside>
                 <div className="main">
-                    {!cloudReady() && <p className="muted" style={{ marginTop: 0 }}>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
+                    {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
                     <header className="topbar">
@@ -312,15 +328,29 @@ export default function App() {
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
                             <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
                                 const next = dark ? 'light' : 'dark';
-                                import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next }));
+                                import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
                         </div>
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                <p style={{ margin: 0, flex: 1 }}>{tip.text}</p>
-                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => saveTip(closeTip(data.tip, tip.id, clock.ymd))}>✕</Btn>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <p style={{ margin: 0, flex: 1, minWidth: 0 }}>{tip.text}</p>
+                                {tip.sound && (
+                                    <Btn className={soundSilenced ? 'chip' : 'chip on'} onClick={() => {
+                                        setKeySound(false);
+                                        rememberKeySoundNotice();
+                                        setSoundSilenced(true);
+                                    }}>끄기</Btn>
+                                )}
+                                <Btn className="icon-btn" aria-label="팁 닫기" onClick={() => {
+                                    if (tip.sound) {
+                                        rememberKeySoundNotice();
+                                        setSoundTip(false);
+                                        return;
+                                    }
+                                    saveTip(closeTip(data.tip, tip.id, clock.ymd));
+                                }}>✕</Btn>
                             </div>
                         </div>
                     )}
@@ -374,7 +404,8 @@ export default function App() {
                     <div className="toast" role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
-                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo(); setToast(null); }}>되돌리기</Btn>}
+                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => { if (ok) setToast(null); }); }}>되돌리기</Btn>}
+                        {toast.action && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => toast.action.onClick?.()}>{toast.action.label}</Btn>}
                     </div>
                 )}
             </div>

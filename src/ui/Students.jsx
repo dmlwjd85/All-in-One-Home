@@ -138,12 +138,13 @@ export function Neis() {
 
     async function moved(row) {
         const { update } = await import('../lib/db.js');
-        await update((draft) => {
+        const saved = await update((draft) => {
             const list = row.localOnly ? draft.local.records : draft.records;
             const found = list.find((item) => item.id === row.id);
             if (found) found.neisMoved = true;
             return draft;
         }, { undoable: true });
+        if (saved?.storageFailed) return;
         showToast('옮긴 것으로 표시했어요.', true);
     }
 
