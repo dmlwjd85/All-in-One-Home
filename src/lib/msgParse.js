@@ -292,7 +292,9 @@ function stripTitleNoise(text) {
         s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|엔|도의|도|에|는|은|의|처럼|보다|과\s*달리|와\s*달리)?/g, ' ');
     }
     s = s.replace(/(?:올해|이번에)(?:는|은)?/g, ' ');
+    s = s.replace(/예정이었던|(?:이었|였)던/g, ' ');
     s = s.replace(/이었(?:는데|고|습니다|어요|음)?/g, ' ');
+    s = s.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
     s = s.replace(/(?:^|\s)이니(?=\s|$)/g, ' ');
     s = s.replace(/예정이에요/g, ' ');
     s = s.replace(/\d{1,2}\s*월\s*(?:초|중순|말)\s*인/g, ' ');
@@ -731,7 +733,7 @@ function dateSpan(text, now) {
 }
 
 const MOVE_ARROW = /→|➡|⇨|->/;
-const MOVE_VERB = /연기|미뤄|미루|미룹|앞당|순연|연장|변경|바뀌|바꿉|바꿔|바뀝|옮겨|옮긴|옮깁/;
+const MOVE_VERB = /연기|미뤄|미루|미룹|미룬|앞당|순연|연장|변경|바뀌|바뀐|바꿉|바꿔|바뀝|옮겨|옮긴|옮깁/;
 const TIME_BIT = '(?:(?:오전|오후)\\s*)?\\d{1,2}\\s*(?:시(?:\\s*\\d{1,2}\\s*분|\\s*반)?|:\\s*\\d{2})';
 const TIME_SHIFT_RE = new RegExp(`(${TIME_BIT})\\s*에서\\s*(${TIME_BIT})\\s*(?:으로|로)`);
 
@@ -748,6 +750,32 @@ function applyTimeShift(text) {
         .replace(/\s+/g, ' ')
         .trim();
     return next && next !== String(text).trim() ? next : null;
+}
+
+const PERIOD_VERB = '(?:변경|바뀌|바뀐|바꿉|바꿔|바뀝|옮깁|옮겨|옮긴|연기|미룹|미뤄|미룬)';
+const PERIOD_VERB_TAIL = '(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|니다|요|습니다)?';
+
+/** 날짜는 그대로 두고 교시만 바뀌면 뒤 교시가 시각입니다. 날짜가 둘이면 날짜 이동이 교시를 가집니다. */
+function applyPeriodShift(text, now) {
+    const src = String(text || '');
+    if (findDates(src, now).length >= 2) return '';
+    const pair = src.match(new RegExp(`(\\d)\\s*교시\\s*에서\\s*(\\d)\\s*교시\\s*(?:으로|로)`));
+    let next = src;
+    if (pair) {
+        next = src.replace(pair[0], `${pair[2]}교시`);
+    } else {
+        const dest = src.match(new RegExp(`(\\d)\\s*교시\\s*(?:으로|로)\\s*${PERIOD_VERB}`));
+        if (!dest) return '';
+        const earlier = [...src.matchAll(/(\d)\s*교시/g)].filter((item) => item.index < dest.index && item[1] !== dest[1]);
+        if (!earlier.length) return '';
+        next = src;
+        [...earlier].reverse().forEach((item) => {
+            next = `${next.slice(0, item.index)} ${next.slice(item.index + item[0].length)}`;
+        });
+    }
+    next = next.replace(new RegExp(`(?:으로|로)?\\s*${PERIOD_VERB}${PERIOD_VERB_TAIL}`, 'g'), ' ');
+    next = next.replace(/\s+/g, ' ').trim();
+    return next && next !== src.trim() ? next : '';
 }
 
 function roAfter(text, end) {
@@ -843,8 +871,13 @@ function moveSubject(text, spans) {
     t = t.replace(/(?:으로|로)\s*(?:변경|바뀌|바꿉|바꿔)(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|어요|었습니다|니다|요)?/g, ' ');
     t = t.replace(/(?:변경|바뀌|바꿉|바꿔)(?:되었(?:습니다|어요)?|됐습니다|됩니다|합니다|했어요|어요|었습니다|니다)/g, ' ');
     t = t.replace(/(?:되었|됐|이었|였)(?:습니다|어요)/g, ' ');
+    t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
+    t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
     t = t.replace(/[()（）]/g, ' ');
-    t = t.replace(/(?:^|\s)(?:원래|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    t = t.replace(/변경\s*(?:전|후)\s*[:：]?/g, ' ');
+    t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
+    t = t.replace(/[/／]/g, ' ');
     t = t.replace(/기한(?:이|은|을|를)?/g, ' ');
     t = t.replace(/연장(?:됩니다|합니다|되었(?:습니다|어요)|됐어요|됨)?/g, ' ');
     t = t.replace(/(?:이|가)?\s*아니라/g, ' ');
@@ -877,15 +910,64 @@ function markBeside(text, unit, units) {
     return { period, clock: clock ? clock[0] : '' };
 }
 
-/** 날짜를 옮기는 문장은 로 뒤의 새 날짜만 넣고, 원래·기존·주어 쪽 날짜는 빼 둡니다. */
+const OLD_VALUE = /(?:원래|당초|기존|변경\s*전|예정이었던)/;
+const NEW_VALUE = /변경\s*후/;
+
+function bareSlashAt(text) {
+    let at = -1;
+    const src = String(text || '');
+    for (let i = 0; i < src.length; i += 1) {
+        if (src[i] !== '/' && src[i] !== '／') continue;
+        if (/\d/.test(src[i - 1] || '') || /\d/.test(src[i + 1] || '')) continue;
+        at = i;
+    }
+    return at;
+}
+
+/** 날짜를 둘러싼 말만 봅니다. 앞 날짜의 '원래'가 뒤 날짜까지 물들이지 않습니다. */
+function valueWindow(text, unit, units) {
+    const start = unit.spans[0].index;
+    const prev = [...units].reverse().find((item) => item.end <= start);
+    const before = text.slice(prev ? prev.end : 0, start);
+    const cut = Math.max(before.lastIndexOf('('), before.lastIndexOf('（'), before.lastIndexOf('.'), before.lastIndexOf('。'), bareSlashAt(before));
+    const head = before.slice(cut + 1);
+    const next = units.find((item) => item.spans[0].index > unit.end);
+    const after = text.slice(unit.end, next ? next.spans[0].index : Math.min(text.length, unit.end + 28));
+    const stop = [after.indexOf(')'), after.indexOf('）'), after.search(/[.。]/), bareSlashAt(after)].filter((item) => item >= 0);
+    const tail = after.slice(0, stop.length ? Math.min(...stop) : after.length);
+    return { head, tail };
+}
+
+/** 원래·당초·기존·변경 전·이었던은 예전 값이고, 변경 후·로 변경·에 합니다는 새 값입니다. */
+function dateRole(text, unit, units) {
+    const { head, tail } = valueWindow(text, unit, units);
+    if (/^\s*(?:은|는|이|가|을|를)?\s*(?:이었|였)던/.test(tail)) return 'old';
+    if (NEW_VALUE.test(head) && !OLD_VALUE.test(head)) return 'new';
+    if (OLD_VALUE.test(head)) return 'old';
+    if (/^\s*에\s*(?:합니다|해요|엽니다)/.test(tail)) return 'new';
+    return '';
+}
+
+function changeSubject(text, spans) {
+    const subject = moveSubject(text, spans).replace(/\s+/g, ' ').trim();
+    if (!subject || /^(?:날짜|일정|입니다|였습니다|이었습니다|던)$/.test(subject)) return '날짜만 있음';
+    return subject;
+}
+
+/** 날짜를 옮기는 문장은 새 날짜만 넣고, 예전 값으로 표시된 날짜는 빼 둡니다. */
 function rescheduleChunks(text, now) {
     const spans = findDates(text, now);
     const units = temporalUnits(text, spans);
     if (units.length < 2) return null;
+    let roles = units.map((unit) => dateRole(text, unit, units));
     const destAt = roleDestination(text, units);
-    if (destAt < 0 && !moveCue(text, units)) return null;
-    const dest = destAt >= 0 ? units[destAt] : units[units.length - 1];
-    const subject = moveSubject(text, spans);
+    if (destAt >= 0) roles[destAt] = 'new';
+    if (!roles.includes('old')) roles = roles.map((role, index) => (role === 'new' && index !== destAt ? '' : role));
+    const newAt = roles.reduce((found, role, index) => (role === 'new' ? index : found), -1);
+    const moved = newAt >= 0 || destAt >= 0 || moveCue(text, units);
+    if (!moved) return null;
+    const dest = newAt >= 0 ? units[newAt] : (destAt >= 0 ? units[destAt] : units[units.length - 1]);
+    const subject = changeSubject(text, spans);
     const beside = markBeside(text, dest, units);
     const fresh = `\u0003${subject} ${unitToken(dest)} ${beside.period ? `${beside.period}교시` : ''} ${beside.clock}`.replace(/\s+/g, ' ').trim();
     const old = units.filter((unit) => unit !== dest).map((unit) => {
@@ -893,6 +975,17 @@ function rescheduleChunks(text, now) {
         return `\u0002${subject} ${unitToken(unit)} ${was.period ? `${was.period}교시` : ''}`.replace(/\s+/g, ' ').trim();
     });
     return [fresh, ...old];
+}
+
+/** 새 날짜 없이 원래·당초·변경 전·이었던만 있으면 그 날짜는 예전 값입니다. */
+function oldValueChunks(text, now) {
+    const spans = findDates(text, now);
+    const units = temporalUnits(text, spans);
+    if (!units.length || roleDestination(text, units) >= 0 || moveCue(text, units)) return null;
+    const roles = units.map((unit) => dateRole(text, unit, units));
+    if (!roles.length || roles.some((role) => role !== 'old')) return null;
+    const subject = changeSubject(text, spans);
+    return units.map((unit) => `\u0002${subject} ${unitToken(unit)}`.replace(/\s+/g, ' ').trim());
 }
 
 /** '1차, 2차'처럼 같은 대상을 여러 날에 적으면 제목에 대상과 차례를 같이 붙입니다. */
@@ -1165,15 +1258,28 @@ function unsureChunks(text, now) {
 }
 
 /** 부정 문장 뒤에 날짜만 있으면 그 일정의 날짜로 붙입니다. */
-/** '원래·기존' 문장은 바로 앞의 옮긴 날짜를 꾸미는 말이라 한 문장으로 둡니다. */
+function oldValueSentence(text, now) {
+    const src = String(text || '');
+    if (/변경\s*후/.test(src) && findDates(src, now).length) return false;
+    if (MOVE_VERB.test(src) && /(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(src)) return false;
+    return /(?:원래|당초|기존|변경\s*전|예정이었던|(?:이었|였)던)/.test(src) && (findDates(src, now).length || /\d\s*교시/.test(src));
+}
+
+function changeSentence(text, now) {
+    const src = String(text || '');
+    if (/(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(src) && MOVE_VERB.test(src)) return true;
+    if (/변경\s*후/.test(src) && findDates(src, now).length) return true;
+    return findDates(src, now).length === 1 && /에\s*(?:합니다|해요|엽니다)/.test(src) && !oldValueSentence(src, now);
+}
+
+/** 원래·당초·기존·변경 전 문장은 옮긴 문장과 한 덩어리입니다. 앞뒤는 가리지 않습니다. */
 function bindOriginalDate(parts, now) {
     const out = [];
     for (let i = 0; i < parts.length; i += 1) {
         const cur = String(parts[i] || '');
         const next = String(parts[i + 1] || '');
-        const moves = /(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)/.test(cur) && MOVE_VERB.test(cur);
-        const original = /(?:원래|기존)/.test(next) && findDates(next, now).length && !MOVE_VERB.test(next);
-        if (moves && original) {
+        const pair = (changeSentence(cur, now) && oldValueSentence(next, now)) || (oldValueSentence(cur, now) && changeSentence(next, now));
+        if (pair) {
             out.push(`${cur.replace(/[.。]\s*$/, '')} ${next}`.replace(/\s+/g, ' ').trim());
             i += 1;
             continue;
@@ -1475,7 +1581,7 @@ function clauseCarriesEvent(clause) {
 
 /** 날짜 바로 뒤의 '로 미룹니다'만 옮긴 날입니다. '다음으로'·'추후로'는 날이 없습니다. */
 function realMove(text) {
-    return /(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)\s*(?:[가-힣]{1,12}\s*(?:은|는|을|를)\s*)?(?:미룹|미뤄|미루|미룸|미뤘|미루었|연기|변경|옮깁|옮겨)/.test(String(text || ''));
+    return /(?:\d|[)）])\s*(?:\d\s*교시\s*)?(?:으로|로)\s*(?:[가-힣]{1,12}\s*(?:은|는|을|를)\s*)?(?:미룹|미뤄|미루|미룸|미뤘|미루었|미룬|연기|변경|바뀐|바뀌|옮깁|옮겨)/.test(String(text || ''));
 }
 
 function destinationDate(text) {
@@ -1945,13 +2051,16 @@ function segmentsOf(text, now) {
     return chunks.flatMap((chunk) => {
         if (String(chunk).startsWith('\u0001')) return splitByDate(chunk, now);
         const peeled = peelFormModifier(String(chunk), now);
-        const prepared = applyTimeShift(peeled || chunk) || peeled || chunk;
+        const timed = applyTimeShift(peeled || chunk) || peeled || chunk;
+        const prepared = applyPeriodShift(timed, now) || timed;
         const rain = rainSchedule(String(prepared).replace(/[\u0001\u0002\u0003\u0005\u0007]/g, ''), now);
         if (rain) return [rain];
         const replaced = replaceChunks(prepared);
         if (replaced) return replaced;
         const moved = rescheduleChunks(prepared, now);
         if (moved) return moved;
+        const oldOnly = oldValueChunks(prepared, now);
+        if (oldOnly) return oldOnly;
         if (danglingMove(prepared, now)) return [`\u0001${prepared}`];
         const restarted = yearRestartChunks(prepared, now);
         if (restarted) return restarted;
@@ -2770,13 +2879,18 @@ function polishTitle(title, segment = '', full = '') {
     if (REASON_TAIL.test(t)) {
         t = t.replace(/(?:^|\s)[가-힣]{0,12}\s*(?:출장|연수|병가|연가|휴가|공가|외출|반차)(?:으로|로)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    const nameBecause = (chunk, at) => /^\s*[가-힣]{1,8}(?:는|ㄴ)\s/.test(String(chunk).slice(at));
-    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?\s+/, '');
-    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인하여\s+/, '');
-    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}\s*때문에\s+/, (all, offset) => (nameBecause(t, offset + all.length) ? all : ''));
-    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?(?=\s|$)/g, ' ');
-    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인하여(?=\s|$)/g, ' ');
-    t = t.replace(/(?:^|\s)[가-힣]{1,12}\s*때문에(?=\s|$)/g, (all, offset) => (nameBecause(t, offset + all.length) ? all : ' '));
+    const nameBecause = (chunk, at) => {
+        const matched = String(chunk).slice(at).match(/^\s*([가-힣]{1,8})(?:는|ㄴ)\s+[가-힣]/);
+        return Boolean(matched) && /(?:하|되|지|리|기|오|우|뀌|끼|켜|내|치|주|보|쓰|르|키|시|니|워)$/.test(matched[1]);
+    };
+    const keepName = (all, offset) => (nameBecause(t, offset + all.length) ? all : '');
+    const keepNameSpace = (all, offset) => (nameBecause(t, offset + all.length) ? all : ' ');
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?\s+/, keepName);
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}(?:으로|로)\s*인하여\s+/, keepName);
+    t = t.replace(/^(?:[가-힣]{1,12}\s+)??[가-힣]{1,12}\s*때문에\s+/, keepName);
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인해(?:서)?(?=\s|$)/g, keepNameSpace);
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}(?:으로|로)\s*인하여(?=\s|$)/g, keepNameSpace);
+    t = t.replace(/(?:^|\s)[가-힣]{1,12}\s*때문에(?=\s|$)/g, keepNameSpace);
     t = t.replace(/^(?:[가-힣]{1,12}\s+){1,3}관계로\s+/, '');
     t = t.replace(/(?:^|\s)[가-힣]{1,12}\s+관계로(?=\s|$)/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
@@ -2793,11 +2907,18 @@ function polishTitle(title, segment = '', full = '') {
     }
     t = t.replace(/([가-힣]{2,})(?:은|는)\s+(제출|회신|작성|입력|업로드)(?=\s|$)/g, '$1 $2');
     t = t.replace(/(?:되었|됐)(?:습니다|어요)$/g, '');
+    t = t.replace(/예정이었던|(?:이었|였)던/g, ' ');
     t = t.replace(/(?:이었|였)(?:습니다|어요)$/g, '');
-    t = t.replace(/(?:^|\s)(?:원래|기존)(?:는|은|의)?$/g, '');
+    t = t.replace(/변경\s*(?:전|후)/g, ' ');
+    t = t.replace(/(?:^|\s)(?:원래|당초|기존)(?:는|은|의)?(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)던(?=\s|$)/g, ' ');
+    t = t.replace(/(?:^|\s)바뀐(?=\s|$)/g, ' ');
+    t = t.replace(/[/／]/g, ' ');
     t = t.replace(/\s+/g, ' ').trim();
     t = t.replace(/(?<=[가-힣])(?:은|는|을|를)$/g, '');
     t = t.replace(/\s+/g, ' ').trim();
+    const lastWord = t.split(/\s+/).pop() || '';
+    if (/(?<=[가-힣]{2,})가$/.test(lastWord) && !/(?:평가|휴가|연가|병가|공가|추가|결과|참가|출가)$/.test(lastWord)) t = t.replace(/가$/, '').trim();
     if (/제출하지\s*못한/.test(t) && /다시\s*올려/.test(t)) t = '다시 올리기';
     return t;
 }
