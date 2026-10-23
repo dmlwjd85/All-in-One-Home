@@ -337,7 +337,7 @@ export default function App() {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <p style={{ margin: 0, flex: 1, minWidth: 0 }}>{tip.text}</p>
                                 {tip.sound && (
-                                    <Btn className={soundSilenced ? 'chip' : 'chip on'} aria-pressed={soundSilenced ? 'false' : 'true'} onClick={() => {
+                                    <Btn className={soundSilenced ? 'chip' : 'chip on'} onClick={() => {
                                         setKeySound(false);
                                         rememberKeySoundNotice();
                                         setSoundSilenced(true);
