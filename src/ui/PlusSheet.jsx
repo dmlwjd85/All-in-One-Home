@@ -28,6 +28,14 @@ function kindLabel(id) {
     return CAPTURE_KINDS.find((kind) => kind.id === id)?.label || id;
 }
 
+function doneHeading(note, record) {
+    const registered = String(note || '').match(/(\d+)개 등록했어요/);
+    const held = String(note || '').match(/(\d+)개는 정리함에/);
+    if (registered && held) return `${registered[1]}개 등록, ${held[1]}개는 정리함에`;
+    if (held && !registered && !record) return '정리함에 뒀어요';
+    return '남겼어요';
+}
+
 function summaryLine(item) {
     const bits = [String(item.title || '').trim(), kindLabel(item.kind)];
     if (item.studentNo) bits.push(`${item.studentNo}번`);
@@ -211,7 +219,7 @@ export function PlusSheet({ onClose, onPick }) {
                 {phase === 'done' ? (
                     <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
                         <ClayMark size={140} />
-                        <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{savedNote.includes('정리함') && !savedRecord ? '정리함에 뒀어요' : '남겼어요'}</h2>
+                        <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{doneHeading(savedNote, savedRecord)}</h2>
                         <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '적어 둔 자리에 넣었어요.')}</p>
                     </div>
                 ) : (

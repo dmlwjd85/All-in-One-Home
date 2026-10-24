@@ -1768,6 +1768,54 @@ try {
             '오프라인에서 껍데기가 열리지 않습니다.',
         );
     });
+
+    await withPage(390, async (page) => {
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+        await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
+        const before = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '예시 학급으로 둘러보기');
+            const top = (button?.getBoundingClientRect().top || 0) + window.scrollY;
+            window.scrollTo(0, Math.max(0, top - 80));
+            return window.scrollY;
+        });
+        check(before > 200, `온보딩이 아래로 내려가지 않았습니다. scrollY ${before}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '예시 학급으로 둘러보기')?.click());
+        await page.waitForFunction(() => {
+            const text = document.body.innerText;
+            const main = document.querySelector('.main')?.scrollTop || 0;
+            return (text.includes('오늘 우리 반') || text.includes('오늘은 수업이 없어요')) && window.scrollY === 0 && main === 0;
+        });
+        const home = await page.evaluate(() => ({ y: window.scrollY, main: document.querySelector('.main')?.scrollTop || 0 }));
+        check(home.y === 0 && home.main === 0, `예시 학급 홈이 맨 위가 아닙니다. scrollY ${home.y}, main ${home.main}`);
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        const mid = await page.evaluate(() => window.scrollY);
+        check(mid > 0, '홈을 내려 화면 이동을 확인하지 못했습니다.');
+        await page.evaluate(() => { location.hash = '#/todo'; });
+        await page.waitForFunction(() => document.querySelector('[data-screen="todo"]') && window.scrollY === 0 && (document.querySelector('.main')?.scrollTop || 0) === 0);
+        const todo = await page.evaluate(() => ({ y: window.scrollY, main: document.querySelector('.main')?.scrollTop || 0 }));
+        check(todo.y === 0 && todo.main === 0, `할 일 화면이 맨 위가 아닙니다. scrollY ${todo.y}, main ${todo.main}`);
+    });
+
+    await withDemo(390, 'light', async (page) => {
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
+        await openPlus(page);
+        const line = `${planDue.label}까지 과학도서 제출\n${counselStart.label} 학예회`;
+        await page.evaluate((text) => {
+            const box = document.querySelector('[data-screen="plus"] textarea');
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+            setter.call(box, text);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }, line);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '다음')?.click());
+        await page.waitForFunction(() => document.querySelectorAll('[data-screen="plus"] .msg-card').length >= 2);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] .msg-card button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 정리함에'));
+    }, 844);
 } catch (error) {
     failures.push(error?.message || String(error));
 }

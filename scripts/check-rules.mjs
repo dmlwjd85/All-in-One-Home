@@ -1,7 +1,7 @@
 /** 에뮬레이터에서 건강·보건이 든 글이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { eventBodyWithoutEndTime, fromCloudRow, toCloudRow } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
@@ -62,6 +62,14 @@ async function expectAllow(label, write) {
     }
 }
 
+async function expectBlocked(label, op) {
+    try {
+        await assertFails(op());
+    } catch (error) {
+        failures.push(`${label} 요청이 거절되지 않았습니다. ${error?.message || error}`);
+    }
+}
+
 try {
     await expectDeny('학생 메모 건강', () => setDoc(doc(db, 'users/teacher-a/students/s3'), { no: 3, name: '박서준', memo: '건강 특이' }));
     await expectDeny('학생 메모 보건', () => setDoc(doc(db, 'users/teacher-a/students/s5'), { no: 5, name: '강민우', memo: '보건실' }));
@@ -94,6 +102,21 @@ try {
         if (!back || back.kind !== '할 일' || back.date !== '2026-12-31' || back.title !== '체험학습 동의서') {
             failures.push(`정리함을 다시 읽지 못했습니다. ${JSON.stringify(back)}`);
         }
+        const other = testEnv.authenticatedContext('teacher-b').firestore();
+        const guest = testEnv.unauthenticatedContext().firestore();
+        const inboxPath = 'users/teacher-a/inbox/msgabcdef12';
+        await expectBlocked('정리함 소유자', () => setDoc(doc(db, 'users/teacher-b/inbox/msgabcdef12'), inboxRow.body));
+        await expectBlocked('다른 사람 정리함 읽기', () => getDoc(doc(other, inboxPath)));
+        await expectBlocked('다른 사람 정리함 삭제', () => deleteDoc(doc(other, inboxPath)));
+        await expectBlocked('로그인 없이 정리함 읽기', () => getDoc(doc(guest, inboxPath)));
+        const kept = await getDoc(doc(db, inboxPath));
+        if (!kept.exists()) failures.push('다른 사람의 삭제가 정리함을 지웠습니다.');
+        const inboxBase = { title: '체험학습 동의서', kind: 'todo', source: 'app' };
+        await expectDeny('정리함 kind', () => setDoc(doc(db, 'users/teacher-a/inbox/badkind01'), { ...inboxBase, kind: 'note' }));
+        await expectDeny('정리함 title', () => setDoc(doc(db, 'users/teacher-a/inbox/badtitle1'), { ...inboxBase, title: '가'.repeat(101) }));
+        await expectDeny('정리함 warning', () => setDoc(doc(db, 'users/teacher-a/inbox/badwarn01'), { ...inboxBase, warning: '가'.repeat(121) }));
+        await expectDeny('정리함 source', () => setDoc(doc(db, 'users/teacher-a/inbox/badsource'), { ...inboxBase, source: 'msg' }));
+        await expectDeny('정리함 endTime', () => setDoc(doc(db, 'users/teacher-a/inbox/badendtim'), { ...inboxBase, endTime: '16:00까지' }));
     }
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));

@@ -18,7 +18,11 @@ concurrency:
 
 jobs:
   build:
+    timeout-minutes: 40
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,6 +32,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-13.29.1-${{ runner.os }}
       - name: 설치하고 빌드
         env:
           VITE_BASE: ./
@@ -64,6 +73,7 @@ jobs:
           path: dist
 
   deploy:
+    timeout-minutes: 10
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
@@ -94,6 +94,16 @@ export default function App() {
     }, []);
 
     const route = useMemo(() => resolveHash(hash, clock.ymd), [hash, clock.ymd]);
+    const place = data
+        ? `${data.profile.started ? '1' : '0'}|${route.name}|${route.params.date || ''}|${route.params.no || ''}|${route.params.page || ''}|${route.params.week || ''}|${route.params.view || ''}`
+        : '';
+    useLayoutEffect(() => {
+        if (!place) return;
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        document.querySelector('.main')?.scrollTo(0, 0);
+    }, [place]);
 
     useEffect(() => {
         if (!route.replace) return;
