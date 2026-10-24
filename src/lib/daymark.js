@@ -27,6 +27,14 @@ export function schoolOffEvent(ymd, events) {
     return null;
 }
 
+/** 끝 글자에 받침이 없으면 ‘라’, 있으면 ‘이라’. 크리스마스는 ‘라’입니다. */
+export function iraParticle(word) {
+    const last = [...String(word || '')].pop() || '';
+    const code = last.charCodeAt(0);
+    if (code < 0xac00 || code > 0xd7a3) return '이라';
+    return (code - 0xac00) % 28 === 0 ? '라' : '이라';
+}
+
 export function restInfo(ymd, events) {
     const weekend = isWeekendYmd(ymd);
     const holiday = holidayCaption(ymd);

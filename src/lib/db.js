@@ -5,12 +5,13 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { pullUserData, pushUserData, syncAvailable } from './cloud.js';
+import { deleteUserDoc, pullUserData, pushUserData, syncAvailable } from './cloud.js';
 import { seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
+let inboxVault = createVault('ssug-gyomu-inbox');
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
@@ -41,6 +42,7 @@ export function emptyState() {
         notices: [],
         timetable: {},
         legacyPages: [],
+        inbox: [],
         local: { records: [], notes: [], events: [], todos: [], notices: [], contacts: [], pages: [], backup: null },
         auth: null,
         tip: { hidden: [], seen: [], closes: {}, snooze: '' },
@@ -121,10 +123,35 @@ function platformHasNoVault(error) {
     return typeof indexedDB === 'undefined' && /indexedDB is not defined/.test(`${error?.message || ''}`);
 }
 
+async function writeInbox(items) {
+    let previous;
+    let seen = false;
+    try {
+        previous = await inboxVault.get('items');
+        seen = true;
+    } catch (error) {
+        if (platformHasNoVault(error)) return;
+        throw error;
+    }
+    try {
+        await inboxVault.set('items', Array.isArray(items) ? items : []);
+    } catch (error) {
+        if (platformHasNoVault(error)) return;
+        try {
+            if (seen && previous !== undefined) await inboxVault.set('items', previous);
+            else await inboxVault.remove('items');
+        } catch {
+            /* 되돌리기가 막혀도 처음 오류를 올립니다. */
+        }
+        throw error;
+    }
+}
+
 async function writeVaults(copy) {
     if (memoryOnly) return;
     const local = copy.local;
-    const main = { ...copy, local: undefined, auth: null, tip: undefined };
+    const inbox = copy.inbox;
+    const main = { ...copy, local: undefined, auth: null, tip: undefined, inbox: undefined };
     let previousMain;
     let previousLocal;
     try {
@@ -144,6 +171,7 @@ async function writeVaults(copy) {
         mainWrote = true;
         await localVault.set('state', local);
         localWrote = true;
+        await writeInbox(inbox);
     } catch (error) {
         if (mainWrote || localWrote) await restoreVaults(previousMain, previousLocal);
         throw markStorage(error);
@@ -184,9 +212,10 @@ export async function update(recipe, { undoable = false } = {}) {
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
-export function useVaultsForTest(nextMain, nextLocal) {
+export function useVaultsForTest(nextMain, nextLocal, nextInbox) {
     mainVault = nextMain;
     localVault = nextLocal;
+    if (nextInbox) inboxVault = nextInbox;
     memoryOnly = false;
     persistQueue = Promise.resolve();
 }
@@ -234,6 +263,7 @@ function absorbCloud(draft, remote) {
     draft.notes = unionById(draft.notes, remote.notes);
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
+    draft.inbox = unionById(draft.inbox, remote.inbox);
     for (const [day, value] of Object.entries(remote.timetable || {})) {
         if (!draft.timetable[day] || !Object.keys(draft.timetable[day]).length) draft.timetable[day] = value;
     }
@@ -312,6 +342,12 @@ export async function boot(query = '') {
         /* 팁 저장이 없어도 됩니다. */
     }
     if (!memoryOnly) {
+        try {
+            const held = await inboxVault.get('items');
+            if (Array.isArray(held)) state.inbox = held;
+        } catch {
+            /* 정리함 칸이 없어도 할 일은 열립니다. */
+        }
         try {
             const savedHashes = await mainVault.get('cloudHashes');
             if (savedHashes && typeof savedHashes === 'object') cloudHashes = savedHashes;
@@ -458,23 +494,64 @@ const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
  * 기기 기록의 source는 msg입니다. 클라우드 규칙이 app·legacy·file만 받으므로
  * 올릴 때는 기존 sourceOf가 app으로 바꿉니다. 아이디 msg… 는 그대로라 중복을 다시 막습니다.
  */
+function inboxId(value) {
+    const id = String(value || '').slice(0, 40);
+    return /^[A-Za-z0-9_-]{1,40}$/.test(id) ? id : '';
+}
+
+function heldRow(item, now) {
+    const id = inboxId(item.id);
+    const title = String(item.title || '').trim().slice(0, 100);
+    if (!id || !title) return null;
+    const row = {
+        id,
+        kind: item.kind === '일정' ? '일정' : '할 일',
+        title,
+        date: item.date || '',
+        warning: String(item.warning || '').slice(0, 120),
+        at: now.toISOString(),
+        source: 'msg',
+    };
+    if (item.time) row.time = item.time;
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '')) row.endTime = item.endTime;
+    if (item.end) row.end = item.end;
+    if (item.memo) row.memo = String(item.memo).slice(0, 300);
+    if (EVENT_KINDS.includes(item.eventKind)) row.eventKind = item.eventKind;
+    if (item.period) row.period = item.period;
+    if (item.periodEnd) row.periodEnd = item.periodEnd;
+    return row;
+}
+
+function blobOf(item) {
+    return `${item.title || ''} ${item.memo || ''} ${item.warning || ''} ${item.raw || ''}`;
+}
+
+/**
+ * 고른 항목은 할 일·일정에 넣고, 빼 둔 항목은 정리함(ssug-gyomu-inbox)에 둡니다.
+ * 이미 등록된 아이디는 정리함으로 옮기지 않습니다.
+ */
 export async function saveParsed(items, now = new Date()) {
-    const chosen = (items || []).filter((item) => item && item.include !== false && String(item.title || '').trim());
-    if (!chosen.length) return { ok: false, message: '등록할 항목이 없어요.', count: 0 };
+    const list = (items || []).filter((item) => item && String(item.title || '').trim());
+    const chosen = list.filter((item) => item.include !== false);
+    const held = list.filter((item) => item.include === false);
+    if (!chosen.length && !held.length) return { ok: false, message: '등록할 항목이 없어요.', count: 0, held: 0 };
     let count = 0;
+    let heldCount = 0;
     let skipped = 0;
     let sensitiveCount = 0;
     let filled = 0;
     const failed = await update((draft) => {
-        const seen = new Set([
+        if (!Array.isArray(draft.inbox)) draft.inbox = [];
+        const registered = new Set([
             ...draft.todos, ...draft.local.todos, ...draft.events, ...draft.local.events,
         ].map((row) => row.id));
+        const parked = new Set(draft.inbox.map((row) => row.id));
         for (const item of chosen) {
-            if (!item.id || seen.has(item.id)) {
+            if (!item.id || registered.has(item.id)) {
                 skipped += 1;
                 continue;
             }
-            const blob = `${item.title || ''} ${item.memo || ''} ${item.raw || ''}`;
+            const blob = blobOf(item);
             const sensitive = isSensitiveText(blob);
             if (sensitive) sensitiveCount += 1;
             const base = { source: 'msg', at: now.toISOString(), id: String(item.id).slice(0, 40) };
@@ -503,18 +580,61 @@ export async function saveParsed(items, now = new Date()) {
                     : String(item.title).trim().slice(0, 100);
                 put(sensitive ? draft.local.todos : draft.todos, { ...base, title, done: false, due: item.date || '' });
             }
-            seen.add(item.id);
+            registered.add(item.id);
+            draft.inbox = draft.inbox.filter((row) => row.id !== item.id);
             count += 1;
+        }
+        for (const item of held) {
+            const row = heldRow(item, now);
+            if (!row || registered.has(row.id) || parked.has(row.id)) {
+                skipped += 1;
+                continue;
+            }
+            if (isSensitiveText(blobOf(item))) sensitiveCount += 1;
+            draft.inbox.unshift(row);
+            parked.add(row.id);
+            heldCount += 1;
         }
         return draft;
     }, { undoable: true });
-    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
-    if (!count && skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped };
-    let message = `${count}개 등록했어요.`;
-    if (skipped) message += ` 겹친 ${skipped}개는 나중에 정리함에 뒀어요.`;
-    if (filled) message += ' 날짜가 비어 있던 일정은 오늘로 넣었어요.';
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped, held: 0 };
+    if (!count && !heldCount) {
+        if (skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped, held: 0 };
+        return { ok: false, message: '등록할 항목이 없어요.', count: 0, skipped, held: 0 };
+    }
+    const parts = [];
+    if (count) parts.push(`${count}개 등록했어요.`);
+    if (heldCount) parts.push(`${heldCount}개는 정리함에 뒀어요.`);
+    if (skipped) parts.push(`겹친 ${skipped}개는 이미 있어서 넣지 않았어요.`);
+    if (filled) parts.push('날짜가 비어 있던 일정은 오늘로 넣었어요.');
+    let message = parts.join(' ');
     if (sensitiveCount) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
-    return { ok: true, message, count, skipped, sensitiveCount };
+    return { ok: true, message, count, skipped, held: heldCount, sensitiveCount };
+}
+
+export async function dropInbox(id) {
+    const target = inboxId(id);
+    if (!target) return { ok: false, message: '정리함에서 찾지 못했어요.' };
+    const failed = await update((draft) => {
+        draft.inbox = (draft.inbox || []).filter((row) => row.id !== target);
+        return draft;
+    }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
+    if (state.auth?.uid) {
+        deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
+    }
+    return { ok: true, message: '정리함에서 지웠어요.' };
+}
+
+export async function promoteInbox(id) {
+    const target = inboxId(id);
+    const item = (state.inbox || []).find((row) => row.id === target);
+    if (!item) return { ok: false, message: '정리함에서 찾지 못했어요.', count: 0 };
+    const result = await saveParsed([{ ...item, include: true }], new Date());
+    if ((result.count || 0) > 0 && state.auth?.uid) {
+        deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
+    }
+    return result;
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
@@ -635,6 +755,7 @@ export async function patchProfile(patch) {
         try {
             await mainVault.remove('state');
             await localVault.remove('state');
+            await inboxVault.remove('items');
             await mainVault.remove('cloudHashes');
         } catch {
             /* 공용 컴퓨터에서는 기록을 남겨 두지 않습니다. */
@@ -774,6 +895,7 @@ function applyIncoming(draft, data, sensitive, mode) {
     draft.todos = merge(draft.todos, data.todos);
     draft.notes = merge(draft.notes, data.notes);
     draft.notices = merge(draft.notices, data.notices);
+    if (Array.isArray(data.inbox)) draft.inbox = merge(draft.inbox, data.inbox);
     draft.legacyPages = merge(draft.legacyPages, data.legacy);
     draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
     if (data.profile?.className) draft.profile.className = data.profile.className;
@@ -841,7 +963,7 @@ async function connectCloud(uid) {
     await flushCloud();
     const remote = await pullUserData(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
-    const hasRemote = remote.profile?.className || (remote.students || []).length || (remote.records || []).length;
+    const hasRemote = remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
     if (!hasRemote) return;
     await update((draft) => absorbCloud(draft, remote));
 }
@@ -873,6 +995,7 @@ export async function clearAll() {
     try {
         await mainVault.remove('state');
         await localVault.remove('state');
+        await inboxVault.remove('items');
     } catch {
         /* 이미 메모리만 쓰는 경우입니다. */
     }

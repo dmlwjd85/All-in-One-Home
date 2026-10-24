@@ -57,9 +57,9 @@ export function IconMoon() {
 
 export function IconSettings() {
     return (
-        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
-            <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
         </svg>
     );
 }
@@ -107,7 +107,7 @@ export function HoldToggle({ held, onToggle }) {
     return (
         <div>
             <p className="muted" style={{ margin: '8px 0 0' }}>
-                {held ? '나중에 정리함 · 이번 저장에는 넣지 않아요.' : '이번 저장에 넣어요. 애매하면 나중에 정리함으로 옮겨 둡니다.'}
+                {held ? '정리함에 둡니다. 할 일 화면에서 다시 등록하거나 지울 수 있어요.' : '이번 저장에 넣어요.'}
             </p>
             <Btn className={held ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={onToggle}>{held ? '지금 저장' : '나중에 정리'}</Btn>
         </div>

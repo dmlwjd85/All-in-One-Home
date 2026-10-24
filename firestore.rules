@@ -117,6 +117,25 @@ service cloud.firestore {
           && optTs('createdAt') && optTs('updatedAt') && optTs('doneAt');
       }
 
+      // 정리함: 저장 때 빼 둔 할 일·일정. 민감 글은 앱이 올리지 않고 규칙에서도 한 번 더 막습니다.
+      match /inbox/{iid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && id(iid)
+          && d().keys().hasAll(['title', 'kind', 'source'])
+          && d().keys().hasOnly(['title', 'kind', 'source', 'date', 'end', 'time', 'endTime', 'eventKind', 'memo', 'warning', 'updatedAt'])
+          && str(d().title, 1, 100) && safeText(d().title)
+          && d().kind in ['todo', 'event']
+          && d().source in ['app', 'legacy', 'file']
+          && (!('date' in d()) || ymd(d().date))
+          && (!('end' in d()) || (ymd(d().end) && (!('date' in d()) || d().end >= d().date)))
+          && (!('time' in d()) || hm(d().time))
+          && (!('endTime' in d()) || hm(d().endTime))
+          && (!('eventKind' in d()) || d().eventKind in ['class', 'school', 'holiday', 'mine'])
+          && optStr('memo', 300) && (!('memo' in d()) || safeText(d().memo))
+          && optStr('warning', 120) && (!('warning' in d()) || safeText(d().warning))
+          && optTs('updatedAt');
+      }
+
       // 메모
       match /notes/{nid} {
         allow read, delete: if isOwner(uid);

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
-import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -9,6 +9,7 @@ export function Tasks() {
     const { data, clock, showToast } = useUi();
     const [title, setTitle] = useState('');
     const todos = joined(data, 'todos');
+    const inbox = data.inbox || [];
     const notes = joined(data, 'notes');
     const follows = joinedRecords(data).filter((row) => row.follow);
     const start = startOfWeekMon(clock.ymd);
@@ -30,7 +31,31 @@ export function Tasks() {
             }}>
                 <input className="field" aria-label="할 일" placeholder="할 일을 적고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
             </form>
-            {!todos.length && !notes.length && (
+            <section aria-label="정리함" style={{ marginTop: 16 }}>
+                <h3 style={{ marginBottom: 8 }}>정리함</h3>
+                {!inbox.length && <p className="muted">빼 둔 항목이 없어요. 메시지에서 나중에 정리를 고르면 여기에 남아요.</p>}
+                {inbox.map((row) => (
+                    <article key={row.id} className="todo-block">
+                        <div className="todo-line">
+                            <div className="todo-main" style={{ minHeight: 44 }}>
+                                <span className="todo-title">{row.kind} · {row.title}</span>
+                            </div>
+                            {row.date ? <span className="todo-due num">{dueLabel(row.date, clock.ymd)}</span> : null}
+                            <Btn className="icon-btn" aria-label="정리함에서 지우기" onClick={async () => {
+                                const failed = await dropInbox(row.id);
+                                if (!failed?.storageFailed) showToast('정리함에서 지웠어요.', true);
+                            }}><IconTrash /></Btn>
+                        </div>
+                        {row.warning ? <p className="muted" style={{ margin: '4px 0' }}>{row.warning}</p> : null}
+                        <Btn className="chip" style={{ minHeight: 44 }} onClick={async () => {
+                            const result = await promoteInbox(row.id);
+                            if (result?.storageFailed) return;
+                            showToast(result.ok ? '다시 등록했어요.' : (result.message || '다시 등록하지 못했어요.'));
+                        }}>다시 등록</Btn>
+                    </article>
+                ))}
+            </section>
+            {!todos.length && !notes.length && !inbox.length && (
                 <div>
                     <ClayMark />
                     <p className="muted" style={{ textAlign: 'center' }}>아직 적어 둔 할 일이 없어요.</p>

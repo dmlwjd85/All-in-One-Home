@@ -89,7 +89,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
                 </div>
             )}
             {item.warning && <p style={{ fontWeight: 800 }}>{item.warning}</p>}
-            {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 나중에 정리함에 뒀어요.</p>}
+            {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 다시 넣지 않아요.</p>}
             {item.sensitive && <p style={{ fontWeight: 800 }}>이 내용은 이 기기에만 남겨 둘게요.</p>}
             <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => onPatch(item.id, { title: event.target.value })} />
             <div className={ranged ? 'msg-summary range' : 'msg-summary'}>
@@ -193,6 +193,8 @@ export function MsgSheet({ onClose }) {
     }
 
     const count = items.filter((item) => item.include !== false).length;
+    const heldCount = items.filter((item) => item.include === false && String(item.title || '').trim() && !item.duplicate).length;
+    const saveLabel = !count && heldCount ? `0개 등록, 정리함 ${heldCount}개` : `${count}개 등록`;
 
     return (
         <div className="sheet-back" onClick={onClose}>
@@ -234,7 +236,7 @@ export function MsgSheet({ onClose }) {
                             />
                         ))}
                         <div className="sheet-foot">
-                            <Btn className="primary-btn block" onClick={save}>{count}개 등록</Btn>
+                            <Btn className="primary-btn block" onClick={save}>{saveLabel}</Btn>
                             <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => setPhase('paste')}>메시지 다시 붙이기</Btn>
                         </div>
                     </>

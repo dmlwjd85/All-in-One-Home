@@ -56,6 +56,26 @@ try {
     await expectAllow('평범한 기록', () => setDoc(doc(db, 'users/teacher-a/records/r3'), {
         date: '2026-10-19', kind: 'observe', text: '발표를 끝까지 했어요', source: 'app',
     }));
+    const inboxRow = toCloudRow('inbox', {
+        id: 'msgabcdef12',
+        kind: '할 일',
+        title: '체험학습 동의서',
+        date: '2026-12-31',
+        warning: '저장하면 정리함에 들어가요.',
+        source: 'msg',
+    });
+    if (!inboxRow || inboxRow.body.kind !== 'todo' || inboxRow.body.date !== '2026-12-31' || inboxRow.body.source !== 'app') {
+        failures.push(`정리함 클라우드 모양이 아닙니다. ${JSON.stringify(inboxRow)}`);
+    } else {
+        await expectAllow('정리함', () => setDoc(doc(db, 'users/teacher-a/inbox/msgabcdef12'), inboxRow.body));
+        await expectDeny('정리함 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth01'), {
+            title: '건강 조심', kind: 'todo', source: 'app', warning: '건강',
+        }));
+        const back = fromCloudRow('inbox', 'msgabcdef12', inboxRow.body);
+        if (!back || back.kind !== '할 일' || back.date !== '2026-12-31' || back.title !== '체험학습 동의서') {
+            failures.push(`정리함을 다시 읽지 못했습니다. ${JSON.stringify(back)}`);
+        }
+    }
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));
 

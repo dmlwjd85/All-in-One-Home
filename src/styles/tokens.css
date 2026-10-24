@@ -6,7 +6,7 @@
 :root {
     --font-plain: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
     --font-soft: 'NanumSquareRound', -apple-system, sans-serif;
-    --font-neat: 'IBM Plex Sans KR', -apple-system, sans-serif;
+    --font-neat: 'Gothic A1', -apple-system, sans-serif;
     --font-title: var(--font-plain);
     --font-body: var(--font-plain);
     --title-effect: none;
