@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { keySoundEnabled, keyVibeEnabled, setKeySound, setKeyVibe, subscribeKeyPrefs } from './keyfeel.js';
+import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
@@ -33,6 +33,25 @@ function publicLabel(name) {
     return PUBLIC_LABELS[name] || '기록';
 }
 
+function KeyPick({ pressed, label, ariaLabel, onPick }) {
+    return (
+        <Btn
+            className={pressed ? 'chip on' : 'chip'}
+            aria-pressed={pressed}
+            aria-label={ariaLabel}
+            data-key-preview="1"
+            onPointerDown={(event) => {
+                if (event.button !== 0) return;
+                onPick();
+            }}
+            onKeyDown={(event) => {
+                if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+                onPick();
+            }}
+        >{label}</Btn>
+    );
+}
+
 export function Settings() {
     const { data, showToast, go } = useUi();
     const [className, setClassName] = useState(data.profile.className || '');
@@ -45,9 +64,13 @@ export function Settings() {
     const [importMode, setImportMode] = useState('merge');
     const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
     const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
+    const [voiceId, setVoiceId] = useState(() => keyVoiceId());
+    const [volumeId, setVolumeId] = useState(() => keyVolumeId());
     useEffect(() => subscribeKeyPrefs(() => {
         setSoundOn(keySoundEnabled());
         setVibeOn(keyVibeEnabled());
+        setVoiceId(keyVoiceId());
+        setVolumeId(keyVolumeId());
     }), []);
 
     return (
@@ -95,7 +118,38 @@ export function Settings() {
                         setVibeOn(next);
                     }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
                 </div>
-                <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted" style={{ margin: '10px 0 0' }}>소리 종류</p>
+                <div className="key-picks" role="group" aria-label="누를 때 소리 종류">
+                    {KEY_VOICES.map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={voiceId === voice.id}
+                            label={voice.label}
+                            ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPick={() => {
+                                setKeyVoice(voice.id);
+                                previewKeyVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted" style={{ margin: '10px 0 0' }}>소리 크기</p>
+                <div className="key-picks" role="group" aria-label="누를 때 소리 크기">
+                    {KEY_VOLUMES.map((volume) => (
+                        <KeyPick
+                            key={volume.id}
+                            pressed={volumeId === volume.id}
+                            label={volume.label}
+                            ariaLabel={volume.label}
+                            onPick={() => {
+                                setKeyVolume(volume.id);
+                                previewKeyVoice();
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
+                <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
 

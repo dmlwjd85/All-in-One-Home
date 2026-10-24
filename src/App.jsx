@@ -162,23 +162,42 @@ export default function App() {
             if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
             return el;
         };
-        const onPointer = (event) => {
+        const onPointerDown = (event) => {
             if (event.button !== 0) return;
-            if (hit(event.target)) playKey();
+            const el = hit(event.target);
+            if (!el || el.hasAttribute('data-key-preview')) return;
+            playKey('down');
         };
-        const onKey = (event) => {
-            if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+        const onPointerUp = () => {
+            playKey('up');
+        };
+        const keyTarget = (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return null;
             const el = event.target;
-            if (!(el instanceof HTMLElement)) return;
-            if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') return;
-            if (el.hasAttribute('disabled')) return;
-            playKey();
+            if (!(el instanceof HTMLElement)) return null;
+            if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') return null;
+            if (el.hasAttribute('disabled') || el.hasAttribute('data-key-preview')) return null;
+            return el;
         };
-        document.addEventListener('pointerdown', onPointer, true);
-        document.addEventListener('keydown', onKey, true);
+        const onKeyDown = (event) => {
+            if (event.repeat || !keyTarget(event)) return;
+            playKey('down');
+        };
+        const onKeyUp = (event) => {
+            if (!keyTarget(event)) return;
+            playKey('up');
+        };
+        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('pointerup', onPointerUp, true);
+        document.addEventListener('pointercancel', onPointerUp, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        document.addEventListener('keyup', onKeyUp, true);
         return () => {
-            document.removeEventListener('pointerdown', onPointer, true);
-            document.removeEventListener('keydown', onKey, true);
+            document.removeEventListener('pointerdown', onPointerDown, true);
+            document.removeEventListener('pointerup', onPointerUp, true);
+            document.removeEventListener('pointercancel', onPointerUp, true);
+            document.removeEventListener('keydown', onKeyDown, true);
+            document.removeEventListener('keyup', onKeyUp, true);
         };
     }, []);
 
@@ -401,7 +420,7 @@ export default function App() {
                 {menu && <MenuSheet onClose={() => setMenu(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
-                    <div className="toast" role="status">
+                    <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
                         {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => { if (ok) setToast(null); }); }}>되돌리기</Btn>}

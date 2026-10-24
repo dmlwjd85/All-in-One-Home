@@ -1472,6 +1472,88 @@ try {
         check(still && still.includes('김하늘'), '시작 화면이 원본 키를 지웠습니다.');
     });
 
+    async function keyPickFit(page) {
+        return page.evaluate(() => {
+            const problems = [];
+            const groups = [...document.querySelectorAll('.key-picks')];
+            if (groups.length < 2) problems.push('소리 칩 묶음이 없습니다.');
+            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+            const sideEl = document.querySelector('.side');
+            const side = sideEl && getComputedStyle(sideEl).display !== 'none' ? sideEl.getBoundingClientRect() : null;
+            for (const group of groups) {
+                const buttons = [...group.querySelectorAll('button')];
+                const rects = buttons.map((el) => el.getBoundingClientRect());
+                buttons.forEach((el, index) => {
+                    const rect = rects[index];
+                    const name = el.getAttribute('aria-label') || el.innerText.trim();
+                    if (rect.width < 43.5 || rect.height < 43.5) problems.push(`작음 ${name} ${Math.round(rect.width)}×${Math.round(rect.height)}`);
+                    if (rect.left < -1 || rect.right > window.innerWidth + 1) problems.push(`가로 ${name}`);
+                    if (tab && rect.bottom > tab.top + 1 && rect.top < tab.bottom - 1 && rect.right > tab.left + 1 && rect.left < tab.right - 1) {
+                        problems.push(`탭과 겹침 ${name}`);
+                    }
+                    if (side && rect.width > 0 && rect.right > side.left + 1 && rect.left < side.right - 1 && rect.bottom > side.top + 1 && rect.top < side.bottom - 1) {
+                        problems.push(`메뉴와 겹침 ${name}`);
+                    }
+                });
+                for (let i = 0; i < rects.length; i += 1) {
+                    for (let j = i + 1; j < rects.length; j += 1) {
+                        const a = rects[i];
+                        const b = rects[j];
+                        const hit = a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+                        if (hit) problems.push(`겹침 ${buttons[i].innerText.trim()}/${buttons[j].innerText.trim()}`);
+                    }
+                }
+            }
+            return {
+                problems,
+                selects: document.querySelectorAll('[data-screen="settings"] select').length,
+            };
+        });
+    }
+
+    const soundShotDir = process.env.SCREENSHOT_DIR || '/tmp';
+    mkdirSync(soundShotDir, { recursive: true });
+    for (const width of [360, 390, 1920]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.setViewport({ width, height: width === 1920 ? 1080 : 844, deviceScaleFactor: 1 });
+            await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
+            await page.waitForFunction(() => {
+                const el = document.querySelector('[aria-label="누를 때 소리 종류"]');
+                el?.closest('section')?.scrollIntoView({ block: 'start' });
+                const top = el?.getBoundingClientRect().top ?? -1;
+                return top > 80 && top < 420;
+            });
+            const fit = await keyPickFit(page);
+            check(fit.selects === 0, `${width} 소리 고르기에 드롭다운이 있습니다.`);
+            check(fit.problems.length === 0, `${width} 소리 칩: ${fit.problems.join(', ')}`);
+            if (width !== 390) return;
+            const initial = await page.evaluate(() => ({
+                voice: localStorage.getItem('ssug-gyomu-key-voice'),
+                volume: localStorage.getItem('ssug-gyomu-key-volume'),
+                soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
+                small: document.querySelector('[aria-label="작게"]')?.getAttribute('aria-pressed'),
+                on: [...document.querySelectorAll('button')].some((el) => el.innerText.includes('누를 때 소리 켜짐')),
+            }));
+            check(initial.voice === null && initial.volume === null && initial.soft === 'true' && initial.small === 'true' && initial.on, '소리 기본값이 몽글·작게가 아닙니다.');
+            await page.screenshot({ path: resolve(soundShotDir, 'settings-sound-390.png') });
+            await page.click('[aria-label="청축 클릭"]');
+            await page.click('[aria-label="크게"]');
+            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'click' && localStorage.getItem('ssug-gyomu-key-volume') === 'loud');
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.waitForSelector('[aria-label="청축 클릭"]');
+            const kept = await page.evaluate(() => ({
+                click: document.querySelector('[aria-label="청축 클릭"]')?.getAttribute('aria-pressed'),
+                loud: document.querySelector('[aria-label="크게"]')?.getAttribute('aria-pressed'),
+                soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
+            }));
+            check(kept.click === 'true' && kept.loud === 'true' && kept.soft === 'false', '고른 소리가 다시 열어도 남지 않습니다.');
+        }, width === 1920 ? 1080 : 844);
+    }
+
     await withDemo(390, 'light', async (page) => {
         const initial = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-sound'));
         check(initial === null, '콕 소리 기본값이 켜져 있지 않습니다.');
