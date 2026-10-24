@@ -1511,7 +1511,8 @@ try {
         });
     }
 
-    mkdirSync('/opt/cursor/artifacts', { recursive: true });
+    const soundShotDir = process.env.SCREENSHOT_DIR || '/tmp';
+    mkdirSync(soundShotDir, { recursive: true });
     for (const width of [360, 390, 1920]) {
         await withDemo(width, 'light', async (page) => {
             await page.setViewport({ width, height: width === 1920 ? 1080 : 844, deviceScaleFactor: 1 });
@@ -1536,7 +1537,7 @@ try {
                 on: [...document.querySelectorAll('button')].some((el) => el.innerText.includes('누를 때 소리 켜짐')),
             }));
             check(initial.voice === null && initial.volume === null && initial.soft === 'true' && initial.small === 'true' && initial.on, '소리 기본값이 몽글·작게가 아닙니다.');
-            await page.screenshot({ path: '/opt/cursor/artifacts/settings-sound-390.png' });
+            await page.screenshot({ path: resolve(soundShotDir, 'settings-sound-390.png') });
             await page.click('[aria-label="청축 클릭"]');
             await page.click('[aria-label="크게"]');
             await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'click' && localStorage.getItem('ssug-gyomu-key-volume') === 'loud');

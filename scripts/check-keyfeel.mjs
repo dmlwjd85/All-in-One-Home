@@ -231,11 +231,12 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v11'"), '서비스 워커가 v11이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v12'"), '서비스 워커가 v12가 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');
 check(settings.includes('KEY_VOICES.map') && settings.includes('KEY_VOLUMES.map') && settings.includes('data-key-preview'), '설정이 소리 칩을 그리지 않습니다.');
+check(settings.includes('꺼 두어도 여기서는 미리 들어 볼 수 있어요'), '꺼 둔 미리듣기 안내가 없습니다.');
 for (const label of ['몽글', '몽돌', '적축', '갈축', '청축', '끌기', '작게', '보통', '크게']) {
     check(feel.includes(`'${label}'`) || settings.includes(label), `소리 이름 ${label} 이 없습니다.`);
 }
