@@ -7,6 +7,25 @@ import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
 
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+
+function ruleBlock(source, startMark, endMark) {
+    const start = source.indexOf(startMark);
+    const end = source.indexOf(endMark);
+    if (start < 0 || end <= start) return '';
+    return source.slice(start, end);
+}
+
+/** 예전 배포본은 일정에만 endTime이 없었습니다. 정리함 규칙의 endTime은 그대로 둡니다. */
+function rulesWithoutEventEndTime(source) {
+    const block = ruleBlock(source, 'match /events/{eid}', 'match /todos/{tid}');
+    if (!block) return source;
+    const stripped = block
+        .replace(", 'endTime'", '')
+        .replace("\n          && (!('endTime' in d()) || hm(d().endTime))", '');
+    const start = source.indexOf('match /events/{eid}');
+    const end = source.indexOf('match /todos/{tid}');
+    return source.slice(0, start) + stripped + source.slice(end);
+}
 const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
 if (!rules.includes(safeLine)) {
     console.error('규칙의 safeText가 앱 민감 낱말과 다릅니다.');
@@ -131,10 +150,10 @@ try {
         }
     }
 
-    const oldRules = rules
-        .replace(", 'endTime'", '')
-        .replace("\n          && (!('endTime' in d()) || hm(d().endTime))", '');
-    if (oldRules.includes('endTime')) {
+    const oldRules = rulesWithoutEventEndTime(rules);
+    const eventsBlock = ruleBlock(oldRules, 'match /events/{eid}', 'match /todos/{tid}');
+    const inboxBlock = ruleBlock(oldRules, 'match /inbox/{iid}', 'match /notes/{nid}');
+    if (!eventsBlock || eventsBlock.includes('endTime') || !inboxBlock.includes('endTime')) {
         failures.push('예전 규칙에서 endTime을 빼지 못했습니다.');
     } else {
         const oldEnv = await initializeTestEnvironment({

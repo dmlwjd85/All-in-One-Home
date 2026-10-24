@@ -349,6 +349,42 @@ export function detectDate(text, now = new Date()) {
     return (explicit || found[0])?.ymd || null;
 }
 
+function nextYearDate(raw, span, ymd, today) {
+    const before = String(raw || '').slice(0, span?.index || 0);
+    if (!/(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?\s*$/.test(before)) return ymd;
+    const target = `${Number(String(today).slice(0, 4)) + 1}${String(ymd).slice(4)}`;
+    return isValidYmd(target) ? target : ymd;
+}
+
+/** '까지' 바로 앞의 날을 마감으로 둡니다. 내년·다음 해는 달력의 다음 해입니다. */
+export function deadlineYmd(text, now = new Date()) {
+    const raw = String(text || '');
+    const today = seoulYmd(now);
+    const found = findDates(raw, now);
+    let span = null;
+    for (const item of found) {
+        if (/^\s*까지/.test(raw.slice(item.index + item.length))) span = item;
+    }
+    if (!span) return '';
+    return nextYearDate(raw, span, span.ymd, today);
+}
+
+/** 할 일 한 줄. 마감이 있으면 그 날을 두고, 제목에서는 날짜와 내년을 뺍니다. */
+export function readTodoLine(text, now = new Date(), fallbackDue = '') {
+    const dueFound = deadlineYmd(text, now);
+    const due = dueFound || fallbackDue;
+    let title = String(text || '').trim();
+    if (dueFound) {
+        title = title
+            .replace(/(?<![가-힣])(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?\s*/g, ' ')
+            .replace(/(?:\d{4}\s*년\s*)?\d{1,2}\s*월\s*\d{1,2}\s*일(?:\s*[.(（][^)）]{0,12}[)）])?\s*까지/g, ' ')
+            .replace(/(?<!\d)\d{1,2}\s*[./]\s*\d{1,2}\s*까지/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    return { title: (title || String(text || '').trim()).slice(0, 100), due };
+}
+
 export function parseNote(text, now = new Date()) {
     const raw = String(text || '');
     const tags = [...raw.matchAll(/#([0-9A-Za-z가-힣_]{1,12})/g)].map((m) => m[1]).slice(0, 10);

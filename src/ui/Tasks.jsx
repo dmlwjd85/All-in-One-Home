@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
+import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash } from './bits.jsx';
@@ -24,7 +25,8 @@ export function Tasks() {
             <form onSubmit={async (event) => {
                 event.preventDefault();
                 if (!title.trim()) return;
-                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: title.trim(), done: false, due: clock.ymd, source: 'app' });
+                const read = readTodoLine(title.trim(), new Date(), clock.ymd);
+                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: read.title, done: false, due: read.due, source: 'app' });
                 if (result?.storageFailed) return;
                 setTitle('');
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);

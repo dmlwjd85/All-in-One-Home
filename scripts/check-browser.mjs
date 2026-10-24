@@ -672,6 +672,8 @@ try {
         if (heroText.includes('오늘은 수업이 없어요')) {
             check(!heroText.includes('1교시') && !heroText.includes('18분') && !heroText.includes('출결 하기') && !heroText.includes('출결부터'), '휴일 홈에 교시 알림이나 출결 카드가 남아 있습니다.');
             check(heroText.includes('출결 보기'), '휴일 홈에서 출결 화면으로 가는 버튼이 없습니다.');
+            const bannerText = await page.evaluate(() => document.querySelector('.rest-banner')?.innerText || '');
+            check(Boolean(bannerText) && !bannerText.includes('수업 대신') && !bannerText.includes('수업과 출결'), '휴일 안내가 시간표에 한 번 더 있습니다.');
         } else {
         check(homeText.includes('1교시') && homeText.includes('18분'), '홈에 다음 교시 18분이 없습니다.');
         check(homeText.includes('박서준') && homeText.includes('결석'), '홈에 결석이 없습니다.');
@@ -1496,6 +1498,36 @@ try {
         await page.waitForFunction(() => !document.querySelector('[data-screen="plus"]'));
         await page.evaluate(() => { location.hash = '#/students/12'; });
         await page.waitForFunction(() => document.body.innerText.includes('발표를 끝까지 했어요'));
+    }, 844);
+
+    await withDemo(390, 'light', async (page) => {
+        await openPlus(page);
+        await page.type('[data-screen="plus"] textarea', '과학도서 12/31까지');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '다음')?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('넣을게요') && document.body.innerText.includes('과학도서'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
+        await page.waitForFunction(() => document.body.innerText.includes('정리함에 뒀어요'));
+        await page.evaluate(() => { location.hash = '#/todo'; });
+        await page.waitForFunction(() => document.body.innerText.includes('정리함') && document.body.innerText.includes('과학도서'));
+        const parked = await page.evaluate(() => {
+            const inbox = document.querySelector('[aria-label="정리함"]');
+            return {
+                inbox: inbox?.innerText || '',
+                titles: [...document.querySelectorAll('.todo-title')].filter((el) => !inbox?.contains(el)).map((el) => el.innerText),
+            };
+        });
+        check(parked.inbox.includes('과학도서'), '나중에 정리한 콕 항목이 정리함에 없습니다.');
+        check(!parked.titles.some((text) => text.includes('과학도서')), '나중에 정리한 콕 항목이 할 일로 등록되었습니다.');
+        await page.type('[aria-label="할 일"]', '독서기록 12/31까지');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => [...document.querySelectorAll('.todo-title')].some((el) => el.innerText.includes('독서기록')));
+        const typed = await page.evaluate(() => {
+            const row = [...document.querySelectorAll('.todo-block')].find((el) => el.innerText.includes('독서기록'));
+            return row ? row.innerText.replace(/\s+/g, ' ') : '';
+        });
+        check(typed.includes('독서기록') && typed.includes('12/31') && !typed.includes('12/31까지'), `할 일 직접 입력에서 12/31까지를 읽지 못했습니다. ${typed}`);
     }, 844);
 
     await withPage(390, async (page) => {

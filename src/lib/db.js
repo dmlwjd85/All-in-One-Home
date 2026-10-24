@@ -12,6 +12,7 @@ import { parseRoster } from './roster.js';
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
 let inboxVault = createVault('ssug-gyomu-inbox');
+let inboxDropped = new Set();
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
@@ -242,6 +243,43 @@ function unionById(local = [], remote = []) {
     return [...map.values()];
 }
 
+function withoutDropped(remote = []) {
+    return (remote || []).filter((row) => row?.id && !inboxDropped.has(String(row.id)));
+}
+
+/** 클라우드에서 지우지 못한 정리함은 다음 받아오기에 다시 붙지 않습니다. */
+export function inboxKeptFromCloud(remoteInbox = []) {
+    return unionById(state.inbox || [], withoutDropped(remoteInbox));
+}
+
+async function rememberDropped(id) {
+    const target = inboxId(id);
+    if (!target) return;
+    inboxDropped.add(target);
+    if (memoryOnly) return;
+    try {
+        const prev = await inboxVault.get('dropped');
+        const list = Array.isArray(prev) ? prev.map(String) : [];
+        if (!list.includes(target)) list.push(target);
+        await inboxVault.set('dropped', list.slice(-400));
+    } catch {
+        /* 목록을 못 적어도 이번 실행의 메모리에는 남아 있습니다. */
+    }
+}
+
+function registeredIds(draft) {
+    return new Set([
+        ...(draft.todos || []), ...(draft.local?.todos || []),
+        ...(draft.events || []), ...(draft.local?.events || []),
+    ].map((row) => row?.id).filter(Boolean));
+}
+
+function dropRegisteredInbox(draft) {
+    const taken = registeredIds(draft);
+    draft.inbox = (draft.inbox || []).filter((row) => row?.id && !taken.has(row.id));
+    return draft;
+}
+
 function absorbCloud(draft, remote) {
     const remoteHas = (remote.students || []).length || (remote.records || []).length;
     if (draft.profile.demo && remoteHas) {
@@ -263,7 +301,7 @@ function absorbCloud(draft, remote) {
     draft.notes = unionById(draft.notes, remote.notes);
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
-    draft.inbox = unionById(draft.inbox, remote.inbox);
+    draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
     for (const [day, value] of Object.entries(remote.timetable || {})) {
         if (!draft.timetable[day] || !Object.keys(draft.timetable[day]).length) draft.timetable[day] = value;
     }
@@ -345,6 +383,8 @@ export async function boot(query = '') {
         try {
             const held = await inboxVault.get('items');
             if (Array.isArray(held)) state.inbox = held;
+            const dropped = await inboxVault.get('dropped');
+            inboxDropped = new Set(Array.isArray(dropped) ? dropped.map(String) : []);
         } catch {
             /* 정리함 칸이 없어도 할 일은 열립니다. */
         }
@@ -620,6 +660,7 @@ export async function dropInbox(id) {
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
+    await rememberDropped(target);
     if (state.auth?.uid) {
         deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
     }
@@ -631,8 +672,11 @@ export async function promoteInbox(id) {
     const item = (state.inbox || []).find((row) => row.id === target);
     if (!item) return { ok: false, message: '정리함에서 찾지 못했어요.', count: 0 };
     const result = await saveParsed([{ ...item, include: true }], new Date());
-    if ((result.count || 0) > 0 && state.auth?.uid) {
-        deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
+    if ((result.count || 0) > 0) {
+        await rememberDropped(target);
+        if (state.auth?.uid) {
+            deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
+        }
     }
     return result;
 }
@@ -756,6 +800,8 @@ export async function patchProfile(patch) {
             await mainVault.remove('state');
             await localVault.remove('state');
             await inboxVault.remove('items');
+            await inboxVault.remove('dropped');
+            inboxDropped = new Set();
             await mainVault.remove('cloudHashes');
         } catch {
             /* 공용 컴퓨터에서는 기록을 남겨 두지 않습니다. */
@@ -896,6 +942,7 @@ function applyIncoming(draft, data, sensitive, mode) {
     draft.notes = merge(draft.notes, data.notes);
     draft.notices = merge(draft.notices, data.notices);
     if (Array.isArray(data.inbox)) draft.inbox = merge(draft.inbox, data.inbox);
+    dropRegisteredInbox(draft);
     draft.legacyPages = merge(draft.legacyPages, data.legacy);
     draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
     if (data.profile?.className) draft.profile.className = data.profile.className;
@@ -996,9 +1043,11 @@ export async function clearAll() {
         await mainVault.remove('state');
         await localVault.remove('state');
         await inboxVault.remove('items');
+        await inboxVault.remove('dropped');
     } catch {
         /* 이미 메모리만 쓰는 경우입니다. */
     }
+    inboxDropped = new Set();
 }
 
 export async function saveTip(tip) {

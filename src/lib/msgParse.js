@@ -294,6 +294,7 @@ function stripTitleNoise(text) {
         s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|엔|도의|도|에|는|은|의|처럼|보다|과\s*달리|와\s*달리)?/g, ' ');
     }
     s = s.replace(/(?:올해|이번에)(?:는|은)?/g, ' ');
+    s = s.replace(/(?<![가-힣])(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?/g, ' ');
     s = s.replace(/예정이었던/g, ' ');
     s = s.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     s = s.replace(/기존\s*일정대로|기존대로/g, ' ');
@@ -395,7 +396,7 @@ export function tidyTitle(text) {
     t = stripTitleNoise(t);
     t = t.replace(/(?:자료|사진|영상)\s*(?:는|은|이|가|을|를)?\s*(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
     t = t.replace(/(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
-    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
+    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달|내년|다음\s*해)(?=\s|$)/g, ' ');
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
@@ -503,7 +504,7 @@ function salvageTitle(text) {
     t = t.replace(/(?:^|\s)모두(?=\s|$)/g, ' ');
     t = t.replace(/[월화수목금토일]요일(?:으로|로)?/g, ' ');
     t = stripTitleNoise(t);
-    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
+    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달|내년|다음\s*해)(?=\s|$)/g, ' ');
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
@@ -2556,10 +2557,16 @@ function adjacentYear(before) {
     return null;
 }
 
+/** 날짜 바로 앞의 내년·다음 해. -2는 달력상 다음 해로 옮긴다는 표시입니다. */
+function nextYearLead(before) {
+    return /(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?\s*$/.test(String(before || ''));
+}
+
 function yearCue(source, span, fullText = '') {
     const token = source.slice(span.index, span.index + span.length);
     const local = source.slice(0, span.index);
     const wide = textBeforeSpan(fullText, source, span);
+    if (nextYearLead(local) || nextYearLead(wide || '')) return -2;
     const shifted = lastYearShift(wide || local);
     if (/요일/.test(token) && !/\d/.test(token)) return shifted;
     if (shifted != null) return shifted;
@@ -2668,6 +2675,10 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         if (!ymd || !cue) return { ymd: ymd || '', remembered: false };
         let years = cue.years;
         const token = source.slice(cue.span.index, cue.span.index + cue.span.length);
+        if (years === -2) {
+            const target = `${Number(todayYmd.slice(0, 4)) + 1}${ymd.slice(4)}`;
+            return { ymd: isValidYmd(target) ? target : ymd, remembered: false };
+        }
         if (years < 0) years = ymd >= todayYmd ? 1 : 0;
         if (/\d{4}/.test(token)) years = 0;
         if (years > 0) {

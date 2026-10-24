@@ -90,7 +90,7 @@ export function Home() {
                 {todayRest.off ? (
                     <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
                         <strong className="day-rest-mark">휴일</strong>
-                        <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : `${todayRest.label}${iraParticle(todayRest.label)} 수업 대신 쉽니다.`}</span>
+                        <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : '시간표는 오늘 없어요.'}</span>
                     </div>
                 ) : (
                     <div className="period-row" style={{ marginTop: 10 }}>
