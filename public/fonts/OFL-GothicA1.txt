@@ -1,8 +1,8 @@
 Gothic A1 (latin·korean woff2).
 Copyright (C) HanYang I&C Co.,Ltd.
 SIL Open Font License 1.1. 저작권 줄은 All rights reserved 이고, Reserved Font Name 지정은 없습니다.
-Noto Sans KR 은 OFL 이지만 Reserved Font Name 'Source' 가 있어 서브셋으로 쓰지 않았습니다.
-나눔바른고딕 공개 배포본도 이름 예약이 있는 계열이라, 예약 없는 고딕 Gothic A1 로 바꿨습니다.
+Noto Sans KR 은 OFL 이지만 Reserved Font Name 'Source' 가 있어 쓰지 않았습니다.
+이름 예약이 없는 Gothic A1 을 확인해서 넣었습니다.
 이 파일은 Fontsource 가 라틴·한글 유니코드 범위로 나눈 woff2 를 그대로 담은 것입니다. 글꼴 이름은 Gothic A1 입니다.
 
 (C) Copyright HanYang I&C Co.,Ltd. All rights reserved.
