@@ -146,5 +146,23 @@ export function monthTitle(ym) {
     return `${y}년 ${Number(m)}월`;
 }
 
+/** 할 일 마감. 예: 10/28(수), D-3. 오늘은 D-day, 지난 날은 D+n. */
+export function dueLabel(due, today) {
+    if (!isValidYmd(due) || !isValidYmd(today)) return '';
+    const month = Number(due.slice(5, 7));
+    const day = Number(due.slice(8, 10));
+    const diff = Math.round((fromYmd(due).getTime() - fromYmd(today).getTime()) / 86400000);
+    const mark = diff === 0 ? 'D-day' : (diff > 0 ? `D-${diff}` : `D+${-diff}`);
+    return `${month}/${day}(${weekdayKo(due)}), ${mark}`;
+}
+
+export function weekSpanLabel(startYmd) {
+    if (!isValidYmd(startYmd)) return '';
+    const end = addDaysYmd(startYmd, 6);
+    const left = `${Number(startYmd.slice(5, 7))}/${Number(startYmd.slice(8, 10))}`;
+    const right = `${Number(end.slice(5, 7))}/${Number(end.slice(8, 10))}`;
+    return `${left}–${right}`;
+}
+
 export const DAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri'];
 export const DAY_LABELS = ['월', '화', '수', '목', '금'];

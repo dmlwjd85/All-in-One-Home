@@ -3,7 +3,7 @@ import { DEFAULT_PERIODS } from '../lib/period.js';
 import { clipboardHint, EVENT_KINDS, parseSchoolMessages, readClipboard } from '../lib/msgParse.js';
 import { saveParsed } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn } from './bits.jsx';
+import { Area, Btn, HoldToggle } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
 
@@ -89,7 +89,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
                 </div>
             )}
             {item.warning && <p style={{ fontWeight: 800 }}>{item.warning}</p>}
-            {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 빼 두었어요.</p>}
+            {item.duplicate && <p style={{ fontWeight: 800 }}>이미 등록한 내용이라 나중에 정리함에 뒀어요.</p>}
             {item.sensitive && <p style={{ fontWeight: 800 }}>이 내용은 이 기기에만 남겨 둘게요.</p>}
             <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => onPatch(item.id, { title: event.target.value })} />
             <div className={ranged ? 'msg-summary range' : 'msg-summary'}>
@@ -129,7 +129,7 @@ function MsgCard({ item, clock, periods, onPatch }) {
                 </div>
             )}
             <input className="field" style={{ marginTop: 8 }} aria-label="메모" placeholder="장소나 메모" value={item.memo || ''} onChange={(event) => onPatch(item.id, { memo: event.target.value })} />
-            <Btn className={item.include === false ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={() => onPatch(item.id, { include: item.include === false }, true)}>{item.include === false ? '빼 둠' : '넣을게요'}</Btn>
+            <HoldToggle held={item.include === false} onToggle={() => onPatch(item.id, { include: item.include === false }, true)} />
         </article>
     );
 }

@@ -15,6 +15,7 @@ import {
     playKey,
     previewKeyVoice,
     rememberKeySoundNotice,
+    mixKeyBurst,
     renderKeyPair,
     setKeyMuted,
     setKeySound,
@@ -103,6 +104,8 @@ for (const voice of KEY_VOICES) {
     check(downPeak > 0.85 && downPeak < 0.95, `${voice.label} 누름 크기가 맞지 않습니다.`);
     check(upPeak < downPeak * 0.85, `${voice.label} 뗌이 누름만큼 큽니다.`);
     check([...pair.down, ...pair.up].every((sample) => Number.isFinite(sample) && Math.abs(sample) <= 1), `${voice.label} 파형이 범위를 벗어납니다.`);
+    check(Math.abs(pair.down[0]) < 1e-6 && Math.abs(pair.down[pair.down.length - 1]) < 1e-6, `${voice.label} 누름 시작·끝이 0이 아닙니다.`);
+    check(Math.abs(pair.up[0]) < 1e-6 && Math.abs(pair.up[pair.up.length - 1]) < 1e-6, `${voice.label} 뗌 시작·끝이 0이 아닙니다.`);
 }
 
 check(pairs.scrape.down.length > pairs.click.down.length && pairs.click.down.length > pairs.munggeul.down.length, '끌기·청축·몽글 길이가 순서와 다릅니다.');
@@ -129,6 +132,21 @@ check(Math.abs(keyPitchRate(() => 0) - 0.94) < 1e-9 && Math.abs(keyPitchRate(() 
 check(Math.abs(keyPitchRate(() => 0.5) - 1) < 1e-9, '음높이 가운데가 1이 아닙니다.');
 check(KEY_VOLUMES[0].id === 'small' && KEY_VOLUMES[0].gain <= 0.05 && KEY_VOLUMES[2].gain <= 0.2, '기본 크기가 교실용으로 작지 않습니다.');
 check(keyVolumeGain('small') < keyVolumeGain('mid') && keyVolumeGain('mid') < keyVolumeGain('loud'), '크기 단계가 커지지 않습니다.');
+const burstNotes = [];
+for (const sampleRate of [44100, 48000]) {
+    for (const voice of KEY_VOICES) {
+        for (const gapMs of [0, 8, 15, 40]) {
+            const burst = mixKeyBurst({ voice: voice.id, volume: 'loud', count: 12, gapMs, fadeMs: 10, sampleRate });
+            burstNotes.push(`${voice.id}@${sampleRate} ${gapMs}ms ${burst.peak.toFixed(4)}`);
+            check(burst.peak <= 1 && burst.peak > 0, `${voice.label} 연타 피크가 1을 넘거나 0입니다. ${sampleRate} ${gapMs}ms ${burst.peak}`);
+        }
+    }
+}
+const worst = burstNotes.reduce((best, line) => {
+    const peak = Number(line.split(' ').at(-1));
+    return peak > best.peak ? { peak, line } : best;
+}, { peak: 0, line: '' });
+console.log(`연타 최대 피크 ${worst.peak.toFixed(4)} (${worst.line})`);
 
 const store = memory();
 check(keyVoiceId(store) === 'munggeul' && keyVolumeId(store) === 'small', '기본 소리나 크기가 몽글·작게가 아닙니다.');
@@ -231,7 +249,7 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v12'"), '서비스 워커가 v12가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v13'"), '서비스 워커가 v13이 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');

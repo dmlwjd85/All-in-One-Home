@@ -4,8 +4,11 @@
    바탕 위 글자 대비가 3.36 이라 버튼·강조는 #A73D74 로 깊혔습니다.
    보조 글자 #6E6869 는 바탕 대비 4.31 이라 #5E5658 을 씁니다. */
 :root {
-    --font-title: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
-    --font-body: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
+    --font-plain: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
+    --font-soft: 'NanumSquareRound', -apple-system, sans-serif;
+    --font-neat: 'IBM Plex Sans KR', -apple-system, sans-serif;
+    --font-title: var(--font-plain);
+    --font-body: var(--font-plain);
     --title-effect: none;
 
     --bg: #E8E4DE;
@@ -64,6 +67,19 @@
     --radius-md: 16px;
     --radius-lg: 18px;
     --radius-xl: 22px;
+
+    --rest-bg: #F4E3E8;
+    --rest-ink: #8E3158;
+}
+
+:root[data-font="soft"] {
+    --font-title: var(--font-soft);
+    --font-body: var(--font-soft);
+}
+
+:root[data-font="neat"] {
+    --font-title: var(--font-neat);
+    --font-body: var(--font-neat);
 }
 
 .dark {
@@ -115,4 +131,7 @@
     --k-parent: #2A2627;
     --k-praise: #2A2627;
     --k-todo: #2A2627;
+
+    --rest-bg: #3A2C31;
+    --rest-ink: #F0A8BA;
 }

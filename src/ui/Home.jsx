@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { restInfo } from '../lib/daymark.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -31,6 +32,7 @@ export function Home() {
     ].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 2);
     const birthdays = data.students.filter((row) => row.birthday && row.birthday === clock.ymd.slice(5));
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
+    const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
     return (
         <div className="home-grid">
@@ -67,19 +69,26 @@ export function Home() {
             <section className="glass home-time" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
+                    <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
                 </div>
-                <div className="period-row" style={{ marginTop: 10 }}>
-                    {labels.map((label, index) => {
-                        const on = period.index === index;
-                        const specialist = table[`s${index + 1}`];
-                        return (
-                            <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
-                                <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
-                            </Btn>
-                        );
-                    })}
-                </div>
+                {todayRest.off ? (
+                    <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
+                        <strong className="day-rest-mark">휴일</strong>
+                        <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : `${todayRest.label}이라 수업 대신 쉽니다.`}</span>
+                    </div>
+                ) : (
+                    <div className="period-row" style={{ marginTop: 10 }}>
+                        {labels.map((label, index) => {
+                            const on = period.index === index;
+                            const specialist = table[`s${index + 1}`];
+                            return (
+                                <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
+                                    <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
+                                </Btn>
+                            );
+                        })}
+                    </div>
+                )}
             </section>
 
             <section className="glass home-todo" style={{ padding: 14 }}>
@@ -91,7 +100,7 @@ export function Home() {
                     {todos.slice(0, 3).map((row) => (
                         <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                             <span>{row.done ? '☑' : '☐'} {row.title}</span>
-                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className="muted">{row.due ? `${Number(row.due.slice(5, 7))}/${Number(row.due.slice(8))}까지` : ''}</span>}
+                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
                         </div>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
@@ -102,7 +111,7 @@ export function Home() {
             <section className="glass home-event" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>이번 주 학급 일정</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>달력</Btn>
+                    <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (

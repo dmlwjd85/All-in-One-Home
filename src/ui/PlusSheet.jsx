@@ -3,7 +3,7 @@ import { DEFAULT_PERIODS } from '../lib/period.js';
 import { clipboardHint, readClipboard } from '../lib/msgParse.js';
 import { joinedRecords, saveParsed, saveQuick, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn } from './bits.jsx';
+import { Area, Btn, HoldToggle } from './bits.jsx';
 import { DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
@@ -343,7 +343,7 @@ function CaptureCard({ item, students, today, onPatch }) {
                     {(item.kind === '학생기록' || item.kind === '상담') && <p className="muted">남기면 누가기록에 쌓여요.</p>}
                 </>
             )}
-            <Btn className={item.include === false ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={() => onPatch(item.id, { include: item.include === false }, true)}>{item.include === false ? '빼 둠' : '넣을게요'}</Btn>
+            <HoldToggle held={item.include === false} onToggle={() => onPatch(item.id, { include: item.include === false }, true)} />
         </article>
     );
 }

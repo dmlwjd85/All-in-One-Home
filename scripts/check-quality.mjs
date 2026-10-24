@@ -8,6 +8,8 @@ import { planMigration, storageFromMap } from '../src/lib/migrate.js';
 import { readLegacyStorage } from '../src/lib/migrate.js';
 import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
 import { resolveHash } from '../src/lib/routes.js';
+import { dueLabel } from '../src/lib/date.js';
+import { restInfo } from '../src/lib/daymark.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
@@ -48,6 +50,14 @@ check(!isPublicHoliday('2026-10-19'), '10월 19일을 공휴일로 봤습니다.
 check(isPublicHoliday('2026-03-01'), '삼일절이 빠졌습니다.');
 check(isPublicHoliday('2026-02-17'), '설날이 빠졌습니다.');
 check(isPublicHoliday('2026-05-05') && isPublicHoliday('2026-10-03') && isPublicHoliday('2026-12-25'), '공휴일이 빠졌습니다.');
+check(dueLabel('2026-10-28', '2026-10-25') === '10/28(수), D-3', `마감 표시가 다릅니다. ${dueLabel('2026-10-28', '2026-10-25')}`);
+check(dueLabel('2026-10-25', '2026-10-25') === '10/25(일), D-day', '오늘 마감 표시가 다릅니다.');
+check(restInfo('2026-10-23', []).off === false, '평일 금요일을 휴일로 봤습니다.');
+check(restInfo('2026-10-24', []).off && restInfo('2026-10-25', []).off, '토·일을 휴일로 보지 않습니다.');
+check(restInfo('2026-10-09', []).off && restInfo('2026-10-09', []).label.includes('한글'), '한글날을 휴일로 보지 않습니다.');
+check(restInfo('2026-11-16', [{ date: '2026-11-16', title: '재량휴업일', kind: '휴일' }]).off, '재량휴업일을 휴일로 보지 않습니다.');
+check(restInfo('2026-12-23', [{ date: '2026-12-23', title: '방학식', kind: '학급' }]).off === false, '방학식을 휴업으로 봤습니다.');
+check(restInfo('2026-12-28', [{ date: '2026-12-28', end: '2027-01-03', title: '겨울 방학', kind: '학급' }]).off, '방학 기간을 휴업으로 보지 않습니다.');
 
 const bag = {
     pages: {
@@ -232,7 +242,7 @@ check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v12'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v13'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';

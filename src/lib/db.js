@@ -511,7 +511,7 @@ export async function saveParsed(items, now = new Date()) {
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
     if (!count && skipped) return { ok: false, message: '이미 등록한 내용이라 넣지 않았어요.', count: 0, skipped };
     let message = `${count}개 등록했어요.`;
-    if (skipped) message += ` 겹친 ${skipped}개는 빼 두었어요.`;
+    if (skipped) message += ` 겹친 ${skipped}개는 나중에 정리함에 뒀어요.`;
     if (filled) message += ' 날짜가 비어 있던 일정은 오늘로 넣었어요.';
     if (sensitiveCount) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
     return { ok: true, message, count, skipped, sensitiveCount };
@@ -617,7 +617,7 @@ export async function saveTextItem(bucket, row) {
 }
 
 export async function removeItem(bucket, id) {
-    await update((draft) => {
+    return update((draft) => {
         draft[bucket] = (draft[bucket] || []).filter((item) => item.id !== id);
         if (draft.local[bucket]) draft.local[bucket] = draft.local[bucket].filter((item) => item.id !== id);
         return draft;
@@ -645,7 +645,7 @@ export async function patchProfile(patch) {
 
 export async function replaceRoster(text) {
     const parsed = parseRoster(text);
-    if (!parsed.students.length) return parsed;
+    if (!parsed.students.length && parsed.errors.length) return parsed;
     const failed = await update((draft) => {
         const old = new Map(draft.students.map((row) => [row.no, row]));
         draft.students = parsed.students.map((row) => ({

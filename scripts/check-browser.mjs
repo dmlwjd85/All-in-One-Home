@@ -1035,10 +1035,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('어제 체육대회 다들 수고 많으셨습니다!');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const yellow = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
         }));
         check(yellow.low && !yellow.chosen, '노란 카드가 기본으로 포함되어 있습니다.');
         async function pasteNext(text) {
@@ -1063,31 +1063,31 @@ try {
         await pasteNext('2027학년도 학부모총회 3월 18일(목) 오후 2시');
         await page.waitForFunction(() => document.body.innerText.includes('2027년 3월 18일') && document.body.innerText.includes('1개 등록'));
         await pasteNext('2025년 11월 3일 학교폭력 실태조사 결과 공유합니다. 참고만 해주세요.');
-        await page.waitForFunction(() => document.body.innerText.includes('2025년 11월 3일') && document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('2025년 11월 3일') && document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const past = await page.evaluate(() => Boolean(document.querySelector('.low-card')));
         check(past, '지난 참고 자료가 노란 카드가 아닙니다.');
         const postpone = `방과후 축구반 ${delayedFrom.slash} 수업은 ${delayedTo.slash}로 연기됩니다.`;
         await pasteNext(postpone);
-        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes(label), {}, delayedTo.label);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장') && document.body.innerText.includes(label), {}, delayedTo.label);
         const moved = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
             low: document.querySelectorAll('.low-card').length,
-            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '지금 저장').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
         }));
         check(moved.chips.includes(delayedTo.label) && moved.chips.includes(delayedFrom.label) && moved.titles.length >= 2 && moved.titles.every((title) => title === postpone) && moved.low >= 2 && moved.aside >= 2 && moved.kept === 0, `연기 카드가 ${JSON.stringify(moved)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_move_date_390.png') });
         const pulledText = `가을 소풍이 ${pulledFrom.slash}에서 ${pulledTo.slash} 15:00로 앞당겨졌습니다`;
         await pasteNext(pulledText);
-        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes(label) && document.body.innerText.includes('15:00'), {}, pulledTo.label);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장') && document.body.innerText.includes(label) && document.body.innerText.includes('15:00'), {}, pulledTo.label);
         const pulled = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
             titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
             low: document.querySelectorAll('.low-card').length,
-            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '지금 저장').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
         }));
         check(pulled.chips.includes(pulledTo.label) && pulled.chips.includes(pulledFrom.label) && pulled.times.includes('15:00') && pulled.titles.length >= 2 && pulled.titles.every((title) => title === pulledText) && pulled.low >= 2 && pulled.aside >= 2 && pulled.kept === 0, `앞당김 카드가 ${JSON.stringify(pulled)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_pull_date_390.png') });
@@ -1097,18 +1097,18 @@ try {
             start: document.querySelector('[aria-label="시작일 고치기"]')?.innerText.trim() || '',
             end: document.querySelector('[aria-label="끝일 고치기"]')?.innerText.trim() || '',
             title: document.querySelector('[aria-label="제목"]')?.value || '',
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
         }));
         check(span.start === bareSpan.start && span.end === bareSpan.end && span.title === '학년 연구실 공사' && !/\d/.test(span.title) && span.kept === 1, `월 없는 기간이 ${JSON.stringify(span)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_monthless_span_390.png') });
         const shiftedText = `${fridaySlash} 교직원 회의는 15:40에서 16:10으로 변경`;
         await pasteNext(shiftedText);
-        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠') && document.body.innerText.includes('16:10') && document.body.innerText.includes(label), {}, fridayLabel);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장') && document.body.innerText.includes('16:10') && document.body.innerText.includes(label), {}, fridayLabel);
         const shifted = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             times: [...document.querySelectorAll('[aria-label="시각 고치기"]')].map((el) => el.innerText.trim()),
             titles: [...document.querySelectorAll('[aria-label="제목"]')].map((el) => el.value),
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
             low: document.querySelectorAll('.low-card').length,
         }));
         check(shifted.chips.includes(fridayLabel) && shifted.times.includes('16:10') && !shifted.times.includes('15:40') && shifted.titles.length === 1 && shifted.titles[0] === shiftedText && shifted.kept === 0 && shifted.low === 1, `시각 이동이 ${JSON.stringify(shifted)} 입니다.`);
@@ -1117,8 +1117,8 @@ try {
         const unsure = await page.evaluate(() => ({
             chips: [...document.querySelectorAll('[aria-label="날짜 고치기"]')].map((el) => el.innerText.trim()),
             low: document.querySelectorAll('.low-card').length,
-            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '빼 둠').length,
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            aside: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '지금 저장').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
         }));
         check(unsure.chips.includes('11월 2일') && unsure.chips.includes('11월 6일') && unsure.low >= 2 && unsure.aside >= 2 && unsure.kept === 0, `모호한 두 날짜가 ${JSON.stringify(unsure)} 입니다.`);
         await page.screenshot({ path: resolve(shots, 'after_unsure_dates_390.png') });
@@ -1129,7 +1129,7 @@ try {
             chip: document.querySelector('[aria-label="시각 고치기"]')?.innerText.trim() || '',
             date: document.querySelector('[aria-label="날짜 고치기"]')?.innerText.trim() || '',
             memo: document.querySelector('[aria-label="메모"]')?.value || '',
-            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '넣을게요').length,
+            kept: [...document.querySelectorAll('.msg-card button')].filter((el) => el.innerText.trim() === '나중에 정리').length,
             low: document.querySelectorAll('.low-card').length,
         }));
         check(rangedTime.cards === 1 && rangedTime.date === todayLabel && rangedTime.chip === '14:00–16:00' && rangedTime.memo.includes('강당') && rangedTime.kept === 1 && rangedTime.low === 0, `시각 범위가 ${JSON.stringify(rangedTime)} 입니다.`);
@@ -1237,7 +1237,7 @@ try {
             const node = document.querySelector('.msg-card');
             const text = node?.innerText || '';
             const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
-            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '나중에 정리');
             return { text, title, include, cards: document.querySelectorAll('.msg-card').length };
         });
         check(card.cards === 1 && card.include && card.text.includes('할 일') && card.text.includes(fridayLabel) && card.title.includes('학급 운영비') && card.title.includes('영수증') && card.title.includes('제출'), `요일 마감이 ${label}에서 ${fridayLabel} 할 일로 보이지 않습니다. ${card.title}`);
@@ -1257,7 +1257,7 @@ try {
         const meet = await page.evaluate(() => {
             const node = document.querySelector('.msg-card');
             const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
-            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '나중에 정리');
             return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
         });
         check(meet.cards === 1 && meet.include && meet.title === '학년 협의회' && meet.text.includes('일정') && meet.text.includes(fridayLabel), `요일 일정이 ${label}에서 ${fridayLabel} 15:00으로 보이지 않습니다. ${meet.title}`);
@@ -1272,10 +1272,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('지난주 금요일까지 학급 운영비 영수증 제출해 주세요.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes(label) && document.body.innerText.includes('빼 둠'), {}, lastFridayLabel);
+        await page.waitForFunction((label) => document.body.innerText.includes('0개 등록') && document.body.innerText.includes(label) && document.body.innerText.includes('지금 저장'), {}, lastFridayLabel);
         const pastWeek = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
         }));
         check(pastWeek.low && !pastWeek.chosen, `지난주 금요일 마감이 ${label}에서 노란 카드가 아닙니다.`);
         await audit(page, `지난주 마감 ${label}`);
@@ -1294,7 +1294,7 @@ try {
         const period = await page.evaluate(() => {
             const node = document.querySelector('.msg-card');
             const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
-            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '나중에 정리');
             return { title, include, text: node?.innerText || '', cards: document.querySelectorAll('.msg-card').length };
         });
         check(period.cards === 1 && period.include && period.title === '학급 회의' && period.text.includes('2교시') && period.text.includes('일정'), `요일 교시가 ${label}에서 날짜와 교시를 채우지 않습니다. ${period.title} ${period.text}`);
@@ -1309,10 +1309,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('선생님 내일 회의 있나요?');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const asked = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
             text: document.body.innerText,
         }));
         check(asked.low && !asked.chosen && asked.text.includes('질문'), `질문 문장이 ${label}에서 노란 카드가 아닙니다.`);
@@ -1331,7 +1331,7 @@ try {
         const monthEnd = await page.evaluate(() => {
             const node = document.querySelector('.msg-card');
             const title = node?.querySelector('input[aria-label="제목"]')?.value || '';
-            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '넣을게요');
+            const include = [...(node?.querySelectorAll('button') || [])].some((el) => el.innerText.trim() === '나중에 정리');
             return { title, include, cards: document.querySelectorAll('.msg-card').length, text: node?.innerText || '' };
         });
         check(monthEnd.cards === 1 && monthEnd.include && monthEnd.title.includes('학급문고') && monthEnd.text.includes('할 일') && monthEnd.text.includes(monthEndLabel), `이번 달 말까지가 ${label}에서 ${monthEndLabel} 할 일로 들어가지 않습니다. ${monthEnd.title}`);
@@ -1346,10 +1346,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('11/12(목) 운동회는 열지 않기로 했습니다.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const closed = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
             text: document.body.innerText,
         }));
         check(closed.low && !closed.chosen && closed.text.includes('11월 12일'), `열지 않기로가 ${label}에서 노란 카드가 아닙니다.`);
@@ -1364,10 +1364,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('11월 6일(금) 학년 체육대회는 열리지 못하게 되었습니다.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const fell = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
             text: document.body.innerText,
         }));
         check(fell.low && !fell.chosen && fell.text.includes('11월 6일'), `열리지 못하게가 ${label}에서 노란 카드가 아닙니다.`);
@@ -1382,10 +1382,10 @@ try {
         await page.keyboard.press('Backspace');
         await page.keyboard.type('저 10/24~10/25 제주도 가요~ 귤 사올게요');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="message"] button')].find((el) => el.innerText.includes('이 메시지 읽기'))?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('빼 둠'));
+        await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('지금 저장'));
         const trip = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
             text: document.body.innerText,
         }));
         check(trip.low && !trip.chosen && trip.text.includes('10월 24일'), `제주 잡담이 ${label}에서 노란 카드가 아닙니다.`);
@@ -1403,7 +1403,7 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 20일'));
         const cannot = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
         }));
         check(cannot.low && !cannot.chosen, `열리지 못합니다가 ${label}에서 노란 카드가 아닙니다.`);
         await audit(page, `열리지 못합니다 ${label}`);
@@ -1420,7 +1420,7 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('0개 등록') && document.body.innerText.includes('11월 2일'));
         const leave = await page.evaluate(() => ({
             low: Boolean(document.querySelector('.low-card')),
-            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '넣을게요'),
+            chosen: [...document.querySelectorAll('.msg-card button')].some((el) => el.innerText.trim() === '나중에 정리'),
             cards: document.querySelectorAll('.msg-card').length,
         }));
         check(leave.low && !leave.chosen && leave.cards === 1, `본인 연차가 ${label}에서 노란 카드 한 장이 아닙니다.`);
@@ -1447,10 +1447,10 @@ try {
             select: document.querySelectorAll('[data-screen="plus"] select').length,
         }));
         check(card.low === 0 && card.kind === '학생 기록' && card.select === 0, `학생 기록 미리보기가 ${JSON.stringify(card)} 입니다.`);
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '넣을게요')?.click());
-        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '빼 둠'));
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '빼 둠')?.click());
-        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '넣을게요'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '지금 저장')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '나중에 정리'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('되돌리기'));
         await page.waitForFunction(() => !document.querySelector('[data-screen="plus"]'));
@@ -1602,6 +1602,8 @@ try {
                     const offBtn = [...(tip?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '끄기')?.getBoundingClientRect();
                     const cells = [...document.querySelectorAll('.period-row button')].map((el) => el.getBoundingClientRect());
                     const sixth = cells[5];
+                    const rest = document.querySelector('.rest-banner')?.getBoundingClientRect();
+                    const timetable = sixth || rest;
                     const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
                     const hero = document.querySelector('.hero-action')?.getBoundingClientRect();
                     const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
@@ -1615,17 +1617,17 @@ try {
                         text: tip?.innerText || '',
                         toast,
                         coversQuick: hits(tipBox, quick),
-                        coversSixth: hits(tipBox, sixth) || cells.some((cell) => hits(tipBox, cell)),
+                        coversSixth: (sixth ? hits(tipBox, sixth) || cells.some((cell) => hits(tipBox, cell)) : hits(tipBox, rest)),
                         coversHero: hits(tipBox, hero) || hits(tipBox, kicker),
                         coversTab: hits(tipBox, tab),
                         coversBanner: hits(tipBox, banner),
                         coversDate: hits(tipBox, date),
                         coversFab: hits(tipBox, fab) || hits(offBtn, fab) || hits(closeBtn, fab),
                         coversClose: hits(offBtn, closeBtn),
-                        sixthUnderTab: hits(sixth, tab),
-                        sixthOnScreen: Boolean(sixth && sixth.top < viewBottom && sixth.bottom > 0),
+                        sixthUnderTab: hits(timetable, tab),
+                        sixthOnScreen: Boolean(timetable && timetable.top < viewBottom && timetable.bottom > 0),
                         quickTop: Math.round(quick?.top ?? -1),
-                        sixthTop: Math.round(sixth?.top ?? -1),
+                        sixthTop: Math.round(timetable?.top ?? -1),
                         cls: window.__cls || 0,
                     };
                 });
@@ -1642,7 +1644,7 @@ try {
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
                     const after = await page.evaluate(() => ({
                         quick: Math.round(document.querySelector('.home-quick')?.getBoundingClientRect().top ?? -1),
-                        sixth: Math.round(document.querySelectorAll('.period-row button')[5]?.getBoundingClientRect().top ?? -1),
+                        sixth: Math.round((document.querySelectorAll('.period-row button')[5] || document.querySelector('.rest-banner'))?.getBoundingClientRect().top ?? -1),
                         cls: window.__cls || 0,
                         toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
                     }));

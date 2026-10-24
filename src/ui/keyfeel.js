@@ -1,7 +1,8 @@
 /** 누르는 손맛. 소리는 이 자리에서 합성하고, 파일을 받지 않습니다.
     가져온 녹음이 없어서 따로 받을 라이선스는 없습니다.
     누름과 뗌은 다른 파형이고, 높이는 조금 흔들립니다.
-    연달은 누름은 이전 소리를 끊고 바로 시작해 겹치거나 밀리지 않습니다. */
+    오디오 컨텍스트는 하나만 쓰고, 하드웨어 샘플레이트를 그대로 둡니다.
+    연달은 누름은 이전 소리를 10ms 동안 줄인 뒤 끊습니다. 8ms보다 짧은 겹침은 바로 끊습니다. */
 
 const SOUND_KEY = 'ssug-gyomu-key-sound';
 const VIBE_KEY = 'ssug-gyomu-key-vibrate';
@@ -201,11 +202,14 @@ function noiseAt(i, salt) {
     return (x / 4294967296) * 2 - 1;
 }
 
-function fadeTail(data, sampleRate) {
-    const n = Math.min(data.length, Math.max(2, Math.floor(sampleRate * 0.0015)));
-    for (let i = 0; i < n; i += 1) {
-        data[data.length - 1 - i] *= i / n;
-    }
+/** 시작·끝이 0이 아니면 버퍼를 붙이거나 끊을 때 클릭이 납니다. */
+function fadeEdges(data, sampleRate) {
+    const attack = Math.min(data.length, Math.max(2, Math.round(sampleRate * 0.00045)));
+    const release = Math.min(data.length, Math.max(2, Math.round(sampleRate * 0.005)));
+    for (let i = 0; i < attack; i += 1) data[i] *= i / attack;
+    for (let i = 0; i < release; i += 1) data[data.length - 1 - i] *= i / release;
+    data[0] = 0;
+    data[data.length - 1] = 0;
 }
 
 function synth(id, part, sampleRate) {
@@ -294,8 +298,8 @@ export function renderKeyPair(voice, sampleRate = 48000) {
     const down = synth(id, 'down', rate);
     const up = synth(id, 'up', rate);
     for (let i = 0; i < up.length; i += 1) up[i] *= 0.62;
-    fadeTail(down, rate);
-    fadeTail(up, rate);
+    fadeEdges(down, rate);
+    fadeEdges(up, rate);
     let peak = 0;
     for (let i = 0; i < down.length; i += 1) peak = Math.max(peak, Math.abs(down[i]));
     const scale = peak > 0.00001 ? 0.9 / peak : 1;
@@ -320,47 +324,153 @@ function buffersFor(audio, voice) {
     return hit;
 }
 
-function stopActive() {
-    const sources = active;
-    active = [];
-    for (const src of sources) {
-        try { src.stop(); } catch { /* 이미 끝난 소리입니다. */ }
+let busCtx = null;
+let busIn = null;
+
+/** 목소리는 리미터로만 모읍니다. 목소리마다 게인을 더하지 않아 기본 크기는 그대로입니다. */
+function masterBus(audio) {
+    if (busCtx === audio && busIn) return busIn;
+    busCtx = audio;
+    busIn = audio.destination;
+    if (typeof audio.createDynamicsCompressor !== 'function') return busIn;
+    try {
+        const comp = audio.createDynamicsCompressor();
+        comp.threshold.value = -1.5;
+        comp.knee.value = 0;
+        comp.ratio.value = 20;
+        comp.attack.value = 0.002;
+        comp.release.value = 0.06;
+        comp.connect(audio.destination);
+        busIn = comp;
+    } catch {
+        busIn = audio.destination;
     }
+    return busIn;
+}
+
+function releaseVoice(entry, audio, fadeSec) {
+    const now = audio?.currentTime || 0;
+    const param = entry.gain?.gain;
+    const canRamp = fadeSec > 0 && param && typeof param.cancelScheduledValues === 'function' && typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function';
+    if (canRamp) {
+        const current = Number.isFinite(param.value) ? param.value : 0;
+        try {
+            param.cancelScheduledValues(now);
+            param.setValueAtTime(current, now);
+            param.linearRampToValueAtTime(0, now + fadeSec);
+        } catch {
+            /* 램프가 없어도 아래에서 끊습니다. */
+        }
+        try { entry.src.stop(now + fadeSec + 0.004); } catch { /* 이미 끝난 소리입니다. */ }
+    } else {
+        try { if (param) param.value = 0; } catch { /* 무시 */ }
+        try { entry.src.stop(); } catch { /* 이미 끝난 소리입니다. */ }
+    }
+    entry.fading = true;
+}
+
+function stopActive() {
+    const audio = ctx;
+    const voices = active;
+    active = [];
+    for (const entry of voices) releaseVoice(entry, audio, 0);
 }
 
 function launch(audio, voice, volume, events) {
-    stopActive();
-    const buffers = buffersFor(audio, voice);
     const now = audio.currentTime || 0;
+    for (const entry of active) {
+        if (entry.fading) continue;
+        const age = now - (entry.startedAt || 0);
+        releaseVoice(entry, audio, age < 0.008 ? 0 : 0.01);
+    }
+    const fading = active.filter((entry) => entry.fading && !entry.dropped);
+    if (fading.length > 2) {
+        for (const entry of fading.slice(0, fading.length - 2)) {
+            try { entry.src.stop(); } catch { /* 이미 끝난 소리입니다. */ }
+            entry.dropped = true;
+        }
+    }
+    const buffers = buffersFor(audio, voice);
     const gainValue = keyVolumeGain(volume);
-    active = events.map((event) => {
+    const dest = masterBus(audio);
+    const created = events.map((event) => {
         const src = audio.createBufferSource();
         const gain = audio.createGain();
         src.buffer = buffers[event.part] || buffers.down;
         src.playbackRate.value = event.rate;
         gain.gain.value = gainValue;
         src.connect(gain);
-        gain.connect(audio.destination);
-        src.start(now + event.at);
-        return src;
+        gain.connect(dest);
+        const at = now + event.at;
+        src.start(at);
+        return { src, gain, startedAt: at, fading: false, dropped: false };
     });
+    active = [...active.filter((entry) => entry.fading && !entry.dropped), ...created].slice(-6);
+}
+
+function sharedContext() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (ctx && ctx.state === 'closed') {
+        ctx = null;
+        busCtx = null;
+        busIn = null;
+        pairCache.clear();
+    }
+    if (!ctx) {
+        try { ctx = new AudioCtx({ latencyHint: 'interactive' }); }
+        catch { ctx = new AudioCtx(); }
+    }
+    return ctx;
 }
 
 function withAudio(fn) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
+    const audio = sharedContext();
+    if (!audio) return;
     const mine = ++token;
+    const run = () => {
+        if (mine !== token || muted || audio.state !== 'running') return;
+        fn(audio);
+    };
     try {
-        if (!ctx) ctx = new AudioCtx();
-        const run = () => {
-            if (mine !== token || muted) return;
-            fn(ctx);
-        };
-        if (ctx.state === 'running') run();
-        else ctx.resume().then(run).catch(() => {});
+        if (audio.state === 'running') run();
+        else audio.resume().then(run).catch(() => {});
     } catch {
         /* 소리를 못 내도 누른 일은 진행됩니다. */
     }
+}
+
+/** 연타를 샘플로 섞어 피크를 잽니다. 직전 소리만 페이드하고 그 앞은 끊습니다. */
+export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = 10, sampleRate = 48000 } = {}) {
+    const pair = renderKeyPair(voice, sampleRate);
+    const gain = keyVolumeGain(volume);
+    const gap = Math.max(0, Math.round((sampleRate * gapMs) / 1000));
+    const fade = Math.max(1, Math.round((sampleRate * fadeMs) / 1000));
+    const tail = pair.down.length + fade + 8;
+    const length = Math.max(tail, gap * Math.max(0, count - 1) + tail);
+    const mix = new Float32Array(length);
+    for (let n = 0; n < count; n += 1) {
+        const start = n * gap;
+        for (let i = 0; i < pair.down.length; i += 1) {
+            const at = start + i;
+            if (at >= length) break;
+            let env = 1;
+            const newer = n + 1;
+            if (newer < count) {
+                const cut = newer * gap;
+                if (at >= cut) {
+                    const into = at - cut;
+                    const nextCut = newer + 1 < count ? (newer + 1) * gap : length;
+                    if (nextCut - cut < Math.round(sampleRate * 0.008)) env = 0;
+                    else env = into >= fade ? 0 : 1 - into / fade;
+                }
+            }
+            mix[at] += pair.down[i] * gain * env;
+        }
+    }
+    let peak = 0;
+    for (let i = 0; i < mix.length; i += 1) peak = Math.max(peak, Math.abs(mix[i]));
+    return { peak, voices: count, gapMs, fadeMs, sampleRate, voice, volume };
 }
 
 export function previewKeyVoice(id) {

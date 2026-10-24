@@ -4,12 +4,13 @@ import { applyLegacy, finishSetup, loadDemo, previewLegacy, setAuth, snapshot } 
 import { cloudReady, loginHint, signInGoogle } from '../firebase.js';
 import { useUi } from './context.jsx';
 import { Btn, Symbol } from './bits.jsx';
+import { RosterSlots, rosterTextFromSlots } from './RosterSlots.jsx';
 
 export function Start() {
     const { showToast, go } = useUi();
     const [step, setStep] = useState('choose');
     const [className, setClassName] = useState('');
-    const [roster, setRoster] = useState('');
+    const [names, setNames] = useState(() => Array.from({ length: 32 }, () => ''));
     const [plan, setPlan] = useState(null);
     const [busy, setBusy] = useState(false);
 
@@ -71,8 +72,9 @@ export function Start() {
                 <div className="solid-card" style={{ padding: 16 }}>
                     <h2 className="title-font">우리 반</h2>
                     <input className="field" aria-label="학급 이름" placeholder="6학년 3반" value={className} onChange={(event) => setClassName(event.target.value)} />
-                    <textarea className="field" style={{ marginTop: 8 }} rows={6} aria-label="명단" placeholder={'한 줄에 한 명씩 적어 주세요.\n1 김하늘\n2 오지호'} value={roster} onChange={(event) => setRoster(event.target.value)} />
-                    <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => { const saved = await finishSetup({ className, rosterText: roster }); if (!saved?.storageFailed) go('#/today'); }}>이 명단으로 시작</Btn>
+                    <p className="muted">1번부터 32번 칸에 이름을 적어 주세요. 비어 있는 번호는 저장하지 않아요.</p>
+                    <RosterSlots names={names} onChange={setNames} />
+                    <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => { const saved = await finishSetup({ className, rosterText: rosterTextFromSlots(names) }); if (!saved?.storageFailed) go('#/today'); }}>이 명단으로 시작</Btn>
                     <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { const saved = await finishSetup({ className, rosterText: '', skip: true }); if (!saved?.storageFailed) go('#/today'); }}>나중에 할게요</Btn>
                     <Btn className="chip block" style={{ marginTop: 8 }} onClick={async () => { const saved = await loadDemo(); if (!saved?.storageFailed) go('#/today'); }}>예시 학급으로 둘러보기</Btn>
                 </div>

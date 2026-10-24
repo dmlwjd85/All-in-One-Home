@@ -55,6 +55,25 @@ export function IconMoon() {
     );
 }
 
+export function IconSettings() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+        </svg>
+    );
+}
+
+export function IconTrash() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 7h16" />
+            <path d="M9 7V5h6v2" />
+            <path d="M7 7l1 13h8l1-13" />
+        </svg>
+    );
+}
+
 export function IconSun() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
@@ -83,6 +102,17 @@ export const TAGS = {
     보호자: ['전화', '방문', '문자'],
     칭찬: ['학습', '생활', '교우'],
 };
+
+export function HoldToggle({ held, onToggle }) {
+    return (
+        <div>
+            <p className="muted" style={{ margin: '8px 0 0' }}>
+                {held ? '나중에 정리함 · 이번 저장에는 넣지 않아요.' : '이번 저장에 넣어요. 애매하면 나중에 정리함으로 옮겨 둡니다.'}
+            </p>
+            <Btn className={held ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={onToggle}>{held ? '지금 저장' : '나중에 정리'}</Btn>
+        </div>
+    );
+}
 
 export function studentName(students, sid) {
     return students.find((row) => row.id === sid)?.name || '';

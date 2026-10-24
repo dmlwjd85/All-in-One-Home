@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { addDaysYmd, eventClock, startOfWeekMon } from '../lib/date.js';
+import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Btn } from './bits.jsx';
+import { Btn, IconTrash } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 
 export function Tasks() {
@@ -41,18 +41,27 @@ export function Tasks() {
                     <h3 style={{ marginBottom: 8 }}>{label}</h3>
                     {!rows.length && <p className="muted">없어요.</p>}
                     {rows.map((row) => (
-                        <article key={row.id} className="glass" style={{ padding: 12, marginBottom: 8 }}>
-                            <Btn block className="neo" style={{ justifyContent: 'space-between', display: 'flex', fontWeight: 800 }} onClick={() => toggleTodo(row.id)}>
-                                <span>{row.done ? '☑' : '☐'} {row.localOnly ? '🔒 ' : ''}{row.title}</span>
-                            </Btn>
-                            {row.of ? <p className="num" style={{ margin: '8px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                {(row.pendingNos || []).map((no) => {
-                                    const student = data.students.find((item) => item.no === no);
-                                    return <Btn key={no} className="chip" onClick={() => receiveOne(row.id, no)}>{no} {student?.name || ''} 받음</Btn>;
-                                })}
+                        <article key={row.id} className="todo-block">
+                            <div className="todo-line">
+                                <Btn className="todo-main" onClick={() => toggleTodo(row.id)}>
+                                    <span aria-hidden="true">{row.done ? '☑' : '☐'}</span>
+                                    <span className="todo-title">{row.localOnly ? '🔒 ' : ''}{row.title}</span>
+                                </Btn>
+                                {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
+                                <Btn className="icon-btn" aria-label="할 일 지우기" onClick={async () => {
+                                    const failed = await removeItem('todos', row.id);
+                                    if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
+                                }}><IconTrash /></Btn>
                             </div>
-                            <Btn className="chip" style={{ marginTop: 8 }} onClick={() => removeItem('todos', row.id)}>지우기</Btn>
+                            {row.of ? <p className="num" style={{ margin: '4px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
+                            {(row.pendingNos || []).length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {(row.pendingNos || []).map((no) => {
+                                        const student = data.students.find((item) => item.no === no);
+                                        return <Btn key={no} className="chip" onClick={() => receiveOne(row.id, no)}>{no} {student?.name || ''} 받음</Btn>;
+                                    })}
+                                </div>
+                            )}
                         </article>
                     ))}
                 </section>

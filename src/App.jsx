@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
+import { restInfo } from './lib/daymark.js';
 import { resolveHash } from './lib/routes.js';
 import { closeTip, tipForToday } from './lib/tips.js';
 import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMenu, IconMoon, IconSearch, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs } from './ui/keyfeel.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
@@ -52,6 +54,8 @@ export default function App() {
     const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
     const [tipFolded, setTipFolded] = useState(false);
     const toastTimer = useRef(0);
+
+    useEffect(() => { applyStoredFont(); }, []);
 
     useEffect(() => {
         let stop = () => {};
@@ -266,17 +270,16 @@ export default function App() {
         );
     }
 
-    const attendHash = `#/attend/${clock.ymd}`;
     const tabs = [
         ['오늘', '#/today', '🏠'],
-        ['출결', attendHash, '✓'],
+        ['할 일', '#/todo', '☑'],
         ['더', '', '+'],
         ['기록', '#/students', '✎'],
         ['일정', '#/schedule', '📅'],
     ];
     const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
     const tip = showSoundTip ? { id: 'key-sound', text: '콕, 누를 때 소리가 나요', sound: true } : dailyTip;
-    const checked = data.profile.checkedDates.includes(clock.ymd);
+    const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
     let screen = <Home />;
     if (route.name === 'attend') screen = <Attend />;
@@ -331,7 +334,7 @@ export default function App() {
                         {route.name === 'today' ? (
                             <div className="date-block">
                                 <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
-                                <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em>{clock.weekday}요일</em></h1>
+                                <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em className={todayRest.off ? 'day-rest-mark' : undefined}>{clock.weekday}요일</em></h1>
                                 <p className="muted">{headingSub}</p>
                             </div>
                         ) : (
@@ -341,14 +344,13 @@ export default function App() {
                             </div>
                         )}
                         <div className="top-tools">
-                            {route.name !== 'student' && route.name !== 'legacy' && (
-                                <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
-                            )}
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
                             <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
                                 const next = dark ? 'light' : 'dark';
                                 import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
+                            <Btn className={route.name === 'settings' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings'} onClick={() => go('#/settings')}><IconSettings /></Btn>
+                            <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
                     </header>
                     {tip && !tipFolded && (
@@ -383,9 +385,9 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '출결' && route.name === 'attend')) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '할 일' && route.name === 'todo')) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
-                                    <span aria-hidden="true" style={{ color: label === '출결' && checked ? 'var(--st-present)' : 'inherit', fontSize: 16 }}>{icon}</span>
+                                    <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
                                     {label}
                                 </span>
                             </Btn>
