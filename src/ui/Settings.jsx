@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
+import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
+import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
@@ -55,7 +57,9 @@ function KeyPick({ pressed, label, ariaLabel, onPick }) {
 export function Settings() {
     const { data, showToast, go } = useUi();
     const [className, setClassName] = useState(data.profile.className || '');
-    const [roster, setRoster] = useState(data.students.map((row) => `${row.no} ${row.name}`).join('\n'));
+    const [names, setNames] = useState(() => slotsFromStudents(data.students));
+    const [paste, setPaste] = useState('');
+    const [font, setFontId] = useState(() => fontId());
     const [periods, setPeriods] = useState(data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS);
     const [phrase, setPhrase] = useState('');
     const [wipe, setWipe] = useState('');
@@ -78,11 +82,18 @@ export function Settings() {
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>학급</h2>
                 <input className="field" aria-label="학급 이름" value={className} onChange={(event) => setClassName(event.target.value)} />
-                <textarea className="field" style={{ marginTop: 8 }} rows={6} aria-label="명단" value={roster} onChange={(event) => setRoster(event.target.value)} />
+                <p className="muted" style={{ marginBottom: 0 }}>1번부터 32번까지 칸이 열려 있어요. 있는 이름은 그 번호에 채워 두었습니다.</p>
+                <RosterSlots names={names} onChange={setNames} />
+                <textarea className="field" style={{ marginTop: 8 }} rows={3} aria-label="명단 붙여 넣기" placeholder={'한 줄에 한 명. 빈 칸은 그대로 둡니다.\n12 이하은'} value={paste} onChange={(event) => setPaste(event.target.value)} />
+                <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => {
+                    const filled = fillSlotsFromText(names, paste);
+                    setNames(filled.names);
+                    showToast(filled.errors?.[0] || '번호 칸에 채웠어요.');
+                }}>칸에 채우기</Btn>
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
                     const saved = await patchProfile({ className: className.trim() });
                     if (saved?.storageFailed) return;
-                    const parsed = await replaceRoster(roster);
+                    const parsed = await replaceRoster(rosterTextFromSlots(names));
                     if (parsed?.storageFailed) return;
                     showToast(parsed.errors?.[0] || '학급 정보를 저장했어요.');
                 }}>학급 저장</Btn>
@@ -100,7 +111,16 @@ export function Settings() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <p className="muted" style={{ marginTop: 0 }}>글꼴</p>
+                <div className="font-grid" role="group" aria-label="글꼴">
+                    {FONT_CHOICES.map((item) => (
+                        <Btn key={item.id} className={font === item.id ? 'choice-tile on' : 'choice-tile'} data-font-sample={item.id} aria-pressed={font === item.id} onClick={() => { setFont(item.id); setFontId(item.id); }}>
+                            <span>{item.label}</span>
+                            <span style={{ fontWeight: 600, fontSize: 12 }}>{item.hint}</span>
+                        </Btn>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                     {[['system', '기기 설정'], ['light', '밝게'], ['dark', '어둡게']].map(([id, label]) => (
                         <Btn key={id} className={data.profile.theme === id ? 'chip on' : 'chip'} onClick={() => patchProfile({ theme: id })}>{label}</Btn>
                     ))}

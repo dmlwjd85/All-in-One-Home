@@ -66,6 +66,7 @@ export function toCloudRow(collection, row) {
     if (collection === 'notices') return toNotice(row);
     if (collection === 'legacy') return toLegacy(row);
     if (collection === 'timetable') return toTable(row);
+    if (collection === 'inbox') return toInbox(row);
     return null;
 }
 
@@ -178,6 +179,32 @@ function toLegacy(row) {
     return { id, body, stamps: stamps(['at']) };
 }
 
+function toInbox(row) {
+    const id = cloudDocId(row.id);
+    const source = sourceOf(row.source);
+    const title = String(row.title || '').trim();
+    if (!id || !source || !title) return null;
+    const body = {
+        title: title.slice(0, 100),
+        kind: row.kind === '일정' ? 'event' : 'todo',
+        source,
+    };
+    if (/^\d{4}-\d{2}-\d{2}$/.test(row.date || '')) body.date = row.date;
+    if (body.date && row.end && row.end >= body.date) body.end = row.end;
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.endTime || '')) body.endTime = row.endTime;
+    if (EVENT_TO[row.eventKind]) body.eventKind = EVENT_TO[row.eventKind];
+    const memoBits = [row.memo];
+    if (row.period) {
+        const label = row.periodEnd ? `${row.period}~${row.periodEnd}교시` : `${row.period}교시`;
+        if (!String(row.memo || '').includes(label)) memoBits.push(label);
+    }
+    const memo = memoBits.filter(Boolean).join(' · ').slice(0, 300);
+    if (memo) body.memo = memo;
+    if (row.warning) body.warning = String(row.warning).slice(0, 120);
+    return { id, body, stamps: stamps(['updatedAt']) };
+}
+
 function toTable(row) {
     const id = row.id;
     if (!(id === 'mon' || id === 'tue' || id === 'wed' || id === 'thu' || id === 'fri' || /^\d{4}-\d{2}-\d{2}$/.test(id || ''))) return null;
@@ -273,6 +300,21 @@ export function fromCloudRow(collection, id, data = {}) {
         let raw = data.raw;
         try { raw = JSON.parse(data.raw); } catch { /* 글 그대로 */ }
         return { id: id === 'board-praise' ? 'praiseBoard' : id, kind: data.kind || 'page', title: data.title || '', raw, source: 'legacy' };
+    }
+    if (collection === 'inbox') {
+        return {
+            id,
+            kind: data.kind === 'event' ? '일정' : '할 일',
+            title: data.title || '',
+            date: data.date || '',
+            end: data.end || '',
+            time: data.time || '',
+            endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(data.endTime || '') ? data.endTime : '',
+            eventKind: EVENT_FROM[data.eventKind] || '',
+            memo: data.memo || '',
+            warning: data.warning || '',
+            source: data.source === 'legacy' ? 'legacy' : (data.source === 'file' ? 'file' : 'app'),
+        };
     }
     if (collection === 'timetable') {
         const body = {};

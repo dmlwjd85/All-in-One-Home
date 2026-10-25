@@ -1,12 +1,31 @@
 /** 에뮬레이터에서 건강·보건이 든 글이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { eventBodyWithoutEndTime, fromCloudRow, toCloudRow } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
 
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+
+function ruleBlock(source, startMark, endMark) {
+    const start = source.indexOf(startMark);
+    const end = source.indexOf(endMark);
+    if (start < 0 || end <= start) return '';
+    return source.slice(start, end);
+}
+
+/** 예전 배포본은 일정에만 endTime이 없었습니다. 정리함 규칙의 endTime은 그대로 둡니다. */
+function rulesWithoutEventEndTime(source) {
+    const block = ruleBlock(source, 'match /events/{eid}', 'match /todos/{tid}');
+    if (!block) return source;
+    const stripped = block
+        .replace(", 'endTime'", '')
+        .replace("\n          && (!('endTime' in d()) || hm(d().endTime))", '');
+    const start = source.indexOf('match /events/{eid}');
+    const end = source.indexOf('match /todos/{tid}');
+    return source.slice(0, start) + stripped + source.slice(end);
+}
 const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
 if (!rules.includes(safeLine)) {
     console.error('규칙의 safeText가 앱 민감 낱말과 다릅니다.');
@@ -43,6 +62,14 @@ async function expectAllow(label, write) {
     }
 }
 
+async function expectBlocked(label, op) {
+    try {
+        await assertFails(op());
+    } catch (error) {
+        failures.push(`${label} 요청이 거절되지 않았습니다. ${error?.message || error}`);
+    }
+}
+
 try {
     await expectDeny('학생 메모 건강', () => setDoc(doc(db, 'users/teacher-a/students/s3'), { no: 3, name: '박서준', memo: '건강 특이' }));
     await expectDeny('학생 메모 보건', () => setDoc(doc(db, 'users/teacher-a/students/s5'), { no: 5, name: '강민우', memo: '보건실' }));
@@ -56,6 +83,41 @@ try {
     await expectAllow('평범한 기록', () => setDoc(doc(db, 'users/teacher-a/records/r3'), {
         date: '2026-10-19', kind: 'observe', text: '발표를 끝까지 했어요', source: 'app',
     }));
+    const inboxRow = toCloudRow('inbox', {
+        id: 'msgabcdef12',
+        kind: '할 일',
+        title: '체험학습 동의서',
+        date: '2026-12-31',
+        warning: '저장하면 정리함에 들어가요.',
+        source: 'msg',
+    });
+    if (!inboxRow || inboxRow.body.kind !== 'todo' || inboxRow.body.date !== '2026-12-31' || inboxRow.body.source !== 'app') {
+        failures.push(`정리함 클라우드 모양이 아닙니다. ${JSON.stringify(inboxRow)}`);
+    } else {
+        await expectAllow('정리함', () => setDoc(doc(db, 'users/teacher-a/inbox/msgabcdef12'), inboxRow.body));
+        await expectDeny('정리함 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth01'), {
+            title: '건강 조심', kind: 'todo', source: 'app', warning: '건강',
+        }));
+        const back = fromCloudRow('inbox', 'msgabcdef12', inboxRow.body);
+        if (!back || back.kind !== '할 일' || back.date !== '2026-12-31' || back.title !== '체험학습 동의서') {
+            failures.push(`정리함을 다시 읽지 못했습니다. ${JSON.stringify(back)}`);
+        }
+        const other = testEnv.authenticatedContext('teacher-b').firestore();
+        const guest = testEnv.unauthenticatedContext().firestore();
+        const inboxPath = 'users/teacher-a/inbox/msgabcdef12';
+        await expectBlocked('정리함 소유자', () => setDoc(doc(db, 'users/teacher-b/inbox/msgabcdef12'), inboxRow.body));
+        await expectBlocked('다른 사람 정리함 읽기', () => getDoc(doc(other, inboxPath)));
+        await expectBlocked('다른 사람 정리함 삭제', () => deleteDoc(doc(other, inboxPath)));
+        await expectBlocked('로그인 없이 정리함 읽기', () => getDoc(doc(guest, inboxPath)));
+        const kept = await getDoc(doc(db, inboxPath));
+        if (!kept.exists()) failures.push('다른 사람의 삭제가 정리함을 지웠습니다.');
+        const inboxBase = { title: '체험학습 동의서', kind: 'todo', source: 'app' };
+        await expectDeny('정리함 kind', () => setDoc(doc(db, 'users/teacher-a/inbox/badkind01'), { ...inboxBase, kind: 'note' }));
+        await expectDeny('정리함 title', () => setDoc(doc(db, 'users/teacher-a/inbox/badtitle1'), { ...inboxBase, title: '가'.repeat(101) }));
+        await expectDeny('정리함 warning', () => setDoc(doc(db, 'users/teacher-a/inbox/badwarn01'), { ...inboxBase, warning: '가'.repeat(121) }));
+        await expectDeny('정리함 source', () => setDoc(doc(db, 'users/teacher-a/inbox/badsource'), { ...inboxBase, source: 'msg' }));
+        await expectDeny('정리함 endTime', () => setDoc(doc(db, 'users/teacher-a/inbox/badendtim'), { ...inboxBase, endTime: '16:00까지' }));
+    }
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));
 
@@ -111,10 +173,10 @@ try {
         }
     }
 
-    const oldRules = rules
-        .replace(", 'endTime'", '')
-        .replace("\n          && (!('endTime' in d()) || hm(d().endTime))", '');
-    if (oldRules.includes('endTime')) {
+    const oldRules = rulesWithoutEventEndTime(rules);
+    const eventsBlock = ruleBlock(oldRules, 'match /events/{eid}', 'match /todos/{tid}');
+    const inboxBlock = ruleBlock(oldRules, 'match /inbox/{iid}', 'match /notes/{nid}');
+    if (!eventsBlock || eventsBlock.includes('endTime') || !inboxBlock.includes('endTime')) {
         failures.push('예전 규칙에서 endTime을 빼지 못했습니다.');
     } else {
         const oldEnv = await initializeTestEnvironment({

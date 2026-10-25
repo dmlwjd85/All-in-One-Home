@@ -294,6 +294,7 @@ function stripTitleNoise(text) {
         s = s.replace(/(?:재작년|작년|지난해|지난\s*해)(?:에는|에도|엔|도의|도|에|는|은|의|처럼|보다|과\s*달리|와\s*달리)?/g, ' ');
     }
     s = s.replace(/(?:올해|이번에)(?:는|은)?/g, ' ');
+    s = s.replace(/(?<![가-힣])(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?/g, ' ');
     s = s.replace(/예정이었던/g, ' ');
     s = s.replace(/(?:^|\s)(?:이었|였)던(?=\s|$)/g, ' ');
     s = s.replace(/기존\s*일정대로|기존대로/g, ' ');
@@ -395,7 +396,7 @@ export function tidyTitle(text) {
     t = stripTitleNoise(t);
     t = t.replace(/(?:자료|사진|영상)\s*(?:는|은|이|가|을|를)?\s*(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
     t = t.replace(/(?:양식|서식|형식)(?:을|를|으로|로)?\s*(?:씁니다|써요|사용(?:합니다|해요)?|준비(?:합니다|해요)?)/g, ' ');
-    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
+    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달|내년|다음\s*해)(?=\s|$)/g, ' ');
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
@@ -503,7 +504,7 @@ function salvageTitle(text) {
     t = t.replace(/(?:^|\s)모두(?=\s|$)/g, ' ');
     t = t.replace(/[월화수목금토일]요일(?:으로|로)?/g, ' ');
     t = stripTitleNoise(t);
-    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
+    if (!keepsPastMaterialYear(t)) t = t.replace(/(?:^|\s)(?:재작년|지난해|지난\s*해|작년|지난번|지난\s*달|지난달|내년|다음\s*해)(?=\s|$)/g, ' ');
     else t = t.replace(/(?:^|\s)(?:지난번|지난\s*달|지난달)(?=\s|$)/g, ' ');
     t = t.replace(/마감(?:은|는)(?![가-힣])/g, '마감');
     t = t.replace(/(?:^|\s)지난(?=\s|$)/g, ' ');
@@ -1351,14 +1352,24 @@ function replaceChunks(text) {
     return [cancelled, `\u0005${next}`];
 }
 
+/** 날짜 바로 뒤의 '까지·마감'은 그 날짜의 마감입니다. 다음 날짜 앞은 넘지 않습니다. */
+function deadlineTailEnd(text, unit, next) {
+    const limit = next ? next.spans[0].index : text.length;
+    const after = text.slice(unit.end, limit);
+    const tail = after.match(/^\s*(?:(?:오전|오후)\s*)?(?:\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?\s*)?까지/);
+    return unit.end + (tail ? tail[0].length : 0);
+}
+
 /** 이동·나열·대체가 아니면 날짜와 시각 후보를 모두 빼 둡니다. */
 function unsureChunks(text, now) {
     const units = temporalUnits(text, findDates(text, now));
     const days = new Set(units.flatMap((unit) => unit.spans.map((span) => span.ymd)));
     if (units.length >= 2 && days.size >= 2) {
         return units.map((unit, index) => {
-            const from = index === 0 ? 0 : units[index - 1].end;
-            return `\u0001${text.slice(from, unit.end).trim()}`;
+            const prev = units[index - 1];
+            const from = index === 0 ? 0 : deadlineTailEnd(text, prev, unit);
+            const end = deadlineTailEnd(text, unit, units[index + 1]);
+            return `\u0001${text.slice(from, end).trim()}`;
         });
     }
     const clocks = clockMatches(text);
@@ -2546,10 +2557,16 @@ function adjacentYear(before) {
     return null;
 }
 
+/** 날짜 바로 앞의 내년·다음 해. -2는 달력상 다음 해로 옮긴다는 표시입니다. */
+function nextYearLead(before) {
+    return /(?:내년|다음\s*해)(?:도|에는|에도|엔|에|는|은|의)?\s*$/.test(String(before || ''));
+}
+
 function yearCue(source, span, fullText = '') {
     const token = source.slice(span.index, span.index + span.length);
     const local = source.slice(0, span.index);
     const wide = textBeforeSpan(fullText, source, span);
+    if (nextYearLead(local) || nextYearLead(wide || '')) return -2;
     const shifted = lastYearShift(wide || local);
     if (/요일/.test(token) && !/\d/.test(token)) return shifted;
     if (shifted != null) return shifted;
@@ -2658,6 +2675,10 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
         if (!ymd || !cue) return { ymd: ymd || '', remembered: false };
         let years = cue.years;
         const token = source.slice(cue.span.index, cue.span.index + cue.span.length);
+        if (years === -2) {
+            const target = `${Number(todayYmd.slice(0, 4)) + 1}${ymd.slice(4)}`;
+            return { ymd: isValidYmd(target) ? target : ymd, remembered: false };
+        }
         if (years < 0) years = ymd >= todayYmd ? 1 : 0;
         if (/\d{4}/.test(token)) years = 0;
         if (years > 0) {
@@ -2686,16 +2707,16 @@ function buildItem(source, kind, now, periods, seq, extraNotes = [], fullText = 
     const approx = approximateWhen(source);
     const assumed = when.assumedPm ? '오전·오후가 없어 오후로 봤어요.' : '';
     const missing = date || chatter ? '' : '날짜가 없어요. 달력에서 골라 주세요.';
-    const aside = chatter ? '업무로 볼 말이 없어 빼 두었어요.' : '';
-    const stale = past ? '지난 날짜라 빼 두었어요.' : '';
-    const shared = reference ? '참고용이라 빼 두었어요.' : '';
+    const aside = chatter ? '업무로 볼 말이 없어 저장하면 정리함에 들어가요.' : '';
+    const stale = past ? '지난 날짜라 저장하면 정리함에 들어가요.' : '';
+    const shared = reference ? '참고용이라 저장하면 정리함에 들어가요.' : '';
     const cancelled = eventCancelled(source);
-    const dropped = cancelled ? '취소된 내용이라 빼 두었어요.' : '';
-    const recalled = remembered ? '지난 이야기라 빼 두었어요.' : '';
-    const askedNote = asked ? '질문이라 빼 두었어요.' : '';
-    const closedNote = closed && !cancelled ? '열리지 않는 내용이라 빼 두었어요.' : '';
-    const approxNote = approx ? '날짜가 대략적이라 빼 두었어요.' : '';
-    const bareNote = bareYearNoun(source) ? '서술 없이 짧아 빼 두었어요.' : '';
+    const dropped = cancelled ? '취소된 내용이라 저장하면 정리함에 들어가요.' : '';
+    const recalled = remembered ? '지난 이야기라 저장하면 정리함에 들어가요.' : '';
+    const askedNote = asked ? '질문이라 저장하면 정리함에 들어가요.' : '';
+    const closedNote = closed && !cancelled ? '열리지 않는 내용이라 저장하면 정리함에 들어가요.' : '';
+    const approxNote = approx ? '날짜가 대략적이라 저장하면 정리함에 들어가요.' : '';
+    const bareNote = bareYearNoun(source) ? '서술 없이 짧아 저장하면 정리함에 들어가요.' : '';
     const notes = [warning, assumed, missing, aside, stale, shared, dropped, recalled, askedNote, closedNote, approxNote, bareNote].filter(Boolean);
     let score = 0.45;
     if (date?.explicit) score += 0.25;
@@ -2774,7 +2795,7 @@ function bareTimeTitle(title) {
 
 function scrubTimeTitle(item) {
     if (!item || !bareTimeTitle(item.title)) return item;
-    return markUnsure({ ...item, title: '날짜만 있음' }, '행사명이 없어 빼 두었어요.');
+    return markUnsure({ ...item, title: '날짜만 있음' }, '행사명이 없어 저장하면 정리함에 들어가요.');
 }
 
 function markUnsure(item, note) {
@@ -2789,7 +2810,7 @@ function markUnsure(item, note) {
 function collapsePair(items, segment) {
     if (items.length < 2) return items;
     const [first, second] = items;
-    if (!titlesOverlap(first, second)) return [first, markUnsure(second, '같은 문장에서 나눈 내용이라 빼 두었어요.')];
+    if (!titlesOverlap(first, second)) return [first, markUnsure(second, '같은 문장에서 나눈 내용이라 저장하면 정리함에 들어가요.')];
     const deliverable = /제출|회신|작성|입력|업로드|마감|탑재/.test(segment);
     const kept = deliverable ? (second.kind === '할 일' ? second : first) : (first.kind === '일정' ? first : second);
     const other = kept === first ? second : first;
@@ -2847,7 +2868,7 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
             if (openedName && !/^(?:일정|할일|합니다|해요|엽니다)$/.test(openedName) && !bareTimeTitle(openedName)) return [make('일정', 0)];
         }
         if (replacement) return [make('일정', 0)];
-        if (deadlineClosed(segment)) return [markUnsure(make('할 일', 0), '이미 마감된 내용이라 빼 두었어요.')];
+        if (deadlineClosed(segment)) return [markUnsure(make('할 일', 0), '이미 마감된 내용이라 저장하면 정리함에 들어가요.')];
         if (magamIsDeadline(segment) && !span.range) return [make('할 일', 0)];
         if (thisYearRecording(segment)) return [make('할 일', 0)];
         const namedMagamLeft = String(segment).replace(new RegExp(`(?<![가-힣])마감\\s+${MAGAM_EVENT_TAIL}`, 'g'), ' ');
@@ -2916,28 +2937,34 @@ function classifySegment(segment, now, periods, notes = [], fullText = '') {
         const title = String(next.title || '').trim();
         const compact = title.replace(/\s+/g, '');
         if (bareTimeTitle(compact) || bareTimeTitle(next.title)) {
-            next = markUnsure({ ...next, title: '날짜만 있음' }, '행사명이 없어 빼 두었어요.');
+            next = markUnsure({ ...next, title: '날짜만 있음' }, '행사명이 없어 저장하면 정리함에 들어가요.');
         }
         const titled = String(next.title || '').trim();
         const compactTitle = titled.replace(/\s+/g, '');
         const bare = /^(?:일정|또는|신청|마감은|할 일)$/.test(compactTitle);
         const namedInText = /연수|대회|학예회|설명회|박람회|축제|체험학습|현장학습|수련회|협의회|공개수업|체육대회|운동회|발표회|강연|발표/.test(`${segment}\n${fullText}`);
-        if (bare && next.include !== false && !span.range && !moved && !replacement && !oldDate && namedInText) return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
+        if (bare && next.include !== false && !span.range && !moved && !replacement && !oldDate && namedInText) return markUnsure(next, '무엇의 일정인지 저장하면 정리함에 들어가요.');
         const stillThin = /^(?:신청|있습니다|합니다|해요|갑니다|엽니다|봅니다|봐요|드립니다|주세요|했어요|했습니다)$/.test(compactTitle);
         const absenceApplication = compactTitle === '신청' && /까지/.test(segment) && new RegExp(OTHER_PERSON).test(fullText) && new RegExp(OTHER_ABSENCE).test(fullText) && !/(?<![가-힣])(?:제가|저는|저)(?![가-힣])/.test(fullText);
-        if (stillThin && !absenceApplication && next.include !== false && !span.range && !moved && !replacement && !oldDate) return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
+        if (stillThin && !absenceApplication && next.include !== false && !span.range && !moved && !replacement && !oldDate) return markUnsure(next, '무엇의 일정인지 저장하면 정리함에 들어가요.');
         const genericSchedule = title === '일정' && !moved && !replacement && !oldDate && !span.range && !when.period;
         const genericTodo = title === '할 일' && !moved && !replacement && !oldDate && !span.range && !named;
         const generic = genericSchedule || genericTodo;
         const leftover = /^(?:그대로|아니라|정정|졌습니다|됐습니다)$/.test(compact);
         if (!generic && !leftover) return next;
         if (next.low) return next;
-        return markUnsure(next, '무엇의 일정인지 빼 두었어요.');
+        return markUnsure(next, '무엇의 일정인지 저장하면 정리함에 들어가요.');
     });
-    if (oldDate) return vague.map((item) => markUnsure(item, '예전 날짜라 빼 두었어요.'));
-    if (ambiguous) return vague.map((item) => markUnsure(item, '날짜가 여러 개라 빼 두었어요.'));
+    if (oldDate) return vague.map((item) => markUnsure(item, '예전 날짜라 저장하면 정리함에 들어가요.'));
+    if (ambiguous) return vague.map((item) => markUnsure(item, '날짜가 여러 개라 저장하면 정리함에 들어가요.'));
+    const dueSpans = findDates(segment, now);
+    const due = dueSpanOf(segment, dueSpans);
+    const dueTail = due ? segment.slice(due.index + due.length) : '';
+    if (due && dueSpans.length === 1 && /^\s*(?:(?:오전|오후)\s*)?(?:\d{1,2}\s*시(?:\s*\d{1,2}\s*분|\s*반)?\s*)?까지/.test(dueTail)) {
+        return vague.map((item) => ({ ...item, kind: '할 일', date: item.date || due.ymd }));
+    }
     if (!unsure) return vague;
-    return vague.map((item) => markUnsure(item, '같은 문장에서 나눈 내용이라 빼 두었어요.'));
+    return vague.map((item) => markUnsure(item, '같은 문장에서 나눈 내용이라 저장하면 정리함에 들어가요.'));
 }
 
 /** 출장 연수의 괄호·내용·주제가 있으면 그 이름이 제목입니다. */
@@ -3219,7 +3246,7 @@ function confirmPieces(text) {
  * 우천처럼 조건이 있으면 원래 날짜는 포함으로 남기고, 미룬 날짜만 노란 카드로 더합니다.
  */
 function confirmUncertain(text, items, now) {
-    const note = '확인이 필요해 빼 두었어요.';
+    const note = '확인이 필요해 저장하면 정리함에 들어가요.';
     let next = items.map((item) => ({ ...item }));
     const paint = (index, title) => {
         const item = next[index];
@@ -3338,7 +3365,7 @@ function confirmUncertain(text, items, now) {
     return next.map((item) => {
         if (item.include === false) return item;
         const last = String(item.title || '').trim().split(/\s+/).pop() || '';
-        if (last === '들어' || /^계신(?:\s*[?？])?$/.test(last)) return markUnsure(item, '제목이 어간으로 끝나 빼 두었어요.');
+        if (last === '들어' || /^계신(?:\s*[?？])?$/.test(last)) return markUnsure(item, '제목이 어간으로 끝나 저장하면 정리함에 들어가요.');
         return item;
     });
 }
@@ -3387,7 +3414,7 @@ export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_
     });
     const visible = confirmUncertain(raw, dedupeTargets(titled.map(scrubTimeTitle)), now).filter((item) => !(item.include === false && PERSON_ONLY_TITLE.test(String(item.title || '').trim())));
     if (!visible.length && findDates(raw, now).length && !silentOtherAbsence(raw, now)) {
-        const card = scrubTimeTitle(markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 빼 두었어요.'));
+        const card = scrubTimeTitle(markUnsure(buildItem(raw, '할 일', now, periods, 0, [], raw), '날짜는 있는데 내용을 못 나눠 저장하면 정리함에 들어가요.'));
         if (card.date && !PERSON_ONLY_TITLE.test(String(card.title || '').trim())) return { items: [{ ...card, title: shapeTitle(card.title, card.raw, raw, card.kind) || '할 일' }] };
     }
     if (!visible.some((item) => item.date)) return { items: visible };

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
+import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -31,32 +32,49 @@ export function Home() {
     ].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 2);
     const birthdays = data.students.filter((row) => row.birthday && row.birthday === clock.ymd.slice(5));
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
+    const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
     return (
         <div className="home-grid">
             <section className="hero home-hero">
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                    <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>⏰ {period.text}</span>
-                    <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
-                </div>
-                <h2 className="title-font" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {marks.map((row) => {
-                        const student = data.students.find((item) => item.id === row.sid);
-                        if (!student) return null;
-                        return (
-                            <Btn key={row.id} className="hero-pill" onClick={() => setAttendStudent(student)}>
-                                {student.no} {student.name} {row.status}{row.note ? `·${row.note}` : ''}
-                            </Btn>
-                        );
-                    })}
-                    {!marks.length && checked && <span className="hero-pill">오늘은 모두 출석이에요</span>}
-                </div>
-                {birthdays.length > 0 && <p style={{ marginBottom: 0 }}>🎂 {birthdays.map((row) => row.name).join(', ')} 생일이에요</p>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 14, fontWeight: 700 }}>
-                    <span>{checked ? '출결 확인 끝났어요' : '출결부터 볼까요?'}</span>
-                    <span>할 일 {left}개 남음</span>
-                </div>
+                {todayRest.off ? (
+                    <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>오늘은 수업이 없어요</span>
+                            <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
+                        </div>
+                        <h2 className="title-font" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
+                        <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{todayRest.label === '휴일' ? '시간표와 출결 대신 쉽니다. 필요하면 출결 보기를 누르세요.' : `${todayRest.label}${iraParticle(todayRest.label)} 수업과 출결 대신 쉽니다.`}</p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, fontWeight: 700 }}>
+                            <span>할 일 {left}개 남음</span>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>⏰ {period.text}</span>
+                            <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
+                        </div>
+                        <h2 className="title-font" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {marks.map((row) => {
+                                const student = data.students.find((item) => item.id === row.sid);
+                                if (!student) return null;
+                                return (
+                                    <Btn key={row.id} className="hero-pill" onClick={() => setAttendStudent(student)}>
+                                        {student.no} {student.name} {row.status}{row.note ? `·${row.note}` : ''}
+                                    </Btn>
+                                );
+                            })}
+                            {!marks.length && checked && <span className="hero-pill">오늘은 모두 출석이에요</span>}
+                        </div>
+                        {birthdays.length > 0 && <p style={{ marginBottom: 0 }}>🎂 {birthdays.map((row) => row.name).join(', ')} 생일이에요</p>}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 14, fontWeight: 700 }}>
+                            <span>{checked ? '출결 확인 끝났어요' : '출결부터 볼까요?'}</span>
+                            <span>할 일 {left}개 남음</span>
+                        </div>
+                    </>
+                )}
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
@@ -67,19 +85,26 @@ export function Home() {
             <section className="glass home-time" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
+                    <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
                 </div>
-                <div className="period-row" style={{ marginTop: 10 }}>
-                    {labels.map((label, index) => {
-                        const on = period.index === index;
-                        const specialist = table[`s${index + 1}`];
-                        return (
-                            <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
-                                <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
-                            </Btn>
-                        );
-                    })}
-                </div>
+                {todayRest.off ? (
+                    <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
+                        <strong className="day-rest-mark">휴일</strong>
+                        <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : '시간표는 오늘 없어요.'}</span>
+                    </div>
+                ) : (
+                    <div className="period-row" style={{ marginTop: 10 }}>
+                        {labels.map((label, index) => {
+                            const on = period.index === index;
+                            const specialist = table[`s${index + 1}`];
+                            return (
+                                <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
+                                    <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
+                                </Btn>
+                            );
+                        })}
+                    </div>
+                )}
             </section>
 
             <section className="glass home-todo" style={{ padding: 14 }}>
@@ -91,18 +116,21 @@ export function Home() {
                     {todos.slice(0, 3).map((row) => (
                         <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                             <span>{row.done ? '☑' : '☐'} {row.title}</span>
-                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className="muted">{row.due ? `${Number(row.due.slice(5, 7))}/${Number(row.due.slice(8))}까지` : ''}</span>}
+                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
                         </div>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
                     {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 적어 둔 할 일이 없어요.</p>}
+                    {(data.inbox || []).length > 0 && (
+                        <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>정리함 {(data.inbox || []).length}개</Btn>
+                    )}
                 </div>
             </section>
 
             <section className="glass home-event" style={{ padding: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>이번 주 학급 일정</h3>
-                    <Btn onClick={() => go('#/schedule')} style={{ color: 'var(--accent)', fontWeight: 800 }}>달력</Btn>
+                    <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (

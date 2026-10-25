@@ -11,6 +11,7 @@ const COLLECTIONS = [
     ['notes', 'notes'],
     ['notices', 'notices'],
     ['legacyPages', 'legacy'],
+    ['inbox', 'inbox'],
 ];
 
 const RETRYABLE = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'aborted', 'auth/network-request-failed'];
@@ -150,6 +151,7 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         notes: [],
         notices: [],
         legacyPages: [],
+        inbox: [],
         timetable: {},
     };
     for (const [localName, cloudName] of COLLECTIONS) {
@@ -165,6 +167,19 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         if (row) out.timetable[item.id] = row;
     });
     return out;
+}
+
+export async function deleteUserDoc(uid, name, id, { memoryOnly = false } = {}) {
+    if (!uid || !name || !id || !syncAvailable()) return { skipped: true };
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return { skipped: true };
+    try {
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        await deleteDoc(doc(ready.db, 'users', uid, name, String(id)));
+        return { ok: true };
+    } catch {
+        return { ok: false };
+    }
 }
 
 export async function watchAuth(onUser, { memoryOnly = false } = {}) {

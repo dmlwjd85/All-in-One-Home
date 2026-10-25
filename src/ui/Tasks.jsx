@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { addDaysYmd, eventClock, startOfWeekMon } from '../lib/date.js';
-import { joined, joinedRecords, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
+import { readTodoLine } from '../lib/parse.js';
+import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Btn } from './bits.jsx';
+import { Btn, IconTrash } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 
 export function Tasks() {
     const { data, clock, showToast } = useUi();
     const [title, setTitle] = useState('');
     const todos = joined(data, 'todos');
+    const inbox = data.inbox || [];
     const notes = joined(data, 'notes');
     const follows = joinedRecords(data).filter((row) => row.follow);
     const start = startOfWeekMon(clock.ymd);
@@ -23,14 +25,39 @@ export function Tasks() {
             <form onSubmit={async (event) => {
                 event.preventDefault();
                 if (!title.trim()) return;
-                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: title.trim(), done: false, due: clock.ymd, source: 'app' });
+                const read = readTodoLine(title.trim(), new Date(), clock.ymd);
+                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: read.title, done: false, due: read.due, source: 'app' });
                 if (result?.storageFailed) return;
                 setTitle('');
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
             }}>
                 <input className="field" aria-label="할 일" placeholder="할 일을 적고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
             </form>
-            {!todos.length && !notes.length && (
+            <section aria-label="정리함" style={{ marginTop: 16 }}>
+                <h3 style={{ marginBottom: 8 }}>정리함</h3>
+                {!inbox.length && <p className="muted">빼 둔 항목이 없어요. 메시지에서 나중에 정리를 고르면 여기에 남아요.</p>}
+                {inbox.map((row) => (
+                    <article key={row.id} className="todo-block">
+                        <div className="todo-line">
+                            <div className="todo-main" style={{ minHeight: 44 }}>
+                                <span className="todo-title">{row.kind} · {row.title}</span>
+                            </div>
+                            {row.date ? <span className="todo-due num">{dueLabel(row.date, clock.ymd)}</span> : null}
+                            <Btn className="icon-btn" aria-label="정리함에서 지우기" onClick={async () => {
+                                const failed = await dropInbox(row.id);
+                                if (!failed?.storageFailed) showToast('정리함에서 지웠어요.', true);
+                            }}><IconTrash /></Btn>
+                        </div>
+                        {row.warning ? <p className="muted" style={{ margin: '4px 0' }}>{row.warning}</p> : null}
+                        <Btn className="chip" style={{ minHeight: 44 }} onClick={async () => {
+                            const result = await promoteInbox(row.id);
+                            if (result?.storageFailed) return;
+                            showToast(result.ok ? '다시 등록했어요.' : (result.message || '다시 등록하지 못했어요.'));
+                        }}>다시 등록</Btn>
+                    </article>
+                ))}
+            </section>
+            {!todos.length && !notes.length && !inbox.length && (
                 <div>
                     <ClayMark />
                     <p className="muted" style={{ textAlign: 'center' }}>아직 적어 둔 할 일이 없어요.</p>
@@ -41,18 +68,27 @@ export function Tasks() {
                     <h3 style={{ marginBottom: 8 }}>{label}</h3>
                     {!rows.length && <p className="muted">없어요.</p>}
                     {rows.map((row) => (
-                        <article key={row.id} className="glass" style={{ padding: 12, marginBottom: 8 }}>
-                            <Btn block className="neo" style={{ justifyContent: 'space-between', display: 'flex', fontWeight: 800 }} onClick={() => toggleTodo(row.id)}>
-                                <span>{row.done ? '☑' : '☐'} {row.localOnly ? '🔒 ' : ''}{row.title}</span>
-                            </Btn>
-                            {row.of ? <p className="num" style={{ margin: '8px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                {(row.pendingNos || []).map((no) => {
-                                    const student = data.students.find((item) => item.no === no);
-                                    return <Btn key={no} className="chip" onClick={() => receiveOne(row.id, no)}>{no} {student?.name || ''} 받음</Btn>;
-                                })}
+                        <article key={row.id} className="todo-block">
+                            <div className="todo-line">
+                                <Btn className="todo-main" onClick={() => toggleTodo(row.id)}>
+                                    <span aria-hidden="true">{row.done ? '☑' : '☐'}</span>
+                                    <span className="todo-title">{row.localOnly ? '🔒 ' : ''}{row.title}</span>
+                                </Btn>
+                                {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
+                                <Btn className="icon-btn" aria-label="할 일 지우기" onClick={async () => {
+                                    const failed = await removeItem('todos', row.id);
+                                    if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
+                                }}><IconTrash /></Btn>
                             </div>
-                            <Btn className="chip" style={{ marginTop: 8 }} onClick={() => removeItem('todos', row.id)}>지우기</Btn>
+                            {row.of ? <p className="num" style={{ margin: '4px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
+                            {(row.pendingNos || []).length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {(row.pendingNos || []).map((no) => {
+                                        const student = data.students.find((item) => item.no === no);
+                                        return <Btn key={no} className="chip" onClick={() => receiveOne(row.id, no)}>{no} {student?.name || ''} 받음</Btn>;
+                                    })}
+                                </div>
+                            )}
                         </article>
                     ))}
                 </section>

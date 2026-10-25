@@ -55,8 +55,12 @@ export function resolveHash(raw, today) {
     if (path === '/start') return pack('start', {}, '#/start', incoming);
     if (path === '/students') return pack('students', {}, '#/students', incoming);
     if (path === '/students/neis') return pack('neis', {}, '#/students/neis', incoming);
-    if (path === '/schedule' || path === '/timetable' || path === '/class' || path === '/year' || path === '/weeks' || path === '/days') {
-        return pack('schedule', {}, '#/schedule', incoming);
+    const scheduleWeek = path.match(/^\/schedule\/week\/(\d{4}-\d{2}-\d{2})$/);
+    if (scheduleWeek && isValidYmd(scheduleWeek[1])) {
+        return pack('schedule', { view: '주', week: scheduleWeek[1] }, `#/schedule/week/${scheduleWeek[1]}`, incoming);
+    }
+    if (path === '/schedule' || path === '/timetable' || path === '/class' || path === '/year' || path === '/weeks' || path === '/days' || path === '/schedule/week') {
+        return pack('schedule', path === '/schedule/week' ? { view: '주' } : {}, '#/schedule', incoming);
     }
     if (path === '/todo' || path === '/work' || path === '/deadlines' || path === '/budget') {
         return pack('todo', {}, '#/todo', incoming);

@@ -18,7 +18,11 @@ concurrency:
 
 jobs:
   build:
+    timeout-minutes: 40
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,6 +32,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-13.29.1-${{ runner.os }}
       - name: 설치하고 빌드
         env:
           VITE_BASE: ./
@@ -41,8 +50,10 @@ jobs:
           npm run check:quality
           npm run check:speech
           npm run check:keyfeel
-          npm run build
           sudo apt-get update
+          sudo apt-get install -y openjdk-17-jre-headless
+          npm run check:rules
+          npm run build
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
       - name: 브라우저에서 넘침과 버튼 크기 확인
@@ -51,7 +62,7 @@ jobs:
           VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
         run: |
-          for day in 2026-10-23 2026-10-24 2026-10-25 2026-10-26 2026-10-31 2026-11-01; do
+          for day in 2026-10-23 2026-10-24 2026-10-25 2026-10-26 2026-10-31 2026-11-01 2026-12-25 2026-12-31 2027-01-01; do
             echo "브라우저 시계 ${day}"
             FIXED_NOW="${day}T08:42:00+09:00" npm run check:browser
           done
@@ -62,6 +73,7 @@ jobs:
           path: dist
 
   deploy:
+    timeout-minutes: 10
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest

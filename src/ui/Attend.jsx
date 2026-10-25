@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
-import { markChecked, setAttendance } from '../lib/db.js';
+import { restInfo } from '../lib/daymark.js';
+import { joined, markChecked, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
@@ -56,7 +57,7 @@ export function Attend() {
         <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(`#/attend/${addDaysYmd(date, -1)}`)}>‹</Btn>
-                <strong className="title-font" style={{ fontSize: 18 }}>{formatKoDate(date, { today: clock.ymd })}</strong>
+                <strong className={restInfo(date, joined(data, 'events')).off ? 'title-font day-rest-mark' : 'title-font'} style={{ fontSize: 18 }}>{formatKoDate(date, { today: clock.ymd })}{restInfo(date, joined(data, 'events')).off ? ` · 휴일` : ''}</strong>
                 <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(`#/attend/${addDaysYmd(date, 1)}`)}>›</Btn>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8, margin: '12px 0' }}>

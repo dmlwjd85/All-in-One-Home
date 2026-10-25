@@ -59,7 +59,7 @@ export function validateNewBackup(data) {
     if (!plain(data) || data.format !== 'ssug-gyomu') errors.push('콕 교무수첩 백업 파일이 아니에요.');
     if (data?.version !== 1) errors.push('이 앱이 읽는 파일 판이 아니에요.');
     if (errors.length) return { ok: false, errors, data: null };
-    for (const key of ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'legacy']) {
+    for (const key of ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'legacy', 'inbox']) {
         if (data[key] != null && !Array.isArray(data[key])) errors.push(`${key} 목록이 이상해요.`);
     }
     (data.students || []).forEach((row) => {
@@ -89,6 +89,12 @@ export function validateBackupText(text) {
     }
     if (isOldBackup(data)) return { ok: true, errors: [], data, kind: 'legacy' };
     return { ok: false, errors: ['아는 백업 형식이 아니에요.'], data: null, kind: '' };
+}
+
+function inboxExportRows(state, includeLocal) {
+    const rows = Array.isArray(state?.inbox) ? state.inbox : [];
+    if (includeLocal) return rows;
+    return rows.filter((row) => !isSensitiveText(`${row?.title || ''} ${row?.memo || ''} ${row?.warning || ''}`));
 }
 
 function copyData(value) {
@@ -130,6 +136,7 @@ export function buildExport(state, { includeLocal = false, at } = {}) {
         notices: copyData(state.notices),
         timetable: copyData(state.timetable),
         legacy: copyData(state.legacyPages),
+        inbox: copyData(inboxExportRows(state, includeLocal)),
     };
     if (includeLocal) {
         const source = state.local || {};

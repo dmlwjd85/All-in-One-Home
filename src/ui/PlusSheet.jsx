@@ -3,7 +3,7 @@ import { DEFAULT_PERIODS } from '../lib/period.js';
 import { clipboardHint, readClipboard } from '../lib/msgParse.js';
 import { joinedRecords, saveParsed, saveQuick, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn } from './bits.jsx';
+import { Area, Btn, HoldToggle } from './bits.jsx';
 import { DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
@@ -26,6 +26,14 @@ function oneDate(ymd) {
 
 function kindLabel(id) {
     return CAPTURE_KINDS.find((kind) => kind.id === id)?.label || id;
+}
+
+function doneHeading(note, record) {
+    const registered = String(note || '').match(/(\d+)개 등록했어요/);
+    const held = String(note || '').match(/(\d+)개는 정리함에/);
+    if (registered && held) return `${registered[1]}개 등록, ${held[1]}개는 정리함에`;
+    if (held && !registered && !record) return '정리함에 뒀어요';
+    return '남겼어요';
 }
 
 function summaryLine(item) {
@@ -63,6 +71,7 @@ export function PlusSheet({ onClose, onPick }) {
     const [more, setMore] = useState(false);
     const [items, setItems] = useState([]);
     const [savedRecord, setSavedRecord] = useState(false);
+    const [savedNote, setSavedNote] = useState('');
     const box = useRef(null);
     const speech = useSpeechDictation(text, setText);
     const recent = useMemo(() => recentStudents(data.students, joinedRecords(data)), [data]);
@@ -117,7 +126,8 @@ export function PlusSheet({ onClose, onPick }) {
     async function save() {
         speech.stop();
         const chosen = items.filter((item) => item.include !== false);
-        if (!chosen.length) {
+        const held = items.filter((item) => item.include === false && String(item.title || '').trim());
+        if (!chosen.length && !held.length) {
             showToast('등록할 항목이 없어요.');
             return;
         }
@@ -183,15 +193,21 @@ export function PlusSheet({ onClose, onPick }) {
             }
             message = result.message;
         }
-        if (schedule.length) {
-            const result = await saveParsed(schedule);
+        const parked = [
+            ...schedule,
+            ...held.map((item) => ({ ...item, include: false })),
+        ];
+        if (parked.length) {
+            const result = await saveParsed(parked);
             if (!result.ok) {
                 showToast(result.message, false);
                 return;
             }
-            message = schedule.length > 1 || !record ? result.message : message;
+            if (result.held) message = record ? `${message} ${result.message}` : result.message;
+            else if (schedule.length > 1 || !record) message = result.message;
         }
         setSavedRecord(record);
+        setSavedNote(message);
         showToast(message, true);
         setPhase('done');
     }
@@ -203,8 +219,8 @@ export function PlusSheet({ onClose, onPick }) {
                 {phase === 'done' ? (
                     <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
                         <ClayMark size={140} />
-                        <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>남겼어요</h2>
-                        <p className="muted">{savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '적어 둔 자리에 넣었어요.'}</p>
+                        <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{doneHeading(savedNote, savedRecord)}</h2>
+                        <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '적어 둔 자리에 넣었어요.')}</p>
                     </div>
                 ) : (
                     <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : '무엇을 적을까요?'}</h2>
@@ -343,7 +359,7 @@ function CaptureCard({ item, students, today, onPatch }) {
                     {(item.kind === '학생기록' || item.kind === '상담') && <p className="muted">남기면 누가기록에 쌓여요.</p>}
                 </>
             )}
-            <Btn className={item.include === false ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={() => onPatch(item.id, { include: item.include === false }, true)}>{item.include === false ? '빼 둠' : '넣을게요'}</Btn>
+            <HoldToggle held={item.include === false} onToggle={() => onPatch(item.id, { include: item.include === false }, true)} />
         </article>
     );
 }

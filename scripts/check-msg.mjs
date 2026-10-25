@@ -1,7 +1,7 @@
 /** 학교 메시지 예문을 읽고 유형·날짜·시각·제목 정확도를 확인합니다. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dateGroupCount, gradeMessages, hasChangeCue, isBackupDay, leakedAbsenceDates, parseSchoolMessages, silentOtherAbsence, silentPostponement } from '../src/lib/msgParse.js';
-import { findDates } from '../src/lib/parse.js';
+import { deadlineYmd, findDates, readTodoLine } from '../src/lib/parse.js';
 import { MSG_NOW, MSG_SAMPLES } from '../src/lib/msgSamples.js';
 import { MSG_HOLDOUT } from '../src/lib/msgHoldout.js';
 import { MSG_BLIND } from '../src/lib/msgBlind.js';
@@ -13,7 +13,7 @@ import { MSG_SHIFT } from '../src/lib/msgShift.js';
 import { MSG_DOUBT } from '../src/lib/msgDoubt.js';
 import { endTimeUploadBlocked, noteEndTimeRejected, prepareEventWrite, resetEndTimeUpload } from '../src/lib/cloud.js';
 import { eventBodyWithoutEndTime, toCloudRow } from '../src/lib/cloudShape.js';
-import { clearAll, saveParsed, snapshot } from '../src/lib/db.js';
+import { clearAll, dropInbox, importText, inboxKeptFromCloud, promoteInbox, saveParsed, snapshot } from '../src/lib/db.js';
 import { planMigration, readLegacyStorage } from '../src/lib/migrate.js';
 
 const grade = gradeMessages(MSG_SAMPLES, MSG_NOW);
@@ -102,6 +102,9 @@ function must(label, text, now, ok) {
 }
 must('번호 목록', '[안내] 1. 10월 30일(금) 3~4교시 학급 사진 촬영이 있습니다. 장소: 강당', qaNow, (items) => items.length === 1 && items[0].date === '2026-10-30' && items[0].title === '학급 사진 촬영' && items[0].low === false && items[0].time === '10:30');
 must('기한 제출', '11월 12일까지 공개수업 지도안 제출', qaNow, (items) => items.length === 1 && items[0].kind === '할 일' && items[0].title.includes('공개수업') && items[0].date === '2026-11-12');
+must('같은 문장 마감', '12/20 체험학습 동의서 12/31까지', qaNow, (items) => items.some((item) => item.kind === '할 일' && item.date === '2026-12-31' && item.title.includes('동의서') && item.include !== false));
+must('내년 마감', '내년 1월 8일까지 보고서 제출', qaNow, (items) => items.some((item) => item.kind === '할 일' && item.date === '2027-01-08' && item.title.includes('보고서') && !item.title.includes('내년')));
+must('새해의 내년', '내년 1월 8일까지 보고서 제출', new Date('2027-01-02T09:00:00+09:00'), (items) => items.some((item) => item.date === '2028-01-08' && item.title.includes('보고서') && !item.title.includes('내년')));
 must('상담주간', '가정통신문\n학부모 상담주간: 11월 2일(월)~11월 6일(금)', qaNow, (items) => items.length === 1 && items[0].kind === '일정' && items[0].date === '2026-11-02' && items[0].end === '2026-11-06' && items[0].title === '학부모 상담주간');
 must('쉼표 교시', '김교사 출장으로 5,6교시 보결 부탁드립니다', qaNow, (items) => items.length === 1 && items[0].time === '13:10' && items[0].period === 5 && items[0].periodEnd === 6 && items[0].title === '5,6교시 보결');
 must('잡담', '선생님들 항상 수고 많으십니다. 날씨가 추우니 건강 조심하세요.', qaNow, (items) => items.length === 1 && items[0].include === false);
@@ -2045,14 +2048,52 @@ if (!savedRange.ok || !rangedRow || rangedRow.date !== '2026-11-02' || rangedRow
 }
 const chatter = parseSchoolMessages('선생님들 항상 수고 많으십니다. 날씨가 추우니 건강 조심하세요.', { now: MSG_NOW });
 const chatterSave = await saveParsed(chatter.items, MSG_NOW);
-if (chatterSave.ok || snapshot().todos.some((row) => String(row.title).includes('수고'))) {
-    console.error('잡담이 등록되었습니다.');
+const chatterInbox = (snapshot().inbox || []).find((row) => String(row.title).includes('건강'));
+if (!chatterSave.ok || !chatterSave.held || snapshot().todos.some((row) => String(row.title).includes('건강')) || !chatterInbox || toCloudRow('inbox', chatterInbox)) {
+    console.error('잡담이 할 일로 등록되거나 정리함에 남지 않았습니다.', chatterSave, snapshot().inbox);
     process.exit(1);
 }
 const lunch = parseSchoolMessages('점심시간에 커피 한잔 하실래요', { now: qaNow });
 const lunchSave = await saveParsed(lunch.items, qaNow);
-if (lunchSave.ok || snapshot().events.some((row) => row.time === '12:10' && String(row.title).includes('커피'))) {
-    console.error('날짜 없는 점심 잡담이 일정으로 등록되었습니다.');
+const lunchInbox = (snapshot().inbox || []).find((row) => String(row.title).includes('커피'));
+if (!lunchSave.ok || !lunchInbox || snapshot().events.some((row) => row.time === '12:10' && String(row.title).includes('커피')) || toCloudRow('inbox', lunchInbox)?.body?.kind !== 'event') {
+    console.error('날짜 없는 점심 잡담이 일정으로 등록되거나 정리함 모양이 아닙니다.', lunchSave, lunchInbox);
+    process.exit(1);
+}
+const brought = await promoteInbox(lunchInbox.id);
+if (!brought.ok || !snapshot().events.some((row) => String(row.title).includes('커피')) || (snapshot().inbox || []).some((row) => row.id === lunchInbox.id)) {
+    console.error('정리함에서 다시 등록되지 않았습니다.', brought, snapshot().events, snapshot().inbox);
+    process.exit(1);
+}
+const dropped = await dropInbox(chatterInbox.id);
+if (!dropped.ok || (snapshot().inbox || []).some((row) => row.id === chatterInbox.id)) {
+    console.error('정리함에서 지우지 못했습니다.', dropped, snapshot().inbox);
+    process.exit(1);
+}
+const revived = inboxKeptFromCloud([{ id: chatterInbox.id, kind: '할 일', title: chatterInbox.title, date: '' }]);
+if (revived.some((row) => row.id === chatterInbox.id)) {
+    console.error('지운 정리함이 클라우드에서 되살아났습니다.', revived);
+    process.exit(1);
+}
+const typedDue = readTodoLine('동의서 12/31까지', qaNow, '2026-10-22');
+const typedNext = readTodoLine('내년 1월 8일까지 보고서', qaNow, '2026-10-22');
+const typedPlain = readTodoLine('운동회 준비', qaNow, '2026-10-22');
+if (deadlineYmd('12/20 체험학습 동의서 12/31까지', qaNow) !== '2026-12-31' || typedDue.due !== '2026-12-31' || typedDue.title !== '동의서' || typedNext.due !== '2027-01-08' || typedNext.title.includes('내년') || typedPlain.due !== '2026-10-22' || typedPlain.title !== '운동회 준비') {
+    console.error('할 일 직접 입력에서 마감을 읽지 못했습니다.', typedDue, typedNext, typedPlain);
+    process.exit(1);
+}
+const oldFile = JSON.stringify({
+    format: 'ssug-gyomu',
+    version: 1,
+    inbox: [
+        { id: lunchInbox.id, kind: '일정', title: '커피 한잔', date: '' },
+        { id: 'msgfreshinbox1', kind: '할 일', title: '새 정리', date: '2026-12-01' },
+    ],
+});
+const mergedBackup = await importText(oldFile, 'merge');
+const afterMerge = snapshot().inbox || [];
+if (!mergedBackup.ok || afterMerge.some((row) => row.id === lunchInbox.id) || !afterMerge.some((row) => row.id === 'msgfreshinbox1')) {
+    console.error('다시 등록한 항목이 예전 백업 합치기로 정리함에 돌아왔습니다.', mergedBackup, afterMerge);
     process.exit(1);
 }
 const trip = parseSchoolMessages('수학여행 11/4~11/6\n2박 3일\n장소: 경주 일대', { now: qaNow });

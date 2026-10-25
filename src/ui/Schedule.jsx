@@ -1,22 +1,32 @@
-import { useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, monthCells, monthTitle, startOfWeekMon } from '../lib/date.js';
+import { useEffect, useState } from 'react';
+import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
+import { restInfo } from '../lib/daymark.js';
 import { joined, setTimetable } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
-import { ClayMark } from './ClayMark.jsx';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
 export function Schedule() {
-    const { data, clock } = useUi();
+    const { data, clock, route, go } = useUi();
+    const routedWeek = route.params.week && isValidYmd(route.params.week) ? route.params.week : '';
     const [mode, setMode] = useState('주');
-    const [ym, setYm] = useState(clock.ymd.slice(0, 7));
-    const [picked, setPicked] = useState(clock.ymd);
-    const weekStart = startOfWeekMon(clock.ymd);
+    const [ym, setYm] = useState((routedWeek || clock.ymd).slice(0, 7));
+    const [picked, setPicked] = useState(routedWeek || clock.ymd);
+    const [weekAnchor, setWeekAnchor] = useState(routedWeek || clock.ymd);
+    useEffect(() => {
+        if (!routedWeek) return;
+        setWeekAnchor(routedWeek);
+        setPicked(routedWeek);
+        setYm(routedWeek.slice(0, 7));
+        setMode('주');
+    }, [routedWeek]);
+    const weekStart = startOfWeekMon(weekAnchor);
     const events = joined(data, 'events');
     const weekEnd = addDaysYmd(weekStart, 6);
     const week = events.filter((row) => coversDay(row, weekStart, weekEnd));
+    const pickedRest = restInfo(picked, events);
     const specialist = [];
     DAYS.forEach(([key, label]) => {
         const row = data.timetable[key] || {};
@@ -32,21 +42,30 @@ export function Schedule() {
             </div>
             {mode === '주' && (
                 <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-                    {!week.length && (
-                        <div>
-                            <ClayMark />
-                            <p className="muted" style={{ textAlign: 'center', marginTop: 0 }}>이번 주 일정은 아직 없어요.</p>
-                        </div>
-                    )}
+                    <div className="week-nav">
+                        <Btn className="icon-btn" aria-label="이전 주" onClick={() => {
+                            const next = addDaysYmd(weekStart, -7);
+                            setWeekAnchor(next);
+                            go(`#/schedule/week/${next}`);
+                        }}>‹</Btn>
+                        <strong className="title-font">{weekSpanLabel(weekStart)}</strong>
+                        <Btn className="icon-btn" aria-label="다음 주" onClick={() => {
+                            const next = addDaysYmd(weekStart, 7);
+                            setWeekAnchor(next);
+                            go(`#/schedule/week/${next}`);
+                        }}>›</Btn>
+                    </div>
+                    <Btn className="chip" onClick={() => { setWeekAnchor(clock.ymd); go(`#/schedule/week/${clock.ymd}`); }}>이번 주</Btn>
                     {Array.from({ length: 7 }, (_, index) => {
                         const date = addDaysYmd(weekStart, index);
-                        const holiday = holidayCaption(date);
+                        const rest = restInfo(date, events);
                         const mine = week.filter((row) => onDay(row, date));
                         return (
-                            <section key={date} className="glass" style={{ padding: 12 }}>
-                                <strong>{formatKoDate(date, { today: clock.ymd })} {holiday?.isHoliday ? `· ${holiday.primary.name}` : ''}</strong>
+                            <section key={date} className={rest.off ? 'glass day-rest' : 'glass'} style={{ padding: 12 }}>
+                                <strong>{formatKoDate(date, { today: clock.ymd })}</strong>
+                                {rest.off && <span className="day-rest-mark"> · {rest.label === '휴일' ? '휴일' : `휴일 · ${rest.label}`}</span>}
                                 {mine.map((row) => <p key={row.id} style={{ marginBottom: 0 }}>{row.localOnly ? '🔒 ' : ''}{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title} {row.memo || ''}</p>)}
-                                {!mine.length && !holiday?.isHoliday && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
+                                {!mine.length && !rest.off && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
                             </section>
                         );
                     })}
@@ -62,27 +81,31 @@ export function Schedule() {
                         <Btn className="icon-btn" aria-label="다음 달" onClick={() => setYm(shift(ym, 1))}>›</Btn>
                     </div>
                     <div className="cal-grid" style={{ marginTop: 8 }}>
-                        {['월', '화', '수', '목', '금', '토', '일'].map((label) => <div key={label} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800 }}>{label}</div>)}
-                        {monthCells(ym).map((cell) => {
+                        {['월', '화', '수', '목', '금', '토', '일'].map((label, index) => <div key={label} className={index >= 5 ? 'day-rest-mark' : undefined} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800 }}>{label}</div>)}
+                        {monthCells(ym).map((cell, index) => {
                             const holiday = holidayCaption(cell.ymd);
+                            const rest = restInfo(cell.ymd, events);
                             const has = events.some((row) => onDay(row, cell.ymd));
+                            const weekend = index % 7 >= 5;
                             return (
-                                <Btn key={cell.ymd} className={cell.ymd === picked ? 'block neo-in' : 'block'} onClick={() => setPicked(cell.ymd)} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
-                                    <span className="num" style={{ fontWeight: 800, color: cell.ymd === picked || cell.ymd === clock.ymd ? 'var(--accent)' : 'inherit' }}>{cell.day}</span>
-                                    {holiday?.isHoliday && <span style={{ display: 'block', fontSize: 11 }}>{holiday.primary.short || '휴일'}</span>}
+                                <Btn key={cell.ymd} className={`${cell.ymd === picked ? 'block neo-in' : 'block'}${rest.off || weekend ? ' day-rest' : ''}`} onClick={() => setPicked(cell.ymd)} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
+                                    <span className="num" style={{ fontWeight: 800, color: rest.off ? 'var(--rest-ink)' : (cell.ymd === picked || cell.ymd === clock.ymd ? 'var(--accent)' : 'inherit') }}>{cell.day}</span>
+                                    {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11 }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
                                     {has && <span aria-hidden="true">·</span>}
                                 </Btn>
                             );
                         })}
                     </div>
-                    <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
+                    <div className={`solid-card${pickedRest.off ? ' day-rest' : ''}`} style={{ padding: 12, marginTop: 12 }}>
                         <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
+                        {pickedRest.off && <p className="day-rest-mark" style={{ margin: '4px 0' }}>{pickedRest.label === '휴일' ? '휴일' : `휴일 · ${pickedRest.label}`}</p>}
+                        <Btn className="chip" style={{ marginTop: 8 }} onClick={() => { setWeekAnchor(picked); setMode('주'); go(`#/schedule/week/${picked}`); }}>이 주 보기</Btn>
                         {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}</p>)}
                         {!events.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
                     </div>
                 </div>
             )}
-            {mode === '시간표' && <Timetable data={data} todayKey={dayKeyFromYmd(clock.ymd)} />}
+            {mode === '시간표' && <Timetable data={data} todayKey={dayKeyFromYmd(clock.ymd)} weekStart={weekStart} events={events} />}
         </div>
     );
 }
@@ -110,32 +133,44 @@ function AddEvent() {
     return <Btn className="primary-btn block" onClick={() => openFlow({ id: 'quick', kind: '일정' })}>일정 더하기</Btn>;
 }
 
-function Timetable({ data, todayKey }) {
+function Timetable({ data, todayKey, weekStart, events }) {
     const [edit, setEdit] = useState(null);
     const [specialOn, setSpecialOn] = useState(false);
-    const cells = [<span key="corner" />];
-    DAYS.forEach(([key, label]) => {
-        cells.push(<strong key={key} style={{ textAlign: 'center', color: key === todayKey ? 'var(--accent)' : 'inherit' }}>{label}</strong>);
+    const days = DAYS.map(([key, label], index) => {
+        const ymd = addDaysYmd(weekStart, index);
+        return { key, label, ymd, rest: restInfo(ymd, events) };
     });
-    for (let index = 0; index < 6; index += 1) {
-        cells.push(<strong key={`h${index}`} style={{ display: 'grid', placeItems: 'center', fontSize: 12 }}>{index + 1}</strong>);
-        DAYS.forEach(([key]) => {
-            const row = data.timetable[key] || {};
-            cells.push(
-                <Btn key={`${key}-${index}`} className="solid-card block" onClick={() => {
-                    setEdit({ day: key, period: index + 1, subject: row[`p${index + 1}`] || '' });
-                    setSpecialOn(Boolean(row[`s${index + 1}`]));
-                }}>
-                    {row[`p${index + 1}`] || '비움'}{row[`s${index + 1}`] ? ' 전담' : ''}
-                </Btn>,
-            );
-        });
-    }
     return (
         <div style={{ marginTop: 12, minWidth: 0 }}>
-            <p className="muted">칸을 누르면 과목을 고칠 수 있어요. 전담이면 상담 시간으로 보여 드려요.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '36px repeat(5, minmax(0, 1fr))', gap: 4 }}>
-                {cells}
+            <p className="muted">칸을 누르면 과목을 고칠 수 있어요. 공휴일·휴업일이면 그 요일은 수업 대신 휴일로 보여요. 전담이면 상담 시간으로 보여 드려요.</p>
+            <div className="tt-grid">
+                <span />
+                {days.map((day) => (
+                    <div key={day.key} className={day.rest.off ? 'tt-head day-rest' : 'tt-head'} style={{ color: day.key === todayKey ? 'var(--accent)' : 'inherit', gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: 1 }}>
+                        <strong>{day.label}</strong>
+                        <span className="num">{Number(day.ymd.slice(8))}</span>
+                    </div>
+                ))}
+                {days.map((day) => (day.rest.off ? (
+                    <div key={`off-${day.key}`} className="tt-off day-rest" style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: '2 / span 6' }}>
+                        <strong>휴일</strong>
+                        <span>{day.rest.label}</span>
+                    </div>
+                ) : null))}
+                {Array.from({ length: 6 }, (_, index) => (
+                    <strong key={`h${index}`} className="tt-period" style={{ gridColumn: 1, gridRow: index + 2 }}>{index + 1}</strong>
+                ))}
+                {days.map((day) => (day.rest.off ? null : Array.from({ length: 6 }, (_, index) => {
+                    const row = data.timetable[day.key] || {};
+                    return (
+                        <Btn key={`${day.key}-${index}`} className="solid-card block" style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: index + 2 }} onClick={() => {
+                            setEdit({ day: day.key, period: index + 1, subject: row[`p${index + 1}`] || '' });
+                            setSpecialOn(Boolean(row[`s${index + 1}`]));
+                        }}>
+                            {row[`p${index + 1}`] || '비움'}{row[`s${index + 1}`] ? ' 전담' : ''}
+                        </Btn>
+                    );
+                })))}
             </div>
             {edit && (
                 <form className="solid-card" style={{ padding: 12, marginTop: 12 }} onSubmit={async (event) => {

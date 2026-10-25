@@ -55,6 +55,25 @@ export function IconMoon() {
     );
 }
 
+export function IconSettings() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        </svg>
+    );
+}
+
+export function IconTrash() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 7h16" />
+            <path d="M9 7V5h6v2" />
+            <path d="M7 7l1 13h8l1-13" />
+        </svg>
+    );
+}
+
 export function IconSun() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
@@ -83,6 +102,17 @@ export const TAGS = {
     보호자: ['전화', '방문', '문자'],
     칭찬: ['학습', '생활', '교우'],
 };
+
+export function HoldToggle({ held, onToggle }) {
+    return (
+        <div>
+            <p className="muted" style={{ margin: '8px 0 0' }}>
+                {held ? '정리함에 둡니다. 할 일 화면에서 다시 등록하거나 지울 수 있어요.' : '이번 저장에 넣어요.'}
+            </p>
+            <Btn className={held ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={onToggle}>{held ? '지금 저장' : '나중에 정리'}</Btn>
+        </div>
+    );
+}
 
 export function studentName(students, sid) {
     return students.find((row) => row.id === sid)?.name || '';

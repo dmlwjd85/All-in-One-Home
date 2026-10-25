@@ -23,6 +23,8 @@
             if (q.get('mode') === 'dark' || q.get('mode') === 'light') localStorage.setItem('ssug-gyomu-theme', q.get('mode'));
             var saved = localStorage.getItem('ssug-gyomu-theme');
             var dark = saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+            var font = localStorage.getItem('ssug-gyomu-font');
+            if (font === 'soft' || font === 'neat') document.documentElement.setAttribute('data-font', font);
             if (dark) document.documentElement.classList.add('dark');
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
             var meta = document.querySelector('meta[name="theme-color"]');

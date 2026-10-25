@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { KEY_VOICES, keyPitchRate, renderKeyPair } from '../src/ui/keyfeel.js';
 
 const sampleRate = 48000;
-const outDir = process.env.KEY_WAV_DIR || '/opt/cursor/artifacts/key-sounds';
+const outDir = process.env.KEY_WAV_DIR || '/tmp/ssug-key-sounds';
 
 function resample(data, rate) {
     const length = Math.max(1, Math.floor(data.length / rate));
