@@ -4,7 +4,9 @@ import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
-import { forgetGcalLocal, settleGcalQueue } from '../lib/gcalLive.js';
+import { planRecordWipe } from '../lib/gcalCore.js';
+import { disconnectGcal, forgetGcalLocal, settleGcalQueue } from '../lib/gcalLive.js';
+import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
 import { setAuth } from '../lib/db.js';
@@ -65,6 +67,8 @@ export function Settings() {
     const [periods, setPeriods] = useState(data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS);
     const [phrase, setPhrase] = useState('');
     const [wipe, setWipe] = useState('');
+    const [gcalWipe, setGcalWipe] = useState('keep');
+    const gcal = useGcal();
     const [includeLocal, setIncludeLocal] = useState(false);
     const [publicInfo, setPublicInfo] = useState(null);
     const [importMode, setImportMode] = useState('merge');
@@ -264,13 +268,37 @@ export function Settings() {
                 {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
                 <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
+                {gcal.enabled && gcal.mode === 'write' && (
+                    <>
+                        <p className="muted">구글에 올려 둔 콕 일정을 지울지 골라 주세요.</p>
+                        <div className="gcal-modes" role="group" aria-label="구글에 올려 둔 일정">
+                            <Btn
+                                className={gcalWipe === 'keep' ? 'choice-tile on' : 'choice-tile'}
+                                aria-pressed={gcalWipe === 'keep'}
+                                onClick={() => setGcalWipe('keep')}
+                            >구글 일정은 남기기</Btn>
+                            <Btn
+                                className={gcalWipe === 'drop' ? 'choice-tile on' : 'choice-tile'}
+                                aria-pressed={gcalWipe === 'drop'}
+                                onClick={() => setGcalWipe('drop')}
+                            >구글에서도 지우기</Btn>
+                        </div>
+                    </>
+                )}
                 <input className="field" aria-label="삭제 확인" value={wipe} onChange={(event) => setWipe(event.target.value)} placeholder="삭제" />
-                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => clearAll().then(async (saved) => {
-                    if (saved?.storageFailed) return;
-                    await settleGcalQueue();
-                    await forgetGcalLocal();
-                    showToast('이 앱의 기록을 지웠어요.');
-                })}>계정과 기록 삭제</Btn>
+                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => {
+                    const plan = planRecordWipe(gcal, gcalWipe);
+                    (async () => {
+                        await settleGcalQueue();
+                        if (plan.releaseBeforeClear) await disconnectGcal();
+                        const saved = await clearAll();
+                        if (saved?.storageFailed) return;
+                        await settleGcalQueue();
+                        if (plan.dropRemote) await disconnectGcal();
+                        await forgetGcalLocal();
+                        showToast('이 앱의 기록을 지웠어요.');
+                    })();
+                }}>계정과 기록 삭제</Btn>
             </section>
         </div>
     );

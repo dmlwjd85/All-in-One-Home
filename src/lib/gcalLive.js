@@ -24,7 +24,7 @@ import {
     tokenUsable,
     diffKokEvents,
 } from './gcalCore.js';
-import { applyKokDiff, listExternalEvents, uploadKokEvents } from './gcalFlow.js';
+import { applyKokDiff, listExternalEvents, quietFetch, uploadKokEvents } from './gcalFlow.js';
 
 const listeners = new Set();
 let memory = emptyGcalState();
@@ -67,15 +67,20 @@ let tokenStore = null;
 function browserStore() {
     if (tokenStore) return tokenStore;
     try {
-        if (typeof localStorage !== 'undefined') {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(GCAL_TOKEN_KEY);
+    } catch {
+        /* 예전에 남겨 둔 토큰이 없어도 됩니다. */
+    }
+    try {
+        if (typeof sessionStorage !== 'undefined') {
             const probe = `${GCAL_TOKEN_KEY}-probe`;
-            localStorage.setItem(probe, '1');
-            localStorage.removeItem(probe);
-            tokenStore = localStorage;
+            sessionStorage.setItem(probe, '1');
+            sessionStorage.removeItem(probe);
+            tokenStore = sessionStorage;
             return tokenStore;
         }
     } catch {
-        /* 사생활 보호 모드면 메모리만 씁니다. */
+        /* 세션을 못 쓰면 메모리만 씁니다. */
     }
     tokenStore = memoryStore();
     return tokenStore;
@@ -84,6 +89,12 @@ function browserStore() {
 export function useTokenStoreForTest(store) {
     tokenStore = store;
     tokenMemory = null;
+}
+
+let revokeImpl = null;
+
+export function useGcalRevokeForTest(fn) {
+    revokeImpl = fn;
 }
 
 export function useGcalVaultForTest(next) {
@@ -125,6 +136,65 @@ function writeToken(record) {
 function clearToken() {
     tokenMemory = null;
     try { browserStore().removeItem(GCAL_TOKEN_KEY); } catch { /* 없어도 됩니다. */ }
+    try {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(GCAL_TOKEN_KEY);
+    } catch {
+        /* 예전 칸이 없어도 됩니다. */
+    }
+}
+
+function readAnyToken() {
+    if (tokenMemory?.accessToken) return tokenMemory;
+    try {
+        const raw = browserStore().getItem(GCAL_TOKEN_KEY);
+        const token = normalizeToken(raw ? JSON.parse(raw) : null);
+        if (token?.accessToken) {
+            tokenMemory = token;
+            return token;
+        }
+    } catch {
+        /* 깨진 토큰은 버립니다. */
+    }
+    return null;
+}
+
+function oauthRevoke() {
+    if (typeof revokeImpl === 'function') return revokeImpl;
+    const revoke = typeof window !== 'undefined' ? window.google?.accounts?.oauth2?.revoke : null;
+    return typeof revoke === 'function' ? revoke : null;
+}
+
+async function revokeAccessToken(accessToken) {
+    const access = String(accessToken || '').trim();
+    if (!access) return;
+    let fn = oauthRevoke();
+    if (!fn && typeof window !== 'undefined') {
+        await prepareCalendarScript();
+        fn = oauthRevoke();
+    }
+    if (typeof fn !== 'function') return;
+    await new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+        const timer = setTimeout(finish, 4000);
+        try {
+            fn(access, () => {
+                clearTimeout(timer);
+                finish();
+            });
+        } catch {
+            clearTimeout(timer);
+            finish();
+        }
+    });
+}
+
+function dropTokenIfRejected(status) {
+    if (status === 401 || status === 403) clearToken();
 }
 
 async function readVault() {
@@ -371,19 +441,23 @@ export function reconnectGcal() {
 }
 
 export async function disconnectGcal() {
-    await patchGcal({ enabled: false, needsUploadAsk: false, lastError: '' });
+    const access = readAnyToken()?.accessToken || '';
     clearToken();
+    await patchGcal({ enabled: false, needsUploadAsk: false, lastError: '' });
+    await revokeAccessToken(access);
     return memory;
 }
 
 export async function forgetGcalLocal() {
+    const access = readAnyToken()?.accessToken || '';
     clearToken();
     memory = emptyGcalState();
     emit();
     try { await vault.remove('state'); } catch { /* 이미 없습니다. */ }
+    await revokeAccessToken(access);
 }
 
-export async function answerGcalUpload(yes, fetchImpl = globalThis.fetch) {
+export async function answerGcalUpload(yes, fetchImpl = quietFetch) {
     await gcalReady();
     const since = new Date().toISOString();
     if (!yes) {
@@ -405,6 +479,7 @@ export async function answerGcalUpload(yes, fetchImpl = globalThis.fetch) {
         links: memory.links,
         fetchImpl,
     });
+    dropTokenIfRejected(result.status);
     await patchGcal({
         links: result.links,
         needsUploadAsk: false,
@@ -415,7 +490,7 @@ export async function answerGcalUpload(yes, fetchImpl = globalThis.fetch) {
     return { ok: result.errors.length === 0, uploaded: rows.length, errors: result.errors };
 }
 
-export function refreshGcal(fetchImpl = globalThis.fetch) {
+export function refreshGcal(fetchImpl = quietFetch) {
     if (pullLock) return pullLock;
     pullLock = pullNow(fetchImpl).finally(() => { pullLock = null; });
     return pullLock;
@@ -440,6 +515,7 @@ async function pullNow(fetchImpl) {
         fetchImpl,
     });
     if (!listed.ok) {
+        dropTokenIfRejected(listed.status);
         await patchGcal({ lastError: listed.message });
         return { ok: false, message: listed.message };
     }
@@ -471,6 +547,7 @@ async function syncDiff(diff, fetchImpl) {
         fetchImpl,
     });
     if (result.skipped) return result;
+    dropTokenIfRejected(result.status);
     await patchGcal({
         links: result.links,
         lastError: result.errors.length ? GCAL_PARTIAL_ERROR : '',
@@ -499,7 +576,7 @@ export function startGcalBridge() {
         const uid = currentUid();
         if (memory.uid && uid && memory.uid !== uid) return;
         if (!diff.created.length && !diff.updated.length && !diff.deleted.length) return;
-        enqueue(() => syncDiff(diff, globalThis.fetch));
+        enqueue(() => syncDiff(diff, quietFetch));
     });
     enqueue(() => resumeGcalRedirect());
     return () => stop();

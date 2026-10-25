@@ -5,8 +5,8 @@ export function useGcal() {
     const [snap, setSnap] = useState(gcalSnapshot);
     useEffect(() => {
         let alive = true;
-        gcalReady().then((row) => { if (alive) setSnap(row); });
-        const stop = subscribeGcal((row) => { if (alive) setSnap(row); });
+        gcalReady().then(() => { if (alive) setSnap(gcalSnapshot()); });
+        const stop = subscribeGcal(() => { if (alive) setSnap(gcalSnapshot()); });
         return () => {
             alive = false;
             stop();

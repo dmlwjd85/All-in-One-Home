@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import {
     GCAL_AUTH_ERROR,
+    GCAL_TOKEN_KEY,
     GCAL_MODE_HINT,
     GCAL_OFFLINE_ERROR,
     GCAL_PARTIAL_ERROR,
@@ -22,6 +23,7 @@ import {
     parseOauthHash,
     pickTokenUx,
     planModeChange,
+    planRecordWipe,
     scopeAllows,
     scopeForMode,
     shouldPushCreate,
@@ -29,6 +31,17 @@ import {
     visibleGoogleEvents,
 } from '../src/lib/gcalCore.js';
 import { applyKokDiff, listExternalEvents, pushKokEvent, uploadKokEvents } from '../src/lib/gcalFlow.js';
+import {
+    disconnectGcal,
+    gcalReady,
+    gcalSnapshot,
+    refreshGcal,
+    subscribeGcal,
+    switchGcalMode,
+    useGcalRevokeForTest,
+    useGcalVaultForTest,
+    useTokenStoreForTest,
+} from '../src/lib/gcalLive.js';
 
 const failures = [];
 function check(ok, message) {
@@ -239,9 +252,133 @@ const blocked = await uploadKokEvents({
 });
 check(blocked.links.health === undefined && blocked.links['event-8'], '민감 일정을 한꺼번에 올리기에 넣었습니다.');
 
+const keepWipe = planRecordWipe({ enabled: true, mode: 'write' }, 'keep');
+check(keepWipe.dropRemote === false && keepWipe.releaseBeforeClear === true, '넣기 모드의 기본이 구글 일정을 지웁니다.');
+const dropWipe = planRecordWipe({ enabled: true, mode: 'write' }, 'drop');
+check(dropWipe.dropRemote === true && dropWipe.releaseBeforeClear === false, '구글에서도 지우기를 골라도 사본이 남습니다.');
+check(planRecordWipe({ enabled: true, mode: 'readonly' }, 'drop').dropRemote === false, '보기만인데 구글 일정을 지웁니다.');
+
+const logged = [];
+const consoleError = console.error;
+console.error = (...args) => { logged.push(args.map(String).join(' ')); };
+const denied = await listExternalEvents({
+    token: 'ya29.expired',
+    timeMin: '2026-04-01T00:00:00+09:00',
+    timeMax: '2027-04-01T00:00:00+09:00',
+    fetchImpl: async () => ({
+        ok: false,
+        status: 401,
+        json: async () => {
+            console.error('401 json');
+            return { error: { code: 401 } };
+        },
+    }),
+});
+console.error = consoleError;
+check(denied.ok === false && denied.status === 401 && denied.message === GCAL_AUTH_ERROR && logged.length === 0, '401 응답이 콘솔에 남습니다.');
+
+function memoryBag() {
+    const map = new Map();
+    return {
+        getItem(key) { return map.has(key) ? map.get(key) : null; },
+        setItem(key, value) { map.set(key, String(value)); },
+        removeItem(key) { map.delete(key); },
+    };
+}
+
+function memoryVault(seed) {
+    const map = new Map(seed ? [['state', seed]] : []);
+    return {
+        async get(key) { return map.get(key); },
+        async set(key, value) { map.set(key, value); },
+        async remove(key) { map.delete(key); },
+    };
+}
+
+const dental = googleToExternal({ id: 'abc', summary: '치과', start: { date: '2026-10-26' }, end: { date: '2026-10-27' } });
+const tokenBag = memoryBag();
+tokenBag.setItem(GCAL_TOKEN_KEY, JSON.stringify({
+    accessToken: 'ya29.keep',
+    expiresAt: Date.now() + 3600 * 1000,
+    scope: SCOPE_EVENTS,
+}));
+useTokenStoreForTest(tokenBag);
+useGcalVaultForTest(memoryVault({
+    enabled: true,
+    uid: 'teacher',
+    mode: 'write',
+    links: { 'event-8': { googleEventId: 'g1' } },
+    external: [dental],
+    forwardSince: '',
+    needsUploadAsk: false,
+    lastError: '',
+    lastSyncAt: '',
+}));
+const revoked = [];
+useGcalRevokeForTest((access, done) => {
+    revoked.push(access);
+    done();
+});
+const bootRow = await gcalReady();
+let liveOnDisconnect = null;
+const stopWatch = subscribeGcal((row) => { liveOnDisconnect = row; });
+await disconnectGcal();
+stopWatch();
+check(revoked.length === 1 && revoked[0] === 'ya29.keep' && tokenBag.getItem(GCAL_TOKEN_KEY) === null, '연동을 끌 때 구글 권한을 해제하지 않거나 토큰이 남습니다.');
+check(liveOnDisconnect && liveOnDisconnect.enabled === false && visibleGoogleEvents(liveOnDisconnect, 'teacher').length === 0, '연동을 끄자마자 주간 구글 일정이 남습니다.');
+check(bootRow.enabled === true && visibleGoogleEvents(bootRow, 'teacher').length === 1, '부팅 스냅샷이 옛 구글 일정을 들고 있어야 회귀가 성립합니다.');
+let remounted = null;
+await gcalReady().then(() => { remounted = gcalSnapshot(); });
+check(remounted.enabled === false && remounted.mode === 'write' && visibleGoogleEvents(remounted, 'teacher').length === 0, '다른 화면에 갔다 오면 부팅 때 읽은 연동 상태로 덮입니다.');
+await switchGcalMode('readonly');
+check(gcalSnapshot().mode === 'readonly' && bootRow.mode === 'write', '모드를 바꾼 뒤에도 부팅 모드가 화면에 남습니다.');
+
+const authBag = memoryBag();
+authBag.setItem(GCAL_TOKEN_KEY, JSON.stringify({
+    accessToken: 'ya29.expired',
+    expiresAt: Date.now() + 3600 * 1000,
+    scope: SCOPE_READONLY,
+}));
+useTokenStoreForTest(authBag);
+useGcalVaultForTest(memoryVault({
+    enabled: true,
+    uid: 'teacher',
+    mode: 'readonly',
+    links: {},
+    external: [dental],
+    forwardSince: '',
+    needsUploadAsk: false,
+    lastError: '',
+    lastSyncAt: '',
+}));
+const expiredBoot = await gcalReady();
+let hits = 0;
+const authLogs = [];
+console.error = (...args) => { authLogs.push(args.map(String).join(' ')); };
+const deniedFetch = async () => {
+    hits += 1;
+    return {
+        ok: false,
+        status: 401,
+        json: async () => {
+            console.error('401 json');
+            return {};
+        },
+    };
+};
+await refreshGcal(deniedFetch);
+await refreshGcal(deniedFetch);
+console.error = consoleError;
+check(hits === 1 && authLogs.length === 0 && gcalSnapshot().lastError === GCAL_AUTH_ERROR && authBag.getItem(GCAL_TOKEN_KEY) === null, '401 뒤에 토큰으로 다시 요청하거나 콘솔에 남습니다.');
+let afterAuth = null;
+await gcalReady().then(() => { afterAuth = gcalSnapshot(); });
+check(afterAuth.lastError === GCAL_AUTH_ERROR && expiredBoot.lastError === '', '실패 안내가 다른 화면에서 부팅 상태로 사라집니다.');
+
 const root = new URL('..', import.meta.url).pathname;
 const read = (rel) => readFileSync(`${root}/${rel}`, 'utf8');
 const live = read('src/lib/gcalLive.js');
+const hook = read('src/ui/useGcal.js');
+const settings = read('src/ui/Settings.jsx');
 const ui = read('src/ui/GcalSettings.jsx');
 const schedule = read('src/ui/Schedule.jsx');
 const db = read('src/lib/db.js');
@@ -257,6 +394,10 @@ check(!ui.includes('<select') && !ui.includes('checkbox'), '연동 방식이 드
 check(ui.includes('구글 일정 보기만') && ui.includes('콕 일정도 구글에 넣기') && ui.includes('준비 중'), '연동 버튼 문구가 없습니다.');
 check(ui.includes('한꺼번에 올리기') && ui.includes('앞으로 만든 것만') && ui.includes('GCAL_MODE_HINT'), '올리기 확인이나 방식 안내가 없습니다.');
 check(schedule.includes('gcal-badge') && schedule.includes('보기만') && schedule.includes('classEvents'), '달력에 구글 일정 표시가 없습니다.');
+check(hook.includes('gcalReady().then(() => { if (alive) setSnap(gcalSnapshot()); })') && !hook.includes('setSnap(row)'), '부팅 때 읽은 상태로 화면을 덮습니다.');
+check(settings.includes("useState('keep')") && settings.includes('구글 일정은 남기기') && settings.includes('구글에서도 지우기') && settings.includes('planRecordWipe'), '기록 삭제 확인에 구글 일정 타일이 없습니다.');
+check(live.includes('sessionStorage') && live.includes('oauth2?.revoke') && live.includes('localStorage.removeItem(GCAL_TOKEN_KEY)') && !live.includes('tokenStore = localStorage'), '토큰을 세션 밖에서 보관하거나 권한 해제가 없습니다.');
+check(live.includes('quietFetch') && !live.includes('globalThis.fetch'), '401이 페이지 콘솔에 남는 fetch를 씁니다.');
 check(rules.includes('정리함 제목만 건강') && rules.includes('정리함 안내만 건강'), '정리함 건강 거절 테스트가 빠져 있습니다.');
 check(buildJob.includes('contents: read') && !buildJob.includes('actions: write'), '빌드 잡에 actions: write 가 남아 있습니다.');
 check(workflow.includes('npm run check:gcal'), '배포 워크플로가 캘린더 검사를 돌리지 않습니다.');

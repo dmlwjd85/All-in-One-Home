@@ -158,6 +158,16 @@ export function shouldPushCreate(row, { forwardSince = '', bulk = false } = {}) 
     return String(row.at) >= String(forwardSince);
 }
 
+/** 계정과 기록 삭제. 넣기 모드의 기본은 구글에 올라간 일정을 남기는 쪽입니다. */
+export function planRecordWipe(gcal, choice) {
+    const enabled = Boolean(gcal?.enabled);
+    const dropRemote = enabled && gcal?.mode === 'write' && choice === 'drop';
+    return {
+        dropRemote,
+        releaseBeforeClear: enabled && !dropRemote,
+    };
+}
+
 export function planModeChange(prev, nextMode) {
     const mode = nextMode === 'write' ? 'write' : 'readonly';
     return {
