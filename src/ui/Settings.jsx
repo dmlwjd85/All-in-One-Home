@@ -4,6 +4,8 @@ import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
+import { forgetGcalLocal, settleGcalQueue } from '../lib/gcalLive.js';
+import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
 import { setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
@@ -243,6 +245,8 @@ export function Settings() {
                 )}
             </section>
 
+            <GcalSettings />
+
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정과 기록</h2>
                 {!cloudReady() && <p>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
@@ -261,7 +265,12 @@ export function Settings() {
                 <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
                 <input className="field" aria-label="삭제 확인" value={wipe} onChange={(event) => setWipe(event.target.value)} placeholder="삭제" />
-                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => clearAll().then((saved) => { if (!saved?.storageFailed) showToast('이 앱의 기록을 지웠어요.'); })}>계정과 기록 삭제</Btn>
+                <Btn className="primary-btn block" style={{ marginTop: 8 }} disabled={wipe !== '삭제'} onClick={() => clearAll().then(async (saved) => {
+                    if (saved?.storageFailed) return;
+                    await settleGcalQueue();
+                    await forgetGcalLocal();
+                    showToast('이 앱의 기록을 지웠어요.');
+                })}>계정과 기록 삭제</Btn>
             </section>
         </div>
     );

@@ -20,6 +20,7 @@
     "check:msg": "node scripts/check-msg.mjs",
     "check:speech": "node scripts/check-speech.mjs",
     "check:keyfeel": "node scripts/check-keyfeel.mjs",
+    "check:gcal": "node scripts/check-gcal.mjs",
     "check:rules": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-rules.mjs\"",
     "check:browser": "node scripts/check-browser.mjs"
   },

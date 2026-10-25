@@ -19,6 +19,11 @@
     <link rel="stylesheet" href="./fonts/fonts.css">
     <script>
         try {
+            var hash = location.hash || '';
+            if (hash.indexOf('access_token=') !== -1 || hash.indexOf('error=access_denied') !== -1) {
+                sessionStorage.setItem('ssug-gyomu-gcal-hash', hash);
+                history.replaceState(null, '', location.pathname + location.search + '#/settings');
+            }
             var q = new URLSearchParams(location.search);
             if (q.get('mode') === 'dark' || q.get('mode') === 'light') localStorage.setItem('ssug-gyomu-theme', q.get('mode'));
             var saved = localStorage.getItem('ssug-gyomu-theme');
