@@ -1,8 +1,11 @@
 /** 하단 용기. 트리거는 누르기, 규칙은 한 번 터지고 돌아오기, 피드백은 변형과 투명도만.
-    연타는 진행 중인 동작을 끊고 같은 요소에서 다시 시작합니다. */
+    연타는 진행 중인 동작을 끊고 같은 요소에서 다시 시작합니다.
+    D안 컵의 껍질·글자 시간은 v/D.css 의 0.52초입니다. 완성본이 오면 FOIL_POP_MS 만 맞춥니다. */
 
 export const BURST_MS = 420;
+export const FOIL_POP_MS = 520;
 export const SPLAT_COUNT = 6;
+export const DROP_COUNT = 8;
 export const MAX_ANIMATIONS = 8;
 
 const SPLATS = [
@@ -23,9 +26,28 @@ function cancelBurst(root) {
     running.forEach((anim) => anim.cancel());
 }
 
-/** 열 때는 필름만 조금 부풀려 예비 동작으로 남깁니다. 저장할 때 터집니다. */
+function foilButton(node) {
+    if (!node) return null;
+    if (node.classList?.contains('foil-fab')) return node;
+    return node.closest?.('.foil-fab') || null;
+}
+
+/** D안 껍질. 같은 턴에 클래스를 뺐다 넣으면 다시 시작하지 않아서, 중간에 동작 목록을 읽어 스타일을 확정합니다. */
+export function playFoilPop(node) {
+    if (!node || reduceMotion()) return;
+    const button = foilButton(node);
+    if (!button) return;
+    if (button.classList.contains('is-popping')) {
+        button.classList.remove('is-popping');
+        button.getAnimations?.({ subtree: true });
+    }
+    button.classList.add('is-popping');
+}
+
+/** 열 때는 예전 필름만 조금 부풀립니다. D안 컵은 누르는 동안 껍질을 벗기지 않습니다. */
 export function playSealLift(root) {
     if (!root) return;
+    if (foilButton(root) && !reduceMotion()) return;
     cancelBurst(root);
     if (reduceMotion()) {
         root.animate(
@@ -43,6 +65,18 @@ export function playSealLift(root) {
 
 export function playSealBurst(root) {
     if (!root) return;
+    if (foilButton(root)) {
+        if (reduceMotion()) {
+            cancelBurst(root);
+            root.animate(
+                [{ opacity: 1 }, { opacity: 0.62 }, { opacity: 1 }],
+                { duration: 160, easing: 'ease-out' },
+            );
+            return;
+        }
+        playFoilPop(root);
+        return;
+    }
     cancelBurst(root);
     if (reduceMotion()) {
         root.animate(
