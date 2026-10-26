@@ -195,7 +195,7 @@ export function Settings() {
                         setTypeOn(next);
                     }}>{typeOn ? '글자 소리 켜짐' : '글자 소리 꺼짐'}</Btn>
                 </div>
-                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때마다 작은 소리가 따라옵니다. 스페이스, 엔터, 지우기는 조금 다르게 들려요. 비밀번호나 인증 번호 칸에서는 내지 않아요. 처음 소리는 적축이고, 크기는 작게 고정해 두었어요.</p>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때마다 작은 소리가 따라옵니다. 스페이스, 엔터, 지우기는 조금 다르게 들려요. 비밀번호나 인증 번호 칸에서는 내지 않아요. 처음 소리는 뽁이고, 크기는 작게 고정해 두었어요.</p>
                 <div className="type-picks" role="group" aria-label="글자 소리">
                     {TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
                         <KeyPick

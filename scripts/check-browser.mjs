@@ -1986,6 +1986,27 @@ try {
                 soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
             }));
             check(kept.click === 'true' && kept.loud === 'true' && kept.soft === 'false', '고른 소리가 다시 열어도 남지 않습니다.');
+            const typeFirst = await page.evaluate(() => ({
+                stored: localStorage.getItem('ssug-gyomu-type-voice'),
+                ppok: document.querySelector('[aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+            }));
+            check(typeFirst.stored === null && typeFirst.ppok === 'true', '글자 소리 처음 선택이 뽁이 아닙니다.');
+            const typeLabels = { ppok: '뽁 통통', ting: '띵 실로폰', drop: '물방울 또록', red: '적축 직선', bang: '방귀 뿌우' };
+            for (const [id, label] of Object.entries(typeLabels)) {
+                await page.evaluate((value) => localStorage.setItem('ssug-gyomu-type-voice', value), id);
+                await page.reload({ waitUntil: 'domcontentloaded' });
+                await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
+                await page.evaluate(() => { location.hash = '#/settings'; });
+                await page.waitForSelector(`[aria-label="${label}"]`);
+                const shown = await page.evaluate((want) => ({
+                    pressed: [...document.querySelectorAll('.type-picks button[aria-pressed="true"]')].map((el) => el.getAttribute('aria-label')),
+                    stored: localStorage.getItem('ssug-gyomu-type-voice'),
+                    want,
+                }), label);
+                check(shown.pressed.length === 1 && shown.pressed[0] === label && shown.stored === id, `저장된 글자 소리 ${id}가 ${label}로 보이지 않습니다. ${shown.pressed.join(',')}`);
+            }
+            await page.click('[aria-label="띵 실로폰"]');
+            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-type-voice') === 'ting');
         }, width === 1920 ? 1080 : 844);
     }
 

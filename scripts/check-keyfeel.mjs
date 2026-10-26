@@ -23,7 +23,7 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
-import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice } from '../src/ui/typesound.js';
+import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
 
 const failures = [];
 function check(ok, message) {
@@ -154,6 +154,40 @@ for (let i = 0; i < TYPE_VOICES.length; i += 1) {
         check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
     }
 }
+/** main에 있던 뽁·띵·물방울. 저장된 값은 그 이름 그대로 같은 소리로 나야 합니다. 지문은 main 파형에서 뽑았습니다. */
+const LEGACY_TYPE = {
+    ppok: { label: '뽁', 44100: [2029, -1.503304, 99.591032], 48000: [2208, -1.522793, 107.768256] },
+    ting: { label: '띵', 44100: [4057, 0.316212, 182.26893], 48000: [4416, 0.250622, 199.74879] },
+    drop: { label: '물방울', 44100: [6880, -2.187687, 495.692668], 48000: [7488, -2.528074, 547.437276] },
+};
+for (const [id, legacy] of Object.entries(LEGACY_TYPE)) {
+    const item = TYPE_VOICES.find((voice) => voice.id === id);
+    check(item?.label === legacy.label && !item.playful, `${legacy.label} 소리가 목록에 없습니다.`);
+    const bag = memory();
+    bag.setItem('ssug-gyomu-type-voice', id);
+    check(typeVoiceId(bag) === id, `저장된 ${id} 값이 ${typeVoiceId(bag)}(으)로 바뀝니다.`);
+    check(setTypeVoice(id, bag) === id && bag.getItem('ssug-gyomu-type-voice') === id, `${id}를 고르면 같은 값으로 저장되지 않습니다.`);
+    for (const sampleRate of [44100, 48000]) {
+        const samples = renderTypeVoice(id, sampleRate).samples;
+        let sum = 0;
+        let energy = 0;
+        for (const sample of samples) {
+            sum += sample;
+            energy += sample * sample;
+        }
+        const [length, wantSum, wantEnergy] = legacy[sampleRate];
+        check(samples.length === length && Math.abs(sum - wantSum) < 1e-4 && Math.abs(energy - wantEnergy) < 1e-3, `${legacy.label} 소리가 main과 다릅니다. ${sampleRate}Hz 길이 ${samples.length}, 합 ${sum.toFixed(6)}, 에너지 ${energy.toFixed(6)}`);
+    }
+}
+for (const voice of TYPE_VOICES) {
+    const bag = memory();
+    bag.setItem('ssug-gyomu-type-voice', voice.id);
+    check(typeVoiceId(bag) === voice.id, `저장된 ${voice.id} 값이 유지되지 않습니다.`);
+}
+const unknownBag = memory();
+unknownBag.setItem('ssug-gyomu-type-voice', 'nothing');
+check(typeVoiceId(unknownBag) === 'ppok' && typeVoiceId(memory()) === 'ppok', '처음 글자 소리가 main처럼 뽁이 아닙니다.');
+check(typePairs.ppok.samples.length < typePairs.ting.samples.length && typePairs.ting.samples.length < typePairs.drop.samples.length, '예전 글자 소리 길이 순서가 main과 다릅니다.');
 const typeBurstNotes = [];
 for (const sampleRate of [44100, 48000]) {
     for (const voice of TYPE_VOICES) {

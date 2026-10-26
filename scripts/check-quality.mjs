@@ -236,7 +236,7 @@ check(!keySoundNoticePending(memoryStore), '소리 안내를 한 번 본 뒤에�
 memoryStore.setItem('ssug-gyomu-key-sound', '0');
 memoryStore.map.delete('ssug-gyomu-key-sound-notice');
 check(!keySoundNoticePending(memoryStore), '소리가 꺼져 있는데 안내가 뜹니다.');
-check(!typeSoundEnabled(memoryStore) && typeVoiceId(memoryStore) === 'red', '글자 소리 기본이 꺼짐·적축이 아닙니다.');
+check(!typeSoundEnabled(memoryStore) && typeVoiceId(memoryStore) === 'ppok', '글자 소리 기본이 꺼짐·뽁이 아닙니다.');
 check(setTypeSound(true, memoryStore) && typeSoundEnabled(memoryStore), '글자 소리 켜기가 저장되지 않습니다.');
 setTypeSound(false, memoryStore);
 check(!typeSoundEnabled(memoryStore), '글자 소리 끄기가 저장되지 않습니다.');

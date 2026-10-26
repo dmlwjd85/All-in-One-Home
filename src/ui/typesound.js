@@ -1,4 +1,5 @@
-/** 글을 적을 때 나는 타건음. 열 가지 모두 이 자리에서 합성합니다.
+/** 글을 적을 때 나는 타건음. 열세 가지 모두 이 자리에서 합성합니다.
+    뽁·띵·물방울은 main에 있던 소리를 한 표본도 바꾸지 않고 그대로 냅니다.
     녹음 파일을 넣지 않았고, 영상에서 잘라 쓰지도 않았습니다.
     치는 순간은 감쇠하는 배음 몇 개와 짧은 잡음이고, 축마다 클릭·걸림·바닥 치는 시각이 다릅니다.
     출처는 docs/type-sounds.md 에 적어 두었습니다.
@@ -10,6 +11,9 @@ const SOUND_KEY = 'ssug-gyomu-type-sound';
 const VOICE_KEY = 'ssug-gyomu-type-voice';
 
 export const TYPE_VOICES = [
+    { id: 'ppok', label: '뽁', hint: '통통' },
+    { id: 'ting', label: '띵', hint: '실로폰' },
+    { id: 'drop', label: '물방울', hint: '또록' },
     { id: 'red', label: '적축', hint: '직선' },
     { id: 'brown', label: '갈축', hint: '걸림' },
     { id: 'blue', label: '청축', hint: '딸깍' },
@@ -24,10 +28,14 @@ export const TYPE_VOICES = [
 
 /** 목록 순서를 바꿔도 잡음 결이 달라지지 않게 씨앗을 고정합니다. */
 const TYPE_NOISE = {
+    ppok: 76, ting: 95, drop: 114,
     red: 11, brown: 23, blue: 37, black: 53, topre: 71, silent: 89, typewriter: 101, laptop: 113, cream: 127, bang: 57,
 };
 
 export const TYPE_VOICE_MS = {
+    ppok: 46,
+    ting: 92,
+    drop: 156,
     red: 38,
     brown: 54,
     blue: 62,
@@ -43,7 +51,11 @@ export const TYPE_VOICE_MS = {
 /** 버튼 소리의 '작게'보다 낮게 둡니다. 여러 소리가 겹쳐도 1을 넘기지 않게. */
 export const TYPE_GAIN = 0.028;
 
-const DEFAULT_VOICE = 'red';
+/** 예전부터 있던 소리. 저장된 값이 그대로 같은 소리로 나도록 크기와 음높이 흔들림도 main 그대로 둡니다. */
+const LEGACY_VOICES = new Set(['ppok', 'ting', 'drop']);
+const LEGACY_GAIN = 0.032;
+
+const DEFAULT_VOICE = 'ppok';
 const SAME_TURN_MS = 12;
 const MAX_LIVE = 6;
 const FADE_SEC = 0.016;
@@ -337,7 +349,63 @@ function strokeProfile(id, kind) {
     return { ...base, ms, freqScale: 1, ding: 0, rattle: 0 };
 }
 
+/** main의 뽁·띵·물방울 합성을 그대로 옮겼습니다. 누름은 main과 같은 표본이고, 띄어쓰기·엔터·지우기는 길이만 바꿉니다. */
+function synthLegacy(id, sampleRate, kind = 'tap') {
+    const scale = kind === 'space' ? 1.25 : kind === 'delete' ? 0.7 : kind === 'enter' ? 1.1 : 1;
+    const ms = Math.round(TYPE_VOICE_MS[id] * scale);
+    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
+    const data = new Float32Array(n);
+    const salt = TYPE_NOISE[id] || 57;
+    let low = 0;
+    let phase = 0;
+    let phaseB = 0;
+    let phaseC = 0;
+    for (let i = 0; i < n; i += 1) {
+        const t = i / sampleRate;
+        const u = n === 1 ? 0 : i / (n - 1);
+        const white = noiseAt(i, salt);
+        low += 0.16 * (white - low);
+        let sample = 0;
+        if (id === 'ppok') {
+            const freq = 720 - 480 * Math.min(1, u * 1.4);
+            phase += (2 * Math.PI * freq) / sampleRate;
+            const env = Math.exp(-t * 62) * Math.min(1, t / 0.0015);
+            const tick = Math.exp(-t * 280) * white * 0.35;
+            sample = env * Math.sin(phase) * 0.85 + tick;
+        } else if (id === 'ting') {
+            const freq = 932 * (1 - 0.04 * u);
+            phase += (2 * Math.PI * freq) / sampleRate;
+            phaseB += (2 * Math.PI * freq * 2.71) / sampleRate;
+            const env = Math.exp(-t * 28) * Math.min(1, t / 0.001);
+            const mallet = Math.exp(-t * 220) * white * 0.18;
+            sample = env * (Math.sin(phase) * 0.72 + Math.sin(phaseB) * 0.22) + mallet;
+        } else {
+            const first = t < 0.07 ? t : -1;
+            const second = t >= 0.072 ? t - 0.072 : -1;
+            const drip = (dt, base, amp) => {
+                if (dt < 0) return 0;
+                const freq = base * Math.exp(-dt * 14);
+                return { freq, amp: amp * Math.exp(-dt * 22) * Math.min(1, dt / 0.0012) };
+            };
+            const a = drip(first, 1680, 0.85);
+            const b = drip(second, 1240, 0.45);
+            if (a) {
+                phase += (2 * Math.PI * a.freq) / sampleRate;
+                sample += Math.sin(phase) * a.amp;
+            }
+            if (b) {
+                phaseC += (2 * Math.PI * b.freq) / sampleRate;
+                sample += Math.sin(phaseC) * b.amp;
+            }
+            sample += Math.exp(-t * 90) * low * 0.08;
+        }
+        data[i] = sample;
+    }
+    return finish(data, sampleRate);
+}
+
 function synth(id, sampleRate, kind = 'tap') {
+    if (LEGACY_VOICES.has(id)) return synthLegacy(id, sampleRate, kind);
     if (id === 'bang') return synthBang(sampleRate, kind);
     const profile = strokeProfile(id, kind);
     const n = Math.max(8, Math.round((sampleRate * profile.ms) / 1000));
@@ -524,9 +592,10 @@ function launch(audio, voice, kind = 'tap', when) {
     src.buffer = bufferFor(audio, voice, kind);
     const roll = Math.random();
     const pitch = Number.isFinite(roll) ? roll : 0.5;
-    src.playbackRate.value = 0.96 + pitch * 0.12;
+    const legacy = LEGACY_VOICES.has(normalizeTypeVoice(voice));
+    src.playbackRate.value = legacy ? 0.97 + pitch * 0.06 : 0.96 + pitch * 0.12;
     const wobble = Math.random();
-    const level = Math.min(0.049, TYPE_GAIN * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
+    const level = legacy ? LEGACY_GAIN : Math.min(0.049, TYPE_GAIN * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
     const param = gain.gain;
     param.value = level;
     if (typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function') {
@@ -583,8 +652,9 @@ export function mixTypeBurst({ voice = 'red', kind = 'tap', count = 50, gapMs = 
     const mix = new Float32Array(length);
     for (let n = 0; n < count; n += 1) {
         const start = n * gap;
-        const pitch = 0.96 + ((n * 17) % 100) / 100 * 0.12;
-        const gain = Math.min(0.049, TYPE_GAIN * (0.9 + ((n * 13) % 100) / 100 * 0.2));
+        const legacy = LEGACY_VOICES.has(rendered.id);
+        const pitch = legacy ? 0.97 + ((n * 17) % 100) / 100 * 0.06 : 0.96 + ((n * 17) % 100) / 100 * 0.12;
+        const gain = legacy ? LEGACY_GAIN : Math.min(0.049, TYPE_GAIN * (0.9 + ((n * 13) % 100) / 100 * 0.2));
         const step = 1 / pitch;
         let cursor = 0;
         for (let i = 0; i < samples.length; i += 1) {
