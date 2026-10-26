@@ -6,7 +6,9 @@ import {
     browserFunctionKey,
     clearsHotkey,
     hotkeyFromEvent,
+    hotkeyFootnote,
     hotkeyLabel,
+    hotkeyPhoneNote,
     hotkeysAvailable,
     loadHotkeys,
     passesThroughCapture,
@@ -22,7 +24,7 @@ export function HotkeyForm({ onShowList }) {
     const [note, setNote] = useState('');
 
     if (!ready) {
-        return <p>키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 콕을 엽니다.</p>;
+        return <p>{hotkeyPhoneNote(map)}</p>;
     }
 
     function commit(id, key) {
@@ -100,7 +102,7 @@ export function HotkeyForm({ onShowList }) {
                 <Btn className="chip" onClick={() => { setMap(resetHotkeys()); setArmed(''); setNote('처음 키로 돌려 두었어요. 콕은 / 키예요.'); }}>기본값으로 되돌리기</Btn>
                 <Btn className="chip" onClick={onShowList}>단축키 목록</Btn>
             </div>
-            <p className="muted">목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 콕을 엽니다.</p>
+            <p className="muted">{hotkeyFootnote(map)}</p>
         </div>
     );
 }

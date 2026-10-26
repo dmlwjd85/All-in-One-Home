@@ -38,8 +38,9 @@ let live = [];
 
 function liveStorage() {
     try {
-        if (typeof localStorage === 'undefined') return null;
-        return localStorage;
+        const storage = globalThis?.localStorage;
+        if (!storage || typeof storage.getItem !== 'function') return null;
+        return storage;
     } catch {
         return null;
     }
@@ -135,24 +136,40 @@ export function isSensitiveControl(el) {
 }
 
 /** 조합이 끝날 때 브라우저가 같은 글자를 한 번 더 알려 줍니다. 타수로 치지 않습니다.
-    Chromium은 compositionend보다 먼저 insertCompositionText(isComposing true)를 보냅니다.
-    같은 문자열이면 바로 버리고, 이번 턴에 조합이 끝나면 소리를 미뤄 뒀다가 내지 않습니다.
+    Chromium은 compositionupdate 다음에 insertCompositionText(isComposing true)를 보내고,
+    그 리스너가 끝나면 마이크로태스크가 돈 뒤에야 compositionend가 옵니다.
+    받침이 다음 글자로 넘어가면 새 조합의 input이 같은 키의 12ms 안에 들어와, 거름만 있으면 글자가 기록되지 않습니다.
+    그래서 조합 글자는 compositionupdate에서 먼저 적습니다. 방금 바뀐 글자의 input만 타고, 같은 글자가 다시 오면 메아리입니다.
     Safari는 compositionend 다음에 isComposing이 false인 input을 보냅니다. */
 let lastCompositionData = null;
+let freshComposition = null;
 let skipCompositionEcho = false;
-let heldStroke = false;
-let dropHeld = false;
+
+export function noteCompositionUpdate(data) {
+    if (typeof data !== 'string') return;
+    if (data === lastCompositionData) {
+        freshComposition = null;
+        return;
+    }
+    lastCompositionData = data;
+    freshComposition = data;
+}
 
 export function noteCompositionStart() {
     lastCompositionData = null;
+    freshComposition = null;
     skipCompositionEcho = false;
-    heldStroke = false;
-    dropHeld = false;
 }
 
 export function noteCompositionEnd() {
     skipCompositionEcho = true;
-    if (heldStroke) dropHeld = true;
+}
+
+function consumeFresh(data) {
+    if (typeof data !== 'string' || data !== freshComposition) return false;
+    freshComposition = null;
+    lastCompositionData = data;
+    return true;
 }
 
 function compositionEcho(event) {
@@ -162,6 +179,10 @@ function compositionEcho(event) {
         return true;
     }
     if (inputType === 'insertCompositionText' && typeof event?.data === 'string') {
+        if (consumeFresh(event.data)) {
+            skipCompositionEcho = false;
+            return false;
+        }
         if (event.data === lastCompositionData) {
             skipCompositionEcho = false;
             return true;
@@ -193,34 +214,27 @@ export function shouldTypeSound(event) {
     return true;
 }
 
-/** 조합 중 입력은 턴이 끝난 뒤에 소리를 정합니다. compositionend가 먼저 오면 그 입력은 타가 아닙니다. */
-export function planTypeSound(event) {
-    if (!shouldTypeSound(event)) return 'no';
-    const inputType = String(event?.inputType || '');
-    if (inputType === 'insertCompositionText' && event?.isComposing !== false) {
-        heldStroke = true;
-        dropHeld = false;
-        return 'later';
-    }
-    return 'now';
+function inputNow(now) {
+    if (Number.isFinite(now)) return now;
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
-export function finishTypeSoundTurn() {
-    if (!heldStroke) return false;
-    heldStroke = false;
-    const drop = dropHeld;
-    dropHeld = false;
-    return !drop;
+/** 12ms 안의 두 번째 알림은 소리만 건너뛰고, 그 글자는 남겨 확정 때 메아리로 알아봅니다. */
+export function acceptTypeInput(event, now = inputNow()) {
+    const at = inputNow(now);
+    if (at - lastInputAt < SAME_TURN_MS) {
+        if (String(event?.inputType || '') === 'insertCompositionText') consumeFresh(event?.data);
+        return false;
+    }
+    if (!shouldTypeSound(event)) return false;
+    lastInputAt = at;
+    return true;
 }
 
 /** 같은 순간 두 번 오는 조합 이벤트만 건너뜁니다. 다음 글자는 바로 울립니다. */
-export function noteTypeInput(event, now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
+export function noteTypeInput(event, now = inputNow()) {
     if (!typeSoundEnabled()) return false;
-    if (now - lastInputAt < SAME_TURN_MS) return false;
-    const plan = planTypeSound(event);
-    if (plan === 'no') return false;
-    lastInputAt = now;
-    return plan === 'later' ? 'later' : true;
+    return acceptTypeInput(event, now);
 }
 
 function noiseAt(i, salt) {

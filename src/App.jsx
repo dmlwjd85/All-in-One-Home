@@ -11,8 +11,8 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { finishTypeSoundTurn, noteCompositionEnd, noteCompositionStart, noteTypeInput, playTypeSound } from './ui/typesound.js';
-import { HOTKEY_ACTIONS, hotkeyLabel, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, playTypeSound } from './ui/typesound.js';
+import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
@@ -41,9 +41,20 @@ export default function App() {
     const [online, setOnline] = useState(() => navigator.onLine);
     const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
     const [tipFolded, setTipFolded] = useState(false);
+    const [hotkeys, setHotkeys] = useState(() => loadHotkeys());
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+
+    useEffect(() => {
+        const sync = () => setHotkeys(loadHotkeys());
+        window.addEventListener('ssug-gyomu-hotkeys-changed', sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener('ssug-gyomu-hotkeys-changed', sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
 
     useEffect(() => {
         let stop = () => {};
@@ -232,22 +243,20 @@ export default function App() {
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
         const onInput = (event) => {
-            const decision = noteTypeInput(event);
-            if (decision === 'later') {
-                queueMicrotask(() => { if (finishTypeSoundTurn()) playTypeSound(); });
-                return;
-            }
-            if (decision) playTypeSound();
+            if (noteTypeInput(event)) playTypeSound();
         };
+        const onCompositionUpdate = (event) => noteCompositionUpdate(event?.data);
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
         document.addEventListener('compositionstart', noteCompositionStart, true);
+        document.addEventListener('compositionupdate', onCompositionUpdate, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
         document.addEventListener('input', onInput, true);
         return () => {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
             document.removeEventListener('compositionstart', noteCompositionStart, true);
+            document.removeEventListener('compositionupdate', onCompositionUpdate, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
             document.removeEventListener('input', onInput, true);
         };
@@ -419,7 +428,7 @@ export default function App() {
                             <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(menuTarget(href, clock.ymd))}>{label}</Btn>
                         );
                     })}
-                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.</p>
+                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>{kokHotkeyHint(hotkeys)}</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}

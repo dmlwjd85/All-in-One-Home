@@ -15,8 +15,8 @@ import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
 import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
-import { finishTypeSoundTurn, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, planTypeSound, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
-import { assignHotkey, defaultHotkeys, hotkeyFromEvent, isStoredHotkey, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
+import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
+import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
 import { menuSelected, menuTarget } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
@@ -255,41 +255,244 @@ check(isSensitiveControl(fakeControl('INPUT', { type: 'text', autocomplete: 'one
 check(!isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '학급 이름' })), '학급 이름 칸을 비밀번호로 봅니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'text', autocomplete: 'one-time-code' }) }), '인증 번호 칸에서 글자 소리가 납니다.');
 const composing = fakeControl('INPUT', { type: 'text' });
-const jamo = ['ㄱ', '가', '간', '간ㄱ', '간그', '간글'];
-function hear(event, { end = false } = {}) {
-    const plan = planTypeSound(event);
-    if (end) noteCompositionEnd();
-    if (plan === 'now') return 1;
-    if (plan === 'later') return finishTypeSoundTurn() ? 1 : 0;
-    return 0;
+const soundStore = {
+    map: new Map(),
+    getItem(key) { return this.map.has(key) ? this.map.get(key) : null; },
+    setItem(key, value) { this.map.set(key, String(value)); },
+    removeItem(key) { this.map.delete(key); },
+};
+soundStore.setItem('ssug-gyomu-type-sound', '1');
+const previousStorage = globalThis.localStorage;
+globalThis.localStorage = soundStore;
+
+/** Chromium 로그와 같은 순서. 확정은 input → 마이크로태스크 → compositionend.
+    받침이 넘어갈 때는 insertText와 새 조합이 한 키의 12ms 안에 함께 옵니다.
+    noteTypeInput이 참이면(문자열 'later' 포함) 그 자리에서 소리로 셉니다. */
+let strokeAt = 1000;
+async function replayIme(steps) {
+    let sounds = 0;
+    for (const step of steps) {
+        const kind = step[0];
+        if (kind === 'gap') {
+            strokeAt += 80;
+            continue;
+        }
+        if (kind === 'micro') {
+            await Promise.resolve();
+            continue;
+        }
+        if (kind === 'start') {
+            noteCompositionStart();
+            continue;
+        }
+        if (kind === 'end') {
+            noteCompositionEnd();
+            continue;
+        }
+        if (kind === 'update') {
+            noteCompositionUpdate(step[1]);
+            continue;
+        }
+        if (kind === 'input') {
+            strokeAt += 0.3;
+            const decision = noteTypeInput({
+                inputType: step[1],
+                data: step[2],
+                isComposing: step[3],
+                target: composing,
+            }, strokeAt);
+            if (decision) sounds += 1;
+        }
+    }
+    return sounds;
 }
-function countStrokes() {
-    noteCompositionStart();
-    let heard = 0;
-    for (const data of jamo) heard += hear({ inputType: 'insertCompositionText', isComposing: true, data, target: composing });
-    return heard;
+function syllable(data) {
+    return [
+        ['update', data],
+        ['input', 'insertCompositionText', data, true],
+    ];
 }
-const chromiumSame = countStrokes() + hear({ inputType: 'insertCompositionText', isComposing: true, data: jamo[5], target: composing }, { end: true });
-check(chromiumSame === 6, `Chromium에서 같은 조합 문자열이 한 번 더 오면 소리가 ${chromiumSame}번입니다.`);
-const chromiumTurn = countStrokes() + hear({ inputType: 'insertCompositionText', isComposing: true, data: '끝', target: composing }, { end: true });
-check(chromiumTurn === 6, `Chromium에서 조합이 끝나는 턴의 소리가 ${chromiumTurn}번입니다.`);
-const safariSounds = countStrokes();
-noteCompositionEnd();
-const safariHeard = safariSounds + hear({ inputType: 'insertCompositionText', isComposing: false, data: jamo[5], target: composing });
-check(safariHeard === 6, `Safari에서 자모 6타에 소리가 ${safariHeard}번입니다.`);
+function confirm(data) {
+    return [
+        ['gap'],
+        ['update', data],
+        ['input', 'insertCompositionText', data, true],
+        ['micro'],
+        ['end'],
+    ];
+}
+/** 한 키에서 받침이 빠지고 다음 글자가 같은 순간에 시작됩니다. */
+function splitBatchim(kept, next, { commitText = false } = {}) {
+    const steps = [
+        ['gap'],
+        ['update', kept],
+        ['input', 'insertCompositionText', kept, true],
+        ['end'],
+    ];
+    if (commitText) steps.push(['input', 'insertText', kept, false]);
+    steps.push(['start'], ['update', next], ['input', 'insertCompositionText', next, true]);
+    return steps;
+}
+/** 받침이 이미 있는 글자를 확정하고 새 첫소리를 같은 키에서 시작합니다. */
+function commitAndStart(committed, next) {
+    return [
+        ['gap'],
+        ['end'],
+        ['input', 'insertText', committed, false],
+        ['start'],
+        ['update', next],
+        ['input', 'insertCompositionText', next, true],
+    ];
+}
+const words = [
+    {
+        name: '아아',
+        keys: 4,
+        steps: [
+            ['start'],
+            ...syllable('ㅇ'),
+            ['gap'], ...syllable('아'),
+            ['gap'], ...syllable('앙'),
+            ...splitBatchim('아', '아'),
+            ...confirm('아'),
+        ],
+    },
+    {
+        name: '나라',
+        keys: 4,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㄴ'),
+            ['gap'], ...syllable('나'),
+            ['gap'], ...syllable('날'),
+            ...splitBatchim('나', '라', { commitText: true }),
+            ...confirm('라'),
+        ],
+    },
+    {
+        name: '하하하',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('핳'),
+            ...splitBatchim('하', '하', { commitText: true }),
+            ['gap'], ...syllable('핳'),
+            ...splitBatchim('하', '하', { commitText: true }),
+            ...confirm('하'),
+        ],
+    },
+    {
+        name: '사랑해',
+        keys: 7,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅅ'),
+            ['gap'], ...syllable('사'),
+            ['gap'], ...syllable('살'),
+            ...splitBatchim('사', '라', { commitText: true }),
+            ['gap'], ...syllable('랑'),
+            ...commitAndStart('랑', 'ㅎ'),
+            ['gap'], ...syllable('해'),
+            ...confirm('해'),
+        ],
+    },
+    {
+        name: '한글',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('한'),
+            ...commitAndStart('한', 'ㄱ'),
+            ['gap'], ...syllable('그'),
+            ['gap'], ...syllable('글'),
+            ...confirm('글'),
+        ],
+    },
+    {
+        name: '안녕',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅇ'),
+            ['gap'], ...syllable('아'),
+            ['gap'], ...syllable('안'),
+            ...commitAndStart('안', 'ㄴ'),
+            ['gap'], ...syllable('녀'),
+            ['gap'], ...syllable('녕'),
+            ...confirm('녕'),
+        ],
+    },
+    {
+        name: 'ㅋㅋㅋ',
+        keys: 3,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅋ'),
+            ...commitAndStart('ㅋ', 'ㅋ'),
+            ...commitAndStart('ㅋ', 'ㅋ'),
+            ...confirm('ㅋ'),
+        ],
+    },
+    {
+        name: '학교에서',
+        keys: 9,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('학'),
+            ...commitAndStart('학', 'ㄱ'),
+            ['gap'], ...syllable('교'),
+            ['gap'], ...syllable('굥'),
+            ...splitBatchim('교', '에', { commitText: true }),
+            ['gap'], ...syllable('엣'),
+            ...splitBatchim('에', '서', { commitText: true }),
+            ...confirm('서'),
+        ],
+    },
+];
+for (const word of words) {
+    const sounds = await replayIme(word.steps);
+    check(sounds === word.keys, `${word.name}는 ${word.keys}타인데 소리가 ${sounds}번입니다.`);
+}
+const safariHangul = await replayIme([
+    ['gap'], ['start'],
+    ...syllable('ㅎ'),
+    ['gap'], ...syllable('하'),
+    ['gap'], ...syllable('한'),
+    ['gap'], ...syllable('한ㄱ'),
+    ['gap'], ...syllable('한그'),
+    ['gap'], ...syllable('한글'),
+    ['gap'], ['end'],
+    ['input', 'insertCompositionText', '한글', false],
+]);
+check(safariHangul === 6, `Safari에서 한글 6타에 소리가 ${safariHangul}번입니다.`);
 noteCompositionStart();
 let bareSafari = 0;
+let bareAt = strokeAt + 80;
 for (let i = 0; i < 6; i += 1) {
-    if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: true, target: composing })) bareSafari += 1;
+    bareAt += 80;
+    if (acceptTypeInput({ inputType: 'insertCompositionText', isComposing: true, target: composing }, bareAt)) bareSafari += 1;
 }
 noteCompositionEnd();
-if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: false, target: composing })) bareSafari += 1;
+bareAt += 80;
+if (acceptTypeInput({ inputType: 'insertCompositionText', isComposing: false, target: composing }, bareAt)) bareSafari += 1;
 check(bareSafari === 6, `Safari 조합 종료 알림에 소리가 ${bareSafari}번입니다.`);
+const repeatAt = bareAt + 80;
+check(noteTypeInput({ inputType: 'insertText', data: 'a', target: composing }, repeatAt) === true, '일반 글자에서 소리가 나지 않습니다.');
+check(noteTypeInput({ inputType: 'insertText', data: 'b', target: composing }, repeatAt + 1) === false, '12ms 안의 같은 타를 두 번 울립니다.');
+check(noteTypeInput({ inputType: 'insertText', data: 'c', target: composing }, repeatAt + 40) === true, '다음 글자 소리를 12ms 거름이 삼킵니다.');
 noteCompositionStart();
 check(shouldTypeSound({ inputType: 'insertCompositionText', data: 'ㄱ', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
 check(!shouldTypeSound({ inputType: 'insertFromComposition', target: fakeControl('INPUT', { type: 'text' }) }), '조합이 끝날 때 소리가 한 번 더 납니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'password' }) }), '비밀번호 칸에서 글자 소리를 냅니다.');
 check(!shouldTypeSound({ inputType: 'insertFromPaste', target: fakeControl('TEXTAREA') }), '붙여넣기에도 글자마다 소리를 내려 합니다.');
+if (previousStorage === undefined) delete globalThis.localStorage;
+else globalThis.localStorage = previousStorage;
 
 const attendTarget = menuTarget('#/attend', '2026-10-26');
 const attendRoute = resolveHash(attendTarget, '2026-10-26');
@@ -327,6 +530,12 @@ check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, legacyKeys) === 'at
 const freshDefaults = resetHotkeys(hotStore);
 const freshValues = Object.values(freshDefaults).filter(Boolean);
 check(freshDefaults.plus === '/' && freshDefaults.attend === '' && freshDefaults.help === '?' && new Set(freshValues).size === freshValues.length, '기본으로 되돌리면 같은 키가 두 동작에 걸립니다.');
+check(kokHotkeyHint(defaultHotkeys()) === '기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.', '기본 콕 안내가 달라졌습니다.');
+check(kokHotkeyHint(legacyKeys) === '콕 여는 키는 아직 없어요. 설정에서 정해 주시면 돼요.' && !kokHotkeyHint(legacyKeys).includes('/'), '콕 키가 없는데 사이드바가 빗금을 말합니다.');
+check(kokHotkeyHint({ ...defaultHotkeys(), plus: 'a' }) === 'A 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.', '바꾼 콕 키를 사이드바가 따라가지 않습니다.');
+check(hotkeyFootnote(legacyKeys).includes('아직 없어요') && !hotkeyFootnote(legacyKeys).includes('/ 키'), '콕 키가 없는데 단축키 안내가 빗금을 말합니다.');
+check(hotkeyFootnote(defaultHotkeys()).includes('?') && hotkeyFootnote(defaultHotkeys()).includes('/'), '기본 단축키 안내가 빠졌습니다.');
+check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNote(legacyKeys).includes('/'), '콕 키가 없는데 휴대폰 안내가 빗금을 말합니다.');
 
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';
@@ -335,7 +544,16 @@ check(bits.includes(ledgerPath), '콕 글자 윤곽이 가계부와 다릅니다
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
 check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('>끄기<'), '소리 안내 문구가 없습니다.');
 check(/const onKey = \(event\) => \{\n\s+if \(locked\) return;/.test(appText), '잠금 중에 단축키가 먹습니다.');
-check(appText.includes('compositionend'), '한글 조합이 끝날 때 소리를 한 번 더 냅니다.');
+check(appText.includes('compositionupdate') && appText.includes('noteCompositionUpdate(event?.data)'), '조합이 바뀌는 글자를 기록하지 않습니다.');
+check(appText.includes('if (noteTypeInput(event)) playTypeSound();'), '글자 소리를 조합이 끝난 뒤에 미루면 마이크로태스크가 먼저 울립니다.');
+check(!appText.includes('finishTypeSoundTurn') && !appText.includes('queueMicrotask'), '동작하지 않는 소리 미루기가 남아 있습니다.');
+check(!appText.includes('기본으로 / 키를 누르면 콕이 열려요'), '사이드바 콕 안내가 저장된 키를 따라가지 않습니다.');
+check(appText.includes('kokHotkeyHint(hotkeys)'), '사이드바가 콕 키 안내를 그리지 않습니다.');
+const typeText = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+check(typeText.includes('function noteCompositionUpdate') && !typeText.includes('dropHeld') && !typeText.includes('finishTypeSoundTurn') && !typeText.includes('heldStroke'), '받침이 넘어갈 때 소리를 미루는 옛 경로가 남아 있습니다.');
+const formText = readFileSync(`${root}/src/ui/HotkeyForm.jsx`, 'utf8');
+check(formText.includes('hotkeyFootnote(map)') && formText.includes('hotkeyPhoneNote(map)'), '단축키 안내가 저장된 키를 따라가지 않습니다.');
+check(!formText.includes('기본으로는 / 키가 콕을 엽니다.') && !formText.includes('휴대폰에서는 기본으로 / 키가 콕을 엽니다.'), '단축키 화면에 빗금 안내가 고정되어 있습니다.');
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');

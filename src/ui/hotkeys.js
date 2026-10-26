@@ -99,6 +99,14 @@ export function loadHotkeys(storage) {
     return dedupeHotkeys(base, explicit);
 }
 
+function notifyHotkeys() {
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new Event('ssug-gyomu-hotkeys-changed'));
+        }
+    } catch { /* 창이 없는 시험에서는 저장만 확인합니다. */ }
+}
+
 export function saveHotkeys(map, storage) {
     const out = {};
     for (const action of HOTKEY_ACTIONS) {
@@ -107,6 +115,7 @@ export function saveHotkeys(map, storage) {
     }
     try {
         readStore(storage)?.setItem?.(STORAGE_KEY, JSON.stringify(out));
+        notifyHotkeys();
         return true;
     } catch {
         return false;
@@ -115,7 +124,37 @@ export function saveHotkeys(map, storage) {
 
 export function resetHotkeys(storage) {
     try { readStore(storage)?.removeItem?.(STORAGE_KEY); } catch { /* 지워지지 않아도 화면은 기본으로 돌립니다. */ }
+    notifyHotkeys();
     return defaultHotkeys();
+}
+
+/** 사이드바 안내. 저장된 콕 키를 따르고, 키가 없으면 기본 빗금을 말하지 않습니다. */
+export function kokHotkeyHint(map = loadHotkeys()) {
+    const key = map?.plus || '';
+    if (!key) return '콕 여는 키는 아직 없어요. 설정에서 정해 주시면 돼요.';
+    if (key === '/') return '기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.';
+    return `${hotkeyLabel(key)} 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.`;
+}
+
+/** 단축키 설정 아래 안내. 목록 키와 콕 키 모두 지금 저장된 값을 말합니다. */
+export function hotkeyFootnote(map = loadHotkeys()) {
+    const help = map?.help || '';
+    const plus = map?.plus || '';
+    const helpText = help ? `${hotkeyLabel(help)} 키` : '';
+    const plusText = plus ? `${hotkeyLabel(plus)} 키` : '';
+    if (!plus && !help) return '콕과 목록 키는 아직 없어요. 위에서 정해 주시면 돼요.';
+    if (!plus) return `목록은 ${helpText}로도 볼 수 있어요. 콕 여는 키는 아직 없어요.`;
+    if (!help) return `콕은 ${plusText}로 열려요. 목록 키는 아직 없어요.`;
+    if (plus === '/' && help === '?') return '목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 콕을 엽니다.';
+    return `목록은 ${helpText}로도 볼 수 있어요. 콕은 ${plusText}로 열려요.`;
+}
+
+/** 키보드가 없는 화면. 휴대폰에서 열릴 키도 저장된 값을 따릅니다. */
+export function hotkeyPhoneNote(map = loadHotkeys()) {
+    const plus = map?.plus || '';
+    if (!plus) return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 콕 여는 키가 아직 없어요.';
+    if (plus === '/') return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 콕을 엽니다.';
+    return `키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 ${hotkeyLabel(plus)} 키가 콕을 엽니다.`;
 }
 
 export function assignHotkey(map, id, key) {
