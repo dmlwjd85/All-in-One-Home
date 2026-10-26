@@ -160,7 +160,7 @@ for (const sampleRate of [44100, 48000]) {
         const burst = mixTypeBurst({ voice: voice.id, count: 50, gapMs: 30, fadeMs: 16, sampleRate });
         typeBurstNotes.push(`${voice.id}@${sampleRate} peak ${burst.peak.toFixed(4)} jump ${burst.maxJump.toFixed(4)}`);
         check(burst.peak <= 1 && burst.peak > 0, `${voice.label} 연타 피크가 1을 넘거나 0입니다. ${burst.peak}`);
-        check(burst.maxJump < 0.2, `${voice.label} 연타에 클릭이 있습니다. 점프 ${burst.maxJump}`);
+        check(burst.maxJump < 0.08, `${voice.label} 연타에 클릭이 있습니다. 점프 ${burst.maxJump}`);
     }
 }
 const typeWorst = typeBurstNotes.reduce((best, line) => {

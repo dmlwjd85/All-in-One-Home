@@ -1220,18 +1220,39 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
         let week = await page.evaluate(() => document.body.innerText);
         check(week.includes('14:00–16:00') && week.includes('학부모 진로 특강'), `끝 시각이 ${label} 주간에 보이지 않습니다.`);
-        if (!(week.includes('08:50') && week.includes('과학관'))) {
+        async function showCalendar(monthTitle = '') {
+            await page.evaluate(() => { location.hash = '#/schedule'; });
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
             await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
             await page.waitForSelector('.cal-grid');
+            if (!monthTitle) return;
+            for (let back = 0; back < 8; back += 1) {
+                const title = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
+                if (title === monthTitle) return;
+                const year = Number((title.match(/(\d{4})년/) || [])[1] || 0);
+                const month = Number((title.match(/(\d{1,2})월/) || [])[1] || 0);
+                const targetYear = Number((monthTitle.match(/(\d{4})년/) || [])[1] || 0);
+                const targetMonth = Number((monthTitle.match(/(\d{1,2})월/) || [])[1] || 0);
+                await page.click(year * 12 + month < targetYear * 12 + targetMonth ? '[aria-label="다음 달"]' : '[aria-label="이전 달"]');
+            }
+        }
+        if (!(week.includes('08:50') && week.includes('과학관'))) {
+            await showCalendar();
             let found = false;
             for (let hop = 0; hop < 3 && !found; hop += 1) {
                 const count = await page.evaluate(() => document.querySelectorAll('.cal-grid button').length);
-                for (let index = 0; index < count; index += 1) {
+                for (let index = 0; index < count && !found; index += 1) {
                     const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
                     if (!marked) continue;
+                    const monthTitle = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
                     const body = await page.evaluate(async (n) => {
+                        const before = location.hash;
                         document.querySelectorAll('.cal-grid button')[n].click();
-                        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                        const start = performance.now();
+                        while (location.hash === before && performance.now() - start < 1500) {
+                            await new Promise((resolve) => requestAnimationFrame(resolve));
+                        }
+                        await new Promise((resolve) => requestAnimationFrame(resolve));
                         return document.body.innerText;
                     }, index);
                     if (body.includes('과학관') && body.includes('08:50')) {
@@ -1239,6 +1260,7 @@ try {
                         found = true;
                         break;
                     }
+                    await showCalendar(monthTitle);
                 }
                 if (!found) await page.click('[aria-label="다음 달"]');
             }
@@ -1247,7 +1269,7 @@ try {
         check(week.includes('과학관') && week.includes('08:50') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
         await audit(page, `주간 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
-        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await showCalendar();
         for (let hop = 0; hop < 8; hop += 1) {
             const title = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
             if (title === todayMonthLabel) break;
