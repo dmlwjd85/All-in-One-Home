@@ -181,6 +181,7 @@ const pairs = [
     ['강조 카드', '#A73D74', '#E8E4DE'],
     ['강조 노란', '#A73D74', '#F2E6C4'],
     ['다크 강조', '#E08B9A', '#2A2627'],
+    ['다크 오늘 칸', '#2A2627', '#E08B9A'],
     ['다크 강조 카드', '#E08B9A', '#2A2627'],
     ['토스트', '#F6F2EE', '#2E2A2B'],
     ['토스트 동작', '#F0A8BA', '#2E2A2B'],
@@ -497,6 +498,8 @@ else globalThis.localStorage = previousStorage;
 const attendTarget = menuTarget('#/attend', '2026-10-26');
 const attendRoute = resolveHash(attendTarget, '2026-10-26');
 check(attendTarget === '#/attend/2026-10-26' && attendRoute.name === 'attend' && attendRoute.replace === '', '출결 메뉴가 날짜 주소로 바로 열리지 않습니다.');
+const attendMonth = resolveHash('#/attend/2026-10-26/month', '2026-10-19');
+check(attendMonth.name === 'attend' && attendMonth.params.date === '2026-10-26' && attendMonth.params.span === 'month' && attendMonth.replace === '', '이번 달 출결 주소가 유지되지 않습니다.');
 check(menuSelected('attend', '#/attend') && !menuSelected('today', '#/attend'), '출결 화면에서 출결 메뉴가 켜지지 않습니다.');
 check(menuSelected('student', '#/students') && menuSelected('legacy', '#/settings') && menuSelected('schedule', '#/schedule'), '다른 화면의 메뉴 선택이 꺼집니다.');
 check(resolveHash('#/day/2026-10-26', '2026-10-19').name === 'day' && resolveHash('#/day/2026-10-26', '2026-10-19').params.date === '2026-10-26', '날짜 일지 주소가 열리지 않습니다.');
@@ -576,7 +579,7 @@ check(!formText.includes('기본으로는 / 키가 콕을 엽니다.') && !formT
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v18'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v19'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';

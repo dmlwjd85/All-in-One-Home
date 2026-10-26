@@ -93,7 +93,7 @@ export function Schedule() {
                             const todayCell = cell.ymd === clock.ymd;
                             return (
                                 <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={`${formatKoDate(cell.ymd)} 고르기`} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
-                                    <span className="num" style={{ fontWeight: 700, color: todayCell ? 'var(--on-primary)' : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
+                                    <span className="num" style={{ fontWeight: 700, color: todayCell ? undefined : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
                                     {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11 }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
                                     {(has || hasGoogle) && (
                                         <span className="cal-marks">

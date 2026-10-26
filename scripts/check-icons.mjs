@@ -189,6 +189,8 @@ if (tiny) {
         }
     }
     check(ink > 70, `16px 파비콘 획이 너무 가늘거나 받침이 붙었습니다. 흰 칸 ${ink}`);
+    const aeBar = [1, 2, 3, 4, 5, 6].some((y) => isWhite(tiny.pixel(10, y)) && isWhite(tiny.pixel(11, y)) && isWhite(tiny.pixel(12, y)));
+    check(aeBar, '16px 파비콘 ㅐ에 짧은 가로획이 없습니다.');
     const edge = tileMargin(tiny, 1);
     check(edge.white === 0 && edge.tile > 8, `16px 파비콘 타일 여백이 없습니다. 가장자리 흰 칸 ${edge.white}, 타일 ${edge.tile}`);
 }
@@ -201,10 +203,10 @@ check(JJAEM_FAVICON_32_D !== JJAEM_FAVICON_D && JJAEM_FAVICON_32_D.includes('M2 
 
 const index = read('index.html')?.toString('utf8') || '';
 const manifest = read('public/manifest.webmanifest')?.toString('utf8') || '';
-for (const needle of ['favicon.svg?v=18', 'favicon.ico?v=18', 'favicon-16.png?v=18', 'favicon-32.png?v=18', 'apple-touch-icon.png?v=18']) {
+for (const needle of ['favicon.svg?v=19', 'favicon.ico?v=19', 'favicon-16.png?v=19', 'favicon-32.png?v=19', 'apple-touch-icon.png?v=19']) {
     check(index.includes(needle), `index.html 에 ${needle} 가 없습니다.`);
 }
-for (const needle of ['pwa-192.png?v=18', 'pwa-512.png?v=18', 'maskable-512.png?v=18']) {
+for (const needle of ['pwa-192.png?v=19', 'pwa-512.png?v=19', 'maskable-512.png?v=19']) {
     check(manifest.includes(needle), `매니페스트에 ${needle} 가 없습니다.`);
 }
 check(!index.includes('icon-192.png') && !manifest.includes('icon-512.png'), '예전 아이콘 주소가 남아 있습니다.');

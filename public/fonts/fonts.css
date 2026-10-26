@@ -1,12 +1,21 @@
 /* 글꼴은 이 앱 안에만 넣습니다. 글꼴 파일만 따로 배포하지 않습니다.
    글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀
    글꼴: 쨈 본문 — Resource Han Rounded(Cyano Hao, SIL OFL 1.1) 바탕. 원문은 OFL-JJAEMBody.txt
-   24px 미만은 쨈 본문(Bold는 14px부터), 24px 이상은 쨈 제목 평면, font-display: swap.
+   작은 글자는 쨈 본문, 아주 작은 글씨는 보통 굵기, 큰 제목은 쨈 제목 평면, font-display: swap.
+   첫 화면 본문만 담은 JJAEMBody-Regular.first.woff2 를 먼저 받고, 나머지 글자는 본문 파일에서 받습니다.
    아래 대체 글꼴은 빠진 글자와 설정에서 고른 다른 고딕용입니다. 모두 SIL Open Font License 1.1.
    Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다.
    나눔스퀘어라운드는 둥근 고딕(굵게 파일 하나)입니다.
    Gothic A1은 라틴·한글 범위로 나눈 고딕이고, Reserved Font Name 이 없습니다.
    고운바탕은 아이콘 그림에만 남아 있습니다. */
+@font-face {
+    font-family: 'JJAEM Body';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    unicode-range: U+0020, U+002E, U+AC00, U+ACB0, U+ACE0, U+AD11, U+AD6C, U+ADF8, U+AE00, U+AE30, U+B294, U+B2C8, U+B2D8, U+B2E4, U+B2F4, U+B3FC, U+B461, U+B4DC, U+B77C, U+B85C-B85D, U+B8E8, U+B9AC, U+B9CC, U+BA74, U+C0DD, U+C120, U+C544, U+C5B4, U+C5C6, U+C5D0, U+C5F0, U+C694, U+C6B0, U+C740, U+C758, U+C774, U+C778, U+C784, U+C788, U+C790, U+C7A5, U+C800, U+C804, U+C9C1, U+D074, U+D558-D559, U+D55C, U+D654;
+    src: url('./JJAEMBody-Regular.first.woff2') format('woff2');
+}
 @font-face {
     font-family: 'JJAEM Body';
     font-style: normal;

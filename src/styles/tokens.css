@@ -10,6 +10,7 @@
     --font-soft: 'NanumSquareRound', -apple-system, sans-serif;
     --font-neat: 'Gothic A1', -apple-system, sans-serif;
     --font-body: 'JJAEM Body', var(--font-plain);
+    --font-jjaem: 'JJAEM Body', var(--font-plain);
     --font-title: 'JJAEM Body', var(--font-plain);
     --font-display: 'JJAEM Title Flat', 'JJAEM Body', var(--font-plain);
     --title-effect: none;

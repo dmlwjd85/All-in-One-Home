@@ -197,7 +197,7 @@ export default function App() {
                 : route.name === 'student'
                     ? '#/students'
                     : route.name === 'legacy'
-                        ? '#/settings/legacy'
+                        ? (route.params.page ? '#/settings/legacy' : '#/settings')
                         : '#/today';
         try {
             const url = new URL(location.href);
@@ -207,7 +207,7 @@ export default function App() {
             location.replace(parent);
         }
         setHash(parent);
-    }, [route.name, route.params.date]);
+    }, [route.name, route.params.date, route.params.page]);
 
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
