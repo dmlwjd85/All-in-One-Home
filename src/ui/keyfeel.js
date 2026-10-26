@@ -440,6 +440,40 @@ function withAudio(fn) {
     }
 }
 
+/** 아이폰은 첫 터치·첫 키 안에 컨텍스트를 만들어야 이후 글자 소리가 납니다. */
+export function unlockKeyAudio() {
+    const audio = sharedContext();
+    if (!audio) return null;
+    if (audio.state !== 'running') {
+        try {
+            const pending = audio.resume();
+            if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+        } catch {
+            /* 아직 잠겨 있으면 다음 누름에서 다시 엽니다. */
+        }
+    }
+    return audio;
+}
+
+/** 글자 소리는 버튼 소리의 토큰에 끊기지 않게 따로 켭니다. 받아쓰기 중 음소거는 같이 봅니다. */
+export function withKeyAudio(fn) {
+    const audio = sharedContext();
+    if (!audio || muted) return;
+    const run = () => {
+        if (muted || audio.state !== 'running') return;
+        try { fn(audio); } catch { /* 소리 없이 지나갑니다. */ }
+    };
+    try {
+        if (audio.state === 'running') run();
+        else {
+            const pending = audio.resume();
+            if (pending && typeof pending.then === 'function') pending.then(run).catch(() => {});
+        }
+    } catch {
+        /* 소리를 못 내도 글은 적힙니다. */
+    }
+}
+
 /** 연타를 샘플로 섞어 피크를 잽니다. 직전 소리만 페이드하고 그 앞은 끊습니다. */
 export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = 10, sampleRate = 48000 } = {}) {
     const pair = renderKeyPair(voice, sampleRate);

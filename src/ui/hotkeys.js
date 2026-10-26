@@ -1,0 +1,180 @@
+/** 단축키. 기본은 예전과 같이 / 키가 콕을 엽니다. 나머지는 비어 있고, ? 는 목록입니다.
+    값은 이 기기에만 둡니다. Ctrl·Command·Alt 조합은 브라우저 몫이라 받지 않습니다. */
+
+const STORAGE_KEY = 'ssug-gyomu-hotkeys';
+
+export const HOTKEY_ACTIONS = [
+    { id: 'plus', label: '콕 열기', group: '동작', fallback: '/' },
+    { id: 'help', label: '단축키 목록', group: '동작', fallback: '?' },
+    { id: 'search', label: '찾기', group: '동작', fallback: '' },
+    { id: 'today', label: '오늘', group: '이동', fallback: '' },
+    { id: 'attend', label: '출결', group: '이동', fallback: '' },
+    { id: 'students', label: '학생 기록', group: '이동', fallback: '' },
+    { id: 'schedule', label: '일정·시간표', group: '이동', fallback: '' },
+    { id: 'todo', label: '할 일·메모', group: '이동', fallback: '' },
+    { id: 'notice', label: '알림장', group: '이동', fallback: '' },
+    { id: 'neis', label: '나이스 모아 보기', group: '이동', fallback: '' },
+    { id: 'settings', label: '설정', group: '이동', fallback: '' },
+    { id: 'quick:상담', label: '상담 적기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'quick:할 일', label: '할 일 적기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'quick:일정', label: '일정 적기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'message', label: '메시지 붙여넣기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'minutes', label: '회의록 적기', group: '자주 쓰는 일', fallback: '' },
+];
+
+const LABELS = {
+    ArrowUp: '위',
+    ArrowDown: '아래',
+    ArrowLeft: '왼쪽',
+    ArrowRight: '오른쪽',
+};
+
+function liveStorage() {
+    try {
+        if (typeof localStorage === 'undefined') return null;
+        return localStorage;
+    } catch {
+        return null;
+    }
+}
+
+function readStore(storage) {
+    return storage || liveStorage();
+}
+
+export function defaultHotkeys() {
+    const map = {};
+    for (const action of HOTKEY_ACTIONS) map[action.id] = action.fallback;
+    return map;
+}
+
+export function isStoredHotkey(value) {
+    if (value === '') return true;
+    if (typeof value !== 'string') return false;
+    if (value.length === 1) return value !== ' ' && value !== '\n' && value !== '\t';
+    if (/^Arrow(Up|Down|Left|Right)$/.test(value)) return true;
+    if (/^F(?:[234]|[6-9]|10)$/.test(value)) return true;
+    return false;
+}
+
+export function loadHotkeys(storage) {
+    const base = defaultHotkeys();
+    let saved = null;
+    try {
+        const raw = readStore(storage)?.getItem?.(STORAGE_KEY);
+        if (raw) saved = JSON.parse(raw);
+    } catch {
+        saved = null;
+    }
+    if (!saved || typeof saved !== 'object') return base;
+    for (const action of HOTKEY_ACTIONS) {
+        if (Object.prototype.hasOwnProperty.call(saved, action.id) && isStoredHotkey(saved[action.id])) {
+            base[action.id] = saved[action.id];
+        }
+    }
+    return base;
+}
+
+export function saveHotkeys(map, storage) {
+    const out = {};
+    for (const action of HOTKEY_ACTIONS) {
+        const value = map?.[action.id];
+        out[action.id] = isStoredHotkey(value) ? value : '';
+    }
+    try {
+        readStore(storage)?.setItem?.(STORAGE_KEY, JSON.stringify(out));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export function resetHotkeys(storage) {
+    try { readStore(storage)?.removeItem?.(STORAGE_KEY); } catch { /* 지워지지 않아도 화면은 기본으로 돌립니다. */ }
+    return defaultHotkeys();
+}
+
+export function assignHotkey(map, id, key) {
+    const next = { ...defaultHotkeys(), ...map, [id]: key };
+    let movedFrom = '';
+    if (key) {
+        for (const action of HOTKEY_ACTIONS) {
+            if (action.id !== id && next[action.id] === key) {
+                next[action.id] = '';
+                movedFrom = action.label;
+            }
+        }
+    }
+    return { map: next, movedFrom };
+}
+
+export function hotkeyLabel(key) {
+    if (!key) return '없음';
+    if (LABELS[key]) return LABELS[key];
+    if (/^[a-z]$/.test(key)) return key.toUpperCase();
+    return key;
+}
+
+export function hotkeyFromEvent(event) {
+    if (!event || event.ctrlKey || event.metaKey || event.altKey) return '';
+    if (event.isComposing || event.key === 'Process' || event.key === 'Unidentified' || event.key === 'Dead') return '';
+    const key = event.key;
+    if (!key) return '';
+    if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock', 'Escape', 'Tab', 'Enter', ' '].includes(key)) return '';
+    if (key === 'Backspace' || key === 'Delete') return '';
+    if (/^[a-zA-Z]$/.test(key)) return key.toLowerCase();
+    if (key.length === 1) return key;
+    if (/^Arrow(Up|Down|Left|Right)$/.test(key)) return key;
+    if (/^F(?:[234]|[6-9]|10)$/.test(key)) return key;
+    return '';
+}
+
+export function browserCombo(event) {
+    return Boolean(event && (event.ctrlKey || event.metaKey || event.altKey) && event.key && !['Control', 'Meta', 'Alt', 'Shift'].includes(event.key));
+}
+
+export function clearsHotkey(event) {
+    const key = event?.key;
+    return key === 'Backspace' || key === 'Delete';
+}
+
+function typingElement(el) {
+    if (!el || !el.tagName) return false;
+    if (el.isContentEditable) return true;
+    const tag = String(el.tagName).toUpperCase();
+    if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (tag !== 'INPUT') return false;
+    const type = String((typeof el.getAttribute === 'function' ? el.getAttribute('type') : el.type) || 'text').toLowerCase();
+    return ['', 'text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(type);
+}
+
+/** 글자 칸과 한글 조합 중에는 단축키를 쉬게 합니다. */
+export function shortcutBlocked(event) {
+    if (!event || event.repeat) return true;
+    if (event.isComposing || event.key === 'Process' || event.keyCode === 229) return true;
+    const target = event.target;
+    if (target && typeof target.closest === 'function' && target.closest('[data-hotkey-capture]')) return true;
+    if (typingElement(target)) return true;
+    return false;
+}
+
+export function matchHotkey(event, map = loadHotkeys()) {
+    if (shortcutBlocked(event)) return '';
+    const key = hotkeyFromEvent(event);
+    if (!key) return '';
+    for (const action of HOTKEY_ACTIONS) {
+        if (map?.[action.id] === key) return action.id;
+    }
+    return '';
+}
+
+export function hotkeysAvailable() {
+    if (typeof window === 'undefined') return true;
+    try {
+        if (typeof window.matchMedia === 'function' && window.matchMedia('(any-pointer: fine), (hover: hover)').matches) return true;
+    } catch { /* 미디어를 못 물으면 너비로 가릅니다. */ }
+    // 마우스가 없다고 나오는 브라우저라도, 넓고 긴 화면이면 키보드가 있는 쪽으로 봅니다.
+    const width = window.innerWidth || 0;
+    const height = window.innerHeight || 0;
+    return width >= 900 && height >= 700;
+}
