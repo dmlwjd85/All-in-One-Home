@@ -15,7 +15,7 @@ import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
 import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
-import { isSensitiveControl, isTextControl, noteCompositionEnd, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
+import { finishTypeSoundTurn, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, planTypeSound, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFromEvent, isStoredHotkey, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
 import { menuSelected, menuTarget } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
@@ -255,14 +255,38 @@ check(isSensitiveControl(fakeControl('INPUT', { type: 'text', autocomplete: 'one
 check(!isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '학급 이름' })), '학급 이름 칸을 비밀번호로 봅니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'text', autocomplete: 'one-time-code' }) }), '인증 번호 칸에서 글자 소리가 납니다.');
 const composing = fakeControl('INPUT', { type: 'text' });
-let jamoSounds = 0;
+const jamo = ['ㄱ', '가', '간', '간ㄱ', '간그', '간글'];
+function hear(event, { end = false } = {}) {
+    const plan = planTypeSound(event);
+    if (end) noteCompositionEnd();
+    if (plan === 'now') return 1;
+    if (plan === 'later') return finishTypeSoundTurn() ? 1 : 0;
+    return 0;
+}
+function countStrokes() {
+    noteCompositionStart();
+    let heard = 0;
+    for (const data of jamo) heard += hear({ inputType: 'insertCompositionText', isComposing: true, data, target: composing });
+    return heard;
+}
+const chromiumSame = countStrokes() + hear({ inputType: 'insertCompositionText', isComposing: true, data: jamo[5], target: composing }, { end: true });
+check(chromiumSame === 6, `Chromium에서 같은 조합 문자열이 한 번 더 오면 소리가 ${chromiumSame}번입니다.`);
+const chromiumTurn = countStrokes() + hear({ inputType: 'insertCompositionText', isComposing: true, data: '끝', target: composing }, { end: true });
+check(chromiumTurn === 6, `Chromium에서 조합이 끝나는 턴의 소리가 ${chromiumTurn}번입니다.`);
+const safariSounds = countStrokes();
+noteCompositionEnd();
+const safariHeard = safariSounds + hear({ inputType: 'insertCompositionText', isComposing: false, data: jamo[5], target: composing });
+check(safariHeard === 6, `Safari에서 자모 6타에 소리가 ${safariHeard}번입니다.`);
+noteCompositionStart();
+let bareSafari = 0;
 for (let i = 0; i < 6; i += 1) {
-    if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: true, target: composing })) jamoSounds += 1;
+    if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: true, target: composing })) bareSafari += 1;
 }
 noteCompositionEnd();
-if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: false, target: composing })) jamoSounds += 1;
-check(jamoSounds === 6, `자모 6타에 소리가 ${jamoSounds}번입니다.`);
-check(shouldTypeSound({ inputType: 'insertCompositionText', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
+if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: false, target: composing })) bareSafari += 1;
+check(bareSafari === 6, `Safari 조합 종료 알림에 소리가 ${bareSafari}번입니다.`);
+noteCompositionStart();
+check(shouldTypeSound({ inputType: 'insertCompositionText', data: 'ㄱ', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
 check(!shouldTypeSound({ inputType: 'insertFromComposition', target: fakeControl('INPUT', { type: 'text' }) }), '조합이 끝날 때 소리가 한 번 더 납니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'password' }) }), '비밀번호 칸에서 글자 소리를 냅니다.');
 check(!shouldTypeSound({ inputType: 'insertFromPaste', target: fakeControl('TEXTAREA') }), '붙여넣기에도 글자마다 소리를 내려 합니다.');
@@ -286,7 +310,7 @@ check(moved.movedFrom === '콕 열기' && moved.map.attend === '/' && moved.map.
 check(hotkeyFromEvent({ key: 'A' }) === 'a' && hotkeyFromEvent({ key: 'k', ctrlKey: true }) === '', 'Ctrl 조합이나 대문자를 그대로 받습니다.');
 check(hotkeyFromEvent({ key: 'F3' }) === '' && hotkeyFromEvent({ key: 'F6' }) === '' && hotkeyFromEvent({ key: 'F5' }) === '' && hotkeyFromEvent({ key: 'F12' }) === '', '브라우저 기능키를 단축키로 받습니다.');
 check(hotkeyFromEvent({ key: 'F8' }) === 'F8' && isStoredHotkey('F8') && !isStoredHotkey('F3') && !isStoredHotkey('F6'), '브라우저가 쓰지 않는 기능키까지 막거나, 막은 키를 저장합니다.');
-check(passesThroughCapture({ key: 'Tab' }) && !passesThroughCapture({ key: 'a' }), 'Tab이 단축키 칸에 갇힙니다.');
+check(passesThroughCapture({ key: 'Tab' }) && passesThroughCapture({ key: 'Tab', shiftKey: true }) && passesThroughCapture({ key: 'Shift' }) && passesThroughCapture({ key: 'Control' }) && passesThroughCapture({ key: 'Alt' }) && passesThroughCapture({ key: 'Meta' }) && !passesThroughCapture({ key: 'a' }), 'Shift+Tab이나 수정 키가 단축키 칸에 갇힙니다.');
 check(shortcutBlocked({ key: 'a', target: fakeControl('INPUT', { type: 'text' }) }), '글자 칸에서 단축키가 먹습니다.');
 check(shortcutBlocked({ key: 'Process', isComposing: true, target: { tagName: 'BODY' } }), '한글 조합 중에 단축키가 먹습니다.');
 check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 콕을 열지 않습니다.');
@@ -295,6 +319,14 @@ saveHotkeys(moved.map, hotStore);
 check(loadHotkeys(hotStore).attend === '/' && loadHotkeys(hotStore).plus === '', '옮긴 단축키가 저장되지 않습니다.');
 resetHotkeys(hotStore);
 check(loadHotkeys(hotStore).plus === '/' && loadHotkeys(hotStore).attend === '', '기본값으로 되돌리기가 남지 않습니다.');
+hotStore.setItem('ssug-gyomu-hotkeys', JSON.stringify({ plus: 'F6', attend: '/' }));
+const legacyKeys = loadHotkeys(hotStore);
+const legacyValues = Object.values(legacyKeys).filter(Boolean);
+check(legacyKeys.attend === '/' && legacyKeys.plus === '' && legacyKeys.help === '?' && new Set(legacyValues).size === legacyValues.length, '예전 F6 저장이 콕과 출결을 같은 / 로 겹치게 합니다.');
+check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, legacyKeys) === 'attend', '겹친 / 가 콕을 엽니다.');
+const freshDefaults = resetHotkeys(hotStore);
+const freshValues = Object.values(freshDefaults).filter(Boolean);
+check(freshDefaults.plus === '/' && freshDefaults.attend === '' && freshDefaults.help === '?' && new Set(freshValues).size === freshValues.length, '기본으로 되돌리면 같은 키가 두 동작에 걸립니다.');
 
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';

@@ -11,7 +11,7 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteTypeInput, playTypeSound } from './ui/typesound.js';
+import { finishTypeSoundTurn, noteCompositionEnd, noteCompositionStart, noteTypeInput, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -232,16 +232,22 @@ export default function App() {
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
         const onInput = (event) => {
-            if (!noteTypeInput(event)) return;
-            playTypeSound();
+            const decision = noteTypeInput(event);
+            if (decision === 'later') {
+                queueMicrotask(() => { if (finishTypeSoundTurn()) playTypeSound(); });
+                return;
+            }
+            if (decision) playTypeSound();
         };
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
+        document.addEventListener('compositionstart', noteCompositionStart, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
         document.addEventListener('input', onInput, true);
         return () => {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
+            document.removeEventListener('compositionstart', noteCompositionStart, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
             document.removeEventListener('input', onInput, true);
         };

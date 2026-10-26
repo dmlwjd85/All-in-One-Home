@@ -42,10 +42,32 @@ function readStore(storage) {
     return storage || liveStorage();
 }
 
+function dedupeHotkeys(map, explicit) {
+    const next = {};
+    const owner = new Map();
+    for (const action of HOTKEY_ACTIONS) {
+        const key = typeof map?.[action.id] === 'string' ? map[action.id] : '';
+        next[action.id] = key;
+        if (!key) continue;
+        if (!owner.has(key)) {
+            owner.set(key, action.id);
+            continue;
+        }
+        const prev = owner.get(key);
+        if (explicit?.has(action.id) && !explicit?.has(prev)) {
+            next[prev] = '';
+            owner.set(key, action.id);
+        } else {
+            next[action.id] = '';
+        }
+    }
+    return next;
+}
+
 export function defaultHotkeys() {
     const map = {};
     for (const action of HOTKEY_ACTIONS) map[action.id] = action.fallback;
-    return map;
+    return dedupeHotkeys(map);
 }
 
 export function isStoredHotkey(value) {
@@ -67,12 +89,14 @@ export function loadHotkeys(storage) {
         saved = null;
     }
     if (!saved || typeof saved !== 'object') return base;
+    const explicit = new Set();
     for (const action of HOTKEY_ACTIONS) {
         if (Object.prototype.hasOwnProperty.call(saved, action.id) && isStoredHotkey(saved[action.id])) {
             base[action.id] = saved[action.id];
+            explicit.add(action.id);
         }
     }
-    return base;
+    return dedupeHotkeys(base, explicit);
 }
 
 export function saveHotkeys(map, storage) {
@@ -122,9 +146,11 @@ export function browserFunctionKey(event) {
     return BROWSER_FN.has(event?.key);
 }
 
-/** 키를 기다리는 칸에서도 Tab은 다음 칸으로 보내야 합니다. */
+/** 키를 기다리는 칸에서도 Tab과 Shift+Tab, 수정 키 단독은 그대로 둡니다. */
 export function passesThroughCapture(event) {
-    return event?.key === 'Tab';
+    if (!event) return false;
+    if (event.key === 'Tab') return true;
+    return event.key === 'Shift' || event.key === 'Control' || event.key === 'Alt' || event.key === 'Meta';
 }
 
 export function hotkeyFromEvent(event) {

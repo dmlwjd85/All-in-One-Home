@@ -134,11 +134,25 @@ export function isSensitiveControl(el) {
     return /password|cc-number|cc-csc|current-password|new-password|one-time-code|\botp\b|비밀번호|암호|패스워드|인증/i.test(blob);
 }
 
-/** 조합이 끝난 뒤 브라우저가 같은 글자를 한 번 더 알려 주는 이벤트. 타수로 치지 않습니다. */
+/** 조합이 끝날 때 브라우저가 같은 글자를 한 번 더 알려 줍니다. 타수로 치지 않습니다.
+    Chromium은 compositionend보다 먼저 insertCompositionText(isComposing true)를 보냅니다.
+    같은 문자열이면 바로 버리고, 이번 턴에 조합이 끝나면 소리를 미뤄 뒀다가 내지 않습니다.
+    Safari는 compositionend 다음에 isComposing이 false인 input을 보냅니다. */
+let lastCompositionData = null;
 let skipCompositionEcho = false;
+let heldStroke = false;
+let dropHeld = false;
+
+export function noteCompositionStart() {
+    lastCompositionData = null;
+    skipCompositionEcho = false;
+    heldStroke = false;
+    dropHeld = false;
+}
 
 export function noteCompositionEnd() {
     skipCompositionEcho = true;
+    if (heldStroke) dropHeld = true;
 }
 
 function compositionEcho(event) {
@@ -146,6 +160,13 @@ function compositionEcho(event) {
     if (inputType === 'insertFromComposition') {
         skipCompositionEcho = false;
         return true;
+    }
+    if (inputType === 'insertCompositionText' && typeof event?.data === 'string') {
+        if (event.data === lastCompositionData) {
+            skipCompositionEcho = false;
+            return true;
+        }
+        if (event.isComposing !== false) lastCompositionData = event.data;
     }
     if (!skipCompositionEcho) return false;
     skipCompositionEcho = false;
@@ -172,13 +193,34 @@ export function shouldTypeSound(event) {
     return true;
 }
 
+/** 조합 중 입력은 턴이 끝난 뒤에 소리를 정합니다. compositionend가 먼저 오면 그 입력은 타가 아닙니다. */
+export function planTypeSound(event) {
+    if (!shouldTypeSound(event)) return 'no';
+    const inputType = String(event?.inputType || '');
+    if (inputType === 'insertCompositionText' && event?.isComposing !== false) {
+        heldStroke = true;
+        dropHeld = false;
+        return 'later';
+    }
+    return 'now';
+}
+
+export function finishTypeSoundTurn() {
+    if (!heldStroke) return false;
+    heldStroke = false;
+    const drop = dropHeld;
+    dropHeld = false;
+    return !drop;
+}
+
 /** 같은 순간 두 번 오는 조합 이벤트만 건너뜁니다. 다음 글자는 바로 울립니다. */
 export function noteTypeInput(event, now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
     if (!typeSoundEnabled()) return false;
-    if (!shouldTypeSound(event)) return false;
     if (now - lastInputAt < SAME_TURN_MS) return false;
+    const plan = planTypeSound(event);
+    if (plan === 'no') return false;
     lastInputAt = now;
-    return true;
+    return plan === 'later' ? 'later' : true;
 }
 
 function noiseAt(i, salt) {
