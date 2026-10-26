@@ -23,9 +23,15 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
+import { MAIN_TYPE_GAIN, MAIN_TYPE_PITCH, MAIN_TYPE_VOICE_IDS, renderMainTypeVoice } from './fixtures/typesound-main-483e43c.mjs';
 import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
 
 const failures = [];
+function sameSamples(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) if (!Object.is(a[i], b[i])) return false;
+    return true;
+}
 function check(ok, message) {
     if (!ok) failures.push(message);
 }
@@ -142,7 +148,8 @@ for (const voice of TYPE_VOICES) {
     for (const kind of ['space', 'enter', 'delete']) {
         const other = renderTypeStroke(voice.id, kind, rate).samples;
         const score = Math.abs(correlation(samples, other));
-        check(other.length !== samples.length || score < 0.8, `${voice.label} ${kind} 소리가 글자와 같습니다. ${score.toFixed(2)}`);
+        if (MAIN_TYPE_VOICE_IDS.includes(voice.id)) check(sameSamples(other, samples), `${voice.label} ${kind} 소리가 main처럼 글자 소리와 같지 않습니다.`);
+        else check(other.length !== samples.length || score < 0.8, `${voice.label} ${kind} 소리가 글자와 같습니다. ${score.toFixed(2)}`);
         check(Math.abs(other[0]) < 1e-6 && Math.abs(other[other.length - 1]) < 1e-6, `${voice.label} ${kind} 시작·끝이 0이 아닙니다.`);
     }
 }
@@ -152,6 +159,17 @@ for (let i = 0; i < TYPE_VOICES.length; i += 1) {
         const right = TYPE_VOICES[j].id;
         const score = Math.abs(correlation(typePairs[left].samples, typePairs[right].samples));
         check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
+    }
+}
+/** main(483e43c)에 있던 뽁·띵·물방울·방귀는 누름·띄어쓰기·엔터·지우기 모두 main 합성과 표본 하나까지 같아야 합니다. */
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    for (const sampleRate of [44100, 48000]) {
+        const want = renderMainTypeVoice(id, sampleRate);
+        check(TYPE_VOICE_MS[id] === Math.round((want.length / sampleRate) * 1000), `${id} 길이가 main과 다릅니다. ${TYPE_VOICE_MS[id]}ms`);
+        for (const kind of ['tap', 'space', 'enter', 'delete']) {
+            const got = renderTypeStroke(id, kind, sampleRate).samples;
+            check(sameSamples(got, want), `${id} ${kind} 소리가 main 합성과 다릅니다. ${sampleRate}Hz 길이 ${got.length}/${want.length}`);
+        }
     }
 }
 /** main에 있던 뽁·띵·물방울. 저장된 값은 그 이름 그대로 같은 소리로 나야 합니다. 지문은 main 파형에서 뽑았습니다. */
@@ -330,7 +348,21 @@ playTypeSound();
 check(sources.at(-1).buffer.length === Math.round((rate * TYPE_VOICE_MS.bang) / 1000), '방귀를 골라도 글자마다 그 소리가 나지 않습니다.');
 const bangTap = sources.at(-1).buffer.length;
 playTypeSound('space');
-check(sources.at(-1).buffer.length > bangTap, '방귀 스페이스가 글자 소리와 같습니다.');
+check(sources.at(-1).buffer.length === bangTap, '방귀 스페이스가 main처럼 글자 소리와 같지 않습니다.');
+/** 예전 소리는 크기 0.032, 음높이 ±3%(0.97~1.03)가 main 그대로여야 합니다. */
+const realRandom = Math.random;
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    setTypeVoice(id);
+    [0, 1].forEach((roll, index) => {
+        Math.random = () => roll;
+        playTypeSound();
+        Math.random = realRandom;
+        const rateNow = sources.at(-1).playbackRate.value;
+        check(Math.abs(rateNow - MAIN_TYPE_PITCH[index]) < 1e-9, `${id} 음높이 흔들림이 main(${MAIN_TYPE_PITCH[index]})과 다릅니다. ${rateNow}`);
+        check(gains.at(-1).gain.value === MAIN_TYPE_GAIN, `${id} 크기가 main(${MAIN_TYPE_GAIN})과 다릅니다. ${gains.at(-1).gain.value}`);
+    });
+}
+setTypeVoice('bang');
 const field = { tagName: 'TEXTAREA' };
 check(noteTypeKey({ key: ' ', target: field }, 90000) === 'space', '스페이스를 글자 소리로 치지 않습니다.');
 check(noteTypeInput({ inputType: 'insertText', data: ' ', target: field }, 90005) === false, '스페이스 입력 소리가 한 번 더 납니다.');

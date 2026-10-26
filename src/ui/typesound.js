@@ -45,14 +45,14 @@ export const TYPE_VOICE_MS = {
     typewriter: 88,
     laptop: 34,
     cream: 70,
-    bang: 118,
+    bang: 110,
 };
 
 /** 버튼 소리의 '작게'보다 낮게 둡니다. 여러 소리가 겹쳐도 1을 넘기지 않게. */
 export const TYPE_GAIN = 0.028;
 
-/** 예전부터 있던 소리. 저장된 값이 그대로 같은 소리로 나도록 크기와 음높이 흔들림도 main 그대로 둡니다. */
-const LEGACY_VOICES = new Set(['ppok', 'ting', 'drop']);
+/** 예전부터 있던 소리(방귀 포함). 저장된 값이 그대로 같은 소리로 나도록 합성·크기·음높이 흔들림을 main 그대로 둡니다. */
+const LEGACY_VOICES = new Set(['ppok', 'ting', 'drop', 'bang']);
 const LEGACY_GAIN = 0.032;
 
 const DEFAULT_VOICE = 'ppok';
@@ -349,10 +349,9 @@ function strokeProfile(id, kind) {
     return { ...base, ms, freqScale: 1, ding: 0, rattle: 0 };
 }
 
-/** main의 뽁·띵·물방울 합성을 그대로 옮겼습니다. 누름은 main과 같은 표본이고, 띄어쓰기·엔터·지우기는 길이만 바꿉니다. */
-function synthLegacy(id, sampleRate, kind = 'tap') {
-    const scale = kind === 'space' ? 1.25 : kind === 'delete' ? 0.7 : kind === 'enter' ? 1.1 : 1;
-    const ms = Math.round(TYPE_VOICE_MS[id] * scale);
+/** main의 뽁·띵·물방울·방귀 합성을 그대로 옮겼습니다. main에는 키별 소리가 없었으므로 띄어쓰기·엔터·지우기도 누름과 같은 표본입니다. */
+function synthLegacy(id, sampleRate) {
+    const ms = TYPE_VOICE_MS[id];
     const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
     const data = new Float32Array(n);
     const salt = TYPE_NOISE[id] || 57;
@@ -360,13 +359,21 @@ function synthLegacy(id, sampleRate, kind = 'tap') {
     let phase = 0;
     let phaseB = 0;
     let phaseC = 0;
+    let flutter = 0;
     for (let i = 0; i < n; i += 1) {
         const t = i / sampleRate;
         const u = n === 1 ? 0 : i / (n - 1);
         const white = noiseAt(i, salt);
         low += 0.16 * (white - low);
         let sample = 0;
-        if (id === 'ppok') {
+        if (id === 'bang') {
+            flutter += (2 * Math.PI * 13.5) / sampleRate;
+            const wobble = Math.sin(flutter);
+            const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
+            const freq = 118 - 62 * u + 16 * wobble;
+            phase += (2 * Math.PI * freq) / sampleRate;
+            sample = env * (Math.sin(phase) * 0.28 + low * 0.92);
+        } else if (id === 'ppok') {
             const freq = 720 - 480 * Math.min(1, u * 1.4);
             phase += (2 * Math.PI * freq) / sampleRate;
             const env = Math.exp(-t * 62) * Math.min(1, t / 0.0015);
@@ -405,8 +412,7 @@ function synthLegacy(id, sampleRate, kind = 'tap') {
 }
 
 function synth(id, sampleRate, kind = 'tap') {
-    if (LEGACY_VOICES.has(id)) return synthLegacy(id, sampleRate, kind);
-    if (id === 'bang') return synthBang(sampleRate, kind);
+    if (LEGACY_VOICES.has(id)) return synthLegacy(id, sampleRate);
     const profile = strokeProfile(id, kind);
     const n = Math.max(8, Math.round((sampleRate * profile.ms) / 1000));
     const data = new Float32Array(n);
@@ -454,29 +460,6 @@ function synth(id, sampleRate, kind = 'tap') {
     return finish(data, sampleRate);
 }
 
-function synthBang(sampleRate, kind) {
-    const scale = kind === 'space' ? 1.25 : kind === 'delete' ? 0.7 : kind === 'enter' ? 1.1 : 1;
-    const ms = Math.round(TYPE_VOICE_MS.bang * scale);
-    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
-    const data = new Float32Array(n);
-    let low = 0;
-    let phase = 0;
-    let flutter = 0;
-    const salt = TYPE_NOISE.bang + (kind === 'space' ? 2 : 0);
-    for (let i = 0; i < n; i += 1) {
-        const t = i / sampleRate;
-        const u = n === 1 ? 0 : i / (n - 1);
-        const white = noiseAt(i, salt);
-        low += 0.16 * (white - low);
-        flutter += (2 * Math.PI * (kind === 'delete' ? 18 : 13.5)) / sampleRate;
-        const wobble = Math.sin(flutter);
-        const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
-        const freq = (kind === 'delete' ? 160 : 118) - 62 * u + 16 * wobble;
-        phase += (2 * Math.PI * freq) / sampleRate;
-        data[i] = env * (Math.sin(phase) * 0.28 + low * 0.92);
-    }
-    return finish(data, sampleRate);
-}
 
 export function renderTypeStroke(voice, kind = 'tap', sampleRate = 48000) {
     const id = normalizeTypeVoice(voice);
