@@ -13,7 +13,7 @@ import { restInfo } from '../src/lib/daymark.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
-import { boot, clearAll, exportFile, finishSetup, importText, pendingCloudForgetForTest, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
+import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
@@ -796,7 +796,6 @@ await (async () => {
     await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' });
     const hiddenNote = await expectOneSide('notes', 'day-qa', 'local');
     check(hiddenNote?.text === '학폭 관련 민원 상담' && toCloudRow('notes', hiddenNote) === null, '민감 메모를 클라우드 모양으로 올립니다.');
-    check(pendingCloudForgetForTest().includes('notes/day-qa'), '일반 메모를 민감으로 바꿔도 클라우드 사본을 지우지 않습니다.');
     await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' });
     const restoredNote = await expectOneSide('notes', 'day-qa', 'cloud');
     check(restoredNote?.text === '다시 일반' && toCloudRow('notes', restoredNote) !== null, '일반 메모로 되돌리면 기기 사본이 남거나 클라우드로 가지 않습니다.');
