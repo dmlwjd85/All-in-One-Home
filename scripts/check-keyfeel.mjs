@@ -23,7 +23,7 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
-import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, setTypeSound, setTypeVoice } from '../src/ui/typesound.js';
+import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice } from '../src/ui/typesound.js';
 
 const failures = [];
 function check(ok, message) {
@@ -301,6 +301,100 @@ const field = { tagName: 'TEXTAREA' };
 check(noteTypeKey({ key: ' ', target: field }, 90000) === 'space', '스페이스를 글자 소리로 치지 않습니다.');
 check(noteTypeInput({ inputType: 'insertText', data: ' ', target: field }, 90005) === false, '스페이스 입력 소리가 한 번 더 납니다.');
 check(noteTypeKey({ key: 'Enter', target: field, isComposing: true }, 91000) === '', '조합 중인 엔터에도 소리가 납니다.');
+check(noteTypeKey({ key: 'Backspace', target: field, repeat: true }, 92000) === '', '지우기 키를 누르고 있으면 소리가 반복됩니다.');
+check(noteTypeKey({ key: 'Delete', target: field, repeat: true }, 92100) === '', 'Delete 키를 누르고 있으면 소리가 반복됩니다.');
+check(noteTypeKey({ key: 'Backspace', target: field }, 92200) === 'delete', '지우기 키 한 번을 소리 내지 않습니다.');
+
+resetTypeGraphForTest();
+const burstSources = [];
+const burstGains = [];
+const burstShapers = [];
+class BurstParam {
+    constructor() {
+        this.value = 0;
+        this.events = [];
+    }
+    setValueAtTime(value, time) {
+        this.events.push({ type: 'set', value, time });
+        this.value = value;
+    }
+    linearRampToValueAtTime(value, time) {
+        this.events.push({ type: 'ramp', value, time });
+    }
+    cancelScheduledValues() {
+        this.events.push({ type: 'cancel' });
+    }
+}
+class BurstAudio {
+    constructor() {
+        this.state = 'running';
+        this.sampleRate = 48000;
+        this.currentTime = 0;
+        this.destination = { destination: true };
+    }
+    createBuffer(_channels, length, sampleRate) {
+        const data = new Float32Array(length);
+        return { length, sampleRate, duration: length / sampleRate, getChannelData: () => data };
+    }
+    createBufferSource() {
+        const src = {
+            buffer: null,
+            playbackRate: { value: 1 },
+            connect() {},
+            disconnect() {},
+            start() { src.started = true; },
+            stop(time) { src.stopped = true; src.stopTime = time; },
+            onended: null,
+        };
+        burstSources.push(src);
+        return src;
+    }
+    createGain() {
+        const gain = {
+            gain: new BurstParam(),
+            connected: null,
+            connect(node) { gain.connected = node; },
+            disconnect() {},
+        };
+        burstGains.push(gain);
+        return gain;
+    }
+    createWaveShaper() {
+        const shaper = {
+            curve: null,
+            oversample: 'none',
+            connected: null,
+            connect(node) { shaper.connected = node; },
+        };
+        burstShapers.push(shaper);
+        return shaper;
+    }
+    resume() { return Promise.resolve(); }
+}
+const burstAudio = new BurstAudio();
+scheduleTypeBurst(burstAudio, { voice: 'black', count: 8, gapSec: 0, when: 0 });
+const runningBurst = burstSources.filter((src) => src.stopTime == null);
+check(burstSources.length === 8, '실제 재생이 여덟 타를 만들지 않습니다.');
+check(runningBurst.length <= 6 && runningBurst.length >= 1, '동시에 여섯 개를 넘기거나 모두 끊습니다.');
+const faded = burstGains.filter((gain) => gain.gain.events.some((event) => event.type === 'ramp' && event.value === 0 && event.time >= 0.016));
+check(faded.length >= 2, '오래된 소리를 페이드 없이 바로 끊습니다.');
+check(faded.every((gain) => gain.gain.events.some((event) => event.type === 'set' && event.value > 0.01)), '페이드가 나고 있던 크기가 아니라 0에서 시작합니다.');
+check(burstSources.filter((src) => typeof src.stopTime === 'number' && src.stopTime >= 0.016).length >= 2, '페이드가 끝나기 전에 소리를 끊습니다.');
+function limitsTypeBus(node) {
+    if (!node || node.destination) return false;
+    if (node.curve && typeof node.curve.length === 'number') {
+        const curve = node.curve;
+        const last = curve[curve.length - 1];
+        const mid = curve[(curve.length - 1) >> 1];
+        const small = curve[Math.round((curve.length - 1) * 0.55)];
+        return Math.abs(mid) < 0.05 && last > 0.4 && last < 0.95 && small > 0.04 && small < 0.14;
+    }
+    const threshold = node.threshold?.value;
+    const ratio = node.ratio?.value;
+    const attack = node.attack?.value;
+    return Number.isFinite(threshold) && threshold >= -3 && ratio >= 8 && Number.isFinite(attack) && attack <= 0.005;
+}
+check(burstShapers.length === 1 && limitsTypeBus(burstGains.at(-1)?.connected) && burstGains.at(-1).connected.connected === burstAudio.destination, '실제 재생 경로에 리미터가 없습니다.');
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');

@@ -338,7 +338,7 @@ export function RosterSettings() {
                 const parsed = await replaceRoster(rosterTextFromSlots(names));
                 if (parsed?.storageFailed) return;
                 showToast(parsed.errors?.[0] || '명단을 저장했어요.');
-                go('#/settings');
+                go('#/settings', { replace: true });
             }}>명단 저장</Btn>
         </section>
     );

@@ -105,6 +105,7 @@ export function resolveHash(raw, today) {
     const day = path.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
     if (day && isValidYmd(day[1])) return pack('day', { date: day[1] }, `#/day/${day[1]}`, incoming);
     if (path === '/day') return pack('day', { date: today }, `#/day/${today}`, incoming);
+    if (path.startsWith('/day/')) return pack('schedule', {}, '#/schedule', incoming, { notice: '그 날짜는 달력에 없어요. 일정에서 다시 골라 주세요.' });
 
     if (/^\/(?:week|month|day|date)\//.test(path)) return pack('schedule', {}, '#/schedule', incoming);
 

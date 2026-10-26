@@ -13,7 +13,7 @@ import { restInfo } from '../src/lib/daymark.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
-import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
+import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
@@ -501,6 +501,9 @@ check(menuSelected('attend', '#/attend') && !menuSelected('today', '#/attend'), 
 check(menuSelected('student', '#/students') && menuSelected('legacy', '#/settings') && menuSelected('schedule', '#/schedule'), '다른 화면의 메뉴 선택이 꺼집니다.');
 check(resolveHash('#/day/2026-10-26', '2026-10-19').name === 'day' && resolveHash('#/day/2026-10-26', '2026-10-19').params.date === '2026-10-26', '날짜 일지 주소가 열리지 않습니다.');
 check(resolveHash('#/day', '2026-10-26').name === 'day' && resolveHash('#/day', '2026-10-26').params.date === '2026-10-26' && !resolveHash('#/day', '2026-10-26').notice, '날짜 없는 일지가 오늘로 이어지지 않습니다.');
+const missingDay = resolveHash('#/day/2026-02-30', '2026-10-26');
+check(missingDay.name === 'schedule' && missingDay.notice.includes('달력에 없어요'), '없는 날짜가 안내 없이 일정으로 갑니다.');
+check(resolveHash('#/day/2026-10-26', '2026-10-19').notice === '', '있는 날짜 일지에 안내를 붙입니다.');
 check(menuSelected('day', '#/schedule') && tabSelected('일정', 'day') && !menuSelected('day', '#/today'), '날짜 일지에서 일정 메뉴가 켜지지 않습니다.');
 check(resolveHash('#/settings/roster', '2026-10-26').name === 'roster' && menuSelected('roster', '#/settings'), '명단 화면이 설정 메뉴에 속하지 않습니다.');
 
@@ -761,6 +764,55 @@ await (async () => {
     check(fingerprint(snapshot()) === kept, '일반 저장에 실패했는데 화면에 새 기록이 남았습니다.');
     check(!JSON.stringify(mainStore.dump()).includes('남지 않을 할 일'), '실패한 일반 저장이 메인 저장소에 남았습니다.');
     check(JSON.stringify(localStore.dump()) === localBefore, '실패한 일반 저장이 로컬 저장소를 바꿨습니다.');
+
+    mainStore.heal();
+    localStore.heal();
+    const blank = await saveTextItem('notes', { id: 'day-blank', text: '   ', date: '2026-11-03', source: 'app' });
+    check(blank?.ok === false && !snapshot().notes.some((row) => row.id === 'day-blank') && !snapshot().local.notes.some((row) => row.id === 'day-blank'), '빈 메모가 기록으로 남습니다.');
+
+    async function expectOneSide(bucket, id, where) {
+        const cloud = (snapshot()[bucket] || []).filter((row) => row.id === id);
+        const local = (snapshot().local[bucket] || []).filter((row) => row.id === id);
+        check(where === 'cloud' ? cloud.length === 1 && local.length === 0 : cloud.length === 0 && local.length === 1, `${bucket} ${id} 가 ${where} 한쪽에만 있지 않습니다. 클라우드 ${cloud.length}, 기기 ${local.length}`);
+        return where === 'cloud' ? cloud[0] : local[0];
+    }
+    await saveTextItem('notes', { id: 'day-qa', text: '일반 메모', date: '2026-11-03', pinned: false, source: 'app' });
+    await expectOneSide('notes', 'day-qa', 'cloud');
+    await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' });
+    const hiddenNote = await expectOneSide('notes', 'day-qa', 'local');
+    check(hiddenNote?.text === '학폭 관련 민원 상담' && toCloudRow('notes', hiddenNote) === null, '민감 메모를 클라우드 모양으로 올립니다.');
+    await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' });
+    const restoredNote = await expectOneSide('notes', 'day-qa', 'cloud');
+    check(restoredNote?.text === '다시 일반' && toCloudRow('notes', restoredNote) !== null, '일반 메모로 되돌리면 기기 사본이 남거나 클라우드로 가지 않습니다.');
+
+    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 걷기', done: false, due: '2026-11-04', source: 'app' });
+    await expectOneSide('todos', 'todo-qa', 'cloud');
+    await saveTextItem('todos', { id: 'todo-qa', title: '학폭 관련 민원 상담', done: false, due: '2026-11-04', source: 'app' });
+    const hiddenTodo = await expectOneSide('todos', 'todo-qa', 'local');
+    check(toCloudRow('todos', hiddenTodo) === null, '민감 할 일을 클라우드로 보냅니다.');
+    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 다시 걷기', done: false, due: '2026-11-04', source: 'app' });
+    await expectOneSide('todos', 'todo-qa', 'cloud');
+
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '이야기를 들었어요', tags: ['교우'], source: 'app' });
+    await expectOneSide('records', 'rec-qa', 'cloud');
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '학폭 관련 민원 상담', tags: ['교우'], source: 'app' });
+    const hiddenRecord = await expectOneSide('records', 'rec-qa', 'local');
+    check(toCloudRow('records', hiddenRecord) === null, '민감 상담을 클라우드로 보냅니다.');
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '다시 이야기를 들었어요', tags: ['교우'], source: 'app' });
+    await expectOneSide('records', 'rec-qa', 'cloud');
+
+    await saveQuick({ text: '준비물 가위', kind: '알림장', date: '2026-11-09' });
+    await expectOneSide('notices', '2026-11-09', 'cloud');
+    await saveQuick({ text: '학폭 관련 민원 상담', kind: '알림장', date: '2026-11-09' });
+    const hiddenNotice = await expectOneSide('notices', '2026-11-09', 'local');
+    check(String(hiddenNotice?.text || '').includes('준비물 가위') && String(hiddenNotice?.text || '').includes('학폭') && toCloudRow('notices', hiddenNotice) === null, '민감 알림장이 클라우드에 남거나 이전 글을 잃습니다.');
+    await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: '내일은 소풍', source: 'app' });
+    await expectOneSide('notices', '2026-11-09', 'cloud');
+
+    const counsel = await saveQuick({ text: '학폭 관련 민원 상담', kind: '상담', no: 1, date: '2026-11-10' });
+    check(counsel.ok && !snapshot().records.some((row) => String(row.text).includes('학폭')) && snapshot().local.records.some((row) => String(row.text).includes('학폭')), '상담 저장이 민감 기록을 이 기기로 보내지 않습니다.');
+    const counselRow = snapshot().local.records.find((row) => String(row.text).includes('학폭'));
+    check(toCloudRow('records', counselRow) === null, '기기 상담을 클라우드 기록으로 바꿉니다.');
 })().catch((error) => {
     failures.push(error?.message || String(error));
 });

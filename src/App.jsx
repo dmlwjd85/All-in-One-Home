@@ -159,10 +159,21 @@ export default function App() {
         };
     }, [data?.profile.sharedPc, locked]);
 
-    const go = useCallback((hash) => {
+    const go = useCallback((hash, options) => {
         const next = hash || '#/today';
         setHash(next);
-        if (location.hash !== next) location.hash = next;
+        if (location.hash === next) return;
+        if (options?.replace) {
+            try {
+                const url = new URL(location.href);
+                url.hash = next;
+                history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+            } catch {
+                location.hash = next;
+            }
+            return;
+        }
+        location.hash = next;
     }, []);
 
     const runHotkey = useCallback((id) => {

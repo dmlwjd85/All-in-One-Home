@@ -26,7 +26,6 @@ export function Schedule() {
     const events = joined(data, 'events');
     const weekEnd = addDaysYmd(weekStart, 6);
     const week = events.filter((row) => coversDay(row, weekStart, weekEnd));
-    const pickedRest = restInfo(picked, events);
     const specialist = [];
     DAYS.forEach(([key, label]) => {
         const row = data.timetable[key] || {};
@@ -95,16 +94,6 @@ export function Schedule() {
                                 </Btn>
                             );
                         })}
-                    </div>
-                    <div className={`solid-card${pickedRest.off ? ' day-rest' : ''}`} style={{ padding: 12, marginTop: 12 }}>
-                        <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
-                        {pickedRest.off && <p className="day-rest-mark" style={{ margin: '4px 0' }}>{pickedRest.label === '휴일' ? '휴일' : `휴일 · ${pickedRest.label}`}</p>}
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                            <Btn className="chip" onClick={() => go(`#/day/${picked}`)}>이 날 일지</Btn>
-                            <Btn className="chip" onClick={() => { setWeekAnchor(picked); setMode('주'); go(`#/schedule/week/${picked}`); }}>이 주 보기</Btn>
-                        </div>
-                        {events.filter((row) => onDay(row, picked)).map((row) => <p key={row.id}>{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}</p>)}
-                        {!events.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
                     </div>
                 </div>
             )}

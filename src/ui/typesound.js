@@ -235,13 +235,10 @@ function inputNow(now) {
     return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
-/** 12ms 안의 두 번째 알림은 소리만 건너뛰고, 그 글자는 남겨 확정 때 메아리로 알아봅니다. */
+/** 12ms 안의 두 번째 알림은 소리만 건너뜁니다. 글자는 조합 갱신이 이미 기억해서, 확정 때 메아리로 알아봅니다. */
 export function acceptTypeInput(event, now = inputNow()) {
     const at = inputNow(now);
-    if (at - lastInputAt < SAME_TURN_MS) {
-        if (String(event?.inputType || '') === 'insertCompositionText') consumeFresh(event?.data);
-        return false;
-    }
+    if (at - lastInputAt < SAME_TURN_MS) return false;
     if (!shouldTypeSound(event)) return false;
     lastInputAt = at;
     return true;
@@ -256,6 +253,7 @@ export function noteTypeInput(event, now = inputNow()) {
 /** 스페이스·엔터·지우기는 글자 소리와 다른 타건입니다. 바로 뒤의 input은 같은 타로 봅니다. */
 export function noteTypeKey(event, now = inputNow()) {
     if (!typeSoundEnabled()) return '';
+    if (event?.repeat) return '';
     const key = event?.key;
     const kind = key === ' ' || key === 'Spacebar' ? 'space' : key === 'Enter' ? 'enter' : (key === 'Backspace' || key === 'Delete' ? 'delete' : '');
     if (!kind) return '';
@@ -441,21 +439,35 @@ function bufferFor(audio, voice, kind) {
 let busCtx = null;
 let busIn = null;
 
-/** 글자 소리는 하나의 버스로 모은 뒤 리미터를 통과합니다. 컨텍스트는 버튼 소리와 같은 하나를 씁니다. */
+/** 작은 소리는 그대로 두고, 1에 가까운 합만 눌러 줍니다. 압축기의 자동 보정처럼 키우지 않습니다. */
+function typeLimitSample(x) {
+    const n = Number(x);
+    if (!Number.isFinite(n)) return 0;
+    return Math.tanh(n);
+}
+
+function typeLimitCurve() {
+    const size = 2049;
+    const curve = new Float32Array(size);
+    for (let i = 0; i < size; i += 1) {
+        const x = (i / (size - 1)) * 2 - 1;
+        curve[i] = typeLimitSample(x);
+    }
+    return curve;
+}
+
+/** 글자 소리는 하나의 버스로 모은 뒤 웨이브셰이퍼로 제한합니다. 컨텍스트는 버튼 소리와 같은 하나를 씁니다. */
 function typeBus(audio) {
     if (busCtx === audio && busIn) return busIn;
     busCtx = audio;
     busIn = audio.destination;
-    if (typeof audio.createDynamicsCompressor !== 'function') return busIn;
+    if (typeof audio.createWaveShaper !== 'function') return busIn;
     try {
-        const comp = audio.createDynamicsCompressor();
-        comp.threshold.value = -16;
-        comp.knee.value = 6;
-        comp.ratio.value = 12;
-        comp.attack.value = 0.002;
-        comp.release.value = 0.08;
-        comp.connect(audio.destination);
-        busIn = comp;
+        const shaper = audio.createWaveShaper();
+        shaper.curve = typeLimitCurve();
+        shaper.oversample = '2x';
+        shaper.connect(audio.destination);
+        busIn = shaper;
     } catch {
         busIn = audio.destination;
     }
@@ -480,27 +492,31 @@ function dropFinished(audio) {
     live = keep;
 }
 
-function launch(audio, voice, kind = 'tap') {
+function fadeOldest(oldest, now) {
+    const param = oldest?.gain?.gain;
+    const canRamp = param && typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function';
+    const level = Number.isFinite(oldest?.level) ? oldest.level : TYPE_GAIN;
+    if (canRamp) {
+        try {
+            if (typeof param.cancelScheduledValues === 'function') param.cancelScheduledValues(now);
+            param.setValueAtTime(Math.max(0, level), now);
+            param.linearRampToValueAtTime(0, now + FADE_SEC);
+        } catch {
+            /* 램프가 없어도 아래에서 끊습니다. */
+        }
+        try { oldest?.src?.stop?.(now + FADE_SEC + 0.004); } catch { /* 이미 끝난 소리입니다. */ }
+    } else {
+        try { oldest?.src?.stop?.(); } catch { /* 이미 끝난 소리입니다. */ }
+    }
+    if (oldest) oldest.done = true;
+}
+
+function launch(audio, voice, kind = 'tap', when) {
     dropFinished(audio);
-    const now = audio.currentTime || 0;
+    const now = Number.isFinite(when) ? when : (audio.currentTime || 0);
     while (live.length >= MAX_LIVE) {
         const oldest = live[0];
-        const param = oldest?.gain?.gain;
-        const canRamp = param && typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function';
-        if (canRamp) {
-            try {
-                const current = Number.isFinite(param.value) ? param.value : TYPE_GAIN;
-                if (typeof param.cancelScheduledValues === 'function') param.cancelScheduledValues(now);
-                param.setValueAtTime(Math.max(0, current), now);
-                param.linearRampToValueAtTime(0, now + FADE_SEC);
-            } catch {
-                /* 램프가 없어도 아래에서 끊습니다. */
-            }
-            try { oldest?.src?.stop?.(now + FADE_SEC + 0.004); } catch { /* 이미 끝난 소리입니다. */ }
-        } else {
-            try { oldest?.src?.stop?.(); } catch { /* 이미 끝난 소리입니다. */ }
-        }
-        oldest.done = true;
+        fadeOldest(oldest, now);
         live = live.slice(1);
     }
     const src = audio.createBufferSource();
@@ -525,9 +541,23 @@ function launch(audio, voice, kind = 'tap') {
     gain.connect(typeBus(audio));
     src.start(now);
     const seconds = (src.buffer?.duration) || (TYPE_VOICE_MS[normalizeTypeVoice(voice)] / 1000);
-    const entry = { src, gain, until: now + seconds, done: false, released: false };
+    const entry = { src, gain, level, until: now + seconds, done: false, released: false };
     src.onended = () => releaseNode(entry);
     live.push(entry);
+}
+
+/** 검사와 실측이 실제 재생과 같은 launch를 쓰게 합니다. */
+export function scheduleTypeBurst(audio, { voice = 'red', kind = 'tap', count = 50, gapSec = 0.03, when = 0 } = {}) {
+    const start = Number.isFinite(when) ? when : 0;
+    const gap = Number.isFinite(gapSec) ? Math.max(0, gapSec) : 0;
+    const hits = Math.max(0, count);
+    for (let i = 0; i < hits; i += 1) launch(audio, voice, kind, start + i * gap);
+}
+
+export function resetTypeGraphForTest() {
+    live = [];
+    busCtx = null;
+    busIn = null;
 }
 
 export function previewTypeVoice(id) {
@@ -578,7 +608,7 @@ export function mixTypeBurst({ voice = 'red', kind = 'tap', count = 50, gapMs = 
     let maxJump = 0;
     let prev = 0;
     for (let i = 0; i < mix.length; i += 1) {
-        const limited = Math.tanh(mix[i]);
+        const limited = typeLimitSample(mix[i]);
         mix[i] = limited;
         peak = Math.max(peak, Math.abs(limited));
         maxJump = Math.max(maxJump, Math.abs(limited - prev));

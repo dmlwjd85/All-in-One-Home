@@ -119,7 +119,18 @@ export function Day() {
                 <Btn className="chip" onClick={() => go(`#/notice/${date}`)}>알림장 고치기</Btn>
                 <textarea className="field" style={{ marginTop: 8 }} rows={3} aria-label="하루 메모" placeholder="나이스에 넣기 전에 남겨 둘 말" value={memo} onChange={(event) => setMemo(event.target.value)} />
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
-                    const result = await saveTextItem('notes', { id: `day-${date}`, text: memo.trim(), date, pinned: false, source: 'app' });
+                    const text = memo.trim();
+                    if (!text) {
+                        if (!dayNote) {
+                            showToast('한 줄만 적어도 남길 수 있어요.');
+                            return;
+                        }
+                        const failed = await removeItem('notes', `day-${date}`);
+                        if (failed?.storageFailed) return;
+                        showToast('하루 메모를 지웠어요.', true);
+                        return;
+                    }
+                    const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' });
                     if (result?.storageFailed) return;
                     showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '하루 메모를 남겼어요.', true);
                 }}>하루 메모 저장</Btn>
