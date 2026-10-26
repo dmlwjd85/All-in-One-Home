@@ -767,6 +767,22 @@ try {
         await pressBox('결석');
         let names = await seats();
         check(names.length === 1 && names[0].includes('박서준'), '결석 칸이 그 학생만 보여 주지 않습니다.');
+        const smallType = await page.evaluate(() => {
+            const bold = [];
+            let status = 0;
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            while (walker.nextNode()) {
+                const text = walker.currentNode.textContent.trim();
+                const el = walker.currentNode.parentElement;
+                if (!text || !el || !el.getClientRects().length) continue;
+                const style = getComputedStyle(el);
+                if (style.visibility === 'hidden' || parseFloat(style.fontSize) >= 14) continue;
+                if (el.closest('.cell-grid') && text === '결석') status += 1;
+                if (Number(style.fontWeight) >= 600) bold.push(`${text.slice(0, 12)} ${style.fontSize}/${style.fontWeight}`);
+            }
+            return { bold, status };
+        });
+        check(smallType.status >= 1 && smallType.bold.length === 0, `14px보다 작은 글자가 굵습니다. ${JSON.stringify(smallType)}`);
         const pressedShadow = await page.evaluate(() => {
             const probe = document.createElement('div');
             document.body.appendChild(probe);

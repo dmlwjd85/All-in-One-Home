@@ -578,6 +578,15 @@ check(formText.includes('hotkeyFootnote(map)') && formText.includes('hotkeyPhone
 check(!formText.includes('기본으로는 / 키가 콕을 엽니다.') && !formText.includes('휴대폰에서는 기본으로 / 키가 콕을 엽니다.'), '단축키 화면에 빗금 안내가 고정되어 있습니다.');
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
+const settingsText = readFileSync(`${root}/src/ui/Settings.jsx`, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const settingsWords = [
+    ...[...settingsText.matchAll(/>([^<{]+)</g)].map((match) => match[1]),
+    ...[...settingsText.matchAll(/(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)].map((match) => match[2]).filter((value) => /[가-힣]/.test(value)),
+];
+for (const value of settingsWords) {
+    const jargon = value.match(/\d+\s*px|\bpx\b|\bbold\b|\bregular\b|서브셋|부분집합|\bsubset\b|woff|unicode|font-weight|preload|폰트 파일/i);
+    if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
+}
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(sw.includes("const CACHE = 'ssug-gyomu-shell-v20'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
