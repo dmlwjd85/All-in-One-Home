@@ -271,7 +271,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                         className={hint === kind ? 'quick-chip is-suggested' : 'quick-chip'}
                         data-kind={kind}
                         data-suggested={hint === kind ? '1' : '0'}
-                        aria-label={hint === kind ? `${kind} 추천` : kind}
+                        aria-label={hint === kind ? `${kind} 추천` : `${kind} 저장`}
                         onPointerDown={(event) => {
                             event.preventDefault();
                             saveChip(kind, event);

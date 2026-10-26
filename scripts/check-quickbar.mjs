@@ -46,8 +46,9 @@ check(quickSaveDate('일정', '내일 운동회', '2026-10-26', tomorrow) === '2
 check(quickSaveDate('일정', '3교시 조회', '2026-12-25', tomorrow) === '2026-12-25', '교시만 있는데 날짜를 바꿉니다.');
 check(quickSaveDate('메모', '내일 운동회', '2026-12-25', tomorrow) === '2026-12-25', '메모인데 일정 날짜를 씁니다.');
 check(resolveHash('#/quick', '2026-10-26').openQuickBar === true, '빠른 입력 주소가 입력칸을 열지 않습니다.');
-const manifest = readFileSync(resolve(root, 'public/manifest.webmanifest'), 'utf8');
-check(manifest.includes('빠른 입력') && manifest.includes('?quick=1'), '매니페스트 바로가기가 없습니다.');
+const manifest = JSON.parse(readFileSync(resolve(root, 'public/manifest.webmanifest'), 'utf8'));
+const quickShortcut = (manifest.shortcuts || []).find((item) => item?.name === '빠른 입력' && String(item.url || '').includes('?quick=1'));
+check(Boolean(quickShortcut), '매니페스트 바로가기가 없습니다.');
 const matchText = readFileSync(resolve(root, 'src/ui/quickMatch.js'), 'utf8');
 check(!matchText.includes('fetch(') && !matchText.includes('XMLHttpRequest'), '이름 후보가 서버로 나갑니다.');
 check(matchText.includes('키보드의 마이크 버튼으로 받아쓰기를 할 수 있어요.'), '음성 인식을 지원하지 않을 때 안내가 없습니다.');
@@ -56,10 +57,13 @@ check(readFileSync(resolve(root, 'src/ui/Settings.jsx'), 'utf8').includes('URL �
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
 const opener = appText.slice(appText.indexOf('function openQuickBar'), appText.indexOf('const ui ='));
 check(opener.includes('quickInput.current?.focus()') && !opener.includes('setTimeout') && !opener.includes('await'), '탭 안에서 바로 포커스하지 않습니다.');
+const urlOpen = appText.slice(appText.indexOf('pendingQuick.current = false'), appText.indexOf('function openQuickBar'));
+check(urlOpen.includes('blur()') && !urlOpen.includes('.focus('), '주소로 열 때 키보드를 올립니다.');
 const barText = readFileSync(resolve(root, 'src/ui/QuickBar.jsx'), 'utf8');
 check(/onPointerDown=\{\(event\) => \{\s*event\.preventDefault\(\)/.test(barText), '칩을 누를 때 키보드가 먼저 내려갑니다.');
 check(barText.includes('textFromField'), '조합 중인 글자를 확정하지 않습니다.');
 check(barText.includes('showToast(SPEECH_FALLBACK)'), '음성 안내를 보여 주지 않습니다.');
+check(barText.includes('body.no = no'), '관찰에 학생 번호를 넘기지 않습니다.');
 check(barText.includes('SUGGEST_WAIT') && !barText.includes('useEffect(() => {\n        save('), '분류 추천이 저장을 부릅니다.');
 
 function makeVault() {
@@ -218,10 +222,17 @@ if (!failures.length) {
             field.value = '한';
             field.dispatchEvent(new InputEvent('input', { bubbles: true }));
         });
-        await page.waitForFunction(() => {
+        const nameState = await page.waitForFunction(() => {
             const names = [...document.querySelectorAll('.quick-name')].map((el) => el.innerText.trim());
-            return names.includes('한지우') && names.includes('한서아');
+            const open = document.querySelector('.quick-bar')?.classList.contains('is-open') || false;
+            const undo = (document.querySelector('.toast')?.innerText || '').includes('되돌리기');
+            if (names.includes('한지우') && names.includes('한서아') && open && !undo) return 'ready';
+            if (!open || undo) return 'saved';
+            return false;
         });
+        const namesReady = (await nameState.jsonValue()) === 'ready';
+        check(namesReady, '글을 치자마자 저장하거나 이름 후보가 없습니다.');
+        if (namesReady) {
         const nameLayout = await page.evaluate(() => {
             const name = document.querySelector('.quick-name')?.getBoundingClientRect();
             const chip = document.querySelector('.quick-chip')?.getBoundingClientRect();
@@ -235,18 +246,53 @@ if (!failures.length) {
             return event.defaultPrevented && (document.querySelector('.quick-field')?.value || '').includes('한지우');
         });
         check(picked, '이름 후보를 골라도 이름이 들어가지 않습니다.');
+        await page.evaluate(() => {
+            const field = document.querySelector('.quick-field');
+            field.value = '한지우가 발표를 잘했어요';
+            field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        });
+        const observeState = await page.waitForFunction(() => {
+            const suggested = document.querySelector('[data-kind="관찰"]')?.dataset.suggested === '1';
+            const open = document.querySelector('.quick-bar')?.classList.contains('is-open') || false;
+            const undo = (document.querySelector('.toast')?.innerText || '').includes('되돌리기');
+            if (suggested && open && !undo) return 'ready';
+            if (!open || undo) return 'saved';
+            return false;
+        });
+        const observeReady = (await observeState.jsonValue()) === 'ready';
+        check(observeReady, '이름을 넣자마자 관찰을 저장합니다.');
+        if (observeReady) {
+        await page.evaluate(() => {
+            document.querySelector('[data-kind="관찰"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+        });
+        await page.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('한지우'));
+        await page.evaluate(() => { location.hash = '#/students/21'; });
+        await page.waitForFunction(() => document.body.innerText.includes('한지우가 발표를 잘했어요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('되돌리기'))?.click());
+        await page.waitForFunction(() => !document.body.innerText.includes('한지우가 발표를 잘했어요'));
+        }
+        await page.evaluate(() => { location.hash = '#/today'; });
+        await page.waitForSelector('.tabbar .fab');
+        await page.evaluate(() => document.querySelector('.tabbar .fab')?.click());
+        await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open'));
+        }
 
         await page.evaluate(() => {
             const field = document.querySelector('.quick-field');
             field.value = '내일 운동회';
             field.dispatchEvent(new InputEvent('input', { bubbles: true }));
         });
-        await page.waitForFunction(() => document.querySelector('[data-kind="일정"]')?.dataset.suggested === '1');
-        const held = await page.evaluate(() => ({
-            open: document.querySelector('.quick-bar')?.classList.contains('is-open') || false,
-            undo: (document.querySelector('.toast')?.innerText || '').includes('되돌리기'),
-        }));
-        check(held.open && !held.undo, '분류 추천이 바로 저장합니다.');
+        const scheduleState = await page.waitForFunction(() => {
+            const suggested = document.querySelector('[data-kind="일정"]')?.dataset.suggested === '1';
+            const open = document.querySelector('.quick-bar')?.classList.contains('is-open') || false;
+            const undo = (document.querySelector('.toast')?.innerText || '').includes('되돌리기');
+            if (suggested && open && !undo) return 'ready';
+            if (!open || undo) return 'saved';
+            return false;
+        });
+        const scheduleReady = (await scheduleState.jsonValue()) === 'ready';
+        check(scheduleReady, '분류 추천이 바로 저장합니다.');
+        if (scheduleReady) {
         const expectedDay = quickDateLabel(quickSaveDate('일정', '내일 운동회', '2026-10-26', new Date()));
         await page.evaluate(() => {
             document.querySelector('.quick-field').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -254,6 +300,7 @@ if (!failures.length) {
         await page.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('일정'));
         const scheduleToast = await page.evaluate(() => document.querySelector('.toast')?.innerText || '');
         check(scheduleToast.includes(expectedDay) && scheduleToast.includes('되돌리기'), `일정 토스트가 날짜와 되돌리기를 빠뜨립니다: ${scheduleToast}`);
+        }
 
         await page.evaluate(() => document.querySelector('.tabbar .fab')?.click());
         await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open'));
@@ -264,13 +311,28 @@ if (!failures.length) {
         });
         await page.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('키보드의 마이크'));
 
-        await page.goto(`${origin}?demo=1&mode=light#/quick`, { waitUntil: 'networkidle0' });
-        await page.waitForSelector('.quick-bar.is-open.is-invite');
-        const invited = await page.evaluate(() => ({
+        const invitePage = await browser.newPage();
+        await invitePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+        await invitePage.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await invitePage.goto(`${origin}?demo=1&mode=light#/quick`, { waitUntil: 'networkidle0' });
+        await invitePage.waitForSelector('.quick-bar.is-open.is-invite');
+        const invited = await invitePage.evaluate(() => ({
             focused: document.activeElement?.classList?.contains('quick-field') || false,
             placeholder: document.querySelector('.quick-field')?.placeholder || '',
+            hash: location.hash,
         }));
         check(!invited.focused && invited.placeholder.includes('한 번 누르면'), `주소로 열 때 칸이 크지 않거나 키보드를 억지로 올립니다: ${JSON.stringify(invited)}`);
+        await invitePage.goto(`${origin}?demo=1&mode=light&quick=1`, { waitUntil: 'networkidle0' });
+        await invitePage.waitForSelector('.quick-bar.is-open.is-invite');
+        const fromQuery = await invitePage.evaluate(() => ({
+            focused: document.activeElement?.classList?.contains('quick-field') || false,
+            quick: new URLSearchParams(location.search).get('quick'),
+        }));
+        check(!fromQuery.focused && fromQuery.quick !== '1', `바로가기 주소가 입력칸을 열지 않거나 키보드를 올립니다: ${JSON.stringify(fromQuery)}`);
+        await invitePage.close();
 
         const lockPage = await browser.newPage();
         await lockPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });

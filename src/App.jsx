@@ -146,6 +146,7 @@ export default function App() {
         pendingQuick.current = false;
         setQuickInvite(true);
         setQuickOpen(true);
+        quickInput.current?.blur();
         if (!fromQuery) return;
         try {
             const url = new URL(location.href);
