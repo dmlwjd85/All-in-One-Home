@@ -194,7 +194,7 @@ export function Settings() {
                     }}>{jamOn ? '쨈 손맛 켜짐' : '쨈 손맛 꺼짐'}</Btn>
                     <Btn className="chip" data-key-preview="press" onClick={() => previewJam()}>뽁톡 들어 보기</Btn>
                 </div>
-                <p className="muted">기본은 꺼져 있어요. 켜 두면 하단 쨈이 말랑하게 들어갔다가 통 튀면서 뽁, 톡 소리가 나요. 진동은 안드로이드 크롬처럼 되는 기기에서만 아주 짧게 울려요. 아이폰 Safari는 웹에서 진동을 주지 않아요. 소리를 끄면 진동도 같이 꺼져요.</p>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 하단 쨈이 살짝 눌렸다가 통 튀면서 뽁, 톡 소리가 나요. 진동은 안드로이드 크롬처럼 되는 기기에서만 12밀리초로 울려요. 아이폰 Safari는 웹에서 진동을 주지 않고, 무음이면 소리도 나지 않아요. 소리를 끄면 진동도 같이 꺼져요.</p>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Btn className={typeOn ? 'chip on' : 'chip'} aria-pressed={typeOn} onClick={() => {

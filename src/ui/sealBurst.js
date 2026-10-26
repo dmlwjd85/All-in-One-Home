@@ -1,9 +1,11 @@
-/** 하단 용기. 트리거는 누르기, 규칙은 한 번 터지고 돌아오기, 피드백은 변형과 투명도만.
-    연타는 진행 중인 동작을 끊고 같은 요소에서 다시 시작합니다.
-    D안 컵의 껍질·글자 시간은 v/D.css 의 0.52초입니다. 완성본이 오면 FOIL_POP_MS 만 맞춥니다. */
+/** 하단 용기. 껍질이 벗겨지는 시간은 완성본과 같이 0.52초이고, 톡은 0.09초에 납니다.
+    빠른 입력은 이 시간을 기다리지 않습니다. 레이아웃은 다시 읽지 않습니다. */
+
+import { jamFeelEnabled, playJam } from './pressFeel.js';
 
 export const BURST_MS = 420;
 export const FOIL_POP_MS = 520;
+export const BURST_AT_MS = 90;
 export const SPLAT_COUNT = 6;
 export const DROP_COUNT = 8;
 export const MAX_ANIMATIONS = 8;
@@ -32,16 +34,46 @@ function foilButton(node) {
     return node.closest?.('.foil-fab') || null;
 }
 
-/** D안 껍질. 같은 턴에 클래스를 뺐다 넣으면 다시 시작하지 않아서, 중간에 동작 목록을 읽어 스타일을 확정합니다. */
+function clearFoilTimer(button) {
+    if (!button) return;
+    clearTimeout(button._foilTok);
+    clearTimeout(button._foilEnd);
+    button._foilTok = null;
+    button._foilEnd = null;
+}
+
+/** 완성본 껍질. 클래스를 같은 턴에 뺐다 넣으면 다시 시작하지 않아서, 그 사이에 동작 목록을 읽습니다. */
 export function playFoilPop(node) {
-    if (!node || reduceMotion()) return;
     const button = foilButton(node);
     if (!button) return;
+    clearFoilTimer(button);
+    const gen = (Number(button.dataset.popGen) || 0) + 1;
+    button.dataset.popGen = String(gen);
+    if (reduceMotion()) {
+        button.classList.remove('is-popping');
+        button.classList.remove('is-flash');
+        button.getAnimations?.({ subtree: true });
+        button.classList.add('is-flash');
+        if (jamFeelEnabled()) playJam('tok');
+        button._foilEnd = setTimeout(() => {
+            if (button.dataset.popGen !== String(gen)) return;
+            button.classList.remove('is-flash');
+        }, 160);
+        return;
+    }
     if (button.classList.contains('is-popping')) {
         button.classList.remove('is-popping');
         button.getAnimations?.({ subtree: true });
     }
     button.classList.add('is-popping');
+    button._foilTok = setTimeout(() => {
+        if (button.dataset.popGen !== String(gen)) return;
+        if (jamFeelEnabled()) playJam('tok');
+    }, BURST_AT_MS);
+    button._foilEnd = setTimeout(() => {
+        if (button.dataset.popGen !== String(gen)) return;
+        button.classList.remove('is-popping');
+    }, FOIL_POP_MS);
 }
 
 /** 열 때는 예전 필름만 조금 부풀립니다. D안 컵은 누르는 동안 껍질을 벗기지 않습니다. */

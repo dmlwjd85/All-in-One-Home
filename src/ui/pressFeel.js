@@ -1,21 +1,22 @@
-/** 하단 버튼의 바깥 틀. 컵 그림이 바뀌어도 누름, 소리, 진동은 이 자리를 그대로 씁니다.
-    호일이 벗겨지는 그림은 여기에 없습니다. 그 그림은 완성본이 오면 버튼 안에만 넣습니다.
-    스프링은 감쇠 조화 진동이고, 소리는 버튼 소리와 같은 오디오 컨텍스트 하나를 씁니다. */
+/** 하단 버튼 손맛. 눌림 크기는 완성본 컵 CSS(가로 1.1, 세로 0.86, 되튐 0.46초)를 따릅니다.
+    소리 곡선은 완성본의 뽁·톡이고, 재생은 글자 소리와 같은 오디오 컨텍스트·리미터를 씁니다.
+    기본은 꺼져 있고, 소리를 끄면 진동도 같이 꺼집니다. */
 
 import { withKeyAudio } from './keyfeel.js';
 
 export const JAM_KEY = 'ssug-gyomu-press-feel';
-export const PRESS_VIBE_MS = 14;
-export const PRESS_SQUASH_MS = 90;
-export const PRESS_SPRING_MS = 340;
-export const PRESS_HOLD = { x: 1.12, y: 0.78 };
-export const PRESS_HOLD_REDUCED = { x: 1.035, y: 0.96 };
+export const PRESS_VIBE_MS = 12;
+export const PRESS_HOLD = { x: 1.1, y: 0.86 };
+export const PRESS_IN_MS = 70;
+export const PRESS_OUT_MS = 460;
 
 const JAM_GAIN = 0.04;
 const JAM_MAX = 4;
 const JAM_FADE = 0.012;
-const POP_MS = 58;
-const TOK_MS = 36;
+const VOICES = {
+    pop: { f0: 560, f1: 210, dur: 0.075, gain: 1, attack: 0.003, h2: 0.3 },
+    tok: { f0: 880, f1: 1560, dur: 0.055, gain: 1, attack: 0.002, h2: 0.2, click: 2600 },
+};
 
 let jamLive = [];
 let jamBusCtx = null;
@@ -48,54 +49,10 @@ export function setJamFeel(on, storage) {
     return Boolean(on);
 }
 
-export function motionReduced() {
-    try {
-        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch {
-        return false;
-    }
-}
-
-/** ζ<1 이면 제자리를 살짝 넘깁니다. 움직임 줄이기는 ζ를 1 가까이 두어 넘김을 없앱니다. */
-export function springPose(from, timeSec, reduced) {
-    const omega = reduced ? 34 : 18;
-    const zeta = reduced ? 0.95 : 0.38;
-    const t = Math.max(0, timeSec);
-    const under = Math.max(0.04, 1 - zeta * zeta);
-    const wd = omega * Math.sqrt(under);
-    const decay = Math.exp(-zeta * omega * t);
-    const osc = decay * Math.cos(wd * t);
-    return {
-        x: 1 + (from.x - 1) * osc,
-        y: 1 + (from.y - 1) * osc,
-    };
-}
-
-export function springFrames(from, reduced) {
-    const duration = reduced ? 160 : PRESS_SPRING_MS;
-    const steps = reduced ? 6 : 16;
-    const frames = [];
-    let peakY = from.y;
-    for (let i = 0; i <= steps; i += 1) {
-        const pose = springPose(from, (i / steps) * (duration / 1000), reduced);
-        peakY = Math.max(peakY, pose.y);
-        frames.push({
-            transform: `scale(${pose.x.toFixed(4)}, ${pose.y.toFixed(4)})`,
-            offset: i / steps,
-        });
-    }
-    frames[frames.length - 1] = { transform: 'scale(1, 1)', offset: 1 };
-    return { frames, duration, peakY };
-}
-
-function holdOf(reduced) {
-    return reduced ? PRESS_HOLD_REDUCED : PRESS_HOLD;
-}
-
-function feelOf(target) {
-    if (!target || typeof target.querySelector !== 'function') return null;
-    if (target.classList?.contains('press-feel')) return target;
-    return target.querySelector('.press-feel');
+function fabOf(target) {
+    if (!target || typeof target.closest !== 'function') return null;
+    if (target.classList?.contains('foil-fab')) return target;
+    return target.closest('.foil-fab');
 }
 
 function stopWatch(root) {
@@ -105,65 +62,33 @@ function stopWatch(root) {
 }
 
 export function pressDown(target, options = {}) {
-    const root = feelOf(target);
-    if (!root?.animate) return;
-    stopWatch(root);
-    const running = root.getAnimations?.() || [];
-    running.forEach((anim) => anim.cancel());
-    const reduced = options.reduced ?? motionReduced();
-    const hold = holdOf(reduced);
-    root.dataset.press = 'down';
-    const anim = root.animate([
-        { transform: 'scale(1, 1)', offset: 0 },
-        { transform: `scale(${hold.x}, ${hold.y})`, offset: 1 },
-    ], {
-        duration: reduced ? 70 : PRESS_SQUASH_MS,
-        easing: 'cubic-bezier(0.22, 0.9, 0.3, 1)',
-        fill: 'forwards',
-    });
-    anim.pressKind = 'squash';
+    const button = fabOf(target);
+    if (!button) return;
+    stopWatch(button);
+    button.classList.add('is-pressed');
+    button.dataset.press = 'down';
     const onUp = () => {
-        stopWatch(root);
-        pressUp(root, options);
+        stopWatch(button);
+        pressUp(button, options);
     };
-    root._pressStop = () => {
+    button._pressStop = () => {
         window.removeEventListener('pointerup', onUp, true);
         window.removeEventListener('pointercancel', onUp, true);
-        root._pressStop = null;
+        button._pressStop = null;
     };
     window.addEventListener('pointerup', onUp, true);
     window.addEventListener('pointercancel', onUp, true);
-    if (options.silent) return;
-    if (!jamFeelEnabled()) return;
+    if (options.silent || !jamFeelEnabled()) return;
     playJam('pop');
     vibratePress();
 }
 
-export function pressUp(target, options = {}) {
-    const root = feelOf(target);
-    if (!root?.animate) return;
-    if (root.dataset.press !== 'down') return;
-    stopWatch(root);
-    const reduced = options.reduced ?? motionReduced();
-    const hold = holdOf(reduced);
-    const running = root.getAnimations?.() || [];
-    running.forEach((anim) => anim.cancel());
-    root.dataset.press = 'spring';
-    const { frames, duration } = springFrames(hold, reduced);
-    const anim = root.animate(frames, { duration, easing: 'linear', fill: 'forwards' });
-    anim.pressKind = 'spring';
-    anim.onfinish = () => {
-        if (root.dataset.press === 'spring') root.dataset.press = 'rest';
-    };
-    if (options.silent || !jamFeelEnabled()) return;
-    playJam('tok');
-}
-
-function noiseAt(i, salt) {
-    let x = Math.imul(i + salt * 997 + 1, 1103515245) + 12345;
-    x = Math.imul(x ^ (x >>> 16), 2246822519);
-    x = (x ^ (x >>> 13)) >>> 0;
-    return (x / 4294967296) * 2 - 1;
+export function pressUp(target) {
+    const button = fabOf(target);
+    if (!button || button.dataset.press !== 'down') return;
+    stopWatch(button);
+    button.classList.remove('is-pressed');
+    button.dataset.press = 'rest';
 }
 
 function finish(data, sampleRate) {
@@ -180,27 +105,33 @@ function finish(data, sampleRate) {
     return data;
 }
 
-/** 뽁은 말랑한 공기 주머니, 톡은 짧은 뚜껑 튕김. 둘 다 감쇠 사인파와 아주 짧은 잡음입니다. */
-export function renderJamStroke(part = 'pop', sampleRate = 48000) {
-    const pop = part !== 'tok';
-    const ms = pop ? POP_MS : TOK_MS;
-    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
-    const data = new Float32Array(n);
-    let phase = 0;
-    let low = 0;
-    const salt = pop ? 17 : 41;
-    for (let i = 0; i < n; i += 1) {
-        const t = i / sampleRate;
-        const u = n === 1 ? 0 : i / (n - 1);
-        const white = noiseAt(i, salt);
-        low += (pop ? 0.22 : 0.08) * (white - low);
-        const freq = pop ? (640 - 360 * u) : (1480 * Math.exp(-t / 0.012) + 420);
-        phase += (2 * Math.PI * freq) / sampleRate;
-        const body = Math.exp(-t / (pop ? 0.018 : 0.008)) * Math.sin(phase);
-        const puff = t < (pop ? 0.01 : 0.0035) ? (white * 0.35 + low) * Math.sin(Math.PI * Math.min(1, t / (pop ? 0.01 : 0.0035))) : 0;
-        data[i] = body * (pop ? 0.85 : 1) + puff * (pop ? 0.55 : 0.28);
+function voiceSamples(v, sampleRate) {
+    const parts = [
+        ['sine', v.f0, v.f1, v.dur, v.gain, v.attack],
+        ['triangle', v.f0 * 2, v.f1 * 2, v.dur * 0.6, v.gain * v.h2, v.attack],
+    ];
+    if (v.click) parts.push(['sine', v.click, v.click * 0.7, 0.012, v.gain * 0.5, 0.001]);
+    const n = Math.ceil((v.dur + 0.03) * sampleRate);
+    const out = new Float32Array(n);
+    for (const [type, f0, f1, dur, peak, att] of parts) {
+        let phase = 0;
+        for (let i = 0; i < n; i += 1) {
+            const t = i / sampleRate;
+            if (t > dur + 0.02) break;
+            const f = t < dur * 0.7 ? f0 * (f1 / f0) ** (t / (dur * 0.7)) : f1;
+            phase += (2 * Math.PI * f) / sampleRate;
+            const env = t < att ? peak * (t / att) : t < dur ? peak * (0.0003 / peak) ** ((t - att) / (dur - att)) : 0;
+            const wave = type === 'sine' ? Math.sin(phase) : (2 / Math.PI) * Math.asin(Math.sin(phase));
+            out[i] += env * wave;
+        }
     }
-    return { part: pop ? 'pop' : 'tok', samples: finish(data, sampleRate) };
+    return out;
+}
+
+/** 뽁은 내려가는 사인, 톡은 올라가는 사인에 짧은 딸깍. 재생 전에 크기를 맞춰 끝을 0으로 둡니다. */
+export function renderJamStroke(part = 'pop', sampleRate = 48000) {
+    const name = part === 'tok' ? 'tok' : 'pop';
+    return { part: name, samples: finish(voiceSamples(VOICES[name], sampleRate), sampleRate) };
 }
 
 function jamLimit(x) {
@@ -264,15 +195,19 @@ function fadeJam(oldest, now) {
 }
 
 const jamCache = new Map();
+const lastJamWall = {};
 
 function launchJam(audio, part, when) {
+    const name = part === 'tok' ? 'tok' : 'pop';
+    const wall = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+    if (wall - (lastJamWall[name] ?? -Infinity) < 45) return;
+    lastJamWall[name] = wall;
     dropJam(audio);
     const now = Number.isFinite(when) ? when : (audio.currentTime || 0);
     while (jamLive.length >= JAM_MAX) {
         fadeJam(jamLive[0], now);
         jamLive = jamLive.slice(1);
     }
-    const name = part === 'tok' ? 'tok' : 'pop';
     const key = `${name}:${audio.sampleRate}`;
     let buffer = jamCache.get(key);
     if (!buffer) {
@@ -284,6 +219,7 @@ function launchJam(audio, part, when) {
     const src = audio.createBufferSource();
     const gain = audio.createGain();
     src.buffer = buffer;
+    try { src.playbackRate.value = 1 + (Math.random() - 0.5) * 0.1; } catch { /* 속도 조절이 없어도 소리는 납니다. */ }
     const level = name === 'tok' ? JAM_GAIN * 0.72 : JAM_GAIN;
     const param = gain.gain;
     param.value = level;

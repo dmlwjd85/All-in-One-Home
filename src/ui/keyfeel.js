@@ -417,6 +417,7 @@ function sharedContext() {
         busIn = null;
         pairCache.clear();
     }
+    try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch { /* 무음 스위치를 그대로 둡니다. */ }
     if (!ctx) {
         try { ctx = new AudioCtx({ latencyHint: 'interactive' }); }
         catch { ctx = new AudioCtx(); }

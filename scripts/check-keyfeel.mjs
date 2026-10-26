@@ -24,7 +24,7 @@ import {
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
 import { TYPE_GAIN, TYPE_TARGETS, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, noteTypeRelease, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typePitchForKey, typeVoiceId } from '../src/ui/typesound.js';
-import { JAM_KEY, PRESS_HOLD, PRESS_HOLD_REDUCED, PRESS_VIBE_MS, jamFeelEnabled, mixJamBurst, renderJamStroke, setJamFeel, springFrames, springPose } from '../src/ui/pressFeel.js';
+import { JAM_KEY, PRESS_HOLD, PRESS_VIBE_MS, jamFeelEnabled, mixJamBurst, renderJamStroke, setJamFeel } from '../src/ui/pressFeel.js';
 
 const failures = [];
 function check(ok, message) {
@@ -437,11 +437,10 @@ check(setJamFeel(true, jamStore) && jamFeelEnabled(jamStore), '쨈 손맛 켜기
 check(setJamFeel(false, jamStore) === false && !jamFeelEnabled(jamStore), '쨈 손맛 끄기가 저장되지 않습니다.');
 check(JAM_KEY === 'ssug-gyomu-press-feel', '쨈 손맛 저장 키가 바뀌었습니다.');
 check(PRESS_VIBE_MS >= 10 && PRESS_VIBE_MS <= 20, '진동 길이가 10–20ms가 아닙니다.');
-const normalSpring = springFrames(PRESS_HOLD, false);
-const softSpring = springFrames(PRESS_HOLD_REDUCED, true);
-check(normalSpring.peakY > 1.03, `통 튀는 넘김이 없습니다. ${normalSpring.peakY}`);
-check(softSpring.peakY < 1.02 && softSpring.duration < normalSpring.duration, `움직임 줄이기 스프링이 약하지 않습니다. ${softSpring.peakY}`);
-check(springPose(PRESS_HOLD, 0, false).y === PRESS_HOLD.y, '스프링 시작이 눌린 높이가 아닙니다.');
+check(PRESS_HOLD.x === 1.1 && PRESS_HOLD.y === 0.86, '눌림 크기가 완성본과 다릅니다.');
+const foilCss = readFileSync(`${new URL('..', import.meta.url).pathname}/src/ui/foilCup.css`, 'utf8');
+check(foilCss.includes('scale(1.1, .86)') && foilCss.includes('cubic-bezier(.28, 1.9, .42, .9)'), '되튐 곡선이 없습니다.');
+check(foilCss.includes('transform: none'), '움직임 줄이기에서 눌림을 끄지 않습니다.');
 for (const part of ['pop', 'tok']) {
     const stroke = renderJamStroke(part, rate);
     check(Math.abs(stroke.samples[0]) < 1e-6 && Math.abs(stroke.samples.at(-1)) < 1e-6, `${part} 시작·끝이 0이 아닙니다.`);

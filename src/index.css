@@ -325,21 +325,25 @@ a.chip,
     position: relative;
     z-index: 1;
     isolation: isolate;
-    width: 58px;
-    height: 58px;
-    margin-top: -22px;
-    border-radius: 20px;
-    color: var(--on-primary);
+    width: auto;
+    height: auto;
+    min-width: 56px;
+    margin-top: -28px;
+    border-radius: 0;
+    color: var(--cup-label, var(--ink));
     background: transparent;
     box-shadow: none;
-    font-size: 22px;
-    font-weight: 800;
-    line-height: 1;
-    display: grid;
-    place-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
     padding: 0;
     justify-self: center;
     overflow: visible;
+    touch-action: manipulation;
 }
 .fab-name {
     font-family: var(--font-title);
@@ -677,39 +681,31 @@ a.chip,
     z-index: 30;
     left: 50%;
     bottom: 24px;
-    width: 64px;
-    height: 64px;
+    width: auto;
+    height: auto;
     margin: 0;
     transform: translateX(-50%);
-    border-radius: 22px;
-    color: var(--on-primary);
+    border-radius: 0;
+    color: var(--cup-label, var(--ink));
     background: transparent;
     box-shadow: none;
-    font-size: 26px;
-    font-weight: 800;
-    line-height: 1;
-    place-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
     padding: 0;
     overflow: visible;
-}
-.press-feel {
-    display: grid;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    transform-origin: 50% 72%;
-    will-change: transform;
+    touch-action: manipulation;
 }
 .seal-cup {
     position: relative;
-    width: 46px;
-    height: 52px;
     display: block;
     pointer-events: none;
     overflow: visible;
 }
-.desk-fab .seal-cup { width: 52px; height: 58px; }
-.foil-fab .seal-cup { width: 100%; height: 100%; }
+.foil-fab .fab-disc.seal-cup { width: 60px; height: 60px; }
 .seal-svg {
     display: block;
     width: 100%;
@@ -796,7 +792,7 @@ button.glass[aria-pressed="true"]:active {
 }
 
 @media (min-width: 900px) {
-    .desk-fab { display: grid; }
+    .desk-fab { display: flex; }
 }
 
 .font-grid {

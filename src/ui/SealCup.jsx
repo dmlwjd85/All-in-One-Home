@@ -1,33 +1,27 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useMemo, useId } from 'react';
+import { CUP_SVG } from './cupD.js';
 import { flavorForDark } from './sealFlavor.js';
-import { FOIL_IDS, FOIL_MARKUP } from './foilMarkup.js';
 
-function withFoilIds(markup, prefix) {
-    return FOIL_IDS.reduce((html, id) => html
-        .replaceAll(`id="${id}"`, `id="${prefix}${id}"`)
-        .replaceAll(`url(#${id})`, `url(#${prefix}${id})`), markup);
+const CUP_IDS = ['cupd-g', 'cupd-gl', 'cupdjam', 'cupd-pulp', 'cupd-sh', 'cupd-foil', 'cupd-glare', 'cupd-wall', 'cupd-rimside', 'cupd-dots'];
+
+function withCupIds(markup, prefix) {
+    let html = markup.replaceAll('class="cup-pulp', 'fill="url(#cupd-pulp)" class="cup-pulp');
+    for (const id of CUP_IDS) {
+        html = html
+            .replaceAll(`id="${id}"`, `id="${prefix}${id}"`)
+            .replaceAll(`url(#${id})`, `url(#${prefix}${id})`)
+            .replaceAll(`href="#${id}"`, `href="#${prefix}${id}"`);
+    }
+    return html;
 }
 
 export function SealCup() {
     const prefix = useId().replace(/:/g, '');
-    const markup = useMemo(() => withFoilIds(FOIL_MARKUP, prefix), [prefix]);
-    const [flavor, setFlavor] = useState(() => flavorForDark(document.documentElement.classList.contains('dark')));
-
-    useEffect(() => {
-        const root = document.documentElement;
-        const sync = () => setFlavor(flavorForDark(root.classList.contains('dark')));
-        const watch = new MutationObserver(sync);
-        watch.observe(root, { attributes: true, attributeFilter: ['class'] });
-        sync();
-        return () => watch.disconnect();
-    }, []);
-
+    const markup = useMemo(() => withCupIds(CUP_SVG, prefix), [prefix]);
+    const flavor = flavorForDark(typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
     return (
-        <span
-            className={`seal-cup fab-disc fl-${flavor}`}
-            data-flavor={flavor}
-            aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: markup }}
-        />
+        <span className={`fab-disc seal-cup fl-${flavor}`} data-flavor={flavor} aria-hidden="true">
+            <span className="cup-squish" dangerouslySetInnerHTML={{ __html: markup }} />
+        </span>
     );
 }

@@ -1,120 +1,162 @@
-/* D안 컵. 기준은 v/D.css 와 v/flavors.json.
-   색 변수는 컵 안에만 둡니다. 화면 글자색 변수는 덮지 않습니다.
-   껍질이 벗겨지고 글자로 바뀌는 시간은 0.52초(FOIL_POP_MS)입니다.
-   완성본이 오면 이 토큰과 그 시간만 맞추면 됩니다. */
+/* 쨈 컵 버튼. 기준은 완성본 cupD.plain.css.
+   색은 컵 안에만 둡니다. 화면 글자색 변수는 덮지 않습니다.
+   이 수첩은 밝게·어둡게 모두 딸기입니다. 어두운 화면은 접시와 은박만 바꿉니다.
+   껍질 시간은 0.52초(FOIL_POP_MS). 완성본이 고쳐지면 이 값과 토큰을 다시 맞춥니다.
+   글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀 */
+
+.foil-fab {
+    --cup-j1: #9E1630;
+    --cup-j2: #5E0A1C;
+    --cup-j3: #C02A42;
+    --cup-seed: #F2C14E;
+    --cup-pulp: #D0545F;
+    --cup-ink: #8A1129;
+    --cup-plate: #F2F3F6;
+    --cup-rim: #8C95A3;
+    --cup-edge: #6B7482;
+    --cup-rimtop: #E9ECF0;
+    --cup-rimside1: #C9CED6;
+    --cup-rimside2: #98A1AE;
+    --cup-label: #1E2230;
+    color: var(--cup-label);
+}
+
+html.dark .foil-fab {
+    --cup-plate: #262833;
+    --cup-rim: #5A6070;
+    --cup-edge: #A3ABB8;
+    --cup-rimtop: #DDE1E7;
+    --cup-rimside1: #B5BCC6;
+    --cup-rimside2: #7E8794;
+    --cup-label: #F2F3F7;
+}
 
 .foil-fab .fab-disc {
-    --plate: #F4F5F7;
-    --plate-b: #D9DEE6;
-    container-type: inline-size;
+    display: grid;
+    place-items: center;
+    width: 60px;
+    height: 60px;
+    border-radius: 9999px;
+    box-shadow: 0 6px 20px -6px rgba(80, 90, 200, .35);
     position: relative;
-    background: var(--plate);
-    background-image: none;
-    border: 1px solid var(--plate-b);
-    border-radius: inherit;
+    background: var(--cup-plate);
+    border: 1px solid var(--cup-rim);
+    container: cupd / inline-size;
 }
 
-html.dark .foil-fab .fab-disc {
-    --plate: #2B2C38;
-    --plate-b: #4A4D5C;
+.foil-fab .fab-disc .cup-svg { width: 52px; height: 52px; }
+.foil-fab .fab-txt {
+    font-size: 13px;
+    line-height: 1.2;
+    font-weight: 700;
+    color: var(--cup-label);
 }
 
-.foil-fab .rim { fill: #EEF1F6; stroke: #fff; stroke-width: .8; }
-.foil-fab .rim-side { fill: #C4CBD5; }
-html.dark .foil-fab .rim { fill: #E3E8EF; }
-html.dark .foil-fab .rim-side { fill: #A7AFBB; }
+.foil-fab .cup-svg { display: block; overflow: visible; }
+.foil-fab .cup-seed { fill: var(--cup-seed); }
+.foil-fab .cup-edge { stroke: var(--cup-edge); }
+.foil-fab .cup-rimtop { fill: var(--cup-rimtop); }
+.foil-fab .cup-ink { fill: var(--cup-ink); stroke: var(--cup-ink); stroke-linejoin: round; }
+.foil-fab .cup-ink-f { fill: var(--cup-ink); }
+.foil-fab .cup-wback { fill: #FFFDF8; stroke: #FFFDF8; stroke-linejoin: round; }
+.foil-fab .cup-wsh { fill: #000; stroke: #000; stroke-linejoin: round; opacity: .18; }
+.foil-fab .cup-pp circle:first-child { fill: var(--cup-j1); }
 
-.foil-fab .fl-blueberry { --ink: #2B3FA0; --j1: #2E43A8; --j2: #18246A; --j3: #5272D6; --seed: #0E1748; --pulp: #7F97E8; }
-.foil-fab .fl-strawberry { --ink: #8A1129; --j1: #9E1630; --j2: #5E0A1C; --j3: #C02A42; --seed: #F2C14E; --pulp: #D0545F; }
-.foil-fab .fl-grape { --ink: #55246F; --j1: #55246F; --j2: #311244; --j3: #7A3B97; --seed: #22092F; --pulp: #9C6BB8; }
-.foil-fab .fl-apricot { --ink: #7E4204; --j1: #D97F14; --j2: #9C540A; --j3: #F2A73E; --seed: #7A3F06; --pulp: #F8C66E; }
-.foil-fab .fl-kiwi { --ink: #33580C; --j1: #5F9420; --j2: #3A6410; --j3: #8DBD36; --seed: #15160C; --pulp: #BFE07A; }
-
-.foil-fab .cup-svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.foil-fab .ink { fill: var(--ink); stroke: var(--ink); }
-.foil-fab .ink-f { fill: var(--ink); }
-.foil-fab .wink { fill: var(--j1); stroke: var(--j1); }
-.foil-fab .wback { fill: #FFFDF8; stroke: #FFFDF8; }
-.foil-fab .wback-d { fill: #FFFDF8; }
-.foil-fab .wsh { fill: #000; stroke: #000; opacity: .25; }
-.foil-fab .wink-f { fill: var(--j1); }
-.foil-fab .seed { fill: var(--seed); opacity: .8; }
-.foil-fab .pulp { fill: var(--pulp); opacity: .45; }
-.foil-fab .p-blob,
-.foil-fab .p-word,
-.foil-fab .pp,
-.foil-fab .p-ring { opacity: 0; }
-.foil-fab .pp { fill: var(--j1); }
-.foil-fab .p-body,
-.foil-fab .p-lid,
-.foil-fab .p-blob,
-.foil-fab .p-word,
-.foil-fab .pp,
-.foil-fab .p-ring { transform-box: fill-box; }
-.foil-fab .p-body { transform-origin: 50% 100%; }
-.foil-fab .p-blob { transform-origin: 50% 100%; }
-.foil-fab .p-word { transform-origin: 50% 80%; }
-.foil-fab .pp { transform-origin: center; }
-.foil-fab .p-ring { transform-origin: center; }
-.foil-fab .p-lid { transform-origin: 8% 50%; }
-
-@container (max-width: 64px) {
-    .d-fine { display: none; }
+.foil-fab .cup-d1,
+.foil-fab .cup-d2,
+.foil-fab .cup-lbl2 { display: none; }
+@container cupd (min-width: 49px) {
+    .foil-fab .cup-d2 { display: inline; }
 }
-@container (max-width: 44px) {
-    .d-mid { display: none; }
+@container cupd (min-width: 80px) {
+    .foil-fab .cup-d1,
+    .foil-fab .cup-lbl2 { display: inline; }
+    .foil-fab .cup-lbl1 { display: none; }
 }
 
-.foil-fab.is-popping .pp { animation: v-pp .5s cubic-bezier(.2, .8, .3, 1) var(--pd) both; }
-@keyframes v-pp {
+.foil-fab .cup-squish {
+    display: block;
+    transform-origin: 50% 92%;
+    transition: transform .46s cubic-bezier(.28, 1.9, .42, .9);
+}
+.foil-fab.is-pressed .cup-squish {
+    transform: scale(1.1, .86);
+    transition: transform .07s cubic-bezier(.2, .8, .3, 1);
+}
+.foil-fab .cup-body,
+.foil-fab .cup-lid,
+.foil-fab .cup-blob,
+.foil-fab .cup-word,
+.foil-fab .cup-pp { transform-box: view-box; }
+.foil-fab .cup-body { transform-origin: 50% 92%; }
+.foil-fab .cup-lid { transform-origin: 8% 50%; }
+.foil-fab .cup-blob { transform-origin: 50% 50%; }
+.foil-fab .cup-word { transform-origin: 50% 30%; }
+.foil-fab .cup-pp { transform-origin: 50% 40%; }
+.foil-fab .cup-blob,
+.foil-fab .cup-word,
+.foil-fab .cup-pp { opacity: 0; }
+
+.foil-fab.is-popping .cup-body { animation: cup-squash .52s cubic-bezier(.3, .7, .4, 1); }
+.foil-fab.is-popping .cup-lid { animation: cup-peel .52s cubic-bezier(.3, .7, .4, 1); }
+.foil-fab.is-popping .cup-blob { animation: cup-blob .52s cubic-bezier(.2, .9, .3, 1.2); }
+.foil-fab.is-popping .cup-word { animation: cup-word .52s cubic-bezier(.3, 1.5, .5, 1); }
+.foil-fab.is-popping .cup-pp { animation: cup-pp .52s ease-out var(--pd, 0ms) both; }
+@keyframes cup-squash {
+    0% { transform: none; }
+    14% { transform: scale(1.06, .9); }
+    32% { transform: scale(.97, 1.05); }
+    50% { transform: scale(1.01, .99); }
+    64%, 100% { transform: none; }
+}
+@keyframes cup-peel {
+    0% { transform: none; opacity: 1; }
+    16% { transform: translateY(1px) scale(1.02, .94); opacity: 1; }
+    32% { transform: translate(-2px, -6px) rotate(-28deg); opacity: 1; }
+    48% { transform: translate(-4px, -10px) rotate(-38deg); opacity: 0; }
+    86% { transform: none; opacity: 0; }
+    100% { transform: none; opacity: 1; }
+}
+@keyframes cup-blob {
+    0%, 18% { opacity: 0; transform: translateY(8px) scale(.4, .3); }
+    30% { opacity: 1; transform: translateY(-3px) scale(1.06, 1.1); }
+    40% { opacity: 1; transform: scale(.98, .96); }
+    50%, 100% { opacity: 0; transform: translateY(-2px) scale(1.04); }
+}
+@keyframes cup-word {
+    0%, 38% { opacity: 0; transform: translateY(6px) scale(.5); }
+    52% { opacity: 1; transform: translateY(-10px) scale(1.12); }
+    72% { opacity: 1; transform: translateY(-6px) scale(1); }
+    88% { opacity: 1; transform: translateY(-6px) scale(1); }
+    100% { opacity: 0; transform: translateY(-4px) scale(.9); }
+}
+@keyframes cup-pp {
     0%, 24% { opacity: 0; transform: scale(.3); }
-    36% { opacity: 1; transform: translate(calc(var(--px) * .35), calc(var(--py) * .35)) scale(1); }
-    100% { opacity: 0; transform: translate(var(--px), var(--py)) scale(.5); }
+    36% { opacity: 1; transform: translate(calc(var(--px) * .55), calc(var(--py) * .55)) scale(1); }
+    100% { opacity: 0; transform: translate(var(--px), calc(var(--py) + 8px)) scale(.5); }
 }
-.foil-fab.is-popping .p-blob { animation: v-blob .52s cubic-bezier(.3, .7, .4, 1) both; }
-.foil-fab.is-popping .p-word { animation: v-word .52s cubic-bezier(.3, 1.5, .5, 1) both; }
-@keyframes v-blob {
-    0%, 18% { opacity: 0; transform: scale(.4, .1); }
-    30% { opacity: 1; transform: translateY(-4px) scale(.9, 1.3); }
-    42% { opacity: 1; transform: translateY(-8px) scale(1.15, .85); }
-    50% { opacity: 0; transform: translateY(-9px) scale(1.25, .7); }
-    100% { opacity: 0; }
-}
-@keyframes v-word {
-    0%, 38% { opacity: 0; transform: translateY(4px) scale(.5); }
-    50% { opacity: 1; transform: translateY(-4px) scale(1.12, .92); }
-    62% { opacity: 1; transform: translateY(-3px) scale(.96, 1.05); }
-    80% { opacity: 1; transform: translateY(-2px) scale(1); }
-    100% { opacity: 0; transform: translateY(8px) scale(.55); }
-}
+
 .foil-fab .fab-disc::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: var(--j3);
+    background: var(--cup-j1);
     opacity: 0;
     pointer-events: none;
 }
-.foil-fab.is-flash .fab-disc::after { animation: v-flash .16s ease-out; }
-@keyframes v-flash { 40% { opacity: .3; } }
-.foil-fab.is-popping .p-body { animation: v-squash .52s cubic-bezier(.3, .7, .4, 1); }
-.foil-fab.is-popping .p-lid { animation: v-peel .52s cubic-bezier(.3, .7, .4, 1); }
-@keyframes v-squash {
-    0% { transform: none; }
-    16% { transform: scale(1.07, .88); }
-    36% { transform: scale(.97, 1.05); }
-    55% { transform: none; }
+.foil-fab.is-flash .fab-disc::after { animation: cup-flash .16s ease-out; }
+@keyframes cup-flash {
+    0% { opacity: 0; }
+    40% { opacity: .28; }
+    100% { opacity: 0; }
 }
-@keyframes v-peel {
-    0% { transform: none; }
-    16% { transform: translateY(2px) scale(1.03, .9); }
-    34% { transform: translate(-2px, -9px) rotate(-28deg) scale(1, .7); opacity: 1; }
-    48% { transform: translate(-4px, -12px) rotate(-38deg) scale(.95, .55); opacity: 0; }
-    80% { opacity: 0; transform: translateY(-4px); }
-    100% { opacity: 1; transform: none; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-    .foil-fab.is-popping * { animation: none !important; }
+    .foil-fab .cup-squish,
+    .foil-fab.is-pressed .cup-squish { transition: none; transform: none; }
+    .foil-fab.is-popping .cup-body,
+    .foil-fab.is-popping .cup-lid,
+    .foil-fab.is-popping .cup-blob,
+    .foil-fab.is-popping .cup-word,
+    .foil-fab.is-popping .cup-pp { animation: none; }
 }

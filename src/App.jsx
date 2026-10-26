@@ -11,7 +11,7 @@ import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { SealCup } from './ui/SealCup.jsx';
-import { playFoilPop, playSealLift } from './ui/sealBurst.js';
+import { playFoilPop } from './ui/sealBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
 import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
@@ -437,8 +437,6 @@ export default function App() {
         quickInput.current?.focus();
         setQuickInvite(false);
         setQuickOpen(true);
-        const cup = event?.currentTarget?.querySelector?.('.seal-cup');
-        playSealLift(cup);
         playFoilPop(event?.currentTarget);
     }
 
@@ -586,7 +584,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => { pressDown(event.currentTarget); playSealLift(event.currentTarget.querySelector('.seal-cup')); }} onPointerUp={(event) => { pressUp(event.currentTarget); playFoilPop(event.currentTarget); }} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') { pressUp(event.currentTarget); playFoilPop(event.currentTarget); } }} onClick={(event) => openQuickBar(event)}><span className="press-feel" data-press="rest"><SealCup /></span></Btn>
+                            <Btn key={label} className="fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -597,7 +595,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => { pressDown(event.currentTarget); playSealLift(event.currentTarget.querySelector('.seal-cup')); }} onPointerUp={(event) => { pressUp(event.currentTarget); playFoilPop(event.currentTarget); }} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') { pressUp(event.currentTarget); playFoilPop(event.currentTarget); } }} onClick={(event) => openQuickBar(event)}><span className="press-feel" data-press="rest"><SealCup /></span></Btn>
+                <Btn className="desk-fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet
