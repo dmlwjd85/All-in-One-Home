@@ -265,6 +265,8 @@ export function noteTypeInput(event, now = inputNow()) {
 /** 스페이스·엔터·지우기는 글자 소리와 다른 타건입니다. 바로 뒤의 input은 같은 타로 봅니다. */
 export function noteTypeKey(event, now = inputNow()) {
     if (!typeSoundEnabled()) return '';
+    /* 예전 소리(뽁·띵·물방울·방귀)는 main처럼 글자가 들어갈 때만 납니다. 엔터·지우기는 조용하고, 스페이스는 input에서 한 번 납니다. */
+    if (LEGACY_VOICES.has(typeVoiceId())) return '';
     if (event?.repeat) return '';
     const key = event?.key;
     const kind = key === ' ' || key === 'Spacebar' ? 'space' : key === 'Enter' ? 'enter' : (key === 'Backspace' || key === 'Delete' ? 'delete' : '');

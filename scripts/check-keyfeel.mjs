@@ -24,6 +24,7 @@ import {
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
 import { MAIN_TYPE_GAIN, MAIN_TYPE_PITCH, MAIN_TYPE_VOICE_IDS, renderMainTypeVoice } from './fixtures/typesound-main-483e43c.mjs';
+import { mainNoteTypeInput, resetMainTypeInput } from './fixtures/typeinput-main-483e43c.mjs';
 import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
 
 const failures = [];
@@ -362,7 +363,9 @@ for (const id of MAIN_TYPE_VOICE_IDS) {
         check(gains.at(-1).gain.value === MAIN_TYPE_GAIN, `${id} 크기가 main(${MAIN_TYPE_GAIN})과 다릅니다. ${gains.at(-1).gain.value}`);
     });
 }
-setTypeVoice('bang');
+/** 새 소리는 스페이스·엔터·지우기를 따로 칩니다. */
+const newVoice = TYPE_VOICES.find((voice) => !MAIN_TYPE_VOICE_IDS.includes(voice.id)).id;
+setTypeVoice(newVoice);
 const field = { tagName: 'TEXTAREA' };
 check(noteTypeKey({ key: ' ', target: field }, 90000) === 'space', '스페이스를 글자 소리로 치지 않습니다.');
 check(noteTypeInput({ inputType: 'insertText', data: ' ', target: field }, 90005) === false, '스페이스 입력 소리가 한 번 더 납니다.');
@@ -370,6 +373,46 @@ check(noteTypeKey({ key: 'Enter', target: field, isComposing: true }, 91000) ===
 check(noteTypeKey({ key: 'Backspace', target: field, repeat: true }, 92000) === '', '지우기 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Delete', target: field, repeat: true }, 92100) === '', 'Delete 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Backspace', target: field }, 92200) === 'delete', '지우기 키 한 번을 소리 내지 않습니다.');
+
+/** QA 9차 legacyplay9: 예전 소리는 엔터·지우기에 소리가 없고, 글자·스페이스·방향키 울림 횟수가 main과 같아야 합니다. */
+let typeClock = 200000;
+function typeRun(lines, pr) {
+    let count = 0;
+    let at = (typeClock += 5000);
+    if (!pr) resetMainTypeInput();
+    for (const [key, inputType, data, target] of lines) {
+        at += 120;
+        if (pr && noteTypeKey({ key, target }, at)) count += 1;
+        if (!inputType) continue;
+        const event = { inputType, data, target, isComposing: false };
+        if (pr ? noteTypeInput(event, at + 1) : mainNoteTypeInput(event, at + 1)) count += 1;
+    }
+    return count;
+}
+const plainInput = { tagName: 'INPUT', type: 'text' };
+const strokes = (target, enterType) => [
+    ['a', 'insertText', 'a', target],
+    ['b', 'insertText', 'b', target],
+    [' ', 'insertText', ' ', target],
+    ['c', 'insertText', 'c', target],
+    ['ArrowLeft', '', null, target],
+    ['ArrowRight', '', null, target],
+    ['Backspace', 'deleteContentBackward', null, target],
+    ['Delete', 'deleteContentForward', null, target],
+    ['Enter', enterType, null, target],
+];
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    setTypeVoice(id);
+    for (const [label, lines] of [['한 줄 칸', strokes(plainInput, '')], ['여러 줄 칸', strokes(field, 'insertLineBreak')]]) {
+        const pr = typeRun(lines, true);
+        const main = typeRun(lines, false);
+        check(pr === main && main === 4, `${id} ${label}에서 'ab c'+방향키+지우기+엔터 울림이 main(${main})과 다릅니다. ${pr}`);
+    }
+    for (const key of ['Enter', 'Backspace', 'Delete', ' ']) {
+        check(noteTypeKey({ key, target: field }, (typeClock += 500)) === '', `${id} 를 골랐는데 ${key} 키에서 따로 소리가 납니다.`);
+    }
+}
+setTypeVoice(newVoice);
 
 resetTypeGraphForTest();
 const burstSources = [];
@@ -462,8 +505,30 @@ function limitsTypeBus(node) {
 }
 check(burstShapers.length === 1 && limitsTypeBus(burstGains.at(-1)?.connected) && burstGains.at(-1).connected.connected === burstAudio.destination, '실제 재생 경로에 리미터가 없습니다.');
 
+/** 소리는 2ms 동안 0에서 크기까지 올라옵니다(딸깍 소리 방지). 예전 소리와 새 소리 모두 같은 길입니다. */
+resetTypeGraphForTest();
+burstGains.length = 0;
+scheduleTypeBurst(burstAudio, { voice: 'bang', count: 2, gapSec: 0.05, when: 1 });
+scheduleTypeBurst(burstAudio, { voice: newVoice, count: 2, gapSec: 0.05, when: 2 });
+const rampStarts = [1, 1.05, 2, 2.05];
+const typeGains = burstGains.filter((gain) => gain.gain.events.some((event) => event.type === 'ramp' && event.value > 0));
+check(typeGains.length === 4 && typeGains.every((gain, index) => {
+    const [set, ramp] = gain.gain.events;
+    const when = rampStarts[index];
+    return set?.type === 'set' && set.value === 0 && Math.abs(set.time - when) < 1e-9
+        && ramp?.type === 'ramp' && ramp.value > 0.01 && ramp.value <= 0.049 && Math.abs(ramp.time - (when + 0.002)) < 1e-9;
+}), `글자 소리 시작 램프가 0에서 2ms가 아닙니다. ${JSON.stringify(typeGains.map((gain) => gain.gain.events.slice(0, 2)))}`);
+
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
+/** 연타 측정(mixTypeBurst)의 예전 소리 음높이도 실제 재생처럼 main의 ±3%(0.97~1.03)여야 합니다. */
+const typeSource = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+const burstPitch = typeSource.slice(typeSource.indexOf('export function mixTypeBurst')).match(/const pitch = legacy \? ([^:]+) :/);
+const burstRates = burstPitch ? Array.from({ length: 100 }, (_, n) => Function('n', `return ${burstPitch[1]};`)(n)) : [];
+check(
+    burstRates.length === 100 && Math.abs(Math.min(...burstRates) - MAIN_TYPE_PITCH[0]) < 1e-9 && Math.max(...burstRates) < MAIN_TYPE_PITCH[1] && Math.max(...burstRates) > MAIN_TYPE_PITCH[1] - 0.001,
+    `연타 측정의 예전 소리 음높이가 main(${MAIN_TYPE_PITCH.join('~')})과 다릅니다. ${burstPitch?.[1]}`,
+);
 const settings = readFileSync(`${root}/src/ui/Settings.jsx`, 'utf8');
 const speech = readFileSync(`${root}/src/ui/useSpeechDictation.js`, 'utf8');
 const db = readFileSync(`${root}/src/lib/db.js`, 'utf8');
