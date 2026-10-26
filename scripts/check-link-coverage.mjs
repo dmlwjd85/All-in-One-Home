@@ -21,6 +21,7 @@ const must = [
     ['#/today', 'today'],
     ['#/attend', 'attend'],
     ['#/attend/2026-10-19', 'attend'],
+    ['#/attend/2026-10-19/month', 'attend'],
     ['#/students', 'students'],
     ['#/students/12', 'student'],
     ['#/students/neis', 'neis'],

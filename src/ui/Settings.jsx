@@ -120,8 +120,12 @@ export function Settings() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
-                <p className="muted" style={{ marginTop: 0 }}>작은 글자는 쨈 본문, 24px부터는 쨈 제목 평면이에요. 본문 Bold는 14px부터 씁니다.</p>
-                <p className="muted">글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀. 글꼴: 쨈 본문 — Resource Han Rounded(Cyano Hao, SIL OFL 1.1) 바탕.</p>
+                <p className="muted" style={{ marginTop: 0 }}>작은 글자는 쨈 본문 글꼴이고, 큰 제목은 쨈 제목 글꼴이에요. 아주 작은 글씨는 보통 굵기로 둡니다.</p>
+                <p className="muted">글꼴을 어떻게 써도 되는지는 아래 안내를 눌러 보세요.</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <a className="chip" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="./fonts/LICENSE-JJAEM-TitleFlat.txt">제목 글꼴 안내</a>
+                    <a className="chip" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="./fonts/OFL-JJAEMBody.txt">본문 글꼴 안내</a>
+                </div>
                 <div className="font-grid" role="group" aria-label="글꼴">
                     {FONT_CHOICES.map((item) => (
                         <Btn key={item.id} className={font === item.id ? 'choice-tile on' : 'choice-tile'} data-font-sample={item.id} aria-pressed={font === item.id} onClick={() => { setFont(item.id); setFontId(item.id); }}>
@@ -334,7 +338,7 @@ export function Settings() {
                                 applyLegacy(plan).then((saved) => { if (!saved?.storageFailed) showToast('예전 기록을 옮겼어요.'); });
                             }}>이 기기 기록 옮기기</Btn>
                         </div>
-                        <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => go('#/settings/legacy')}>보관함 보기</Btn>
+                        <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => go('#/settings/legacy', { state: { appFrom: 'settings' } })}>보관함 보기</Btn>
                         <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => forgetLegacyImports().then((saved) => { if (!saved?.storageFailed) showToast('옮긴 것만 지웠어요. 원본은 그대로예요.'); })}>옮긴 것 지우기</Btn>
                     </div>
                 )}

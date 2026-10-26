@@ -97,6 +97,10 @@ export function resolveHash(raw, today) {
     if (path === '/counsel') return pack('students', {}, '#/students', incoming);
     if (path === '/attend') return pack('attend', { date: today }, `#/attend/${today}`, incoming);
 
+    const attendMonth = path.match(/^\/attend\/(\d{4}-\d{2}-\d{2})\/month$/);
+    if (attendMonth && isValidYmd(attendMonth[1])) {
+        return pack('attend', { date: attendMonth[1], span: 'month' }, `#/attend/${attendMonth[1]}/month`, incoming);
+    }
     const attend = path.match(/^\/attend\/(\d{4}-\d{2}-\d{2})$/);
     if (attend && isValidYmd(attend[1])) return pack('attend', { date: attend[1] }, `#/attend/${attend[1]}`, incoming);
     if (path.startsWith('/attend/')) return pack('attend', { date: today }, `#/attend/${today}`, incoming);

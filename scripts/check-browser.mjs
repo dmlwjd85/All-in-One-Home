@@ -1,6 +1,6 @@
 /** 360·390·1280에서 넘침과 버튼 크기, 주요 흐름을 확인하고 화면을 저장합니다. */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
@@ -567,6 +567,20 @@ async function tipCover(page) {
 }
 
 try {
+    const indexHtml = readFileSync(resolve(root, 'index.html'), 'utf8');
+    const fontsCss = readFileSync(resolve(root, 'public/fonts/fonts.css'), 'utf8');
+    const screenCss = readFileSync(resolve(root, 'src/index.css'), 'utf8');
+    const tokenCss = readFileSync(resolve(root, 'src/styles/tokens.css'), 'utf8');
+    const firstFont = resolve(root, 'public/fonts/JJAEMBody-Regular.first.woff2');
+    check(indexHtml.includes('href="./fonts/JJAEMBody-Regular.first.woff2" as="font"'), '첫 화면 글꼴 preload가 없습니다.');
+    check(!indexHtml.includes('JJAEMBody-Regular.ks.woff2'), '본문 전체 파일을 미리 받습니다.');
+    check(existsSync(firstFont) && statSync(firstFont).size < 32 * 1024, '첫 화면 글꼴이 작지 않습니다.');
+    const jjaemFaces = fontsCss.split('@font-face').slice(1).filter((block) => block.includes("'JJAEM"));
+    check(jjaemFaces.length >= 4 && jjaemFaces.every((block) => block.includes('font-display: swap') && !/font-display:\s*block/.test(block)), '쨈 글꼴이 swap이 아닙니다.');
+    check(tokenCss.includes("--font-display: 'JJAEM Title Flat'"), '제목 글꼴이 쨈 제목 평면이 아닙니다.');
+    check(screenCss.includes('.cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }'), '오늘이 고른 날이면 안쪽 링이 없습니다.');
+    check(screenCss.includes('.dark .cal-grid .tap.cal-today .num { color: var(--bg); }'), '다크 오늘 칸 글자가 바탕색이 아닙니다.');
+    check(screenCss.includes('data-font-sample="plain"] { font-family: var(--font-jjaem); }'), '기본 글꼴 견본이 쨈 본문이 아닙니다.');
     await waitServer();
     await ensureBrowser();
     const scenes = [
@@ -611,6 +625,10 @@ try {
             await page.evaluate(() => { location.hash = '#/settings'; });
             await delay(200);
             await audit(page, `설정 ${width}`);
+            if (width === 390) {
+                const sample = await page.evaluate(() => getComputedStyle(document.querySelector('[data-font-sample="plain"]')).fontFamily);
+                check(String(sample).includes('JJAEM Body'), `기본 글꼴 견본이 쨈 본문이 아닙니다. ${sample}`);
+            }
             if (width === 360) {
                 const covered = await tipCover(page);
                 if (covered) failures.push(`설정: ${covered}`);
@@ -726,6 +744,17 @@ try {
             };
         });
         check(feel.tap && feel.focused && feel.pressed === 'false' && feel.hits.length === 2 && feel.hits.every((n) => n === 8), '출결 요약이 다른 버튼과 같은 콕 진동·포커스·aria가 아닙니다.');
+        const seatType = await page.evaluate(() => {
+            const seat = document.querySelector('.cell-grid button');
+            const num = seat?.querySelector('.num');
+            const name = num?.nextElementSibling;
+            return {
+                numWeight: num ? getComputedStyle(num).fontWeight : '',
+                numSize: num ? getComputedStyle(num).fontSize : '',
+                nameWeight: name ? getComputedStyle(name).fontWeight : '',
+            };
+        });
+        check(seatType.numSize === '12px' && Number(seatType.numWeight) <= 400 && Number(seatType.nameWeight) >= 700, `12px 번호가 보통 굵기가 아닙니다. ${JSON.stringify(seatType)}`);
         const seats = () => page.evaluate(() => [...document.querySelectorAll('.cell-grid button')].map((el) => el.innerText.replace(/\s+/g, ' ')));
         const pressBox = (name) => page.evaluate((label) => {
             [...document.querySelectorAll('button[aria-pressed]')].find((el) => el.innerText.includes(label))?.click();
@@ -765,7 +794,7 @@ try {
         names = await seats();
         check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '출석 칸을 다시 눌러도 전체가 나오지 않습니다.');
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
-        await delay(150);
+        await page.waitForFunction(() => location.hash.endsWith('/month') && [...document.querySelectorAll('button.solid-card')].some((el) => el.innerText.includes('박서준')));
         const monthRow = await page.evaluate(() => {
             const button = [...document.querySelectorAll('button.solid-card')].find((el) => !el.hasAttribute('aria-pressed') && el.innerText.includes('박서준') && el.classList.contains('tap'));
             button?.click();
@@ -773,6 +802,10 @@ try {
         });
         check(monthRow, '이번 달 학생 줄이 버튼이 아닙니다.');
         await page.waitForFunction(() => (document.querySelector('h1')?.innerText || '').includes('박서준'));
+        await page.click('[aria-label="뒤로"]');
+        await page.waitForFunction(() => location.hash.endsWith('/month'));
+        const monthKept = await page.evaluate(() => [...document.querySelectorAll('button.chip')].some((el) => el.innerText.trim() === '이번 달' && el.classList.contains('on')));
+        check(monthKept, '학생에서 돌아오면 이번 달 보기가 오늘로 돌아갑니다.');
         await page.evaluate(() => { location.hash = '#/attend'; });
         await page.waitForFunction(() => document.body.innerText.includes('출석·결석'));
         const clicked = await page.evaluate(() => {
@@ -1292,6 +1325,16 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         await page.waitForSelector('.cal-grid');
+        const todayRing = await page.evaluate(() => {
+            const el = document.querySelector('.cal-grid button.cal-today.cal-picked');
+            const probe = document.createElement('div');
+            document.body.appendChild(probe);
+            probe.style.boxShadow = 'inset 0 0 0 2px var(--ink)';
+            const expected = getComputedStyle(probe).boxShadow;
+            probe.remove();
+            return { found: Boolean(el), shadow: el ? getComputedStyle(el).boxShadow : '', expected };
+        });
+        check(todayRing.found && todayRing.shadow === todayRing.expected, `오늘이 고른 날이면 안쪽 링이 없습니다. ${JSON.stringify(todayRing)}`);
         const opened = await page.evaluate(() => ({
             panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
             today: document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false,
@@ -1413,6 +1456,39 @@ try {
     }
     await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
 
+    async function darkTodayContrast(width) {
+        await withDemo(width, 'dark', async (page) => {
+            await page.evaluate(() => { location.hash = '#/schedule'; });
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForSelector('.cal-today .num');
+            const ratio = await page.evaluate(() => {
+                const style = getComputedStyle(document.querySelector('.cal-today .num'));
+                const parse = (color) => {
+                    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+                };
+                const lum = (rgb) => {
+                    const parts = rgb.map((value) => {
+                        const channel = value / 255;
+                        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+                    });
+                    return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+                };
+                const fg = parse(style.color);
+                const bg = parse(style.backgroundColor);
+                if (!fg || !bg) return 0;
+                const left = lum(fg);
+                const right = lum(bg);
+                const [hi, lo] = left > right ? [left, right] : [right, left];
+                return (hi + 0.05) / (lo + 0.05);
+            });
+            check(ratio >= 4.5, `${width} 다크 오늘 동그라미 대비 ${Number(ratio).toFixed(2)} 가 4.5보다 낮습니다.`);
+        }, width >= 900 ? 800 : 844);
+    }
+    await darkTodayContrast(390);
+    await darkTodayContrast(1280);
+
     async function saveRoster(page) {
         await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 저장'), { timeout: 15000 });
         const before = await page.evaluate(() => history.length);
@@ -1501,6 +1577,7 @@ try {
             [`${origin}?demo=1&at=08:42&mode=light#/settings/roster`, '#/settings'],
             [`${origin}?demo=1&at=08:42&mode=light#/students/1`, '#/students'],
             [`${origin}?demo=1&at=08:42&mode=light#/legacy/5`, '#/settings/legacy'],
+            [`${origin}?demo=1&at=08:42&mode=light#/settings/legacy`, '#/settings'],
         ];
         try {
             for (const [url, parent] of cases) {
@@ -1518,7 +1595,10 @@ try {
                     stayed = false;
                 }
                 const where = await page.evaluate(() => ({ hash: location.hash, host: location.hostname, title: document.title }));
-                check(stayed && where.host === '127.0.0.1' && where.hash === parent && where.title !== '다른 사이트', `${width}에서 ‹ 가 앱 밖에 나갑니다. ${url} → ${JSON.stringify(where)}`);
+                const leftApp = where.host !== '127.0.0.1' || where.title === '다른 사이트';
+                check(stayed && !leftApp && where.hash === parent, leftApp
+                    ? `${width}에서 ‹ 가 앱 밖에 나갑니다. ${url} → ${JSON.stringify(where)}`
+                    : `${width}에서 ‹ 의 상위 화면이 아닙니다. ${url} → ${JSON.stringify(where)}`);
             }
             await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
             await page.evaluate(() => { location.hash = '#/schedule/month/2026-10-23'; });
@@ -2051,6 +2131,14 @@ try {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        const titleFace = await page.evaluate(() => {
+            const el = document.querySelector('h1.font-display');
+            const link = document.querySelector('link[rel="preload"][as="font"]');
+            const style = el ? getComputedStyle(el) : null;
+            return { family: style?.fontFamily || '', size: style?.fontSize || '', preload: link?.getAttribute('href') || '' };
+        });
+        check(titleFace.size === '32px' && titleFace.family.includes('JJAEM Title Flat'), `32px 제목이 쨈 제목 평면이 아닙니다. ${JSON.stringify(titleFace)}`);
+        check(titleFace.preload.includes('JJAEMBody-Regular.first.woff2') && !titleFace.preload.includes('JJAEMBody-Regular.ks.woff2'), `첫 화면 글꼴 preload가 작은 파일이 아닙니다. ${titleFace.preload}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
         const before = await page.evaluate(() => {

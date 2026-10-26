@@ -807,7 +807,7 @@ button.glass[aria-pressed="true"]:active {
     gap: 8px;
 }
 .choice-tile[data-font-sample="soft"] { font-family: var(--font-soft); }
-.choice-tile[data-font-sample="plain"] { font-family: var(--font-plain); }
+.choice-tile[data-font-sample="plain"] { font-family: var(--font-jjaem); }
 .choice-tile[data-font-sample="neat"] { font-family: var(--font-neat); }
 .font-grid .choice-tile { flex-direction: column; min-height: 72px; }
 
@@ -850,6 +850,7 @@ button.glass[aria-pressed="true"]:active {
     background: var(--accent);
     color: var(--on-primary);
 }
+.dark .cal-grid .tap.cal-today .num { color: var(--bg); }
 .cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }
 .cal-grid .day-rest-mark { font-weight: 500; }
 
