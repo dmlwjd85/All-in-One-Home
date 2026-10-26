@@ -502,11 +502,11 @@ export async function saveQuick(input, now = new Date()) {
                 neis: input.neis != null ? Boolean(input.neis) : kind === '관찰' || kind === '칭찬',
             };
             if (input.follow || (kind === '상담' && parsed.detectedDate && text.includes('다시'))) row.follow = input.follow || parsed.detectedDate;
-            relocate(draft, 'records', row, local);
+            put(local ? draft.local.records : draft.records, row);
             message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
         } else if (kind === '할 일') {
             const row = { ...base, id: nid('todo'), title: stripTokens(text) || text, done: false, due: input.due != null ? input.due : (parsed.detectedDate || '') };
-            relocate(draft, 'todos', row, local);
+            put(local ? draft.local.todos : draft.todos, row);
             message = '할 일에 넣었어요.';
         } else if (kind === '일정') {
             const eventKind = ['학급', '학교', '휴일', '내 일정'].includes(input.eventKind) ? input.eventKind : '학급';
@@ -523,18 +523,15 @@ export async function saveQuick(input, now = new Date()) {
             };
             if (input.time) row.time = input.time;
             if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
-            relocate(draft, 'events', row, local);
+            put(local ? draft.local.events : draft.events, row);
             message = '일정에 넣었어요.';
         } else if (kind === '알림장') {
-            const cloudPrev = (draft.notices || []).find((item) => item.id === date || item.date === date);
-            const localPrev = (draft.local.notices || []).find((item) => item.id === date || item.date === date);
-            const kept = localPrev || cloudPrev;
-            const combined = kept?.text ? `${kept.text}\n${text}` : text;
-            const sideLocal = isSensitiveText(combined, tags) || local;
-            relocate(draft, 'notices', { ...base, id: date, date, text: combined }, sideLocal);
+            const prev = (local ? draft.local.notices : draft.notices).find((item) => item.date === date);
+            const row = { ...base, id: date, date, text: prev ? `${prev.text}\n${text}` : text };
+            put(local ? draft.local.notices : draft.notices, row);
             message = '알림장에 넣었어요.';
         } else {
-            relocate(draft, 'notes', { ...base, id: nid('note'), text, date, pinned: false }, local);
+            put(local ? draft.local.notes : draft.notes, { ...base, id: nid('note'), text, date, pinned: false });
             message = '메모로 남겼어요.';
         }
         return draft;
@@ -631,12 +628,12 @@ export async function saveParsed(items, now = new Date()) {
                 if (item.time) row.time = item.time;
                 if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '')) row.endTime = item.endTime;
                 if (item.end && item.end > date) row.end = item.end;
-                relocate(draft, 'events', row, sensitive);
+                put(sensitive ? draft.local.events : draft.events, row);
             } else {
                 const title = item.time && !String(item.title).includes(item.time)
                     ? `${item.time} ${item.title}`.trim().slice(0, 100)
                     : String(item.title).trim().slice(0, 100);
-                relocate(draft, 'todos', { ...base, title, done: false, due: item.date || '' }, sensitive);
+                put(sensitive ? draft.local.todos : draft.todos, { ...base, title, done: false, due: item.date || '' });
             }
             registered.add(item.id);
             draft.inbox = draft.inbox.filter((row) => row.id !== item.id);

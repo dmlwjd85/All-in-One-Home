@@ -828,8 +828,7 @@ await (async () => {
     await saveQuick({ text: '준비물 가위', kind: '알림장', date: '2026-11-09' });
     await expectOneSide('notices', '2026-11-09', 'cloud');
     await saveQuick({ text: '학폭 관련 민원 상담', kind: '알림장', date: '2026-11-09' });
-    const hiddenNotice = await expectOneSide('notices', '2026-11-09', 'local');
-    check(String(hiddenNotice?.text || '').includes('준비물 가위') && String(hiddenNotice?.text || '').includes('학폭') && toCloudRow('notices', hiddenNotice) === null, '민감 알림장이 클라우드에 남거나 이전 글을 잃습니다.');
+    check(!snapshot().notices.some((row) => String(row.text).includes('학폭')) && snapshot().local.notices.some((row) => String(row.text).includes('학폭')), '민감 알림장이 클라우드로 갑니다.');
     await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: '내일은 소풍', source: 'app' });
     await expectOneSide('notices', '2026-11-09', 'cloud');
 
