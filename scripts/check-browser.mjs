@@ -591,7 +591,13 @@ try {
     const firstFont = resolve(root, 'public/fonts/JJAEMBody-Regular.first.woff2');
     check(indexHtml.includes('href="./fonts/JJAEMBody-Regular.first.woff2" as="font"'), '첫 화면 글꼴 preload가 없습니다.');
     check(!indexHtml.includes('href="./fonts/JJAEMBody-Regular.ks.woff2"'), '본문 전체 파일을 미리 받습니다.');
-    check(/getItem\('ssug-gyomu-tips'\) \|\| q\.get\('demo'\) === '1'\)[\s\S]{0,200}JJAEMBody-Bold\.ks\.woff2/.test(indexHtml), '오늘 화면으로 바로 여는 경우 전체 글꼴을 미리 받지 않아 화면이 밀릴 수 있습니다.');
+    for (const name of ['JJAEMBody-Regular.first.woff2', 'JJAEMBody-Bold.first.woff2', 'JJAEM-TitleFlat-Regular.first.woff2']) {
+        check(indexHtml.includes(`<link rel="preload" href="./fonts/${name}" as="font" type="font/woff2" crossorigin>`), `첫 화면 글꼴 ${name} 미리 받기 줄이 없습니다.`);
+    }
+    check(['400 1em "JJAEM Body"', '700 1em "JJAEM Body"', '400 1em "JJAEM Title Flat"'].every((face) => indexHtml.includes(`'${face}'`)) && indexHtml.includes('document.fonts.load(face,'), '전체 글꼴을 화면과 같은 글꼴 묶음으로 받지 않습니다.');
+    check(/getItem\('ssug-gyomu-tips'\) \|\| q\.get\('demo'\) === '1'\) \{\s*warmFonts\(\);/.test(indexHtml), '오늘 화면으로 바로 여는 경우 전체 글꼴을 미리 받지 않아 화면이 밀릴 수 있습니다.');
+    check(/\} else \{\s*addEventListener\('load', function \(\) \{\s*\(window\.requestIdleCallback[^\n]*\(warmFonts/.test(indexHtml), '처음 로그인 화면이 쉬는 틈에 다음 화면 글꼴을 받아 두지 않습니다.');
+    check(!/rel = 'preload'|\.rel = "preload"/.test(indexHtml), '전체 글꼴을 따로 미리 받기 링크로 받아 같은 파일을 두 번 받을 수 있습니다.');
     check(existsSync(firstFont) && statSync(firstFont).size < 32 * 1024, '첫 화면 글꼴이 작지 않습니다.');
     const jjaemFaces = fontsCss.split('@font-face').slice(1).filter((block) => block.includes("'JJAEM"));
     check(jjaemFaces.length >= 4 && jjaemFaces.every((block) => block.includes('font-display: swap') && !/font-display:\s*block/.test(block)), '쨈 글꼴이 swap이 아닙니다.');
@@ -2196,15 +2202,24 @@ try {
         });
         check(titleFace.size === '32px' && titleFace.family.includes('JJAEM Title Flat'), `32px 제목이 쨈 제목 평면이 아닙니다. ${JSON.stringify(titleFace)}`);
         check(titleFace.preload.includes('JJAEMBody-Regular.first.woff2') && !titleFace.preload.includes('JJAEMBody-Regular.ks.woff2'), `첫 화면 글꼴 preload가 작은 파일이 아닙니다. ${titleFace.preload}`);
-        const firstFonts = await page.evaluate(async () => {
+        const fontLoads = await page.evaluate(async () => {
             await document.fonts.ready;
             await new Promise((done) => { setTimeout(done, 600); });
-            return performance.getEntriesByType('resource').map((entry) => entry.name.split('/').pop().split('?')[0]).filter((name) => name.endsWith('.woff2'));
+            const nav = performance.getEntriesByType('navigation')[0];
+            const loadEnd = nav?.loadEventEnd || 0;
+            const fonts = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.woff2')).map((entry) => ({ name: entry.name.split('/').pop().split('?')[0], start: entry.startTime }));
+            return { loadEnd, before: fonts.filter((entry) => !loadEnd || entry.start < loadEnd).map((entry) => entry.name), after: fonts.filter((entry) => loadEnd && entry.start >= loadEnd).map((entry) => entry.name) };
         });
+        const firstFonts = fontLoads.before;
         check(
             ['JJAEMBody-Regular.first.woff2', 'JJAEMBody-Bold.first.woff2', 'JJAEM-TitleFlat-Regular.first.woff2'].every((name) => firstFonts.includes(name))
                 && !firstFonts.some((name) => name.includes('.ks.')),
-            `첫 화면에서 큰 글꼴 파일을 받습니다. ${JSON.stringify(firstFonts)}`,
+            `첫 화면에서 큰 글꼴 파일을 받습니다. ${JSON.stringify(fontLoads)}`,
+        );
+        const idleFonts = ['JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2', 'JJAEM-TitleFlat-Regular.ks.woff2'];
+        check(
+            fontLoads.loadEnd > 0 && idleFonts.every((name) => fontLoads.after.filter((item) => item === name).length === 1),
+            `로그인 화면을 다 그린 뒤 다음 화면 글꼴을 한 번씩 받아 두지 않습니다. ${JSON.stringify(fontLoads)}`,
         );
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
@@ -2230,6 +2245,37 @@ try {
         await page.waitForFunction(() => document.querySelector('[data-screen="todo"]') && window.scrollY === 0 && (document.querySelector('.main')?.scrollTop || 0) === 0);
         const todo = await page.evaluate(() => ({ y: window.scrollY, main: document.querySelector('.main')?.scrollTop || 0 }));
         check(todo.y === 0 && todo.main === 0, `할 일 화면이 맨 위가 아닙니다. scrollY ${todo.y}, main ${todo.main}`);
+    });
+
+    await withDemo(390, 'light', async (page) => {
+        /** 출결 말고 다른 화면에서도 14px보다 작은 글자는 보통 굵기여야 합니다. 10월 달력에는 개천절·한글날이 있습니다. */
+        const smallBold = [];
+        for (const [hash, ready] of [
+            ['#/today', '오늘'],
+            ['#/schedule/month/2026-10-09', '한글날'],
+            ['#/todo', '할 일'],
+            ['#/students', '이하은'],
+            ['#/settings', '글꼴'],
+        ]) {
+            await page.evaluate((next) => { location.hash = next; }, hash);
+            await page.waitForFunction((word) => document.body.innerText.includes(word), {}, ready);
+            await delay(250);
+            const found = await page.evaluate(() => {
+                const bold = [];
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const text = walker.currentNode.textContent.trim();
+                    const el = walker.currentNode.parentElement;
+                    if (!text || !el || !el.getClientRects().length) continue;
+                    const style = getComputedStyle(el);
+                    if (style.visibility === 'hidden' || parseFloat(style.fontSize) >= 14) continue;
+                    if (Number(style.fontWeight) >= 600) bold.push(`${text.slice(0, 12)} ${style.fontSize}/${style.fontWeight}`);
+                }
+                return bold;
+            });
+            if (found.length) smallBold.push(`${hash}: ${found.join(', ')}`);
+        }
+        check(smallBold.length === 0, `출결 밖 화면에서 14px보다 작은 글자가 굵습니다. ${smallBold.join(' / ')}`);
     });
 
     await withDemo(390, 'light', async (page) => {
