@@ -336,6 +336,13 @@ a.chip,
     padding: 0;
     justify-self: center;
 }
+.fab-name {
+    font-family: var(--font-title);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+}
+.desk-fab .fab-name { font-size: 26px; }
 .kok-mark {
     width: 36px;
     height: 39px;

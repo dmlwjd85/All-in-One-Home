@@ -50,7 +50,7 @@ export function Symbol() {
     );
 }
 
-/** 하단 버튼 '콕'. 가계부와 같은 윤곽입니다.
+/** 가계부와 같은 콕 윤곽. 하단 버튼에 보이는 이름은 쨈이고, 이 패스는 검사에서 윤곽을 유지합니다.
     Pretendard Bold 1.3.9 U+CF55, x' = x − 58, y' = 1596 − y.
     Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
     with Reserved Font Name Pretendard.
