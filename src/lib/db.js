@@ -1000,7 +1000,7 @@ export async function forgetLegacyImports() {
 
 export function exportFile(includeLocal) {
     const data = buildExport(state, { includeLocal, at: new Date().toISOString() });
-    downloadJson(`콕교무수첩-${seoulYmd()}.json`, data);
+    downloadJson(`쨈, 적 교무수첩-${seoulYmd()}.json`, data);
     return data;
 }
 
@@ -1069,7 +1069,7 @@ export async function importText(text, mode, hooks = {}) {
         const exportedAt = new Date().toISOString();
         const payload = buildExport(state, { includeLocal: true, at: exportedAt });
         JSON.stringify(payload);
-        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
+        downloadJson(`쨈, 적 교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
         await hooks.onPhase?.('prepared');
         const next = structuredClone(state);
         next.local.backup = { exportedAt, payload };

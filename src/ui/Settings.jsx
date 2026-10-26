@@ -126,7 +126,7 @@ export function Settings() {
                         <Btn key={id} className={data.profile.theme === id ? 'chip on' : 'chip'} onClick={() => patchProfile({ theme: id })}>{label}</Btn>
                     ))}
                 </div>
-                <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘콕 교무수첩’으로 보여요.</p>
+                <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘쨈, 적 교무수첩’으로 보여요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
 

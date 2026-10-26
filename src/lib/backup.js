@@ -56,7 +56,7 @@ function checkRecord(row, errors, index) {
 
 export function validateNewBackup(data) {
     const errors = [];
-    if (!plain(data) || data.format !== 'ssug-gyomu') errors.push('콕 교무수첩 백업 파일이 아니에요.');
+    if (!plain(data) || data.format !== 'ssug-gyomu') errors.push('쨈, 적 교무수첩 백업 파일이 아니에요.');
     if (data?.version !== 1) errors.push('이 앱이 읽는 파일 판이 아니에요.');
     if (errors.length) return { ok: false, errors, data: null };
     for (const key of ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'legacy', 'inbox']) {
