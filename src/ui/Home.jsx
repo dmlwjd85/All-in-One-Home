@@ -36,13 +36,6 @@ export function Home() {
 
     return (
         <div className="home-grid">
-            <div className="home-brand">
-                <Symbol />
-                <div>
-                    <p className="title-font home-brand-name">쨈 교무수첩</p>
-                    <Motto />
-                </div>
-            </div>
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
@@ -85,7 +78,12 @@ export function Home() {
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>콕에 발라 두기</h3>
+                <div className="home-brand">
+                    <Symbol />
+                    <p className="title-font home-brand-name">쨈 교무수첩</p>
+                    <Motto />
+                </div>
+                <h3 className="home-quick-title" style={{ margin: '0 0 6px', fontSize: 16 }}>콕에 발라 두기</h3>
                 <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 콕에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
             </section>
 

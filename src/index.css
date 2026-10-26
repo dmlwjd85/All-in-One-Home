@@ -274,19 +274,24 @@ a.chip,
 }
 .home-brand {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 2px 6px;
     align-items: center;
+    margin: 0 0 4px;
 }
+.home-brand .brand-symbol { width: 24px; height: 24px; }
 .home-brand-name {
     margin: 0;
-    font-size: 18px;
-    line-height: 24px;
+    font-size: 15px;
+    line-height: 20px;
+    white-space: nowrap;
 }
 .home-brand .brand-motto {
     margin: 0;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 13px;
+    line-height: 18px;
 }
+.home-quick-title { display: none; }
 .spread-hint {
     margin: 0 0 8px;
     line-height: 22px;
@@ -443,6 +448,7 @@ a.chip,
     }
     .toast { left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
     .home-brand { display: none; }
+    .home-quick-title { display: block; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);
