@@ -490,6 +490,11 @@ function stageCloudForget(bucket, id) {
     staged.push({ bucket, id: String(id) });
 }
 
+/** 검사에서 클라우드 삭제 대기열을 봅니다. 로그인 전에는 대기열에만 남습니다. */
+export function pendingCloudForgetForTest() {
+    return [...cloudForget];
+}
+
 function queueCloudForget(bucket, id) {
     const name = CLOUD_NAME[bucket];
     if (!name || !id) return;

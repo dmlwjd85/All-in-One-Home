@@ -8,3 +8,6 @@ export const JJAEM_STOPS = ['#5E468C', '#7A56A8', '#8A62B0'];
 
 /** 512 칸에서 잉크의 무게 중심을 가운데로 맞춘 자리입니다. */
 export const JJAEM_PLACE = 'translate(90.03 99.45) scale(0.176471)';
+
+/** 16·32px 파비콘. 16칸 좌표, 획은 2px 안팎이고 받침 ㅁ은 구멍을 남깁니다. */
+export const JJAEM_FAVICON_D = 'M0 1h5v2H0zM1 3h3v2H1zM0 5h2v2H0zM3 5h2v2H3zM6 1h5v2H6zM7 3h3v2H7zM6 5h2v2H6zM9 5h2v2H9zM12 1h2v6h-2zM14 1h2v2h-2zM14 4h2v2h-2zM0 8h16v2H0zM0 10h2v3H0zM14 10h2v3h-2zM0 13h16v2H0z';

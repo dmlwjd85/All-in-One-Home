@@ -1,7 +1,7 @@
 /** 쨈 아이콘 파일이 있고, 크기와 안전 영역이 맞는지 확인합니다. */
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { JJAEM_D } from '../src/ui/jjaemMark.js';
+import { JJAEM_D, JJAEM_FAVICON_D } from '../src/ui/jjaemMark.js';
 
 const failures = [];
 function check(ok, message) {
@@ -96,12 +96,16 @@ for (const [path, size] of Object.entries(pngs)) {
     check(info && info.width === size && info.height === size, `${path} 크기가 ${size}이 아닙니다.`);
 }
 
-for (const path of ['public/icon-jjaem.svg', 'public/favicon.svg', 'public/maskable-512.svg']) {
+for (const path of ['public/icon-jjaem.svg', 'public/maskable-512.svg']) {
     const text = read(path)?.toString('utf8') || '';
     check(text.includes(JJAEM_D), `${path} 에 쨈 외곽선이 없습니다.`);
     check(!/<text[\s>]/.test(text), `${path} 가 글꼴 글자를 그대로 씁니다.`);
     check(!/font-family=/.test(text), `${path} 가 글꼴 이름에 기대고 있습니다.`);
 }
+const faviconSvg = read('public/favicon.svg')?.toString('utf8') || '';
+check(faviconSvg.includes(JJAEM_FAVICON_D), '파비콘에 작은 화면용 쨈이 없습니다.');
+check(!faviconSvg.includes(JJAEM_D), '파비콘이 가는 외곽선을 그대로 씁니다.');
+check(!/<text[\s>]/.test(faviconSvg) && !/font-family=/.test(faviconSvg), '파비콘이 글꼴에 기대고 있습니다.');
 const maskSvg = read('public/maskable-512.svg')?.toString('utf8') || '';
 check(/<rect [^>]*width="512"[^>]*fill="url\(#bg\)"/.test(maskSvg) && !/rx="114"/.test(maskSvg), 'maskable 원본이 네모 배경이 아닙니다.');
 
@@ -148,15 +152,15 @@ if (tiny) {
             if (a > 200 && r > 220 && g > 220 && b > 220) ink += 1;
         }
     }
-    check(ink > 8, '16px 파비콘에서 쨈이 보이지 않습니다.');
+    check(ink > 70, `16px 파비콘 획이 너무 가늘거나 받침이 붙었습니다. 흰 칸 ${ink}`);
 }
 
 const index = read('index.html')?.toString('utf8') || '';
 const manifest = read('public/manifest.webmanifest')?.toString('utf8') || '';
-for (const needle of ['favicon.svg?v=16', 'favicon.ico?v=16', 'favicon-16.png?v=16', 'favicon-32.png?v=16', 'apple-touch-icon.png?v=16']) {
+for (const needle of ['favicon.svg?v=17', 'favicon.ico?v=17', 'favicon-16.png?v=17', 'favicon-32.png?v=17', 'apple-touch-icon.png?v=17']) {
     check(index.includes(needle), `index.html 에 ${needle} 가 없습니다.`);
 }
-for (const needle of ['pwa-192.png?v=16', 'pwa-512.png?v=16', 'maskable-512.png?v=16']) {
+for (const needle of ['pwa-192.png?v=17', 'pwa-512.png?v=17', 'maskable-512.png?v=17']) {
     check(manifest.includes(needle), `매니페스트에 ${needle} 가 없습니다.`);
 }
 check(!index.includes('icon-192.png') && !manifest.includes('icon-512.png'), '예전 아이콘 주소가 남아 있습니다.');

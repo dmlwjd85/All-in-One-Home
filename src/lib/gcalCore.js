@@ -10,16 +10,16 @@ export const SCOPE_READONLY = 'https://www.googleapis.com/auth/calendar.readonly
 export const SCOPE_EVENTS = 'https://www.googleapis.com/auth/calendar.events';
 export const KOK_PRIVATE_KEY = 'kokId';
 
-export const GCAL_SYNC_ERROR = '구글 캘린더와 맞추지 못했어요. 콕 일정은 그대로 두었어요. 잠시 후 설정에서 다시 연결해 주세요.';
-export const GCAL_AUTH_ERROR = '캘린더 연결이 만료됐거나 권한이 부족해요. 설정에서 다시 연결해 주세요. 콕 일정은 그대로예요.';
-export const GCAL_OFFLINE_ERROR = '인터넷에 닿지 못해 구글 캘린더와 맞추지 못했어요. 콕 일정은 그대로예요.';
-export const GCAL_DENIED_ERROR = '구글이 캘린더 권한을 거절했어요. 연동은 바꾸지 않았고, 콕 일정은 그대로예요.';
-export const GCAL_SCRIPT_ERROR = '구글 연결 스크립트를 불러오지 못했어요. 인터넷을 확인한 뒤 다시 눌러 주세요. 콕 일정은 그대로예요.';
-export const GCAL_RETRY_ERROR = '구글 연결 준비를 마쳤어요. 한 번만 더 눌러 주세요. 콕 일정은 그대로예요.';
-export const GCAL_POPUP_ERROR = '구글 창이 열리지 않았어요. 팝업을 허용한 뒤 한 번 더 눌러 주세요. 콕 일정은 그대로예요.';
-export const GCAL_PARTIAL_ERROR = '일부 일정을 구글에 올리지 못했어요. 콕에 적어 둔 일정은 그대로예요.';
-export const GCAL_SHARED_ERROR = '공용 컴퓨터에서는 캘린더 연동을 켜지 않아요. 콕 일정은 그대로예요.';
-export const GCAL_MODE_HINT = '보기만은 구글 일정을 읽기만 하고, 콕 일정도 구글에 넣기는 만든 일정과 수정·삭제를 구글에 반영해요.';
+export const GCAL_SYNC_ERROR = '구글 캘린더와 맞추지 못했어요. 적어 둔 일정은 그대로 두었어요. 잠시 후 설정에서 다시 연결해 주세요.';
+export const GCAL_AUTH_ERROR = '캘린더 연결이 만료됐거나 권한이 부족해요. 설정에서 다시 연결해 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_OFFLINE_ERROR = '인터넷에 닿지 못해 구글 캘린더와 맞추지 못했어요. 적어 둔 일정은 그대로예요.';
+export const GCAL_DENIED_ERROR = '구글이 캘린더 권한을 거절했어요. 연동은 바꾸지 않았고, 적어 둔 일정은 그대로예요.';
+export const GCAL_SCRIPT_ERROR = '구글 연결 스크립트를 불러오지 못했어요. 인터넷을 확인한 뒤 다시 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_RETRY_ERROR = '구글 연결 준비를 마쳤어요. 한 번만 더 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_POPUP_ERROR = '구글 창이 열리지 않았어요. 팝업을 허용한 뒤 한 번 더 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_PARTIAL_ERROR = '일부 일정을 구글에 올리지 못했어요. 여기에 적어 둔 일정은 그대로예요.';
+export const GCAL_SHARED_ERROR = '공용 컴퓨터에서는 캘린더 연동을 켜지 않아요. 적어 둔 일정은 그대로예요.';
+export const GCAL_MODE_HINT = '보기만은 구글 일정을 읽기만 해요. 만든 일정도 구글에 넣기는 새 일정과 수정·삭제를 구글에 반영해요.';
 
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -191,7 +191,7 @@ function plusMinutes(hm, minutes) {
 
 export function kokToGoogleEvent(row) {
     const summary = String(row.title || '일정').trim().slice(0, 200) || '일정';
-    const description = [row.memo, row.kind ? `콕 ${row.kind}` : ''].filter(Boolean).join('\n').slice(0, 800);
+    const description = [row.memo, row.kind || ''].filter(Boolean).join('\n').slice(0, 800);
     const extendedProperties = {
         private: {
             [KOK_PRIVATE_KEY]: String(row.id),

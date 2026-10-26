@@ -242,7 +242,7 @@ export function Settings() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>
                 <p>교실 컴퓨터라면 켜 두세요. 30분 동안 가만히 있으면 화면을 잠그고, 클라우드가 연결되면 창을 닫을 때 임시 저장만 남깁니다.</p>
-                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 끄기'}</Btn>
+                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
                 <h3>백업</h3>
                 <p className="muted">파일은 이 기기 밖으로 나가지 않아요. 민감한 기록을 넣을지는 직접 고릅니다.</p>
                 <Btn className={includeLocal ? 'chip on' : 'chip'} onClick={() => setIncludeLocal((value) => !value)}>이 기기 전용 기록도 넣기</Btn>
@@ -277,7 +277,7 @@ export function Settings() {
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
                 {gcal.enabled && gcal.mode === 'write' && (
                     <>
-                        <p className="muted">구글에 올려 둔 콕 일정을 지울지 골라 주세요.</p>
+                        <p className="muted">구글에 올려 둔 일정을 지울지 골라 주세요.</p>
                         <div className="gcal-modes" role="group" aria-label="구글에 올려 둔 일정">
                             <Btn
                                 className={gcalWipe === 'keep' ? 'choice-tile on' : 'choice-tile'}
@@ -383,7 +383,8 @@ export function RosterSettings() {
                 const parsed = await replaceRoster(rosterTextFromSlots(names));
                 if (parsed?.storageFailed) return;
                 showToast(parsed.errors?.[0] || '명단을 저장했어요.');
-                go('#/settings', { replace: true });
+                if (history.length > 1) history.back();
+                else go('#/settings', { replace: true });
             }}>명단 저장</Btn>
         </section>
     );
