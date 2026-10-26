@@ -98,6 +98,12 @@ try {
         await expectDeny('정리함 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth01'), {
             title: '건강 조심', kind: 'todo', source: 'app', warning: '건강',
         }));
+        await expectDeny('정리함 제목만 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth02'), {
+            title: '건강 조심', kind: 'todo', source: 'app', warning: '저장하면 정리함에 들어가요.',
+        }));
+        await expectDeny('정리함 안내만 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth03'), {
+            title: '체험학습 동의서', kind: 'todo', source: 'app', warning: '건강',
+        }));
         const back = fromCloudRow('inbox', 'msgabcdef12', inboxRow.body);
         if (!back || back.kind !== '할 일' || back.date !== '2026-12-31' || back.title !== '체험학습 동의서') {
             failures.push(`정리함을 다시 읽지 못했습니다. ${JSON.stringify(back)}`);

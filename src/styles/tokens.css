@@ -34,6 +34,12 @@
     --aurora-brand: #E8E4DE;
     --fab-1: #A73D74;
     --fab-2: #A73D74;
+    --keycap-top: #C45E90;
+    --keycap-mid: #A73D74;
+    --keycap-bottom: #8F3466;
+    --keycap-side: #6B2246;
+    --keycap-highlight: rgba(255, 255, 255, .55);
+    --keycap-shadow: rgba(46, 42, 43, .24);
     --glow: rgba(167, 61, 116, .28);
     --shadow: 6px 6px 14px #C8C3BB, -6px -6px 14px #FFFFFF;
     --neo-shadow: #C8C3BB;
@@ -103,6 +109,12 @@
     --aurora-brand: #2A2627;
     --fab-1: #A73D74;
     --fab-2: #A73D74;
+    --keycap-top: #C56A96;
+    --keycap-mid: #A73D74;
+    --keycap-bottom: #8A315F;
+    --keycap-side: #5C1C3C;
+    --keycap-highlight: rgba(255, 255, 255, .28);
+    --keycap-shadow: rgba(0, 0, 0, .5);
     --glow: rgba(0, 0, 0, .4);
     --shadow: 6px 6px 14px #161314, -6px -6px 14px #3E393A;
     --neo-shadow: #161314;

@@ -10,17 +10,22 @@
     <meta name="apple-mobile-web-app-title" content="쨈 교무수첩">
     <title>쨈 교무수첩</title>
     <link rel="manifest" href="./manifest.webmanifest">
-    <link rel="icon" href="./favicon.svg?v=15" type="image/svg+xml">
-    <link rel="icon" href="./favicon.ico?v=15" sizes="16x16 32x32">
-    <link rel="icon" href="./favicon-32.png?v=15" sizes="32x32" type="image/png">
-    <link rel="icon" href="./favicon-16.png?v=15" sizes="16x16" type="image/png">
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=15" sizes="180x180">
+    <link rel="icon" href="./favicon.svg?v=16" type="image/svg+xml">
+    <link rel="icon" href="./favicon.ico?v=16" sizes="16x16 32x32">
+    <link rel="icon" href="./favicon-32.png?v=16" sizes="32x32" type="image/png">
+    <link rel="icon" href="./favicon-16.png?v=16" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=16" sizes="180x180">
     <link rel="preload" href="./fonts/Pretendard-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="./fonts/Pretendard-Bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="./fonts/NanumSquareRoundB.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./fonts/fonts.css">
     <script>
         try {
+            var hash = location.hash || '';
+            if (hash.indexOf('access_token=') !== -1 || hash.indexOf('error=access_denied') !== -1) {
+                sessionStorage.setItem('ssug-gyomu-gcal-hash', hash);
+                history.replaceState(null, '', location.pathname + location.search + '#/settings');
+            }
             var q = new URLSearchParams(location.search);
             if (q.get('mode') === 'dark' || q.get('mode') === 'light') localStorage.setItem('ssug-gyomu-theme', q.get('mode'));
             var saved = localStorage.getItem('ssug-gyomu-theme');

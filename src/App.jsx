@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
 import { resolveHash } from './lib/routes.js';
@@ -60,18 +61,21 @@ export default function App() {
     useEffect(() => {
         let stop = () => {};
         let unsub = () => {};
+        let stopGcal = () => {};
         let alive = true;
         boot(location.search).then(async () => {
             if (!alive) return;
             setClock(seoulParts());
             setData(snapshot());
             stop = subscribe(setData);
+            stopGcal = startGcalBridge();
             unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
         });
         return () => {
             alive = false;
             stop();
             unsub();
+            stopGcal();
         };
     }, []);
 
@@ -81,7 +85,10 @@ export default function App() {
         const onPop = () => setHash(location.hash || '#/today');
         const onLine = () => {
             setOnline(navigator.onLine);
-            if (navigator.onLine) flushCloud().catch(() => {});
+            if (navigator.onLine) {
+                flushCloud().catch(() => {});
+                refreshGcal().catch(() => {});
+            }
         };
         window.addEventListener('hashchange', onHash);
         window.addEventListener('popstate', onPop);

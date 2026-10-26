@@ -153,10 +153,10 @@ if (tiny) {
 
 const index = read('index.html')?.toString('utf8') || '';
 const manifest = read('public/manifest.webmanifest')?.toString('utf8') || '';
-for (const needle of ['favicon.svg?v=15', 'favicon.ico?v=15', 'favicon-16.png?v=15', 'favicon-32.png?v=15', 'apple-touch-icon.png?v=15']) {
+for (const needle of ['favicon.svg?v=16', 'favicon.ico?v=16', 'favicon-16.png?v=16', 'favicon-32.png?v=16', 'apple-touch-icon.png?v=16']) {
     check(index.includes(needle), `index.html 에 ${needle} 가 없습니다.`);
 }
-for (const needle of ['pwa-192.png?v=15', 'pwa-512.png?v=15', 'maskable-512.png?v=15']) {
+for (const needle of ['pwa-192.png?v=16', 'pwa-512.png?v=16', 'maskable-512.png?v=16']) {
     check(manifest.includes(needle), `매니페스트에 ${needle} 가 없습니다.`);
 }
 check(!index.includes('icon-192.png') && !manifest.includes('icon-512.png'), '예전 아이콘 주소가 남아 있습니다.');
