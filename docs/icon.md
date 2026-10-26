@@ -23,4 +23,4 @@
 - 마스크: `public/maskable-512.svg`, `public/maskable-512.png`. 글자는 가운데 지름 80% 원 안에 있습니다.
 - 16·32px 파비콘은 글자를 조금 더 키워 알아보게 했습니다.
 
-주소에는 `?v=15` 를 붙였고, 서비스 워커 캐시는 `ssug-gyomu-shell-v15` 입니다. 다시 만들 때는 `node scripts/make-jjaem-icon.mjs` 입니다.
+주소에는 `?v=16` 를 붙였고, 서비스 워커 캐시는 `ssug-gyomu-shell-v16` 입니다. 다시 만들 때는 `node scripts/make-jjaem-icon.mjs` 입니다.

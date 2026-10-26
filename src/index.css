@@ -321,6 +321,9 @@ a.chip,
     border-radius: 14px;
 }
 .fab {
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
     width: 58px;
     height: 58px;
     margin-top: -22px;
@@ -348,6 +351,11 @@ a.chip,
     width: 36px;
     height: 39px;
     display: block;
+}
+.fab .kok-mark,
+.desk-fab .kok-mark {
+    position: relative;
+    z-index: 2;
 }
 .desk-fab .kok-mark {
     width: 42px;
@@ -664,6 +672,7 @@ a.chip,
 .desk-fab {
     display: none;
     position: fixed;
+    isolation: isolate;
     z-index: 30;
     left: 50%;
     bottom: 24px;
@@ -817,6 +826,58 @@ button.glass[aria-pressed="true"]:active {
 .day-rest-mark { color: var(--rest-ink); font-weight: 800; }
 .rest-banner { border-radius: 16px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .cal-grid .tap.day-rest { background: var(--rest-bg); }
+
+.gcal-modes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+.gcal-modes .choice-tile {
+    flex-direction: column;
+    min-height: 72px;
+    padding: 10px 12px;
+}
+.gcal-ask { display: grid; gap: 8px; margin-top: 8px; }
+.gcal-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 22px;
+    margin-right: 6px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: var(--st-early-bg);
+    color: var(--st-early);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 16px;
+    vertical-align: 1px;
+}
+.gcal-line { color: var(--st-early); }
+.gcal-error {
+    margin: 8px 0 0;
+    color: var(--ink);
+    background: var(--warn);
+    border-radius: 14px;
+    padding: 10px 12px;
+    line-height: 22px;
+}
+.cal-marks {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    min-height: 14px;
+}
+.gcal-mark {
+    color: var(--st-early);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 14px;
+}
+@media (max-width: 389px) {
+    .gcal-modes { grid-template-columns: minmax(0, 1fr); }
+}
 .week-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .week-nav strong { min-width: 0; text-align: center; }
 

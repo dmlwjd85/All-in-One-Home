@@ -22,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +41,7 @@ jobs:
           VITE_BASE: ./
           VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
         run: |
           npm install
           npm run check:links
@@ -52,6 +52,7 @@ jobs:
           npm run check:keyfeel
           npm run check:brand
           npm run check:icons
+          npm run check:gcal
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules

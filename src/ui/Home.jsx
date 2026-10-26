@@ -3,7 +3,9 @@ import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekda
 import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
+import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
+import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
@@ -22,10 +24,15 @@ export function Home() {
     const left = todos.filter((row) => !row.done).length;
     const weekStart = startOfWeekMon(clock.ymd);
     const weekEnd = addDaysYmd(weekStart, 6);
+    const gcal = useGcal();
     const events = joined(data, 'events').filter((row) => {
         const end = row.end && row.end >= row.date ? row.end : row.date;
         return row.date <= weekEnd && end >= weekStart;
     });
+    const googleWeek = visibleGoogleEvents(gcal, data.auth?.uid).filter((row) => {
+        const end = row.end && row.end >= row.date ? row.end : row.date;
+        return row.date <= weekEnd && end >= weekStart;
+    }).slice(0, 2);
     const feed = [
         ...joinedRecords(data).map((row) => ({ id: row.id, at: row.at || row.date, title: `${data.students.find((item) => item.id === row.sid)?.no || ''} ${studentName(data.students, row.sid)} · ${row.kind}`.trim(), text: row.text, emoji: '👀' })),
         ...joined(data, 'notices').map((row) => ({ id: row.id, at: row.at || row.date, title: row.date === addDaysYmd(clock.ymd, 1) ? '내일 알림장' : '알림장', text: row.text, emoji: '📢' })),
@@ -144,7 +151,13 @@ export function Home() {
                             {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
                         </div>
                     ))}
-                    {!events.length && <p className="muted" style={{ margin: 0 }}>이번 주 일정은 아직 없어요.</p>}
+                    {googleWeek.map((row) => (
+                        <div key={row.id} className="gcal-line">
+                            <strong><span className="gcal-badge">구글</span>{weekdayKo(row.date)} {Number(row.date.slice(5, 7))}/{Number(row.date.slice(8))} · {row.title}</strong>
+                            <p className="muted" style={{ margin: '2px 0 0' }}>보기만</p>
+                        </div>
+                    ))}
+                    {!events.length && !googleWeek.length && <p className="muted" style={{ margin: 0 }}>이번 주 일정은 아직 없어요.</p>}
                 </div>
             </section>
 

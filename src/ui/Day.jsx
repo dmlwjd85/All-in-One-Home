@@ -1,9 +1,13 @@
-import { useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, weekdayKo } from '../lib/date.js';
+import { useEffect, useState } from 'react';
+import { addDaysYmd, dayKeyFromYmd, formatKoDate, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
 import { joined, joinedRecords, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
+import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
+import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
+import { EventLine } from './EventLine.jsx';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
 
@@ -17,8 +21,13 @@ function onDay(row, date) {
 
 export function Day() {
     const { data, clock, route, go, openFlow, showToast } = useUi();
+    const gcal = useGcal();
+    useEffect(() => { refreshGcal().catch(() => {}); }, []);
     const date = route.params.date;
-    const events = joined(data, 'events').filter((row) => onDay(row, date));
+    const events = mergeCalendarRows(
+        joined(data, 'events'),
+        visibleGoogleEvents(gcal, data.auth?.uid),
+    ).filter((row) => onDay(row, date));
     const todos = joined(data, 'todos').filter((row) => row.due === date);
     const records = joinedRecords(data).filter((row) => row.date === date);
     const follows = joinedRecords(data).filter((row) => row.follow === date && row.date !== date);
@@ -59,9 +68,7 @@ export function Day() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>일정</h2>
-                {events.map((row) => (
-                    <p key={row.id} style={{ marginTop: 0 }}>{row.localOnly ? '🔒 ' : ''}{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}{row.memo ? ` · ${row.memo}` : ''}</p>
-                ))}
+                {events.map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
                 {!events.length && <p className="muted">이 날 일정은 없어요.</p>}
                 <Btn className="chip" onClick={() => openFlow({ id: 'quick', kind: '일정', date })}>일정 적기</Btn>
             </section>

@@ -1,20 +1,26 @@
 import { useEffect, useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
 import { restInfo } from '../lib/daymark.js';
 import { joined, setTimetable } from '../lib/db.js';
+import { EventLine } from './EventLine.jsx';
+import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
+import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
+import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
 export function Schedule() {
-    const { data, clock, route, go } = useUi();
+    const { data, clock, route, go, showToast } = useUi();
     const routedWeek = route.params.week && isValidYmd(route.params.week) ? route.params.week : '';
     const [mode, setMode] = useState('주');
     const [ym, setYm] = useState((routedWeek || clock.ymd).slice(0, 7));
     const [picked, setPicked] = useState(routedWeek || clock.ymd);
     const [weekAnchor, setWeekAnchor] = useState(routedWeek || clock.ymd);
+    const gcal = useGcal();
+    useEffect(() => { refreshGcal().catch(() => {}); }, []);
     useEffect(() => {
         if (!routedWeek) return;
         setWeekAnchor(routedWeek);
@@ -23,9 +29,11 @@ export function Schedule() {
         setMode('주');
     }, [routedWeek]);
     const weekStart = startOfWeekMon(weekAnchor);
-    const events = joined(data, 'events');
+    const classEvents = joined(data, 'events');
+    const shown = mergeCalendarRows(classEvents, visibleGoogleEvents(gcal, data.auth?.uid));
     const weekEnd = addDaysYmd(weekStart, 6);
-    const week = events.filter((row) => coversDay(row, weekStart, weekEnd));
+    const week = shown.filter((row) => coversDay(row, weekStart, weekEnd));
+    const pickedRest = restInfo(picked, classEvents);
     const specialist = [];
     DAYS.forEach(([key, label]) => {
         const row = data.timetable[key] || {};
@@ -36,6 +44,7 @@ export function Schedule() {
 
     return (
         <div>
+            {gcal.lastError && <p className="gcal-error" role="status">{gcal.lastError}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
                 {['주', '달력', '시간표'].map((item) => <Btn key={item} className={mode === item ? 'chip on' : 'chip'} onClick={() => setMode(item)}>{item}</Btn>)}
             </div>
@@ -57,13 +66,13 @@ export function Schedule() {
                     <Btn className="chip" onClick={() => { setWeekAnchor(clock.ymd); go(`#/schedule/week/${clock.ymd}`); }}>이번 주</Btn>
                     {Array.from({ length: 7 }, (_, index) => {
                         const date = addDaysYmd(weekStart, index);
-                        const rest = restInfo(date, events);
+                        const rest = restInfo(date, classEvents);
                         const mine = week.filter((row) => onDay(row, date));
                         return (
                             <section key={date} className={rest.off ? 'glass day-rest' : 'glass'} style={{ padding: 12 }}>
                                 <Btn block className="chip" style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', marginBottom: 8 }} onClick={() => go(`#/day/${date}`)}>{formatKoDate(date, { today: clock.ymd })} 일지</Btn>
                                 {rest.off && <span className="day-rest-mark"> · {rest.label === '휴일' ? '휴일' : `휴일 · ${rest.label}`}</span>}
-                                {mine.map((row) => <p key={row.id} style={{ marginBottom: 0 }}>{row.localOnly ? '🔒 ' : ''}{eventClock(row) ? `${eventClock(row)} ` : ''}{row.title} {row.memo || ''}</p>)}
+                                {mine.map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
                                 {!mine.length && !rest.off && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
                             </section>
                         );
@@ -83,21 +92,34 @@ export function Schedule() {
                         {['월', '화', '수', '목', '금', '토', '일'].map((label, index) => <div key={label} className={index >= 5 ? 'day-rest-mark' : undefined} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800 }}>{label}</div>)}
                         {monthCells(ym).map((cell, index) => {
                             const holiday = holidayCaption(cell.ymd);
-                            const rest = restInfo(cell.ymd, events);
-                            const has = events.some((row) => onDay(row, cell.ymd));
+                            const rest = restInfo(cell.ymd, classEvents);
+                            const has = classEvents.some((row) => onDay(row, cell.ymd));
+                            const hasGoogle = shown.some((row) => row.google && onDay(row, cell.ymd));
                             const weekend = index % 7 >= 5;
                             return (
                                 <Btn key={cell.ymd} className={`${cell.ymd === picked ? 'block neo-in' : 'block'}${rest.off || weekend ? ' day-rest' : ''}`} aria-label={`${formatKoDate(cell.ymd)} 일지`} onClick={() => go(`#/day/${cell.ymd}`)} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
                                     <span className="num" style={{ fontWeight: 800, color: rest.off ? 'var(--rest-ink)' : (cell.ymd === picked || cell.ymd === clock.ymd ? 'var(--accent)' : 'inherit') }}>{cell.day}</span>
                                     {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11 }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
-                                    {has && <span aria-hidden="true">·</span>}
+                                    {(has || hasGoogle) && (
+                                        <span className="cal-marks">
+                                            {has && <span aria-hidden="true">·</span>}
+                                            {hasGoogle && <span className="gcal-mark" aria-hidden="true">구</span>}
+                                        </span>
+                                    )}
                                 </Btn>
                             );
                         })}
                     </div>
+                    <div className={`solid-card${pickedRest.off ? ' day-rest' : ''}`} style={{ padding: 12, marginTop: 12 }}>
+                        <strong>{formatKoDate(picked, { today: clock.ymd })}</strong>
+                        {pickedRest.off && <p className="day-rest-mark" style={{ margin: '4px 0' }}>{pickedRest.label === '휴일' ? '휴일' : `휴일 · ${pickedRest.label}`}</p>}
+                        <Btn className="chip" style={{ marginTop: 8 }} onClick={() => { setWeekAnchor(picked); setMode('주'); go(`#/schedule/week/${picked}`); }}>이 주 보기</Btn>
+                        {shown.filter((row) => onDay(row, picked)).map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
+                        {!shown.some((row) => onDay(row, picked)) && <p className="muted">이 날 일정은 없어요.</p>}
+                    </div>
                 </div>
             )}
-            {mode === '시간표' && <Timetable data={data} todayKey={dayKeyFromYmd(clock.ymd)} weekStart={weekStart} events={events} />}
+            {mode === '시간표' && <Timetable data={data} todayKey={dayKeyFromYmd(clock.ymd)} weekStart={weekStart} events={classEvents} />}
         </div>
     );
 }
