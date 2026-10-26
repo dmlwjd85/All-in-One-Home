@@ -1,4 +1,5 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
+import { JJAEM_D, JJAEM_PLACE, JJAEM_STOPS } from './jjaemMark.js';
 
 export function Btn({ className = '', block = false, ...props }) {
     return <button type="button" className={`tap ${block ? 'block' : ''} ${className}`} {...props} />;
@@ -12,9 +13,24 @@ export const Area = forwardRef(function Area(props, ref) {
     return <textarea ref={ref} className="field" {...props} />;
 });
 
-/** 36px 칸에는 앱 이름 전체가 들어가지 않아 쨈만 둡니다. */
+/** 헤더·잠금·시작 화면의 로고. 앱 아이콘과 같은 라일락 판, 같은 쨈 외곽선입니다. */
 export function Symbol() {
-    return <span className="symbol" aria-hidden="true">쨈</span>;
+    const id = `jjaem${useId().replace(/:/g, '')}`;
+    return (
+        <svg className="brand-symbol" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+            <defs>
+                <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+                    {JJAEM_STOPS.map((color, index) => <stop key={color} offset={index === 0 ? '0' : index === 1 ? '0.55' : '1'} stopColor={color} />)}
+                </linearGradient>
+            </defs>
+            <rect width="512" height="512" rx="114" fill={`url(#${id})`} />
+            <g transform={JJAEM_PLACE}>
+                <g transform="translate(-13 1638) scale(1 -1)">
+                    <path fill="#fff" d={JJAEM_D} />
+                </g>
+            </g>
+        </svg>
+    );
 }
 
 /** 하단 버튼 '콕'. 가계부와 같은 윤곽입니다.

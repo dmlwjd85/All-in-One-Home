@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-    <rect width="512" height="512" fill="#A73D74"/>
-    <g transform="translate(256 256) scale(0.78) translate(-256 -256)">
-        <text x="256" y="230" text-anchor="middle" fill="#ffffff" font-family="Pretendard, sans-serif" font-size="168" font-weight="700">쨈</text>
-        <text x="256" y="340" text-anchor="middle" fill="#ffffff" font-family="Pretendard, sans-serif" font-size="64" font-weight="700">교무수첩</text>
-    </g>
-</svg>

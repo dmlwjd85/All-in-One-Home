@@ -247,18 +247,11 @@ a.chip,
 .hotkey-row > span { min-width: 0; overflow-wrap: anywhere; }
 .hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 8px; }
 
-.symbol {
+.brand-symbol {
     width: 36px;
     height: 36px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    color: var(--on-primary);
-    background: var(--primary);
-    font-family: var(--font-title);
-    font-size: 18px;
-    text-shadow: none;
-    box-shadow: none;
+    display: block;
+    flex: none;
 }
 
 .tabbar {
