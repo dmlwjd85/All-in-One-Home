@@ -7,6 +7,7 @@ function pack(name, params, canonical, incoming, extra = {}) {
         replace: canonical === incoming ? '' : canonical,
         notice: '',
         openQuick: false,
+        openQuickBar: false,
         ...extra,
     };
 }
@@ -69,6 +70,7 @@ export function resolveHash(raw, today) {
     if (path === '/settings/roster') return pack('roster', {}, '#/settings/roster', incoming);
     if (path === '/settings/legacy' || path === '/legacy') return pack('legacy', { page: '' }, '#/settings/legacy', incoming);
     if (path === '/write') return pack('today', {}, '#/today', incoming, { openQuick: true });
+    if (path === '/quick') return pack('today', {}, '#/today', incoming, { openQuickBar: true });
     if (path === '/counsel') return pack('students', {}, '#/students', incoming);
     if (path === '/attend') return pack('attend', { date: today }, `#/attend/${today}`, incoming);
 

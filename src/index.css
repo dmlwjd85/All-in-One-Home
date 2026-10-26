@@ -423,6 +423,20 @@ a.chip,
     font-weight: 800;
     color: var(--ink-sub);
 }
+.quick-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.quick-row .quick-field { flex: 1 1 auto; min-width: 0; }
+.quick-bar.is-invite .quick-field { min-height: 72px; font-size: 18px; }
+.quick-mic { flex: 0 0 auto; padding: 0 10px; white-space: nowrap; }
+.quick-names {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+}
+.quick-name { flex: 0 0 auto; padding: 0 12px; font-weight: 800; }
 .quick-chips {
     display: flex;
     gap: 6px;
@@ -434,9 +448,15 @@ a.chip,
     padding: 0 4px;
     font-weight: 800;
     white-space: nowrap;
+    transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.quick-chip.is-suggested {
+    background: var(--primary);
+    color: var(--on-primary);
+    border-radius: 14px;
 }
 .quick-bar.is-open ~ .toast {
-    bottom: calc(160px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
+    bottom: calc(260px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
 }
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }

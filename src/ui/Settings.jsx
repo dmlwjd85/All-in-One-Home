@@ -224,6 +224,14 @@ export function Settings() {
                 <HotkeyForm onShowList={openHotkeyHelp} />
             </section>
 
+            <section className="glass" style={{ padding: 14 }} data-screen="quick-help">
+                <h2 className="title-font" style={{ marginTop: 0 }}>홈 화면에서 바로 적기</h2>
+                <p>안드로이드에서는 홈 화면의 쨈 아이콘을 길게 누르면 빠른 입력이 나옵니다.</p>
+                <p>아이폰은 아이콘을 길게 눌러도 빠른 입력이 나오지 않아요. 단축어 앱에서 새 단축어를 만들고, 동작은 URL 열기를 고르세요. 주소는 아래를 붙여 넣습니다. 공유에서 홈 화면에 추가하면 아이콘이 생깁니다. 잠금 화면, 제어 센터, 뒷면 탭에도 같은 단축어를 넣을 수 있어요.</p>
+                <p className="muted" style={{ wordBreak: 'break-all' }}>{typeof location === 'undefined' ? '' : `${location.origin}${location.pathname}?quick=1`}</p>
+                <p>이 주소는 Safari로 열립니다. 홈 화면에 넣어 둔 쨈 교무수첩 안의 기록과는 따로일 수 있어요. 그 앱에서 적으려면 아이콘을 연 다음 하단 쨈을 누르세요.</p>
+            </section>
+
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>

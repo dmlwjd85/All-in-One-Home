@@ -38,7 +38,9 @@ export default function App() {
     const [toast, setToast] = useState(null);
     const [plus, setPlus] = useState(false);
     const [quickOpen, setQuickOpen] = useState(false);
+    const [quickInvite, setQuickInvite] = useState(false);
     const quickInput = useRef(null);
+    const pendingQuick = useRef(false);
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
@@ -132,6 +134,27 @@ export default function App() {
         if (route.openQuick) setFlow((prev) => prev || { id: 'quick', kind: '관찰' });
         if (route.notice) setToast({ message: route.notice, undoable: false });
     }, [route.openQuick, route.notice, data?.profile.started]);
+
+    useEffect(() => {
+        if (route.openQuickBar) pendingQuick.current = true;
+    }, [route.openQuickBar]);
+
+    useEffect(() => {
+        if (!data?.profile.started || locked) return;
+        const fromQuery = new URLSearchParams(location.search).get('quick') === '1';
+        if (!pendingQuick.current && !fromQuery) return;
+        pendingQuick.current = false;
+        setQuickInvite(true);
+        setQuickOpen(true);
+        if (!fromQuery) return;
+        try {
+            const url = new URL(location.href);
+            url.searchParams.delete('quick');
+            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            /* 주소를 못 고쳐도 입력칸은 열려 있습니다. */
+        }
+    }, [route.openQuickBar, locked, data?.profile.started, hash]);
 
     useEffect(() => {
         if (!data) return;
@@ -242,6 +265,7 @@ export default function App() {
             if (event.key === 'Escape') {
                 quickInput.current?.blur();
                 setQuickOpen(false);
+                setQuickInvite(false);
                 setPlus(false);
                 setFlow(null);
                 setMsg(false);
@@ -389,6 +413,7 @@ export default function App() {
             bar.setAttribute('aria-hidden', 'false');
         }
         quickInput.current?.focus();
+        setQuickInvite(false);
         setQuickOpen(true);
         playSealLift(event?.currentTarget?.querySelector?.('.seal-cup'));
     }
@@ -549,7 +574,7 @@ export default function App() {
                     ))}
                 </nav>
                 <Btn className="desk-fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealLift(event.currentTarget.querySelector('.seal-cup'))} onClick={(event) => openQuickBar(event)}><SealCup /></Btn>
-                <QuickBar open={quickOpen} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); }} />
+                <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet
                         onClose={() => setPlus(false)}
