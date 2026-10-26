@@ -462,12 +462,7 @@ async function controlBoxes(page, selector, label) {
 
 async function openPlus(page) {
     await page.evaluate(() => {
-        const buttons = [...document.querySelectorAll('[aria-label="할 일 고르기"]')];
-        const visible = buttons.find((el) => {
-            const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-        });
-        visible?.click();
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
     });
     await page.waitForSelector('[data-screen="plus"]');
 }
@@ -578,11 +573,11 @@ try {
         ['home-360-lilac.png', 360, 'light', async (page) => page],
         ['attend-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
-        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.click('[aria-label="할 일 고르기"]'); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
+        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
         ['home-360-dark.png', 360, 'dark', async () => {}],
         ['attend-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
-        ['quick-360-dark.png', 360, 'dark', async (page) => { await page.click('[aria-label="할 일 고르기"]'); await delay(250); }],
+        ['quick-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await delay(250); }],
         ['home-1280-lilac.png', 1280, 'light', async () => {}],
     ];
 

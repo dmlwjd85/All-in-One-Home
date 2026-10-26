@@ -10,7 +10,9 @@ import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { SealCup } from './ui/SealCup.jsx';
-import { playSealBurst } from './ui/sealBurst.js';
+import { playSealLift } from './ui/sealBurst.js';
+import { QuickBar } from './ui/QuickBar.jsx';
+import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
 import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
@@ -35,6 +37,8 @@ export default function App() {
     const [clock, setClock] = useState(() => seoulParts());
     const [toast, setToast] = useState(null);
     const [plus, setPlus] = useState(false);
+    const [quickOpen, setQuickOpen] = useState(false);
+    const quickInput = useRef(null);
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
@@ -236,6 +240,8 @@ export default function App() {
         const onKey = (event) => {
             if (locked) return;
             if (event.key === 'Escape') {
+                quickInput.current?.blur();
+                setQuickOpen(false);
                 setPlus(false);
                 setFlow(null);
                 setMsg(false);
@@ -374,6 +380,17 @@ export default function App() {
                 </div>
             </div>
         );
+    }
+
+    function openQuickBar(event) {
+        const bar = document.querySelector('.quick-bar');
+        if (bar) {
+            bar.classList.add('is-open');
+            bar.setAttribute('aria-hidden', 'false');
+        }
+        quickInput.current?.focus();
+        setQuickOpen(true);
+        playSealLift(event?.currentTarget?.querySelector?.('.seal-cup'));
     }
 
     const ui = {
@@ -520,7 +537,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealBurst(event.currentTarget.querySelector('.seal-cup'))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') playSealBurst(event.currentTarget.querySelector('.seal-cup')); }} onClick={() => setPlus(true)}><SealCup /></Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealLift(event.currentTarget.querySelector('.seal-cup'))} onClick={(event) => openQuickBar(event)}><SealCup /></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -531,7 +548,8 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealBurst(event.currentTarget.querySelector('.seal-cup'))} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') playSealBurst(event.currentTarget.querySelector('.seal-cup')); }} onClick={() => setPlus(true)}><SealCup /></Btn>
+                <Btn className="desk-fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealLift(event.currentTarget.querySelector('.seal-cup'))} onClick={(event) => openQuickBar(event)}><SealCup /></Btn>
+                <QuickBar open={quickOpen} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); }} />
                 {plus && (
                     <PlusSheet
                         onClose={() => setPlus(false)}

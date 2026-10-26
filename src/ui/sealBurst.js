@@ -23,6 +23,24 @@ function cancelBurst(root) {
     running.forEach((anim) => anim.cancel());
 }
 
+/** 열 때는 필름만 조금 부풀려 예비 동작으로 남깁니다. 저장할 때 터집니다. */
+export function playSealLift(root) {
+    if (!root) return;
+    cancelBurst(root);
+    if (reduceMotion()) {
+        root.animate(
+            [{ opacity: 1 }, { opacity: 0.62 }, { opacity: 1 }],
+            { duration: 160, easing: 'ease-out' },
+        );
+        return;
+    }
+    const foil = root.querySelector('.seal-foil');
+    foil?.animate([
+        { transform: 'translateY(0px) scale(1, 1)', offset: 0 },
+        { transform: 'translateY(-2px) scale(1.06, 1.14)', offset: 1 },
+    ], { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' });
+}
+
 export function playSealBurst(root) {
     if (!root) return;
     cancelBurst(root);

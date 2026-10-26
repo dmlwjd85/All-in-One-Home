@@ -322,6 +322,12 @@ function absorbCloud(draft, remote) {
     return draft;
 }
 
+const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices'];
+
+export function queuedCloudKeys() {
+    return [...cloudForget];
+}
+
 export async function undo() {
     const prev = undoStack.pop();
     if (!prev) return false;
@@ -339,6 +345,13 @@ export async function undo() {
         tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
         return false;
     }
+    for (const bucket of CLOUD_BUCKETS) {
+        const kept = new Set((prev[bucket] || []).map((row) => row?.id).filter(Boolean));
+        for (const row of current[bucket] || []) {
+            if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id);
+        }
+    }
+    await flushCloud().catch(() => {});
     return true;
 }
 

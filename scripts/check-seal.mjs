@@ -22,7 +22,7 @@ const burstText = readFileSync(resolve(root, 'src/ui/sealBurst.js'), 'utf8');
 check(burstText.includes('prefers-reduced-motion') && burstText.includes('opacity: 0.62'), '움직임 줄이기 분기가 없습니다.');
 check(!burstText.includes('getBoundingClientRect') && !burstText.includes('offsetWidth') && !burstText.includes('offsetHeight'), '터지는 동작이 레이아웃을 다시 읽습니다.');
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
-check(appText.includes('aria-label="할 일 고르기"') && appText.includes('onClick={() => setPlus(true)}'), '버튼 이름이나 바로 열기가 바뀌었습니다.');
+check(appText.includes('aria-label="할 일 고르기"') && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않습니다.');
 
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => existsSync(path));
 if (!chrome) failures.push('브라우저가 없습니다.');
@@ -85,19 +85,21 @@ if (!failures.length) {
             const splatAnims = [...cup.querySelectorAll('.seal-splat')].reduce((sum, el) => sum + el.getAnimations().length, 0);
             return { anims: anims.length, splatAnims, scaled: anims.some((anim) => (anim.effect?.getKeyframes?.() || []).some((frame) => String(frame.transform || '').includes('scale'))) };
         });
-        check(burst.anims > 0 && burst.anims <= MAX_ANIMATIONS, `동작이 ${burst.anims}개입니다.`);
-        check(burst.splatAnims === SPLAT_COUNT && burst.scaled, '터지는 얼룩 동작이 없습니다.');
+        check(burst.anims > 0 && burst.anims <= 2, `열 때 동작이 ${burst.anims}개입니다.`);
+        check(burst.splatAnims === 0 && burst.scaled, '열 때 필름이 부풀지 않거나 얼룩이 먼저 터집니다.');
 
-        const opened = await page.evaluate(async () => {
+        const opened = await page.evaluate(() => {
             const button = document.querySelector('.tabbar .fab');
             const cup = button.querySelector('.seal-cup');
-            const before = performance.now();
             button.click();
-            const running = cup.getAnimations({ subtree: true }).some((anim) => anim.playState === 'running');
-            return { running, ms: Math.round(performance.now() - before) };
+            return {
+                running: cup.getAnimations({ subtree: true }).some((anim) => anim.playState === 'running'),
+                focused: document.activeElement?.classList.contains('quick-field') || false,
+                open: document.querySelector('.quick-bar')?.classList.contains('is-open') || false,
+                plus: Boolean(document.querySelector('[data-screen="plus"]')),
+            };
         });
-        await page.waitForSelector('[data-screen="plus"]', { timeout: 1500 });
-        check(opened.running, '창을 여는 동안 움직임이 이미 끝나 있었습니다.');
+        check(opened.running && opened.focused && opened.open && !opened.plus, `입력칸이 바로 열리지 않습니다: ${JSON.stringify(opened)}`);
 
         const rapid = await page.evaluate(() => {
             const button = document.querySelector('.tabbar .fab');
@@ -109,7 +111,7 @@ if (!failures.length) {
             };
         });
         check(rapid.splats === SPLAT_COUNT, `연타 뒤 얼룩이 ${rapid.splats}개로 늘었습니다.`);
-        check(rapid.anims <= MAX_ANIMATIONS, `연타 뒤 동작이 ${rapid.anims}개입니다.`);
+        check(rapid.anims <= 2, `연타 뒤 동작이 ${rapid.anims}개입니다.`);
 
         await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
         await page.reload({ waitUntil: 'networkidle0' });

@@ -395,6 +395,49 @@ a.chip,
     padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 24px rgba(46, 42, 43, .16);
 }
+.quick-bar {
+    position: fixed;
+    z-index: 45;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 20px rgba(46, 42, 43, .16);
+    transform: translateY(140%);
+    opacity: 0;
+    pointer-events: none;
+}
+.quick-bar.is-open {
+    transform: translateY(calc(-1 * var(--quick-lift, 0px)));
+    opacity: 1;
+    pointer-events: auto;
+}
+.quick-date {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--ink-sub);
+}
+.quick-chips {
+    display: flex;
+    gap: 6px;
+}
+.quick-chip {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 4px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+.quick-bar.is-open ~ .toast {
+    bottom: calc(160px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
+}
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
 .toast {
