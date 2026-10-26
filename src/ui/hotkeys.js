@@ -53,7 +53,7 @@ export function isStoredHotkey(value) {
     if (typeof value !== 'string') return false;
     if (value.length === 1) return value !== ' ' && value !== '\n' && value !== '\t';
     if (/^Arrow(Up|Down|Left|Right)$/.test(value)) return true;
-    if (/^F(?:[234]|[6-9]|10)$/.test(value)) return true;
+    if (/^F(?:2|4|8|9)$/.test(value)) return true;
     return false;
 }
 
@@ -115,6 +115,18 @@ export function hotkeyLabel(key) {
     return key;
 }
 
+/** 브라우저가 먼저 가져가는 기능키. 찾기, 주소창, 새로고침, 전체화면 같은 키입니다. */
+const BROWSER_FN = new Set(['F1', 'F3', 'F5', 'F6', 'F7', 'F10', 'F11', 'F12']);
+
+export function browserFunctionKey(event) {
+    return BROWSER_FN.has(event?.key);
+}
+
+/** 키를 기다리는 칸에서도 Tab은 다음 칸으로 보내야 합니다. */
+export function passesThroughCapture(event) {
+    return event?.key === 'Tab';
+}
+
 export function hotkeyFromEvent(event) {
     if (!event || event.ctrlKey || event.metaKey || event.altKey) return '';
     if (event.isComposing || event.key === 'Process' || event.key === 'Unidentified' || event.key === 'Dead') return '';
@@ -122,10 +134,11 @@ export function hotkeyFromEvent(event) {
     if (!key) return '';
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock', 'Escape', 'Tab', 'Enter', ' '].includes(key)) return '';
     if (key === 'Backspace' || key === 'Delete') return '';
+    if (browserFunctionKey(event)) return '';
     if (/^[a-zA-Z]$/.test(key)) return key.toLowerCase();
     if (key.length === 1) return key;
     if (/^Arrow(Up|Down|Left|Right)$/.test(key)) return key;
-    if (/^F(?:[234]|[6-9]|10)$/.test(key)) return key;
+    if (/^F(?:2|4|8|9)$/.test(key)) return key;
     return '';
 }
 

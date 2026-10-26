@@ -209,6 +209,7 @@ class FakeAudioContext {
             buffer: null,
             playbackRate: { value: 1 },
             connect() {},
+            disconnect() { src.disconnected = true; },
             start() { src.started = true; },
             stop() { src.stopped = true; },
         };
@@ -216,7 +217,7 @@ class FakeAudioContext {
         return src;
     }
     createGain() {
-        const gain = { gain: { value: 0 }, connect() {} };
+        const gain = { gain: { value: 0 }, connect() {}, disconnect() { gain.disconnected = true; } };
         gains.push(gain);
         return gain;
     }
@@ -269,6 +270,8 @@ playTypeSound();
 check(sources.length === mutedCount + 2, '글자 소리 미리듣기나 입력이 나지 않습니다.');
 check(!sources.at(-2).stopped && !sources.at(-1).stopped, '이어 친 글자 소리가 앞 소리를 끊습니다.');
 check(gains.at(-1).gain.value <= 0.05, '글자 소리가 작지 않습니다.');
+sources.at(-1).onended();
+check(sources.at(-1).disconnected && gains.at(-1).disconnected, '끝난 글자 소리 노드를 끊지 않습니다.');
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');

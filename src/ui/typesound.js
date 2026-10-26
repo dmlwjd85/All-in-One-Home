@@ -9,11 +9,14 @@ const SOUND_KEY = 'ssug-gyomu-type-sound';
 const VOICE_KEY = 'ssug-gyomu-type-voice';
 
 export const TYPE_VOICES = [
-    { id: 'bang', label: '방귀', hint: '뿌우' },
     { id: 'ppok', label: '뽁', hint: '통통' },
     { id: 'ting', label: '띵', hint: '실로폰' },
     { id: 'drop', label: '물방울', hint: '또록' },
+    { id: 'bang', label: '방귀', hint: '뿌우', playful: true },
 ];
+
+/** 목록 순서를 바꿔도 소리 결이 달라지지 않게, 처음 만들 때의 잡음 씨앗을 고정합니다. */
+const TYPE_NOISE = { bang: 57, ppok: 76, ting: 95, drop: 114 };
 
 export const TYPE_VOICE_MS = {
     bang: 110,
@@ -128,7 +131,26 @@ export function isSensitiveControl(el) {
         attr(el, 'placeholder'),
         attr(el, 'id'),
     ].join(' ');
-    return /password|cc-number|cc-csc|current-password|new-password|비밀번호|암호|패스워드/i.test(blob);
+    return /password|cc-number|cc-csc|current-password|new-password|one-time-code|\botp\b|비밀번호|암호|패스워드|인증/i.test(blob);
+}
+
+/** 조합이 끝난 뒤 브라우저가 같은 글자를 한 번 더 알려 주는 이벤트. 타수로 치지 않습니다. */
+let skipCompositionEcho = false;
+
+export function noteCompositionEnd() {
+    skipCompositionEcho = true;
+}
+
+function compositionEcho(event) {
+    const inputType = String(event?.inputType || '');
+    if (inputType === 'insertFromComposition') {
+        skipCompositionEcho = false;
+        return true;
+    }
+    if (!skipCompositionEcho) return false;
+    skipCompositionEcho = false;
+    if (inputType === 'insertText' || event?.isComposing === true) return false;
+    return true;
 }
 
 const SKIP_INPUT = new Set([
@@ -146,6 +168,7 @@ export function shouldTypeSound(event) {
     if (inputType.startsWith('delete') || inputType.startsWith('format') || inputType.startsWith('history')) return false;
     if (SKIP_INPUT.has(inputType)) return false;
     if (inputType && inputType !== 'insertText' && inputType !== 'insertCompositionText' && inputType !== 'insertFromComposition') return false;
+    if (compositionEcho(event)) return false;
     return true;
 }
 
@@ -189,7 +212,7 @@ function synth(id, sampleRate) {
     const ms = TYPE_VOICE_MS[id] || TYPE_VOICE_MS[DEFAULT_VOICE];
     const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
     const data = new Float32Array(n);
-    const salt = (TYPE_VOICES.findIndex((item) => item.id === id) + 3) * 19;
+    const salt = TYPE_NOISE[id] || 57;
     let low = 0;
     let phase = 0;
     let phaseB = 0;
@@ -266,9 +289,22 @@ function bufferFor(audio, voice) {
     return hit;
 }
 
+function releaseNode(entry) {
+    if (!entry || entry.released) return;
+    entry.released = true;
+    entry.done = true;
+    try { entry.src?.disconnect?.(); } catch { /* 이미 끊긴 소리입니다. */ }
+    try { entry.gain?.disconnect?.(); } catch { /* 이미 끊긴 소리입니다. */ }
+}
+
 function dropFinished(audio) {
     const now = audio.currentTime || 0;
-    live = live.filter((entry) => !entry.done && now < (entry.until || 0) + 0.05);
+    const keep = [];
+    for (const entry of live) {
+        if (entry.done || now >= (entry.until || 0) + 0.05) releaseNode(entry);
+        else keep.push(entry);
+    }
+    live = keep;
 }
 
 function launch(audio, voice) {
@@ -301,8 +337,8 @@ function launch(audio, voice) {
     const at = audio.currentTime || 0;
     src.start(at);
     const seconds = (src.buffer?.duration) || (TYPE_VOICE_MS[normalizeTypeVoice(voice)] / 1000);
-    const entry = { src, gain, until: at + seconds, done: false };
-    src.onended = () => { entry.done = true; };
+    const entry = { src, gain, until: at + seconds, done: false, released: false };
+    src.onended = () => releaseNode(entry);
     live.push(entry);
 }
 
