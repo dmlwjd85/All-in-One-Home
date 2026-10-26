@@ -12,17 +12,9 @@ export const Area = forwardRef(function Area(props, ref) {
     return <textarea ref={ref} className="field" {...props} />;
 });
 
-/** 36px 칸에는 '쨈, 적'이 다 들어가지 않습니다. 글자 대신 병 그림만 둡니다. */
-export function BrandMark() {
-    return (
-        <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path fill="currentColor" d="M8 3.2h8c.9 0 1.6.7 1.6 1.6v1.1c0 .9-.7 1.6-1.6 1.6H8c-.9 0-1.6-.7-1.6-1.6V4.8c0-.9.7-1.6 1.6-1.6zM9.2 7.6h5.6V9H9.2zM6.4 9.2h11.2c1.3 0 2.3 1 2.3 2.3v7.4c0 1.5-1.2 2.7-2.7 2.7H6.8c-1.5 0-2.7-1.2-2.7-2.7v-7.4c0-1.3 1-2.3 2.3-2.3z" />
-        </svg>
-    );
-}
-
+/** 36px 칸에는 앱 이름 전체가 들어가지 않아 쨈만 둡니다. */
 export function Symbol() {
-    return <span className="symbol" aria-hidden="true"><BrandMark /></span>;
+    return <span className="symbol" aria-hidden="true">쨈</span>;
 }
 
 /** 하단 버튼 '콕'. 가계부와 같은 윤곽입니다.

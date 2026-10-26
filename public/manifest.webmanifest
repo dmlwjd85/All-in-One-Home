@@ -1,8 +1,8 @@
 {
     "id": "./",
-    "name": "쨈, 적 교무수첩",
-    "short_name": "쨈, 적 교무수첩",
-    "description": "열자마자 쨈, 적. 초등 담임 교무수첩.",
+    "name": "쨈 교무수첩",
+    "short_name": "쨈 교무수첩",
+    "description": "쨈 교무수첩. 초등 담임이 오늘을 남깁니다.",
     "lang": "ko",
     "dir": "ltr",
     "start_url": "./",

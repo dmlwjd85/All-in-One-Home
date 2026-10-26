@@ -356,7 +356,7 @@ export default function App() {
     }
 
     if (!data) {
-        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>쨈, 적 교무수첩을 열고 있어요.</p></div>;
+        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>쨈 교무수첩을 열고 있어요.</p></div>;
     }
 
     if (locked) {
@@ -364,7 +364,7 @@ export default function App() {
             <div className="app-bg" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
                 <div className="solid-card" style={{ padding: 24, maxWidth: 360, width: '100%', display: 'grid', justifyItems: 'center' }}>
                     <Symbol />
-                    <p className="title-font" style={{ fontSize: 18, margin: '12px 0 0' }}>쨈, 적 교무수첩</p>
+                    <p className="title-font" style={{ fontSize: 18, margin: '12px 0 0' }}>쨈 교무수첩</p>
                     <p className="title-font" style={{ fontSize: 26, margin: '8px 0' }}>화면을 잠가 두었어요</p>
                     <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터라 30분 동안 가만히 있으면 이렇게 가려 둡니다.</p>
                     <Btn className="primary-btn block" onClick={() => setLocked(false)}>다시 열기</Btn>
@@ -444,7 +444,7 @@ export default function App() {
                 <aside className="side">
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
                         <Symbol />
-                        <strong className="title-font" style={{ fontSize: 16, lineHeight: '22px' }}>쨈, 적 교무수첩</strong>
+                        <strong className="title-font" style={{ fontSize: 18, lineHeight: '24px' }}>쨈 교무수첩</strong>
                     </div>
                     {MENU.map(([label, href]) => {
                         const on = menuSelected(route.name, href);

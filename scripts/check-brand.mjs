@@ -1,16 +1,16 @@
 /**
  * 화면에 보이는 파일에 예전 브랜드 글자가 남으면 실패합니다.
  * 검사 대상: src, public(매니페스트 포함), index.html
- * 글자: 쓱, 잼, JAM(대소문자 무시, 낱말로만)
+ * 글자: 쓱, 잼, JAM(대소문자 무시, 낱말로만), 쨈, 적, 쓱, 적
  * 저장 키처럼 남겨야 하는 경우는 ALLOW 에만 적습니다.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 
 const TEXT_EXT = new Set(['.js', '.jsx', '.mjs', '.cjs', '.css', '.html', '.svg', '.json', '.webmanifest', '.txt', '.md']);
-const ROOTS = ['src', 'public'];
-const EXTRA = ['index.html'];
-const APP_NAME = '쨈, 적 교무수첩';
+const ROOTS = ['src', 'public', 'docs'];
+const EXTRA = ['index.html', 'README.md'];
+const APP_NAME = '쨈 교무수첩';
 
 /**
  * file: 저장소 기준 경로
@@ -26,6 +26,8 @@ const BANNED = [
     { name: '쓱', re: /쓱/g },
     { name: '잼', re: /잼/g },
     { name: 'JAM', re: /\bJAM\b/gi },
+    { name: '쨈, 적', re: /쨈, 적/g },
+    { name: '쓱, 적', re: /쓱, 적/g },
 ];
 
 async function filesIn(dir, out) {

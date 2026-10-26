@@ -29,8 +29,8 @@ export function Start() {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Symbol />
             </div>
-            <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>쨈, 적 교무수첩</h1>
-            <p style={{ fontSize: 16 }}>열자마자 쨈, 적. 담임의 하루가 한 화면에 있어요.</p>
+            <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>쨈 교무수첩</h1>
+            <p style={{ fontSize: 16 }}>담임의 하루가 한 화면에 있어요.</p>
             {step === 'choose' && (
                 <div className="solid-card" style={{ padding: 16 }}>
                     <p style={{ marginTop: 0 }}>학생 기록은 선생님 자리에만 둡니다. 광고는 없어요.</p>

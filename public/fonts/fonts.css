@@ -35,7 +35,7 @@
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
-/* 제목: 나눔스퀘어라운드 굵게. 본문: Pretendard. 고운바탕은 아이콘 그림에만 남아 있습니다.
+/* 화면에 보이는 이름은 제목 쨈 제목, 본문 쨈 본문. 고운바탕은 아이콘 그림에만 남아 있습니다.
    하단 버튼 '콕' 패스(src/ui/bits.jsx)는 Pretendard-Bold.woff2 의 U+CF55 윤곽입니다. OFL 1.1. */
 @font-face {
     font-family: 'NanumSquareRound';

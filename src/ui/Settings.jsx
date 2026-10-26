@@ -112,7 +112,7 @@ export function Settings() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
-                <p className="muted" style={{ marginTop: 0 }}>글꼴</p>
+                <p className="muted" style={{ marginTop: 0 }}>제목 글꼴은 쨈 제목, 본문 글꼴은 쨈 본문이에요.</p>
                 <div className="font-grid" role="group" aria-label="글꼴">
                     {FONT_CHOICES.map((item) => (
                         <Btn key={item.id} className={font === item.id ? 'choice-tile on' : 'choice-tile'} data-font-sample={item.id} aria-pressed={font === item.id} onClick={() => { setFont(item.id); setFontId(item.id); }}>
@@ -126,7 +126,7 @@ export function Settings() {
                         <Btn key={id} className={data.profile.theme === id ? 'chip on' : 'chip'} onClick={() => patchProfile({ theme: id })}>{label}</Btn>
                     ))}
                 </div>
-                <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘쨈, 적 교무수첩’으로 보여요.</p>
+                <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘쨈 교무수첩’으로 보여요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
 
