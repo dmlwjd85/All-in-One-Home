@@ -33,7 +33,19 @@ async function pinBrowserClock(page) {
         try {
             new PerformanceObserver((list) => {
                 for (const entry of list.getEntries()) {
-                    if (!entry.hadRecentInput) window.__cls += entry.value;
+                    if (!entry.hadRecentInput) {
+                        window.__cls += entry.value;
+                        (window.__shifts ||= []).push({
+                            value: Number(entry.value.toFixed(5)),
+                            at: Math.round(entry.startTime),
+                            nodes: (entry.sources || []).map((src) => {
+                                const el = src.node?.nodeType === 1 ? src.node : src.node?.parentElement;
+                                const r = src.currentRect;
+                                const p = src.previousRect;
+                                return `${el?.className || el?.nodeName || '?'} "${(src.node?.textContent || '').trim().slice(0, 16)}" ${p?.y}→${r?.y} ${p?.height}→${r?.height}`;
+                            }),
+                        });
+                    }
                 }
             }).observe({ type: 'layout-shift', buffered: true });
         } catch {
@@ -2119,8 +2131,10 @@ try {
                         sixth: Math.round((document.querySelectorAll('.period-row button')[5] || document.querySelector('.rest-banner'))?.getBoundingClientRect().top ?? -1),
                         cls: window.__cls || 0,
                         toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+                        shifts: window.__shifts || [],
+                        fonts: [...document.fonts].filter((face) => face.status !== 'unloaded').map((face) => `${face.family} ${face.weight} ${face.status}`),
                     }));
-                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls}`);
+                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls} ${JSON.stringify({ shifts: after.shifts, fonts: after.fonts })}`);
                 } else {
                     check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
                     await page.evaluate(() => { location.hash = '#/settings'; });
