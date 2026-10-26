@@ -16,7 +16,8 @@ import { QuickBar } from './ui/QuickBar.jsx';
 import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
+import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
+import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, noteTypeRelease, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -303,10 +304,15 @@ export default function App() {
             const kind = noteTypeKey(event);
             if (kind) playTypeSound(kind);
         };
+        const onTypeUp = (event) => {
+            const kind = noteTypeRelease(event);
+            if (kind) playTypeSound(kind);
+        };
         const onCompositionUpdate = (event) => noteCompositionUpdate(event?.data);
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
         document.addEventListener('keydown', onTypeKey, true);
+        document.addEventListener('keyup', onTypeUp, true);
         document.addEventListener('compositionstart', noteCompositionStart, true);
         document.addEventListener('compositionupdate', onCompositionUpdate, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
@@ -315,6 +321,7 @@ export default function App() {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
             document.removeEventListener('keydown', onTypeKey, true);
+            document.removeEventListener('keyup', onTypeUp, true);
             document.removeEventListener('compositionstart', noteCompositionStart, true);
             document.removeEventListener('compositionupdate', onCompositionUpdate, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
@@ -333,9 +340,12 @@ export default function App() {
             if (event.button !== 0) return;
             const el = hit(event.target);
             if (!el || el.hasAttribute('data-key-preview')) return;
+            if (jamFeelEnabled() && el.closest('.fab, .desk-fab')) return;
             playKey('down');
         };
-        const onPointerUp = () => {
+        const onPointerUp = (event) => {
+            const target = event.target;
+            if (jamFeelEnabled() && target instanceof Element && target.closest('.fab, .desk-fab')) return;
             playKey('up');
         };
         const keyTarget = (event) => {
@@ -348,10 +358,12 @@ export default function App() {
         };
         const onKeyDown = (event) => {
             if (event.repeat || !keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('down');
         };
         const onKeyUp = (event) => {
             if (!keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('up');
         };
         document.addEventListener('pointerdown', onPointerDown, true);
@@ -572,7 +584,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealLift(event.currentTarget.querySelector('.seal-cup'))} onClick={(event) => openQuickBar(event)}><SealCup /></Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onPointerDown={(event) => { pressDown(event.currentTarget); playSealLift(event.currentTarget.querySelector('.seal-cup')); }} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><span className="press-feel" data-press="rest"><SealCup /></span></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -583,7 +595,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onPointerDown={(event) => playSealLift(event.currentTarget.querySelector('.seal-cup'))} onClick={(event) => openQuickBar(event)}><SealCup /></Btn>
+                <Btn className="desk-fab" aria-label="할 일 고르기" onPointerDown={(event) => { pressDown(event.currentTarget); playSealLift(event.currentTarget.querySelector('.seal-cup')); }} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><span className="press-feel" data-press="rest"><SealCup /></span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet

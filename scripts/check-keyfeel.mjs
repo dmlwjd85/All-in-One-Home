@@ -23,7 +23,8 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
-import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice } from '../src/ui/typesound.js';
+import { TYPE_GAIN, TYPE_TARGETS, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, noteTypeRelease, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typePitchForKey, typeVoiceId } from '../src/ui/typesound.js';
+import { JAM_KEY, PRESS_HOLD, PRESS_HOLD_REDUCED, PRESS_VIBE_MS, jamFeelEnabled, mixJamBurst, renderJamStroke, setJamFeel, springFrames, springPose } from '../src/ui/pressFeel.js';
 
 const failures = [];
 function check(ok, message) {
@@ -154,6 +155,36 @@ for (let i = 0; i < TYPE_VOICES.length; i += 1) {
         check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
     }
 }
+for (const voice of TYPE_VOICES) {
+    check(TYPE_TARGETS[voice.id], `${voice.id} 목표 스위치가 없습니다.`);
+    const up = renderTypeStroke(voice.id, 'up', rate).samples;
+    const down = typePairs[voice.id].samples;
+    check(up.length < down.length, `${voice.label} 뗌이 누름보다 짧지 않습니다.`);
+    check(Math.abs(up[0]) < 1e-6 && Math.abs(up[up.length - 1]) < 1e-6, `${voice.label} 뗌 시작·끝이 0이 아닙니다.`);
+    const upPeak = peakOf(up);
+    check(upPeak > 0.85 && upPeak < 0.95, `${voice.label} 뗌 크기가 맞지 않습니다.`);
+    const space = renderTypeStroke(voice.id, 'space', rate).samples;
+    check(space.length > down.length, `${voice.label} 스페이스가 글자보다 길지 않습니다.`);
+}
+const pitchA = typePitchForKey('ㄱ', () => 0.5);
+const pitchB = typePitchForKey('ㅎ', () => 0.5);
+check(pitchA !== pitchB, '글자마다 높이가 같습니다.');
+check(Math.abs(typePitchForKey('ㄱ', () => 0) - typePitchForKey('ㄱ', () => 1)) > 0.01, '같은 글자도 조금 흔들리지 않습니다.');
+const voiceStore = memory();
+check(typeVoiceId(voiceStore) === 'red', '저장된 글자 소리가 없으면 빨간 직선이 아닙니다.');
+check(setTypeVoice('cream', voiceStore) === 'cream' && typeVoiceId(voiceStore) === 'cream', '예전 크림 소리가 읽히지 않습니다.');
+check(setTypeVoice('panda', voiceStore) === 'panda' && typeVoiceId(voiceStore) === 'panda', '판다 소리가 저장되지 않습니다.');
+check(setTypeVoice('없는소리', voiceStore) === 'red', '모르는 글자 소리를 그대로 둡니다.');
+const synthStarted = performance.now();
+for (const voice of TYPE_VOICES) {
+    renderTypeStroke(voice.id, 'tap', rate);
+    renderTypeStroke(voice.id, 'up', rate);
+    renderTypeStroke(voice.id, 'space', rate);
+}
+const synthMs = performance.now() - synthStarted;
+console.log(`글자 소리 처음 합성 ${TYPE_VOICES.length * 3}개 ${synthMs.toFixed(1)}ms, 녹음 파일 0바이트`);
+check(synthMs < 800, `글자 소리 처음 합성이 느립니다. ${synthMs.toFixed(0)}ms`);
+
 const typeBurstNotes = [];
 for (const sampleRate of [44100, 48000]) {
     for (const voice of TYPE_VOICES) {
@@ -304,6 +335,10 @@ check(noteTypeKey({ key: 'Enter', target: field, isComposing: true }, 91000) ===
 check(noteTypeKey({ key: 'Backspace', target: field, repeat: true }, 92000) === '', '지우기 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Delete', target: field, repeat: true }, 92100) === '', 'Delete 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Backspace', target: field }, 92200) === 'delete', '지우기 키 한 번을 소리 내지 않습니다.');
+check(noteTypeRelease({ key: 'a', target: field }, 93000) === 'up', '글자에서 손을 떼도 소리가 없습니다.');
+check(noteTypeRelease({ key: ' ', target: field }, 93100) === 'space-up', '스페이스 뗌이 없습니다.');
+check(noteTypeKey({ key: 'Shift', target: field }, 93200) === 'shift', '시프트를 큰 키로 치지 않습니다.');
+check(noteTypeKey({ key: 'Tab', target: field }, 93300) === 'tab', '탭을 큰 키로 치지 않습니다.');
 
 resetTypeGraphForTest();
 const burstSources = [];
@@ -396,6 +431,33 @@ function limitsTypeBus(node) {
 }
 check(burstShapers.length === 1 && limitsTypeBus(burstGains.at(-1)?.connected) && burstGains.at(-1).connected.connected === burstAudio.destination, '실제 재생 경로에 리미터가 없습니다.');
 
+const jamStore = memory();
+check(!jamFeelEnabled(jamStore), '쨈 손맛 기본이 켜져 있습니다.');
+check(setJamFeel(true, jamStore) && jamFeelEnabled(jamStore), '쨈 손맛 켜기가 저장되지 않습니다.');
+check(setJamFeel(false, jamStore) === false && !jamFeelEnabled(jamStore), '쨈 손맛 끄기가 저장되지 않습니다.');
+check(JAM_KEY === 'ssug-gyomu-press-feel', '쨈 손맛 저장 키가 바뀌었습니다.');
+check(PRESS_VIBE_MS >= 10 && PRESS_VIBE_MS <= 20, '진동 길이가 10–20ms가 아닙니다.');
+const normalSpring = springFrames(PRESS_HOLD, false);
+const softSpring = springFrames(PRESS_HOLD_REDUCED, true);
+check(normalSpring.peakY > 1.03, `통 튀는 넘김이 없습니다. ${normalSpring.peakY}`);
+check(softSpring.peakY < 1.02 && softSpring.duration < normalSpring.duration, `움직임 줄이기 스프링이 약하지 않습니다. ${softSpring.peakY}`);
+check(springPose(PRESS_HOLD, 0, false).y === PRESS_HOLD.y, '스프링 시작이 눌린 높이가 아닙니다.');
+for (const part of ['pop', 'tok']) {
+    const stroke = renderJamStroke(part, rate);
+    check(Math.abs(stroke.samples[0]) < 1e-6 && Math.abs(stroke.samples.at(-1)) < 1e-6, `${part} 시작·끝이 0이 아닙니다.`);
+    const peak = peakOf(stroke.samples);
+    check(peak > 0.85 && peak < 0.95, `${part} 크기가 맞지 않습니다.`);
+    for (const sampleRate of [44100, 48000]) {
+        const burst = mixJamBurst({ part, count: 20, gapMs: 20, fadeMs: 12, sampleRate });
+        console.log(`쨈 ${part} 연타 20회 @${sampleRate} peak ${burst.peak.toFixed(4)} jump ${burst.maxJump.toFixed(4)} clip ${burst.clipped}`);
+        check(burst.peak <= 1 && burst.peak > 0, `${part} 연타 피크가 1을 넘거나 0입니다.`);
+        check(burst.clipped === 0, `${part} 연타가 잘립니다. ${burst.clipped}`);
+        check(burst.maxJump < 0.08, `${part} 연타 점프가 큽니다. ${burst.maxJump}`);
+    }
+}
+const popTok = Math.abs(correlation(renderJamStroke('pop', rate).samples, renderJamStroke('tok', rate).samples));
+check(popTok < 0.8, `뽁과 톡이 너무 같습니다. ${popTok.toFixed(2)}`);
+
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
 const settings = readFileSync(`${root}/src/ui/Settings.jsx`, 'utf8');
@@ -410,6 +472,9 @@ check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');
 check(settings.includes('KEY_VOICES.map') && settings.includes('KEY_VOLUMES.map') && settings.includes('data-key-preview'), '설정이 소리 칩을 그리지 않습니다.');
+check(settings.includes('쨈 손맛 켜짐') && settings.includes('쨈 손맛 꺼짐') && settings.includes('aria-pressed={jamOn}'), '쨈 손맛 켜기가 없습니다.');
+const typeSrc = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+check(typeSrc.includes("const SOUND_KEY = 'ssug-gyomu-type-sound'") && typeSrc.includes("const VOICE_KEY = 'ssug-gyomu-type-voice'"), '글자 소리 저장 키가 바뀌었습니다.');
 check(settings.includes('꺼 두어도 여기서는 미리 들어 볼 수 있어요'), '꺼 둔 미리듣기 안내가 없습니다.');
 for (const label of ['몽글', '몽돌', '적축', '갈축', '청축', '끌기', '작게', '보통', '크게']) {
     check(feel.includes(`'${label}'`) || settings.includes(label), `소리 이름 ${label} 이 없습니다.`);

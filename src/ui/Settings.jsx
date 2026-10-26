@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import { TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
+import { jamFeelEnabled, previewJam, setJamFeel } from './pressFeel.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
@@ -81,6 +82,7 @@ export function Settings() {
     const [volumeId, setVolumeId] = useState(() => keyVolumeId());
     const [typeOn, setTypeOn] = useState(() => typeSoundEnabled());
     const [typeId, setTypeId] = useState(() => typeVoiceId());
+    const [jamOn, setJamOn] = useState(() => jamFeelEnabled());
     useEffect(() => subscribeKeyPrefs(() => {
         setSoundOn(keySoundEnabled());
         setVibeOn(keyVibeEnabled());
@@ -182,6 +184,17 @@ export function Settings() {
                 </div>
                 <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
                 <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted" style={{ margin: '14px 0 0' }}>하단 쨈</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn className={jamOn ? 'chip on' : 'chip'} aria-pressed={jamOn} onClick={() => {
+                        const next = !jamOn;
+                        setJamFeel(next);
+                        setJamOn(next);
+                        if (next) previewJam();
+                    }}>{jamOn ? '쨈 손맛 켜짐' : '쨈 손맛 꺼짐'}</Btn>
+                    <Btn className="chip" data-key-preview="press" onClick={() => previewJam()}>뽁톡 들어 보기</Btn>
+                </div>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 하단 쨈이 말랑하게 들어갔다가 통 튀면서 뽁, 톡 소리가 나요. 진동은 안드로이드 크롬처럼 되는 기기에서만 아주 짧게 울려요. 아이폰 Safari는 웹에서 진동을 주지 않아요. 소리를 끄면 진동도 같이 꺼져요.</p>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Btn className={typeOn ? 'chip on' : 'chip'} aria-pressed={typeOn} onClick={() => {
@@ -190,7 +203,7 @@ export function Settings() {
                         setTypeOn(next);
                     }}>{typeOn ? '글자 소리 켜짐' : '글자 소리 꺼짐'}</Btn>
                 </div>
-                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때마다 작은 소리가 따라옵니다. 스페이스, 엔터, 지우기는 조금 다르게 들려요. 비밀번호나 인증 번호 칸에서는 내지 않아요. 처음 소리는 적축이고, 크기는 작게 고정해 두었어요.</p>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 누르는 소리와 떼는 소리가 따로 나고, 글자마다 높이가 조금씩 달라요. 스페이스, 엔터, 시프트, 탭은 더 크고 안정 막대 소리가 섞여요. 지우기는 더 짧아요. 비밀번호나 인증 번호 칸에서는 내지 않아요. 처음 소리는 빨간 직선이고, 크기는 작게 고정해 두었어요.</p>
                 <div className="type-picks" role="group" aria-label="글자 소리">
                     {TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
                         <KeyPick

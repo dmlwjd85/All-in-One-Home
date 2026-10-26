@@ -80,13 +80,24 @@ if (!failures.length) {
         const burst = await page.evaluate(() => {
             const button = document.querySelector('.tabbar .fab');
             const cup = button.querySelector('.seal-cup');
-            button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            const feel = button.querySelector('.press-feel');
+            button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
             const anims = cup.getAnimations({ subtree: true });
             const splatAnims = [...cup.querySelectorAll('.seal-splat')].reduce((sum, el) => sum + el.getAnimations().length, 0);
-            return { anims: anims.length, splatAnims, scaled: anims.some((anim) => (anim.effect?.getKeyframes?.() || []).some((frame) => String(frame.transform || '').includes('scale'))) };
+            const hold = feel?.getAnimations?.().at(-1);
+            const last = hold?.effect?.getKeyframes?.().at(-1)?.transform || '';
+            return {
+                anims: anims.length,
+                splatAnims,
+                scaled: anims.some((anim) => (anim.effect?.getKeyframes?.() || []).some((frame) => String(frame.transform || '').includes('scale'))),
+                press: feel?.dataset.press || '',
+                hold: last,
+                feelAnims: feel?.getAnimations?.().length || 0,
+            };
         });
         check(burst.anims > 0 && burst.anims <= 2, `열 때 동작이 ${burst.anims}개입니다.`);
         check(burst.splatAnims === 0 && burst.scaled, '열 때 필름이 부풀지 않거나 얼룩이 먼저 터집니다.');
+        check(burst.press === 'down' && burst.feelAnims >= 1 && burst.hold.includes('0.78'), `누르고 있는 동안 눌린 채로 머물지 않습니다. ${JSON.stringify(burst)}`);
 
         const opened = await page.evaluate(() => {
             const button = document.querySelector('.tabbar .fab');
@@ -108,10 +119,12 @@ if (!failures.length) {
             return {
                 splats: cup.querySelectorAll('.seal-splat').length,
                 anims: cup.getAnimations({ subtree: true }).length,
+                feelAnims: button.querySelector('.press-feel')?.getAnimations?.().length || 0,
             };
         });
         check(rapid.splats === SPLAT_COUNT, `연타 뒤 얼룩이 ${rapid.splats}개로 늘었습니다.`);
         check(rapid.anims <= 2, `연타 뒤 동작이 ${rapid.anims}개입니다.`);
+        check(rapid.feelAnims <= 2, `연타 뒤 누름 동작이 ${rapid.feelAnims}개입니다.`);
 
         await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
         await page.reload({ waitUntil: 'networkidle0' });
@@ -124,9 +137,12 @@ if (!failures.length) {
             const frames = cup.getAnimations().flatMap((anim) => anim.effect?.getKeyframes?.() || []);
             const fades = frames.some((frame) => frame.opacity === 0.62 || frame.opacity === '0.62');
             const scales = frames.some((frame) => String(frame.transform || '').includes('scale'));
-            return { splatAnims, fades, scales, splats: cup.querySelectorAll('.seal-splat').length };
+            const feel = button.querySelector('.press-feel');
+            const hold = feel?.getAnimations?.().at(-1)?.effect?.getKeyframes?.().at(-1)?.transform || '';
+            return { splatAnims, fades, scales, splats: cup.querySelectorAll('.seal-splat').length, hold, press: feel?.dataset.press || '' };
         });
         check(reduced.splatAnims === 0 && reduced.fades && !reduced.scales, `움직임 줄이기에서 터짐이 남습니다: ${JSON.stringify(reduced)}`);
+        check(reduced.press === 'down' && reduced.hold.includes('0.96') && !reduced.hold.includes('0.78'), `움직임 줄이기에서 찌부러짐이 줄지 않습니다. ${reduced.hold}`);
         check(reduced.splats === SPLAT_COUNT, '움직임 줄이기에서 얼룩 요소가 사라졌습니다.');
     } finally {
         await browser.close();
