@@ -138,7 +138,7 @@ export function Day() {
                         showToast('하루 메모를 지웠어요.', true);
                         return;
                     }
-                    const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' });
+                    const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' }, { from: dayNote ? (dayNote.localOnly ? 'local' : 'cloud') : undefined });
                     if (result?.storageFailed) return;
                     showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '하루 메모를 남겼어요.', true);
                 }}>하루 메모 저장</Btn>

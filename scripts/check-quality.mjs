@@ -802,35 +802,43 @@ await (async () => {
     }
     await saveTextItem('notes', { id: 'day-qa', text: '일반 메모', date: '2026-11-03', pinned: false, source: 'app' });
     await expectOneSide('notes', 'day-qa', 'cloud');
-    await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' });
+    await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' }, { from: 'cloud' });
     const hiddenNote = await expectOneSide('notes', 'day-qa', 'local');
     check(hiddenNote?.text === '학폭 관련 민원 상담' && toCloudRow('notes', hiddenNote) === null, '민감 메모를 클라우드 모양으로 올립니다.');
-    await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' });
+    await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' }, { from: 'local' });
     const restoredNote = await expectOneSide('notes', 'day-qa', 'cloud');
     check(restoredNote?.text === '다시 일반' && toCloudRow('notes', restoredNote) !== null, '일반 메모로 되돌리면 기기 사본이 남거나 클라우드로 가지 않습니다.');
 
     await saveTextItem('todos', { id: 'todo-qa', title: '준비물 걷기', done: false, due: '2026-11-04', source: 'app' });
     await expectOneSide('todos', 'todo-qa', 'cloud');
-    await saveTextItem('todos', { id: 'todo-qa', title: '학폭 관련 민원 상담', done: false, due: '2026-11-04', source: 'app' });
+    await saveTextItem('todos', { id: 'todo-qa', title: '학폭 관련 민원 상담', done: false, due: '2026-11-04', source: 'app' }, { from: 'cloud' });
     const hiddenTodo = await expectOneSide('todos', 'todo-qa', 'local');
     check(toCloudRow('todos', hiddenTodo) === null, '민감 할 일을 클라우드로 보냅니다.');
-    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 다시 걷기', done: false, due: '2026-11-04', source: 'app' });
+    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 다시 걷기', done: false, due: '2026-11-04', source: 'app' }, { from: 'local' });
     await expectOneSide('todos', 'todo-qa', 'cloud');
 
     await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '이야기를 들었어요', tags: ['교우'], source: 'app' });
     await expectOneSide('records', 'rec-qa', 'cloud');
-    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '학폭 관련 민원 상담', tags: ['교우'], source: 'app' });
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '학폭 관련 민원 상담', tags: ['교우'], source: 'app' }, { from: 'cloud' });
     const hiddenRecord = await expectOneSide('records', 'rec-qa', 'local');
     check(toCloudRow('records', hiddenRecord) === null, '민감 상담을 클라우드로 보냅니다.');
-    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '다시 이야기를 들었어요', tags: ['교우'], source: 'app' });
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '다시 이야기를 들었어요', tags: ['교우'], source: 'app' }, { from: 'local' });
     await expectOneSide('records', 'rec-qa', 'cloud');
 
     await saveQuick({ text: '준비물 가위', kind: '알림장', date: '2026-11-09' });
     await expectOneSide('notices', '2026-11-09', 'cloud');
     await saveQuick({ text: '학폭 관련 민원 상담', kind: '알림장', date: '2026-11-09' });
     check(!snapshot().notices.some((row) => String(row.text).includes('학폭')) && snapshot().local.notices.some((row) => String(row.text).includes('학폭')), '민감 알림장이 클라우드로 갑니다.');
+    /** QA 9차 dbloss9: 같은 날 클라우드 알림장을 고쳐도 숨은 이 기기 전용 민감 알림장은 그대로 남아야 합니다(main과 같음). */
+    const shownNotice = snapshot().notices.find((row) => row.id === '2026-11-09');
+    await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: `${shownNotice?.text}\n색종이`, source: 'app' }, { from: 'cloud' });
+    const cloudNotice = snapshot().notices.filter((row) => row.id === '2026-11-09').map((row) => row.text);
+    const localNotice = snapshot().local.notices.filter((row) => row.id === '2026-11-09').map((row) => row.text);
+    check(JSON.stringify(cloudNotice) === JSON.stringify(['준비물 가위\n색종이']), `클라우드 알림장 고친 글이 남지 않습니다. ${JSON.stringify(cloudNotice)}`);
+    check(JSON.stringify(localNotice) === JSON.stringify(['학폭 관련 민원 상담']), `클라우드 알림장을 고치자 이 기기 전용 민감 알림장이 지워졌습니다. ${JSON.stringify(localNotice)}`);
+    /** 어느 행을 고쳤는지 모르면(from 없음) 반대쪽 같은 아이디는 지우지 않습니다. */
     await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: '내일은 소풍', source: 'app' });
-    await expectOneSide('notices', '2026-11-09', 'cloud');
+    check(snapshot().local.notices.some((row) => row.id === '2026-11-09' && row.text === '학폭 관련 민원 상담'), '고친 쪽을 모르는 저장이 이 기기 전용 알림장을 지웁니다.');
 
     const counsel = await saveQuick({ text: '학폭 관련 민원 상담', kind: '상담', no: 1, date: '2026-11-10' });
     check(counsel.ok && !snapshot().records.some((row) => String(row.text).includes('학폭')) && snapshot().local.records.some((row) => String(row.text).includes('학폭')), '상담 저장이 민감 기록을 이 기기로 보내지 않습니다.');

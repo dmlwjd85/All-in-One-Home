@@ -462,13 +462,16 @@ function dropId(list, id) {
     return (list || []).filter((item) => item?.id !== id);
 }
 
-/** 같은 아이디는 이 화면의 클라우드 목록과 이 기기 목록 중 한쪽에만 둡니다. */
-function relocate(draft, bucket, row, local) {
+/**
+ * 화면이 고치던 그 행(from)이 클라우드↔이 기기 사이를 옮겨 갈 때만 옛 자리의 같은 아이디를 지웁니다.
+ * from 을 모르거나 같은 쪽에 남으면 반대쪽은 건드리지 않습니다(main과 같음). 숨은 이 기기 전용 행은 지우지 않습니다.
+ */
+function relocate(draft, bucket, row, local, from) {
     if (!draft.local) draft.local = {};
     if (!Array.isArray(draft[bucket])) draft[bucket] = [];
     if (!Array.isArray(draft.local[bucket])) draft.local[bucket] = [];
-    draft[bucket] = dropId(draft[bucket], row.id);
-    draft.local[bucket] = dropId(draft.local[bucket], row.id);
+    if (local && from === 'cloud') draft[bucket] = dropId(draft[bucket], row.id);
+    if (!local && from === 'local') draft.local[bucket] = dropId(draft.local[bucket], row.id);
     put(local ? draft.local[bucket] : draft[bucket], { ...row, source: row.source || 'app' });
     return draft;
 }
@@ -784,7 +787,8 @@ export async function receiveOne(id, no) {
     });
 }
 
-export async function saveTextItem(bucket, row) {
+/** from: 화면이 고치던 행이 'cloud'(클라우드)인지 'local'(이 기기)인지. 새 행이면 비워 둡니다. */
+export async function saveTextItem(bucket, row, { from } = {}) {
     const text = String(row.text || '');
     const title = String(row.title || '');
     if (bucket === 'notes' && !text.trim() && !title.trim()) {
@@ -792,7 +796,7 @@ export async function saveTextItem(bucket, row) {
     }
     const sensitive = isSensitiveText(text || title, row.tags) || isSensitiveText(row.memo) || isSensitiveText(row.note);
     const failed = await update((draft) => {
-        relocate(draft, bucket, row, sensitive);
+        relocate(draft, bucket, row, sensitive, from);
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, sensitive };

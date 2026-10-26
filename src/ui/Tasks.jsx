@@ -139,7 +139,7 @@ export function Notice() {
     const events = joined(data, 'events').filter((row) => row.date === date);
 
     async function save(next) {
-        const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() });
+        const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() }, { from: current ? (current.localOnly ? 'local' : 'cloud') : undefined });
         if (result?.storageFailed) return;
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }
