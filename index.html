@@ -32,6 +32,19 @@
             var dark = saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
             var font = localStorage.getItem('ssug-gyomu-font');
             if (font === 'soft' || font === 'neat') document.documentElement.setAttribute('data-font', font);
+            // 쓰던 기기나 예시 학급은 바로 오늘 화면이 열려서, 전체 글꼴을 미리 받아 글자가 바뀌며 화면이 밀리지 않게 합니다.
+            // 처음 오는 분의 로그인 화면은 작은 글꼴 파일만 받습니다.
+            if (localStorage.getItem('ssug-gyomu-tips') || q.get('demo') === '1') {
+                ['JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2', 'JJAEM-TitleFlat-Regular.ks.woff2'].forEach(function (name) {
+                    var link = document.createElement('link');
+                    link.rel = 'preload';
+                    link.as = 'font';
+                    link.type = 'font/woff2';
+                    link.crossOrigin = 'anonymous';
+                    link.href = './fonts/' + name;
+                    document.head.appendChild(link);
+                });
+            }
             if (dark) document.documentElement.classList.add('dark');
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
             var meta = document.querySelector('meta[name="theme-color"]');

@@ -590,7 +590,8 @@ try {
     const tokenCss = readFileSync(resolve(root, 'src/styles/tokens.css'), 'utf8');
     const firstFont = resolve(root, 'public/fonts/JJAEMBody-Regular.first.woff2');
     check(indexHtml.includes('href="./fonts/JJAEMBody-Regular.first.woff2" as="font"'), '첫 화면 글꼴 preload가 없습니다.');
-    check(!indexHtml.includes('JJAEMBody-Regular.ks.woff2'), '본문 전체 파일을 미리 받습니다.');
+    check(!indexHtml.includes('href="./fonts/JJAEMBody-Regular.ks.woff2"'), '본문 전체 파일을 미리 받습니다.');
+    check(/getItem\('ssug-gyomu-tips'\) \|\| q\.get\('demo'\) === '1'\)[\s\S]{0,200}JJAEMBody-Bold\.ks\.woff2/.test(indexHtml), '오늘 화면으로 바로 여는 경우 전체 글꼴을 미리 받지 않아 화면이 밀릴 수 있습니다.');
     check(existsSync(firstFont) && statSync(firstFont).size < 32 * 1024, '첫 화면 글꼴이 작지 않습니다.');
     const jjaemFaces = fontsCss.split('@font-face').slice(1).filter((block) => block.includes("'JJAEM"));
     check(jjaemFaces.length >= 4 && jjaemFaces.every((block) => block.includes('font-display: swap') && !/font-display:\s*block/.test(block)), '쨈 글꼴이 swap이 아닙니다.');
