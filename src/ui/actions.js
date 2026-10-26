@@ -1,6 +1,6 @@
 import { KINDS } from './bits.jsx';
 
-/** 가운데 콕에 나오는 일. 새 기능은 이 목록에 한 줄 넣으면 됩니다. 지우는 항목은 없습니다. */
+/** 가운데 버튼에 나오는 일. 새 기능은 이 목록에 한 줄 넣으면 됩니다. 지우는 항목은 없습니다. */
 export const PLUS_ACTIONS = [
     { id: 'minutes', label: '회의록 작성', emoji: '📋' },
     { id: 'attend', label: '출결 체크', emoji: '✓' },

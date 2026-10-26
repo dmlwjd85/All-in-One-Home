@@ -1326,6 +1326,30 @@ try {
             };
         }, todayDay, laterDay);
         check(marks.pickedCurrent === 'date' && marks.pickedRing && marks.todayCurrent !== 'date' && !marks.todayRing, `고른 칸과 오늘 칸이 구분되지 않습니다. ${JSON.stringify(marks)}`);
+        const todayDisk = await page.evaluate((today, picked) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const byDay = (day) => buttons.find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            const disk = (el) => {
+                const num = el?.querySelector('.num');
+                if (!num) return null;
+                const style = getComputedStyle(num);
+                const radius = Number.parseFloat(style.borderRadius) || 0;
+                return {
+                    today: el.classList.contains('cal-today'),
+                    picked: el.classList.contains('cal-picked'),
+                    radius,
+                    filled: style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent',
+                };
+            };
+            const weekend = buttons.find((el) => el.classList.contains('day-rest') && !el.classList.contains('cal-today') && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            return { today: disk(byDay(today)), picked: disk(byDay(picked)), weekend: disk(weekend) };
+        }, todayDay, laterDay);
+        check(
+            todayDisk.today?.today && todayDisk.today.filled && todayDisk.today.radius >= 10 && !todayDisk.today.picked
+            && todayDisk.picked?.picked && !todayDisk.picked.today && !todayDisk.picked.filled
+            && todayDisk.weekend && !todayDisk.weekend.today && !todayDisk.weekend.filled,
+            `오늘 칸이 채운 동그라미로 주말·고른 날과 구분되지 않습니다. ${JSON.stringify(todayDisk)}`,
+        );
         await page.click('[aria-label="다음 달"]');
         const [year, month] = todayYmd.split('-').map(Number);
         const nextDate = new Date(year, month, 1);
@@ -1447,7 +1471,80 @@ try {
             return button?.getAttribute('aria-pressed') || '';
         });
         check(shared === 'false' || shared === 'true', '공용 컴퓨터 버튼에 눌림 상태가 없습니다.');
+        await page.evaluate(() => history.back());
+        let leftSettings = false;
+        try {
+            await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/settings', { timeout: 3000 });
+            leftSettings = true;
+        } catch {
+            leftSettings = false;
+        }
+        const afterBack = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
+        check(leftSettings && afterBack.host === '127.0.0.1' && afterBack.hash !== '#/settings', `설정에서 들어온 명단 저장이 설정 기록을 하나 더 남깁니다. ${JSON.stringify(afterBack)}`);
     }, 844);
+
+    async function directBack(width) {
+        const current = await ensureBrowser();
+        const context = await current.createBrowserContext();
+        const page = await context.newPage();
+        page.setDefaultTimeout(20000);
+        await pinBrowserClock(page);
+        await page.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await page.setViewport({ width, height: width >= 900 ? 800 : 844, deviceScaleFactor: 1 });
+        const outside = 'data:text/html;charset=utf-8,<title>다른 사이트</title><p>다른 사이트</p>';
+        const day = '#/day/2026-10-23';
+        const cases = [
+            [`${origin}?demo=1&at=08:42&mode=light${day}`, '#/schedule/month/2026-10-23'],
+            [`${origin}?demo=1&at=08:42&mode=light#/settings/roster`, '#/settings'],
+            [`${origin}?demo=1&at=08:42&mode=light#/students/1`, '#/students'],
+            [`${origin}?demo=1&at=08:42&mode=light#/legacy/5`, '#/settings/legacy'],
+        ];
+        try {
+            for (const [url, parent] of cases) {
+                await page.goto(outside, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.waitForSelector('[aria-label="뒤로"]');
+                const marked = await page.evaluate(() => Boolean(history.state?.appFrom || history.state?.rosterFrom));
+                check(!marked, `${width} 주소로 연 ${url} 에 앱 안 표시가 있습니다.`);
+                await page.click('[aria-label="뒤로"]');
+                let stayed = false;
+                try {
+                    await page.waitForFunction((expected) => location.hostname === '127.0.0.1' && location.hash === expected, { timeout: 4000 }, parent);
+                    stayed = true;
+                } catch {
+                    stayed = false;
+                }
+                const where = await page.evaluate(() => ({ hash: location.hash, host: location.hostname, title: document.title }));
+                check(stayed && where.host === '127.0.0.1' && where.hash === parent && where.title !== '다른 사이트', `${width}에서 ‹ 가 앱 밖에 나갑니다. ${url} → ${JSON.stringify(where)}`);
+            }
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.evaluate(() => { location.hash = '#/schedule/month/2026-10-23'; });
+            await page.waitForFunction(() => location.hash === '#/schedule/month/2026-10-23');
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '이 날 일지'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 날 일지')?.click());
+            await page.waitForFunction(() => location.hash === '#/day/2026-10-23' && history.state?.appFrom === 'schedule');
+            await page.click('[aria-label="뒤로"]');
+            await page.waitForFunction(() => location.hash === '#/schedule/month/2026-10-23');
+            await page.evaluate(() => history.back());
+            let leftMonth = false;
+            try {
+                await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/schedule/month/2026-10-23', { timeout: 3000 });
+                leftMonth = true;
+            } catch {
+                leftMonth = false;
+            }
+            const returned = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
+            check(leftMonth && returned.host === '127.0.0.1' && returned.hash === '#/today', `${width}에서 앱 안 ‹ 가 달력 기록을 덮습니다. ${JSON.stringify(returned)}`);
+        } catch (error) {
+            check(false, `${width} ‹ 버튼 시험이 멈추었습니다. ${error?.message || error}`);
+        }
+        await context.close().catch(() => {});
+    }
+    await directBack(390);
+    await directBack(1280);
 
     async function weekdayDeadline(page, label) {
         await openPlus(page);
@@ -1818,7 +1915,7 @@ try {
                 toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
             };
         });
-        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
+        check(notice.text.includes('누를 때 소리가 나요') && !notice.text.includes('콕') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
         await page.click('[aria-label="할 일 고르기"]');
         await delay(80);
         const during = await page.evaluate(() => ({
@@ -1888,7 +1985,7 @@ try {
                 check(layout.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${layout.cls}`);
                 if (width < 900) {
                     check(
-                        layout.visible && layout.text.includes('콕') && layout.text.includes('누를 때 소리가 나요')
+                        layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
                         && layout.sixthOnScreen && !layout.sixthUnderTab,
@@ -1905,7 +2002,7 @@ try {
                 } else {
                     check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
                     await page.evaluate(() => { location.hash = '#/settings'; });
-                    await page.waitForFunction(() => document.body.innerText.includes('콕, 누를 때 소리가 나요'));
+                    await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요') && !document.body.innerText.includes('콕'));
                     const settings = await page.evaluate(() => {
                         const hits = (a, b) => Boolean(
                             a && b && a.width > 0 && b.width > 0
@@ -1913,13 +2010,13 @@ try {
                             && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
                         );
                         const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('누를 때 소리'));
-                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('콕, 누를 때 소리가 나요'));
+                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('누를 때 소리가 나요'));
                         note?.scrollIntoView({ block: 'end' });
                         const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                         const noteBox = note?.getBoundingClientRect();
                         const buttonBox = button?.getBoundingClientRect();
                         return {
-                            phrase: note?.innerText.includes('콕, 누를 때 소리가 나요') || false,
+                            phrase: (note?.innerText.includes('누를 때 소리가 나요') && !note.innerText.includes('콕')) || false,
                             off: Boolean(button),
                             under: hits(buttonBox, fab) || hits(noteBox, fab),
                             aboveFab: Boolean(noteBox && fab && noteBox.bottom <= fab.top + 0.5),
@@ -1945,7 +2042,7 @@ try {
         await delay(400);
         const offlineText = await page.evaluate(() => document.body.innerText).catch(() => '');
         check(
-            offlineText.includes('콕') || offlineText.includes('오늘') || offlineText.includes('인터넷'),
+            offlineText.includes('쨈') || offlineText.includes('오늘') || offlineText.includes('인터넷'),
             '오프라인에서 껍데기가 열리지 않습니다.',
         );
     });

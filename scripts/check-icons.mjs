@@ -201,10 +201,10 @@ check(JJAEM_FAVICON_32_D !== JJAEM_FAVICON_D && JJAEM_FAVICON_32_D.includes('M2 
 
 const index = read('index.html')?.toString('utf8') || '';
 const manifest = read('public/manifest.webmanifest')?.toString('utf8') || '';
-for (const needle of ['favicon.svg?v=17', 'favicon.ico?v=17', 'favicon-16.png?v=17', 'favicon-32.png?v=17', 'apple-touch-icon.png?v=17']) {
+for (const needle of ['favicon.svg?v=18', 'favicon.ico?v=18', 'favicon-16.png?v=18', 'favicon-32.png?v=18', 'apple-touch-icon.png?v=18']) {
     check(index.includes(needle), `index.html 에 ${needle} 가 없습니다.`);
 }
-for (const needle of ['pwa-192.png?v=17', 'pwa-512.png?v=17', 'maskable-512.png?v=17']) {
+for (const needle of ['pwa-192.png?v=18', 'pwa-512.png?v=18', 'maskable-512.png?v=18']) {
     check(manifest.includes(needle), `매니페스트에 ${needle} 가 없습니다.`);
 }
 check(!index.includes('icon-192.png') && !manifest.includes('icon-512.png'), '예전 아이콘 주소가 남아 있습니다.');

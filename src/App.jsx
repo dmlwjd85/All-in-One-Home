@@ -216,6 +216,30 @@ export default function App() {
         location.hash = next;
     }, []);
 
+    const goBack = useCallback(() => {
+        if (history.state?.appFrom || history.state?.rosterFrom) {
+            history.back();
+            return;
+        }
+        const parent = route.name === 'day'
+            ? (route.params.date ? `#/schedule/month/${route.params.date}` : '#/schedule')
+            : route.name === 'roster'
+                ? '#/settings'
+                : route.name === 'student'
+                    ? '#/students'
+                    : route.name === 'legacy'
+                        ? '#/settings/legacy'
+                        : '#/today';
+        try {
+            const url = new URL(location.href);
+            url.hash = parent;
+            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            location.replace(parent);
+        }
+        setHash(parent);
+    }, [route.name, route.params.date]);
+
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
         const closeLayers = () => {
@@ -420,7 +444,7 @@ export default function App() {
                     <Symbol />
                     <p className="title-font" style={{ fontSize: 18, margin: '12px 0 0' }}>쨈 교무수첩</p>
                     <Motto center />
-                    <p className="title-font" style={{ fontSize: 26, margin: '12px 0 8px' }}>화면을 잠가 두었어요</p>
+                    <p className="title-font font-display" style={{ fontSize: 26, margin: '12px 0 8px' }}>화면을 잠가 두었어요</p>
                     <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터라 30분 동안 가만히 있으면 이렇게 가려 둡니다.</p>
                     <Btn className="primary-btn block" onClick={() => setLocked(false)}>다시 열기</Btn>
                 </div>
@@ -469,7 +493,7 @@ export default function App() {
         ['일정', '#/schedule', '📅'],
     ];
     const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
-    const tip = showSoundTip ? { id: 'key-sound', text: '콕, 누를 때 소리가 나요', sound: true } : dailyTip;
+    const tip = showSoundTip ? { id: 'key-sound', text: '누를 때 소리가 나요', sound: true } : dailyTip;
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
     let screen = <Home />;
@@ -530,7 +554,7 @@ export default function App() {
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
                     <header className="topbar">
                         {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
-                            <Btn className="icon-btn" aria-label="뒤로" onClick={() => history.back()}>‹</Btn>
+                            <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
                         {route.name === 'today' ? (
                             <div className="date-block">
@@ -586,7 +610,7 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
                                     {label}
@@ -687,10 +711,10 @@ function SearchSheet({ onClose }) {
                 <input className="field" autoFocus placeholder="이름, 번호, 기록 단어" value={q} onChange={(event) => setQ(event.target.value)} aria-label="찾을 말" />
                 <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                     {students.slice(0, 8).map((row) => (
-                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(`#/students/${row.no}`); onClose(); }}>{row.no}번 {row.name}</Btn>
+                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(`#/students/${row.no}`, { state: { appFrom: 'find' } }); onClose(); }}>{row.no}번 {row.name}</Btn>
                     ))}
                     {records.map((row) => (
-                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students'); onClose(); }}>{row.text}</Btn>
+                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students', { state: { appFrom: 'find' } }); onClose(); }}>{row.text}</Btn>
                     ))}
                     {query && !students.length && !records.length && <p className="muted">찾는 말이 기록에 없어요.</p>}
                 </div>

@@ -21,6 +21,6 @@
 - 홈 화면: `public/pwa-192.png`, `public/pwa-512.png`
 - 애플: `public/apple-touch-icon.png` 180, 배경은 불투명
 - 마스크: `public/maskable-512.svg`, `public/maskable-512.png`. 글자는 가운데 지름 80% 원 안에 있습니다.
-- 16px 파비콘은 사방 1px, 32px 파비콘은 사방 2px를 둥근 타일 여백으로 남깁니다. 32px는 16px를 늘리지 않고 32칸에 다시 그렸습니다. 180·512px과 마스크 아이콘은 자세한 외곽선을 그대로 둡니다.
+- 16px 파비콘은 사방 1px, 32px 파비콘은 사방 2px를 둥근 타일 여백으로 남깁니다. 16px는 ㅈ와 ㅐ 사이에 빈 칸이 있는 단순한 획이고, 32px는 그 그림을 늘리지 않고 32칸에 다시 그렸습니다. 180·512px과 마스크 아이콘은 자세한 외곽선을 그대로 둡니다.
 
-주소에는 `?v=17` 를 붙였고, 서비스 워커 캐시는 `ssug-gyomu-shell-v17` 입니다. 다시 만들 때는 `node scripts/make-jjaem-icon.mjs` 입니다.
+주소에는 `?v=18` 를 붙였고, 서비스 워커 캐시는 `ssug-gyomu-shell-v18` 입니다. 다시 만들 때는 `node scripts/make-jjaem-icon.mjs` 입니다.

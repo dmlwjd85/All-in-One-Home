@@ -48,7 +48,7 @@ html.dark .foil-fab {
 .foil-fab .fab-txt {
     font-size: 13px;
     line-height: 1.2;
-    font-weight: 700;
+    font-weight: 500;
     color: var(--cup-label);
 }
 

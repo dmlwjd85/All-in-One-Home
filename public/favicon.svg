@@ -4,5 +4,5 @@
   <title>쨈 교무수첩</title>
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E468C"/><stop offset=".55" stop-color="#7A56A8"/><stop offset="1" stop-color="#8A62B0"/></linearGradient></defs>
   <rect width="16" height="16" rx="2" fill="url(#bg)"/>
-  <path fill="#fff" shape-rendering="crispEdges" d="M1 1h5v2H1zM2 3h3v2H2zM1 5h2v2H1zM4 5h2v2H4zM7 1h5v2H7zM8 3h3v2H8zM7 5h2v2H7zM10 5h2v2H10zM12 1h2v6h-2zM14 1h1v2H14zM14 4h1v2H14zM1 8h14v2H1zM1 10h2v3H1zM13 10h2v3H13zM1 13h14v2H1z"/>
+  <path fill="#fff" shape-rendering="crispEdges" d="M1 1h3v1H1zM6 1h3v1H6zM10 1h1v1H10zM12 1h1v1H12zM1 2h3v1H1zM6 2h3v1H6zM10 2h1v1H10zM12 2h1v1H12zM2 3h1v1H2zM7 3h1v1H7zM10 3h1v1H10zM12 3h1v1H12zM2 4h1v1H2zM7 4h1v1H7zM10 4h1v1H10zM12 4h1v1H12zM1 5h1v1H1zM3 5h1v1H3zM6 5h1v1H6zM8 5h1v1H8zM10 5h1v1H10zM12 5h1v1H12zM1 6h1v1H1zM3 6h1v1H3zM6 6h1v1H6zM8 6h1v1H8zM10 6h1v1H10zM12 6h1v1H12zM1 8h14v1H1zM1 9h14v1H1zM1 10h2v1H1zM13 10h2v1H13zM1 11h2v1H1zM13 11h2v1H13zM1 12h2v1H1zM13 12h2v1H13zM1 13h14v1H1zM1 14h14v1H1z"/>
 </svg>

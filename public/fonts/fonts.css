@@ -1,13 +1,40 @@
-/* 글꼴은 이 사이트와 함께 제공합니다. 모두 SIL Open Font License 1.1.
+/* 글꼴은 이 앱 안에만 넣습니다. 글꼴 파일만 따로 배포하지 않습니다.
+   글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀
+   글꼴: 쨈 본문 — Resource Han Rounded(Cyano Hao, SIL OFL 1.1) 바탕. 원문은 OFL-JJAEMBody.txt
+   24px 미만은 쨈 본문(Bold는 14px부터), 24px 이상은 쨈 제목 평면, font-display: swap.
+   아래 대체 글꼴은 빠진 글자와 설정에서 고른 다른 고딕용입니다. 모두 SIL Open Font License 1.1.
    Pretendard는 KS X 1001 한글 2,350자와 ASCII만 남긴 굵기 400·700 서브셋입니다.
    나눔스퀘어라운드는 둥근 고딕(굵게 파일 하나)입니다.
    Gothic A1은 라틴·한글 범위로 나눈 고딕이고, Reserved Font Name 이 없습니다.
    고운바탕은 아이콘 그림에만 남아 있습니다. */
 @font-face {
+    font-family: 'JJAEM Body';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./JJAEMBody-Regular.ks.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'JJAEM Body';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('./JJAEMBody-Bold.ks.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'JJAEM Title Flat';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('./JJAEM-TitleFlat-Regular.ks.woff2') format('woff2');
+}
+@font-face {
     font-family: 'Pretendard Variable';
     font-style: normal;
     font-weight: 100 500;
     font-display: optional;
+    /* 이모지·기호는 기기 글꼴로 넘깁니다. 한글이 빠질 때만 이 파일을 받습니다. */
+    unicode-range: U+0000-00FF, U+1100-11FF, U+3130-318F, U+AC00-D7A3;
     src: url('./Pretendard-Regular.woff2') format('woff2');
 }
 
@@ -16,6 +43,7 @@
     font-style: normal;
     font-weight: 501 900;
     font-display: optional;
+    unicode-range: U+0000-00FF, U+1100-11FF, U+3130-318F, U+AC00-D7A3;
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
@@ -24,6 +52,7 @@
     font-style: normal;
     font-weight: 100 500;
     font-display: optional;
+    unicode-range: U+0000-00FF, U+1100-11FF, U+3130-318F, U+AC00-D7A3;
     src: url('./Pretendard-Regular.woff2') format('woff2');
 }
 
@@ -32,11 +61,12 @@
     font-style: normal;
     font-weight: 501 900;
     font-display: optional;
+    unicode-range: U+0000-00FF, U+1100-11FF, U+3130-318F, U+AC00-D7A3;
     src: url('./Pretendard-Bold.woff2') format('woff2');
 }
 
 /* 화면에 보이는 이름은 제목 쨈 제목, 본문 쨈 본문. 고운바탕은 아이콘 그림에만 남아 있습니다.
-   콕 윤곽 패스(src/ui/bits.jsx)는 Pretendard-Bold.woff2 의 U+CF55 입니다. 하단 버튼에 보이는 이름은 쨈입니다. OFL 1.1. */
+   하단 버튼 옆 윤곽 패스는 Pretendard-Bold.woff2 의 U+CF55 입니다. 보이는 이름은 쨈입니다. OFL 1.1. */
 @font-face {
     font-family: 'NanumSquareRound';
     font-style: normal;

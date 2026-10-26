@@ -40,7 +40,7 @@ export function Attend() {
 
     function openRecord(student) {
         if (student?.no >= 1 && student?.no <= 50) {
-            go(`#/students/${student.no}`);
+            go(`#/students/${student.no}`, { state: { appFrom: 'attend' } });
             return;
         }
         setMonth(false);
@@ -63,8 +63,8 @@ export function Attend() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8, margin: '12px 0' }}>
                 {boxes.map(([label, value, color]) => (
                     <Btn key={label} block className="solid-card" aria-pressed={filter === label} onClick={() => pickBox(label)} style={{ padding: '8px 4px', textAlign: 'center', minHeight: 64, display: 'grid', alignContent: 'center', justifyItems: 'center' }}>
-                        <span className="num title-font" style={{ fontSize: 26, color, lineHeight: '30px' }}>{value}</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, lineHeight: '16px' }}>{label}</span>
+                        <span className="num title-font font-display" style={{ fontSize: 26, color, lineHeight: '30px' }}>{value}</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, lineHeight: '16px' }}>{label}</span>
                     </Btn>
                 ))}
             </div>

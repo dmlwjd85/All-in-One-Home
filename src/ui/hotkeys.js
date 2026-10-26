@@ -1,10 +1,10 @@
-/** 단축키. 기본은 예전과 같이 / 키가 콕을 엽니다. 나머지는 비어 있고, ? 는 목록입니다.
+/** 단축키. 기본은 예전과 같이 / 키가 발라 두기를 엽니다. 나머지는 비어 있고, ? 는 목록입니다.
     값은 이 기기에만 둡니다. Ctrl·Command·Alt 조합은 브라우저 몫이라 받지 않습니다. */
 
 const STORAGE_KEY = 'ssug-gyomu-hotkeys';
 
 export const HOTKEY_ACTIONS = [
-    { id: 'plus', label: '콕 열기', group: '동작', fallback: '/' },
+    { id: 'plus', label: '발라 두기', group: '동작', fallback: '/' },
     { id: 'help', label: '단축키 목록', group: '동작', fallback: '?' },
     { id: 'search', label: '찾기', group: '동작', fallback: '' },
     { id: 'today', label: '오늘', group: '이동', fallback: '' },
@@ -128,33 +128,33 @@ export function resetHotkeys(storage) {
     return defaultHotkeys();
 }
 
-/** 사이드바 안내. 저장된 콕 키를 따르고, 키가 없으면 기본 빗금을 말하지 않습니다. */
+/** 사이드바 안내. 저장된 발라 두기 키를 따르고, 키가 없으면 기본 빗금을 말하지 않습니다. */
 export function kokHotkeyHint(map = loadHotkeys()) {
     const key = map?.plus || '';
-    if (!key) return '콕 여는 키는 아직 없어요. 설정에서 정해 주시면 돼요.';
-    if (key === '/') return '기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.';
-    return `${hotkeyLabel(key)} 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.`;
+    if (!key) return '발라 두는 키는 아직 없어요. 설정에서 정해 주시면 돼요.';
+    if (key === '/') return '기본으로 / 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.';
+    return `${hotkeyLabel(key)} 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.`;
 }
 
-/** 단축키 설정 아래 안내. 목록 키와 콕 키 모두 지금 저장된 값을 말합니다. */
+/** 단축키 설정 아래 안내. 목록 키와 발라 두기 키 모두 지금 저장된 값을 말합니다. */
 export function hotkeyFootnote(map = loadHotkeys()) {
     const help = map?.help || '';
     const plus = map?.plus || '';
     const helpText = help ? `${hotkeyLabel(help)} 키` : '';
     const plusText = plus ? `${hotkeyLabel(plus)} 키` : '';
-    if (!plus && !help) return '콕과 목록 키는 아직 없어요. 위에서 정해 주시면 돼요.';
-    if (!plus) return `목록은 ${helpText}로도 볼 수 있어요. 콕 여는 키는 아직 없어요.`;
-    if (!help) return `콕은 ${plusText}로 열려요. 목록 키는 아직 없어요.`;
-    if (plus === '/' && help === '?') return '목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 콕을 엽니다.';
-    return `목록은 ${helpText}로도 볼 수 있어요. 콕은 ${plusText}로 열려요.`;
+    if (!plus && !help) return '발라 두기와 목록 키는 아직 없어요. 위에서 정해 주시면 돼요.';
+    if (!plus) return `목록은 ${helpText}로도 볼 수 있어요. 발라 두는 키는 아직 없어요.`;
+    if (!help) return `발라 두기는 ${plusText}로 열려요. 목록 키는 아직 없어요.`;
+    if (plus === '/' && help === '?') return '목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 발라 두기를 엽니다.';
+    return `목록은 ${helpText}로도 볼 수 있어요. 발라 두기는 ${plusText}로 열려요.`;
 }
 
 /** 키보드가 없는 화면. 휴대폰에서 열릴 키도 저장된 값을 따릅니다. */
 export function hotkeyPhoneNote(map = loadHotkeys()) {
     const plus = map?.plus || '';
-    if (!plus) return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 콕 여는 키가 아직 없어요.';
-    if (plus === '/') return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 콕을 엽니다.';
-    return `키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 ${hotkeyLabel(plus)} 키가 콕을 엽니다.`;
+    if (!plus) return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 발라 두는 키가 아직 없어요.';
+    if (plus === '/') return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 발라 두기를 엽니다.';
+    return `키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 ${hotkeyLabel(plus)} 키가 발라 두기를 엽니다.`;
 }
 
 export function assignHotkey(map, id, key) {

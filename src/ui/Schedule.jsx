@@ -63,7 +63,7 @@ export function Schedule() {
                         const mine = week.filter((row) => onDay(row, date));
                         return (
                             <section key={date} className={rest.off ? 'glass day-rest' : 'glass'} style={{ padding: 12 }}>
-                                <Btn block className="chip" style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', marginBottom: 8 }} onClick={() => go(`#/day/${date}`)}>{formatKoDate(date, { today: clock.ymd })} 일지</Btn>
+                                <Btn block className="chip" style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', marginBottom: 8 }} onClick={() => go(`#/day/${date}`, { state: { appFrom: 'schedule' } })}>{formatKoDate(date, { today: clock.ymd })} 일지</Btn>
                                 {rest.off && <span className="day-rest-mark"> · {rest.label === '휴일' ? '휴일' : `휴일 · ${rest.label}`}</span>}
                                 {mine.map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
                                 {!mine.length && !rest.off && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
@@ -82,7 +82,7 @@ export function Schedule() {
                         <Btn className="icon-btn" aria-label="다음 달" onClick={() => shiftMonth(1)}>›</Btn>
                     </div>
                     <div className="cal-grid" style={{ marginTop: 8 }}>
-                        {['월', '화', '수', '목', '금', '토', '일'].map((label, index) => <div key={label} className={index >= 5 ? 'day-rest-mark' : undefined} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800 }}>{label}</div>)}
+                        {['월', '화', '수', '목', '금', '토', '일'].map((label, index) => <div key={label} className={index >= 5 ? 'day-rest-mark' : undefined} style={{ textAlign: 'center', fontSize: 12, fontWeight: 500 }}>{label}</div>)}
                         {monthCells(ym).map((cell, index) => {
                             const holiday = holidayCaption(cell.ymd);
                             const rest = restInfo(cell.ymd, classEvents);
@@ -90,9 +90,10 @@ export function Schedule() {
                             const hasGoogle = shown.some((row) => row.google && onDay(row, cell.ymd));
                             const weekend = index % 7 >= 5;
                             const selected = cell.ymd === focus;
+                            const todayCell = cell.ymd === clock.ymd;
                             return (
-                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={`${formatKoDate(cell.ymd)} 고르기`} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
-                                    <span className="num" style={{ fontWeight: 800, color: rest.off ? 'var(--rest-ink)' : (selected || cell.ymd === clock.ymd ? 'var(--accent)' : 'inherit') }}>{cell.day}</span>
+                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={`${formatKoDate(cell.ymd)} 고르기`} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
+                                    <span className="num" style={{ fontWeight: 700, color: todayCell ? 'var(--on-primary)' : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
                                     {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11 }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
                                     {(has || hasGoogle) && (
                                         <span className="cal-marks">
@@ -108,7 +109,7 @@ export function Schedule() {
                         <strong>{formatKoDate(focus, { today: clock.ymd })}</strong>
                         {pickedRest.off && <p className="day-rest-mark" style={{ margin: '4px 0' }}>{pickedRest.label === '휴일' ? '휴일' : `휴일 · ${pickedRest.label}`}</p>}
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                            <Btn className="chip" onClick={() => go(`#/day/${focus}`)}>이 날 일지</Btn>
+                            <Btn className="chip" onClick={() => go(`#/day/${focus}`, { state: { appFrom: 'schedule' } })}>이 날 일지</Btn>
                             <Btn className="chip" onClick={() => go(`#/schedule/week/${focus}`)}>이 주 보기</Btn>
                         </div>
                         {shown.filter((row) => onDay(row, focus)).map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
