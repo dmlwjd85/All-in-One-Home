@@ -2165,6 +2165,16 @@ try {
         });
         check(titleFace.size === '32px' && titleFace.family.includes('JJAEM Title Flat'), `32px 제목이 쨈 제목 평면이 아닙니다. ${JSON.stringify(titleFace)}`);
         check(titleFace.preload.includes('JJAEMBody-Regular.first.woff2') && !titleFace.preload.includes('JJAEMBody-Regular.ks.woff2'), `첫 화면 글꼴 preload가 작은 파일이 아닙니다. ${titleFace.preload}`);
+        const firstFonts = await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise((done) => { setTimeout(done, 600); });
+            return performance.getEntriesByType('resource').map((entry) => entry.name.split('/').pop().split('?')[0]).filter((name) => name.endsWith('.woff2'));
+        });
+        check(
+            ['JJAEMBody-Regular.first.woff2', 'JJAEMBody-Bold.first.woff2', 'JJAEM-TitleFlat-Regular.first.woff2'].every((name) => firstFonts.includes(name))
+                && !firstFonts.some((name) => name.includes('.ks.')),
+            `첫 화면에서 큰 글꼴 파일을 받습니다. ${JSON.stringify(firstFonts)}`,
+        );
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
         const before = await page.evaluate(() => {
