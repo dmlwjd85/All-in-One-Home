@@ -326,8 +326,8 @@ a.chip,
     margin-top: -22px;
     border-radius: 20px;
     color: var(--on-primary);
-    background: var(--primary);
-    box-shadow: var(--neo-raise-sm), inset 0 1px 0 rgba(255, 255, 255, .35);
+    background: transparent;
+    box-shadow: none;
     font-size: 22px;
     font-weight: 800;
     line-height: 1;
@@ -335,6 +335,7 @@ a.chip,
     place-items: center;
     padding: 0;
     justify-self: center;
+    overflow: visible;
 }
 .fab-name {
     font-family: var(--font-title);
@@ -609,13 +610,51 @@ a.chip,
     transform: translateX(-50%);
     border-radius: 22px;
     color: var(--on-primary);
-    background: var(--primary);
-    box-shadow: var(--neo-raise);
+    background: transparent;
+    box-shadow: none;
     font-size: 26px;
     font-weight: 800;
     line-height: 1;
     place-items: center;
     padding: 0;
+    overflow: visible;
+}
+.seal-cup {
+    position: relative;
+    width: 46px;
+    height: 52px;
+    display: block;
+    pointer-events: none;
+    overflow: visible;
+}
+.desk-fab .seal-cup { width: 52px; height: 58px; }
+.seal-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.seal-body,
+.seal-foil,
+.seal-splat {
+    will-change: transform, opacity;
+}
+.seal-body,
+.seal-foil {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+.seal-splat {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 11px;
+    height: 8px;
+    margin: -4px 0 0 -5px;
+    border-radius: 50% 45% 50% 48%;
+    background: radial-gradient(circle at 35% 35%, var(--seal-gloss), var(--seal-fill) 55%, var(--seal-deep));
+    opacity: 0;
+    pointer-events: none;
 }
 .sheet { overflow-x: hidden; }
 
@@ -638,7 +677,7 @@ button.neo, a.neo, [role="button"].neo { box-shadow: var(--neo-raise-sm); }
     box-shadow: inset 2px 2px 4px var(--neo-shadow), inset -1px -1px 3px var(--neo-highlight);
 }
 
-.tap:active:not(.desk-fab) { transform: translateY(2px); }
+.tap:active:not(.desk-fab):not(.fab) { transform: translateY(2px); }
 .chip:active,
 .icon-btn:active,
 .choice-tile:active,
@@ -657,7 +696,6 @@ button.glass[aria-pressed="true"]:active {
     box-shadow: var(--neo-inset-deep);
 }
 .primary-btn:active,
-.fab:active,
 .hero-action:active {
     box-shadow: inset 3px 3px 6px rgba(70, 16, 36, .45), inset -2px -2px 5px rgba(255, 255, 255, .28);
 }
@@ -669,8 +707,7 @@ button.glass[aria-pressed="true"]:active {
     box-shadow: var(--neo-inset-deep);
 }
 .desk-fab:active {
-    transform: translateX(-50%) translateY(2px);
-    box-shadow: inset 3px 3px 6px rgba(70, 16, 36, .45), inset -2px -2px 5px rgba(255, 255, 255, .28);
+    transform: translateX(-50%);
 }
 
 @media (min-width: 900px) {
@@ -744,6 +781,6 @@ button.glass[aria-pressed="true"]:active {
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
     }
-    .tap:active:not(.desk-fab) { transform: none; }
+    .tap:active:not(.desk-fab):not(.fab) { transform: none; }
     .desk-fab:active { transform: translateX(-50%); }
 }
