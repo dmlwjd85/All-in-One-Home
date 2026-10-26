@@ -285,13 +285,16 @@ a.chip,
     border-radius: 14px;
 }
 .fab {
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
     width: 58px;
     height: 58px;
     margin-top: -22px;
-    border-radius: 20px;
+    border-radius: 10px;
     color: var(--on-primary);
-    background: var(--primary);
-    box-shadow: var(--neo-raise-sm), inset 0 1px 0 rgba(255, 255, 255, .35);
+    background: transparent;
+    box-shadow: none;
     font-size: 22px;
     font-weight: 800;
     line-height: 1;
@@ -300,10 +303,32 @@ a.chip,
     padding: 0;
     justify-self: center;
 }
+.fab::after,
+.desk-fab::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    z-index: 1;
+    background-color: var(--keycap-mid);
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 42%),
+        linear-gradient(180deg, var(--keycap-top) 0%, var(--keycap-mid) 52%, var(--keycap-bottom) 100%);
+    box-shadow:
+        inset 0 1px 0 var(--keycap-highlight),
+        0 9px 0 var(--keycap-side),
+        0 13px 8px -2px var(--keycap-shadow);
+    transition: box-shadow 80ms cubic-bezier(.2, .8, .2, 1);
+}
 .kok-mark {
     width: 36px;
     height: 39px;
     display: block;
+}
+.fab .kok-mark,
+.desk-fab .kok-mark {
+    position: relative;
+    z-index: 2;
 }
 .desk-fab .kok-mark {
     width: 42px;
@@ -555,6 +580,7 @@ a.chip,
 .desk-fab {
     display: none;
     position: fixed;
+    isolation: isolate;
     z-index: 30;
     left: 50%;
     bottom: 24px;
@@ -562,10 +588,10 @@ a.chip,
     height: 64px;
     margin: 0;
     transform: translateX(-50%);
-    border-radius: 22px;
+    border-radius: 12px;
     color: var(--on-primary);
-    background: var(--primary);
-    box-shadow: var(--neo-raise);
+    background: transparent;
+    box-shadow: none;
     font-size: 26px;
     font-weight: 800;
     line-height: 1;
@@ -612,7 +638,6 @@ button.glass[aria-pressed="true"]:active {
     box-shadow: var(--neo-inset-deep);
 }
 .primary-btn:active,
-.fab:active,
 .hero-action:active {
     box-shadow: inset 3px 3px 6px rgba(70, 16, 36, .45), inset -2px -2px 5px rgba(255, 255, 255, .28);
 }
@@ -623,9 +648,19 @@ button.glass[aria-pressed="true"]:active {
     transform: translateY(1px);
     box-shadow: var(--neo-inset-deep);
 }
+.tap.fab:active {
+    transform: translateY(6px);
+}
+.tap.fab:active::after,
+.desk-fab:active::after {
+    box-shadow:
+        inset 0 2px 3px rgba(70, 16, 36, .28),
+        inset 0 1px 0 rgba(255, 255, 255, .22),
+        0 3px 0 var(--keycap-side),
+        0 5px 4px -2px var(--keycap-shadow);
+}
 .desk-fab:active {
-    transform: translateX(-50%) translateY(2px);
-    box-shadow: inset 3px 3px 6px rgba(70, 16, 36, .45), inset -2px -2px 5px rgba(255, 255, 255, .28);
+    transform: translateX(-50%) translateY(6px);
 }
 
 @media (min-width: 900px) {
@@ -751,6 +786,14 @@ button.glass[aria-pressed="true"]:active {
         animation-duration: 0.01ms !important;
         transition-duration: 0.01ms !important;
     }
-    .tap:active:not(.desk-fab) { transform: none; }
+    .tap:active:not(.desk-fab),
+    .tap.fab:active { transform: none; }
     .desk-fab:active { transform: translateX(-50%); }
+    .tap.fab:active::after,
+    .desk-fab:active::after {
+        box-shadow:
+            inset 0 1px 0 var(--keycap-highlight),
+            0 9px 0 var(--keycap-side),
+            0 13px 8px -2px var(--keycap-shadow);
+    }
 }

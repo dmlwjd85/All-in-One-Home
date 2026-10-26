@@ -307,7 +307,7 @@ check(appText.includes('compositionend'), '한글 조합이 끝날 때 소리를
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v15'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v16'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';
