@@ -47,9 +47,9 @@ export function Day() {
     return (
         <div style={{ display: 'grid', gap: 12 }}>
             <div className="week-nav">
-                <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(`#/day/${addDaysYmd(date, -1)}`)}>‹</Btn>
+                <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(`#/day/${addDaysYmd(date, -1)}`, { state: { appFrom: history.state?.appFrom || 'day' } })}>‹</Btn>
                 <strong className="title-font">{formatKoDate(date, { today: clock.ymd })}</strong>
-                <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(`#/day/${addDaysYmd(date, 1)}`)}>›</Btn>
+                <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(`#/day/${addDaysYmd(date, 1)}`, { state: { appFrom: history.state?.appFrom || 'day' } })}>›</Btn>
             </div>
             <p className="muted" style={{ margin: 0 }}>이 날의 할 일, 일정, 시간표, 출결, 상담을 한곳에 모았어요. 나이스에 넣기 전에 여기서 확인하고 바로 고쳐요.</p>
             {rest.off && <p className="day-rest-mark" style={{ margin: 0 }}>{rest.label === '휴일' ? '휴일이에요.' : `휴일 · ${rest.label}`}</p>}
@@ -105,7 +105,7 @@ export function Day() {
                         <div key={row.id} style={{ marginBottom: 8 }}>
                             <p style={{ margin: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.kind} · {studentOf(row.sid)}</p>
                             <p style={{ margin: '4px 0' }}>{row.text}</p>
-                            {student && <Btn className="chip" onClick={() => go(`#/students/${student.no}`)}>이 학생 기록</Btn>}
+                            {student && <Btn className="chip" onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'day' } })}>이 학생 기록</Btn>}
                         </div>
                     );
                 })}

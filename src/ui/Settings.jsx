@@ -118,12 +118,13 @@ export function Settings() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
-                <p className="muted" style={{ marginTop: 0 }}>제목 글꼴은 쨈 제목, 본문 글꼴은 쨈 본문이에요.</p>
+                <p className="muted" style={{ marginTop: 0 }}>작은 글자는 쨈 본문, 24px부터는 쨈 제목 평면이에요. 본문 Bold는 14px부터 씁니다.</p>
+                <p className="muted">글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀. 글꼴: 쨈 본문 — Resource Han Rounded(Cyano Hao, SIL OFL 1.1) 바탕.</p>
                 <div className="font-grid" role="group" aria-label="글꼴">
                     {FONT_CHOICES.map((item) => (
                         <Btn key={item.id} className={font === item.id ? 'choice-tile on' : 'choice-tile'} data-font-sample={item.id} aria-pressed={font === item.id} onClick={() => { setFont(item.id); setFontId(item.id); }}>
                             <span>{item.label}</span>
-                            <span style={{ fontWeight: 600, fontSize: 12 }}>{item.hint}</span>
+                            <span style={{ fontWeight: 500, fontSize: 12 }}>{item.hint}</span>
                         </Btn>
                     ))}
                 </div>
@@ -181,7 +182,7 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
-                <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted">누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Btn className={typeOn ? 'chip on' : 'chip'} aria-pressed={typeOn} onClick={() => {
@@ -391,7 +392,7 @@ export function Legacy() {
             <div style={{ display: 'grid', gap: 8 }}>
                 <p>새 화면으로 옮기지 못한 쪽이에요. 읽기만 되고, 고치지는 않아요.</p>
                 {pages.map((row) => (
-                    <Btn key={row.id} block className="glass" style={{ padding: 12, textAlign: 'left' }} onClick={() => go(row.id.startsWith('p') ? `#/legacy/${row.id.slice(1)}` : '#/settings/legacy')}>
+                    <Btn key={row.id} block className="glass" style={{ padding: 12, textAlign: 'left' }} onClick={() => go(row.id.startsWith('p') ? `#/legacy/${row.id.slice(1)}` : '#/settings/legacy', { state: { appFrom: 'legacy' } })}>
                         {titles[row.id.replace('p', '')] || row.title || row.id}
                     </Btn>
                 ))}

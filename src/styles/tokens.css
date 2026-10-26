@@ -1,14 +1,17 @@
-/* 쨈 교무수첩 색·글꼴. 화면에 보이는 글꼴 이름은 쨈 제목, 쨈 본문.
-   바탕은 따뜻한 종이, 카드는 같은 색에서 그림자로만 뜨고, 포인트는 로즈 하나.
-   제목과 본문 모두 프리텐다드. 시안의 #C2577A 는 흰 글자 대비가 4.25,
-   바탕 위 글자 대비가 3.36 이라 버튼·강조는 #A73D74 로 깊혔습니다.
-   보조 글자 #6E6869 는 바탕 대비 4.31 이라 #5E5658 을 씁니다. */
+/* 쨈 교무수첩 색·글꼴.
+   24px 미만은 쨈 본문. 본문 Bold는 14px부터. 24px 이상은 쨈 제목 평면.
+   입체·컬러는 48px부터라 지금 화면(가장 큰 제목 32px)에는 넣지 않습니다.
+   글꼴: 쨈 제목 — (c) 2026 쨈 폰트 팀
+   글꼴: 쨈 본문 — Resource Han Rounded(Cyano Hao, SIL OFL 1.1) 바탕
+   시안의 #C2577A 는 흰 글자 대비가 4.25, 바탕 위 글자 대비가 3.36 이라
+   버튼·강조는 #A73D74 로 깊혔습니다. 보조 글자는 #5E5658 입니다. */
 :root {
     --font-plain: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
     --font-soft: 'NanumSquareRound', -apple-system, sans-serif;
     --font-neat: 'Gothic A1', -apple-system, sans-serif;
-    --font-title: var(--font-plain);
-    --font-body: var(--font-plain);
+    --font-body: 'JJAEM Body', var(--font-plain);
+    --font-title: 'JJAEM Body', var(--font-plain);
+    --font-display: 'JJAEM Title Flat', 'JJAEM Body', var(--font-plain);
     --title-effect: none;
 
     --bg: #E8E4DE;
@@ -81,11 +84,13 @@
 :root[data-font="soft"] {
     --font-title: var(--font-soft);
     --font-body: var(--font-soft);
+    --font-display: var(--font-soft);
 }
 
 :root[data-font="neat"] {
     --font-title: var(--font-neat);
     --font-body: var(--font-neat);
+    --font-display: var(--font-neat);
 }
 
 .dark {

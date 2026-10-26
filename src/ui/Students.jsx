@@ -23,7 +23,7 @@ export function Students() {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
                     const follow = records.find((row) => row.sid === student.id && row.follow && row.follow >= clock.ymd);
                     return (
-                        <Btn key={student.id} block className="glass" style={{ justifyContent: 'space-between', display: 'flex', padding: '8px 12px' }} onClick={() => go(`#/students/${student.no}`)}>
+                        <Btn key={student.id} block className="glass" style={{ justifyContent: 'space-between', display: 'flex', padding: '8px 12px' }} onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'students' } })}>
                             <span><strong className="num">{student.no}</strong> {student.name}</span>
                             <span className="muted">{mine.length ? `이번 달 ${mine.length}` : '이번 달 기록 없음'}{follow ? ` · ${Number(follow.follow.slice(5, 7))}/${Number(follow.follow.slice(8))} 다시` : ''}</span>
                         </Btn>
@@ -54,7 +54,7 @@ export function Student() {
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <div className="symbol" style={{ width: 64, height: 64, borderRadius: 20, fontSize: 20 }}>{givenName(student.name)}</div>
                 <div>
-                    <h2 className="title-font" style={{ margin: 0, fontSize: 26 }}>{student.name}</h2>
+                    <h2 className="title-font font-display" style={{ margin: 0, fontSize: 26 }}>{student.name}</h2>
                     <p className="muted" style={{ margin: 0 }}>{student.no}번 · {data.profile.className}</p>
                 </div>
             </div>

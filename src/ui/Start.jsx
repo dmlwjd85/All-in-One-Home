@@ -28,7 +28,7 @@ export function Start() {
         <div style={{ maxWidth: 480, margin: '0 auto', padding: 20 }}>
             <div className="brand-lockup">
                 <Symbol />
-                <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px', margin: 0 }}>쨈 교무수첩</h1>
+                <h1 className="title-font font-display" style={{ fontSize: 32, lineHeight: '40px', margin: 0 }}>쨈 교무수첩</h1>
             </div>
             <Motto />
             <p className="muted" style={{ fontSize: 15, marginTop: 4 }}>담임의 하루가 한 화면에 있어요.</p>

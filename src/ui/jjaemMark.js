@@ -9,8 +9,8 @@ export const JJAEM_STOPS = ['#5E468C', '#7A56A8', '#8A62B0'];
 /** 512 칸에서 잉크의 무게 중심을 가운데로 맞춘 자리입니다. */
 export const JJAEM_PLACE = 'translate(90.03 99.45) scale(0.176471)';
 
-/** 16px 파비콘. 사방 1px는 둥근 타일 여백이고, 획은 그 안에만 있습니다. */
-export const JJAEM_FAVICON_D = 'M1 1h5v2H1zM2 3h3v2H2zM1 5h2v2H1zM4 5h2v2H4zM7 1h5v2H7zM8 3h3v2H8zM7 5h2v2H7zM10 5h2v2H10zM12 1h2v6h-2zM14 1h1v2H14zM14 4h1v2H14zM1 8h14v2H1zM1 10h2v3H1zM13 10h2v3H13zM1 13h14v2H1z';
+/** 16px 파비콘. 사방 1px는 타일 여백입니다. ㅈ와 ㅐ 사이에 빈 칸을 두어 16칸에서도 떨어지게 그렸습니다. */
+export const JJAEM_FAVICON_D = 'M1 1h3v1H1zM6 1h3v1H6zM10 1h1v1H10zM12 1h1v1H12zM1 2h3v1H1zM6 2h3v1H6zM10 2h1v1H10zM12 2h1v1H12zM2 3h1v1H2zM7 3h1v1H7zM10 3h1v1H10zM12 3h1v1H12zM2 4h1v1H2zM7 4h1v1H7zM10 4h1v1H10zM12 4h1v1H12zM1 5h1v1H1zM3 5h1v1H3zM6 5h1v1H6zM8 5h1v1H8zM10 5h1v1H10zM12 5h1v1H12zM1 6h1v1H1zM3 6h1v1H3zM6 6h1v1H6zM8 6h1v1H8zM10 6h1v1H10zM12 6h1v1H12zM1 8h14v1H1zM1 9h14v1H1zM1 10h2v1H1zM13 10h2v1H13zM1 11h2v1H1zM13 11h2v1H13zM1 12h2v1H1zM13 12h2v1H13zM1 13h14v1H1zM1 14h14v1H1z';
 
-/** 32px 파비콘. 16px를 늘리지 않고 32칸에 다시 그렸습니다. 사방 2px는 타일 여백입니다. */
-export const JJAEM_FAVICON_32_D = 'M2 2h8v3H2zM4 5h4v3H4zM2 8h3v6H2zM7 8h3v6H7zM11 2h8v3H11zM13 5h4v3H13zM11 8h3v6H11zM16 8h3v6H16zM20 2h4v12H20zM25 2h4v4H25zM25 8h4v6H25zM2 16h27v3H2zM2 19h3v7H2zM26 19h3v7H26zM2 26h27v4H2z';
+/** 32px 파비콘. 16px를 늘리지 않고 32칸에 다시 그렸습니다. 사방 2px는 타일 여백이고, 오른쪽 획을 한 칸 늘려 좌우 여백을 맞췄습니다. */
+export const JJAEM_FAVICON_32_D = 'M2 2h8v3H2zM4 5h4v3H4zM2 8h3v6H2zM7 8h3v6H7zM11 2h8v3H11zM13 5h4v3H13zM11 8h3v6H11zM16 8h3v6H16zM20 2h4v12H20zM25 2h5v4H25zM25 8h5v6H25zM2 16h28v3H2zM2 19h3v7H2zM26 19h4v7H26zM2 26h28v4H2z';

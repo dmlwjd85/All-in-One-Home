@@ -42,7 +42,7 @@ export function DateGrid({ value, today, onPick }) {
             </div>
             <div className="cal-grid" style={{ marginTop: 8 }} role="group" aria-label="날짜">
                 {['월', '화', '수', '목', '금', '토', '일'].map((label) => (
-                    <div key={label} style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, lineHeight: '20px' }}>{label}</div>
+                    <div key={label} style={{ textAlign: 'center', fontSize: 12, fontWeight: 500, lineHeight: '20px' }}>{label}</div>
                 ))}
                 {monthCells(month).map((cell) => {
                     const on = cell.ymd === value;

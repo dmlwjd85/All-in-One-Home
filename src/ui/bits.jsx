@@ -23,7 +23,7 @@ export function Motto({ center = false }) {
     );
 }
 
-/** 콕 입력과 할 일 빈 화면의 안내. 글자 그대로 둡니다. */
+/** 빠른 입력과 할 일 빈 화면의 안내. 글자 그대로 둡니다. */
 export function SpreadHint({ center = false }) {
     return (
         <p className="muted spread-hint" style={center ? { textAlign: 'center' } : undefined}>생각나면 일단 여기 발라 두세요. 틈나면 간식처럼 처리해요.</p>
@@ -50,7 +50,7 @@ export function Symbol() {
     );
 }
 
-/** 가계부와 같은 콕 윤곽. 하단 버튼에 보이는 이름은 쨈이고, 이 패스는 검사에서 윤곽을 유지합니다.
+/** 가계부와 같은 윤곽. 하단 버튼에 보이는 이름은 쨈이고, 이 패스는 검사에서 윤곽을 유지합니다.
     Pretendard Bold 1.3.9 U+CF55, x' = x − 58, y' = 1596 − y.
     Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
     with Reserved Font Name Pretendard.
