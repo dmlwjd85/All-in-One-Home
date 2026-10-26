@@ -435,7 +435,8 @@ a.chip,
         border-radius: 24px;
         max-height: min(86dvh, 820px);
     }
-    .toast { left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
+    /* 가운데 콕 키캡(64px) 오른쪽 끝에서 16px 띄웁니다. 900~1000px에서도 겹치지 않습니다. */
+    .toast { left: auto; right: 24px; width: min(420px, calc(50vw - 72px)); bottom: 24px; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);
