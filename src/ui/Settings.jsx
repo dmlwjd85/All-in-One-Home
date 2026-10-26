@@ -182,9 +182,25 @@ export function Settings() {
                         setTypeOn(next);
                     }}>{typeOn ? '글자 소리 켜짐' : '글자 소리 꺼짐'}</Btn>
                 </div>
-                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때 작은 소리가 따라옵니다. 비밀번호 칸에서는 내지 않아요. 처음 소리는 뽁이고, 크기는 작게 고정해 두었어요.</p>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때 작은 소리가 따라옵니다. 비밀번호나 인증 번호 칸에서는 내지 않아요. 처음 소리는 뽁이고, 크기는 작게 고정해 두었어요.</p>
                 <div className="type-picks" role="group" aria-label="글자 소리">
-                    {TYPE_VOICES.map((voice) => (
+                    {TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={typeId === voice.id}
+                            label={voice.label}
+                            ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPick={() => {
+                                setTypeVoice(voice.id);
+                                setTypeId(voice.id);
+                                previewTypeVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted" style={{ margin: '12px 0 0' }}>장난 소리</p>
+                <div className="type-picks" role="group" aria-label="장난 소리">
+                    {TYPE_VOICES.filter((voice) => voice.playful).map((voice) => (
                         <KeyPick
                             key={voice.id}
                             pressed={typeId === voice.id}

@@ -11,7 +11,7 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteTypeInput, playTypeSound } from './ui/typesound.js';
+import { noteCompositionEnd, noteTypeInput, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -209,6 +209,7 @@ export default function App() {
 
     useEffect(() => {
         const onKey = (event) => {
+            if (locked) return;
             if (event.key === 'Escape') {
                 setPlus(false);
                 setFlow(null);
@@ -226,7 +227,7 @@ export default function App() {
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [data?.profile.started, runHotkey]);
+    }, [data?.profile.started, locked, runHotkey]);
 
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
@@ -236,10 +237,12 @@ export default function App() {
         };
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
+        document.addEventListener('compositionend', noteCompositionEnd, true);
         document.addEventListener('input', onInput, true);
         return () => {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
+            document.removeEventListener('compositionend', noteCompositionEnd, true);
             document.removeEventListener('input', onInput, true);
         };
     }, []);

@@ -3,11 +3,13 @@ import {
     HOTKEY_ACTIONS,
     assignHotkey,
     browserCombo,
+    browserFunctionKey,
     clearsHotkey,
     hotkeyFromEvent,
     hotkeyLabel,
     hotkeysAvailable,
     loadHotkeys,
+    passesThroughCapture,
     resetHotkeys,
     saveHotkeys,
 } from './hotkeys.js';
@@ -60,6 +62,11 @@ export function HotkeyForm({ onShowList }) {
                                     onBlur={() => setArmed((cur) => (cur === action.id ? '' : cur))}
                                     onKeyDown={(event) => {
                                         if (armed !== action.id) return;
+                                        if (passesThroughCapture(event)) return;
+                                        if (browserFunctionKey(event)) {
+                                            setNote('F3이나 F6처럼 브라우저가 쓰는 키는 여기 두지 않았어요. 그 키는 브라우저가 그대로 가져갑니다.');
+                                            return;
+                                        }
                                         event.preventDefault();
                                         event.stopPropagation();
                                         if (event.key === 'Escape') {

@@ -15,8 +15,8 @@ import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
 import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
-import { isSensitiveControl, isTextControl, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
-import { assignHotkey, defaultHotkeys, hotkeyFromEvent, loadHotkeys, matchHotkey, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
+import { isSensitiveControl, isTextControl, noteCompositionEnd, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
+import { assignHotkey, defaultHotkeys, hotkeyFromEvent, isStoredHotkey, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
 import { menuSelected, menuTarget } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
@@ -251,8 +251,19 @@ function fakeControl(tag, attrs = {}) {
 check(isTextControl(fakeControl('TEXTAREA')) && isTextControl(fakeControl('INPUT', { type: 'search' })), '글자 칸을 소리 대상으로 보지 않습니다.');
 check(!isTextControl(fakeControl('INPUT', { type: 'checkbox' })), '체크 칸에서도 글자 소리를 내려 합니다.');
 check(isSensitiveControl(fakeControl('INPUT', { type: 'password' })) && isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '비밀번호' })), '비밀번호 칸을 민감하게 보지 않습니다.');
+check(isSensitiveControl(fakeControl('INPUT', { type: 'text', autocomplete: 'one-time-code' })) && isSensitiveControl(fakeControl('INPUT', { type: 'text', name: 'otp' })) && isSensitiveControl(fakeControl('INPUT', { type: 'text', placeholder: '인증 번호' })), '인증 번호 칸을 조용히 하지 않습니다.');
 check(!isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '학급 이름' })), '학급 이름 칸을 비밀번호로 봅니다.');
+check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'text', autocomplete: 'one-time-code' }) }), '인증 번호 칸에서 글자 소리가 납니다.');
+const composing = fakeControl('INPUT', { type: 'text' });
+let jamoSounds = 0;
+for (let i = 0; i < 6; i += 1) {
+    if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: true, target: composing })) jamoSounds += 1;
+}
+noteCompositionEnd();
+if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: false, target: composing })) jamoSounds += 1;
+check(jamoSounds === 6, `자모 6타에 소리가 ${jamoSounds}번입니다.`);
 check(shouldTypeSound({ inputType: 'insertCompositionText', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
+check(!shouldTypeSound({ inputType: 'insertFromComposition', target: fakeControl('INPUT', { type: 'text' }) }), '조합이 끝날 때 소리가 한 번 더 납니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'password' }) }), '비밀번호 칸에서 글자 소리를 냅니다.');
 check(!shouldTypeSound({ inputType: 'insertFromPaste', target: fakeControl('TEXTAREA') }), '붙여넣기에도 글자마다 소리를 내려 합니다.');
 
@@ -273,6 +284,9 @@ check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 콕이 / �
 const moved = assignHotkey(loadHotkeys(hotStore), 'attend', '/');
 check(moved.movedFrom === '콕 열기' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 콕에 그대로 둡니다.');
 check(hotkeyFromEvent({ key: 'A' }) === 'a' && hotkeyFromEvent({ key: 'k', ctrlKey: true }) === '', 'Ctrl 조합이나 대문자를 그대로 받습니다.');
+check(hotkeyFromEvent({ key: 'F3' }) === '' && hotkeyFromEvent({ key: 'F6' }) === '' && hotkeyFromEvent({ key: 'F5' }) === '' && hotkeyFromEvent({ key: 'F12' }) === '', '브라우저 기능키를 단축키로 받습니다.');
+check(hotkeyFromEvent({ key: 'F8' }) === 'F8' && isStoredHotkey('F8') && !isStoredHotkey('F3') && !isStoredHotkey('F6'), '브라우저가 쓰지 않는 기능키까지 막거나, 막은 키를 저장합니다.');
+check(passesThroughCapture({ key: 'Tab' }) && !passesThroughCapture({ key: 'a' }), 'Tab이 단축키 칸에 갇힙니다.');
 check(shortcutBlocked({ key: 'a', target: fakeControl('INPUT', { type: 'text' }) }), '글자 칸에서 단축키가 먹습니다.');
 check(shortcutBlocked({ key: 'Process', isComposing: true, target: { tagName: 'BODY' } }), '한글 조합 중에 단축키가 먹습니다.');
 check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 콕을 열지 않습니다.');
@@ -288,6 +302,8 @@ check(bits.includes('viewBox="0 0 1652 1774"'), '콕 글자 틀이 가계부와 
 check(bits.includes(ledgerPath), '콕 글자 윤곽이 가계부와 다릅니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
 check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('>끄기<'), '소리 안내 문구가 없습니다.');
+check(/const onKey = \(event\) => \{\n\s+if \(locked\) return;/.test(appText), '잠금 중에 단축키가 먹습니다.');
+check(appText.includes('compositionend'), '한글 조합이 끝날 때 소리를 한 번 더 냅니다.');
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
