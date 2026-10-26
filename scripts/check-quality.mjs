@@ -13,7 +13,7 @@ import { restInfo } from '../src/lib/daymark.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
-import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
+import { boot, clearAll, exportFile, finishSetup, importText, pendingCloudForgetForTest, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
@@ -54,7 +54,7 @@ check(isPublicHoliday('2026-03-01'), '삼일절이 빠졌습니다.');
 check(isPublicHoliday('2026-02-17'), '설날이 빠졌습니다.');
 check(isPublicHoliday('2026-05-05') && isPublicHoliday('2026-10-03') && isPublicHoliday('2026-12-25'), '공휴일이 빠졌습니다.');
 check(dueLabel('2026-10-28', '2026-10-25') === '10/28(수), D-3', `마감 표시가 다릅니다. ${dueLabel('2026-10-28', '2026-10-25')}`);
-check(dueLabel('2026-10-25', '2026-10-25') === '10/25(일), D-day', '오늘 마감 표시가 다릅니다.');
+check(dueLabel('2026-10-25', '2026-10-25') === '10/25(일), 디데이', '오늘 마감 표시가 다릅니다.');
 check(restInfo('2026-10-23', []).off === false, '평일 금요일을 휴일로 봤습니다.');
 check(restInfo('2026-10-24', []).off && restInfo('2026-10-25', []).off, '토·일을 휴일로 보지 않습니다.');
 check(restInfo('2026-10-09', []).off && restInfo('2026-10-09', []).label.includes('한글'), '한글날을 휴일로 보지 않습니다.');
@@ -506,6 +506,12 @@ check(missingDay.name === 'schedule' && missingDay.notice.includes('달력에 �
 check(resolveHash('#/day/2026-10-26', '2026-10-19').notice === '', '있는 날짜 일지에 안내를 붙입니다.');
 check(menuSelected('day', '#/schedule') && tabSelected('일정', 'day') && !menuSelected('day', '#/today'), '날짜 일지에서 일정 메뉴가 켜지지 않습니다.');
 check(resolveHash('#/settings/roster', '2026-10-26').name === 'roster' && menuSelected('roster', '#/settings'), '명단 화면이 설정 메뉴에 속하지 않습니다.');
+const monthRoute = resolveHash('#/schedule/month/2026-11-15', '2026-10-26');
+check(monthRoute.name === 'schedule' && monthRoute.params.view === '달력' && monthRoute.params.date === '2026-11-15' && monthRoute.replace === '', '달력 주소가 고른 날을 담지 않습니다.');
+const weekRoute = resolveHash('#/schedule/week/2026-11-15', '2026-10-26');
+check(weekRoute.name === 'schedule' && weekRoute.params.view === '주' && weekRoute.params.date === '2026-11-15' && weekRoute.params.week === '2026-11-15', '주 주소가 고른 날을 담지 않습니다.');
+const missingMonth = resolveHash('#/schedule/month/2026-02-30', '2026-10-26');
+check(missingMonth.name === 'schedule' && missingMonth.notice.includes('달력에 없어요'), '없는 달력 날짜가 오늘로 갑니다.');
 
 const hotStore = {
     map: new Map(),
@@ -564,7 +570,7 @@ check(!formText.includes('기본으로는 / 키가 콕을 엽니다.') && !formT
 check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v16'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v17'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';
@@ -781,6 +787,7 @@ await (async () => {
     await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' });
     const hiddenNote = await expectOneSide('notes', 'day-qa', 'local');
     check(hiddenNote?.text === '학폭 관련 민원 상담' && toCloudRow('notes', hiddenNote) === null, '민감 메모를 클라우드 모양으로 올립니다.');
+    check(pendingCloudForgetForTest().includes('notes/day-qa'), '일반 메모를 민감으로 바꿔도 클라우드 사본을 지우지 않습니다.');
     await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' });
     const restoredNote = await expectOneSide('notes', 'day-qa', 'cloud');
     check(restoredNote?.text === '다시 일반' && toCloudRow('notes', restoredNote) !== null, '일반 메모로 되돌리면 기기 사본이 남거나 클라우드로 가지 않습니다.');

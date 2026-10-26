@@ -1290,6 +1290,59 @@ try {
     await withDemo(390, 'light', async (page) => { await savedTimeSpan(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await savedTimeSpan(page, '360'); }, 844);
 
+    async function calendarPanel(page) {
+        const todayHash = `#/schedule/month/${todayYmd}`;
+        await page.evaluate(() => { location.hash = '#/schedule'; });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        await page.waitForSelector('.cal-grid');
+        const opened = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            today: document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false,
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+        }));
+        check(opened.panel === todayYmd && opened.today && opened.monthOn, `달력을 열면 오늘 패널이 아닙니다. ${JSON.stringify(opened)}`);
+        await page.click('[aria-label="다음 달"]');
+        const [year, month] = todayYmd.split('-').map(Number);
+        const nextDate = new Date(year, month, 1);
+        const nextYm = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
+        const first = `${nextYm}-01`;
+        const nextTitle = monthTitle(nextYm);
+        await page.waitForFunction((hash, title) => location.hash === hash && document.body.innerText.includes(title), {}, `#/schedule/month/${first}`, nextTitle);
+        const moved = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            text: document.querySelector('[data-cal-panel]')?.innerText || '',
+            hash: location.hash,
+        }));
+        check(moved.panel === first && moved.text.includes('1일') && !moved.text.includes('오늘') && !moved.hash.includes('/day/'), `다음 달 패널이 1일이 아닙니다. ${JSON.stringify(moved)}`);
+        await page.evaluate((day) => {
+            const hit = [...document.querySelectorAll('.cal-grid button')].find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            hit?.click();
+        }, 15);
+        const picked = `${nextYm}-15`;
+        await page.waitForFunction((hash) => location.hash === hash && !location.hash.includes('/day/'), {}, `#/schedule/month/${picked}`);
+        const pickedPanel = await page.evaluate(() => document.querySelector('[data-cal-panel]')?.innerText || '');
+        check(pickedPanel.includes('15일') && !pickedPanel.includes('오늘'), `날짜 칸을 눌러도 패널이 그 날이 아닙니다. ${pickedPanel}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 날 일지')?.click());
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/day/${picked}`);
+        await page.evaluate(() => history.back());
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${picked}`);
+        const back = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            grid: Boolean(document.querySelector('.cal-grid')),
+        }));
+        check(back.panel === picked && back.monthOn && !back.weekOn && back.grid, `일지에서 돌아오면 달력 보기가 풀립니다. ${JSON.stringify(back)}`);
+        await page.click('[aria-label="이전 달"]');
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        const returned = await page.evaluate(() => document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false);
+        check(returned, '오늘이 있는 달로 돌아오면 패널이 오늘이 아닙니다.');
+        await audit(page, '달력 패널');
+    }
+    await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
+
     async function weekdayDeadline(page, label) {
         await openPlus(page);
         await clickPlus(page, '메시지 붙여넣기');

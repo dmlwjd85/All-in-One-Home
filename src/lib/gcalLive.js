@@ -5,6 +5,7 @@ import { isIOS, isStandalone } from './googleLogin.js';
 import { seoulYmd } from './date.js';
 import {
     GCAL_AUTH_ERROR,
+    GCAL_SHARED_ERROR,
     GCAL_HASH_KEY,
     GCAL_PARTIAL_ERROR,
     GCAL_PENDING_KEY,
@@ -211,7 +212,7 @@ async function writeVault(next) {
     try {
         await vault.set('state', next);
     } catch {
-        /* 연동 상태를 못 남겨도 콕 일정은 그대로입니다. */
+        /* 연동 상태를 못 남겨도 적어 둔 일정은 그대로입니다. */
     }
 }
 
@@ -395,7 +396,7 @@ function openTokenClient(mode, intent) {
 function requestToken(mode, intent) {
     const clientId = googleClientId();
     if (!clientId) return Promise.resolve({ ok: false, message: '구글 캘린더 연동은 준비 중이에요.' });
-    if (snapshot().profile.sharedPc) return Promise.resolve({ ok: false, message: '공용 컴퓨터에서는 캘린더 연동을 켜지 않아요. 콕 일정은 그대로예요.' });
+    if (snapshot().profile.sharedPc) return Promise.resolve({ ok: false, message: GCAL_SHARED_ERROR });
     if (!currentUid()) return Promise.resolve({ ok: false, message: '구글 로그인 후 켤 수 있어요.' });
     if (!window.google?.accounts?.oauth2) {
         return prepareCalendarScript().then((ready) => ({
