@@ -94,7 +94,7 @@ export function Settings() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>학급</h2>
                 <input className="field" aria-label="학급 이름" value={className} onChange={(event) => setClassName(event.target.value)} />
                 <p className="muted">{data.students.filter((row) => row.name).length}명이 명단에 있어요. 이름은 명단 화면에서 고쳐요.</p>
-                <Btn className="chip block" onClick={() => go('#/settings/roster')}>명단 고치기</Btn>
+                <Btn className="chip block" onClick={() => go('#/settings/roster', { state: { rosterFrom: 'settings' } })}>명단 고치기</Btn>
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
                     const saved = await patchProfile({ className: className.trim() });
                     if (saved?.storageFailed) return;
@@ -234,7 +234,7 @@ export function Settings() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>
                 <p>교실 컴퓨터라면 켜 두세요. 30분 동안 가만히 있으면 화면을 잠그고, 클라우드가 연결되면 창을 닫을 때 임시 저장만 남깁니다.</p>
-                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
+                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} aria-pressed={data.profile.sharedPc} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
                 <h3>백업</h3>
                 <p className="muted">파일은 이 기기 밖으로 나가지 않아요. 민감한 기록을 넣을지는 직접 고릅니다.</p>
                 <Btn className={includeLocal ? 'chip on' : 'chip'} onClick={() => setIncludeLocal((value) => !value)}>이 기기 전용 기록도 넣기</Btn>
@@ -357,7 +357,7 @@ export function Settings() {
 }
 
 export function RosterSettings() {
-    const { data, showToast, go } = useUi();
+    const { data, showToast } = useUi();
     const [names, setNames] = useState(() => slotsFromStudents(data.students));
     const [paste, setPaste] = useState('');
     return (
@@ -375,8 +375,8 @@ export function RosterSettings() {
                 const parsed = await replaceRoster(rosterTextFromSlots(names));
                 if (parsed?.storageFailed) return;
                 showToast(parsed.errors?.[0] || '명단을 저장했어요.');
-                if (history.length > 1) history.back();
-                else go('#/settings', { replace: true });
+                if (history.state?.rosterFrom === 'settings') history.back();
+                else location.replace('#/settings');
             }}>명단 저장</Btn>
         </section>
     );

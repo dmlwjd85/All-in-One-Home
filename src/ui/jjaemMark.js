@@ -9,5 +9,8 @@ export const JJAEM_STOPS = ['#5E468C', '#7A56A8', '#8A62B0'];
 /** 512 칸에서 잉크의 무게 중심을 가운데로 맞춘 자리입니다. */
 export const JJAEM_PLACE = 'translate(90.03 99.45) scale(0.176471)';
 
-/** 16·32px 파비콘. 16칸 좌표, 획은 2px 안팎이고 받침 ㅁ은 구멍을 남깁니다. */
-export const JJAEM_FAVICON_D = 'M0 1h5v2H0zM1 3h3v2H1zM0 5h2v2H0zM3 5h2v2H3zM6 1h5v2H6zM7 3h3v2H7zM6 5h2v2H6zM9 5h2v2H9zM12 1h2v6h-2zM14 1h2v2h-2zM14 4h2v2h-2zM0 8h16v2H0zM0 10h2v3H0zM14 10h2v3h-2zM0 13h16v2H0z';
+/** 16px 파비콘. 사방 1px는 둥근 타일 여백이고, 획은 그 안에만 있습니다. */
+export const JJAEM_FAVICON_D = 'M1 1h5v2H1zM2 3h3v2H2zM1 5h2v2H1zM4 5h2v2H4zM7 1h5v2H7zM8 3h3v2H8zM7 5h2v2H7zM10 5h2v2H10zM12 1h2v6h-2zM14 1h1v2H14zM14 4h1v2H14zM1 8h14v2H1zM1 10h2v3H1zM13 10h2v3H13zM1 13h14v2H1z';
+
+/** 32px 파비콘. 16px를 늘리지 않고 32칸에 다시 그렸습니다. 사방 2px는 타일 여백입니다. */
+export const JJAEM_FAVICON_32_D = 'M2 2h8v3H2zM4 5h4v3H4zM2 8h3v6H2zM7 8h3v6H7zM11 2h8v3H11zM13 5h4v3H13zM11 8h3v6H11zM16 8h3v6H16zM20 2h4v12H20zM25 2h4v4H25zM25 8h4v6H25zM2 16h27v3H2zM2 19h3v7H2zM26 19h3v7H26zM2 26h27v4H2z';

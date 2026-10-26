@@ -1303,6 +1303,34 @@ try {
             monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
         }));
         check(opened.panel === todayYmd && opened.today && opened.monthOn, `달력을 열면 오늘 패널이 아닙니다. ${JSON.stringify(opened)}`);
+        const lenBeforeCells = await page.evaluate(() => history.length);
+        const otherDay = todayDay === 15 ? 16 : 15;
+        const laterDay = todayDay === 30 ? 28 : 30;
+        async function clickInMonthDay(day) {
+            await page.evaluate((value) => {
+                const hit = [...document.querySelectorAll('.cal-grid button')].find((el) => Number(el.querySelector('.num')?.textContent) === value && !String(el.getAttribute('style') || '').includes('ink-sub'));
+                hit?.click();
+            }, day);
+            const ymd = `${todayYmd.slice(0, 8)}${String(day).padStart(2, '0')}`;
+            await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${ymd}`);
+        }
+        await clickInMonthDay(otherDay);
+        await clickInMonthDay(laterDay);
+        const lenAfterCells = await page.evaluate(() => history.length);
+        check(lenAfterCells === lenBeforeCells, '날짜 칸을 누를 때마다 기록이 쌓입니다.');
+        const marks = await page.evaluate((today, picked) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const byDay = (day) => buttons.find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            const todayEl = byDay(today);
+            const pickedEl = byDay(picked);
+            return {
+                todayCurrent: todayEl?.getAttribute('aria-current') || '',
+                pickedCurrent: pickedEl?.getAttribute('aria-current') || '',
+                todayRing: Boolean(todayEl?.classList.contains('cal-picked')),
+                pickedRing: Boolean(pickedEl?.classList.contains('cal-picked')),
+            };
+        }, todayDay, laterDay);
+        check(marks.pickedCurrent === 'date' && marks.pickedRing && marks.todayCurrent !== 'date' && !marks.todayRing, `고른 칸과 오늘 칸이 구분되지 않습니다. ${JSON.stringify(marks)}`);
         await page.click('[aria-label="다음 달"]');
         const [year, month] = todayYmd.split('-').map(Number);
         const nextDate = new Date(year, month, 1);
@@ -1339,9 +1367,92 @@ try {
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         const returned = await page.evaluate(() => document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false);
         check(returned, '오늘이 있는 달로 돌아오면 패널이 오늘이 아닙니다.');
+        await page.evaluate(() => { location.hash = '#/schedule/month'; });
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        const bareMonth = await page.evaluate(() => ({
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            grid: Boolean(document.querySelector('.cal-grid')),
+        }));
+        check(bareMonth.monthOn && !bareMonth.weekOn && bareMonth.grid, `날짜 없는 달력이 주 보기로 열립니다. ${JSON.stringify(bareMonth)}`);
+        await page.evaluate(() => { location.hash = '#/schedule/month/2026-02-30'; });
+        await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, todayHash);
+        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')));
+        check(badMonth, '잘못된 달력 날짜가 주 보기로 열립니다.');
+        await page.evaluate(() => { location.hash = '#/schedule/table'; });
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/table/${todayYmd}`);
+        const bareTable = await page.evaluate(() => ({
+            tableOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+        }));
+        check(bareTable.tableOn && !bareTable.weekOn, `날짜 없는 시간표가 주 보기로 열립니다. ${JSON.stringify(bareTable)}`);
+        await page.evaluate(() => { location.hash = '#/schedule/table/2026-13-01'; });
+        await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, `#/schedule/table/${todayYmd}`);
+        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')));
+        check(badTable, '잘못된 시간표 날짜가 주 보기로 열립니다.');
         await audit(page, '달력 패널');
     }
     await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
+
+    async function saveRoster(page) {
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 저장'), { timeout: 15000 });
+        const before = await page.evaluate(() => history.length);
+        check(before > 1, `앞선 기록이 없어 명단 저장을 구분하지 못합니다. 기록 ${before}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
+        try {
+            await page.waitForFunction(() => location.hash === '#/settings' && location.hostname === '127.0.0.1', { timeout: 4000 });
+        } catch {
+            const where = await page.evaluate(() => location.href).catch(() => '');
+            check(false, `명단을 저장하면 앱 밖으로 나갑니다. ${where}`);
+            return;
+        }
+        const stayed = await page.evaluate(() => ({
+            hash: location.hash,
+            host: location.hostname,
+            outside: document.body.innerText.includes('다른 사이트'),
+        }));
+        check(stayed.hash === '#/settings' && stayed.host === '127.0.0.1' && !stayed.outside, `명단을 저장한 뒤 설정에 머물지 않습니다. ${JSON.stringify(stayed)}`);
+    }
+
+    async function withRosterEntry(previous, label) {
+        const current = await ensureBrowser();
+        const context = await current.createBrowserContext();
+        const page = await context.newPage();
+        page.setDefaultTimeout(20000);
+        await pinBrowserClock(page);
+        await page.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        try {
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.goto(previous, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/settings/roster`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await saveRoster(page);
+        } catch (error) {
+            check(false, `${label} 명단 저장 시험이 멈추었습니다. ${error?.message || error}`);
+        }
+        await context.close().catch(() => {});
+    }
+    await withRosterEntry('about:blank', '주소로 연');
+    await withRosterEntry('data:text/html,<title>outside</title><p>다른 사이트</p>', '다른 사이트에서 연');
+
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(() => { location.hash = '#/settings'; });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 고치기'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 고치기')?.click());
+        await page.waitForFunction(() => location.hash === '#/settings/roster' && history.state?.rosterFrom === 'settings');
+        const marked = await page.evaluate(() => history.state?.rosterFrom === 'settings');
+        check(marked, '설정에서 명단으로 들어올 때 표시가 없습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
+        await page.waitForFunction(() => location.hash === '#/settings');
+        const shared = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'));
+            return button?.getAttribute('aria-pressed') || '';
+        });
+        check(shared === 'false' || shared === 'true', '공용 컴퓨터 버튼에 눌림 상태가 없습니다.');
+    }, 844);
 
     async function weekdayDeadline(page, label) {
         await openPlus(page);

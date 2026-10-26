@@ -117,7 +117,7 @@ check(explainOauthError('access_denied').includes('적어 둔 일정은 그대�
 check(explainSyncError(401) === GCAL_AUTH_ERROR && GCAL_AUTH_ERROR.includes('다시 연결'), '만료 안내가 없습니다.');
 check(explainSyncError(0) === GCAL_OFFLINE_ERROR && GCAL_OFFLINE_ERROR.includes('적어 둔 일정은 그대로'), '오프라인 안내가 없습니다.');
 check(GCAL_PARTIAL_ERROR.includes('그대로'), '일부 실패 안내가 없습니다.');
-check(GCAL_MODE_HINT.includes('보기만') && GCAL_MODE_HINT.includes('수정·삭제'), '방식 안내 문장이 없습니다.');
+check(GCAL_MODE_HINT.includes('보기만') && GCAL_MODE_HINT.includes('고치거나') && GCAL_MODE_HINT.includes('지우지는 않아요'), '방식 안내 문장이 없습니다.');
 
 const allDay = kokToGoogleEvent({ id: 'event-1', date: '2026-10-26', end: '2026-10-28', title: '수학여행', kind: '학급', memo: '경주' });
 check(allDay.start.date === '2026-10-26' && allDay.end.date === '2026-10-29', '하루 종일 끝 날짜가 구글 규칙과 다릅니다.');

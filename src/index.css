@@ -665,6 +665,9 @@ button.neo, a.neo, [role="button"].neo { box-shadow: var(--neo-raise-sm); }
 .cal-grid .tap.neo-in {
     box-shadow: inset 2px 2px 4px var(--neo-shadow), inset -1px -1px 3px var(--neo-highlight);
 }
+.cal-grid .tap.cal-picked {
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
 
 .tap:active:not(.desk-fab) { transform: translateY(2px); }
 .chip:active,
