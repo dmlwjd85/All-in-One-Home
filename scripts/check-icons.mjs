@@ -1,7 +1,7 @@
 /** 쨈 아이콘 파일이 있고, 크기와 안전 영역이 맞는지 확인합니다. */
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { JJAEM_D, JJAEM_FAVICON_D } from '../src/ui/jjaemMark.js';
+import { JJAEM_D, JJAEM_FAVICON_D, JJAEM_FAVICON_32_D } from '../src/ui/jjaemMark.js';
 
 const failures = [];
 function check(ok, message) {
@@ -143,17 +143,61 @@ if (mask) {
     }
     check(ink > 1000 && outside === 0, 'maskable 글자가 안전 영역 80% 밖으로 나갑니다.');
 }
+function isWhite(pixel) {
+    const [r, g, b, a] = pixel;
+    return a > 200 && r > 220 && g > 220 && b > 220;
+}
+
+function tileMargin(png, margin) {
+    let white = 0;
+    let tile = 0;
+    for (let y = 0; y < png.height; y += 1) {
+        for (let x = 0; x < png.width; x += 1) {
+            const edge = x < margin || y < margin || x >= png.width - margin || y >= png.height - margin;
+            if (!edge) continue;
+            const pixel = png.pixel(x, y);
+            if (isWhite(pixel)) white += 1;
+            else if (pixel[3] > 200) tile += 1;
+        }
+    }
+    return { white, tile };
+}
+
+function nearestDoubleOf(small, big) {
+    if (!small || !big || big.width !== small.width * 2 || big.height !== small.height * 2) return false;
+    for (let y = 0; y < small.height; y += 1) {
+        for (let x = 0; x < small.width; x += 1) {
+            const pixel = small.pixel(x, y);
+            for (let dy = 0; dy < 2; dy += 1) {
+                for (let dx = 0; dx < 2; dx += 1) {
+                    const grown = big.pixel(x * 2 + dx, y * 2 + dy);
+                    if (grown.some((channel, index) => channel !== pixel[index])) return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 const tiny = decodePng(read('public/favicon-16.png'));
+const fav32 = decodePng(read('public/favicon-32.png'));
 if (tiny) {
     let ink = 0;
     for (let y = 0; y < tiny.height; y += 1) {
         for (let x = 0; x < tiny.width; x += 1) {
-            const [r, g, b, a] = tiny.pixel(x, y);
-            if (a > 200 && r > 220 && g > 220 && b > 220) ink += 1;
+            if (isWhite(tiny.pixel(x, y))) ink += 1;
         }
     }
     check(ink > 70, `16px 파비콘 획이 너무 가늘거나 받침이 붙었습니다. 흰 칸 ${ink}`);
+    const edge = tileMargin(tiny, 1);
+    check(edge.white === 0 && edge.tile > 8, `16px 파비콘 타일 여백이 없습니다. 가장자리 흰 칸 ${edge.white}, 타일 ${edge.tile}`);
 }
+if (fav32) {
+    const edge = tileMargin(fav32, 2);
+    check(edge.white === 0 && edge.tile > 16, `32px 파비콘 타일 여백이 없습니다. 가장자리 흰 칸 ${edge.white}, 타일 ${edge.tile}`);
+    check(!nearestDoubleOf(tiny, fav32), '32px 파비콘이 16px를 늘린 것입니다.');
+}
+check(JJAEM_FAVICON_32_D !== JJAEM_FAVICON_D && JJAEM_FAVICON_32_D.includes('M2 2'), '32px 파비콘 글자가 16px와 따로 그려져 있지 않습니다.');
 
 const index = read('index.html')?.toString('utf8') || '';
 const manifest = read('public/manifest.webmanifest')?.toString('utf8') || '';

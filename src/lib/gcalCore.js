@@ -19,7 +19,7 @@ export const GCAL_RETRY_ERROR = '구글 연결 준비를 마쳤어요. 한 번�
 export const GCAL_POPUP_ERROR = '구글 창이 열리지 않았어요. 팝업을 허용한 뒤 한 번 더 눌러 주세요. 적어 둔 일정은 그대로예요.';
 export const GCAL_PARTIAL_ERROR = '일부 일정을 구글에 올리지 못했어요. 여기에 적어 둔 일정은 그대로예요.';
 export const GCAL_SHARED_ERROR = '공용 컴퓨터에서는 캘린더 연동을 켜지 않아요. 적어 둔 일정은 그대로예요.';
-export const GCAL_MODE_HINT = '보기만은 구글 일정을 읽기만 해요. 만든 일정도 구글에 넣기는 새 일정과 수정·삭제를 구글에 반영해요.';
+export const GCAL_MODE_HINT = '구글 일정을 보기만 하고, 고치거나 지우지는 않아요. 만든 일정도 구글에 넣으면 새 일정과 고친 내용, 지운 내용이 구글에 반영돼요.';
 
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 

@@ -510,8 +510,14 @@ const monthRoute = resolveHash('#/schedule/month/2026-11-15', '2026-10-26');
 check(monthRoute.name === 'schedule' && monthRoute.params.view === '달력' && monthRoute.params.date === '2026-11-15' && monthRoute.replace === '', '달력 주소가 고른 날을 담지 않습니다.');
 const weekRoute = resolveHash('#/schedule/week/2026-11-15', '2026-10-26');
 check(weekRoute.name === 'schedule' && weekRoute.params.view === '주' && weekRoute.params.date === '2026-11-15' && weekRoute.params.week === '2026-11-15', '주 주소가 고른 날을 담지 않습니다.');
+const bareMonth = resolveHash('#/schedule/month', '2026-10-26');
+check(bareMonth.params.view === '달력' && bareMonth.params.date === '2026-10-26' && bareMonth.replace === '#/schedule/month/2026-10-26' && !bareMonth.notice, '날짜 없는 달력이 주 보기로 풀립니다.');
 const missingMonth = resolveHash('#/schedule/month/2026-02-30', '2026-10-26');
-check(missingMonth.name === 'schedule' && missingMonth.notice.includes('달력에 없어요'), '없는 달력 날짜가 오늘로 갑니다.');
+check(missingMonth.params.view === '달력' && missingMonth.params.date === '2026-10-26' && missingMonth.replace === '#/schedule/month/2026-10-26' && missingMonth.notice.includes('달력에 없어요'), '잘못된 달력 날짜가 주 보기로 풀립니다.');
+const bareTable = resolveHash('#/schedule/table', '2026-10-26');
+check(bareTable.params.view === '시간표' && bareTable.params.date === '2026-10-26' && bareTable.replace === '#/schedule/table/2026-10-26' && !bareTable.notice, '날짜 없는 시간표가 주 보기로 풀립니다.');
+const missingTable = resolveHash('#/schedule/table/2026-13-01', '2026-10-26');
+check(missingTable.params.view === '시간표' && missingTable.params.date === '2026-10-26' && missingTable.replace === '#/schedule/table/2026-10-26' && missingTable.notice.includes('달력에 없어요'), '잘못된 시간표 날짜가 주 보기로 풀립니다.');
 
 const hotStore = {
     map: new Map(),

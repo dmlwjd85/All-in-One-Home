@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
-import { JJAEM_D, JJAEM_FAVICON_D } from '../src/ui/jjaemMark.js';
+import { JJAEM_D, JJAEM_FAVICON_D, JJAEM_FAVICON_32_D } from '../src/ui/jjaemMark.js';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/local/bin/google-chrome', '/usr/bin/google-chrome'].find((path) => existsSync(path));
@@ -105,19 +105,20 @@ const mask = svg({ canvas: 512, radius: 0, glyphH: 276, nudgeX: nudgeX * (276 / 
 const apple = svg({ canvas: 512, radius: 0, glyphH: 318, nudgeX, nudgeY, opaque: true });
 const faviconOnly = process.argv.includes('--favicon-only');
 
-function faviconSvg() {
+function faviconSvg(size, radius, path) {
     const grad = STOPS.map(([offset, color]) => `<stop offset="${offset}" stop-color="${color}"/>`).join('');
     return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <!-- 16·32px 파비콘. 자세한 외곽선은 icon-jjaem.svg. 글꼴 파일은 넣지 않았습니다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}">
+  <!-- ${size}px 파비콘. 자세한 외곽선은 icon-jjaem.svg. 글꼴 파일은 넣지 않았습니다. -->
   <title>쨈 교무수첩</title>
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">${grad}</linearGradient></defs>
-  <rect width="16" height="16" rx="2" fill="url(#bg)"/>
-  <path fill="#fff" shape-rendering="crispEdges" d="${JJAEM_FAVICON_D}"/>
+  <rect width="${size}" height="${size}" rx="${radius}" fill="url(#bg)"/>
+  <path fill="#fff" shape-rendering="crispEdges" d="${path}"/>
 </svg>
 `;
 }
-const small = faviconSvg();
+const small = faviconSvg(16, 2, JJAEM_FAVICON_D);
+const small32 = faviconSvg(32, 4, JJAEM_FAVICON_32_D);
 
 if (!faviconOnly) {
     writeFileSync(resolve(root, 'public/icon-jjaem.svg'), any);
@@ -131,55 +132,6 @@ async function raster(markup, size, transparent) {
     const sized = markup.includes('width=') ? markup : markup.replace('<svg ', `<svg width="${size}" height="${size}" `);
     await page.setContent(`<!doctype html><style>html,body{margin:0;width:${size}px;height:${size}px;overflow:hidden;background:transparent}</style>${sized}`, { waitUntil: 'load' });
     const png = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: size, height: size }, omitBackground: transparent });
-    await page.close();
-    return png;
-}
-
-/** 16px 그림을 픽셀 단위로 두 배 키웁니다. 32px에서도 획이 흐려지지 않습니다. */
-async function nearestDouble(markup) {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 32, height: 32, deviceScaleFactor: 1 });
-    await page.setContent(`<!doctype html><style>html,body{margin:0;background:transparent}</style>${markup}<canvas id="c" width="32" height="32"></canvas>`, { waitUntil: 'load' });
-    await page.evaluate(() => new Promise((resolve) => {
-        const svg = document.querySelector('svg');
-        svg.setAttribute('width', '16');
-        svg.setAttribute('height', '16');
-        const xml = new XMLSerializer().serializeToString(svg);
-        const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
-        const image = new Image();
-        image.onload = () => {
-            const canvas = document.getElementById('c');
-            const ctx = canvas.getContext('2d');
-            ctx.imageSmoothingEnabled = false;
-            const small = document.createElement('canvas');
-            small.width = 16;
-            small.height = 16;
-            const src = small.getContext('2d');
-            src.imageSmoothingEnabled = false;
-            src.drawImage(image, 0, 0, 16, 16);
-            const dots = src.getImageData(0, 0, 16, 16).data;
-            const big = ctx.createImageData(32, 32);
-            for (let y = 0; y < 16; y += 1) {
-                for (let x = 0; x < 16; x += 1) {
-                    const i = (y * 16 + x) * 4;
-                    for (let dy = 0; dy < 2; dy += 1) {
-                        for (let dx = 0; dx < 2; dx += 1) {
-                            const j = ((y * 2 + dy) * 32 + (x * 2 + dx)) * 4;
-                            big.data[j] = dots[i];
-                            big.data[j + 1] = dots[i + 1];
-                            big.data[j + 2] = dots[i + 2];
-                            big.data[j + 3] = dots[i + 3];
-                        }
-                    }
-                }
-            }
-            ctx.putImageData(big, 0, 0);
-            svg.remove();
-            resolve();
-        };
-        image.src = url;
-    }));
-    const png = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 32, height: 32 }, omitBackground: true });
     await page.close();
     return png;
 }
@@ -222,9 +174,9 @@ function ico(images) {
 }
 
 const png16 = await raster(small, 16, true);
-const png32 = await nearestDouble(small);
+const png32 = await raster(small32, 32, true);
 writeFileSync(resolve(root, 'public/favicon-32.png'), png32);
-console.log('public/favicon-32.png', png32.length, 'nearest');
+console.log('public/favicon-32.png', png32.length, '따로');
 writeFileSync(resolve(root, 'public/favicon.ico'), ico([
     { size: 16, png: png16 },
     { size: 32, png: png32 },

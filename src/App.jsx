@@ -200,11 +200,13 @@ export default function App() {
         const next = hash || '#/today';
         setHash(next);
         if (location.hash === next) return;
-        if (options?.replace) {
+        if (options?.replace || options?.state) {
             try {
                 const url = new URL(location.href);
                 url.hash = next;
-                history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+                const href = `${url.pathname}${url.search}${url.hash}`;
+                if (options.replace) history.replaceState(options.state || null, '', href);
+                else history.pushState(options.state, '', href);
             } catch {
                 location.hash = next;
             }

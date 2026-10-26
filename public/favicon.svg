@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <!-- 16·32px 파비콘. 자세한 외곽선은 icon-jjaem.svg. 글꼴 파일은 넣지 않았습니다. -->
+  <!-- 16px 파비콘. 자세한 외곽선은 icon-jjaem.svg. 글꼴 파일은 넣지 않았습니다. -->
   <title>쨈 교무수첩</title>
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E468C"/><stop offset=".55" stop-color="#7A56A8"/><stop offset="1" stop-color="#8A62B0"/></linearGradient></defs>
   <rect width="16" height="16" rx="2" fill="url(#bg)"/>
-  <path fill="#fff" shape-rendering="crispEdges" d="M0 1h5v2H0zM1 3h3v2H1zM0 5h2v2H0zM3 5h2v2H3zM6 1h5v2H6zM7 3h3v2H7zM6 5h2v2H6zM9 5h2v2H9zM12 1h2v6h-2zM14 1h2v2h-2zM14 4h2v2h-2zM0 8h16v2H0zM0 10h2v3H0zM14 10h2v3h-2zM0 13h16v2H0z"/>
+  <path fill="#fff" shape-rendering="crispEdges" d="M1 1h5v2H1zM2 3h3v2H2zM1 5h2v2H1zM4 5h2v2H4zM7 1h5v2H7zM8 3h3v2H8zM7 5h2v2H7zM10 5h2v2H10zM12 1h2v6h-2zM14 1h1v2H14zM14 4h1v2H14zM1 8h14v2H1zM1 10h2v3H1zM13 10h2v3H13zM1 13h14v2H1z"/>
 </svg>

@@ -1,5 +1,10 @@
 import { isValidYmd } from './date.js';
 
+/** 날짜가 없거나 잘못된 달력·시간표는 보기를 유지하고 날짜만 오늘로 맞춥니다. */
+function scheduleOpen(view, slug, today, incoming, invalid) {
+    return pack('schedule', { view, date: today }, `#/schedule/${slug}/${today}`, incoming, invalid ? { notice: '그 날짜는 달력에 없어요. 일정에서 다시 골라 주세요.' } : {});
+}
+
 function pack(name, params, canonical, incoming, extra = {}) {
     return {
         name,
@@ -69,14 +74,14 @@ export function resolveHash(raw, today) {
         return pack('schedule', { view: '달력', date: scheduleMonth[1] }, `#/schedule/month/${scheduleMonth[1]}`, incoming);
     }
     if (path.startsWith('/schedule/month')) {
-        return pack('schedule', { view: '달력' }, '#/schedule', incoming, path === '/schedule/month' ? {} : { notice: '그 날짜는 달력에 없어요. 일정에서 다시 골라 주세요.' });
+        return scheduleOpen('달력', 'month', today, incoming, path !== '/schedule/month');
     }
     const scheduleTable = path.match(/^\/schedule\/table\/(\d{4}-\d{2}-\d{2})$/);
     if (scheduleTable && isValidYmd(scheduleTable[1])) {
         return pack('schedule', { view: '시간표', date: scheduleTable[1] }, `#/schedule/table/${scheduleTable[1]}`, incoming);
     }
     if (path === '/schedule/table' || path.startsWith('/schedule/table/')) {
-        return pack('schedule', { view: '시간표' }, '#/schedule', incoming, path === '/schedule/table' ? {} : { notice: '그 날짜는 달력에 없어요. 일정에서 다시 골라 주세요.' });
+        return scheduleOpen('시간표', 'table', today, incoming, path !== '/schedule/table');
     }
     if (path === '/schedule' || path === '/timetable' || path === '/class' || path === '/year' || path === '/weeks' || path === '/days') {
         return pack('schedule', {}, '#/schedule', incoming);
