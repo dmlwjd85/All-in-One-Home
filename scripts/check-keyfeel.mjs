@@ -23,6 +23,7 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
+import { TYPE_GAIN, TYPE_VOICES, playTypeSound, previewTypeVoice, renderTypeVoice, setTypeSound } from '../src/ui/typesound.js';
 
 const failures = [];
 function check(ok, message) {
@@ -127,6 +128,27 @@ for (let i = 0; i < KEY_VOICES.length; i += 1) {
         check(score < 0.8, `${left}와 ${right} 파형이 너무 같습니다. ${score.toFixed(2)}`);
     }
 }
+
+const typePairs = Object.fromEntries(TYPE_VOICES.map((voice) => [voice.id, renderTypeVoice(voice.id, rate)]));
+check(TYPE_GAIN <= 0.05, '글자 소리가 교실용으로 작지 않습니다.');
+for (const voice of TYPE_VOICES) {
+    const samples = typePairs[voice.id].samples;
+    const expect = Math.round((rate * ({ bang: 110, ppok: 46, ting: 92, drop: 156 })[voice.id]) / 1000);
+    check(samples.length === expect, `${voice.label} 길이가 다릅니다.`);
+    check(Math.abs(samples[0]) < 1e-6 && Math.abs(samples[samples.length - 1]) < 1e-6, `${voice.label} 시작·끝이 0이 아닙니다.`);
+    const peak = peakOf(samples);
+    check(peak > 0.85 && peak < 0.95, `${voice.label} 크기가 맞지 않습니다.`);
+    check([...samples].every((sample) => Number.isFinite(sample) && Math.abs(sample) <= 1), `${voice.label} 파형이 범위를 벗어납니다.`);
+}
+for (let i = 0; i < TYPE_VOICES.length; i += 1) {
+    for (let j = i + 1; j < TYPE_VOICES.length; j += 1) {
+        const left = TYPE_VOICES[i].id;
+        const right = TYPE_VOICES[j].id;
+        const score = Math.abs(correlation(typePairs[left].samples, typePairs[right].samples));
+        check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
+    }
+}
+check(typePairs.ppok.samples.length < typePairs.ting.samples.length && typePairs.ting.samples.length < typePairs.bang.samples.length && typePairs.bang.samples.length < typePairs.drop.samples.length, '글자 소리 길이가 순서와 다릅니다.');
 
 check(Math.abs(keyPitchRate(() => 0) - 0.94) < 1e-9 && Math.abs(keyPitchRate(() => 1) - 1.06) < 1e-9, '음높이 흔들림 범위가 아닙니다.');
 check(Math.abs(keyPitchRate(() => 0.5) - 1) < 1e-9, '음높이 가운데가 1이 아닙니다.');
@@ -239,6 +261,14 @@ setKeyMuted(false);
 setKeySound(false);
 playKey('down');
 check(sources.length === mutedCount, '소리를 꺼도 납니다.');
+playTypeSound();
+check(sources.length === mutedCount, '꺼진 글자 소리가 납니다.');
+setTypeSound(true);
+previewTypeVoice('bang');
+playTypeSound();
+check(sources.length === mutedCount + 2, '글자 소리 미리듣기나 입력이 나지 않습니다.');
+check(!sources.at(-2).stopped && !sources.at(-1).stopped, '이어 친 글자 소리가 앞 소리를 끊습니다.');
+check(gains.at(-1).gain.value <= 0.05, '글자 소리가 작지 않습니다.');
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');

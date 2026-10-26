@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
@@ -10,7 +10,10 @@ import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
-import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs } from './ui/keyfeel.js';
+import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
+import { noteTypeInput, playTypeSound } from './ui/typesound.js';
+import { HOTKEY_ACTIONS, hotkeyLabel, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -23,22 +26,6 @@ import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, Settings } from './ui/Settings.jsx';
 import { Start } from './ui/Start.jsx';
 
-const MENU = [
-    ['오늘', '#/today'],
-    ['출결', '#/attend'],
-    ['학생 기록', '#/students'],
-    ['일정·시간표', '#/schedule'],
-    ['할 일·메모', '#/todo'],
-    ['알림장', '#/notice'],
-    ['나이스 모아 보기', '#/students/neis'],
-    ['설정', '#/settings'],
-];
-
-function go(hash) {
-    if (location.hash === hash) return;
-    location.hash = hash;
-}
-
 export default function App() {
     const [data, setData] = useState(null);
     const [hash, setHash] = useState(() => location.hash || '#/today');
@@ -48,6 +35,7 @@ export default function App() {
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
+    const [help, setHelp] = useState(false);
     const [search, setSearch] = useState(false);
     const [locked, setLocked] = useState(false);
     const [online, setOnline] = useState(() => navigator.onLine);
@@ -78,16 +66,19 @@ export default function App() {
     useEffect(() => {
         const timer = setInterval(() => setClock(seoulParts()), 30000);
         const onHash = () => setHash(location.hash || '#/today');
+        const onPop = () => setHash(location.hash || '#/today');
         const onLine = () => {
             setOnline(navigator.onLine);
             if (navigator.onLine) flushCloud().catch(() => {});
         };
         window.addEventListener('hashchange', onHash);
+        window.addEventListener('popstate', onPop);
         window.addEventListener('online', onLine);
         window.addEventListener('offline', onLine);
         return () => {
             clearInterval(timer);
             window.removeEventListener('hashchange', onHash);
+            window.removeEventListener('popstate', onPop);
             window.removeEventListener('online', onLine);
             window.removeEventListener('offline', onLine);
         };
@@ -107,8 +98,15 @@ export default function App() {
 
     useEffect(() => {
         if (!route.replace) return;
-        history.replaceState(null, '', route.replace);
-        setHash(route.replace);
+        const next = route.replace.startsWith('#') ? route.replace : `#${route.replace}`;
+        try {
+            const url = new URL(location.href);
+            url.hash = next;
+            if (url.hash !== location.hash) history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            /* 주소창을 못 고쳐도 아래 setHash로 화면은 옮깁니다. */
+        }
+        setHash(next);
     }, [route.replace]);
 
     useEffect(() => {
@@ -149,25 +147,102 @@ export default function App() {
         };
     }, [data?.profile.sharedPc, locked]);
 
+    const go = useCallback((hash) => {
+        const next = hash || '#/today';
+        setHash(next);
+        if (location.hash !== next) location.hash = next;
+    }, []);
+
+    const runHotkey = useCallback((id) => {
+        const ymd = clock.ymd;
+        const closeLayers = () => {
+            setPlus(false);
+            setFlow(null);
+            setMsg(false);
+            setSearch(false);
+            setMenu(false);
+            setHelp(false);
+        };
+        if (id === 'help') {
+            setHelp((open) => !open);
+            return;
+        }
+        if (id === 'plus') {
+            closeLayers();
+            setPlus(true);
+            return;
+        }
+        if (id === 'search') {
+            closeLayers();
+            setSearch(true);
+            return;
+        }
+        if (id === 'message') {
+            closeLayers();
+            setMsg(true);
+            return;
+        }
+        if (id === 'minutes') {
+            closeLayers();
+            setFlow({ id: 'minutes' });
+            return;
+        }
+        if (id.startsWith('quick:')) {
+            closeLayers();
+            setFlow({ id: 'quick', kind: id.slice(6) });
+            return;
+        }
+        const href = {
+            today: '#/today',
+            attend: `#/attend/${ymd}`,
+            students: '#/students',
+            schedule: '#/schedule',
+            todo: '#/todo',
+            notice: '#/notice',
+            neis: '#/students/neis',
+            settings: '#/settings',
+        }[id];
+        if (!href) return;
+        closeLayers();
+        go(href);
+    }, [clock.ymd, go]);
+
     useEffect(() => {
         const onKey = (event) => {
-            const tag = document.activeElement?.tagName;
-            const typing = tag === 'INPUT' || tag === 'TEXTAREA';
-            if (event.key === '/' && !typing && data?.profile.started) {
-                event.preventDefault();
-                setPlus(true);
-            }
             if (event.key === 'Escape') {
                 setPlus(false);
                 setFlow(null);
                 setMsg(false);
                 setSearch(false);
                 setMenu(false);
+                setHelp(false);
+                return;
             }
+            if (!data?.profile.started) return;
+            const id = matchHotkey(event, loadHotkeys());
+            if (!id) return;
+            event.preventDefault();
+            runHotkey(id);
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [data?.profile.started]);
+    }, [data?.profile.started, runHotkey]);
+
+    useEffect(() => {
+        const unlock = () => unlockKeyAudio();
+        const onInput = (event) => {
+            if (!noteTypeInput(event)) return;
+            playTypeSound();
+        };
+        document.addEventListener('pointerdown', unlock, true);
+        document.addEventListener('keydown', unlock, true);
+        document.addEventListener('input', onInput, true);
+        return () => {
+            document.removeEventListener('pointerdown', unlock, true);
+            document.removeEventListener('keydown', unlock, true);
+            document.removeEventListener('input', onInput, true);
+        };
+    }, []);
 
     useEffect(() => {
         const hit = (target) => {
@@ -269,6 +344,7 @@ export default function App() {
         openFlow: (next) => setFlow(next),
         openPlus: () => setPlus(true),
         go,
+        openHotkeyHelp: () => setHelp(true),
         route,
     };
 
@@ -328,10 +404,13 @@ export default function App() {
                         <Symbol />
                         <strong className="title-font" style={{ fontSize: 18 }}>콕 교무수첩</strong>
                     </div>
-                    {MENU.map(([label, href]) => (
-                        <Btn key={label} block className={(location.hash || '#/today') === href ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(href)}>{label}</Btn>
-                    ))}
-                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>/ 키를 누르면 콕과 같은 일 고르기가 열려요.</p>
+                    {MENU.map(([label, href]) => {
+                        const on = menuSelected(route.name, href);
+                        return (
+                            <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(menuTarget(href, clock.ymd))}>{label}</Btn>
+                        );
+                    })}
+                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
@@ -395,7 +474,7 @@ export default function App() {
                         label === '더' ? (
                             <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: (href === '#/today' ? route.name === 'today' : location.hash === href || (label === '할 일' && route.name === 'todo')) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
                                     {label}
@@ -429,7 +508,8 @@ export default function App() {
                 )}
                 {flow && <FlowSheet flow={flow} onClose={() => setFlow(null)} />}
                 {msg && <MsgSheet onClose={() => setMsg(false)} />}
-                {menu && <MenuSheet onClose={() => setMenu(false)} />}
+                {menu && <MenuSheet onClose={() => setMenu(false)} go={go} ymd={clock.ymd} routeName={route.name} />}
+                {help && <HotkeySheet onClose={() => setHelp(false)} />}
                 {search && <SearchSheet onClose={() => setSearch(false)} />}
                 {toast && (
                     <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
@@ -444,14 +524,39 @@ export default function App() {
     );
 }
 
-function MenuSheet({ onClose }) {
+function MenuSheet({ onClose, go, ymd, routeName }) {
     return (
         <div className="sheet-back" onClick={onClose}>
             <div className="sheet" role="dialog" aria-modal="true" aria-label="메뉴" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                {MENU.map(([label, href]) => (
-                    <Btn key={label} block className="chip" style={{ marginBottom: 8, justifyContent: 'flex-start' }} onClick={() => { go(href); onClose(); }}>{label}</Btn>
+                {MENU.map(([label, href]) => {
+                    const on = menuSelected(routeName, href);
+                    return (
+                        <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ marginBottom: 8, justifyContent: 'flex-start' }} onClick={() => { go(menuTarget(href, ymd)); onClose(); }}>{label}</Btn>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function HotkeySheet({ onClose }) {
+    const map = loadHotkeys();
+    const rows = HOTKEY_ACTIONS.filter((action) => map[action.id]);
+    return (
+        <div className="sheet-back" onClick={onClose}>
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="단축키" onClick={(event) => event.stopPropagation()}>
+                <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
+                <h2 className="title-font" style={{ marginTop: 0 }}>단축키</h2>
+                <p className="muted">지금 이 기기에 잡아 둔 키예요. 바꾸는 곳은 설정입니다.</p>
+                {rows.map((action) => (
+                    <p key={action.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, margin: '8px 0' }}>
+                        <span style={{ minWidth: 0 }}>{action.label}</span>
+                        <strong>{hotkeyLabel(map[action.id])}</strong>
+                    </p>
                 ))}
+                {!rows.length && <p>아직 잡아 둔 키가 없어요.</p>}
+                <Btn className="chip block" onClick={onClose}>닫기</Btn>
             </div>
         </div>
     );

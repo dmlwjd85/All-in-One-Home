@@ -15,6 +15,9 @@ import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
 import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
+import { isSensitiveControl, isTextControl, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
+import { assignHotkey, defaultHotkeys, hotkeyFromEvent, loadHotkeys, matchHotkey, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
+import { menuSelected, menuTarget } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
 
@@ -232,6 +235,52 @@ check(!keySoundNoticePending(memoryStore), '소리 안내를 한 번 본 뒤에�
 memoryStore.setItem('ssug-gyomu-key-sound', '0');
 memoryStore.map.delete('ssug-gyomu-key-sound-notice');
 check(!keySoundNoticePending(memoryStore), '소리가 꺼져 있는데 안내가 뜹니다.');
+check(!typeSoundEnabled(memoryStore) && typeVoiceId(memoryStore) === 'ppok', '글자 소리 기본이 꺼짐·뽁이 아닙니다.');
+check(setTypeSound(true, memoryStore) && typeSoundEnabled(memoryStore), '글자 소리 켜기가 저장되지 않습니다.');
+setTypeSound(false, memoryStore);
+check(!typeSoundEnabled(memoryStore), '글자 소리 끄기가 저장되지 않습니다.');
+
+function fakeControl(tag, attrs = {}) {
+    return {
+        tagName: tag,
+        isContentEditable: Boolean(attrs.contentEditable),
+        getAttribute(name) { return Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null; },
+        hasAttribute(name) { return Object.prototype.hasOwnProperty.call(attrs, name); },
+    };
+}
+check(isTextControl(fakeControl('TEXTAREA')) && isTextControl(fakeControl('INPUT', { type: 'search' })), '글자 칸을 소리 대상으로 보지 않습니다.');
+check(!isTextControl(fakeControl('INPUT', { type: 'checkbox' })), '체크 칸에서도 글자 소리를 내려 합니다.');
+check(isSensitiveControl(fakeControl('INPUT', { type: 'password' })) && isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '비밀번호' })), '비밀번호 칸을 민감하게 보지 않습니다.');
+check(!isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '학급 이름' })), '학급 이름 칸을 비밀번호로 봅니다.');
+check(shouldTypeSound({ inputType: 'insertCompositionText', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
+check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'password' }) }), '비밀번호 칸에서 글자 소리를 냅니다.');
+check(!shouldTypeSound({ inputType: 'insertFromPaste', target: fakeControl('TEXTAREA') }), '붙여넣기에도 글자마다 소리를 내려 합니다.');
+
+const attendTarget = menuTarget('#/attend', '2026-10-26');
+const attendRoute = resolveHash(attendTarget, '2026-10-26');
+check(attendTarget === '#/attend/2026-10-26' && attendRoute.name === 'attend' && attendRoute.replace === '', '출결 메뉴가 날짜 주소로 바로 열리지 않습니다.');
+check(menuSelected('attend', '#/attend') && !menuSelected('today', '#/attend'), '출결 화면에서 출결 메뉴가 켜지지 않습니다.');
+check(menuSelected('student', '#/students') && menuSelected('legacy', '#/settings') && menuSelected('schedule', '#/schedule'), '다른 화면의 메뉴 선택이 꺼집니다.');
+
+const hotStore = {
+    map: new Map(),
+    getItem(key) { return this.map.has(key) ? this.map.get(key) : null; },
+    setItem(key, value) { this.map.set(key, String(value)); },
+    removeItem(key) { this.map.delete(key); },
+};
+check(defaultHotkeys().plus === '/' && defaultHotkeys().help === '?' && defaultHotkeys().attend === '', '단축키 기본이 / 와 물음표가 아닙니다.');
+check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 콕이 / 가 아닙니다.');
+const moved = assignHotkey(loadHotkeys(hotStore), 'attend', '/');
+check(moved.movedFrom === '콕 열기' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 콕에 그대로 둡니다.');
+check(hotkeyFromEvent({ key: 'A' }) === 'a' && hotkeyFromEvent({ key: 'k', ctrlKey: true }) === '', 'Ctrl 조합이나 대문자를 그대로 받습니다.');
+check(shortcutBlocked({ key: 'a', target: fakeControl('INPUT', { type: 'text' }) }), '글자 칸에서 단축키가 먹습니다.');
+check(shortcutBlocked({ key: 'Process', isComposing: true, target: { tagName: 'BODY' } }), '한글 조합 중에 단축키가 먹습니다.');
+check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 콕을 열지 않습니다.');
+check(matchHotkey({ key: '/', target: fakeControl('TEXTAREA') }, defaultHotkeys()) === '', '글자 칸의 / 가 콕을 엽니다.');
+saveHotkeys(moved.map, hotStore);
+check(loadHotkeys(hotStore).attend === '/' && loadHotkeys(hotStore).plus === '', '옮긴 단축키가 저장되지 않습니다.');
+resetHotkeys(hotStore);
+check(loadHotkeys(hotStore).plus === '/' && loadHotkeys(hotStore).attend === '', '기본값으로 되돌리기가 남지 않습니다.');
 
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';

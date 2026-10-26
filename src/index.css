@@ -219,7 +219,8 @@ a.chip,
     gap: 8px;
     margin-top: 8px;
 }
-.key-picks .chip {
+.key-picks .chip,
+.type-picks .chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -230,6 +231,21 @@ a.chip,
     white-space: nowrap;
     text-align: center;
 }
+.type-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.hotkey-list { display: grid; gap: 8px; }
+.hotkey-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 128px);
+    gap: 8px;
+    align-items: center;
+}
+.hotkey-row > span { min-width: 0; overflow-wrap: anywhere; }
+.hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 8px; }
 
 .symbol {
     width: 36px;

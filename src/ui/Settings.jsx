@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
+import { TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
+import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import titles from '../data/legacyTitles.json';
@@ -55,7 +57,7 @@ function KeyPick({ pressed, label, ariaLabel, onPick }) {
 }
 
 export function Settings() {
-    const { data, showToast, go } = useUi();
+    const { data, showToast, go, openHotkeyHelp } = useUi();
     const [className, setClassName] = useState(data.profile.className || '');
     const [names, setNames] = useState(() => slotsFromStudents(data.students));
     const [paste, setPaste] = useState('');
@@ -70,6 +72,8 @@ export function Settings() {
     const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
     const [voiceId, setVoiceId] = useState(() => keyVoiceId());
     const [volumeId, setVolumeId] = useState(() => keyVolumeId());
+    const [typeOn, setTypeOn] = useState(() => typeSoundEnabled());
+    const [typeId, setTypeId] = useState(() => typeVoiceId());
     useEffect(() => subscribeKeyPrefs(() => {
         setSoundOn(keySoundEnabled());
         setVibeOn(keyVibeEnabled());
@@ -170,7 +174,37 @@ export function Settings() {
                 </div>
                 <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
                 <p className="muted">콕, 누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn className={typeOn ? 'chip on' : 'chip'} aria-pressed={typeOn} onClick={() => {
+                        const next = !typeOn;
+                        setTypeSound(next);
+                        setTypeOn(next);
+                    }}>{typeOn ? '글자 소리 켜짐' : '글자 소리 꺼짐'}</Btn>
+                </div>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 글을 적을 때 작은 소리가 따라옵니다. 비밀번호 칸에서는 내지 않아요. 처음 소리는 뽁이고, 크기는 작게 고정해 두었어요.</p>
+                <div className="type-picks" role="group" aria-label="글자 소리">
+                    {TYPE_VOICES.map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={typeId === voice.id}
+                            label={voice.label}
+                            ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPick={() => {
+                                setTypeVoice(voice.id);
+                                setTypeId(voice.id);
+                                previewTypeVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted">칸을 누르면 미리 들려 드려요. 소리를 꺼 두어도 여기서는 들을 수 있고, 고른 소리는 이 기기에 남아요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
+            </section>
+
+            <section className="glass" style={{ padding: 14 }} data-screen="hotkeys">
+                <h2 className="title-font" style={{ marginTop: 0 }}>단축키</h2>
+                <HotkeyForm onShowList={openHotkeyHelp} />
             </section>
 
             <section className="glass" style={{ padding: 14 }}>
