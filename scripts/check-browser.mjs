@@ -2205,6 +2205,10 @@ try {
         const fontLoads = await page.evaluate(async () => {
             await document.fonts.ready;
             await new Promise((done) => { setTimeout(done, 600); });
+            // 쉬는 틈 받기는 CI가 바쁘면 늦게 시작할 수 있어 최대 8초까지 기다립니다.
+            for (let waited = 0; waited < 8000 && performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).length < 3; waited += 200) {
+                await new Promise((done) => { setTimeout(done, 200); });
+            }
             const nav = performance.getEntriesByType('navigation')[0];
             const loadEnd = nav?.loadEventEnd || 0;
             const fonts = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.woff2')).map((entry) => ({ name: entry.name.split('/').pop().split('?')[0], start: entry.startTime }));
