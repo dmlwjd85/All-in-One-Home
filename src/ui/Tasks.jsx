@@ -3,7 +3,7 @@ import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js
 import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Btn, IconTrash } from './bits.jsx';
+import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 
 export function Tasks() {
@@ -31,7 +31,7 @@ export function Tasks() {
                 setTitle('');
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
             }}>
-                <input className="field" aria-label="할 일" placeholder="할 일을 적고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
+                <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
             </form>
             <section aria-label="정리함" style={{ marginTop: 16 }}>
                 <h3 style={{ marginBottom: 8 }}>정리함</h3>
@@ -60,7 +60,7 @@ export function Tasks() {
             {!todos.length && !notes.length && !inbox.length && (
                 <div>
                     <ClayMark />
-                    <p className="muted" style={{ textAlign: 'center' }}>아직 적어 둔 할 일이 없어요.</p>
+                    <SpreadHint center />
                 </div>
             )}
             {groups.map(([label, rows]) => (
@@ -124,7 +124,7 @@ function NoteBox() {
             setText('');
             showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '메모로 남겼어요.', true);
         }}>
-            <textarea className="field" rows={3} aria-label="메모" placeholder="잠깐 적어 둘 말" value={text} onChange={(event) => setText(event.target.value)} />
+            <textarea className="field" rows={3} aria-label="메모" placeholder="여기에 발라 둘 말" value={text} onChange={(event) => setText(event.target.value)} />
             <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>메모 남기기</Btn>
         </form>
     );

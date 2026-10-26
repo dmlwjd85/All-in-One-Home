@@ -3,7 +3,7 @@ import { DEFAULT_PERIODS } from '../lib/period.js';
 import { clipboardHint, readClipboard } from '../lib/msgParse.js';
 import { joinedRecords, saveParsed, saveQuick, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn, HoldToggle } from './bits.jsx';
+import { Area, Btn, HoldToggle, SpreadHint } from './bits.jsx';
 import { DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
@@ -220,19 +220,20 @@ export function PlusSheet({ onClose, onPick }) {
                     <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
                         <ClayMark size={140} />
                         <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{doneHeading(savedNote, savedRecord)}</h2>
-                        <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '적어 둔 자리에 넣었어요.')}</p>
+                        <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '발라 둔 자리에 넣었어요.')}</p>
                     </div>
                 ) : (
-                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : '무엇을 적을까요?'}</h2>
+                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : '무엇을 발라 둘까요?'}</h2>
                 )}
                 {phase === 'write' && (
                     <>
+                        <SpreadHint />
                         <div className="msg-compose">
                             <Area
                                 ref={box}
                                 rows={3}
                                 aria-label="기록"
-                                placeholder="적거나 붙여 넣으세요. 말하면 여기 받아 적어요."
+                                placeholder="여기에 발라 두세요"
                                 value={text}
                                 onChange={(event) => speech.onEdit(event.target.value)}
                                 onKeyDown={(event) => {

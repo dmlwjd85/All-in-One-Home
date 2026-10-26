@@ -73,7 +73,7 @@ export function Student() {
                 ))}
             </div>
             <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
-                <input className="field" placeholder={`${givenName(student.name)}이 이야기 적기`} aria-label="이 학생 기록" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={async (event) => {
+                <input className="field" placeholder={`${givenName(student.name)} 이야기 발라 두기`} aria-label="이 학생 기록" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={async (event) => {
                     if (event.key === 'Enter') {
                         const result = await saveQuick({ kind: '관찰', text, no: student.no, tags: ['학습'], neis: true });
                         if (result.ok) { setText(''); showToast(result.message, true); }

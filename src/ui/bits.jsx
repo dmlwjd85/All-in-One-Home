@@ -13,6 +13,23 @@ export const Area = forwardRef(function Area(props, ref) {
     return <textarea ref={ref} className="field" {...props} />;
 });
 
+/** 로고 옆 모토. 쉼표 뒤에서만 줄이 바뀝니다. */
+export function Motto({ center = false }) {
+    return (
+        <p className={center ? 'brand-motto is-center' : 'brand-motto'}>
+            <span>생각나면 발라 두기,</span>{' '}
+            <span>틈나면 꺼내 먹기</span>
+        </p>
+    );
+}
+
+/** 콕 입력과 할 일 빈 화면의 안내. 글자 그대로 둡니다. */
+export function SpreadHint({ center = false }) {
+    return (
+        <p className="muted spread-hint" style={center ? { textAlign: 'center' } : undefined}>생각나면 일단 여기 발라 두세요. 틈나면 간식처럼 처리해요.</p>
+    );
+}
+
 /** 헤더·잠금·시작 화면의 로고. 앱 아이콘과 같은 라일락 판, 같은 쨈 외곽선입니다. */
 export function Symbol() {
     const id = `jjaem${useId().replace(/:/g, '')}`;

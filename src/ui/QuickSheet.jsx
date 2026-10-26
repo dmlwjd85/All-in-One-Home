@@ -4,7 +4,7 @@ import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick } from '../lib/db.js';
 import { joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn, KINDS, TAGS } from './bits.jsx';
+import { Area, Btn, KINDS, SpreadHint, TAGS } from './bits.jsx';
 import { recentStudents } from './capture.js';
 
 export function QuickSheet({ initial, onClose }) {
@@ -75,7 +75,8 @@ export function QuickSheet({ initial, onClose }) {
                         )}
                     </>
                 )}
-                <Area ref={box} rows={4} aria-label="내용" placeholder="한 줄로 적어도 충분해요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} style={{ marginTop: 12 }} />
+                <SpreadHint />
+                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {(TAGS[kind] || []).map((tag) => (
                         <Btn key={tag} className={tags.includes(tag) ? 'chip on' : 'chip'} onClick={() => setTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])}>#{tag}</Btn>

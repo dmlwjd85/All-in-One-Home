@@ -4,7 +4,7 @@ import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus } from '../lib/period.js';
 import { joined, joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Btn, studentName } from './bits.jsx';
+import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
 
@@ -36,6 +36,13 @@ export function Home() {
 
     return (
         <div className="home-grid">
+            <div className="home-brand">
+                <Symbol />
+                <div>
+                    <p className="title-font home-brand-name">쨈 교무수첩</p>
+                    <Motto />
+                </div>
+            </div>
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
@@ -78,8 +85,8 @@ export function Home() {
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 콕에서 시작해요</h3>
-                <p className="muted" style={{ margin: 0 }}>가운데 콕에 한 줄을 적으면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
+                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>콕에 발라 두기</h3>
+                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 콕에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
@@ -120,7 +127,7 @@ export function Home() {
                         </div>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
-                    {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 적어 둔 할 일이 없어요.</p>}
+                    {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 발라 둔 할 일이 없어요.</p>}
                     {(data.inbox || []).length > 0 && (
                         <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>정리함 {(data.inbox || []).length}개</Btn>
                     )}
@@ -144,7 +151,7 @@ export function Home() {
             </section>
 
             <section className="glass home-recent" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 적은 것</h3>
+                <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 발라 둔 것</h3>
                 <div style={{ display: 'grid', gap: 10 }}>
                     {feed.map((row) => (
                         <div key={row.id} style={{ display: 'flex', gap: 10 }}>
@@ -158,7 +165,7 @@ export function Home() {
                     {!feed.length && (
                         <div>
                             <ClayMark />
-                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. 콕에 한 줄이면 누가기록에 쌓을 수 있어요.</p>
+                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. 콕에 발라 두면 누가기록에 쌓여요.</p>
                         </div>
                     )}
                 </div>

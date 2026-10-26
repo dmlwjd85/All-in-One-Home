@@ -3,7 +3,7 @@ import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick, saveTextItem } from '../lib/db.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import { useUi } from './context.jsx';
-import { Area, Btn, TAGS } from './bits.jsx';
+import { Area, Btn, SpreadHint, TAGS } from './bits.jsx';
 import { ChoiceGrid, DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 
 const EVENT_OPTIONS = [
@@ -132,7 +132,8 @@ export function FlowSheet({ flow, onClose }) {
                 {name === 'text' && (
                     <>
                         {student && <p style={{ fontWeight: 800, marginTop: 0 }}>{student.no}번 {student.name}</p>}
-                        <Area data-flow-text rows={4} aria-label="내용" placeholder="한 줄로 적어도 충분해요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+                        <SpreadHint />
+                        <Area data-flow-text rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
                                 event.preventDefault();
                                 save();

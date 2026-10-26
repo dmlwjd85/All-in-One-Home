@@ -253,6 +253,44 @@ a.chip,
     display: block;
     flex: none;
 }
+.brand-lockup {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.brand-motto {
+    margin: 6px 0 0;
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.brand-motto.is-center { text-align: center; }
+.brand-motto span { white-space: nowrap; }
+.side-brand .brand-motto {
+    margin: 8px 8px 12px;
+    font-size: 13px;
+    line-height: 18px;
+}
+.home-brand {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.home-brand-name {
+    margin: 0;
+    font-size: 18px;
+    line-height: 24px;
+}
+.home-brand .brand-motto {
+    margin: 0;
+    font-size: 14px;
+    line-height: 20px;
+}
+.spread-hint {
+    margin: 0 0 8px;
+    line-height: 22px;
+}
 
 .tabbar {
     position: fixed;
@@ -404,6 +442,7 @@ a.chip,
         max-height: min(86dvh, 820px);
     }
     .toast { left: auto; right: 24px; width: min(420px, calc(100vw - 248px)); bottom: 24px; }
+    .home-brand { display: none; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);

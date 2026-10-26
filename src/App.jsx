@@ -8,7 +8,7 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Motto, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
 import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
@@ -365,7 +365,8 @@ export default function App() {
                 <div className="solid-card" style={{ padding: 24, maxWidth: 360, width: '100%', display: 'grid', justifyItems: 'center' }}>
                     <Symbol />
                     <p className="title-font" style={{ fontSize: 18, margin: '12px 0 0' }}>쨈 교무수첩</p>
-                    <p className="title-font" style={{ fontSize: 26, margin: '8px 0' }}>화면을 잠가 두었어요</p>
+                    <Motto center />
+                    <p className="title-font" style={{ fontSize: 26, margin: '12px 0 8px' }}>화면을 잠가 두었어요</p>
                     <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터라 30분 동안 가만히 있으면 이렇게 가려 둡니다.</p>
                     <Btn className="primary-btn block" onClick={() => setLocked(false)}>다시 열기</Btn>
                 </div>
@@ -442,9 +443,12 @@ export default function App() {
         <Ui.Provider value={ui}>
             <div className="app-bg app-frame" data-ready="1">
                 <aside className="side">
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
-                        <Symbol />
-                        <strong className="title-font" style={{ fontSize: 18, lineHeight: '24px' }}>쨈 교무수첩</strong>
+                    <div className="side-brand">
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 0' }}>
+                            <Symbol />
+                            <strong className="title-font" style={{ fontSize: 18, lineHeight: '24px' }}>쨈 교무수첩</strong>
+                        </div>
+                        <Motto />
                     </div>
                     {MENU.map(([label, href]) => {
                         const on = menuSelected(route.name, href);

@@ -53,7 +53,7 @@ export function Day() {
                         <Btn className="chip" onClick={() => removeItem('todos', row.id).then(() => showToast('할 일을 지웠어요.'))}>지우기</Btn>
                     </div>
                 ))}
-                {!todos.length && <p className="muted">이 날로 적어 둔 할 일이 없어요.</p>}
+                {!todos.length && <p className="muted">이 날로 발라 둔 할 일이 없어요.</p>}
                 <Btn className="chip" onClick={() => openFlow({ id: 'quick', kind: '할 일', date })}>할 일 적기</Btn>
             </section>
 
