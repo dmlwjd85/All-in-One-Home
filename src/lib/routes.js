@@ -66,6 +66,7 @@ export function resolveHash(raw, today) {
         return pack('todo', {}, '#/todo', incoming);
     }
     if (path === '/settings') return pack('settings', {}, '#/settings', incoming);
+    if (path === '/settings/roster') return pack('roster', {}, '#/settings/roster', incoming);
     if (path === '/settings/legacy' || path === '/legacy') return pack('legacy', { page: '' }, '#/settings/legacy', incoming);
     if (path === '/write') return pack('today', {}, '#/today', incoming, { openQuick: true });
     if (path === '/counsel') return pack('students', {}, '#/students', incoming);
@@ -100,6 +101,10 @@ export function resolveHash(raw, today) {
         if (n >= 1 && n <= 580) return pack('legacy', { page: String(n) }, `#/legacy/${n}`, incoming);
         return pack('legacy', { page: '' }, '#/settings/legacy', incoming);
     }
+
+    const day = path.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/);
+    if (day && isValidYmd(day[1])) return pack('day', { date: day[1] }, `#/day/${day[1]}`, incoming);
+    if (path === '/day') return pack('day', { date: today }, `#/day/${today}`, incoming);
 
     if (/^\/(?:week|month|day|date)\//.test(path)) return pack('schedule', {}, '#/schedule', incoming);
 

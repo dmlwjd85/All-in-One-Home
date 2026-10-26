@@ -23,7 +23,7 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
-import { TYPE_GAIN, TYPE_VOICES, playTypeSound, previewTypeVoice, renderTypeVoice, setTypeSound } from '../src/ui/typesound.js';
+import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, setTypeSound, setTypeVoice } from '../src/ui/typesound.js';
 
 const failures = [];
 function check(ok, message) {
@@ -133,12 +133,18 @@ const typePairs = Object.fromEntries(TYPE_VOICES.map((voice) => [voice.id, rende
 check(TYPE_GAIN <= 0.05, '글자 소리가 교실용으로 작지 않습니다.');
 for (const voice of TYPE_VOICES) {
     const samples = typePairs[voice.id].samples;
-    const expect = Math.round((rate * ({ bang: 110, ppok: 46, ting: 92, drop: 156 })[voice.id]) / 1000);
+    const expect = Math.round((rate * TYPE_VOICE_MS[voice.id]) / 1000);
     check(samples.length === expect, `${voice.label} 길이가 다릅니다.`);
     check(Math.abs(samples[0]) < 1e-6 && Math.abs(samples[samples.length - 1]) < 1e-6, `${voice.label} 시작·끝이 0이 아닙니다.`);
     const peak = peakOf(samples);
     check(peak > 0.85 && peak < 0.95, `${voice.label} 크기가 맞지 않습니다.`);
     check([...samples].every((sample) => Number.isFinite(sample) && Math.abs(sample) <= 1), `${voice.label} 파형이 범위를 벗어납니다.`);
+    for (const kind of ['space', 'enter', 'delete']) {
+        const other = renderTypeStroke(voice.id, kind, rate).samples;
+        const score = Math.abs(correlation(samples, other));
+        check(other.length !== samples.length || score < 0.8, `${voice.label} ${kind} 소리가 글자와 같습니다. ${score.toFixed(2)}`);
+        check(Math.abs(other[0]) < 1e-6 && Math.abs(other[other.length - 1]) < 1e-6, `${voice.label} ${kind} 시작·끝이 0이 아닙니다.`);
+    }
 }
 for (let i = 0; i < TYPE_VOICES.length; i += 1) {
     for (let j = i + 1; j < TYPE_VOICES.length; j += 1) {
@@ -148,7 +154,20 @@ for (let i = 0; i < TYPE_VOICES.length; i += 1) {
         check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
     }
 }
-check(typePairs.ppok.samples.length < typePairs.ting.samples.length && typePairs.ting.samples.length < typePairs.bang.samples.length && typePairs.bang.samples.length < typePairs.drop.samples.length, '글자 소리 길이가 순서와 다릅니다.');
+const typeBurstNotes = [];
+for (const sampleRate of [44100, 48000]) {
+    for (const voice of TYPE_VOICES) {
+        const burst = mixTypeBurst({ voice: voice.id, count: 50, gapMs: 30, fadeMs: 16, sampleRate });
+        typeBurstNotes.push(`${voice.id}@${sampleRate} peak ${burst.peak.toFixed(4)} jump ${burst.maxJump.toFixed(4)}`);
+        check(burst.peak <= 1 && burst.peak > 0, `${voice.label} 연타 피크가 1을 넘거나 0입니다. ${burst.peak}`);
+        check(burst.maxJump < 0.2, `${voice.label} 연타에 클릭이 있습니다. 점프 ${burst.maxJump}`);
+    }
+}
+const typeWorst = typeBurstNotes.reduce((best, line) => {
+    const peak = Number(line.match(/peak ([0-9.]+)/)[1]);
+    return peak > best.peak ? { peak, line } : best;
+}, { peak: 0, line: '' });
+console.log(`글자 연타 50×30ms 최대 피크 ${typeWorst.peak.toFixed(4)} (${typeWorst.line})`);
 
 check(Math.abs(keyPitchRate(() => 0) - 0.94) < 1e-9 && Math.abs(keyPitchRate(() => 1) - 1.06) < 1e-9, '음높이 흔들림 범위가 아닙니다.');
 check(Math.abs(keyPitchRate(() => 0.5) - 1) < 1e-9, '음높이 가운데가 1이 아닙니다.');
@@ -272,6 +291,16 @@ check(!sources.at(-2).stopped && !sources.at(-1).stopped, '이어 친 글자 소
 check(gains.at(-1).gain.value <= 0.05, '글자 소리가 작지 않습니다.');
 sources.at(-1).onended();
 check(sources.at(-1).disconnected && gains.at(-1).disconnected, '끝난 글자 소리 노드를 끊지 않습니다.');
+setTypeVoice('bang');
+playTypeSound();
+check(sources.at(-1).buffer.length === Math.round((rate * TYPE_VOICE_MS.bang) / 1000), '방귀를 골라도 글자마다 그 소리가 나지 않습니다.');
+const bangTap = sources.at(-1).buffer.length;
+playTypeSound('space');
+check(sources.at(-1).buffer.length > bangTap, '방귀 스페이스가 글자 소리와 같습니다.');
+const field = { tagName: 'TEXTAREA' };
+check(noteTypeKey({ key: ' ', target: field }, 90000) === 'space', '스페이스를 글자 소리로 치지 않습니다.');
+check(noteTypeInput({ inputType: 'insertText', data: ' ', target: field }, 90005) === false, '스페이스 입력 소리가 한 번 더 납니다.');
+check(noteTypeKey({ key: 'Enter', target: field, isComposing: true }, 91000) === '', '조합 중인 엔터에도 소리가 납니다.');
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');

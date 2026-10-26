@@ -11,7 +11,7 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, playTypeSound } from './ui/typesound.js';
+import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -23,7 +23,8 @@ import { Attend } from './ui/Attend.jsx';
 import { Neis, Student, Students } from './ui/Students.jsx';
 import { Schedule } from './ui/Schedule.jsx';
 import { Notice, Tasks } from './ui/Tasks.jsx';
-import { Legacy, Settings } from './ui/Settings.jsx';
+import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
+import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
 
 export default function App() {
@@ -245,9 +246,14 @@ export default function App() {
         const onInput = (event) => {
             if (noteTypeInput(event)) playTypeSound();
         };
+        const onTypeKey = (event) => {
+            const kind = noteTypeKey(event);
+            if (kind) playTypeSound(kind);
+        };
         const onCompositionUpdate = (event) => noteCompositionUpdate(event?.data);
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
+        document.addEventListener('keydown', onTypeKey, true);
         document.addEventListener('compositionstart', noteCompositionStart, true);
         document.addEventListener('compositionupdate', onCompositionUpdate, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
@@ -255,6 +261,7 @@ export default function App() {
         return () => {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
+            document.removeEventListener('keydown', onTypeKey, true);
             document.removeEventListener('compositionstart', noteCompositionStart, true);
             document.removeEventListener('compositionupdate', onCompositionUpdate, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
@@ -394,6 +401,8 @@ export default function App() {
     if (route.name === 'todo') screen = <Tasks />;
     if (route.name === 'notice') screen = <Notice key={route.params.date || 'next'} />;
     if (route.name === 'settings') screen = <Settings />;
+    if (route.name === 'roster') screen = <RosterSettings />;
+    if (route.name === 'day') screen = <Day key={route.params.date} />;
     if (route.name === 'legacy') screen = <Legacy />;
 
     const titles = {
@@ -405,7 +414,9 @@ export default function App() {
         schedule: ['일정·시간표', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 다른 앱에 붙여 넣어요'],
-        settings: ['설정', '이 기기와 학급'],
+        settings: ['설정', '학급, 소리, 단축키, 계정'],
+        roster: ['명단', '번호에 이름을 적어 주세요'],
+        day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],
         legacy: ['예전 수첩', '쪽은 읽기만 됩니다'],
         start: ['시작', ''],
     };
@@ -435,7 +446,7 @@ export default function App() {
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
                     <header className="topbar">
-                        {(route.name === 'student' || route.name === 'legacy') && (
+                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={() => history.back()}>‹</Btn>
                         )}
                         {route.name === 'today' ? (
@@ -456,7 +467,7 @@ export default function App() {
                                 const next = dark ? 'light' : 'dark';
                                 import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
-                            <Btn className={route.name === 'settings' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings'} onClick={() => go('#/settings')}><IconSettings /></Btn>
+                            <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
                     </header>

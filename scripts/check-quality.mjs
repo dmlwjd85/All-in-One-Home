@@ -17,7 +17,7 @@ import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTime
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
-import { menuSelected, menuTarget } from '../src/ui/menu.js';
+import { menuSelected, menuTarget, tabSelected } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
 
@@ -235,7 +235,7 @@ check(!keySoundNoticePending(memoryStore), '소리 안내를 한 번 본 뒤에�
 memoryStore.setItem('ssug-gyomu-key-sound', '0');
 memoryStore.map.delete('ssug-gyomu-key-sound-notice');
 check(!keySoundNoticePending(memoryStore), '소리가 꺼져 있는데 안내가 뜹니다.');
-check(!typeSoundEnabled(memoryStore) && typeVoiceId(memoryStore) === 'ppok', '글자 소리 기본이 꺼짐·뽁이 아닙니다.');
+check(!typeSoundEnabled(memoryStore) && typeVoiceId(memoryStore) === 'red', '글자 소리 기본이 꺼짐·적축이 아닙니다.');
 check(setTypeSound(true, memoryStore) && typeSoundEnabled(memoryStore), '글자 소리 켜기가 저장되지 않습니다.');
 setTypeSound(false, memoryStore);
 check(!typeSoundEnabled(memoryStore), '글자 소리 끄기가 저장되지 않습니다.');
@@ -499,6 +499,10 @@ const attendRoute = resolveHash(attendTarget, '2026-10-26');
 check(attendTarget === '#/attend/2026-10-26' && attendRoute.name === 'attend' && attendRoute.replace === '', '출결 메뉴가 날짜 주소로 바로 열리지 않습니다.');
 check(menuSelected('attend', '#/attend') && !menuSelected('today', '#/attend'), '출결 화면에서 출결 메뉴가 켜지지 않습니다.');
 check(menuSelected('student', '#/students') && menuSelected('legacy', '#/settings') && menuSelected('schedule', '#/schedule'), '다른 화면의 메뉴 선택이 꺼집니다.');
+check(resolveHash('#/day/2026-10-26', '2026-10-19').name === 'day' && resolveHash('#/day/2026-10-26', '2026-10-19').params.date === '2026-10-26', '날짜 일지 주소가 열리지 않습니다.');
+check(resolveHash('#/day', '2026-10-26').name === 'day' && resolveHash('#/day', '2026-10-26').params.date === '2026-10-26' && !resolveHash('#/day', '2026-10-26').notice, '날짜 없는 일지가 오늘로 이어지지 않습니다.');
+check(menuSelected('day', '#/schedule') && tabSelected('일정', 'day') && !menuSelected('day', '#/today'), '날짜 일지에서 일정 메뉴가 켜지지 않습니다.');
+check(resolveHash('#/settings/roster', '2026-10-26').name === 'roster' && menuSelected('roster', '#/settings'), '명단 화면이 설정 메뉴에 속하지 않습니다.');
 
 const hotStore = {
     map: new Map(),

@@ -1,7 +1,8 @@
-/** 글자를 적을 때 나는 짧은 소리. 네 가지 모두 이 자리에서 합성합니다.
-    녹음 파일을 받지 않았고, 따로 받을 라이선스도 없습니다.
+/** 글을 적을 때 나는 타건음. 열 가지 모두 이 자리에서 합성합니다.
+    녹음 파일을 넣지 않았고, 영상에서 잘라 쓰지도 않았습니다.
+    치는 순간은 감쇠하는 배음 몇 개와 짧은 잡음이고, 축마다 클릭·걸림·바닥 치는 시각이 다릅니다.
     출처는 docs/type-sounds.md 에 적어 두었습니다.
-    크기는 교실에 맞게 작게 고정합니다. 연타는 앞 소리를 끊지 않고 바로 겹칩니다. */
+    크기는 교실에 맞게 작게 두고, 빠른 연타는 오래된 소리부터 사그라지게 한 뒤 리미터를 통과합니다. */
 
 import { unlockKeyAudio, withKeyAudio } from './keyfeel.js';
 
@@ -9,28 +10,43 @@ const SOUND_KEY = 'ssug-gyomu-type-sound';
 const VOICE_KEY = 'ssug-gyomu-type-voice';
 
 export const TYPE_VOICES = [
-    { id: 'ppok', label: '뽁', hint: '통통' },
-    { id: 'ting', label: '띵', hint: '실로폰' },
-    { id: 'drop', label: '물방울', hint: '또록' },
+    { id: 'red', label: '적축', hint: '직선' },
+    { id: 'brown', label: '갈축', hint: '걸림' },
+    { id: 'blue', label: '청축', hint: '딸깍' },
+    { id: 'black', label: '흑축', hint: '묵직' },
+    { id: 'topre', label: '무접점', hint: '둥글' },
+    { id: 'silent', label: '저소음', hint: '패드' },
+    { id: 'typewriter', label: '타자기', hint: '금속' },
+    { id: 'laptop', label: '노트북', hint: '돔' },
+    { id: 'cream', label: '크림', hint: '윤활' },
     { id: 'bang', label: '방귀', hint: '뿌우', playful: true },
 ];
 
-/** 목록 순서를 바꿔도 소리 결이 달라지지 않게, 처음 만들 때의 잡음 씨앗을 고정합니다. */
-const TYPE_NOISE = { bang: 57, ppok: 76, ting: 95, drop: 114 };
-
-export const TYPE_VOICE_MS = {
-    bang: 110,
-    ppok: 46,
-    ting: 92,
-    drop: 156,
+/** 목록 순서를 바꿔도 잡음 결이 달라지지 않게 씨앗을 고정합니다. */
+const TYPE_NOISE = {
+    red: 11, brown: 23, blue: 37, black: 53, topre: 71, silent: 89, typewriter: 101, laptop: 113, cream: 127, bang: 57,
 };
 
-/** 버튼 소리의 '작게'보다 낮게 둡니다. 겹쳐도 과하지 않게. */
-export const TYPE_GAIN = 0.032;
+export const TYPE_VOICE_MS = {
+    red: 38,
+    brown: 54,
+    blue: 62,
+    black: 76,
+    topre: 98,
+    silent: 26,
+    typewriter: 88,
+    laptop: 34,
+    cream: 70,
+    bang: 118,
+};
 
-const DEFAULT_VOICE = 'ppok';
+/** 버튼 소리의 '작게'보다 낮게 둡니다. 여러 소리가 겹쳐도 1을 넘기지 않게. */
+export const TYPE_GAIN = 0.028;
+
+const DEFAULT_VOICE = 'red';
 const SAME_TURN_MS = 12;
-const MAX_LIVE = 10;
+const MAX_LIVE = 6;
+const FADE_SEC = 0.016;
 
 let lastInputAt = -1000;
 const cache = new Map();
@@ -237,6 +253,21 @@ export function noteTypeInput(event, now = inputNow()) {
     return acceptTypeInput(event, now);
 }
 
+/** 스페이스·엔터·지우기는 글자 소리와 다른 타건입니다. 바로 뒤의 input은 같은 타로 봅니다. */
+export function noteTypeKey(event, now = inputNow()) {
+    if (!typeSoundEnabled()) return '';
+    const key = event?.key;
+    const kind = key === ' ' || key === 'Spacebar' ? 'space' : key === 'Enter' ? 'enter' : (key === 'Backspace' || key === 'Delete' ? 'delete' : '');
+    if (!kind) return '';
+    const el = event?.target;
+    if (!isTextControl(el) || isSensitiveControl(el)) return '';
+    if (event.isComposing || event.keyCode === 229) return '';
+    const at = inputNow(now);
+    if (at - lastInputAt < SAME_TURN_MS) return '';
+    lastInputAt = at;
+    return kind;
+}
+
 function noiseAt(i, salt) {
     let x = Math.imul(i + salt * 997 + 1, 1103515245) + 12345;
     x = Math.imul(x ^ (x >>> 16), 2246822519);
@@ -264,85 +295,171 @@ function finish(data, sampleRate) {
     return data;
 }
 
-function synth(id, sampleRate) {
+/** 배음은 [주파수, 감쇠 초, 세기, 시작 지연 초]. 바닥을 치는 소리와 클릭을 시간으로 나눕니다. */
+const KEY_PROFILES = {
+    red: { partials: [[248, 0.012, 0.85, 0], [640, 0.005, 0.28, 0]], noise: 0.42, noiseMs: 0.007, follow: 0.28 },
+    brown: { partials: [[980, 0.004, 0.55, 0.006], [210, 0.016, 0.8, 0.012], [520, 0.008, 0.22, 0.012]], noise: 0.3, noiseMs: 0.01, follow: 0.4, noiseAt: 0.011 },
+    blue: { partials: [[3400, 0.0014, 1.1, 0], [5600, 0.001, 0.45, 0], [300, 0.011, 0.55, 0.0045]], noise: 0.62, noiseMs: 0.004, follow: 0.08 },
+    black: { partials: [[132, 0.03, 0.95, 0], [280, 0.018, 0.35, 0.002]], noise: 0.22, noiseMs: 0.012, follow: 0.72 },
+    topre: { partials: [[168, 0.042, 0.75, 0], [390, 0.024, 0.22, 0.003]], noise: 0.08, noiseMs: 0.016, follow: 0.85 },
+    silent: { partials: [[620, 0.006, 0.35, 0]], noise: 0.18, noiseMs: 0.005, follow: 0.55 },
+    typewriter: { partials: [[1860, 0.0035, 0.95, 0], [740, 0.01, 0.4, 0.001], [2400, 0.002, 0.3, 0]], noise: 0.7, noiseMs: 0.003, follow: 0.05 },
+    laptop: { partials: [[410, 0.009, 0.45, 0.002]], noise: 0.85, noiseMs: 0.009, follow: 0.62 },
+    cream: { partials: [[196, 0.026, 0.5, 0.004], [430, 0.018, 0.28, 0.016]], noise: 0.12, noiseMs: 0.014, follow: 0.8 },
+};
+
+function strokeProfile(id, kind) {
+    const base = KEY_PROFILES[id] || KEY_PROFILES.red;
     const ms = TYPE_VOICE_MS[id] || TYPE_VOICE_MS[DEFAULT_VOICE];
-    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
+    if (kind === 'space') {
+        return {
+            ...base,
+            ms: Math.round(ms * 1.4),
+            freqScale: 0.7,
+            noise: base.noise * 1.35,
+            rattle: 0.22,
+        };
+    }
+    if (kind === 'enter') {
+        return {
+            ...base,
+            ms: Math.round(ms * 1.2),
+            freqScale: 0.92,
+            ding: id === 'typewriter' ? 0.9 : 0.26,
+        };
+    }
+    if (kind === 'delete') {
+        return {
+            ...base,
+            ms: Math.max(18, Math.round(ms * 0.62)),
+            freqScale: 1.32,
+            noise: base.noise * 0.45,
+        };
+    }
+    return { ...base, ms, freqScale: 1, ding: 0, rattle: 0 };
+}
+
+function synth(id, sampleRate, kind = 'tap') {
+    if (id === 'bang') return synthBang(sampleRate, kind);
+    const profile = strokeProfile(id, kind);
+    const n = Math.max(8, Math.round((sampleRate * profile.ms) / 1000));
     const data = new Float32Array(n);
     const salt = TYPE_NOISE[id] || 57;
+    const phases = profile.partials.map(() => 0);
     let low = 0;
-    let phase = 0;
-    let phaseB = 0;
-    let phaseC = 0;
-    let flutter = 0;
+    let dingPhase = 0;
+    let rattlePhase = 0;
     for (let i = 0; i < n; i += 1) {
         const t = i / sampleRate;
-        const u = n === 1 ? 0 : i / (n - 1);
-        const white = noiseAt(i, salt);
-        low += 0.16 * (white - low);
+        const white = noiseAt(i, salt + (kind === 'space' ? 3 : kind === 'enter' ? 5 : kind === 'delete' ? 7 : 0));
+        const follow = profile.follow ?? 0.3;
+        low += follow * (white - low);
         let sample = 0;
-        if (id === 'bang') {
-            flutter += (2 * Math.PI * 13.5) / sampleRate;
-            const wobble = Math.sin(flutter);
-            const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
-            const freq = 118 - 62 * u + 16 * wobble;
-            phase += (2 * Math.PI * freq) / sampleRate;
-            sample = env * (Math.sin(phase) * 0.28 + low * 0.92);
-        } else if (id === 'ppok') {
-            const freq = 720 - 480 * Math.min(1, u * 1.4);
-            phase += (2 * Math.PI * freq) / sampleRate;
-            const env = Math.exp(-t * 62) * Math.min(1, t / 0.0015);
-            const tick = Math.exp(-t * 280) * white * 0.35;
-            sample = env * Math.sin(phase) * 0.85 + tick;
-        } else if (id === 'ting') {
-            const freq = 932 * (1 - 0.04 * u);
-            phase += (2 * Math.PI * freq) / sampleRate;
-            phaseB += (2 * Math.PI * freq * 2.71) / sampleRate;
-            const env = Math.exp(-t * 28) * Math.min(1, t / 0.001);
-            const mallet = Math.exp(-t * 220) * white * 0.18;
-            sample = env * (Math.sin(phase) * 0.72 + Math.sin(phaseB) * 0.22) + mallet;
-        } else {
-            const first = t < 0.07 ? t : -1;
-            const second = t >= 0.072 ? t - 0.072 : -1;
-            const drip = (dt, base, amp) => {
-                if (dt < 0) return 0;
-                const freq = base * Math.exp(-dt * 14);
-                return { freq, amp: amp * Math.exp(-dt * 22) * Math.min(1, dt / 0.0012) };
-            };
-            const a = drip(first, 1680, 0.85);
-            const b = drip(second, 1240, 0.45);
-            if (a) {
-                phase += (2 * Math.PI * a.freq) / sampleRate;
-                sample += Math.sin(phase) * a.amp;
-            }
-            if (b) {
-                phaseC += (2 * Math.PI * b.freq) / sampleRate;
-                sample += Math.sin(phaseC) * b.amp;
-            }
-            sample += Math.exp(-t * 90) * low * 0.08;
+        profile.partials.forEach((partial, index) => {
+            const freq = partial[0] * (profile.freqScale || 1);
+            const tau = partial[1];
+            const amp = partial[2];
+            const delay = partial[3] || 0;
+            const dt = t - delay;
+            if (dt < 0) return;
+            phases[index] += (2 * Math.PI * freq) / sampleRate;
+            const env = Math.exp(-dt / tau) * Math.min(1, dt / 0.0007);
+            sample += Math.sin(phases[index]) * amp * env;
+        });
+        const noiseStart = profile.noiseAt || 0;
+        const noiseT = t - noiseStart;
+        if (noiseT >= 0 && noiseT < profile.noiseMs) {
+            const u = noiseT / profile.noiseMs;
+            const burst = Math.sin(Math.PI * Math.min(1, u));
+            sample += (white * (1 - follow) + low * follow) * profile.noise * burst;
+        }
+        if (profile.rattle && t > 0.012 && t < 0.03) {
+            rattlePhase += (2 * Math.PI * 90) / sampleRate;
+            const env = Math.exp(-(t - 0.012) / 0.008);
+            sample += Math.sin(rattlePhase) * profile.rattle * env * (0.6 + 0.4 * white);
+        }
+        if (profile.ding) {
+            dingPhase += (2 * Math.PI * (id === 'typewriter' ? 880 : 740)) / sampleRate;
+            const env = Math.exp(-t / 0.045) * Math.min(1, t / 0.002);
+            sample += Math.sin(dingPhase) * profile.ding * env;
         }
         data[i] = sample;
     }
     return finish(data, sampleRate);
 }
 
-export function renderTypeVoice(voice, sampleRate = 48000) {
-    const id = normalizeTypeVoice(voice);
-    const rate = sampleRate > 0 ? sampleRate : 48000;
-    return { id, samples: synth(id, rate) };
+function synthBang(sampleRate, kind) {
+    const scale = kind === 'space' ? 1.25 : kind === 'delete' ? 0.7 : kind === 'enter' ? 1.1 : 1;
+    const ms = Math.round(TYPE_VOICE_MS.bang * scale);
+    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
+    const data = new Float32Array(n);
+    let low = 0;
+    let phase = 0;
+    let flutter = 0;
+    const salt = TYPE_NOISE.bang + (kind === 'space' ? 2 : 0);
+    for (let i = 0; i < n; i += 1) {
+        const t = i / sampleRate;
+        const u = n === 1 ? 0 : i / (n - 1);
+        const white = noiseAt(i, salt);
+        low += 0.16 * (white - low);
+        flutter += (2 * Math.PI * (kind === 'delete' ? 18 : 13.5)) / sampleRate;
+        const wobble = Math.sin(flutter);
+        const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
+        const freq = (kind === 'delete' ? 160 : 118) - 62 * u + 16 * wobble;
+        phase += (2 * Math.PI * freq) / sampleRate;
+        data[i] = env * (Math.sin(phase) * 0.28 + low * 0.92);
+    }
+    return finish(data, sampleRate);
 }
 
-function bufferFor(audio, voice) {
+export function renderTypeStroke(voice, kind = 'tap', sampleRate = 48000) {
     const id = normalizeTypeVoice(voice);
-    const key = `${id}:${audio.sampleRate}`;
+    const rate = sampleRate > 0 ? sampleRate : 48000;
+    const stroke = kind === 'space' || kind === 'enter' || kind === 'delete' ? kind : 'tap';
+    return { id, kind: stroke, samples: synth(id, rate, stroke) };
+}
+
+export function renderTypeVoice(voice, sampleRate = 48000) {
+    return renderTypeStroke(voice, 'tap', sampleRate);
+}
+
+function bufferFor(audio, voice, kind) {
+    const id = normalizeTypeVoice(voice);
+    const stroke = kind === 'space' || kind === 'enter' || kind === 'delete' ? kind : 'tap';
+    const key = `${id}:${stroke}:${audio.sampleRate}`;
     let hit = cache.get(key);
     if (!hit) {
-        const rendered = renderTypeVoice(id, audio.sampleRate);
+        const rendered = renderTypeStroke(id, stroke, audio.sampleRate);
         const buffer = audio.createBuffer(1, rendered.samples.length, audio.sampleRate);
         buffer.getChannelData(0).set(rendered.samples);
         hit = buffer;
         cache.set(key, hit);
     }
     return hit;
+}
+
+let busCtx = null;
+let busIn = null;
+
+/** 글자 소리는 하나의 버스로 모은 뒤 리미터를 통과합니다. 컨텍스트는 버튼 소리와 같은 하나를 씁니다. */
+function typeBus(audio) {
+    if (busCtx === audio && busIn) return busIn;
+    busCtx = audio;
+    busIn = audio.destination;
+    if (typeof audio.createDynamicsCompressor !== 'function') return busIn;
+    try {
+        const comp = audio.createDynamicsCompressor();
+        comp.threshold.value = -16;
+        comp.knee.value = 6;
+        comp.ratio.value = 12;
+        comp.attack.value = 0.002;
+        comp.release.value = 0.08;
+        comp.connect(audio.destination);
+        busIn = comp;
+    } catch {
+        busIn = audio.destination;
+    }
+    return busIn;
 }
 
 function releaseNode(entry) {
@@ -363,37 +480,52 @@ function dropFinished(audio) {
     live = keep;
 }
 
-function launch(audio, voice) {
+function launch(audio, voice, kind = 'tap') {
     dropFinished(audio);
-    if (live.length >= MAX_LIVE) {
+    const now = audio.currentTime || 0;
+    while (live.length >= MAX_LIVE) {
         const oldest = live[0];
-        const now = audio.currentTime || 0;
-        const gain = oldest?.gain?.gain;
-        if (gain && typeof gain.setValueAtTime === 'function' && typeof gain.linearRampToValueAtTime === 'function') {
+        const param = oldest?.gain?.gain;
+        const canRamp = param && typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function';
+        if (canRamp) {
             try {
-                const current = Number.isFinite(gain.value) ? gain.value : TYPE_GAIN;
-                gain.setValueAtTime(current, now);
-                gain.linearRampToValueAtTime(0, now + 0.02);
+                const current = Number.isFinite(param.value) ? param.value : TYPE_GAIN;
+                if (typeof param.cancelScheduledValues === 'function') param.cancelScheduledValues(now);
+                param.setValueAtTime(Math.max(0, current), now);
+                param.linearRampToValueAtTime(0, now + FADE_SEC);
             } catch {
-                /* 램프가 없어도 새 소리는 바로 냅니다. */
+                /* 램프가 없어도 아래에서 끊습니다. */
             }
+            try { oldest?.src?.stop?.(now + FADE_SEC + 0.004); } catch { /* 이미 끝난 소리입니다. */ }
+        } else {
+            try { oldest?.src?.stop?.(); } catch { /* 이미 끝난 소리입니다. */ }
         }
-        try { oldest?.src?.stop?.(now + 0.03); } catch { /* 이미 끝난 소리입니다. */ }
         oldest.done = true;
         live = live.slice(1);
     }
     const src = audio.createBufferSource();
     const gain = audio.createGain();
-    src.buffer = bufferFor(audio, voice);
+    src.buffer = bufferFor(audio, voice, kind);
     const roll = Math.random();
-    src.playbackRate.value = 0.97 + (Number.isFinite(roll) ? roll : 0.5) * 0.06;
-    gain.gain.value = TYPE_GAIN;
+    const pitch = Number.isFinite(roll) ? roll : 0.5;
+    src.playbackRate.value = 0.96 + pitch * 0.12;
+    const wobble = Math.random();
+    const level = Math.min(0.049, TYPE_GAIN * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
+    const param = gain.gain;
+    param.value = level;
+    if (typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function') {
+        try {
+            param.setValueAtTime(0, now);
+            param.linearRampToValueAtTime(level, now + 0.002);
+        } catch {
+            param.value = level;
+        }
+    }
     src.connect(gain);
-    gain.connect(audio.destination);
-    const at = audio.currentTime || 0;
-    src.start(at);
+    gain.connect(typeBus(audio));
+    src.start(now);
     const seconds = (src.buffer?.duration) || (TYPE_VOICE_MS[normalizeTypeVoice(voice)] / 1000);
-    const entry = { src, gain, until: at + seconds, done: false, released: false };
+    const entry = { src, gain, until: now + seconds, done: false, released: false };
     src.onended = () => releaseNode(entry);
     live.push(entry);
 }
@@ -401,12 +533,56 @@ function launch(audio, voice) {
 export function previewTypeVoice(id) {
     unlockKeyAudio();
     const voice = normalizeTypeVoice(id || typeVoiceId());
-    withKeyAudio((audio) => launch(audio, voice));
+    withKeyAudio((audio) => launch(audio, voice, 'tap'));
 }
 
-export function playTypeSound() {
+export function playTypeSound(kind = 'tap') {
     if (!typeSoundEnabled()) return;
     unlockKeyAudio();
     const voice = typeVoiceId();
-    withKeyAudio((audio) => launch(audio, voice));
+    withKeyAudio((audio) => launch(audio, voice, kind));
+}
+
+/** 연타를 샘플로 섞어 피크와 샘플 간 점프를 잽니다. 오래된 소리는 페이드하고, 합은 리미터를 통과합니다. */
+export function mixTypeBurst({ voice = 'red', kind = 'tap', count = 50, gapMs = 30, fadeMs = 16, sampleRate = 48000 } = {}) {
+    const rendered = renderTypeStroke(voice, kind, sampleRate);
+    const samples = rendered.samples;
+    const gap = Math.max(0, Math.round((sampleRate * gapMs) / 1000));
+    const fade = Math.max(1, Math.round((sampleRate * fadeMs) / 1000));
+    const length = Math.max(samples.length + 8, gap * Math.max(0, count - 1) + samples.length + 8);
+    const mix = new Float32Array(length);
+    for (let n = 0; n < count; n += 1) {
+        const start = n * gap;
+        const pitch = 0.96 + ((n * 17) % 100) / 100 * 0.12;
+        const gain = Math.min(0.049, TYPE_GAIN * (0.9 + ((n * 13) % 100) / 100 * 0.2));
+        const step = 1 / pitch;
+        let cursor = 0;
+        for (let i = 0; i < samples.length; i += 1) {
+            const at = start + Math.floor(cursor);
+            cursor += step;
+            if (at >= length) break;
+            let env = 1;
+            const killer = n + MAX_LIVE;
+            if (killer < count) {
+                const cut = killer * gap;
+                if (at >= cut) {
+                    const into = at - cut;
+                    env = into >= fade ? 0 : 1 - into / fade;
+                }
+            }
+            const attack = Math.min(1, i / Math.max(2, Math.round(sampleRate * 0.002)));
+            mix[at] += samples[i] * gain * env * attack;
+        }
+    }
+    let peak = 0;
+    let maxJump = 0;
+    let prev = 0;
+    for (let i = 0; i < mix.length; i += 1) {
+        const limited = Math.tanh(mix[i]);
+        mix[i] = limited;
+        peak = Math.max(peak, Math.abs(limited));
+        maxJump = Math.max(maxJump, Math.abs(limited - prev));
+        prev = limited;
+    }
+    return { peak, maxJump, voices: count, gapMs, fadeMs, sampleRate, voice, kind };
 }
