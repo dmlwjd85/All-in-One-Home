@@ -309,6 +309,17 @@ async function resetBrowser() {
     browser = null;
 }
 
+/** CSS unicode-range 에 이 글자 번호가 들어 있는지 봅니다. */
+function unicodeRangeHas(range, code) {
+    return String(range).split(',').some((part) => {
+        const m = part.trim().match(/^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i);
+        if (!m) return false;
+        const lo = parseInt(m[1], 16);
+        const hi = m[2] ? parseInt(m[2], 16) : lo;
+        return code >= lo && code <= hi;
+    });
+}
+
 async function withPage(width, fn) {
     let last;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -601,6 +612,23 @@ try {
     check(existsSync(firstFont) && statSync(firstFont).size < 32 * 1024, '첫 화면 글꼴이 작지 않습니다.');
     const jjaemFaces = fontsCss.split('@font-face').slice(1).filter((block) => block.includes("'JJAEM"));
     check(jjaemFaces.length >= 4 && jjaemFaces.every((block) => block.includes('font-display: swap') && !/font-display:\s*block/.test(block)), '쨈 글꼴이 swap이 아닙니다.');
+    /** QA 9차 O1·O5·O7·O9: 글꼴 칸 순서, 첫 화면 범위, 전체 파일 받기 글자, 쉬는 틈이 없는 엔진의 대체 경로. */
+    const faceList = fontsCss.split('@font-face').slice(1).map((block) => ({
+        family: (block.match(/font-family:\s*'([^']+)'/) || [])[1] || '',
+        weight: ((block.match(/font-weight:\s*([^;]+);/) || [])[1] || '').trim(),
+        file: (block.match(/url\('\.\/([^']+)'\)/) || [])[1] || '',
+        range: ((block.match(/unicode-range:\s*([^;]+);/) || [])[1] || '').trim(),
+    }));
+    for (const [family, weight] of [['JJAEM Body', '400'], ['JJAEM Body', '700'], ['JJAEM Title Flat', '400']]) {
+        const ks = faceList.findIndex((face) => face.family === family && face.weight === weight && face.file.endsWith('.ks.woff2'));
+        const first = faceList.findIndex((face) => face.family === family && face.weight === weight && face.file.endsWith('.first.woff2'));
+        check(ks >= 0 && first > ks && !faceList[ks].range && Boolean(faceList[first].range), `${family} ${weight}: 전체 파일(.ks)이 첫 화면 파일(.first)보다 앞에 있지 않습니다. 뒤에 적은 칸을 먼저 보므로 첫 화면이 큰 파일을 받게 됩니다.`);
+        check(first >= 0 && !unicodeRangeHas(faceList[first].range, 0xD7A3), `${family} ${weight}: 전체 파일을 깨우는 글자 '힣'이 첫 화면 파일 범위에 들어 있습니다.`);
+    }
+    const titleFirst = faceList.find((face) => face.family === 'JJAEM Title Flat' && face.file.endsWith('.first.woff2'));
+    check([...'쨈 교무수첩'].every((ch) => unicodeRangeHas(titleFirst?.range || '', ch.codePointAt(0))), `첫 화면 제목 '쨈 교무수첩' 글자가 제목 첫 화면 파일 범위에 다 들어 있지 않습니다. ${titleFirst?.range}`);
+    check(indexHtml.includes("document.fonts.load(face, '\\uD7A3')"), "전체 글꼴을 '힣'(U+D7A3, 첫 화면 범위 밖)으로 깨우지 않습니다. 첫 화면 글자로 깨우면 큰 파일을 받지 않습니다.");
+    check(indexHtml.includes('(window.requestIdleCallback || function (run) { setTimeout(run, 200); })(warmFonts, { timeout: 4000 });'), '쉬는 틈(requestIdleCallback)이 없는 엔진에서 200ms 뒤 전체 글꼴을 받는 대체 경로가 없습니다.');
     check(tokenCss.includes("--font-display: 'JJAEM Title Flat'"), '제목 글꼴이 쨈 제목 평면이 아닙니다.');
     check(screenCss.includes('.cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }'), '오늘이 고른 날이면 안쪽 링이 없습니다.');
     check(screenCss.includes('.dark .cal-grid .tap.cal-today .num { color: var(--bg); }'), '다크 오늘 칸 글자가 바탕색이 아닙니다.');
@@ -2225,6 +2253,19 @@ try {
             fontLoads.loadEnd > 0 && idleFonts.every((name) => fontLoads.after.filter((item) => item === name).length === 1),
             `로그인 화면을 다 그린 뒤 다음 화면 글꼴을 한 번씩 받아 두지 않습니다. ${JSON.stringify(fontLoads)}`,
         );
+        const titleChars = await page.evaluate(() => {
+            const seen = new Set();
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                const el = node.parentElement;
+                if (el && getComputedStyle(el).fontFamily.replace(/["']/g, '').startsWith('JJAEM Title Flat')) [...node.textContent].forEach((ch) => seen.add(ch));
+            }
+            return [...seen].join('');
+        });
+        const fontsNow = readFileSync(resolve(root, 'public/fonts/fonts.css'), 'utf8');
+        const titleRange = ((fontsNow.split('@font-face').find((block) => block.includes('JJAEM-TitleFlat-Regular.first.woff2')) || '').match(/unicode-range:\s*([^;]+);/) || [])[1] || '';
+        const missingTitle = [...titleChars].filter((ch) => !/\s/.test(ch) && !unicodeRangeHas(titleRange, ch.codePointAt(0)));
+        check(titleChars.includes('쨈') && missingTitle.length === 0, `로그인 화면 제목 글자 중 첫 화면 제목 파일에 없는 글자가 있어 큰 파일을 받습니다. ${missingTitle.join('')}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
         const before = await page.evaluate(() => {
@@ -2249,6 +2290,29 @@ try {
         await page.waitForFunction(() => document.querySelector('[data-screen="todo"]') && window.scrollY === 0 && (document.querySelector('.main')?.scrollTop || 0) === 0);
         const todo = await page.evaluate(() => ({ y: window.scrollY, main: document.querySelector('.main')?.scrollTop || 0 }));
         check(todo.y === 0 && todo.main === 0, `할 일 화면이 맨 위가 아닙니다. scrollY ${todo.y}, main ${todo.main}`);
+    });
+
+    await withPage(390, async (page) => {
+        /** 쉬는 틈(requestIdleCallback)이 없는 엔진(예: 예전 Safari)에서도 로그인 화면을 다 그린 뒤 전체 글꼴을 한 번씩 받아야 합니다. */
+        await page.evaluateOnNewDocument(() => {
+            try { delete window.requestIdleCallback; } catch { /* 지울 수 없으면 아래에서 비웁니다. */ }
+            window.requestIdleCallback = undefined;
+        });
+        await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        const noIdle = await page.evaluate(async () => {
+            for (let waited = 0; waited < 8000 && performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).length < 3; waited += 200) {
+                await new Promise((done) => { setTimeout(done, 200); });
+            }
+            const loadEnd = performance.getEntriesByType('navigation')[0]?.loadEventEnd || 0;
+            const ks = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).map((entry) => ({ name: entry.name.split('/').pop().split('?')[0], start: entry.startTime }));
+            return { idle: typeof window.requestIdleCallback, loadEnd, ks };
+        });
+        check(
+            noIdle.idle === 'undefined' && noIdle.loadEnd > 0
+                && ['JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2', 'JJAEM-TitleFlat-Regular.ks.woff2'].every((name) => noIdle.ks.filter((item) => item.name === name && item.start >= noIdle.loadEnd).length === 1),
+            `쉬는 틈이 없는 엔진에서 로그인 화면 뒤 전체 글꼴을 받지 않습니다. ${JSON.stringify(noIdle)}`,
+        );
     });
 
     await withDemo(390, 'light', async (page) => {
