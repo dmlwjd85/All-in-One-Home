@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
-import { clearNotice, saveNotice } from './noticeSave.js';
+import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -131,12 +131,15 @@ function NoteBox() {
     );
 }
 
+// 열려 있는 알림장 화면의 날짜·입력칸 글·DB 글. 화면을 떠나면 비웁니다.
+const liveNotice = { current: null };
+
 export function Notice() {
     const { data, clock, route, showToast, go } = useUi();
     const date = route.params.date || addDaysYmd(clock.ymd, 1);
     const notices = joined(data, 'notices');
-    // 그 날 행이 둘(비운 클라우드 행 + 이 기기 민감 행)이면 글이 있는 행을 먼저 보여 줍니다.
-    const current = notices.find((row) => row.date === date && String(row.text || '').trim()) || notices.find((row) => row.date === date);
+    // 그 날 행이 둘(비운 클라우드 행 + 이 기기 민감 행)이면 글이 있는 행을 먼저 보여 줍니다. 저장 위치 고르기와 같은 함수예요.
+    const current = pickNotice(notices, date);
     const dbText = current?.text || '';
     const [text, setText] = useState(dbText);
     const [synced, setSynced] = useState(dbText);
@@ -144,6 +147,12 @@ export function Notice() {
     const busy = useRef(false);
     const others = notices.filter((row) => row.date !== date && String(row.text || '').trim());
     const events = joined(data, 'events').filter((row) => row.date === date);
+
+    useEffect(() => {
+        // 되돌리기 안내가 지금 입력칸에 쓰던 글이 있는지 알 수 있게, 열려 있는 알림장 화면의 상태를 적어 둡니다.
+        liveNotice.current = { date, text, synced };
+    });
+    useEffect(() => () => { liveNotice.current = null; }, []);
 
     useEffect(() => {
         // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로일 때만 새 글로 채웁니다.
@@ -167,19 +176,22 @@ export function Notice() {
     async function saveOnce(next) {
         if (!next.trim()) {
             if (!current?.text?.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
-            const before = current.text;
-            const failed = await clearNotice(current);
-            if (failed?.storageFailed) return;
+            // 그 날 글이 여러 줄(클라우드 옛 글 + 이 기기 민감 글)이어도 함께 비우고 함께 되돌립니다.
+            const cleared = await clearNoticeDay(date);
+            if (cleared?.storageFailed) return;
             showToast('이 날 알림장을 비웠어요.', false, {
                 label: '되돌리기',
                 onClick: async () => {
-                    const result = await saveNotice(date, before);
-                    if (!result?.storageFailed) showToast('알림장을 되돌렸어요.');
+                    const live = liveNotice.current;
+                    const typing = Boolean(live && live.date === date && live.text.trim() && live.text !== live.synced);
+                    const result = await restoreNoticeDay(cleared.before);
+                    if (result?.storageFailed) return;
+                    showToast(typing ? '알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.' : '알림장을 되돌렸어요.');
                 },
             });
             return;
         }
-        const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() }, { from: current ? (current.localOnly ? 'local' : 'cloud') : undefined });
+        const result = await saveNotice(date, next);
         if (result?.storageFailed) return;
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }

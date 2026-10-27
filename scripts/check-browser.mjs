@@ -3478,6 +3478,8 @@ try {
         const typingToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
         check(keptClearTyping === '단소 챙기기', `쓰던 글이 있는데 비우기를 되돌리자 예전 글로 입력칸을 덮어썼습니다: ${JSON.stringify(keptClearTyping)}`);
         check(typingToast.includes('알림장을 되돌렸어요.'), `비운 알림장을 되돌렸는데 되돌렸다는 안내가 없습니다: ${JSON.stringify(typingToast)}`);
+        // N10: 쓰던 글을 그대로 둔 채 되돌렸으면 그 사실을 안내에 함께 알려 줍니다.
+        check(typingToast.includes('알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.'), `쓰던 글을 남긴 채 되돌렸는데 쓰던 글을 그대로 두었다는 안내가 없습니다: ${JSON.stringify(typingToast)}`);
         const undoToastBox = await page.evaluate(() => {
             const toast = document.querySelector('.toast');
             const root = document.documentElement;
@@ -3487,6 +3489,72 @@ try {
         });
         check(undoToastBox && undoToastBox.left >= 0 && undoToastBox.right <= undoToastBox.width + 1 && !undoToastBox.pageOverflow, `360에서 되돌렸다는 안내가 옆으로 넘칩니다: ${JSON.stringify(undoToastBox)}`);
         await page.screenshot({ path: resolve(shots, 'notice_undo_toast_360_light.png') });
+
+        // S6: 한 날에 글이 두 줄(클라우드 옛 글 + 이 기기에만 둔 민감 글)이면 함께 비우고 함께 되돌립니다.
+        const noticeToast = () => page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        const noticeUndo = () => page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        const twoCloud = { id: noticeDay, date: noticeDay, text: '체육복 챙기기', source: 'app' };
+        const twoLocal = { id: noticeDay, date: noticeDay, text: '서연 학폭 신고 건 안내', source: 'app' };
+        await noticeSeed(page, [twoCloud], [twoLocal]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        const twoCleared = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '') && !v.local.some((row) => row.date === noticeDay && String(row.text || '').trim()));
+        check(twoCleared.cloud.some((row) => row.date === noticeDay && row.text === '') && !twoCleared.local.some((row) => row.date === noticeDay && String(row.text || '').trim()), `글이 두 줄인 날을 비웠는데 한 줄이 남았습니다: ${JSON.stringify(twoCleared)}`);
+        check(![...twoCleared.cloud].some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 비우다가 민감한 글이 클라우드 쪽에 들어갔습니다: ${JSON.stringify(twoCleared.cloud)}`);
+        await page.click('button[aria-label="다음 날"]');
+        await delay(300);
+        await page.click('button[aria-label="이전 날"]');
+        await delay(400);
+        const twoAway = await noticeBox(page);
+        check(twoAway === '', `글이 두 줄인 날을 비우고 다른 날에 갔다 왔더니 다른 줄 글이 다시 보입니다: ${JSON.stringify(twoAway)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_two_rows_cleared_360_light.png') });
+        check(await noticeUndo(), '글이 두 줄인 날을 비우고 다른 날에 갔다 온 뒤 되돌리기 버튼이 없습니다.');
+        const twoBack = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '체육복 챙기기') && v.local.some((row) => row.date === noticeDay && row.text === '서연 학폭 신고 건 안내'));
+        check(twoBack.cloud.some((row) => row.date === noticeDay && row.text === '체육복 챙기기') && twoBack.local.some((row) => row.date === noticeDay && row.text === '서연 학폭 신고 건 안내'), `글이 두 줄인 날을 되돌렸는데 두 줄이 모두 돌아오지 않았습니다: ${JSON.stringify(twoBack)}`);
+        check(!twoBack.cloud.some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 되돌리다가 민감한 글이 클라우드 쪽에 들어갔습니다: ${JSON.stringify(twoBack.cloud)}`);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('되돌렸어요'), { timeout: 5000 }).catch(() => {});
+        const plainUndoToast = await noticeToast();
+        check(plainUndoToast.includes('알림장을 되돌렸어요.') && !plainUndoToast.includes('쓰던 글'), `쓰던 글이 없는데 되돌림 안내가 원래 문구가 아닙니다: ${JSON.stringify(plainUndoToast)}`);
+        const twoBackBox = await noticeBox(page);
+        check(twoBackBox === '체육복 챙기기', `글이 두 줄인 날을 되돌린 뒤 입력칸이 예전 글로 돌아오지 않았습니다: ${JSON.stringify(twoBackBox)}`);
+        // 다시 비우고 새로 열어도 빈칸이며, 클라우드 쪽 민감 글은 0건입니다.
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => !v.local.some((row) => row.date === noticeDay && String(row.text || '').trim()) && v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await noticeOpen(page, 'light', noticeDay);
+        const twoReload = await noticeBox(page);
+        const twoReloadVaults = await noticeVaults(page);
+        check(twoReload === '' && !twoReloadVaults.cloud.some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 비우고 새로 열었더니 빈칸이 아니거나 민감한 글이 클라우드 쪽에 있습니다: ${JSON.stringify({ twoReload, twoReloadVaults })}`);
+
+        // 저장 위치 고르기도 화면과 같은 규칙(글 있는 행 먼저)을 씁니다. 비운 클라우드 행 + 이 기기 민감 글인 날에 화면 글을 일반 글로 고쳐 쓰면, 숨은 민감 글이 남지 않습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }], [{ id: noticeDay, date: noticeDay, text: '지호 학폭 관련 보호자 연락', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '지호 보호자께 전화 드리기');
+        const rewritten = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '지호 보호자께 전화 드리기') && !v.local.some((row) => row.date === noticeDay));
+        check(rewritten.cloud.some((row) => row.date === noticeDay && row.text === '지호 보호자께 전화 드리기') && !rewritten.local.some((row) => row.date === noticeDay && /학폭/.test(row.text || '')), `화면에 보이는 민감한 알림장을 일반 글로 고쳐 썼는데 숨은 민감 글이 남았습니다: ${JSON.stringify(rewritten)}`);
+        check(!rewritten.cloud.some((row) => /학폭/.test(row.text || '')), `민감한 알림장을 고쳐 쓰다가 클라우드 쪽에 민감한 글이 들어갔습니다: ${JSON.stringify(rewritten.cloud)}`);
+
+        // 저장에 실패하면 되돌렸다는 안내를 띄우지 않고 저장 공간 안내만 보여 주며, 비운 상태 그대로 둡니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        check(await noticeUndo(), '저장 실패를 볼 때 비우기 토스트에 되돌리기 버튼이 없습니다.');
+        await delay(900);
+        const failToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const failVaults = await noticeVaults(page);
+        check(!failToast.includes('되돌렸어요') && failToast.includes('저장 공간'), `저장에 실패했는데 되돌렸다는 안내가 뜨거나 저장 공간 안내가 없습니다: ${JSON.stringify(failToast)}`);
+        check(failVaults.cloud.some((row) => row.date === noticeDay && row.text === ''), `저장에 실패했는데 비운 알림장이 바뀌었습니다: ${JSON.stringify(failVaults)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_undo_fail_360_light.png') });
     }, 800);
 } catch (error) {
     failures.push(error?.message || String(error));
