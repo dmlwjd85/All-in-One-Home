@@ -17,7 +17,7 @@ import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
 import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
-import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, noteTypeRelease, playTypeSound } from './ui/typesound.js';
+import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -328,15 +328,10 @@ export default function App() {
             const kind = noteTypeKey(event);
             if (kind) playTypeSound(kind);
         };
-        const onTypeUp = (event) => {
-            const kind = noteTypeRelease(event);
-            if (kind) playTypeSound(kind);
-        };
         const onCompositionUpdate = (event) => noteCompositionUpdate(event?.data);
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
         document.addEventListener('keydown', onTypeKey, true);
-        document.addEventListener('keyup', onTypeUp, true);
         document.addEventListener('compositionstart', noteCompositionStart, true);
         document.addEventListener('compositionupdate', onCompositionUpdate, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
@@ -345,7 +340,6 @@ export default function App() {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
             document.removeEventListener('keydown', onTypeKey, true);
-            document.removeEventListener('keyup', onTypeUp, true);
             document.removeEventListener('compositionstart', noteCompositionStart, true);
             document.removeEventListener('compositionupdate', onCompositionUpdate, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
@@ -517,7 +511,7 @@ export default function App() {
         neis: ['나이스에 옮길 것', '복사해서 옮긴 뒤 표시해 두세요'],
         schedule: ['일정·시간표', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
-        notice: ['알림장', '복사해서 다른 앱에 붙여 넣어요'],
+        notice: ['알림장', '복사해서 붙여 넣어요'],
         settings: ['설정', '학급, 소리, 단축키, 계정'],
         roster: ['명단', '번호에 이름을 적어 주세요'],
         day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],

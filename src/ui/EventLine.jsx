@@ -27,7 +27,7 @@ export function EventLine({ row, showToast }) {
                                 showToast('한 줄만 적어도 남길 수 있어요.');
                                 return;
                             }
-                            const result = await saveTextItem('events', { ...row, title: next });
+                            const result = await saveTextItem('events', { ...row, title: next }, { from: row.localOnly ? 'local' : 'cloud' });
                             if (result?.storageFailed) return;
                             showToast('일정을 고쳤어요.', true);
                             setOpen(false);

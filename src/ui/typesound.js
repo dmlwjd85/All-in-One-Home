@@ -1,6 +1,8 @@
-/** 글을 적을 때 나는 타건음. 축마다 이 자리에서 합성합니다.
-    녹음 파일은 넣지 않았습니다. 누름과 뗌, 큰 키의 안정 막대는 따로 만듭니다.
-    출처와 목표 스위치는 docs/type-sounds.md 에 적어 두었습니다.
+/** 글을 적을 때 나는 타건음. 열세 가지 모두 이 자리에서 합성합니다.
+    뽁·띵·물방울은 main에 있던 소리를 한 표본도 바꾸지 않고 그대로 냅니다.
+    녹음 파일을 넣지 않았고, 영상에서 잘라 쓰지도 않았습니다.
+    치는 순간은 감쇠하는 배음 몇 개와 짧은 잡음이고, 축마다 클릭·걸림·바닥 치는 시각이 다릅니다.
+    출처는 docs/type-sounds.md 에 적어 두었습니다.
     크기는 교실에 맞게 작게 두고, 빠른 연타는 오래된 소리부터 사그라지게 한 뒤 리미터를 통과합니다. */
 
 import { unlockKeyAudio, withKeyAudio } from './keyfeel.js';
@@ -9,55 +11,31 @@ const SOUND_KEY = 'ssug-gyomu-type-sound';
 const VOICE_KEY = 'ssug-gyomu-type-voice';
 
 export const TYPE_VOICES = [
-    { id: 'red', label: '빨간 직선', hint: '체리 적축' },
-    { id: 'brown', label: '갈색 걸림', hint: '체리 갈축' },
-    { id: 'blue', label: '파란 딸깍', hint: '체리 청축' },
-    { id: 'black', label: '검은 묵직', hint: '체리 흑축' },
-    { id: 'topre', label: '고무 컵', hint: '무접점' },
-    { id: 'silent', label: '조용한 패드', hint: '저소음 적축' },
-    { id: 'typewriter', label: '타자기', hint: '금속 막대' },
-    { id: 'laptop', label: '노트북', hint: '짧은 돔' },
-    { id: 'cream', label: '윤활 크림', hint: '크림 축' },
-    { id: 'ink', label: '깊은 먹물', hint: '잉크 흑축' },
-    { id: 'silver', label: '짧은 은색', hint: '스피드' },
-    { id: 'boxnavy', label: '굵은 딸깍', hint: '박스 남색' },
-    { id: 'panda', label: '또렷한 판다', hint: '홀리 판다' },
-    { id: 'alpaca', label: '부드러운 긴 축', hint: '알파카' },
-    { id: 'boba', label: '통통한 걸림', hint: '보바' },
-    { id: 'zeal', label: '둥근 걸림', hint: '질로우' },
-    { id: 'marsh', label: '마시멜로', hint: '말랑한 저소음' },
+    { id: 'ppok', label: '뽁', hint: '통통' },
+    { id: 'ting', label: '띵', hint: '실로폰' },
+    { id: 'drop', label: '물방울', hint: '또록' },
+    { id: 'red', label: '적축', hint: '직선' },
+    { id: 'brown', label: '갈축', hint: '걸림' },
+    { id: 'blue', label: '청축', hint: '딸깍' },
+    { id: 'black', label: '흑축', hint: '묵직' },
+    { id: 'topre', label: '무접점', hint: '둥글' },
+    { id: 'silent', label: '저소음', hint: '패드' },
+    { id: 'typewriter', label: '타자기', hint: '금속' },
+    { id: 'laptop', label: '노트북', hint: '돔' },
+    { id: 'cream', label: '크림', hint: '윤활' },
     { id: 'bang', label: '방귀', hint: '뿌우', playful: true },
 ];
 
-/** 화면 이름과 따로, 소리를 맞춘 실제 스위치입니다. 방귀만 장난입니다. */
-export const TYPE_TARGETS = {
-    red: 'Cherry MX Red',
-    brown: 'Cherry MX Brown',
-    blue: 'Cherry MX Blue',
-    black: 'Cherry MX Black',
-    topre: 'Topre 45g',
-    silent: 'Cherry MX Silent Red',
-    typewriter: '버클링 스프링 타자기',
-    laptop: '노트북 팬터그래프',
-    cream: 'NovelKeys Cream',
-    ink: 'Gateron Ink Black',
-    silver: 'Cherry MX Speed Silver',
-    boxnavy: 'Kailh Box Navy',
-    panda: 'Drop Holy Panda',
-    alpaca: 'JWK Alpaca',
-    boba: 'Gazzew Boba U4T',
-    zeal: 'Zealio V2',
-    marsh: 'Gazzew Boba U4',
-    bang: '장난',
-};
-
 /** 목록 순서를 바꿔도 잡음 결이 달라지지 않게 씨앗을 고정합니다. */
 const TYPE_NOISE = {
+    ppok: 76, ting: 95, drop: 114,
     red: 11, brown: 23, blue: 37, black: 53, topre: 71, silent: 89, typewriter: 101, laptop: 113, cream: 127, bang: 57,
-    ink: 131, silver: 149, boxnavy: 163, panda: 179, alpaca: 191, boba: 211, zeal: 227, marsh: 233,
 };
 
 export const TYPE_VOICE_MS = {
+    ppok: 46,
+    ting: 92,
+    drop: 156,
     red: 38,
     brown: 54,
     blue: 62,
@@ -67,28 +45,22 @@ export const TYPE_VOICE_MS = {
     typewriter: 88,
     laptop: 34,
     cream: 70,
-    ink: 66,
-    silver: 22,
-    boxnavy: 50,
-    panda: 74,
-    alpaca: 46,
-    boba: 80,
-    zeal: 58,
-    marsh: 42,
-    bang: 118,
+    bang: 110,
 };
 
 /** 버튼 소리의 '작게'보다 낮게 둡니다. 여러 소리가 겹쳐도 1을 넘기지 않게. */
 export const TYPE_GAIN = 0.028;
 
-const DEFAULT_VOICE = 'red';
+/** 예전부터 있던 소리(방귀 포함). 저장된 값이 그대로 같은 소리로 나도록 합성·크기·음높이 흔들림을 main 그대로 둡니다. */
+const LEGACY_VOICES = new Set(['ppok', 'ting', 'drop', 'bang']);
+const LEGACY_GAIN = 0.032;
+
+const DEFAULT_VOICE = 'ppok';
 const SAME_TURN_MS = 12;
 const MAX_LIVE = 6;
 const FADE_SEC = 0.016;
 
 let lastInputAt = -1000;
-let lastReleaseAt = -1000;
-let pendingKey = '';
 const cache = new Map();
 let live = [];
 
@@ -287,17 +259,17 @@ export function acceptTypeInput(event, now = inputNow()) {
 /** 같은 순간 두 번 오는 조합 이벤트만 건너뜁니다. 다음 글자는 바로 울립니다. */
 export function noteTypeInput(event, now = inputNow()) {
     if (!typeSoundEnabled()) return false;
-    const ok = acceptTypeInput(event, now);
-    if (ok) pendingKey = String(event?.data || event?.key || '');
-    return ok;
+    return acceptTypeInput(event, now);
 }
 
 /** 스페이스·엔터·지우기는 글자 소리와 다른 타건입니다. 바로 뒤의 input은 같은 타로 봅니다. */
 export function noteTypeKey(event, now = inputNow()) {
     if (!typeSoundEnabled()) return '';
+    /* 예전 소리(뽁·띵·물방울·방귀)는 main처럼 글자가 들어갈 때만 납니다. 엔터·지우기는 조용하고, 스페이스는 input에서 한 번 납니다. */
+    if (LEGACY_VOICES.has(typeVoiceId())) return '';
     if (event?.repeat) return '';
     const key = event?.key;
-    const kind = key === ' ' || key === 'Spacebar' ? 'space' : key === 'Enter' ? 'enter' : (key === 'Backspace' || key === 'Delete' ? 'delete' : (key === 'Shift' ? 'shift' : (key === 'Tab' ? 'tab' : '')));
+    const kind = key === ' ' || key === 'Spacebar' ? 'space' : key === 'Enter' ? 'enter' : (key === 'Backspace' || key === 'Delete' ? 'delete' : '');
     if (!kind) return '';
     const el = event?.target;
     if (!isTextControl(el) || isSensitiveControl(el)) return '';
@@ -305,24 +277,6 @@ export function noteTypeKey(event, now = inputNow()) {
     const at = inputNow(now);
     if (at - lastInputAt < SAME_TURN_MS) return '';
     lastInputAt = at;
-    pendingKey = String(key || '');
-    return kind;
-}
-
-/** 손을 뗄 때의 소리. 누름과 시계를 나누어, 짧은 탭의 뗌이 삼켜지지 않게 합니다. */
-export function noteTypeRelease(event, now = inputNow()) {
-    if (!typeSoundEnabled()) return '';
-    if (event?.repeat) return '';
-    const el = event?.target;
-    if (!isTextControl(el) || isSensitiveControl(el)) return '';
-    if (event.isComposing || event.keyCode === 229) return '';
-    const key = event?.key;
-    const kind = key === ' ' || key === 'Spacebar' ? 'space-up' : key === 'Enter' ? 'enter-up' : (key === 'Backspace' || key === 'Delete' ? 'delete-up' : (key === 'Shift' ? 'shift-up' : (key === 'Tab' ? 'tab-up' : (typeof key === 'string' && key.length === 1 ? 'up' : ''))));
-    if (!kind) return '';
-    const at = inputNow(now);
-    if (at - lastReleaseAt < SAME_TURN_MS) return '';
-    lastReleaseAt = at;
-    pendingKey = String(key || '');
     return kind;
 }
 
@@ -364,62 +318,107 @@ const KEY_PROFILES = {
     typewriter: { partials: [[1860, 0.0035, 0.95, 0], [740, 0.01, 0.4, 0.001], [2400, 0.002, 0.3, 0]], noise: 0.7, noiseMs: 0.003, follow: 0.05 },
     laptop: { partials: [[410, 0.009, 0.45, 0.002]], noise: 0.85, noiseMs: 0.009, follow: 0.62 },
     cream: { partials: [[196, 0.026, 0.5, 0.004], [430, 0.018, 0.28, 0.016]], noise: 0.12, noiseMs: 0.014, follow: 0.8 },
-    ink: { partials: [[92, 0.034, 1, 0], [210, 0.02, 0.22, 0.001]], noise: 0.08, noiseMs: 0.016, follow: 0.88 },
-    silver: { partials: [[3100, 0.0022, 1, 0], [1800, 0.004, 0.35, 0]], noise: 0.5, noiseMs: 0.003, follow: 0.05 },
-    boxnavy: { partials: [[4800, 0.0011, 1.15, 0], [2400, 0.002, 0.4, 0], [190, 0.014, 0.7, 0.006]], noise: 0.55, noiseMs: 0.0035, follow: 0.06 },
-    panda: { partials: [[1700, 0.003, 0.7, 0.005], [108, 0.028, 0.95, 0.012]], noise: 0.28, noiseMs: 0.008, follow: 0.45, noiseAt: 0.004 },
-    alpaca: { partials: [[275, 0.016, 0.7, 0], [860, 0.006, 0.32, 0.001]], noise: 0.48, noiseMs: 0.01, follow: 0.5 },
-    boba: { partials: [[2300, 0.0024, 0.85, 0.002], [104, 0.03, 0.9, 0.014]], noise: 0.24, noiseMs: 0.009, follow: 0.4 },
-    zeal: { partials: [[760, 0.006, 0.6, 0.007], [250, 0.02, 0.75, 0.01]], noise: 0.2, noiseMs: 0.012, follow: 0.55, noiseAt: 0.003 },
-    marsh: { partials: [[340, 0.012, 0.22, 0.002]], noise: 0.7, noiseMs: 0.018, follow: 0.94 },
 };
-
-function kindParts(kind) {
-    const name = String(kind || 'tap');
-    const release = name === 'up' || name.endsWith('-up');
-    const baseName = name === 'up' ? 'tap' : (name.endsWith('-up') ? name.slice(0, -3) : name);
-    const base = ['space', 'enter', 'delete', 'shift', 'tab'].includes(baseName) ? baseName : 'tap';
-    return { base, release };
-}
 
 function strokeProfile(id, kind) {
     const base = KEY_PROFILES[id] || KEY_PROFILES.red;
     const ms = TYPE_VOICE_MS[id] || TYPE_VOICE_MS[DEFAULT_VOICE];
-    const parts = kindParts(kind);
-    let profile;
-    if (parts.base === 'space') {
-        profile = { ...base, ms: Math.round(ms * 1.4), freqScale: 0.7, noise: base.noise * 1.35, rattle: 0.28, stab: 0.22 };
-    } else if (parts.base === 'enter') {
-        profile = { ...base, ms: Math.round(ms * 1.2), freqScale: 0.92, ding: id === 'typewriter' ? 0.9 : 0.26, rattle: 0.12, stab: 0.14 };
-    } else if (parts.base === 'shift') {
-        profile = { ...base, ms: Math.round(ms * 1.33), freqScale: 0.74, noise: base.noise * 1.2, rattle: 0.34, stab: 0.26 };
-    } else if (parts.base === 'tab') {
-        profile = { ...base, ms: Math.round(ms * 1.18), freqScale: 0.84, noise: base.noise * 1.05, rattle: 0.16, stab: 0.1 };
-    } else if (parts.base === 'delete') {
-        profile = { ...base, ms: Math.max(18, Math.round(ms * 0.62)), freqScale: 1.32, noise: base.noise * 0.45, rattle: 0, stab: 0 };
-    } else {
-        profile = { ...base, ms, freqScale: 1, ding: 0, rattle: 0, stab: 0 };
+    if (kind === 'space') {
+        return {
+            ...base,
+            ms: Math.round(ms * 1.4),
+            freqScale: 0.7,
+            noise: base.noise * 1.35,
+            rattle: 0.22,
+        };
     }
-    if (!parts.release) return profile;
-    return {
-        ...profile,
-        ms: Math.max(16, Math.round(profile.ms * 0.52)),
-        freqScale: (profile.freqScale || 1) * 1.55,
-        noise: (profile.noise || 0) * 0.35,
-        rattle: (profile.rattle || 0) * 0.35,
-        stab: (profile.stab || 0) * 0.25,
-        ding: 0,
-        noiseAt: 0,
-        partials: (profile.partials || []).map((partial) => [partial[0] * 1.15, partial[1] * 0.55, partial[2] * 0.62, 0]),
-    };
+    if (kind === 'enter') {
+        return {
+            ...base,
+            ms: Math.round(ms * 1.2),
+            freqScale: 0.92,
+            ding: id === 'typewriter' ? 0.9 : 0.26,
+        };
+    }
+    if (kind === 'delete') {
+        return {
+            ...base,
+            ms: Math.max(18, Math.round(ms * 0.62)),
+            freqScale: 1.32,
+            noise: base.noise * 0.45,
+        };
+    }
+    return { ...base, ms, freqScale: 1, ding: 0, rattle: 0 };
 }
 
-function synth(id, sampleRate, kind = 'tap', variant = 0) {
-    if (id === 'bang') return synthBang(sampleRate, kind, variant);
+/** main의 뽁·띵·물방울·방귀 합성을 그대로 옮겼습니다. main에는 키별 소리가 없었으므로 띄어쓰기·엔터·지우기도 누름과 같은 표본입니다. */
+function synthLegacy(id, sampleRate) {
+    const ms = TYPE_VOICE_MS[id];
+    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
+    const data = new Float32Array(n);
+    const salt = TYPE_NOISE[id] || 57;
+    let low = 0;
+    let phase = 0;
+    let phaseB = 0;
+    let phaseC = 0;
+    let flutter = 0;
+    for (let i = 0; i < n; i += 1) {
+        const t = i / sampleRate;
+        const u = n === 1 ? 0 : i / (n - 1);
+        const white = noiseAt(i, salt);
+        low += 0.16 * (white - low);
+        let sample = 0;
+        if (id === 'bang') {
+            flutter += (2 * Math.PI * 13.5) / sampleRate;
+            const wobble = Math.sin(flutter);
+            const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
+            const freq = 118 - 62 * u + 16 * wobble;
+            phase += (2 * Math.PI * freq) / sampleRate;
+            sample = env * (Math.sin(phase) * 0.28 + low * 0.92);
+        } else if (id === 'ppok') {
+            const freq = 720 - 480 * Math.min(1, u * 1.4);
+            phase += (2 * Math.PI * freq) / sampleRate;
+            const env = Math.exp(-t * 62) * Math.min(1, t / 0.0015);
+            const tick = Math.exp(-t * 280) * white * 0.35;
+            sample = env * Math.sin(phase) * 0.85 + tick;
+        } else if (id === 'ting') {
+            const freq = 932 * (1 - 0.04 * u);
+            phase += (2 * Math.PI * freq) / sampleRate;
+            phaseB += (2 * Math.PI * freq * 2.71) / sampleRate;
+            const env = Math.exp(-t * 28) * Math.min(1, t / 0.001);
+            const mallet = Math.exp(-t * 220) * white * 0.18;
+            sample = env * (Math.sin(phase) * 0.72 + Math.sin(phaseB) * 0.22) + mallet;
+        } else {
+            const first = t < 0.07 ? t : -1;
+            const second = t >= 0.072 ? t - 0.072 : -1;
+            const drip = (dt, base, amp) => {
+                if (dt < 0) return 0;
+                const freq = base * Math.exp(-dt * 14);
+                return { freq, amp: amp * Math.exp(-dt * 22) * Math.min(1, dt / 0.0012) };
+            };
+            const a = drip(first, 1680, 0.85);
+            const b = drip(second, 1240, 0.45);
+            if (a) {
+                phase += (2 * Math.PI * a.freq) / sampleRate;
+                sample += Math.sin(phase) * a.amp;
+            }
+            if (b) {
+                phaseC += (2 * Math.PI * b.freq) / sampleRate;
+                sample += Math.sin(phaseC) * b.amp;
+            }
+            sample += Math.exp(-t * 90) * low * 0.08;
+        }
+        data[i] = sample;
+    }
+    return finish(data, sampleRate);
+}
+
+function synth(id, sampleRate, kind = 'tap') {
+    if (LEGACY_VOICES.has(id)) return synthLegacy(id, sampleRate);
     const profile = strokeProfile(id, kind);
     const n = Math.max(8, Math.round((sampleRate * profile.ms) / 1000));
     const data = new Float32Array(n);
-    const salt = (TYPE_NOISE[id] || 57) + variant * 17;
+    const salt = TYPE_NOISE[id] || 57;
     const phases = profile.partials.map(() => 0);
     let low = 0;
     let dingPhase = 0;
@@ -453,10 +452,6 @@ function synth(id, sampleRate, kind = 'tap', variant = 0) {
             const env = Math.exp(-(t - 0.012) / 0.008);
             sample += Math.sin(rattlePhase) * profile.rattle * env * (0.6 + 0.4 * white);
         }
-        if (profile.stab && t > 0.006 && t < 0.02) {
-            const tick = (t > 0.006 && t < 0.009) || (t > 0.013 && t < 0.016);
-            if (tick) sample += white * profile.stab;
-        }
         if (profile.ding) {
             dingPhase += (2 * Math.PI * (id === 'typewriter' ? 880 : 740)) / sampleRate;
             const env = Math.exp(-t / 0.045) * Math.min(1, t / 0.002);
@@ -467,84 +462,31 @@ function synth(id, sampleRate, kind = 'tap', variant = 0) {
     return finish(data, sampleRate);
 }
 
-function synthBang(sampleRate, kind, variant = 0) {
-    const parts = kindParts(kind);
-    const scale = parts.base === 'space' ? 1.25 : parts.base === 'delete' ? 0.7 : parts.base === 'enter' ? 1.1 : parts.base === 'shift' ? 1.2 : parts.base === 'tab' ? 1.05 : 1;
-    const ms = Math.max(16, Math.round(TYPE_VOICE_MS.bang * scale * (parts.release ? 0.52 : 1)));
-    const n = Math.max(8, Math.round((sampleRate * ms) / 1000));
-    const data = new Float32Array(n);
-    let low = 0;
-    let phase = 0;
-    let flutter = 0;
-    const salt = TYPE_NOISE.bang + (parts.base === 'space' ? 2 : 0) + variant * 17;
-    for (let i = 0; i < n; i += 1) {
-        const t = i / sampleRate;
-        const u = n === 1 ? 0 : i / (n - 1);
-        const white = noiseAt(i, salt);
-        low += 0.16 * (white - low);
-        flutter += (2 * Math.PI * (parts.base === 'delete' ? 18 : 13.5)) / sampleRate;
-        const wobble = Math.sin(flutter);
-        const env = (Math.sin(Math.PI * Math.min(1, u)) ** 0.55) * (0.62 + 0.38 * wobble);
-        const freq = (parts.base === 'delete' ? 160 : 118) - 62 * u + 16 * wobble;
-        phase += (2 * Math.PI * freq) / sampleRate;
-        data[i] = env * (Math.sin(phase) * 0.28 + low * 0.92);
-    }
-    return finish(data, sampleRate);
-}
 
-function strokeName(kind) {
-    const name = String(kind || 'tap');
-    if (name === 'up' || name.endsWith('-up')) return name;
-    if (name === 'space' || name === 'enter' || name === 'delete' || name === 'shift' || name === 'tab') return name;
-    return 'tap';
-}
-
-export function renderTypeStroke(voice, kind = 'tap', sampleRate = 48000, variant = 0) {
+export function renderTypeStroke(voice, kind = 'tap', sampleRate = 48000) {
     const id = normalizeTypeVoice(voice);
     const rate = sampleRate > 0 ? sampleRate : 48000;
-    const stroke = strokeName(kind);
-    const salt = Number.isFinite(variant) ? Math.max(0, Math.min(2, variant)) : 0;
-    return { id, kind: stroke, samples: synth(id, rate, stroke, salt) };
+    const stroke = kind === 'space' || kind === 'enter' || kind === 'delete' ? kind : 'tap';
+    return { id, kind: stroke, samples: synth(id, rate, stroke) };
 }
 
 export function renderTypeVoice(voice, sampleRate = 48000) {
     return renderTypeStroke(voice, 'tap', sampleRate);
 }
 
-function bufferFor(audio, voice, kind, variant = 0) {
+function bufferFor(audio, voice, kind) {
     const id = normalizeTypeVoice(voice);
-    const stroke = strokeName(kind);
-    const salt = Number.isFinite(variant) ? Math.max(0, Math.min(2, variant)) : 0;
-    const key = `${id}:${stroke}:${salt}:${audio.sampleRate}`;
+    const stroke = kind === 'space' || kind === 'enter' || kind === 'delete' ? kind : 'tap';
+    const key = `${id}:${stroke}:${audio.sampleRate}`;
     let hit = cache.get(key);
     if (!hit) {
-        const rendered = renderTypeStroke(id, stroke, audio.sampleRate, salt);
+        const rendered = renderTypeStroke(id, stroke, audio.sampleRate);
         const buffer = audio.createBuffer(1, rendered.samples.length, audio.sampleRate);
         buffer.getChannelData(0).set(rendered.samples);
         hit = buffer;
         cache.set(key, hit);
     }
     return hit;
-}
-
-function variantOf(key) {
-    const text = String(key || '');
-    if (!text) return 0;
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) hash = (hash + text.charCodeAt(i) * (i + 1)) % 3;
-    return hash;
-}
-
-/** 같은 글자는 비슷한 높이, 다른 글자는 다른 높이. 매 타마다 아주 조금 더 흔듭니다. */
-export function typePitchForKey(key, random = Math.random) {
-    const text = String(key || '');
-    let hash = 2166136261;
-    for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-    const unit = text ? ((hash >>> 0) % 1000) / 999 : 0.5;
-    const roll = Number(random());
-    const wobble = Number.isFinite(roll) ? Math.min(1, Math.max(0, roll)) : 0.5;
-    const center = 0.94 + unit * 0.1;
-    return Math.min(1.08, Math.max(0.9, center + (wobble - 0.5) * 0.04));
 }
 
 let busCtx = null;
@@ -622,7 +564,7 @@ function fadeOldest(oldest, now) {
     if (oldest) oldest.done = true;
 }
 
-function launch(audio, voice, kind = 'tap', when, keyName = '') {
+function launch(audio, voice, kind = 'tap', when) {
     dropFinished(audio);
     const now = Number.isFinite(when) ? when : (audio.currentTime || 0);
     while (live.length >= MAX_LIVE) {
@@ -632,12 +574,13 @@ function launch(audio, voice, kind = 'tap', when, keyName = '') {
     }
     const src = audio.createBufferSource();
     const gain = audio.createGain();
-    const keyText = String(keyName || '');
-    src.buffer = bufferFor(audio, voice, kind, variantOf(keyText));
-    src.playbackRate.value = typePitchForKey(keyText);
+    src.buffer = bufferFor(audio, voice, kind);
+    const roll = Math.random();
+    const pitch = Number.isFinite(roll) ? roll : 0.5;
+    const legacy = LEGACY_VOICES.has(normalizeTypeVoice(voice));
+    src.playbackRate.value = legacy ? 0.97 + pitch * 0.06 : 0.96 + pitch * 0.12;
     const wobble = Math.random();
-    const release = kind === 'up' || String(kind).endsWith('-up');
-    const level = Math.min(0.049, TYPE_GAIN * (release ? 0.62 : 1) * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
+    const level = legacy ? LEGACY_GAIN : Math.min(0.049, TYPE_GAIN * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
     const param = gain.gain;
     param.value = level;
     if (typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function') {
@@ -674,17 +617,14 @@ export function resetTypeGraphForTest() {
 export function previewTypeVoice(id) {
     unlockKeyAudio();
     const voice = normalizeTypeVoice(id || typeVoiceId());
-    pendingKey = '';
-    withKeyAudio((audio) => launch(audio, voice, 'tap', undefined, ''));
+    withKeyAudio((audio) => launch(audio, voice, 'tap'));
 }
 
 export function playTypeSound(kind = 'tap') {
     if (!typeSoundEnabled()) return;
     unlockKeyAudio();
     const voice = typeVoiceId();
-    const keyName = pendingKey;
-    pendingKey = '';
-    withKeyAudio((audio) => launch(audio, voice, kind, undefined, keyName));
+    withKeyAudio((audio) => launch(audio, voice, kind));
 }
 
 /** 연타를 샘플로 섞어 피크와 샘플 간 점프를 잽니다. 오래된 소리는 페이드하고, 합은 리미터를 통과합니다. */
@@ -697,8 +637,9 @@ export function mixTypeBurst({ voice = 'red', kind = 'tap', count = 50, gapMs = 
     const mix = new Float32Array(length);
     for (let n = 0; n < count; n += 1) {
         const start = n * gap;
-        const pitch = 0.96 + ((n * 17) % 100) / 100 * 0.12;
-        const gain = Math.min(0.049, TYPE_GAIN * (0.9 + ((n * 13) % 100) / 100 * 0.2));
+        const legacy = LEGACY_VOICES.has(rendered.id);
+        const pitch = legacy ? 0.97 + ((n * 17) % 100) / 100 * 0.06 : 0.96 + ((n * 17) % 100) / 100 * 0.12;
+        const gain = legacy ? LEGACY_GAIN : Math.min(0.049, TYPE_GAIN * (0.9 + ((n * 13) % 100) / 100 * 0.2));
         const step = 1 / pitch;
         let cursor = 0;
         for (let i = 0; i < samples.length; i += 1) {

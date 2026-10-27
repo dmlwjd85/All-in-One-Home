@@ -194,29 +194,22 @@ async function revertMemory(previous, undoable) {
 }
 
 export async function update(recipe, { undoable = false } = {}) {
-    const staged = [];
-    forgetStack.push(staged);
+    const previous = structuredClone(state);
+    if (undoable) undoStack = [...undoStack.slice(-4), previous];
+    const next = recipe(structuredClone(state)) || state;
+    state = next;
+    mirrorTheme(state.profile.theme);
+    emit();
     try {
-        const previous = structuredClone(state);
-        if (undoable) undoStack = [...undoStack.slice(-4), previous];
-        const next = recipe(structuredClone(state)) || state;
-        state = next;
-        mirrorTheme(state.profile.theme);
-        emit();
-        try {
-            await persist();
-        } catch (error) {
-            await revertMemory(previous, undoable);
-            const message = error?.storageFailed ? error.message : storageIssueMessage(error);
-            tellStorageIssue(message);
-            return { storageFailed: true, message };
-        }
-        for (const item of staged) queueCloudForget(item.bucket, item.id);
-        flushCloud().catch(() => {});
-        return null;
-    } finally {
-        forgetStack.pop();
+        await persist();
+    } catch (error) {
+        await revertMemory(previous, undoable);
+        const message = error?.storageFailed ? error.message : storageIssueMessage(error);
+        tellStorageIssue(message);
+        return { storageFailed: true, message };
     }
+    flushCloud().catch(() => {});
+    return null;
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
@@ -238,7 +231,6 @@ export async function flushCloud() {
         cloudHashes = result.hashes;
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
-    await forgetQueuedCloud();
     return result;
 }
 
@@ -303,11 +295,11 @@ function absorbCloud(draft, remote) {
     }
     draft.students = unionById(draft.students, remote.students);
     draft.attendance = unionById(draft.attendance, remote.attendance);
-    draft.records = unionById(draft.records, withoutLocalTwin(draft, 'records', remote.records));
-    draft.events = unionById(draft.events, withoutLocalTwin(draft, 'events', remote.events));
-    draft.todos = unionById(draft.todos, withoutLocalTwin(draft, 'todos', remote.todos));
-    draft.notes = unionById(draft.notes, withoutLocalTwin(draft, 'notes', remote.notes));
-    draft.notices = unionById(draft.notices, withoutLocalTwin(draft, 'notices', remote.notices));
+    draft.records = unionById(draft.records, remote.records);
+    draft.events = unionById(draft.events, remote.events);
+    draft.todos = unionById(draft.todos, remote.todos);
+    draft.notes = unionById(draft.notes, remote.notes);
+    draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
     draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
     for (const [day, value] of Object.entries(remote.timetable || {})) {
@@ -320,12 +312,6 @@ function absorbCloud(draft, remote) {
         draft.profile.guest = false;
     }
     return draft;
-}
-
-const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices'];
-
-export function queuedCloudKeys() {
-    return [...cloudForget];
 }
 
 export async function undo() {
@@ -345,13 +331,6 @@ export async function undo() {
         tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
         return false;
     }
-    for (const bucket of CLOUD_BUCKETS) {
-        const kept = new Set((prev[bucket] || []).map((row) => row?.id).filter(Boolean));
-        for (const row of current[bucket] || []) {
-            if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id);
-        }
-    }
-    await flushCloud().catch(() => {});
     return true;
 }
 
@@ -479,75 +458,22 @@ function put(list, row) {
     else list.unshift(row);
 }
 
-const MOVED_BUCKETS = new Set(['notes', 'todos', 'records', 'events', 'notices']);
-const CLOUD_NAME = { notes: 'notes', todos: 'todos', records: 'records', events: 'events', notices: 'notices' };
-const forgetStack = [];
-const cloudForget = new Set();
-
-function stageCloudForget(bucket, id) {
-    const staged = forgetStack[forgetStack.length - 1];
-    if (!staged || !MOVED_BUCKETS.has(bucket) || !id) return;
-    staged.push({ bucket, id: String(id) });
-}
-
-/** 검사에서 클라우드 삭제 대기열을 봅니다. 로그인 전에는 대기열에만 남습니다. */
-export function pendingCloudForgetForTest() {
-    return [...cloudForget];
-}
-
-function queueCloudForget(bucket, id) {
-    const name = CLOUD_NAME[bucket];
-    if (!name || !id) return;
-    const key = `${name}/${id}`;
-    cloudForget.add(key);
-    if (Object.prototype.hasOwnProperty.call(cloudHashes, key)) {
-        delete cloudHashes[key];
-        if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
-    }
-}
-
-function bucketOfCloud(name) {
-    return Object.keys(CLOUD_NAME).find((bucket) => CLOUD_NAME[bucket] === name) || '';
-}
-
-async function forgetQueuedCloud() {
-    if (!cloudForget.size || !state.auth?.uid) return;
-    const uid = state.auth.uid;
-    const memory = memoryOnly || state.profile?.sharedPc;
-    for (const key of [...cloudForget]) {
-        const slash = key.indexOf('/');
-        const name = key.slice(0, slash);
-        const id = key.slice(slash + 1);
-        const bucket = bucketOfCloud(name);
-        if (bucket && (state[bucket] || []).some((row) => String(row?.id) === id)) {
-            cloudForget.delete(key);
-            continue;
-        }
-        const result = await deleteUserDoc(uid, name, id, { memoryOnly: memory }).catch(() => ({ ok: false }));
-        if (result?.ok) cloudForget.delete(key);
-    }
-}
-
 function dropId(list, id) {
     return (list || []).filter((item) => item?.id !== id);
 }
 
-/** 같은 아이디는 클라우드와 이 기기 중 한쪽에만 둡니다. 민감하면 클라우드 쪽을 지웁니다. */
-function relocate(draft, bucket, row, local) {
+/**
+ * 화면이 고치던 그 행(from)이 클라우드↔이 기기 사이를 옮겨 갈 때만 옛 자리의 같은 아이디를 지웁니다.
+ * from 을 모르거나 같은 쪽에 남으면 반대쪽은 건드리지 않습니다(main과 같음). 숨은 이 기기 전용 행은 지우지 않습니다.
+ */
+function relocate(draft, bucket, row, local, from) {
     if (!draft.local) draft.local = {};
     if (!Array.isArray(draft[bucket])) draft[bucket] = [];
     if (!Array.isArray(draft.local[bucket])) draft.local[bucket] = [];
-    const hadCloud = draft[bucket].some((item) => item?.id === row.id);
-    draft[bucket] = dropId(draft[bucket], row.id);
-    draft.local[bucket] = dropId(draft.local[bucket], row.id);
+    if (local && from === 'cloud') draft[bucket] = dropId(draft[bucket], row.id);
+    if (!local && from === 'local') draft.local[bucket] = dropId(draft.local[bucket], row.id);
     put(local ? draft.local[bucket] : draft[bucket], { ...row, source: row.source || 'app' });
-    if (local && hadCloud) stageCloudForget(bucket, row.id);
     return draft;
-}
-
-function withoutLocalTwin(draft, bucket, remote = []) {
-    const localIds = new Set((draft.local?.[bucket] || []).map((row) => row?.id).filter(Boolean));
-    return (remote || []).filter((row) => row?.id && !localIds.has(row.id));
 }
 
 export async function saveQuick(input, now = new Date()) {
@@ -579,11 +505,11 @@ export async function saveQuick(input, now = new Date()) {
                 neis: input.neis != null ? Boolean(input.neis) : kind === '관찰' || kind === '칭찬',
             };
             if (input.follow || (kind === '상담' && parsed.detectedDate && text.includes('다시'))) row.follow = input.follow || parsed.detectedDate;
-            relocate(draft, 'records', row, local);
+            put(local ? draft.local.records : draft.records, row);
             message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
         } else if (kind === '할 일') {
             const row = { ...base, id: nid('todo'), title: stripTokens(text) || text, done: false, due: input.due != null ? input.due : (parsed.detectedDate || '') };
-            relocate(draft, 'todos', row, local);
+            put(local ? draft.local.todos : draft.todos, row);
             message = '할 일에 넣었어요.';
         } else if (kind === '일정') {
             const eventKind = ['학급', '학교', '휴일', '내 일정'].includes(input.eventKind) ? input.eventKind : '학급';
@@ -600,18 +526,15 @@ export async function saveQuick(input, now = new Date()) {
             };
             if (input.time) row.time = input.time;
             if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
-            relocate(draft, 'events', row, local);
+            put(local ? draft.local.events : draft.events, row);
             message = '일정에 넣었어요.';
         } else if (kind === '알림장') {
-            const cloudPrev = (draft.notices || []).find((item) => item.id === date || item.date === date);
-            const localPrev = (draft.local.notices || []).find((item) => item.id === date || item.date === date);
-            const kept = localPrev || cloudPrev;
-            const combined = kept?.text ? `${kept.text}\n${text}` : text;
-            const sideLocal = isSensitiveText(combined, tags) || local;
-            relocate(draft, 'notices', { ...base, id: date, date, text: combined }, sideLocal);
+            const prev = (local ? draft.local.notices : draft.notices).find((item) => item.date === date);
+            const row = { ...base, id: date, date, text: prev ? `${prev.text}\n${text}` : text };
+            put(local ? draft.local.notices : draft.notices, row);
             message = '알림장에 넣었어요.';
         } else {
-            relocate(draft, 'notes', { ...base, id: nid('note'), text, date, pinned: false }, local);
+            put(local ? draft.local.notes : draft.notes, { ...base, id: nid('note'), text, date, pinned: false });
             message = '메모로 남겼어요.';
         }
         return draft;
@@ -708,12 +631,12 @@ export async function saveParsed(items, now = new Date()) {
                 if (item.time) row.time = item.time;
                 if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '')) row.endTime = item.endTime;
                 if (item.end && item.end > date) row.end = item.end;
-                relocate(draft, 'events', row, sensitive);
+                put(sensitive ? draft.local.events : draft.events, row);
             } else {
                 const title = item.time && !String(item.title).includes(item.time)
                     ? `${item.time} ${item.title}`.trim().slice(0, 100)
                     : String(item.title).trim().slice(0, 100);
-                relocate(draft, 'todos', { ...base, title, done: false, due: item.date || '' }, sensitive);
+                put(sensitive ? draft.local.todos : draft.todos, { ...base, title, done: false, due: item.date || '' });
             }
             registered.add(item.id);
             draft.inbox = draft.inbox.filter((row) => row.id !== item.id);
@@ -864,7 +787,8 @@ export async function receiveOne(id, no) {
     });
 }
 
-export async function saveTextItem(bucket, row) {
+/** from: 화면이 고치던 행이 'cloud'(클라우드)인지 'local'(이 기기)인지. 새 행이면 비워 둡니다. */
+export async function saveTextItem(bucket, row, { from } = {}) {
     const text = String(row.text || '');
     const title = String(row.title || '');
     if (bucket === 'notes' && !text.trim() && !title.trim()) {
@@ -872,7 +796,7 @@ export async function saveTextItem(bucket, row) {
     }
     const sensitive = isSensitiveText(text || title, row.tags) || isSensitiveText(row.memo) || isSensitiveText(row.note);
     const failed = await update((draft) => {
-        relocate(draft, bucket, row, sensitive);
+        relocate(draft, bucket, row, sensitive, from);
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, sensitive };
@@ -881,10 +805,8 @@ export async function saveTextItem(bucket, row) {
 
 export async function removeItem(bucket, id) {
     return update((draft) => {
-        const hadCloud = (draft[bucket] || []).some((item) => item?.id === id);
-        draft[bucket] = (draft[bucket] || []).filter((item) => item?.id !== id);
-        if (draft.local?.[bucket]) draft.local[bucket] = draft.local[bucket].filter((item) => item?.id !== id);
-        if (hadCloud) stageCloudForget(bucket, id);
+        draft[bucket] = (draft[bucket] || []).filter((item) => item.id !== id);
+        if (draft.local[bucket]) draft.local[bucket] = draft.local[bucket].filter((item) => item.id !== id);
         return draft;
     }, { undoable: true });
 }

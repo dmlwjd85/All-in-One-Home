@@ -33,7 +33,8 @@ export function Day() {
     const follows = joinedRecords(data).filter((row) => row.follow === date && row.date !== date);
     const marks = joined(data, 'attendance').filter((row) => row.date === date && row.status && row.status !== '출석');
     const notices = joined(data, 'notices').filter((row) => row.date === date);
-    const dayNote = joined(data, 'notes').find((row) => row.id === `day-${date}`);
+    const dayNotes = joined(data, 'notes').filter((row) => row.id === `day-${date}`);
+    const dayNote = dayNotes.find((row) => row.localOnly) || dayNotes[0];
     const [memo, setMemo] = useState(dayNote?.text || '');
     const rest = restInfo(date, joined(data, 'events'));
     const dayKey = dayKeyFromYmd(date);
@@ -137,7 +138,7 @@ export function Day() {
                         showToast('하루 메모를 지웠어요.', true);
                         return;
                     }
-                    const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' });
+                    const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' }, { from: dayNote ? (dayNote.localOnly ? 'local' : 'cloud') : undefined });
                     if (result?.storageFailed) return;
                     showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '하루 메모를 남겼어요.', true);
                 }}>하루 메모 저장</Btn>

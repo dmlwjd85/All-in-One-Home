@@ -16,6 +16,8 @@
     <link rel="icon" href="./favicon-16.png?v=19" sizes="16x16" type="image/png">
     <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=19" sizes="180x180">
     <link rel="preload" href="./fonts/JJAEMBody-Regular.first.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="./fonts/JJAEMBody-Bold.first.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="./fonts/JJAEM-TitleFlat-Regular.first.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./fonts/fonts.css">
     <script>
         try {
@@ -30,6 +32,24 @@
             var dark = saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
             var font = localStorage.getItem('ssug-gyomu-font');
             if (font === 'soft' || font === 'neat') document.documentElement.setAttribute('data-font', font);
+            // 전체 글꼴은 fonts.css 의 @font-face 를 document.fonts.load 로 받습니다. 화면이 쓰는 것과 같은 face라 어느 엔진에서도 한 번만 받습니다.
+            // '힣'은 첫 화면 파일(.first) 범위 밖이라 전체 파일만 받습니다. 이 스크립트는 fonts.css 를 다 읽은 뒤에 돕니다.
+            var warmFonts = function () {
+                try {
+                    ['400 1em "JJAEM Body"', '700 1em "JJAEM Body"', '400 1em "JJAEM Title Flat"'].forEach(function (face) {
+                        document.fonts.load(face, '\uD7A3').catch(function () {});
+                    });
+                } catch (e) {}
+            };
+            // 쓰던 기기나 예시 학급은 바로 오늘 화면이 열려서, 전체 글꼴을 곧바로 받아 글자가 바뀌며 화면이 밀리지 않게 합니다.
+            // 처음 오는 분의 로그인 화면은 작은 글꼴 파일만 먼저 받고, 화면을 다 그린 뒤 쉬는 틈에 다음 화면 글꼴을 받아 둡니다.
+            if (localStorage.getItem('ssug-gyomu-tips') || q.get('demo') === '1') {
+                warmFonts();
+            } else {
+                addEventListener('load', function () {
+                    (window.requestIdleCallback || function (run) { setTimeout(run, 200); })(warmFonts, { timeout: 4000 });
+                }, { once: true });
+            }
             if (dark) document.documentElement.classList.add('dark');
             document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
             var meta = document.querySelector('meta[name="theme-color"]');

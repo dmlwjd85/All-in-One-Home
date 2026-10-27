@@ -23,10 +23,17 @@ import {
     setKeyVoice,
     setKeyVolume,
 } from '../src/ui/keyfeel.js';
-import { TYPE_GAIN, TYPE_TARGETS, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, noteTypeRelease, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typePitchForKey, typeVoiceId } from '../src/ui/typesound.js';
+import { MAIN_TYPE_GAIN, MAIN_TYPE_PITCH, MAIN_TYPE_VOICE_IDS, renderMainTypeVoice } from './fixtures/typesound-main-483e43c.mjs';
+import { mainNoteTypeInput, resetMainTypeInput } from './fixtures/typeinput-main-483e43c.mjs';
+import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
 import { JAM_KEY, PRESS_HOLD, PRESS_VIBE_MS, jamFeelEnabled, mixJamBurst, renderJamStroke, setJamFeel } from '../src/ui/pressFeel.js';
 
 const failures = [];
+function sameSamples(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) if (!Object.is(a[i], b[i])) return false;
+    return true;
+}
 function check(ok, message) {
     if (!ok) failures.push(message);
 }
@@ -143,7 +150,8 @@ for (const voice of TYPE_VOICES) {
     for (const kind of ['space', 'enter', 'delete']) {
         const other = renderTypeStroke(voice.id, kind, rate).samples;
         const score = Math.abs(correlation(samples, other));
-        check(other.length !== samples.length || score < 0.8, `${voice.label} ${kind} 소리가 글자와 같습니다. ${score.toFixed(2)}`);
+        if (MAIN_TYPE_VOICE_IDS.includes(voice.id)) check(sameSamples(other, samples), `${voice.label} ${kind} 소리가 main처럼 글자 소리와 같지 않습니다.`);
+        else check(other.length !== samples.length || score < 0.8, `${voice.label} ${kind} 소리가 글자와 같습니다. ${score.toFixed(2)}`);
         check(Math.abs(other[0]) < 1e-6 && Math.abs(other[other.length - 1]) < 1e-6, `${voice.label} ${kind} 시작·끝이 0이 아닙니다.`);
     }
 }
@@ -155,36 +163,51 @@ for (let i = 0; i < TYPE_VOICES.length; i += 1) {
         check(score < 0.8, `${left}와 ${right} 글자 소리가 너무 같습니다. ${score.toFixed(2)}`);
     }
 }
-for (const voice of TYPE_VOICES) {
-    check(TYPE_TARGETS[voice.id], `${voice.id} 목표 스위치가 없습니다.`);
-    const up = renderTypeStroke(voice.id, 'up', rate).samples;
-    const down = typePairs[voice.id].samples;
-    check(up.length < down.length, `${voice.label} 뗌이 누름보다 짧지 않습니다.`);
-    check(Math.abs(up[0]) < 1e-6 && Math.abs(up[up.length - 1]) < 1e-6, `${voice.label} 뗌 시작·끝이 0이 아닙니다.`);
-    const upPeak = peakOf(up);
-    check(upPeak > 0.85 && upPeak < 0.95, `${voice.label} 뗌 크기가 맞지 않습니다.`);
-    const space = renderTypeStroke(voice.id, 'space', rate).samples;
-    check(space.length > down.length, `${voice.label} 스페이스가 글자보다 길지 않습니다.`);
+/** main(483e43c)에 있던 뽁·띵·물방울·방귀는 누름·띄어쓰기·엔터·지우기 모두 main 합성과 표본 하나까지 같아야 합니다. */
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    for (const sampleRate of [44100, 48000]) {
+        const want = renderMainTypeVoice(id, sampleRate);
+        check(TYPE_VOICE_MS[id] === Math.round((want.length / sampleRate) * 1000), `${id} 길이가 main과 다릅니다. ${TYPE_VOICE_MS[id]}ms`);
+        for (const kind of ['tap', 'space', 'enter', 'delete']) {
+            const got = renderTypeStroke(id, kind, sampleRate).samples;
+            check(sameSamples(got, want), `${id} ${kind} 소리가 main 합성과 다릅니다. ${sampleRate}Hz 길이 ${got.length}/${want.length}`);
+        }
+    }
 }
-const pitchA = typePitchForKey('ㄱ', () => 0.5);
-const pitchB = typePitchForKey('ㅎ', () => 0.5);
-check(pitchA !== pitchB, '글자마다 높이가 같습니다.');
-check(Math.abs(typePitchForKey('ㄱ', () => 0) - typePitchForKey('ㄱ', () => 1)) > 0.01, '같은 글자도 조금 흔들리지 않습니다.');
-const voiceStore = memory();
-check(typeVoiceId(voiceStore) === 'red', '저장된 글자 소리가 없으면 빨간 직선이 아닙니다.');
-check(setTypeVoice('cream', voiceStore) === 'cream' && typeVoiceId(voiceStore) === 'cream', '예전 크림 소리가 읽히지 않습니다.');
-check(setTypeVoice('panda', voiceStore) === 'panda' && typeVoiceId(voiceStore) === 'panda', '판다 소리가 저장되지 않습니다.');
-check(setTypeVoice('없는소리', voiceStore) === 'red', '모르는 글자 소리를 그대로 둡니다.');
-const synthStarted = performance.now();
-for (const voice of TYPE_VOICES) {
-    renderTypeStroke(voice.id, 'tap', rate);
-    renderTypeStroke(voice.id, 'up', rate);
-    renderTypeStroke(voice.id, 'space', rate);
+/** main에 있던 뽁·띵·물방울. 저장된 값은 그 이름 그대로 같은 소리로 나야 합니다. 지문은 main 파형에서 뽑았습니다. */
+const LEGACY_TYPE = {
+    ppok: { label: '뽁', 44100: [2029, -1.503304, 99.591032], 48000: [2208, -1.522793, 107.768256] },
+    ting: { label: '띵', 44100: [4057, 0.316212, 182.26893], 48000: [4416, 0.250622, 199.74879] },
+    drop: { label: '물방울', 44100: [6880, -2.187687, 495.692668], 48000: [7488, -2.528074, 547.437276] },
+};
+for (const [id, legacy] of Object.entries(LEGACY_TYPE)) {
+    const item = TYPE_VOICES.find((voice) => voice.id === id);
+    check(item?.label === legacy.label && !item.playful, `${legacy.label} 소리가 목록에 없습니다.`);
+    const bag = memory();
+    bag.setItem('ssug-gyomu-type-voice', id);
+    check(typeVoiceId(bag) === id, `저장된 ${id} 값이 ${typeVoiceId(bag)}(으)로 바뀝니다.`);
+    check(setTypeVoice(id, bag) === id && bag.getItem('ssug-gyomu-type-voice') === id, `${id}를 고르면 같은 값으로 저장되지 않습니다.`);
+    for (const sampleRate of [44100, 48000]) {
+        const samples = renderTypeVoice(id, sampleRate).samples;
+        let sum = 0;
+        let energy = 0;
+        for (const sample of samples) {
+            sum += sample;
+            energy += sample * sample;
+        }
+        const [length, wantSum, wantEnergy] = legacy[sampleRate];
+        check(samples.length === length && Math.abs(sum - wantSum) < 1e-4 && Math.abs(energy - wantEnergy) < 1e-3, `${legacy.label} 소리가 main과 다릅니다. ${sampleRate}Hz 길이 ${samples.length}, 합 ${sum.toFixed(6)}, 에너지 ${energy.toFixed(6)}`);
+    }
 }
-const synthMs = performance.now() - synthStarted;
-console.log(`글자 소리 처음 합성 ${TYPE_VOICES.length * 3}개 ${synthMs.toFixed(1)}ms, 녹음 파일 0바이트`);
-check(synthMs < 800, `글자 소리 처음 합성이 느립니다. ${synthMs.toFixed(0)}ms`);
-
+for (const voice of TYPE_VOICES) {
+    const bag = memory();
+    bag.setItem('ssug-gyomu-type-voice', voice.id);
+    check(typeVoiceId(bag) === voice.id, `저장된 ${voice.id} 값이 유지되지 않습니다.`);
+}
+const unknownBag = memory();
+unknownBag.setItem('ssug-gyomu-type-voice', 'nothing');
+check(typeVoiceId(unknownBag) === 'ppok' && typeVoiceId(memory()) === 'ppok', '처음 글자 소리가 main처럼 뽁이 아닙니다.');
+check(typePairs.ppok.samples.length < typePairs.ting.samples.length && typePairs.ting.samples.length < typePairs.drop.samples.length, '예전 글자 소리 길이 순서가 main과 다릅니다.');
 const typeBurstNotes = [];
 for (const sampleRate of [44100, 48000]) {
     for (const voice of TYPE_VOICES) {
@@ -327,7 +350,23 @@ playTypeSound();
 check(sources.at(-1).buffer.length === Math.round((rate * TYPE_VOICE_MS.bang) / 1000), '방귀를 골라도 글자마다 그 소리가 나지 않습니다.');
 const bangTap = sources.at(-1).buffer.length;
 playTypeSound('space');
-check(sources.at(-1).buffer.length > bangTap, '방귀 스페이스가 글자 소리와 같습니다.');
+check(sources.at(-1).buffer.length === bangTap, '방귀 스페이스가 main처럼 글자 소리와 같지 않습니다.');
+/** 예전 소리는 크기 0.032, 음높이 ±3%(0.97~1.03)가 main 그대로여야 합니다. */
+const realRandom = Math.random;
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    setTypeVoice(id);
+    [0, 1].forEach((roll, index) => {
+        Math.random = () => roll;
+        playTypeSound();
+        Math.random = realRandom;
+        const rateNow = sources.at(-1).playbackRate.value;
+        check(Math.abs(rateNow - MAIN_TYPE_PITCH[index]) < 1e-9, `${id} 음높이 흔들림이 main(${MAIN_TYPE_PITCH[index]})과 다릅니다. ${rateNow}`);
+        check(gains.at(-1).gain.value === MAIN_TYPE_GAIN, `${id} 크기가 main(${MAIN_TYPE_GAIN})과 다릅니다. ${gains.at(-1).gain.value}`);
+    });
+}
+/** 새 소리는 스페이스·엔터·지우기를 따로 칩니다. */
+const newVoice = TYPE_VOICES.find((voice) => !MAIN_TYPE_VOICE_IDS.includes(voice.id)).id;
+setTypeVoice(newVoice);
 const field = { tagName: 'TEXTAREA' };
 check(noteTypeKey({ key: ' ', target: field }, 90000) === 'space', '스페이스를 글자 소리로 치지 않습니다.');
 check(noteTypeInput({ inputType: 'insertText', data: ' ', target: field }, 90005) === false, '스페이스 입력 소리가 한 번 더 납니다.');
@@ -335,10 +374,46 @@ check(noteTypeKey({ key: 'Enter', target: field, isComposing: true }, 91000) ===
 check(noteTypeKey({ key: 'Backspace', target: field, repeat: true }, 92000) === '', '지우기 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Delete', target: field, repeat: true }, 92100) === '', 'Delete 키를 누르고 있으면 소리가 반복됩니다.');
 check(noteTypeKey({ key: 'Backspace', target: field }, 92200) === 'delete', '지우기 키 한 번을 소리 내지 않습니다.');
-check(noteTypeRelease({ key: 'a', target: field }, 93000) === 'up', '글자에서 손을 떼도 소리가 없습니다.');
-check(noteTypeRelease({ key: ' ', target: field }, 93100) === 'space-up', '스페이스 뗌이 없습니다.');
-check(noteTypeKey({ key: 'Shift', target: field }, 93200) === 'shift', '시프트를 큰 키로 치지 않습니다.');
-check(noteTypeKey({ key: 'Tab', target: field }, 93300) === 'tab', '탭을 큰 키로 치지 않습니다.');
+
+/** QA 9차 legacyplay9: 예전 소리는 엔터·지우기에 소리가 없고, 글자·스페이스·방향키 울림 횟수가 main과 같아야 합니다. */
+let typeClock = 200000;
+function typeRun(lines, pr) {
+    let count = 0;
+    let at = (typeClock += 5000);
+    if (!pr) resetMainTypeInput();
+    for (const [key, inputType, data, target] of lines) {
+        at += 120;
+        if (pr && noteTypeKey({ key, target }, at)) count += 1;
+        if (!inputType) continue;
+        const event = { inputType, data, target, isComposing: false };
+        if (pr ? noteTypeInput(event, at + 1) : mainNoteTypeInput(event, at + 1)) count += 1;
+    }
+    return count;
+}
+const plainInput = { tagName: 'INPUT', type: 'text' };
+const strokes = (target, enterType) => [
+    ['a', 'insertText', 'a', target],
+    ['b', 'insertText', 'b', target],
+    [' ', 'insertText', ' ', target],
+    ['c', 'insertText', 'c', target],
+    ['ArrowLeft', '', null, target],
+    ['ArrowRight', '', null, target],
+    ['Backspace', 'deleteContentBackward', null, target],
+    ['Delete', 'deleteContentForward', null, target],
+    ['Enter', enterType, null, target],
+];
+for (const id of MAIN_TYPE_VOICE_IDS) {
+    setTypeVoice(id);
+    for (const [label, lines] of [['한 줄 칸', strokes(plainInput, '')], ['여러 줄 칸', strokes(field, 'insertLineBreak')]]) {
+        const pr = typeRun(lines, true);
+        const main = typeRun(lines, false);
+        check(pr === main && main === 4, `${id} ${label}에서 'ab c'+방향키+지우기+엔터 울림이 main(${main})과 다릅니다. ${pr}`);
+    }
+    for (const key of ['Enter', 'Backspace', 'Delete', ' ']) {
+        check(noteTypeKey({ key, target: field }, (typeClock += 500)) === '', `${id} 를 골랐는데 ${key} 키에서 따로 소리가 납니다.`);
+    }
+}
+setTypeVoice(newVoice);
 
 resetTypeGraphForTest();
 const burstSources = [];
@@ -431,6 +506,20 @@ function limitsTypeBus(node) {
 }
 check(burstShapers.length === 1 && limitsTypeBus(burstGains.at(-1)?.connected) && burstGains.at(-1).connected.connected === burstAudio.destination, '실제 재생 경로에 리미터가 없습니다.');
 
+/** 소리는 2ms 동안 0에서 크기까지 올라옵니다(딸깍 소리 방지). 예전 소리와 새 소리 모두 같은 길입니다. */
+resetTypeGraphForTest();
+burstGains.length = 0;
+scheduleTypeBurst(burstAudio, { voice: 'bang', count: 2, gapSec: 0.05, when: 1 });
+scheduleTypeBurst(burstAudio, { voice: newVoice, count: 2, gapSec: 0.05, when: 2 });
+const rampStarts = [1, 1.05, 2, 2.05];
+const typeGains = burstGains.filter((gain) => gain.gain.events.some((event) => event.type === 'ramp' && event.value > 0));
+check(typeGains.length === 4 && typeGains.every((gain, index) => {
+    const [set, ramp] = gain.gain.events;
+    const when = rampStarts[index];
+    return set?.type === 'set' && set.value === 0 && Math.abs(set.time - when) < 1e-9
+        && ramp?.type === 'ramp' && ramp.value > 0.01 && ramp.value <= 0.049 && Math.abs(ramp.time - (when + 0.002)) < 1e-9;
+}), `글자 소리 시작 램프가 0에서 2ms가 아닙니다. ${JSON.stringify(typeGains.map((gain) => gain.gain.events.slice(0, 2)))}`);
+
 const jamStore = memory();
 check(!jamFeelEnabled(jamStore), '쨈 손맛 기본이 켜져 있습니다.');
 check(setJamFeel(true, jamStore) && jamFeelEnabled(jamStore), '쨈 손맛 켜기가 저장되지 않습니다.');
@@ -459,6 +548,14 @@ check(popTok < 0.8, `뽁과 톡이 너무 같습니다. ${popTok.toFixed(2)}`);
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
+/** 연타 측정(mixTypeBurst)의 예전 소리 음높이도 실제 재생처럼 main의 ±3%(0.97~1.03)여야 합니다. */
+const typeSource = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+const burstPitch = typeSource.slice(typeSource.indexOf('export function mixTypeBurst')).match(/const pitch = legacy \? ([^:]+) :/);
+const burstRates = burstPitch ? Array.from({ length: 100 }, (_, n) => Function('n', `return ${burstPitch[1]};`)(n)) : [];
+check(
+    burstRates.length === 100 && Math.abs(Math.min(...burstRates) - MAIN_TYPE_PITCH[0]) < 1e-9 && Math.max(...burstRates) < MAIN_TYPE_PITCH[1] && Math.max(...burstRates) > MAIN_TYPE_PITCH[1] - 0.001,
+    `연타 측정의 예전 소리 음높이가 main(${MAIN_TYPE_PITCH.join('~')})과 다릅니다. ${burstPitch?.[1]}`,
+);
 const settings = readFileSync(`${root}/src/ui/Settings.jsx`, 'utf8');
 const speech = readFileSync(`${root}/src/ui/useSpeechDictation.js`, 'utf8');
 const db = readFileSync(`${root}/src/lib/db.js`, 'utf8');
@@ -466,7 +563,7 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v19'"), '서비스 워커가 v19이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v22'"), '서비스 워커가 v22가 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');

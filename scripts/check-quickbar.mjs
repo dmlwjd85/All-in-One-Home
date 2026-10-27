@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { queuedCloudKeys, replaceRoster, saveQuick, snapshot, undo, useVaultsForTest } from '../src/lib/db.js';
+import { replaceRoster, saveQuick, snapshot, undo, useVaultsForTest } from '../src/lib/db.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { quickDate, quickDateLabel, textFromField } from '../src/ui/quickText.js';
 import { nameCandidates, quickSaveDate, studentNoFor, suggestKind } from '../src/ui/quickMatch.js';
@@ -87,7 +87,6 @@ const secret = await saveQuick({ text: '학폭 상담을 적습니다', kind: '�
 const secretRow = snapshot().local.records.find((row) => String(row.text || '').includes('학폭'));
 check(secret.ok && secret.message.includes('이 기기에만') && secretRow, '민감한 관찰이 이 기기에만 남지 않습니다.');
 check(!snapshot().records.some((row) => String(row.text || '').includes('학폭')), '민감한 관찰이 클라우드 목록에 있습니다.');
-check(!queuedCloudKeys().includes(`records/${secretRow?.id}`), '민감한 관찰을 클라우드에서 지우라고 올립니다.');
 check(JSON.stringify(localStore.dump() || {}).includes('학폭') && !JSON.stringify(mainStore.dump() || {}).includes('학폭'), '민감한 관찰의 저장소가 바뀌었습니다.');
 const undoneSecret = await undo();
 check(undoneSecret && !snapshot().local.records.some((row) => String(row.text || '').includes('학폭')), '민감한 관찰 되돌리기가 기기에서 지우지 않습니다.');
@@ -99,7 +98,6 @@ check(note.ok && noteId && JSON.stringify(mainStore.dump() || {}).includes('운�
 const undone = await undo();
 check(undone && !snapshot().notes.some((row) => row.text === '운동회 안내'), '되돌리기가 화면 기록에서 지우지 않습니다.');
 check(!JSON.stringify(mainStore.dump() || {}).includes('운동회 안내'), '되돌리기가 기기 저장소에서 지우지 않습니다.');
-check(queuedCloudKeys().includes(`notes/${noteId}`), '되돌리기가 클라우드 쪽을 지우지 않습니다.');
 
 await replaceRoster('1 민준\n2 민서');
 const linked = await saveQuick({ text: '민준이 발표를 잘했어요', kind: '관찰', no: 1, date: '2026-10-26' });
