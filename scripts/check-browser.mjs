@@ -2049,27 +2049,56 @@ try {
                 soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
             }));
             check(kept.click === 'true' && kept.loud === 'true' && kept.soft === 'false', '고른 소리가 다시 열어도 남지 않습니다.');
-            const typeFirst = await page.evaluate(() => ({
-                stored: localStorage.getItem('ssug-gyomu-type-voice'),
-                ppok: document.querySelector('[aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+            /* 글자 소리는 숨겨 둡니다. 켜 둔 기기에서도 칸이 없고 글을 적어도 소리가 없으며, 저장값은 그대로입니다. */
+            await page.evaluate(() => {
+                localStorage.setItem('ssug-gyomu-type-sound', '1');
+                localStorage.setItem('ssug-gyomu-type-voice', 'bang');
+            });
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.waitForSelector('[aria-label="누를 때 장난 소리"]');
+            const hidden = await page.evaluate(() => {
+                window.__soundStarts = 0;
+                const start = AudioBufferSourceNode.prototype.start;
+                AudioBufferSourceNode.prototype.start = function countStart(...args) {
+                    window.__soundStarts += 1;
+                    return start.apply(this, args);
+                };
+                const text = document.querySelector('[data-screen="settings"]')?.innerText || document.body.innerText;
+                return {
+                    picks: document.querySelectorAll('.type-picks').length,
+                    words: [
+                        ...[...document.querySelectorAll('p, button, span')].filter((el) => el.innerText.trim() === '글자를 적을 때').map(() => '글자를 적을 때'),
+                        ...['글자 소리 켜짐', '글자 소리 꺼짐', '적을 때 소리'].filter((word) => text.includes(word)),
+                    ],
+                    pressBang: document.querySelector('[aria-label="누를 때 장난 소리"] [aria-label="방귀 뿌우"]')?.getAttribute('aria-pressed'),
+                };
+            });
+            check(hidden.picks === 0 && hidden.words.length === 0, `숨긴 글자 소리가 설정에 보입니다. ${JSON.stringify(hidden)}`);
+            check(hidden.pressBang === 'false', '누를 때 장난 소리에 방귀가 없거나 이미 골라져 있습니다.');
+            await page.focus('[aria-label="학급 이름"]');
+            await page.keyboard.type('ab c', { delay: 30 });
+            await page.keyboard.press('Backspace');
+            await page.keyboard.press('Enter');
+            await delay(120);
+            const typed = await page.evaluate(() => ({
+                starts: window.__soundStarts,
+                sound: localStorage.getItem('ssug-gyomu-type-sound'),
+                voice: localStorage.getItem('ssug-gyomu-type-voice'),
+                key: localStorage.getItem('ssug-gyomu-key-voice'),
             }));
-            check(typeFirst.stored === null && typeFirst.ppok === 'true', '글자 소리 처음 선택이 뽁이 아닙니다.');
-            const typeLabels = { ppok: '뽁 통통', ting: '띵 실로폰', drop: '물방울 또록', red: '적축 직선', bang: '방귀 뿌우' };
-            for (const [id, label] of Object.entries(typeLabels)) {
-                await page.evaluate((value) => localStorage.setItem('ssug-gyomu-type-voice', value), id);
-                await page.reload({ waitUntil: 'domcontentloaded' });
-                await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
-                await page.evaluate(() => { location.hash = '#/settings'; });
-                await page.waitForSelector(`[aria-label="${label}"]`);
-                const shown = await page.evaluate((want) => ({
-                    pressed: [...document.querySelectorAll('.type-picks button[aria-pressed="true"]')].map((el) => el.getAttribute('aria-label')),
-                    stored: localStorage.getItem('ssug-gyomu-type-voice'),
-                    want,
-                }), label);
-                check(shown.pressed.length === 1 && shown.pressed[0] === label && shown.stored === id, `저장된 글자 소리 ${id}가 ${label}로 보이지 않습니다. ${shown.pressed.join(',')}`);
-            }
-            await page.click('[aria-label="띵 실로폰"]');
-            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-type-voice') === 'ting');
+            check(typed.starts === 0, `글자를 적을 때 소리가 납니다. ${typed.starts}번`);
+            check(typed.sound === '1' && typed.voice === 'bang' && typed.key === 'click', `글자 소리 저장값이 바뀌었습니다. ${JSON.stringify(typed)}`);
+            await page.click('[aria-label="뽁 통통"]');
+            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'ppok');
+            const picked = await page.evaluate(() => ({
+                ppok: document.querySelector('[aria-label="누를 때 소리 종류"] [aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+                click: document.querySelector('[aria-label="청축 클릭"]')?.getAttribute('aria-pressed'),
+                starts: window.__soundStarts,
+                voice: localStorage.getItem('ssug-gyomu-type-voice'),
+            }));
+            check(picked.ppok === 'true' && picked.click === 'false' && picked.starts >= 1 && picked.voice === 'bang', `누를 때 소리로 뽁을 고를 수 없습니다. ${JSON.stringify(picked)}`);
         }, width === 1920 ? 1080 : 844);
     }
 

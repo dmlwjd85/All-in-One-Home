@@ -2,8 +2,11 @@
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
+    KEY_FADE_SEC,
     KEY_VOICES,
     KEY_VOICE_MS,
+    MAX_KEY_VOICES,
+    PRESS_SELECTOR,
     KEY_VOLUMES,
     keyPitchRate,
     keySoundEnabled,
@@ -13,6 +16,7 @@ import {
     keyVolumeGain,
     keyVolumeId,
     playKey,
+    pressTarget,
     previewKeyVoice,
     rememberKeySoundNotice,
     mixKeyBurst,
@@ -22,10 +26,11 @@ import {
     setKeyVibe,
     setKeyVoice,
     setKeyVolume,
+    unlockKeyAudio,
 } from '../src/ui/keyfeel.js';
 import { MAIN_TYPE_GAIN, MAIN_TYPE_PITCH, MAIN_TYPE_VOICE_IDS, renderMainTypeVoice } from './fixtures/typesound-main-483e43c.mjs';
 import { mainNoteTypeInput, resetMainTypeInput } from './fixtures/typeinput-main-483e43c.mjs';
-import { TYPE_GAIN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
+import { TYPE_GAIN, TYPE_SOUND_SHOWN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
 
 const failures = [];
 function sameSamples(a, b) {
@@ -519,6 +524,215 @@ check(typeGains.length === 4 && typeGains.every((gain, index) => {
         && ramp?.type === 'ramp' && ramp.value > 0.01 && ramp.value <= 0.049 && Math.abs(ramp.time - (when + 0.002)) < 1e-9;
 }), `글자 소리 시작 램프가 0에서 2ms가 아닙니다. ${JSON.stringify(typeGains.map((gain) => gain.gain.events.slice(0, 2)))}`);
 
+
+/** 누를 때 소리를 낼 곳: 실제 PRESS_SELECTOR 문자열을 읽어 가짜 요소에 맞춰 봅니다. */
+function simpleMatch(el, sel) {
+    const m = sel.trim().match(/^([a-z]*)((?:\.[\w-]+)*)((?:\[[^\]]+\])*)$/i);
+    if (!m) throw new Error(`모르는 선택자 ${sel}`);
+    if (m[1] && el.tagName !== m[1].toUpperCase()) return false;
+    for (const cls of m[2].split('.').filter(Boolean)) if (!el.classList.includes(cls)) return false;
+    for (const [, name, value] of m[3].matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)) {
+        if (value === undefined ? !(name in el.attrs) : el.attrs[name] !== value) return false;
+    }
+    return true;
+}
+function fakeEl(tag, attrs = {}, parent = null) {
+    const el = {
+        tagName: tag.toUpperCase(),
+        attrs,
+        parentElement: parent,
+        classList: String(attrs.class || '').split(' ').filter(Boolean),
+        getAttribute: (name) => (name in attrs ? attrs[name] : null),
+        hasAttribute: (name) => name in attrs,
+        matches: (sel) => sel.split(',').some((part) => simpleMatch(el, part)),
+        closest(sel) {
+            for (let node = el; node; node = node.parentElement) if (node.matches(sel)) return node;
+            return null;
+        },
+    };
+    if (attrs.type) el.type = attrs.type;
+    return el;
+}
+const inside = (tag, attrs) => {
+    const host = fakeEl(tag, attrs);
+    return { host, child: fakeEl('span', {}, host) };
+};
+const sounding = [
+    ['버튼', 'button', {}],
+    ['링크', 'a', { href: '#/' }],
+    ['칩 라벨', 'label', { class: 'chip' }],
+    ['role=button', 'div', { role: 'button' }],
+    ['탭', 'div', { role: 'tab' }],
+    ['켜고 끄는 단추', 'div', { role: 'switch', 'aria-checked': 'false' }],
+    ['메뉴 항목', 'div', { role: 'menuitem' }],
+    ['체크 칸', 'input', { type: 'checkbox' }],
+    ['동그라미 칸', 'input', { type: 'radio' }],
+    ['고르기 칸', 'select', {}],
+    ['펼치기', 'summary', {}],
+    ['하단 키캡', 'div', { class: 'fab' }],
+    ['넓은 화면 키캡', 'div', { class: 'desk-fab' }],
+    ['이름에 인증이 들어간 버튼', 'button', { 'aria-label': '인증 메일 다시 보내기' }],
+];
+for (const [label, tag, attrs] of sounding) {
+    const { host, child } = inside(tag, attrs);
+    check(pressTarget(child) === host && pressTarget(host) === host, `${label}을 눌러도 소리가 나지 않습니다.`);
+}
+const wrapped = fakeEl('label');
+const box = fakeEl('input', { type: 'checkbox' }, wrapped);
+wrapped.control = box;
+check(pressTarget(fakeEl('span', {}, wrapped)) === box, '체크 칸 이름을 눌러도 소리가 나지 않습니다.');
+const silent = [
+    ['꺼진 버튼', 'button', { disabled: '' }],
+    ['aria-disabled 탭', 'div', { role: 'tab', 'aria-disabled': 'true' }],
+    ['aria-disabled 단추', 'div', { role: 'switch', 'aria-disabled': 'true' }],
+    ['꺼진 체크 칸', 'input', { type: 'checkbox', disabled: '' }],
+    ['비밀번호 칸', 'input', { type: 'password' }],
+    ['글 입력칸', 'input', { type: 'text' }],
+    ['검색 칸', 'input', { type: 'search' }],
+    ['여러 줄 칸', 'textarea', {}],
+    ['민감한 체크 칸', 'input', { type: 'checkbox', 'data-sensitive': '1' }],
+    ['인증 고르기 칸', 'select', { 'aria-label': '인증 방법' }],
+    ['비밀번호 보기 체크 칸', 'input', { type: 'checkbox', name: 'show-password' }],
+];
+for (const [label, tag, attrs] of silent) {
+    const { host, child } = inside(tag, attrs);
+    check(pressTarget(child) === null && pressTarget(host) === null, `${label}에서 소리가 납니다.`);
+}
+const chipField = fakeEl('label', { class: 'chip' });
+check(pressTarget(fakeEl('input', { type: 'text' }, chipField)) === null, '칩 안 글 입력칸에서 소리가 납니다.');
+const textLabel = fakeEl('label');
+textLabel.control = fakeEl('input', { type: 'text' });
+check(pressTarget(fakeEl('span', {}, textLabel)) === null, '글 입력칸 이름을 누르면 소리가 납니다.');
+check(pressTarget(fakeEl('div')) === null && pressTarget(null) === null, '아무것도 아닌 곳에서 소리가 납니다.');
+for (const sel of ['button', 'a', 'label.chip', '[role="button"]']) check(PRESS_SELECTOR.split(', ').includes(sel), `예전 누름 대상 ${sel}이 빠졌습니다.`);
+
+/** 저장값 옮기기: 글자 소리 종류만 있으면 한 번 누를 때 소리로 가져오고, 원래 값은 그대로 둡니다. */
+const moveBag = memory();
+moveBag.setItem('ssug-gyomu-type-voice', 'ting');
+check(keyVoiceId(moveBag) === 'ting' && moveBag.getItem('ssug-gyomu-key-voice') === 'ting' && moveBag.getItem('ssug-gyomu-type-voice') === 'ting', '글자 소리 종류를 누를 때 소리로 한 번 가져오지 않습니다.');
+setKeyVoice('click', moveBag);
+check(keyVoiceId(moveBag) === 'click' && moveBag.getItem('ssug-gyomu-type-voice') === 'ting', '옮긴 뒤 고른 누를 때 소리를 글자 소리가 다시 덮습니다.');
+const keepBag = memory();
+keepBag.setItem('ssug-gyomu-key-voice', 'mongdol');
+keepBag.setItem('ssug-gyomu-type-voice', 'bang');
+check(keyVoiceId(keepBag) === 'mongdol' && keepBag.getItem('ssug-gyomu-type-voice') === 'bang', '이미 고른 누를 때 소리를 글자 소리가 덮습니다.');
+const freshBag = memory();
+check(keyVoiceId(freshBag) === 'munggeul' && keyVolumeId(freshBag) === 'small' && freshBag.getItem('ssug-gyomu-key-voice') === null, '처음 쓰는 기기의 몽글·작게가 바뀌거나 값을 새로 씁니다.');
+const oddBag = memory();
+oddBag.setItem('ssug-gyomu-type-voice', 'nothing');
+check(keyVoiceId(oddBag) === 'munggeul' && oddBag.getItem('ssug-gyomu-key-voice') === null && oddBag.getItem('ssug-gyomu-type-voice') === 'nothing', '모르는 글자 소리 값을 옮기거나 지웁니다.');
+for (const voice of TYPE_VOICES) {
+    const bag = memory();
+    check(setKeyVoice(voice.id, bag) === voice.id && keyVoiceId(bag) === voice.id, `누를 때 소리로 ${voice.label}을 고를 수 없습니다.`);
+}
+
+/** 연타 30번×15ms: 모든 소리, 크게, 44.1k·48k에서 피크 1 미만, 샘플 간 점프는 소리 하나일 때의 1.25배 안. */
+check(MAX_KEY_VOICES === 6 && KEY_FADE_SEC >= 0.002 && KEY_FADE_SEC <= 0.005, '동시 소리 상한 6이나 2~5ms 페이드가 아닙니다.');
+check(MAX_KEY_VOICES * 0.9 * keyVolumeGain('loud') < 1, '여섯 소리가 모두 겹쳐도 1을 넘을 수 있습니다.');
+const pressBurst = { peak: 0, jump: 0, ratio: 0, line: '' };
+for (const sampleRate of [44100, 48000]) {
+    for (const voice of [...KEY_VOICES, ...TYPE_VOICES]) {
+        const burst = mixKeyBurst({ voice: voice.id, volume: 'loud', count: 30, gapMs: 15, sampleRate });
+        const ratio = burst.maxJump / burst.soloJump;
+        if (burst.peak > pressBurst.peak) Object.assign(pressBurst, { peak: burst.peak, line: `${voice.id}@${sampleRate}` });
+        pressBurst.jump = Math.max(pressBurst.jump, burst.maxJump);
+        pressBurst.ratio = Math.max(pressBurst.ratio, ratio);
+        check(burst.peak < 1 && burst.peak > 0, `${voice.label} 30×15ms 연타 피크가 1 이상입니다. ${sampleRate} ${burst.peak}`);
+        check(ratio <= 1.25, `${voice.label} 30×15ms 연타에 갑작스러운 튐이 있습니다. ${sampleRate} 점프 ${burst.maxJump.toFixed(4)} / 하나 ${burst.soloJump.toFixed(4)}`);
+        check(burst.maxVoices <= MAX_KEY_VOICES, `${voice.label} 연타에 소리가 여섯 개 넘게 겹칩니다.`);
+        for (const gapMs of [0, 0.5, 1, 2]) {
+            const fast = mixKeyBurst({ voice: voice.id, volume: 'loud', count: 30, gapMs, sampleRate });
+            check(fast.maxVoices <= MAX_KEY_VOICES && fast.peak < MAX_KEY_VOICES * 0.9 * keyVolumeGain('loud') + 1e-6, `${voice.label} ${gapMs}ms 연타가 상한을 넘습니다. ${fast.maxVoices}개 ${fast.peak}`);
+        }
+    }
+}
+console.log(`누름 연타 30×15ms 최대 피크 ${pressBurst.peak.toFixed(4)} (${pressBurst.line}), 최대 점프 ${pressBurst.jump.toFixed(4)}, 하나 대비 ${pressBurst.ratio.toFixed(2)}배`);
+
+/** 실제 재생: 앞 소리는 바로 끊지 않고 2~5ms로 줄이고, 들리는 소리는 여섯 개를 넘지 않습니다. */
+const liveAudio = unlockKeyAudio();
+const liveSources = [];
+const liveGains = [];
+FakeAudioContext.prototype.createBufferSource = function createRampSource() {
+    const src = {
+        buffer: null,
+        playbackRate: { value: 1 },
+        connect() {},
+        disconnect() {},
+        start(time) { src.startAt = time; },
+        stop(time) { src.stopAt = time ?? liveAudio.currentTime; },
+    };
+    liveSources.push(src);
+    return src;
+};
+FakeAudioContext.prototype.createGain = function createRampGain() {
+    const events = [];
+    const gain = {
+        gain: {
+            value: 0,
+            events,
+            cancelScheduledValues() {},
+            setValueAtTime(value, time) { events.push({ type: 'set', value, time }); },
+            linearRampToValueAtTime(value, time) { events.push({ type: 'ramp', value, time }); },
+        },
+        connect() {},
+        disconnect() {},
+    };
+    liveGains.push(gain);
+    return gain;
+};
+const audibleAt = (now) => liveSources.filter((src, index) => {
+    if (src.startAt > now + 1e-9) return false;
+    if (src.startAt + src.buffer.length / src.buffer.sampleRate / (src.playbackRate.value || 1) <= now + 1e-9) return false;
+    if (src.stopAt != null && src.stopAt <= now + 1e-9) return false;
+    const ramp = liveGains[index].gain.events.filter((event) => event.type === 'ramp').at(-1);
+    return !ramp || ramp.time > now + 1e-9;
+}).length;
+setKeyMuted(false);
+setKeySound(true);
+setKeyVoice('click');
+setKeyVolume('loud');
+let liveWorst = 0;
+for (let i = 0; i < 30; i += 1) {
+    liveAudio.currentTime = 10 + i * 0.015;
+    playKey('down');
+    liveWorst = Math.max(liveWorst, audibleAt(liveAudio.currentTime));
+}
+const cutEarly = liveSources.slice(0, -1).filter((src, index) => {
+    const events = liveGains[index].gain.events;
+    const set = events.find((event) => event.type === 'set');
+    const ramp = events.find((event) => event.type === 'ramp');
+    if (!set || !ramp || ramp.value !== 0) return true;
+    const span = ramp.time - set.time;
+    return span < 0.002 - 1e-9 || span > 0.005 + 1e-9 || src.stopAt < ramp.time;
+});
+check(liveSources.length === 30 && cutEarly.length === 0 && liveWorst <= 2, `연타에서 앞 소리를 페이드 없이 끊습니다. ${cutEarly.length}개, 겹침 ${liveWorst}`);
+let crowdWorst = 0;
+for (let i = 0; i < 20; i += 1) {
+    liveAudio.currentTime = 20 + i * 0.0005;
+    playKey('down');
+    crowdWorst = Math.max(crowdWorst, audibleAt(liveAudio.currentTime));
+}
+check(crowdWorst <= MAX_KEY_VOICES, `아주 빠른 연타에 소리가 ${crowdWorst}개 겹칩니다.`);
+liveAudio.currentTime = 30;
+setKeyVoice('ppok');
+const ppokFrom = liveSources.length;
+playKey('down');
+playKey('up');
+const ppokTap = renderTypeStroke('ppok', 'tap', rate).samples.length;
+check(liveSources.length === ppokFrom + 1 && liveSources.at(-1).buffer.length === ppokTap, '뽁을 골랐는데 누를 때 한 번만 나지 않습니다.');
+check(liveSources.at(-1).stopAt == null && !liveGains.at(-1).gain.events.length, '뽁을 떼면 누를 때 소리가 끊깁니다.');
+previewKeyVoice('bang');
+check(liveSources.length === ppokFrom + 2, '방귀 미리듣기가 한 번 나지 않습니다.');
+setKeyVoice('munggeul');
+playKey('down');
+playKey('up');
+check(liveSources.length === ppokFrom + 4, '몽글은 누를 때와 뗄 때 두 번 나야 합니다.');
+setKeyMuted(true);
+check(liveSources.at(-1).stopAt != null, '받아쓰기 중에 누를 때 소리를 끊지 않습니다.');
+playKey('down');
+check(liveSources.length === ppokFrom + 4, '받아쓰기 중에 누를 때 소리가 납니다.');
+setKeyMuted(false);
+
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
 /** 연타 측정(mixTypeBurst)의 예전 소리 음높이도 실제 재생처럼 main의 ±3%(0.97~1.03)여야 합니다. */
@@ -536,7 +750,7 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v21'"), '서비스 워커가 v21이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v22'"), '서비스 워커가 v22가 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');
@@ -545,6 +759,26 @@ check(settings.includes('꺼 두어도 여기서는 미리 들어 볼 수 있어
 for (const label of ['몽글', '몽돌', '적축', '갈축', '청축', '끌기', '작게', '보통', '크게']) {
     check(feel.includes(`'${label}'`) || settings.includes(label), `소리 이름 ${label} 이 없습니다.`);
 }
+
+/** 글자 소리는 숨겨 둡니다: 설정에 칸이 없고, 켜 둔 기기에서도 입력 연결이 소리를 부르지 않으며, 저장값은 그대로 둡니다. */
+const appSource = readFileSync(`${root}/src/App.jsx`, 'utf8');
+check(TYPE_SOUND_SHOWN === false, '글자 소리가 다시 보입니다.');
+const hideFrom = settings.indexOf('{TYPE_SOUND_SHOWN && (<>');
+const hideTo = settings.indexOf('</>)}', hideFrom);
+const typeBits = ['type-picks', 'setTypeSound(', 'previewTypeVoice(', 'setTypeVoice(', '글자 소리 켜짐'];
+check(hideFrom > 0 && hideTo > hideFrom && typeBits.every((bit) => {
+    let at = settings.indexOf(bit);
+    if (at < 0) return false;
+    for (; at >= 0; at = settings.indexOf(bit, at + 1)) if (at < hideFrom || at > hideTo) return false;
+    return true;
+}), '설정에 글자 소리 칸이 숨겨지지 않았습니다.');
+check(/const onInput = \(event\) => \{\n\s+if \(!TYPE_SOUND_SHOWN\) return;\n\s+if \(noteTypeInput\(event\)\) playTypeSound\(\);/.test(appSource), '글자 입력 소리 연결이 막혀 있지 않거나 지워졌습니다.');
+check(/const onTypeKey = \(event\) => \{\n\s+if \(!TYPE_SOUND_SHOWN\) return;\n\s+const kind = noteTypeKey\(event\);\n\s+if \(kind\) playTypeSound\(kind\);/.test(appSource), '스페이스·엔터 글자 소리 연결이 막혀 있지 않거나 지워졌습니다.');
+check(typeSource.includes("const SOUND_KEY = 'ssug-gyomu-type-sound'") && typeSource.includes("'ssug-gyomu-type-voice'"), '글자 소리 저장 키가 바뀌었습니다.');
+check(feel.includes("const VOICE_KEY = 'ssug-gyomu-key-voice'") && feel.includes("const VOLUME_KEY = 'ssug-gyomu-key-volume'"), '누를 때 소리 저장 키가 바뀌었습니다.');
+check(!/removeItem/.test(feel) && !feel.includes('setItem(TYPE_VOICE_KEY'), '누를 때 소리가 글자 소리 저장값을 지우거나 바꿉니다.');
+check(appSource.includes('return pressTarget(target);') && appSource.includes('pressTarget(el) !== el'), '누름과 키보드가 같은 누름 대상 규칙을 쓰지 않습니다.');
+check(settings.includes('PRESS_TYPE_VOICES') && settings.includes('aria-label="누를 때 장난 소리"'), '누를 때 소리 종류에 뽁·띵·방귀 같은 소리가 없습니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));

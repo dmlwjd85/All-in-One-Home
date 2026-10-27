@@ -11,8 +11,8 @@ import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
-import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
+import { keySoundEnabled, keySoundNoticePending, playKey, pressTarget, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
+import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -288,9 +288,11 @@ export default function App() {
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
         const onInput = (event) => {
+            if (!TYPE_SOUND_SHOWN) return;
             if (noteTypeInput(event)) playTypeSound();
         };
         const onTypeKey = (event) => {
+            if (!TYPE_SOUND_SHOWN) return;
             const kind = noteTypeKey(event);
             if (kind) playTypeSound(kind);
         };
@@ -316,9 +318,7 @@ export default function App() {
     useEffect(() => {
         const hit = (target) => {
             if (!(target instanceof Element)) return null;
-            const el = target.closest('button, a, label.chip, [role="button"]');
-            if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
-            return el;
+            return pressTarget(target);
         };
         const onPointerDown = (event) => {
             if (event.button !== 0) return;
@@ -333,8 +333,8 @@ export default function App() {
             if (event.key !== 'Enter' && event.key !== ' ') return null;
             const el = event.target;
             if (!(el instanceof HTMLElement)) return null;
-            if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') return null;
-            if (el.hasAttribute('disabled') || el.hasAttribute('data-key-preview')) return null;
+            if (el.tagName === 'A' || pressTarget(el) !== el) return null;
+            if (el.hasAttribute('data-key-preview')) return null;
             return el;
         };
         const onKeyDown = (event) => {

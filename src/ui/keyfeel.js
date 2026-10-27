@@ -2,13 +2,24 @@
     가져온 녹음이 없어서 따로 받을 라이선스는 없습니다.
     누름과 뗌은 다른 파형이고, 높이는 조금 흔들립니다.
     오디오 컨텍스트는 하나만 쓰고, 하드웨어 샘플레이트를 그대로 둡니다.
-    연달은 누름은 이전 소리를 10ms 동안 줄인 뒤 끊습니다. 8ms보다 짧은 겹침은 바로 끊습니다. */
+    연달은 누름은 이전 소리를 4ms 동안 줄인 뒤 끊습니다. 바로 끊지 않아 지지직 소리가 나지 않습니다.
+    글자 소리에서 옮겨 온 소리(뽁·띵·물방울·방귀 등)는 typesound의 합성을 그대로 쓰고, 한 가지 소리라 누를 때만 냅니다. */
+
+import { TYPE_VOICES, isSensitiveControl, isTextControl, renderTypeStroke } from './typesound.js';
 
 const SOUND_KEY = 'ssug-gyomu-key-sound';
 const VIBE_KEY = 'ssug-gyomu-key-vibrate';
 const VOICE_KEY = 'ssug-gyomu-key-voice';
 const VOLUME_KEY = 'ssug-gyomu-key-volume';
 const NOTICE_KEY = 'ssug-gyomu-key-sound-notice';
+/** 글자 소리 종류. 누를 때 소리 종류가 아직 없을 때 처음 값으로 한 번만 가져옵니다. 원래 값은 그대로 둡니다. */
+const TYPE_VOICE_KEY = 'ssug-gyomu-type-voice';
+
+/** 버튼·탭·토글·체크 칸·고르기 칸·펼치기와 하단 키캡 버튼. 글 입력칸은 넣지 않습니다. */
+export const PRESS_SELECTOR = 'button, a, label.chip, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], input[type="checkbox"], input[type="radio"], select, summary, .fab, .desk-fab';
+/** 동시에 나는 소리는 여섯 개까지입니다. 새 소리가 오면 앞 소리를 이만큼 줄이며 끊습니다. */
+export const MAX_KEY_VOICES = 6;
+export const KEY_FADE_SEC = 0.004;
 
 export const KEY_VOICES = [
     { id: 'munggeul', label: '몽글', hint: '저소음' },
@@ -132,8 +143,31 @@ export function setKeyVibe(on, storage) {
     emitPrefs();
 }
 
+/** 글자 소리에서 옮겨 온 소리인지. 목록은 부를 때 읽어 서로 가져오는 순서에 기대지 않습니다. */
+export function isTypePressVoice(id) {
+    return TYPE_VOICES.some((item) => item.id === id);
+}
+
 export function normalizeKeyVoice(id) {
-    return KEY_VOICES.some((item) => item.id === id) ? id : DEFAULT_VOICE;
+    return KEY_VOICES.some((item) => item.id === id) || isTypePressVoice(id) ? id : DEFAULT_VOICE;
+}
+
+/** 누를 때 소리를 낼 요소. 꺼진 버튼, 민감한 칸, 글 입력칸은 소리 없이 지나갑니다. */
+const FIELD_TAGS = ['INPUT', 'SELECT', 'TEXTAREA'];
+/** 비밀번호·인증번호 같은 칸. 버튼 이름에 '인증'이 들어가도 버튼은 그대로 소리를 냅니다. */
+function sensitiveField(el) {
+    return FIELD_TAGS.includes(String(el?.tagName || '').toUpperCase()) ? isSensitiveControl(el) : Boolean(el?.hasAttribute?.('data-sensitive'));
+}
+
+export function pressTarget(target) {
+    if (!target || typeof target.closest !== 'function') return null;
+    if (isTextControl(target) || sensitiveField(target)) return null;
+    const label = target.closest('label');
+    const control = label && !label.matches(PRESS_SELECTOR) ? label.control : null;
+    const el = target.closest(PRESS_SELECTOR) || (control?.matches?.(PRESS_SELECTOR) ? control : null);
+    if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
+    if (isTextControl(el) || sensitiveField(el)) return null;
+    return el;
 }
 
 export function normalizeKeyVolume(id) {
@@ -142,7 +176,15 @@ export function normalizeKeyVolume(id) {
 
 export function keyVoiceId(storage) {
     try {
-        const value = readStore(storage)?.getItem?.(VOICE_KEY);
+        const store = readStore(storage);
+        let value = store?.getItem?.(VOICE_KEY);
+        if (value == null) {
+            const typed = store?.getItem?.(TYPE_VOICE_KEY);
+            if (isTypePressVoice(typed)) {
+                store.setItem(VOICE_KEY, typed);
+                value = typed;
+            }
+        }
         return normalizeKeyVoice(value);
     } catch {
         return DEFAULT_VOICE;
@@ -295,6 +337,7 @@ function synth(id, part, sampleRate) {
 export function renderKeyPair(voice, sampleRate = 48000) {
     const id = normalizeKeyVoice(voice);
     const rate = sampleRate > 0 ? sampleRate : 48000;
+    if (isTypePressVoice(id)) return { id, down: renderTypeStroke(id, 'tap', rate).samples, up: null };
     const down = synth(id, 'down', rate);
     const up = synth(id, 'up', rate);
     for (let i = 0; i < up.length; i += 1) up[i] *= 0.62;
@@ -318,7 +361,7 @@ function buffersFor(audio, voice) {
             buffer.getChannelData(0).set(samples);
             return buffer;
         };
-        hit = { down: pack(pair.down), up: pack(pair.up) };
+        hit = { down: pack(pair.down), up: pair.up ? pack(pair.up) : null };
         pairCache.set(key, hit);
     }
     return hit;
@@ -362,9 +405,11 @@ function releaseVoice(entry, audio, fadeSec) {
             /* 램프가 없어도 아래에서 끊습니다. */
         }
         try { entry.src.stop(now + fadeSec + 0.004); } catch { /* 이미 끝난 소리입니다. */ }
+        entry.endsAt = now + fadeSec;
     } else {
         try { if (param) param.value = 0; } catch { /* 무시 */ }
         try { entry.src.stop(); } catch { /* 이미 끝난 소리입니다. */ }
+        entry.endsAt = now;
     }
     entry.fading = true;
 }
@@ -376,36 +421,49 @@ function stopActive() {
     for (const entry of voices) releaseVoice(entry, audio, 0);
 }
 
+/** 새 누름이 올 때 앞 소리를 어떻게 줄일지 정합니다. 실제 재생과 연타 측정이 같은 규칙을 씁니다.
+    앞 소리는 모두 4ms로 줄이고, 들리는 소리가 여섯 개를 넘으려 하면 가장 오래된 소리를 2ms로 줄입니다.
+    2ms로 줄던 소리가 또 밀려나면(4ms 안에 여섯 번 넘게 누를 때) 그때만 바로 멈춥니다. */
+export function planKeyPress(entries, now, count) {
+    const fade = entries.filter((entry) => !entry.fading);
+    const ends = (entry) => Math.min(entry.fading ? (entry.endsAt ?? 0) : now + KEY_FADE_SEC, entry.until ?? Infinity);
+    const live = entries.filter((entry) => now < ends(entry));
+    const tails = live.filter((entry) => entry.dropped);
+    const rest = live.filter((entry) => !entry.dropped);
+    const room = Math.max(0, MAX_KEY_VOICES - 1 - count);
+    if (rest.length <= room) return { fade, drop: [], stop: [], keep: live };
+    const over = rest.slice(0, rest.length - room);
+    return { fade, drop: over.slice(-1), stop: [...tails, ...over.slice(0, -1)], keep: [...over.slice(-1), ...rest.slice(rest.length - room)] };
+}
+
 function launch(audio, voice, volume, events) {
-    const now = audio.currentTime || 0;
-    for (const entry of active) {
-        if (entry.fading) continue;
-        const age = now - (entry.startedAt || 0);
-        releaseVoice(entry, audio, age < 0.008 ? 0 : 0.01);
-    }
-    const fading = active.filter((entry) => entry.fading && !entry.dropped);
-    if (fading.length > 2) {
-        for (const entry of fading.slice(0, fading.length - 2)) {
-            try { entry.src.stop(); } catch { /* 이미 끝난 소리입니다. */ }
-            entry.dropped = true;
-        }
-    }
     const buffers = buffersFor(audio, voice);
+    const parts = events.filter((event) => buffers[event.part]);
+    if (!parts.length) return;
+    const now = audio.currentTime || 0;
+    const plan = planKeyPress(active, now, parts.length);
+    for (const entry of plan.fade) releaseVoice(entry, audio, KEY_FADE_SEC);
+    for (const entry of plan.drop) {
+        releaseVoice(entry, audio, 0.002);
+        entry.dropped = true;
+    }
+    for (const entry of plan.stop) releaseVoice(entry, audio, 0);
     const gainValue = keyVolumeGain(volume);
     const dest = masterBus(audio);
-    const created = events.map((event) => {
+    const created = parts.map((event) => {
         const src = audio.createBufferSource();
         const gain = audio.createGain();
-        src.buffer = buffers[event.part] || buffers.down;
+        src.buffer = buffers[event.part];
         src.playbackRate.value = event.rate;
         gain.gain.value = gainValue;
         src.connect(gain);
         gain.connect(dest);
         const at = now + event.at;
         src.start(at);
-        return { src, gain, startedAt: at, fading: false, dropped: false };
+        const seconds = src.buffer?.length && src.buffer?.sampleRate ? src.buffer.length / src.buffer.sampleRate / (event.rate || 1) : Infinity;
+        return { src, gain, startedAt: at, until: at + seconds, fading: false, dropped: false };
     });
-    active = [...active.filter((entry) => entry.fading && !entry.dropped), ...created].slice(-6);
+    active = [...plan.keep, ...created];
 }
 
 function sharedContext() {
@@ -474,37 +532,65 @@ export function withKeyAudio(fn) {
     }
 }
 
-/** 연타를 샘플로 섞어 피크를 잽니다. 직전 소리만 페이드하고 그 앞은 끊습니다. */
-export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = 10, sampleRate = 48000 } = {}) {
+/** 연타를 샘플로 섞어 피크와 샘플 간 점프를 잽니다. 실제 재생과 같은 planKeyPress 규칙으로 앞 소리를 줄입니다. */
+export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = KEY_FADE_SEC * 1000, sampleRate = 48000 } = {}) {
     const pair = renderKeyPair(voice, sampleRate);
     const gain = keyVolumeGain(volume);
     const gap = Math.max(0, Math.round((sampleRate * gapMs) / 1000));
     const fade = Math.max(1, Math.round((sampleRate * fadeMs) / 1000));
+    const short = Math.max(1, Math.round(sampleRate * 0.002));
     const tail = pair.down.length + fade + 8;
     const length = Math.max(tail, gap * Math.max(0, count - 1) + tail);
-    const mix = new Float32Array(length);
+    const valueAt = (entry, at) => {
+        let value = 1;
+        for (const ramp of entry.ramps) {
+            if (at < ramp.from) break;
+            value = ramp.to <= ramp.from ? 0 : Math.max(0, ramp.value * (1 - (at - ramp.from) / (ramp.to - ramp.from)));
+        }
+        return value;
+    };
+    const ramp = (entry, at, span) => {
+        entry.ramps.push({ from: at, to: at + span, value: valueAt(entry, at) });
+        entry.fading = true;
+        entry.endsAt = (at + span) / sampleRate;
+    };
+    const voices = [];
+    let live = [];
     for (let n = 0; n < count; n += 1) {
-        const start = n * gap;
+        const at = n * gap;
+        const plan = planKeyPress(live, at / sampleRate, 1);
+        for (const entry of plan.fade) ramp(entry, at, fade);
+        for (const entry of plan.drop) {
+            ramp(entry, at, short);
+            entry.dropped = true;
+        }
+        for (const entry of plan.stop) ramp(entry, at, 0);
+        const entry = { start: at, until: (at + pair.down.length) / sampleRate, ramps: [], fading: false, dropped: false };
+        voices.push(entry);
+        live = [...plan.keep, entry];
+    }
+    const mix = new Float32Array(length);
+    const heard = new Uint8Array(length);
+    let soloJump = 0;
+    for (let i = 1; i < pair.down.length; i += 1) soloJump = Math.max(soloJump, Math.abs(pair.down[i] - pair.down[i - 1]) * gain);
+    for (const entry of voices) {
         for (let i = 0; i < pair.down.length; i += 1) {
-            const at = start + i;
+            const at = entry.start + i;
             if (at >= length) break;
-            let env = 1;
-            const newer = n + 1;
-            if (newer < count) {
-                const cut = newer * gap;
-                if (at >= cut) {
-                    const into = at - cut;
-                    const nextCut = newer + 1 < count ? (newer + 1) * gap : length;
-                    if (nextCut - cut < Math.round(sampleRate * 0.008)) env = 0;
-                    else env = into >= fade ? 0 : 1 - into / fade;
-                }
-            }
+            const env = valueAt(entry, at);
+            if (env > 0) heard[at] += 1;
             mix[at] += pair.down[i] * gain * env;
         }
     }
     let peak = 0;
-    for (let i = 0; i < mix.length; i += 1) peak = Math.max(peak, Math.abs(mix[i]));
-    return { peak, voices: count, gapMs, fadeMs, sampleRate, voice, volume };
+    let maxJump = 0;
+    let maxVoices = 0;
+    for (let i = 0; i < mix.length; i += 1) {
+        peak = Math.max(peak, Math.abs(mix[i]));
+        if (i > 0) maxJump = Math.max(maxJump, Math.abs(mix[i] - mix[i - 1]));
+        maxVoices = Math.max(maxVoices, heard[i]);
+    }
+    return { peak, maxJump, soloJump, maxVoices, voices: count, gapMs, fadeMs, sampleRate, voice, volume };
 }
 
 export function previewKeyVoice(id) {

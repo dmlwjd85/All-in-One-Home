@@ -8,6 +8,8 @@
 import { unlockKeyAudio, withKeyAudio } from './keyfeel.js';
 
 const SOUND_KEY = 'ssug-gyomu-type-sound';
+/** 글자 소리는 지금 쉬어 갑니다. 설정에서 숨기고, 켜 둔 기기에서도 입력 연결이 소리를 부르지 않습니다. 저장값은 그대로 둡니다. */
+export const TYPE_SOUND_SHOWN = false;
 const VOICE_KEY = 'ssug-gyomu-type-voice';
 
 export const TYPE_VOICES = [
