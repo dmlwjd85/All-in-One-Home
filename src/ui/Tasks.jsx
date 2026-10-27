@@ -175,7 +175,7 @@ export function Notice() {
                     <span className="muted" style={{ display: 'block' }}>{row.text}</span>
                 </Btn>
             ))}
-            {!notices.some((row) => row.date !== date) && <p className="muted">아직 지난 알림장이 없어요. 저장하면 여기에 모여요.</p>}
+            {!notices.some((row) => row.date !== date) && <p className="muted">{current ? '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.' : '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.'}</p>}
         </div>
     );
 }
