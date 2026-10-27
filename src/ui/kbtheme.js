@@ -1,7 +1,7 @@
 /** 키보드 테마(모양). 값은 이 기기 키 ssug-gyomu-kb-theme 에만 둡니다. 기록·클라우드에는 넣지 않습니다.
     MX 미니(기본)는 지금 키캡 그대로라 따로 스타일을 받지 않습니다. 다른 테마를 고르거나 설정을 열 때만 kbtheme.css 를 받습니다. */
 import { DEFAULT_KB_THEME, KB_VOICE_PREFIX, normalizeKbTheme } from './kbvoices.js';
-import { isKbVoice, keyVoiceId, setKeyVoice } from './keyfeel.js';
+import { isKbVoice, keyVoiceId, loadKbVoice, setKeyVoice } from './keyfeel.js';
 
 export const KB_THEME_KEY = 'ssug-gyomu-kb-theme';
 
@@ -65,7 +65,10 @@ export async function setKbTheme(id, { storage, x, y, loadCss = loadKbThemeCss }
     } catch {
         /* 저장이 막혀도 이번 화면은 고른 테마로 보입니다. */
     }
-    if (isKbVoice(keyVoiceId(storage))) setKeyVoice(`${KB_VOICE_PREFIX}${theme}`, storage);
+    if (isKbVoice(keyVoiceId(storage))) {
+        setKeyVoice(`${KB_VOICE_PREFIX}${theme}`, storage);
+        loadKbVoice(`${KB_VOICE_PREFIX}${theme}`);
+    }
     if (typeof document === 'undefined') return theme;
     if (theme !== DEFAULT_KB_THEME && !(await loadCss())) return theme;
     const root = document.documentElement;

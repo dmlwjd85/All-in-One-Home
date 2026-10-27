@@ -93,7 +93,7 @@ globalThis.window = { AudioContext: FakeAudioContext, OfflineAudioContext: FakeA
 Object.defineProperty(globalThis, 'navigator', { value: { vibrate: (ms) => { vibes.push(ms); return true; } }, configurable: true });
 
 const feel = await import('../src/ui/keyfeel.js');
-const { KB_VOICE_BOOST, keyVoiceId, setKeyVoice, playKey, setKeySound, setKeyVibe, setKeyVolume, keyVolumeGain, loadKbVoice, pickVariant, mixKeyBurst, previewKeyVoice, setKeyMuted } = feel;
+const { KB_VOICE_GAIN, TYPE_PRESS_STEPS, keyPressGain, keyVoiceId, setKeyVoice, playKey, setKeySound, setKeyVibe, setKeyVolume, loadKbVoice, pickVariant, mixKeyBurst, previewKeyVoice, setKeyMuted } = feel;
 
 check(keyVoiceId() !== 'kb-mx' && !isKbVoice(keyVoiceId()), '저장값이 없는데 테마 소리가 기본이 됩니다(기존 소리가 바뀜).');
 setKeyVoice('kb-retro');
@@ -102,7 +102,7 @@ setKeyVoice('kb-nope');
 check(!isKbVoice(keyVoiceId()), '없는 테마 소리를 받아 줍니다.');
 
 /* 파일을 받기 전 누름은 조용히, 위로 뗌도 소리 없음 */
-setKeySound(true); setKeyVibe(false); setKeyVolume('normal');
+setKeySound(true); setKeyVibe(false); setKeyVolume('mid');
 live.setItem('ssug-gyomu-key-voice', 'kb-jelly');
 const before = sources.length; const fetchedBefore = fetched.length;
 playKey('down');
@@ -122,7 +122,7 @@ for (let n = 0; n < 12; n += 1) {
     check(downs.length === 1, `누름 한 번에 소리가 ${downs.length}개 납니다.`);
     check(downs[0]?.buffer?.path?.startsWith('sounds/kb/jelly-d'), '누름에 누름 녹음이 아닌 소리가 납니다.');
     const g = gains.slice(g0).find((x) => x.gain.value > 0);
-    check(Math.abs((g?.gain.value || 0) - keyVolumeGain('normal') * KB_VOICE_BOOST) < 1e-9, '테마 소리 크기가 소리 크기 설정을 따르지 않습니다.');
+    check(Math.abs((g?.gain.value || 0) - KB_VOICE_GAIN * 2) < 1e-9, '테마 소리 크기가 소리 크기 설정을 따르지 않습니다.');
     const s1 = sources.length;
     playKey('up');
     check(sources.slice(s1).filter((s) => s.started).length === 1 && sources[s1]?.buffer?.path?.startsWith('sounds/kb/jelly-u'), '뗄 때 소리가 한 번이 아닙니다.');
@@ -152,7 +152,22 @@ check(sources.length === sMute, '받아쓰기 중에도 테마 소리가 납니�
 setKeyMuted(false);
 setKeyVolume('loud');
 const gLoud = gains.length; playKey('down'); playKey('up');
-check(gains.slice(gLoud).some((x) => Math.abs(x.gain.value - keyVolumeGain('loud') * KB_VOICE_BOOST) < 1e-9), '크게 설정이 테마 소리에 적용되지 않습니다.');
+check(gains.slice(gLoud).some((x) => Math.abs(x.gain.value - KB_VOICE_GAIN * 3) < 1e-9), '크게 설정이 테마 소리에 적용되지 않습니다.');
+
+/* 테마 소리 크기는 #42의 옮겨 온 소리와 같은 1·2·3배 계단 */
+check(TYPE_PRESS_STEPS.small === 1 && TYPE_PRESS_STEPS.mid === 2 && TYPE_PRESS_STEPS.loud === 3, '#42 소리 크기 계단이 1·2·3배가 아닙니다.');
+check(['small', 'mid', 'loud'].every((v) => Math.abs(keyPressGain('kb-mx', v) - KB_VOICE_GAIN * TYPE_PRESS_STEPS[v]) < 1e-12), '테마 소리 크기가 #42 계단을 따르지 않습니다.');
+
+/* 테마 소리 '작게'가 #42의 옮겨 온 소리(0.032 기준)와 비슷하게 들리는지: 처음 30ms 에너지(RMS) 가운데값 비교 */
+{
+    const head = (samples, rate, gain) => { const n = Math.min(samples.length, Math.round(rate * 0.03)); let e = 0; for (let i = 0; i < n; i += 1) e += (samples[i] * gain) ** 2; return Math.sqrt(e / Math.max(1, n)); };
+    const mid = (list) => { const s = [...list].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+    const { TYPE_VOICES: tv } = await import('../src/ui/typesound.js');
+    const moved = tv.filter((v) => !v.playful).map((v) => head(feel.renderKeyPair(v.id, 48000).down, 48000, keyPressGain(v.id, 'small')));
+    const themed = KB_THEMES.map((t) => head(wavs[kbSoundFiles(t.id).down[0]].samples, 32000, keyPressGain(`kb-${t.id}`, 'small')));
+    const ratio = mid(themed) / mid(moved);
+    check(ratio > 0.6 && ratio < 1.4, `테마 소리 '작게'가 옮겨 온 소리보다 ${ratio.toFixed(2)}배입니다(0.6~1.4배여야 함).`);
+}
 
 /* 같은 녹음을 연달아 쓰지 않습니다 */
 for (const len of [2, 3, 4]) {
