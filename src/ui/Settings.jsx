@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KB_VOICES, KEY_VOICES, KEY_VOLUMES, closeKeyVoiceMoved, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVoiceMoved, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import { TYPE_SOUND_SHOWN, TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
 import { jamFeelEnabled, previewJam, setJamFeel } from './pressFeel.js';
+import { tapHandlers } from './tapGuard.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
@@ -56,19 +57,24 @@ function movedChipName(id) {
     return PRESS_TYPE_VOICES.find((voice) => voice.id === id)?.chip || '';
 }
 
-function KeyPick({ pressed, label, ariaLabel, onPick }) {
+/** 소리 칩. 누르는 순간에는 그 소리만 미리 들려 주고, 손을 뗄 때 10px 안에서 멈췄을 때만 고릅니다.
+    설정을 스크롤하다 손가락이 처음 닿은 칩이 바로 바뀌던 문제를 막습니다(tapGuard.js). */
+function KeyPick({ pressed, label, ariaLabel, onPick, onPreview }) {
+    const latest = useRef({ onPick, onPreview });
+    latest.current = { onPick, onPreview };
+    const tap = useMemo(() => tapHandlers({ onDown: () => latest.current.onPreview?.(), onTap: () => latest.current.onPick() }), []);
     return (
         <Btn
             className={pressed ? 'chip on' : 'chip'}
             aria-pressed={pressed}
             aria-label={ariaLabel}
-            data-key-preview="1"
-            onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                onPick();
-            }}
+            data-key-preview={onPreview ? '1' : undefined}
+            data-tap-guard="1"
+            {...tap}
             onKeyDown={(event) => {
                 if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                onPreview?.();
                 onPick();
             }}
         >{label}</Btn>
@@ -198,10 +204,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                     {PRESS_TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
@@ -210,10 +214,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={voice.aria}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -225,10 +227,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={`${voice.label} ${voice.hint}`}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -240,10 +240,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={voice.aria}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -291,10 +289,10 @@ export function Settings() {
                             pressed={typeId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPreview={() => previewTypeVoice(voice.id)}
                             onPick={() => {
                                 setTypeVoice(voice.id);
                                 setTypeId(voice.id);
-                                previewTypeVoice(voice.id);
                             }}
                         />
                     ))}
@@ -307,10 +305,10 @@ export function Settings() {
                             pressed={typeId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPreview={() => previewTypeVoice(voice.id)}
                             onPick={() => {
                                 setTypeVoice(voice.id);
                                 setTypeId(voice.id);
-                                previewTypeVoice(voice.id);
                             }}
                         />
                     ))}

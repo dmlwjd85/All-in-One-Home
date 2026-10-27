@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus, workTimer } from '../lib/period.js';
-import { joined, joinedRecords } from '../lib/db.js';
+import { joined, joinedRecords, toggleTodo } from '../lib/db.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
-import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, tableRow, withUsedCount } from '../lib/periodLocal.js';
+import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
+import { DetailSheet } from './DetailSheet.jsx';
+import { tableForDateWithLocal } from '../lib/semester.js';
 
 export function Home() {
     const { data, go, showToast } = useUi();
@@ -22,7 +24,7 @@ export function Home() {
     const day = dayKeyFromYmd(clock.ymd);
     const local = withUsedCount(data.timetable, usePeriodLocal());
     const leave = useLeave(clock.ymd);
-    const table = tableRow(data.timetable, day, local);
+    const table = tableForDateWithLocal(data, clock.ymd, local);
     const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
     const period = periodStatus(clock.hm, allStarts(data.profile.periodStarts, local), labels, {
         last: lastPeriod(table, local, day),
@@ -32,6 +34,7 @@ export function Home() {
         workEnd: leave || local.workEnd,
         endLabel: leave ? '조퇴' : '퇴근',
     });
+    const [detail, setDetail] = useState(null);
     const marks = data.attendance.filter((row) => row.date === clock.ymd);
     const checked = data.profile.checkedDates.includes(clock.ymd);
     const count = data.profile.classSize || data.students.length;
@@ -151,10 +154,10 @@ export function Home() {
                 </div>
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
-                        <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                            <span>{row.done ? '☑' : '☐'} {row.title}</span>
-                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
-                        </div>
+                        <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
+                            <span className="home-line-text">{row.done ? '☑' : '☐'} {row.title}</span>
+                            {row.of ? <span className="muted num" style={{ flex: 'none' }}>{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`} style={{ flex: 'none' }}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
+                        </Btn>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
                     {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 발라 둔 할 일이 없어요.</p>}
@@ -171,10 +174,10 @@ export function Home() {
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
-                        <div key={row.id}>
-                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
-                            {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
-                        </div>
+                        <Btn key={row.id} className="home-event-line" data-home-event="1" aria-label={`일정 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'event', id: row.id })}>
+                            <strong className="clip2">{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
+                            {row.memo && <p className="muted clip2" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
+                        </Btn>
                     ))}
                     {googleWeek.map((row) => (
                         <div key={row.id} className="gcal-line">
@@ -214,6 +217,11 @@ export function Home() {
                     onClose={() => setAttendStudent(null)}
                 />
             )}
+            {detail && (() => {
+                const row = (detail.kind === 'todo' ? todos : events).find((item) => item.id === detail.id);
+                if (!row) return null;
+                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? () => toggleTodo(row.id) : null} />;
+            })()}
         </div>
     );
 }

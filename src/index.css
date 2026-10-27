@@ -1011,3 +1011,22 @@ button.glass[aria-pressed="true"]:active {
     .tap:active:not(.desk-fab):not(.fab) { transform: none; }
     .desk-fab:active { transform: translateX(-50%); }
 }
+
+/* 자세히 보기 팝업 */
+.detail-title { font-size: 22px; line-height: 30px; margin: 4px 0 12px; overflow-wrap: anywhere; word-break: keep-all; }
+.detail-list { display: grid; gap: 8px; margin: 0 0 14px; }
+.detail-item { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; align-items: start; }
+.detail-item dt { font-weight: 800; color: var(--ink-sub); }
+.detail-item dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.detail-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.todo-check { flex: none; width: 44px; min-height: 44px; font-size: 18px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-raise-sm); }
+.home-line { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 4px; border-radius: 12px; }
+.home-line .home-line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-event-line { width: 100%; min-height: 44px; display: block; text-align: left; padding: 4px; border-radius: 12px; }
+.home-event-line .clip2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.term-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.term-tile { min-height: 64px; display: grid; gap: 2px; justify-items: center; align-content: center; text-align: center; }
+.term-tile .num, .term-tile .muted { font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.day-tt { display: grid; gap: 6px; }
+.day-tt-cell { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 12px; }
+.term-tile .term-date { white-space: nowrap; }

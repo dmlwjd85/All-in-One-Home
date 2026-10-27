@@ -7,7 +7,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { deleteUserDoc, pullUserData, pushUserData, syncAvailable } from './cloud.js';
-import { seoulParts, seoulYmd } from './date.js';
+import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
 let mainVault = createVault('ssug-gyomu');
@@ -912,11 +912,73 @@ export async function setTimetable(day, period, subject, specialist) {
     }
     return update((draft) => {
         const table = { ...draft.timetable };
-        const row = { ...(table[day] || {}) };
+        const before = { ...(table[day] || {}) };
+        const row = { ...before };
         if (subject != null) row[`p${period}`] = subject;
         if (specialist != null) row[`s${period}`] = specialist;
         table[day] = row;
+        /* 요일 기본 시간표를 고치면, 학기에 채워 둔 날짜 가운데 그날 따로 고치지 않은 앞으로의 날도 같이 바꿉니다. */
+        if (/^(mon|tue|wed|thu|fri)$/.test(day)) {
+            const edited = draft.profile.ttEdited || [];
+            const today = todayYmdForTable();
+            for (const [key, value] of Object.entries(table)) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || key < today || edited.includes(key) || dayKeyFromYmd(key) !== day) continue;
+                const next = { ...value };
+                for (const field of [`p${period}`, `s${period}`]) {
+                    if ((value[field] || '') !== (before[field] || '')) continue;
+                    if (row[field]) next[field] = row[field];
+                    else delete next[field];
+                }
+                table[key] = next;
+            }
+        }
         draft.timetable = table;
+        return draft;
+    });
+}
+
+function todayYmdForTable() {
+    return seoulYmd();
+}
+
+/** 학기·1년 채우기. rows는 날짜별 줄, overwrite 가 참이면 그날 고친 표시도 지웁니다. */
+export async function applyTermTimetable(rows, { overwrite = false } = {}) {
+    return update((draft) => {
+        const table = { ...draft.timetable };
+        for (const [day, row] of Object.entries(rows || {})) table[day] = { ...row };
+        draft.timetable = table;
+        if (overwrite) {
+            const done = new Set(Object.keys(rows || {}));
+            draft.profile.ttEdited = (draft.profile.ttEdited || []).filter((day) => !done.has(day));
+        }
+        return draft;
+    }, { undoable: true });
+}
+
+/** 그날 시간표만 고칩니다. 기본 시간표를 다시 넣어도 이 날은 지켜집니다. */
+export async function setDayTimetable(ymd, period, subject, specialist) {
+    return update((draft) => {
+        const table = { ...draft.timetable };
+        const own = table[ymd];
+        const edited = draft.profile.ttEdited || [];
+        const base = own && (Object.keys(own).length || edited.includes(ymd)) ? own : (table[dayKeyFromYmd(ymd)] || {});
+        const row = { ...base };
+        if (subject != null) { if (subject) row[`p${period}`] = subject; else delete row[`p${period}`]; }
+        if (specialist != null) { if (specialist) row[`s${period}`] = specialist; else delete row[`s${period}`]; }
+        table[ymd] = row;
+        draft.timetable = table;
+        if (!edited.includes(ymd)) draft.profile.ttEdited = [...edited, ymd].sort();
+        return draft;
+    });
+}
+
+/** 그날 고친 것을 버리고 요일 기본 시간표로 돌립니다. */
+export async function resetDayTimetable(ymd) {
+    return update((draft) => {
+        const table = { ...draft.timetable };
+        table[ymd] = { ...(table[dayKeyFromYmd(ymd)] || {}) };
+        draft.timetable = table;
+        draft.profile.ttEdited = (draft.profile.ttEdited || []).filter((day) => day !== ymd);
         return draft;
     });
 }
