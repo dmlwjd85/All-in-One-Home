@@ -158,11 +158,11 @@ export function Notice() {
 
     useEffect(() => {
         // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로이거나 비어 있을(공백만 포함) 때만 새 글로 채웁니다.
-        // 저장하는 동안에는 입력칸을 그대로 둡니다. 저장에 실패해 DB가 원래대로 돌아가도 쓰던 글이 사라지지 않아요.
-        if (dbText === synced) return;
-        if (!busy.current) setText((prev) => prev === synced || !prev.trim() ? dbText : prev);
+        // 저장하는 동안에는 입력칸을 그대로 두고, 저장이 끝난 뒤 한 번만 맞춥니다. 저장에 실패해 DB가 원래대로 돌아가도 쓰던 글이 사라지지 않아요.
+        if (saving || dbText === synced) return;
+        setText((prev) => prev === synced || !prev.trim() ? dbText : prev);
         setSynced(dbText);
-    }, [dbText]);
+    }, [dbText, saving]);
 
     async function save(next) {
         if (busy.current) return;
