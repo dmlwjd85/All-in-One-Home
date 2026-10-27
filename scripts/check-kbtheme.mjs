@@ -265,6 +265,11 @@ const ktSrc = src('src/ui/kbtheme.js');
 const app = src('src/App.jsx');
 const settings = src('src/ui/Settings.jsx');
 check(!/scale/i.test(css) && !/scaleY/.test(indexCss), '키캡 눌림에 scale 이 있습니다.');
+/* 소리 칩이 늘어도 맨 아래 내용이 하단 탭에 가리지 않게: 본문 아래 여백 = 탭 70px + 여유 16px 이상 + 홈 표시줄. */
+{
+    const main = indexCss.match(/\n\.main \{[^}]*padding:\s*\S+\s+\S+\s+calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)/);
+    check(main && Number(main[1]) >= 70 + 16, `본문 아래 여백이 탭 높이 + safe-area + 16px보다 작습니다. ${main ? main[1] : '없음'}`);
+}
 check(!/font-family|font:/.test(css), '테마 스타일이 글꼴을 바꿉니다.');
 check(!/data-kb="mx"/.test(css), 'MX 미니가 기존 키캡과 다른 스타일을 받습니다.');
 for (const id of ids.slice(1)) {

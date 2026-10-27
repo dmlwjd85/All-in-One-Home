@@ -34,7 +34,8 @@ button, input, textarea { font-family: inherit; }
 }
 
 .app-frame { min-height: 100dvh; }
-.main { min-width: 0; padding: 16px 16px 136px; }
+/* 아래 여백 = 탭바 70px + 여유 66px. 탭바가 홈 표시줄만큼 높아지니 여백도 그만큼 더 띄웁니다. */
+.main { min-width: 0; padding: 16px 16px calc(136px + env(safe-area-inset-bottom)); }
 .cloud-note {
     margin-top: 0;
     line-height: 22px;

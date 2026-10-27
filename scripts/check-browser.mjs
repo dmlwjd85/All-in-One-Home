@@ -2322,6 +2322,70 @@ try {
             }, 844);
         }
     }
+    /** 맨 아래까지 내리면 크기 칩과 각 화면 마지막 내용이 하단 탭(가운데 단추 포함) 위로 12px 이상 올라와야 합니다.
+     *  홈 표시줄이 없는 기기(0)와 있는 기기(34px)를 모두 봅니다. 본문 아래 여백은 탭 높이 + 16px 이상입니다. */
+    const bottomFit = async (page, inset) => {
+        const cdp = await page.createCDPSession();
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 0, right: 0, bottom: inset } });
+        await delay(150);
+        return page.evaluate(async () => {
+            const s = document.scrollingElement; s.scrollTop = s.scrollHeight;
+            await new Promise((r) => setTimeout(r, 200));
+            const tab = document.querySelector('.tabbar').getBoundingClientRect();
+            const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
+            const cover = Math.min(tab.top, fab ? fab.top : tab.top);
+            const main = document.querySelector('.main');
+            let low = -Infinity;
+            for (const el of main.querySelectorAll('*')) {
+                const r = el.getBoundingClientRect();
+                if (!r.width || !r.height || getComputedStyle(el).position === 'fixed' || el.closest('.tabbar,.sheet,[role=dialog]')) continue;
+                low = Math.max(low, r.bottom);
+            }
+            const sizes = document.querySelector('[aria-label="누를 때 소리 크기"]')?.getBoundingClientRect();
+            return {
+                tabTop: Math.round(tab.top), cover: Math.round(cover), low: Math.round(low), sizes: sizes ? Math.round(sizes.bottom) : null,
+                pad: parseFloat(getComputedStyle(main).paddingBottom), tabH: Math.round(tab.height),
+                note: Boolean(document.querySelector('[data-type-moved]')),
+            };
+        });
+    };
+    for (const width of [360, 390]) {
+        for (const state of ['note', 'closed']) {
+            await withDemo(width, 'light', async (page) => {
+                await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'red' });
+                if (state === 'closed') {
+                    await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+                    await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
+                }
+                const pads = {};
+                for (const inset of [0, 34]) {
+                    const fit = await bottomFit(page, inset);
+                    pads[inset] = fit.pad;
+                    const at = `${width} ${state} 홈 표시줄 ${inset}px`;
+                    check(fit.note === (state === 'note'), `${at} 옮김 안내 상태가 다릅니다.`);
+                    check(fit.sizes !== null && fit.cover - fit.sizes >= 12, `${at} 맨 아래에서 크기 칩이 탭에 가립니다. 칩 ${fit.sizes} / 탭 ${fit.tabTop} / 가운데 단추 ${fit.cover}`);
+                    check(fit.cover - fit.low >= 12, `${at} 설정 마지막 내용이 탭에 가립니다. ${fit.low} / ${fit.cover}`);
+                    check(fit.pad >= fit.tabH + 16, `${at} 본문 아래 여백 ${fit.pad}px가 탭 ${fit.tabH}px + 16px보다 작습니다.`);
+                    if (inset === 34) await page.screenshot({ path: resolve(soundShotDir, `settings-bottom-${width}-${state}.png`) });
+                    console.log(`설정 맨 아래 ${at}: 크기 칩과 탭 사이 ${fit.tabTop - fit.sizes}px, 마지막 내용과 가운데 단추 사이 ${fit.cover - fit.low}px`);
+                }
+                check(pads[34] - pads[0] >= 33, `${width} ${state} 홈 표시줄만큼 본문 아래 여백이 늘지 않습니다. ${pads[0]} → ${pads[34]}`);
+            }, 844);
+        }
+    }
+    for (const [label, hash] of [['홈', '#/today'], ['할 일', '#/todo'], ['시간표', '#/schedule']]) {
+        await withDemo(360, 'light', async (page) => {
+            await page.evaluate((h) => { location.hash = h; }, hash);
+            await delay(400);
+            for (const inset of [0, 34]) {
+                const fit = await bottomFit(page, inset);
+                check(fit.cover - fit.low >= 12, `360 ${label} 홈 표시줄 ${inset}px 맨 아래 내용이 탭에 가립니다. ${fit.low} / ${fit.cover}`);
+                check(fit.pad >= fit.tabH + 16, `360 ${label} 홈 표시줄 ${inset}px 본문 아래 여백 ${fit.pad}px가 탭 ${fit.tabH}px + 16px보다 작습니다.`);
+                if (inset === 34) await page.screenshot({ path: resolve(soundShotDir, `${hash.slice(2)}-bottom-360.png`) });
+                console.log(`${label} 맨 아래 360 홈 표시줄 ${inset}px: 마지막 내용과 가운데 단추 사이 ${fit.cover - fit.low}px`);
+            }
+        }, 844);
+    }
     await withDemo(390, 'light', async (page) => {
         const caseH = await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1' });
         check(caseH.shown && caseH.id === 'ppok' && caseH.voice === 'ppok' && caseH.text.includes('‘뽁’'), `H: 글자 소리만 켠 기기가 main 기본 뽁으로 옮겨 안내되지 않습니다. ${JSON.stringify(caseH)}`);
