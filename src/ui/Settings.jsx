@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KB_VOICES, KEY_VOICES, KEY_VOLUMES, closeKeyVoiceMoved, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVoiceMoved, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import { TYPE_SOUND_SHOWN, TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
+import { jamFeelEnabled, previewJam, setJamFeel } from './pressFeel.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
@@ -97,6 +98,7 @@ export function Settings() {
     const [movedId, setMovedId] = useState(() => keyVoiceMoved());
     const [typeOn, setTypeOn] = useState(() => typeSoundEnabled());
     const [typeId, setTypeId] = useState(() => typeVoiceId());
+    const [jamOn, setJamOn] = useState(() => jamFeelEnabled());
     useEffect(() => subscribeKeyPrefs(() => {
         setSoundOn(keySoundEnabled());
         setVibeOn(keyVibeEnabled());
@@ -261,6 +263,17 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요. 몽글·청축처럼 누를 때와 뗄 때 소리가 따로 있으면 두 번, 뽁·띵처럼 한 번 나는 소리는 누를 때만 들려요. 되는 기기에서는 살짝 떨리기도 해요. 처음에는 몽글, 작게로 두었어요.</p>
+                <p className="muted" style={{ margin: '14px 0 0' }}>하단 쨈</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn className={jamOn ? 'chip on' : 'chip'} aria-pressed={jamOn} onClick={() => {
+                        const next = !jamOn;
+                        setJamFeel(next);
+                        setJamOn(next);
+                        if (next) previewJam();
+                    }}>{jamOn ? '쨈 손맛 켜짐' : '쨈 손맛 꺼짐'}</Btn>
+                    <Btn className="chip" data-key-preview="press" onClick={() => previewJam()}>뽁톡 들어 보기</Btn>
+                </div>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 하단 쨈이 살짝 눌렸다가 통 튀면서 뽁, 톡 소리가 나요. 진동은 안드로이드 크롬처럼 되는 기기에서만 12밀리초로 울려요. 아이폰 Safari는 웹에서 진동을 주지 않고, 무음이면 소리도 나지 않아요. 소리를 끄면 진동도 같이 꺼져요.</p>
                 {TYPE_SOUND_SHOWN && (<>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -309,6 +322,14 @@ export function Settings() {
             <section className="glass" style={{ padding: 14 }} data-screen="hotkeys">
                 <h2 className="title-font" style={{ marginTop: 0 }}>단축키</h2>
                 <HotkeyForm onShowList={openHotkeyHelp} />
+            </section>
+
+            <section className="glass" style={{ padding: 14 }} data-screen="quick-help">
+                <h2 className="title-font" style={{ marginTop: 0 }}>홈 화면에서 바로 적기</h2>
+                <p>안드로이드에서는 홈 화면의 쨈 아이콘을 길게 누르면 빠른 입력이 나옵니다.</p>
+                <p>아이폰은 아이콘을 길게 눌러도 빠른 입력이 나오지 않아요. 단축어 앱에서 새 단축어를 만들고, 동작은 URL 열기를 고르세요. 주소는 아래를 붙여 넣습니다. 공유에서 홈 화면에 추가하면 아이콘이 생깁니다. 잠금 화면, 제어 센터, 뒷면 탭에도 같은 단축어를 넣을 수 있어요.</p>
+                <p className="muted" style={{ wordBreak: 'break-all' }}>{typeof location === 'undefined' ? '' : `${location.origin}${location.pathname}?quick=1`}</p>
+                <p>이 주소는 Safari로 열립니다. 홈 화면에 넣어 둔 쨈 교무수첩 안의 기록과는 따로일 수 있어요. 그 앱에서 적으려면 아이콘을 연 다음 하단 쨈을 누르세요.</p>
             </section>
 
             <section className="glass" style={{ padding: 14 }}>

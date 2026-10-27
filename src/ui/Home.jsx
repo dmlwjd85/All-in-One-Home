@@ -113,7 +113,7 @@ export function Home() {
                     <Motto />
                 </div>
                 <h3 className="home-quick-title" style={{ margin: '0 0 6px', fontSize: 16 }}>생각나면 발라 두기</h3>
-                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
+                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 메시지·회의록은 쨈 버튼을 누른 뒤 붙여넣기로 넣어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>

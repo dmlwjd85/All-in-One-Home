@@ -50,20 +50,6 @@ export function Symbol() {
     );
 }
 
-/** 가계부와 같은 윤곽. 하단 버튼에 보이는 이름은 쨈이고, 이 패스는 검사에서 윤곽을 유지합니다.
-    Pretendard Bold 1.3.9 U+CF55, x' = x − 58, y' = 1596 − y.
-    Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
-    with Reserved Font Name Pretendard.
-    SIL Open Font License 1.1. 전문은 public/fonts/OFL-Pretendard.txt
-    글꼴 파일을 더 받지 않고 패스만 넣어 오프라인에서도 같습니다. */
-export function KokMark() {
-    return (
-        <svg className="kok-mark" viewBox="0 0 1652 1774" aria-hidden="true" focusable="false">
-            <path fill="currentColor" d="M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z" />
-        </svg>
-    );
-}
-
 export function IconMenu() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">

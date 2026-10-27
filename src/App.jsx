@@ -10,8 +10,14 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
+import { SealCup } from './ui/SealCup.jsx';
+import { playFoilPop } from './ui/sealBurst.js';
+import { guardCupBurst, playCupGhost } from './ui/cupBurst.js';
+import { QuickBar } from './ui/QuickBar.jsx';
+import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
 import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVoice, playKey, pressTarget, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
+import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
@@ -35,6 +41,10 @@ export default function App() {
     const [clock, setClock] = useState(() => seoulParts());
     const [toast, setToast] = useState(null);
     const [plus, setPlus] = useState(false);
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [quickInvite, setQuickInvite] = useState(false);
+    const quickInput = useRef(null);
+    const pendingQuick = useRef(false);
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
@@ -48,6 +58,7 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+    useEffect(() => guardCupBurst(), []);
 
     /* 키보드 테마는 이 기기에 둔 값만 봅니다. 테마 소리를 골라 두었으면 쉬는 틈에 파일을 받아 첫 누름부터 들리게 합니다. */
     useEffect(() => {
@@ -145,6 +156,28 @@ export default function App() {
         if (route.openQuick) setFlow((prev) => prev || { id: 'quick', kind: '관찰' });
         if (route.notice) setToast({ message: route.notice, undoable: false });
     }, [route.openQuick, route.notice, data?.profile.started]);
+
+    useEffect(() => {
+        if (route.openQuickBar) pendingQuick.current = true;
+    }, [route.openQuickBar]);
+
+    useEffect(() => {
+        if (!data?.profile.started || locked) return;
+        const fromQuery = new URLSearchParams(location.search).get('quick') === '1';
+        if (!pendingQuick.current && !fromQuery) return;
+        pendingQuick.current = false;
+        setQuickInvite(true);
+        setQuickOpen(true);
+        quickInput.current?.blur();
+        if (!fromQuery) return;
+        try {
+            const url = new URL(location.href);
+            url.searchParams.delete('quick');
+            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            /* 주소를 못 고쳐도 입력칸은 열려 있습니다. */
+        }
+    }, [route.openQuickBar, locked, data?.profile.started, hash]);
 
     useEffect(() => {
         if (!data) return;
@@ -279,6 +312,9 @@ export default function App() {
         const onKey = (event) => {
             if (locked) return;
             if (event.key === 'Escape') {
+                quickInput.current?.blur();
+                setQuickOpen(false);
+                setQuickInvite(false);
                 setPlus(false);
                 setFlow(null);
                 setMsg(false);
@@ -336,9 +372,12 @@ export default function App() {
             if (event.button !== 0) return;
             const el = hit(event.target);
             if (!el || el.hasAttribute('data-key-preview')) return;
+            if (jamFeelEnabled() && el.closest('.fab, .desk-fab')) return;
             playKey('down');
         };
-        const onPointerUp = () => {
+        const onPointerUp = (event) => {
+            const target = event.target;
+            if (jamFeelEnabled() && target instanceof Element && target.closest('.fab, .desk-fab')) return;
             playKey('up');
         };
         const keyTarget = (event) => {
@@ -351,10 +390,12 @@ export default function App() {
         };
         const onKeyDown = (event) => {
             if (event.repeat || !keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('down');
         };
         const onKeyUp = (event) => {
             if (!keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('up');
         };
         document.addEventListener('pointerdown', onPointerDown, true);
@@ -419,6 +460,19 @@ export default function App() {
         );
     }
 
+    function openQuickBar(event) {
+        const bar = document.querySelector('.quick-bar');
+        if (bar) {
+            bar.classList.add('is-open');
+            bar.setAttribute('aria-hidden', 'false');
+        }
+        quickInput.current?.focus();
+        setQuickInvite(false);
+        setQuickOpen(true);
+        playFoilPop(event?.currentTarget);
+        playCupGhost(event?.currentTarget);
+    }
+
     const ui = {
         data,
         clock,
@@ -426,7 +480,7 @@ export default function App() {
         showToast,
         openQuick: (kind, extra = {}) => setFlow({ id: 'quick', kind: kind || '관찰', ...extra }),
         openFlow: (next) => setFlow(next),
-        openPlus: () => setPlus(true),
+        openPlus: (opts) => setPlus(opts?.more ? 'more' : true),
         go,
         openHotkeyHelp: () => setHelp(true),
         route,
@@ -563,7 +617,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
+                            <Btn key={label} className="fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -574,9 +628,11 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
+                <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
+                <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet
+                        startMore={plus === 'more'}
                         onClose={() => setPlus(false)}
                         onPick={(action) => {
                             setPlus(false);

@@ -502,16 +502,25 @@ async function controlBoxes(page, selector, label) {
     if (result.small.length) failures.push(`${label} 44px 미만: ${result.small.join(', ')}`);
 }
 
+/* + 화면은 사람이 가는 길 그대로 엽니다: 보이는 쨈 버튼 → 빠른 입력의 '메시지·회의록 붙여넣기'. */
 async function openPlus(page) {
     await page.evaluate(() => {
-        const buttons = [...document.querySelectorAll('[aria-label="할 일 고르기"]')];
+        const buttons = [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')];
         const visible = buttons.find((el) => {
             const rect = el.getBoundingClientRect();
             return rect.width > 0 && rect.height > 0;
         });
         visible?.click();
     });
+    await page.waitForSelector('.quick-bar.is-open .quick-paste');
+    await page.evaluate(() => document.querySelector('.quick-bar.is-open .quick-paste')?.click());
     await page.waitForSelector('[data-screen="plus"]');
+}
+
+// 붙여넣기로 연 ＋는 더보기가 펼쳐져 있습니다. 한 화면 맞춤은 접은 기본 화면에서 봅니다(펼친 뒤 스크롤은 예전과 같음).
+async function foldPlus(page) {
+    await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('접기'))?.click());
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.includes('더보기')), { timeout: 5000 });
 }
 
 async function clickPlus(page, label) {
@@ -658,11 +667,11 @@ try {
         ['home-360-lilac.png', 360, 'light', async (page) => page],
         ['attend-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
-        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.click('[aria-label="할 일 고르기"]'); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
+        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
         ['home-360-dark.png', 360, 'dark', async () => {}],
         ['attend-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
-        ['quick-360-dark.png', 360, 'dark', async (page) => { await page.click('[aria-label="할 일 고르기"]'); await delay(250); }],
+        ['quick-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await delay(250); }],
         ['home-1280-lilac.png', 1280, 'light', async () => {}],
     ];
 
@@ -743,7 +752,7 @@ try {
                 });
                 check(
                     underFab.length === 2 && underFab.every((row) => !row.under),
-                    `1920에서 출결 16·17번 줄이 할 일 고르기 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
+                    `1920에서 출결 16·17번 줄이 쨈 버튼 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
                 );
             }
             await audit(page, `출결 너비 ${width}`);
@@ -938,16 +947,18 @@ try {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await page.screenshot({ path: resolve(shots, 'after_home_390.png') });
         await openPlus(page);
-        const plus = await choiceFit(page, 'plus');
-        reportChoice('＋ 메뉴 390', plus);
         const face = await page.evaluate(() => ({
             field: Boolean(document.querySelector('[data-screen="plus"] textarea')),
             buttons: [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()),
         }));
         check(face.field, '＋에 입력창이 없습니다.');
-        for (const label of ['출결', '상담', '할 일', '일정', '더보기']) {
+        for (const label of ['출결', '상담', '할 일', '일정']) {
             if (!face.buttons.some((item) => item.includes(label))) failures.push(`＋에 ${label}이 없습니다.`);
         }
+        // QA 2차 1번: 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기가 이미 펼쳐져 있습니다(접기 단추가 보임).
+        check(face.buttons.some((item) => item.includes('접기')) && !face.buttons.some((item) => item.includes('더보기')), `붙여넣기로 연 ＋에 더보기가 펼쳐져 있지 않습니다: ${face.buttons.join(' / ')}`);
+        await foldPlus(page);
+        reportChoice('＋ 메뉴 390', await choiceFit(page, 'plus'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('회의록 작성') && document.body.innerText.includes('보호자'));
         const moreLabels = await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
@@ -1307,6 +1318,7 @@ try {
         await audit(page, '홈 16:9');
         await page.screenshot({ path: resolve(shots, 'after_home_16x9.png') });
         await openPlus(page);
+        await foldPlus(page);
         const plus = await choiceFit(page, 'plus');
         reportChoice('＋ 메뉴 16:9', plus);
         await audit(page, '＋ 16:9');
@@ -2110,6 +2122,7 @@ try {
             }));
             check(typed.starts === 0, `글자를 적을 때 소리가 납니다. ${typed.starts}번`);
             check(typed.sound === '1' && typed.voice === 'bang' && typed.key === 'click', `글자 소리 저장값이 바뀌었습니다. ${JSON.stringify(typed)}`);
+            await page.$eval('[aria-label="뽁 통통"]', (el) => el.scrollIntoView({ block: 'center' }));
             await page.click('[aria-label="뽁 통통"]');
             await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'ppok');
             const picked = await page.evaluate(() => ({
@@ -2134,7 +2147,7 @@ try {
             };
         });
         check(notice.text.includes('누를 때 소리가 나요') && !notice.text.includes('콕') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
-        await page.click('[aria-label="할 일 고르기"]');
+        await page.click('[aria-label="쨈 빠른 입력 열기"]');
         await delay(80);
         const during = await page.evaluate(() => ({
             toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
@@ -2815,46 +2828,116 @@ try {
         check(leaked.length === 0, `숨은 행 검사: 기기 전용 기록을 빼고 내보냈는데 민감한 글이 들어갔습니다. ${leaked.join(', ')}`);
     }, 844);
 
-    /* 콕 키캡: 크기·측면·눌림·터치 영역·그림자와, 토스트가 키캡을 덮지 않는지 계산된 스타일로 봅니다. */
+    /* 하단 쨈 버튼: 크기·측면·눌림·터치 영역·그림자와, 토스트가 버튼을 덮지 않는지 계산된 스타일로 봅니다.
+       main(#39)의 콕 키캡 검사를 #38 쨈 용기 모양에 맞게 고쳤습니다.
+       58/64px 키캡 → 60px 접시(.fab-disc), 9px 측면 → 접시 아래 6px 그림자,
+       :active 6px 눌림·80ms 전환 → 누르는 동안(is-pressed) 컵이 납작해지고(1.1×0.86) 70ms 전환, 떼면 원래대로. */
     for (const width of [360, 390, 900, 960, 1000, 1920]) {
         for (const mode of ['light', 'dark']) {
             await withDemo(width, mode, async (page) => {
                 const selector = width >= 900 ? '.desk-fab' : '.tabbar .fab';
-                const size = width >= 900 ? 64 : 58;
+                const size = 60;
                 const cap = await page.evaluate((sel) => {
                     const el = document.querySelector(sel);
                     if (!el) return null;
                     const rect = el.getBoundingClientRect();
-                    const after = getComputedStyle(el, '::after');
+                    const disc = el.querySelector('.fab-disc');
+                    const squish = el.querySelector('.cup-squish');
+                    const discRect = disc?.getBoundingClientRect();
                     return {
                         w: rect.width,
                         h: rect.height,
-                        shadow: after.boxShadow,
-                        transition: `${after.transitionProperty} ${after.transitionDuration}`,
+                        discW: discRect?.width ?? 0,
+                        discH: discRect?.height ?? 0,
+                        shadow: disc ? getComputedStyle(disc).boxShadow : '',
+                        squish: squish ? getComputedStyle(squish).transform : '',
+                        transition: squish ? `${getComputedStyle(squish).transitionProperty} ${getComputedStyle(squish).transitionDuration}` : '',
                     };
                 }, selector);
-                check(Boolean(cap), `${width} ${mode}에서 콕 키캡이 없습니다.`);
+                check(Boolean(cap), `${width} ${mode}에서 쨈 버튼이 없습니다.`);
                 if (!cap) return;
-                check(Math.abs(cap.w - size) < 0.6 && Math.abs(cap.h - size) < 0.6, `${width} ${mode} 콕 키캡이 ${size}px가 아닙니다: ${cap.w}×${cap.h}`);
-                check(cap.w >= 44 && cap.h >= 44, `${width} ${mode} 콕 키캡 터치 영역이 44px보다 작습니다.`);
-                check(cap.shadow && cap.shadow !== 'none' && /\b0px 9px 0px\b/.test(cap.shadow) && /inset/.test(cap.shadow), `${width} ${mode} 콕 키캡 측면 9px 그림자가 없습니다: ${cap.shadow}`);
-                check(/box-shadow/.test(cap.transition) && /0\.08s/.test(cap.transition), `${width} ${mode} 콕 키캡 눌림 전환이 80ms가 아닙니다: ${cap.transition}`);
-                const cdp = await page.createCDPSession();
-                await cdp.send('DOM.enable');
-                await cdp.send('CSS.enable');
-                const { root: docRoot } = await cdp.send('DOM.getDocument');
-                const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docRoot.nodeId, selector });
-                await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['active'] });
-                await delay(150);
-                const pressed = await page.evaluate((sel) => {
+                check(Math.abs(cap.discW - size) < 0.6 && Math.abs(cap.discH - size) < 0.6, `${width} ${mode} 쨈 접시가 ${size}px가 아닙니다: ${cap.discW}×${cap.discH}`);
+                check(cap.w >= 44 && cap.h >= 44, `${width} ${mode} 쨈 버튼 터치 영역이 44px보다 작습니다.`);
+                check(cap.shadow && cap.shadow !== 'none' && /\b0px 6px 20px -6px\b/.test(cap.shadow), `${width} ${mode} 쨈 접시 아래 6px 그림자가 없습니다: ${cap.shadow}`);
+                check(cap.squish === 'none' && /transform/.test(cap.transition) && /0\.46s/.test(cap.transition), `${width} ${mode} 쨈 컵이 쉬는 모양이 아니거나 돌아오는 전환이 없습니다: ${cap.squish} ${cap.transition}`);
+                const pressed = await page.evaluate(async (sel) => {
                     const el = document.querySelector(sel);
-                    const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
-                    return { y: matrix.m42, shadow: getComputedStyle(el, '::after').boxShadow };
+                    const squish = el.querySelector('.cup-squish');
+                    const rect = el.getBoundingClientRect();
+                    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
+                    await new Promise((done) => setTimeout(done, 200));
+                    const down = { transform: getComputedStyle(squish).transform, duration: getComputedStyle(squish).transitionDuration, press: el.dataset.press };
+                    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+                    await new Promise((done) => setTimeout(done, 700));
+                    return { down, up: { transform: getComputedStyle(squish).transform, press: el.dataset.press } };
                 }, selector);
-                await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
-                await cdp.detach().catch(() => {});
-                check(Math.abs(pressed.y - 6) < 0.6, `${width} ${mode} 콕 키캡이 6px 눌리지 않습니다: ${pressed.y}`);
-                check(/\b0px 3px 0px\b/.test(pressed.shadow), `${width} ${mode} 눌린 콕 키캡 측면이 3px로 줄지 않습니다: ${pressed.shadow}`);
+                const matrix = /matrix\(([^)]+)\)/.exec(pressed.down.transform)?.[1].split(',').map(Number) || [];
+                check(pressed.down.press === 'down' && Math.abs(matrix[0] - 1.1) < 0.01 && Math.abs(matrix[3] - 0.86) < 0.01, `${width} ${mode} 누르는 동안 쨈 컵이 1.1×0.86으로 눌리지 않습니다: ${pressed.down.transform}`);
+                check(/0\.07s/.test(pressed.down.duration), `${width} ${mode} 쨈 컵 눌림 전환이 70ms가 아닙니다: ${pressed.down.duration}`);
+                check(pressed.up.press === 'rest' && pressed.up.transform === 'none', `${width} ${mode} 뗀 쨈 컵이 원래대로 돌아오지 않습니다: ${pressed.up.transform}`);
+                /* QA 1차 6번(M10): 키보드 Enter·Space도 누르는 동안 눌리고, 떼면 돌아와야 합니다.
+                   Enter는 누르는 순간 열려 글자 칸으로 초점이 가므로 버튼 대신 창에서 뗌을 받습니다. */
+                for (const key of ['Enter', 'Space']) {
+                    await page.evaluate((sel) => document.querySelector(sel).focus(), selector);
+                    await page.keyboard.down(key);
+                    await delay(200);
+                    const keyDown = await page.evaluate((sel) => {
+                        const el = document.querySelector(sel);
+                        return { transform: getComputedStyle(el.querySelector('.cup-squish')).transform, press: el.dataset.press };
+                    }, selector);
+                    await page.keyboard.up(key);
+                    await delay(700);
+                    const keyUp = await page.evaluate((sel) => {
+                        const el = document.querySelector(sel);
+                        return { transform: getComputedStyle(el.querySelector('.cup-squish')).transform, press: el.dataset.press, open: Boolean(document.querySelector('.quick-bar.is-open')) };
+                    }, selector);
+                    const keyMatrix = /matrix\(([^)]+)\)/.exec(keyDown.transform)?.[1].split(',').map(Number) || [];
+                    check(keyDown.press === 'down' && Math.abs(keyMatrix[0] - 1.1) < 0.01 && Math.abs(keyMatrix[3] - 0.86) < 0.01, `${width} ${mode} ${key}를 누르는 동안 쨈 컵이 눌리지 않습니다: ${keyDown.press} ${keyDown.transform}`);
+                    check(keyUp.press === 'rest' && keyUp.transform === 'none', `${width} ${mode} ${key}를 뗀 뒤 쨈 컵이 돌아오지 않습니다: ${keyUp.press} ${keyUp.transform}`);
+                    check(keyUp.open, `${width} ${mode} ${key}로 빠른 입력이 열리지 않습니다.`);
+                    await page.keyboard.press('Escape');
+                    await page.waitForFunction(() => !document.querySelector('.quick-bar.is-open'), { timeout: 3000 }).catch(() => {});
+                }
+                /* QA 2차 5번: 누른 채 창이 초점을 잃거나(blur) 화면이 가려지면(visibilitychange hidden) 눌림이 풀려야 합니다. */
+                const lost = await page.evaluate(async (sel) => {
+                    const el = document.querySelector(sel);
+                    const rect = el.getBoundingClientRect();
+                    const down = () => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, button: 0, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
+                    const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+                    down();
+                    await wait(120);
+                    const before = el.dataset.press;
+                    window.dispatchEvent(new Event('blur'));
+                    await wait(50);
+                    const blur = el.dataset.press;
+                    down();
+                    await wait(120);
+                    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    delete document.visibilityState;
+                    await wait(50);
+                    const hidden = el.dataset.press;
+                    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 }));
+                    return { before, blur, hidden, pressed: el.classList.contains('is-pressed') };
+                }, selector);
+                check(lost.before === 'down' && lost.blur === 'rest' && lost.hidden === 'rest' && !lost.pressed, `${width} ${mode} 창 초점을 잃거나 화면이 가려져도 쨈 컵 눌림이 풀리지 않습니다: ${JSON.stringify(lost)}`);
+                /* QA 2차 5번: 키보드 초점 테두리는 바탕과 3:1 이상이어야 합니다(어두운 화면 포함). */
+                const ring = await page.evaluate((sel) => {
+                    const el = document.querySelector(sel);
+                    el.focus();
+                    const rgb = (text) => (text.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+                    const lum = ([r, g, b]) => [r, g, b].map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+                    const style = getComputedStyle(el);
+                    const probe = document.createElement('div');
+                    probe.style.background = 'var(--bg)';
+                    document.body.append(probe);
+                    const bg = getComputedStyle(probe).backgroundColor;
+                    probe.remove();
+                    const a = lum(rgb(style.outlineColor));
+                    const b = lum(rgb(bg));
+                    return { visible: el.matches(':focus-visible'), style: style.outlineStyle, color: style.outlineColor, bg, ratio: Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100 };
+                }, selector);
+                check(ring.visible && ring.style !== 'none' && ring.ratio >= 3, `${width} ${mode} 키보드 초점 테두리가 바탕과 3:1이 안 됩니다: ${JSON.stringify(ring)}`);
                 await clickPlus(page, '관찰');
                 await page.waitForFunction(() => document.body.innerText.includes('누구'));
                 await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());
