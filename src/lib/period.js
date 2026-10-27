@@ -122,6 +122,11 @@ export function workTimer(sec, { workStart = '', workEnd = '', leave = '' } = {}
     return { ...base, done: false, remain, progress, seconds: remain <= 600, left, text: `${label}까지 ${left}` };
 }
 
+/** 10분 안쪽이면 초 단위로 셉니다. 홈이 이 값으로 시계를 빠르게 돌립니다. 1분 시계가 600초를 놓치지 않게 660초부터 1초로 돌립니다. */
+export function wantsFast(timer) {
+    return Boolean(timer.show && !timer.done && timer.remain <= 660);
+}
+
 /** 조퇴 시각이 알맞은지 봅니다. 출근 뒤, 지금 뒤, 퇴근 전만 받습니다. 괜찮으면 빈 문자열입니다. */
 export function leaveProblem(hm, nowHm, { workStart = '', workEnd = '' } = {}) {
     if (!isHm(hm)) return '조퇴 시각은 14:30처럼 골라 주세요.';

@@ -49,10 +49,8 @@ export function useLeave(ymd) {
     return leave;
 }
 
-/** 10분 안쪽이면 초 단위로 셉니다. 홈이 이 값으로 시계를 빠르게 돌립니다. */
-export function wantsFast(timer) {
-    return Boolean(timer.show && !timer.done && timer.remain <= 660);
-}
+/* 초 단위 전환 판정은 검사할 수 있게 period.js에 둡니다. */
+export { wantsFast } from '../lib/period.js';
 
 export function WorkTimer({ ymd, local, leave, showToast, now }) {
     const [open, setOpen] = useState(false);

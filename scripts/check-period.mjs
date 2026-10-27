@@ -18,7 +18,7 @@ globalThis.localStorage = {
     removeItem: (key) => bag.delete(key),
 };
 
-const { DEFAULT_PERIODS, eulReul, leaveProblem, periodStatus, workTimer } = await import('../src/lib/period.js');
+const { DEFAULT_PERIODS, eulReul, leaveProblem, periodStatus, wantsFast, workTimer } = await import('../src/lib/period.js');
 const local = await import('../src/lib/periodLocal.js');
 const { detectWhen, parseSchoolMessages } = await import('../src/lib/msgParse.js');
 const { toCloudRow } = await import('../src/lib/cloudShape.js');
@@ -78,6 +78,19 @@ check(five.text === '퇴근까지 5분 00초' && five.seconds === true, `5분 �
 check(workTimer(at('16:30'), work).text === '퇴근까지 10분 00초', '딱 10분 남았을 때 초가 없습니다.');
 check(workTimer(at('16:29', 59), work).text === '퇴근까지 11분' && !workTimer(at('16:29', 59), work).seconds, '10분 넘게 남았는데 초가 나옵니다.');
 check(workTimer(at('16:39', 15), work).text === '퇴근까지 45초', '1분 안쪽이 초만 나오지 않습니다.');
+/* 홈 시계 흉내: 빠르지 않으면 1분, 빠르면 1초씩 갑니다. 601초(11분)에서 600초(10분 00초)로 넘어가는 순간을 1초 시계로 찍어야 합니다. */
+check(!wantsFast(workTimer(at('16:28', 59), work)) && wantsFast(workTimer(at('16:29'), work)), '660초부터 1초 시계로 바뀌지 않습니다.');
+check(wantsFast(workTimer(at('16:29', 59), work)) && wantsFast(workTimer(at('16:30'), work)), '601초·600초에 1초 시계가 아닙니다.');
+{
+    const seen = [];
+    for (let sec = at('16:20'); sec <= at('16:31'); ) {
+        const timer = workTimer(sec, work);
+        seen.push(timer.text);
+        sec += wantsFast(timer) ? 1 : 60;
+    }
+    const i = seen.indexOf('퇴근까지 10분 00초');
+    check(i > 0 && seen[i - 1] === '퇴근까지 11분' && seen[i + 1] === '퇴근까지 9분 59초', `가짜 시계에서 601초→600초 경계를 1초로 넘지 않습니다: ${JSON.stringify(seen.slice(Math.max(0, i - 2), i + 3))}`);
+}
 const done = workTimer(at('16:40'), work);
 check(done.show && done.done && done.text === '퇴근 시간이 지났어요', `지남 문구가 틀립니다: ${done.text}`);
 check(!workTimer(at('08:00'), work).show, '출근 전에 타이머가 보입니다.');
