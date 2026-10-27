@@ -2704,7 +2704,8 @@ try {
         check(!view.empty, '알림장을 저장한 뒤에도 "저장하면 여기에 모여요" 빈 안내가 그대로 보입니다.');
         check(!view.hintOverflow && !view.pageOverflow, `390에서 알림장 저장 안내가 옆으로 넘칩니다: ${JSON.stringify(view)}`);
 
-        // 되돌리기 뒤에는 빈 안내로 돌아갑니다.
+        // 되돌리기 뒤에는 빈 안내로 돌아갑니다. 안내는 저장 직후, 토스트는 기기 저장이 끝난 뒤 뜨므로 토스트를 기다립니다.
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '되돌리기'), { timeout: 5000 }).catch(() => {});
         const undone = await page.evaluate(() => {
             const button = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기');
             button?.click();
@@ -2760,6 +2761,7 @@ try {
         await noticeSave(page, '줄넘기 챙기기');
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
         await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
         const clearToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
         check(clearToast.includes('이 날 알림장을 비웠어요.') && /되돌\s*리\s*기/.test(clearToast), `알림장을 비웠다는 안내나 되돌리기 버튼이 없습니다: ${JSON.stringify(clearToast)}`);
         // main처럼 빈 글('')로 저장해 다른 기기에도 비운 상태가 퍼지게 하고, 화면에서만 숨깁니다.
