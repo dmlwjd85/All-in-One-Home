@@ -11,8 +11,9 @@ import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
-import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
+import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVoice, playKey, pressTarget, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
+import { applyStoredKbTheme } from './ui/kbtheme.js';
+import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
@@ -47,6 +48,17 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+
+    /* 키보드 테마는 이 기기에 둔 값만 봅니다. 테마 소리를 골라 두었으면 쉬는 틈에 파일을 받아 첫 누름부터 들리게 합니다. */
+    useEffect(() => {
+        applyStoredKbTheme();
+        const voice = keyVoiceId();
+        if (!isKbVoice(voice)) return undefined;
+        const idle = window.requestIdleCallback ? (fn) => window.requestIdleCallback(fn, { timeout: 2000 }) : (fn) => window.setTimeout(fn, 600);
+        const stop = window.cancelIdleCallback ? (id) => window.cancelIdleCallback(id) : (id) => window.clearTimeout(id);
+        const id = idle(() => loadKbVoice(voice));
+        return () => stop(id);
+    }, []);
 
     useEffect(() => {
         const sync = () => setHotkeys(loadHotkeys());
@@ -288,9 +300,11 @@ export default function App() {
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
         const onInput = (event) => {
+            if (!TYPE_SOUND_SHOWN) return;
             if (noteTypeInput(event)) playTypeSound();
         };
         const onTypeKey = (event) => {
+            if (!TYPE_SOUND_SHOWN) return;
             const kind = noteTypeKey(event);
             if (kind) playTypeSound(kind);
         };
@@ -316,9 +330,7 @@ export default function App() {
     useEffect(() => {
         const hit = (target) => {
             if (!(target instanceof Element)) return null;
-            const el = target.closest('button, a, label.chip, [role="button"]');
-            if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
-            return el;
+            return pressTarget(target);
         };
         const onPointerDown = (event) => {
             if (event.button !== 0) return;
@@ -333,8 +345,8 @@ export default function App() {
             if (event.key !== 'Enter' && event.key !== ' ') return null;
             const el = event.target;
             if (!(el instanceof HTMLElement)) return null;
-            if (el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') return null;
-            if (el.hasAttribute('disabled') || el.hasAttribute('data-key-preview')) return null;
+            if (el.tagName === 'A' || pressTarget(el) !== el) return null;
+            if (el.hasAttribute('data-key-preview')) return null;
             return el;
         };
         const onKeyDown = (event) => {

@@ -50,6 +50,7 @@ jobs:
           npm run check:quality
           npm run check:speech
           npm run check:keyfeel
+          npm run check:kbtheme
           npm run check:brand
           npm run check:icons
           npm run check:gcal
