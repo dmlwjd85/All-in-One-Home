@@ -20,6 +20,7 @@
     "check:msg": "node scripts/check-msg.mjs",
     "check:speech": "node scripts/check-speech.mjs",
     "check:keyfeel": "node scripts/check-keyfeel.mjs",
+    "check:kbtheme": "node scripts/check-kbtheme.mjs",
     "check:brand": "node scripts/check-brand.mjs",
     "check:icons": "node scripts/check-icons.mjs",
     "check:gcal": "node scripts/check-gcal.mjs",

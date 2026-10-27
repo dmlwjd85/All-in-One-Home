@@ -1,0 +1,146 @@
+/* 키보드 테마 키캡. 고르거나 설정을 열 때만 받는 따로 나뉜 스타일입니다.
+   MX 미니(기본)는 지금 키캡 그대로라 여기에 없습니다.
+   바꾸는 것은 누르는 곳의 재질(바탕), 그림자, 모서리, 눌리는 깊이뿐입니다. 글꼴·글자색·화면 바탕은 그대로 둡니다.
+   눌림은 위치(translateY)로만 나타냅니다. 키를 납작하게 줄이지 않습니다. */
+
+html[data-kb="retro"] {
+    --kb-key: linear-gradient(180deg, #F6F1E6 0%, #EDE6D7 100%);
+    --kb-key-on: #E6DECD;
+    --kb-r: 8px;
+    --kb-raise: inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 -4px 0 #D3C9B5, 0 2px 0 #ABA08B, 0 4px 6px rgba(46, 42, 43, .18);
+    --kb-on: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 #D3C9B5, 0 1px 0 #ABA08B, 0 1px 2px rgba(46, 42, 43, .16);
+    --kb-press: inset 0 1px 0 rgba(255, 255, 255, .45), inset 0 -1px 0 #D3C9B5, 0 0 0 #ABA08B, 0 1px 2px rgba(46, 42, 43, .14);
+    --kb-travel: 3px;
+    --kb-travel-on: 2px;
+}
+html.dark[data-kb="retro"] {
+    --kb-key: linear-gradient(180deg, #4D4741 0%, #433D37 100%);
+    --kb-key-on: #3C3631;
+    --kb-raise: inset 0 1px 0 rgba(255, 255, 255, .10), inset 0 -4px 0 #34302B, 0 2px 0 #1C1916, 0 4px 6px rgba(0, 0, 0, .45);
+    --kb-on: inset 0 1px 0 rgba(255, 255, 255, .06), inset 0 -1px 0 #34302B, 0 1px 0 #1C1916, 0 1px 2px rgba(0, 0, 0, .4);
+    --kb-press: inset 0 1px 0 rgba(255, 255, 255, .06), inset 0 -1px 0 #34302B, 0 0 0 #1C1916, 0 1px 2px rgba(0, 0, 0, .4);
+}
+
+html[data-kb="slim"] {
+    --kb-key: #FAF9F7;
+    --kb-key-on: #EFEDEA;
+    --kb-r: 6px;
+    --kb-raise: inset 0 0 0 1px rgba(46, 42, 43, .10), 0 1px 0 rgba(46, 42, 43, .22), 0 2px 3px rgba(46, 42, 43, .10);
+    --kb-on: inset 0 0 0 1px rgba(46, 42, 43, .16), inset 0 1px 2px rgba(46, 42, 43, .14);
+    --kb-press: inset 0 0 0 1px rgba(46, 42, 43, .16), inset 0 1px 2px rgba(46, 42, 43, .18);
+    --kb-travel: 1px;
+    --kb-travel-on: 1px;
+}
+html.dark[data-kb="slim"] {
+    --kb-key: #3A3637;
+    --kb-key-on: #312D2E;
+    --kb-raise: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 1px 0 rgba(0, 0, 0, .55), 0 2px 3px rgba(0, 0, 0, .35);
+    --kb-on: inset 0 0 0 1px rgba(255, 255, 255, .10), inset 0 1px 2px rgba(0, 0, 0, .45);
+    --kb-press: inset 0 0 0 1px rgba(255, 255, 255, .10), inset 0 1px 3px rgba(0, 0, 0, .5);
+}
+
+html[data-kb="puff"] {
+    --kb-key: linear-gradient(180deg, #FCF2F7 0%, #F5E3EC 100%);
+    --kb-key-on: #F1DCE6;
+    --kb-r: 22px;
+    --kb-raise: inset 0 2px 0 rgba(255, 255, 255, .85), inset 0 -3px 6px rgba(167, 61, 116, .10), 0 6px 12px -4px rgba(167, 61, 116, .30);
+    --kb-on: inset 0 3px 8px rgba(167, 61, 116, .20), 0 1px 2px rgba(167, 61, 116, .12);
+    --kb-press: inset 0 3px 8px rgba(167, 61, 116, .24), 0 1px 1px rgba(167, 61, 116, .10);
+    --kb-travel: 3px;
+    --kb-travel-on: 2px;
+}
+html.dark[data-kb="puff"] {
+    --kb-key: linear-gradient(180deg, #4E3C46 0%, #45343E 100%);
+    --kb-key-on: #3F2F38;
+    --kb-raise: inset 0 2px 0 rgba(255, 255, 255, .10), inset 0 -3px 6px rgba(0, 0, 0, .25), 0 6px 12px -4px rgba(0, 0, 0, .6);
+    --kb-on: inset 0 3px 8px rgba(0, 0, 0, .45), 0 1px 2px rgba(0, 0, 0, .3);
+    --kb-press: inset 0 3px 8px rgba(0, 0, 0, .5), 0 1px 1px rgba(0, 0, 0, .3);
+}
+
+html[data-kb="jelly"] {
+    --kb-key: linear-gradient(180deg, rgba(255, 255, 255, .62) 0%, rgba(255, 255, 255, .34) 100%);
+    --kb-key-on: rgba(255, 255, 255, .26);
+    --kb-r: 14px;
+    --kb-raise: inset 0 0 0 1px rgba(255, 255, 255, .9), inset 0 -6px 12px rgba(167, 61, 116, .10), inset 0 2px 0 rgba(255, 255, 255, .7), 0 4px 10px -4px rgba(46, 42, 43, .28);
+    --kb-on: inset 0 0 0 1px rgba(255, 255, 255, .8), inset 0 2px 8px rgba(167, 61, 116, .18);
+    --kb-press: inset 0 0 0 1px rgba(255, 255, 255, .8), inset 0 2px 8px rgba(167, 61, 116, .22);
+    --kb-travel: 2px;
+    --kb-travel-on: 1px;
+}
+html.dark[data-kb="jelly"] {
+    --kb-key: linear-gradient(180deg, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, .05) 100%);
+    --kb-key-on: rgba(255, 255, 255, .04);
+    --kb-raise: inset 0 0 0 1px rgba(255, 255, 255, .22), inset 0 -6px 12px rgba(224, 139, 154, .14), inset 0 2px 0 rgba(255, 255, 255, .10), 0 4px 10px -4px rgba(0, 0, 0, .6);
+    --kb-on: inset 0 0 0 1px rgba(255, 255, 255, .18), inset 0 2px 8px rgba(0, 0, 0, .45);
+    --kb-press: inset 0 0 0 1px rgba(255, 255, 255, .18), inset 0 2px 8px rgba(0, 0, 0, .5);
+}
+
+html[data-kb="type"] {
+    --kb-key: radial-gradient(120% 90% at 50% 20%, #FBF7EE 0%, #F1EBDD 100%);
+    --kb-key-on: #E9E2D2;
+    --kb-r: 22px;
+    --kb-raise: inset 0 0 0 2px #8C8476, inset 0 3px 0 rgba(255, 255, 255, .8), 0 4px 0 #5E584E, 0 6px 6px rgba(46, 42, 43, .22);
+    --kb-on: inset 0 0 0 2px #8C8476, inset 0 2px 4px rgba(46, 42, 43, .18), 0 1px 0 #5E584E;
+    --kb-press: inset 0 0 0 2px #8C8476, inset 0 2px 4px rgba(46, 42, 43, .2), 0 1px 0 #5E584E;
+    --kb-travel: 3px;
+    --kb-travel-on: 3px;
+}
+html.dark[data-kb="type"] {
+    --kb-key: radial-gradient(120% 90% at 50% 20%, #36322D 0%, #2B2824 100%);
+    --kb-key-on: #25221F;
+    --kb-raise: inset 0 0 0 2px #A39B8C, inset 0 3px 0 rgba(255, 255, 255, .08), 0 4px 0 #121010, 0 6px 6px rgba(0, 0, 0, .5);
+    --kb-on: inset 0 0 0 2px #A39B8C, inset 0 2px 4px rgba(0, 0, 0, .5), 0 1px 0 #121010;
+    --kb-press: inset 0 0 0 2px #A39B8C, inset 0 2px 4px rgba(0, 0, 0, .5), 0 1px 0 #121010;
+}
+
+/* 누르는 곳: 버튼 칩, 아이콘 단추, 고르기 칸, 할 일 줄, 카드 버튼, 달력 날짜 */
+html[data-kb] :is(button.chip, a.chip, label.chip, [role="button"].chip, .icon-btn, .choice-tile, .todo-main, button.solid-card, [role="button"].solid-card, button.glass, .cal-grid .tap) {
+    background: var(--kb-key);
+    border-radius: var(--kb-r);
+    box-shadow: var(--kb-raise);
+}
+/* 출결 칸처럼 바탕을 style 로 직접 쓰는 카드는 --solid 값을 바꿔 같은 재질을 입힙니다. */
+html[data-kb] :is(button.solid-card, [role="button"].solid-card) { --solid: var(--kb-key); }
+html[data-kb] :is(button.solid-card, [role="button"].solid-card)[aria-pressed="true"] { --solid: var(--kb-key-on); }
+html[data-kb] .cal-grid .tap.day-rest { background: var(--rest-bg); }
+html[data-kb] .primary-btn {
+    border-radius: var(--kb-r);
+    box-shadow: 0 3px 0 var(--keycap-side), 0 5px 6px var(--keycap-shadow);
+}
+html[data-kb] :is(.chip.on, .choice-tile.on, .cal-grid .tap.neo-in, button.solid-card[aria-pressed="true"], button.glass[aria-pressed="true"]) {
+    background: var(--kb-key-on);
+    box-shadow: var(--kb-on);
+    transform: translateY(var(--kb-travel-on));
+}
+html[data-kb] .cal-grid .tap.cal-picked { box-shadow: var(--kb-on), inset 0 0 0 2px var(--accent); }
+html[data-kb] :is(button.chip, a.chip, label.chip, [role="button"].chip, .icon-btn, .choice-tile, .todo-main, button.solid-card, [role="button"].solid-card, button.glass, .cal-grid .tap):active {
+    box-shadow: var(--kb-press);
+    transform: translateY(var(--kb-travel));
+}
+html[data-kb] .primary-btn:active {
+    box-shadow: 0 0 0 var(--keycap-side), 0 1px 2px var(--keycap-shadow);
+    transform: translateY(3px);
+}
+
+/* 견본 키캡 세 개. 고르기 전에도 모양을 볼 수 있게 테마마다 따로 그립니다. */
+.kb-swatch i { display: block; width: 18px; height: 14px; border-radius: 4px; background: var(--bg); box-shadow: 2px 2px 4px var(--neo-shadow), -2px -2px 4px var(--neo-highlight); }
+.kb-swatch[data-kb-sample="retro"] i { border-radius: 3px; background: #EDE6D7; box-shadow: inset 0 -3px 0 #D3C9B5, 0 1px 0 #ABA08B; }
+.kb-swatch[data-kb-sample="slim"] i { height: 10px; margin-top: 2px; border-radius: 2px; background: #FAF9F7; box-shadow: inset 0 0 0 1px rgba(46, 42, 43, .14), 0 1px 0 rgba(46, 42, 43, .2); }
+.kb-swatch[data-kb-sample="puff"] i { border-radius: 7px; background: #F5E3EC; box-shadow: inset 0 1px 0 #FFFFFF, 0 3px 5px -2px rgba(167, 61, 116, .35); }
+.kb-swatch[data-kb-sample="jelly"] i { border-radius: 5px; background: rgba(255, 255, 255, .5); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .95), inset 0 -3px 5px rgba(167, 61, 116, .16); }
+.kb-swatch[data-kb-sample="type"] i { width: 14px; border-radius: 999px; background: #F5F0E4; box-shadow: inset 0 0 0 2px #8C8476, 0 2px 0 #5E584E; }
+.dark .kb-swatch[data-kb-sample="retro"] i { background: #47413B; box-shadow: inset 0 -3px 0 #34302B, 0 1px 0 #1C1916; }
+.dark .kb-swatch[data-kb-sample="slim"] i { background: #3A3637; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), 0 1px 0 rgba(0, 0, 0, .55); }
+.dark .kb-swatch[data-kb-sample="puff"] i { background: #4A3842; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 3px 5px -2px rgba(0, 0, 0, .6); }
+.dark .kb-swatch[data-kb-sample="jelly"] i { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3), inset 0 -3px 5px rgba(224, 139, 154, .2); }
+.dark .kb-swatch[data-kb-sample="type"] i { background: #2F2C28; box-shadow: inset 0 0 0 2px #A39B8C, 0 2px 0 #121010; }
+
+/* 테마를 바꿀 때 원이 퍼지며 새 모양이 드러납니다. 브라우저 기본 겹침 효과는 끕니다. */
+html.kb-reveal::view-transition-old(root),
+html.kb-reveal::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html.kb-reveal::view-transition-new(root) { z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-kb] { --kb-travel: 0px; --kb-travel-on: 0px; }
+    html[data-kb] .primary-btn:active { transform: none; }
+}
