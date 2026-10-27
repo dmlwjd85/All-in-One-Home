@@ -90,6 +90,17 @@ export function hasDateRow(data, ymd) {
     return Boolean(data?.timetable?.[ymd]);
 }
 
+/** 학기 수업일. 1년은 1학기+2학기만 모아 여름방학(7월 말~8월 중순)을 넣지 않습니다. */
+export function termDays(id, schoolYear = 2026, events = []) {
+    if (id === 'year') {
+        const a = termRange('first', schoolYear, events);
+        const b = termRange('second', schoolYear, events);
+        return [...schoolDays(a.from, a.to, events), ...schoolDays(b.from, b.to, events)];
+    }
+    const range = termRange(id, schoolYear, events);
+    return schoolDays(range.from, range.to, events);
+}
+
 /** 그날 시간표 + 이 기기의 7~10교시(periodLocal.extra). 그날 따로 고친 칸이 이깁니다. */
 export function tableForDateWithLocal(data, ymd, local) {
     const extra = local?.extra?.[dayKeyFromYmd(ymd)] || {};

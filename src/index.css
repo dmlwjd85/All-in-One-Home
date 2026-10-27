@@ -1030,3 +1030,4 @@ button.glass[aria-pressed="true"]:active {
 .day-tt { display: grid; gap: 6px; }
 .day-tt-cell { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 12px; }
 .term-tile .term-date { white-space: nowrap; }
+.event-line-text { display: block; width: 100%; min-height: 44px; margin: 0 0 8px; padding: 4px; text-align: left; border-radius: 12px; overflow-wrap: anywhere; font-weight: inherit; }

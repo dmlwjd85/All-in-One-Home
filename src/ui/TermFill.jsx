@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { applyTermTimetable } from '../lib/db.js';
-import { TERM_CHOICES, planTermFill, schoolDays, termRange } from '../lib/semester.js';
+import { TERM_CHOICES, planTermFill, termDays, termRange } from '../lib/semester.js';
 import { Btn } from './bits.jsx';
 import { useUi } from './context.jsx';
 
@@ -12,8 +12,7 @@ export function TermFill({ data, events }) {
     const edited = data.profile.ttEdited || [];
 
     async function run(choice, keepEdited) {
-        const range = termRange(choice.id, year, events);
-        const days = schoolDays(range.from, range.to, events);
+        const days = termDays(choice.id, year, events);
         const plan = planTermFill(data.timetable, days, { edited, keepEdited });
         const saved = await applyTermTimetable(plan.rows, { overwrite: !keepEdited });
         setAsk(null);
@@ -22,8 +21,7 @@ export function TermFill({ data, events }) {
     }
 
     function pick(choice) {
-        const range = termRange(choice.id, year, events);
-        const days = schoolDays(range.from, range.to, events);
+        const days = termDays(choice.id, year, events);
         const touched = days.filter((day) => edited.includes(day));
         if (touched.length) setAsk({ choice, touched: touched.length });
         else run(choice, true);
@@ -36,12 +34,15 @@ export function TermFill({ data, events }) {
             <div className="term-tiles">
                 {TERM_CHOICES.map((choice) => {
                     const range = termRange(choice.id, year, events);
+                    const days = termDays(choice.id, year, events);
+                    const from = days[0] || range.from;
+                    const to = days[days.length - 1] || range.to;
                     return (
                         <Btn key={choice.id} className="choice-tile term-tile" data-term={choice.id} onClick={() => pick(choice)}>
                             <strong>{choice.label}</strong>
-                            <span className="num term-date">{shortDate(range.from)}~</span>
-                            <span className="num term-date">{shortDate(range.to)}</span>
-                            <span className="muted">{range.source}</span>
+                            <span className="num term-date">{shortDate(from)}~</span>
+                            <span className="num term-date">{shortDate(to)}</span>
+                            <span className="muted">{range.source} · {days.length}일</span>
                         </Btn>
                     );
                 })}

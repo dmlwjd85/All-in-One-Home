@@ -1,7 +1,7 @@
 /** 자세히 보기 팝업, 학기 시간표 채우기, 그날 시간표, 스크롤 탭 방지 검사. */
 import { readFileSync } from 'node:fs';
 import { detailRows } from '../src/lib/detail.js';
-import { planTermFill, schoolDays, tableForDate, termRange } from '../src/lib/semester.js';
+import { planTermFill, schoolDays, tableForDate, termDays, termRange } from '../src/lib/semester.js';
 import { isTap, tapHandlers, TAP_SLOP } from '../src/ui/tapGuard.js';
 
 let failed = 0;
@@ -42,6 +42,18 @@ const base = { mon: { p1: '국어', s4: '전담', p4: '영어' }, tue: { p1: '�
 const plan = planTermFill(base, ['2026-05-04', '2026-05-05', '2026-05-11'], { edited: ['2026-05-11'], keepEdited: true });
 check(plan.rows['2026-05-04']?.p1 === '국어' && plan.rows['2026-05-04']?.s4 === '전담', '요일 시간표가 날짜로 안 들어갑니다.');
 check(plan.rows['2026-05-05']?.p1 === '수학', '화요일 시간표가 안 들어갑니다.');
+
+const june = schoolDays('2026-06-01', '2026-06-05', []);
+check(!june.includes('2026-06-03') && june.includes('2026-06-02') && june.includes('2026-06-04'), '6/3 지방선거일이 학기 채우기에서 빠지지 않습니다.');
+check(!all.includes('2026-06-03'), '1학기 채우기에 6/3 선거일이 들어갔습니다.');
+check(all[0] === '2026-03-03', `1학기 첫 수업일이 3/3이 아닙니다(${all[0]}).`);
+check(schoolDays(second.from, second.to, [])[0] === '2026-08-18', '2학기 첫 수업일이 8/18이 아닙니다.');
+const yearDays = termDays('year', 2026, []);
+check(yearDays.length === termDays('first', 2026, []).length + termDays('second', 2026, []).length && !yearDays.includes('2026-08-03'), '1년 채우기에 여름방학이 들어갔습니다.');
+const termUi = readFileSync('src/ui/TermFill.jsx', 'utf8');
+check(termUi.includes('shortDate(from)') && termUi.includes('days[0]'), '타일에 실제 첫 수업일을 보여 주지 않습니다.');
+const eventLine = readFileSync('src/ui/EventLine.jsx', 'utf8');
+check(eventLine.includes('<DetailSheet') && eventLine.includes('고치기'), '일정 탭 목록에서 자세히 팝업이 안 열리거나 고치기가 사라졌습니다.');
 
 /* 3. 그날 고치기 */
 check(!plan.rows['2026-05-11'] && plan.kept.includes('2026-05-11'), '고친 날을 덮어썼습니다.');
