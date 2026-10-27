@@ -942,3 +942,9 @@ button.glass[aria-pressed="true"]:active {
             0 13px 8px -2px var(--keycap-shadow);
     }
 }
+
+/* 홈 출퇴근 안내 카드: 360px에서는 시각 두 칸 아래로 저장이 내려가고, 넓은 화면에서도 버튼이 길게 늘어나지 않습니다. */
+.work-setup-text { margin: 8px 0 10px; font-weight: 700; line-height: 22px; word-break: keep-all; }
+.work-setup-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.work-setup-form label { flex: 1 1 116px; min-width: 0; display: grid; gap: 4px; }
+.work-setup-form .primary-btn { flex: 0 0 auto; padding: 0 18px; min-height: 44px; }

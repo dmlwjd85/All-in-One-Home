@@ -255,8 +255,11 @@ function Timetable({ data, todayKey, weekStart, events }) {
                     if (saved?.storageFailed) return;
                     closeEdit();
                 }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                        <strong>{edit.label} {edit.period}교시</strong>
+                    <strong>{edit.label} {edit.period}교시</strong>
+                    {/* 과목 칸을 먼저 두어, 탭과 화면 읽기 순서가 과목 → 전담 → 잠그기 → 닫기 → 저장이 되게 합니다. */}
+                    <input className="field" name="subject" aria-label="과목" defaultValue={edit.subject} style={{ marginTop: 8 }} />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        <Btn className={specialOn ? 'chip on' : 'chip'} onClick={() => setSpecialOn((value) => !value)}>{specialOn ? '전담 시간이에요' : '전담 아님'}</Btn>
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
                         {local.locks.includes(edit.period) ? (
                             <span className="muted">🔒 {edit.period}교시 전체가 잠겨 있어요</span>
@@ -266,8 +269,6 @@ function Timetable({ data, todayKey, weekStart, events }) {
                         <Btn className="chip" aria-label={`${edit.label} ${edit.period}교시 편집 닫기`} onClick={closeEdit}>닫기</Btn>
                         </div>
                     </div>
-                    <input className="field" name="subject" aria-label="과목" defaultValue={edit.subject} style={{ marginTop: 8 }} />
-                    <Btn className={specialOn ? 'chip on' : 'chip'} style={{ marginTop: 8 }} onClick={() => setSpecialOn((value) => !value)}>{specialOn ? '전담 시간이에요' : '전담 아님'}</Btn>
                     <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>시간표 저장</Btn>
                 </form>
             )}

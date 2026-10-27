@@ -5,6 +5,8 @@ import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from 
 
 export const PERIOD_LOCAL_KEY = 'ssug-gyomu-period-local';
 export const LEAVE_KEY = 'ssug-gyomu-leave-early';
+/** 홈 출퇴근 안내 카드에서 '다음에'를 누르면 '1'을 둡니다. 새로 더한 키입니다. */
+export const WORK_CARD_KEY = 'ssug-gyomu-work-card-off';
 const SHARED_KEY = 'ssug-gyomu-shared';
 
 const listeners = new Set();
@@ -174,11 +176,33 @@ export function setLeave(ymd, hm) {
     writeJson(LEAVE_KEY, next);
 }
 
+/** 홈 출퇴근 안내 카드를 접었는지. */
+export function workCardOff() {
+    const store = storage();
+    try {
+        return (store ? store.getItem(WORK_CARD_KEY) : memory[WORK_CARD_KEY]) === '1';
+    } catch {
+        return memory[WORK_CARD_KEY] === '1';
+    }
+}
+
+export function hideWorkCard() {
+    const store = storage();
+    try {
+        if (store) store.setItem(WORK_CARD_KEY, '1');
+        else memory[WORK_CARD_KEY] = '1';
+    } catch {
+        memory[WORK_CARD_KEY] = '1';
+    }
+    listeners.forEach((fn) => fn());
+}
+
 export function clearPeriodLocal() {
     const store = storage();
     try {
         store?.removeItem(PERIOD_LOCAL_KEY);
         store?.removeItem(LEAVE_KEY);
+        store?.removeItem(WORK_CARD_KEY);
     } catch {
         /* 지우지 못해도 화면은 동작합니다. */
     }

@@ -9,9 +9,10 @@ import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
-import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, tableRow, withUsedCount } from '../lib/periodLocal.js';
+import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, tableRow, withUsedCount, workCardOff } from '../lib/periodLocal.js';
+import { DEMO_WORK } from '../lib/demo.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
-import { WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
+import { WorkSetup, WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
 
 export function Home() {
     const { data, go, showToast } = useUi();
@@ -20,7 +21,9 @@ export function Home() {
     const [fast, setFast] = useState(false);
     const clock = useWorkClock(fast);
     const day = dayKeyFromYmd(clock.ymd);
-    const local = withUsedCount(data.timetable, usePeriodLocal());
+    const saved = withUsedCount(data.timetable, usePeriodLocal());
+    /* 데모에서는 출퇴근 시각을 채워 타이머를 보여 줍니다. 이 기기 설정에는 쓰지 않습니다. */
+    const local = data.profile.demo && !saved.workStart && !saved.workEnd ? { ...saved, ...DEMO_WORK } : saved;
     const leave = useLeave(clock.ymd);
     const table = tableRow(data.timetable, day, local);
     const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
@@ -56,6 +59,8 @@ export function Home() {
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
     const timer = !todayRest.off && (local.workEnd || leave) ? <WorkTimer ymd={clock.ymd} local={local} leave={leave} showToast={showToast} now={clock} /> : null;
+    /* 출퇴근 시각이 없으면 타이머 자리에 작은 안내 카드를 둡니다. 쉬는 날과 '다음에'를 누른 뒤에는 숨깁니다. */
+    const setup = !todayRest.off && !(local.workStart && local.workEnd) && !workCardOff() ? <WorkSetup local={local} showToast={showToast} now={clock} /> : null;
     const wantFast = Boolean(timer) && wantsFast(workTimer(clock.sec, { workStart: local.workStart, workEnd: local.workEnd, leave }));
     useEffect(() => { if (wantFast !== fast) setFast(wantFast); }, [wantFast, fast]);
     /* 빈 교시는 빼고, 잠긴 교시는 잠김으로 보여 줍니다. 과목이 하나도 없으면 교시 칸만 보여 줍니다. */
@@ -63,7 +68,7 @@ export function Home() {
     const strip = slots.some((slot) => slot.label) ? slots.filter((slot) => slot.label) : slots;
 
     return (
-        <div className={timer ? 'home-grid has-leave' : 'home-grid'}>
+        <div className={timer || setup ? 'home-grid has-leave' : 'home-grid'}>
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
@@ -105,6 +110,7 @@ export function Home() {
                 )}
             </section>
             {timer}
+            {setup}
 
             <section className="glass home-quick" style={{ padding: 14 }}>
                 <div className="home-brand">

@@ -17,6 +17,13 @@ export const MAX_PERIODS = 10;
 /** 학교급별 한 교시 길이(분). */
 export const LEVEL_LENGTH = { 초: 40, 중: 45, 고: 50 };
 
+/** 남은 분을 읽기 쉽게 씁니다. 60분부터는 '1시간 20분', 정각이면 '2시간'입니다. */
+export function hourMinute(total) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return h ? (m ? `${h}시간 ${m}분` : `${h}시간`) : `${m}분`;
+}
+
 /**
  * 지금 시각 기준으로 다음 교시 또는 진행 중인 교시를 고릅니다.
  * labels 는 1교시부터의 과목 이름입니다.
@@ -69,7 +76,7 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
                 phase: lunch ? 'lunch' : 'before',
                 minutes,
                 subject,
-                text: lunch ? `점심시간이에요. ${name}까지 ${minutes}분` : `${name}까지 ${minutes}분`,
+                text: lunch ? `점심시간이에요. ${name}까지 ${hourMinute(minutes)}` : `${name}까지 ${hourMinute(minutes)}`,
             };
         }
         const end = slotEnd(i);
@@ -110,10 +117,7 @@ export function workTimer(sec, { workStart = '', workEnd = '', leave = '' } = {}
     const progress = span ? Math.min(1, Math.max(0, (sec - startSec) / span)) : null;
     let left;
     if (remain > 600) {
-        const total = Math.ceil(remain / 60);
-        const h = Math.floor(total / 60);
-        const m = total % 60;
-        left = h ? (m ? `${h}시간 ${m}분` : `${h}시간`) : `${m}분`;
+        left = hourMinute(Math.ceil(remain / 60));
     } else {
         const m = Math.floor(remain / 60);
         const s = remain % 60;
@@ -140,4 +144,13 @@ export function leaveProblem(hm, nowHm, { workStart = '', workEnd = '' } = {}) {
 /** 숫자 뒤에 붙는 '을/를'. 2·4·5·9처럼 받침이 없으면 '를'입니다. */
 export function eulReul(n) {
     return [2, 4, 5, 9].includes(Math.abs(Number(n)) % 10) ? '를' : '을';
+}
+
+/** 홈 안내 카드의 출퇴근 시각 검사. 설정 화면(TimetableSettings)과 같은 규칙·문구에, 카드에서는 둘 다 고르게 합니다. 문제가 없으면 ''입니다. */
+export function workTimeProblem(workStart, workEnd) {
+    if ((workStart && !isHm(workStart)) || (workEnd && !isHm(workEnd))) return '시각은 08:30처럼 골라 주세요.';
+    if (workEnd && !workStart) return '출근 시각도 함께 골라 주세요. 타이머는 출근부터 퇴근까지 보여요.';
+    if (workStart && workEnd && workEnd <= workStart) return '퇴근 시각은 출근 시각보다 늦어야 해요.';
+    if (!workStart || !workEnd) return '출근·퇴근 시각을 모두 골라 주세요.';
+    return '';
 }

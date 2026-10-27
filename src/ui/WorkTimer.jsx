@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clockFrozen, seoulParts } from '../lib/date.js';
-import { leaveProblem, workTimer } from '../lib/period.js';
-import { leaveFor, setLeave, subscribePeriodLocal } from '../lib/periodLocal.js';
+import { leaveProblem, workTimeProblem, workTimer } from '../lib/period.js';
+import { hideWorkCard, leaveFor, patchPeriodLocal, setLeave, subscribePeriodLocal } from '../lib/periodLocal.js';
 import { Btn } from './bits.jsx';
 
 /** 서울 시각과 자정부터 지난 초. 홈 문구와 타이머가 같은 값을 씁니다. */
@@ -105,6 +105,42 @@ export function WorkTimer({ ymd, local, leave, showToast, now }) {
                     )}
                 </form>
             )}
+        </section>
+    );
+}
+
+/** 출퇴근 시각이 없을 때 타이머 자리에 보이는 작은 안내 카드. 저장을 눌러야만 이 기기 설정에 씁니다. */
+export function WorkSetup({ local, showToast, now }) {
+    const [workStart, setWorkStart] = useState(local.workStart || '08:40');
+    const [workEnd, setWorkEnd] = useState(local.workEnd || '16:40');
+    return (
+        <section className="glass home-leave work-setup" aria-label="퇴근 타이머 설정">
+            <div className="leave-head">
+                <span className="leave-kicker">퇴근 타이머</span>
+                <Btn className="chip" onClick={() => {
+                    hideWorkCard();
+                    showToast?.('설정의 시간표와 출퇴근에서 언제든 정할 수 있어요.');
+                }}>다음에</Btn>
+            </div>
+            <p className="work-setup-text">출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요.</p>
+            <form className="work-setup-form" onSubmit={(event) => {
+                event.preventDefault();
+                const problem = workTimeProblem(workStart, workEnd);
+                if (problem) { showToast?.(problem); return; }
+                patchPeriodLocal({ workStart, workEnd });
+                /* 출근 전이면 타이머가 아직 숨어 있으니, 언제부터 보이는지 알려 줍니다. */
+                showToast?.(now && now.hm < workStart ? `출근 ${workStart}부터 퇴근까지 남은 시간을 보여 드릴게요.` : `퇴근 ${workEnd}까지 남은 시간을 홈에 보여 드릴게요.`);
+            }}>
+                <label>
+                    <span className="muted">출근</span>
+                    <input className="field" type="time" aria-label="출근 시각" value={workStart} onChange={(event) => setWorkStart(event.target.value)} />
+                </label>
+                <label>
+                    <span className="muted">퇴근</span>
+                    <input className="field" type="time" aria-label="퇴근 시각" value={workEnd} onChange={(event) => setWorkEnd(event.target.value)} />
+                </label>
+                <Btn className="primary-btn" onClick={(event) => event.currentTarget.form?.requestSubmit()}>저장</Btn>
+            </form>
         </section>
     );
 }
