@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
+import { KB_VOICES, KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import { TYPE_SOUND_SHOWN, TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
+import { KB_THEMES } from './kbvoices.js';
+import { kbThemeId, loadKbThemeCss, setKbTheme } from './kbtheme.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
@@ -70,6 +72,9 @@ export function Settings() {
     const { data, showToast, go, openHotkeyHelp } = useUi();
     const [className, setClassName] = useState(data.profile.className || '');
     const [font, setFontId] = useState(() => fontId());
+    const [kbTheme, setKbThemeId] = useState(() => kbThemeId());
+    /* 테마 견본 키캡을 그리려고 설정을 열 때 테마 스타일을 받아 둡니다. 첫 화면에는 들어가지 않습니다. */
+    useEffect(() => { loadKbThemeCss(); }, []);
     const [periodsOpen, setPeriodsOpen] = useState(false);
     const [oldOpen, setOldOpen] = useState(false);
     const [publicOpen, setPublicOpen] = useState(false);
@@ -138,6 +143,21 @@ export function Settings() {
                         </Btn>
                     ))}
                 </div>
+                <p className="muted" style={{ margin: '14px 0 0' }}>키보드 테마</p>
+                <div className="kb-grid" role="group" aria-label="키보드 테마">
+                    {KB_THEMES.map((item) => (
+                        <Btn key={item.id} className={kbTheme === item.id ? 'choice-tile on' : 'choice-tile'} data-kb-pick={item.id} aria-pressed={kbTheme === item.id} onClick={(event) => {
+                            setKbThemeId(item.id);
+                            const box = event.currentTarget.getBoundingClientRect();
+                            setKbTheme(item.id, { x: box.left + box.width / 2, y: box.top + box.height / 2 });
+                        }}>
+                            <span className="kb-swatch" data-kb-sample={item.id} aria-hidden="true"><i /><i /><i /></span>
+                            <span>{item.label}</span>
+                            <span style={{ fontWeight: 500, fontSize: 12 }}>{item.hint}</span>
+                        </Btn>
+                    ))}
+                </div>
+                <p className="muted">버튼·탭·칸의 키캡 모양이 바뀌어요. 이 기기에만 저장돼요. 글꼴은 그대로예요. 테마 소리는 아래 소리에서 고를 수 있어요.</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                     {[['system', '기기 설정'], ['light', '밝게'], ['dark', '어둡게']].map(([id, label]) => (
                         <Btn key={id} className={data.profile.theme === id ? 'chip on' : 'chip'} onClick={() => patchProfile({ theme: id })}>{label}</Btn>
@@ -180,6 +200,21 @@ export function Settings() {
                             key={voice.id}
                             pressed={voiceId === voice.id}
                             label={voice.chip}
+                            ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPick={() => {
+                                setKeyVoice(voice.id);
+                                previewKeyVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted" style={{ margin: '10px 0 0' }}>키보드 테마 소리</p>
+                <div className="key-picks" role="group" aria-label="키보드 테마 소리">
+                    {KB_VOICES.map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={voiceId === voice.id}
+                            label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
                             onPick={() => {
                                 setKeyVoice(voice.id);

@@ -733,6 +733,13 @@ button.glass[aria-pressed="true"]:active {
 .choice-tile[data-font-sample="plain"] { font-family: var(--font-jjaem); }
 .choice-tile[data-font-sample="neat"] { font-family: var(--font-neat); }
 .font-grid .choice-tile { flex-direction: column; min-height: 72px; }
+/* 키보드 테마 고르기 자리만 둡니다. 키캡 모양과 견본은 고를 때 받는 kbtheme.css 에 있습니다. */
+.kb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.kb-grid .choice-tile { flex-direction: column; gap: 4px; min-height: 84px; }
+.kb-swatch { display: flex; justify-content: center; gap: 4px; min-height: 14px; }
+@media (min-width: 720px) {
+    .kb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 .roster-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
 .roster-slot { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; align-items: center; }
