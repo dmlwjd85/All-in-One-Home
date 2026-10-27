@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { monthCells, monthTitle, shiftMonth } from '../lib/date.js';
 import { Btn } from './bits.jsx';
+import { usePeriodLocal } from './usePeriodLocal.js';
 
 export const TIME_CHOICES = [
     ['09:00', '09:00'],
@@ -86,9 +87,10 @@ export function NumberGrid({ students, value = 0, onPick }) {
 }
 
 export function PeriodRow({ value, onPick }) {
+    const count = Math.max(7, usePeriodLocal().count);
     return (
-        <div className="period-picks" role="group" aria-label="교시">
-            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+        <div className="period-picks" role="group" aria-label="교시" style={count > 7 ? { gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 4 } : undefined}>
+            {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
                 <Btn key={n} className={Number(value) === n ? 'chip on block' : 'chip block'} aria-label={`${n}교시`} onClick={() => onPick(n)}>{n}</Btn>
             ))}
         </div>

@@ -1,5 +1,6 @@
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
+import { setExtraPeriod } from './periodLocal.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
@@ -856,6 +857,11 @@ export async function replaceRoster(text) {
 }
 
 export async function setTimetable(day, period, subject, specialist) {
+    /* 9·10교시는 서버 규칙(p1~p8) 밖이라 이 기기에만 둡니다. */
+    if (period > 8) {
+        setExtraPeriod(day, period, subject, specialist);
+        return null;
+    }
     return update((draft) => {
         const table = { ...draft.timetable };
         const row = { ...(table[day] || {}) };
