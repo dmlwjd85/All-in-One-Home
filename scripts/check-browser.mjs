@@ -2520,6 +2520,70 @@ try {
         check(leaked.length === 0, `숨은 행 검사: 기기 전용 기록을 빼고 내보냈는데 민감한 글이 들어갔습니다. ${leaked.join(', ')}`);
     }, 844);
 
+    /* 콕 키캡: 크기·측면·눌림·터치 영역·그림자와, 토스트가 키캡을 덮지 않는지 계산된 스타일로 봅니다. */
+    for (const width of [360, 390, 900, 960, 1000, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const selector = width >= 900 ? '.desk-fab' : '.tabbar .fab';
+                const size = width >= 900 ? 64 : 58;
+                const cap = await page.evaluate((sel) => {
+                    const el = document.querySelector(sel);
+                    if (!el) return null;
+                    const rect = el.getBoundingClientRect();
+                    const after = getComputedStyle(el, '::after');
+                    return {
+                        w: rect.width,
+                        h: rect.height,
+                        shadow: after.boxShadow,
+                        transition: `${after.transitionProperty} ${after.transitionDuration}`,
+                    };
+                }, selector);
+                check(Boolean(cap), `${width} ${mode}에서 콕 키캡이 없습니다.`);
+                if (!cap) return;
+                check(Math.abs(cap.w - size) < 0.6 && Math.abs(cap.h - size) < 0.6, `${width} ${mode} 콕 키캡이 ${size}px가 아닙니다: ${cap.w}×${cap.h}`);
+                check(cap.w >= 44 && cap.h >= 44, `${width} ${mode} 콕 키캡 터치 영역이 44px보다 작습니다.`);
+                check(cap.shadow && cap.shadow !== 'none' && /\b0px 9px 0px\b/.test(cap.shadow) && /inset/.test(cap.shadow), `${width} ${mode} 콕 키캡 측면 9px 그림자가 없습니다: ${cap.shadow}`);
+                check(/box-shadow/.test(cap.transition) && /0\.08s/.test(cap.transition), `${width} ${mode} 콕 키캡 눌림 전환이 80ms가 아닙니다: ${cap.transition}`);
+                const cdp = await page.createCDPSession();
+                await cdp.send('DOM.enable');
+                await cdp.send('CSS.enable');
+                const { root: docRoot } = await cdp.send('DOM.getDocument');
+                const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: docRoot.nodeId, selector });
+                await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['active'] });
+                await delay(150);
+                const pressed = await page.evaluate((sel) => {
+                    const el = document.querySelector(sel);
+                    const matrix = new DOMMatrixReadOnly(getComputedStyle(el).transform);
+                    return { y: matrix.m42, shadow: getComputedStyle(el, '::after').boxShadow };
+                }, selector);
+                await cdp.send('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+                await cdp.detach().catch(() => {});
+                check(Math.abs(pressed.y - 6) < 0.6, `${width} ${mode} 콕 키캡이 6px 눌리지 않습니다: ${pressed.y}`);
+                check(/\b0px 3px 0px\b/.test(pressed.shadow), `${width} ${mode} 눌린 콕 키캡 측면이 3px로 줄지 않습니다: ${pressed.shadow}`);
+                await clickPlus(page, '관찰');
+                await page.waitForFunction(() => document.body.innerText.includes('누구'));
+                await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());
+                await page.waitForSelector('textarea');
+                await page.type('textarea', '@12 #학습 키캡 점검');
+                await page.keyboard.press('Enter');
+                await page.waitForSelector('.toast');
+                await delay(300);
+                const box = await page.evaluate((sel) => {
+                    const t = document.querySelector('.toast').getBoundingClientRect();
+                    const f = document.querySelector(sel).getBoundingClientRect();
+                    const bottom = f.bottom + 9;
+                    return {
+                        hit: t.left < f.right && t.right > f.left && t.top < bottom && t.bottom > f.top,
+                        inside: t.left >= 0 && t.right <= document.documentElement.clientWidth,
+                        t: [t.left, t.top, t.right, t.bottom].map(Math.round),
+                        f: [f.left, f.top, f.right, bottom].map(Math.round),
+                    };
+                }, selector);
+                check(!box.hit && box.inside, `${width} ${mode}에서 토스트가 콕 키캡을 덮습니다: ${JSON.stringify(box)}`);
+                if (width === 960) await page.screenshot({ path: resolve(shots, `keycap_toast_960_${mode}.png`) });
+            });
+        }
+    }
 } catch (error) {
     failures.push(error?.message || String(error));
 }
