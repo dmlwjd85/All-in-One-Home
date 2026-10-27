@@ -51,6 +51,7 @@ jobs:
           npm run check:speech
           npm run check:keyfeel
           npm run check:gcal
+          npm run check:sync
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
@@ -26,6 +26,7 @@ import { Schedule } from './ui/Schedule.jsx';
 import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, Settings } from './ui/Settings.jsx';
 import { Start } from './ui/Start.jsx';
+import { SyncChip } from './ui/SyncChip.jsx';
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -76,8 +77,16 @@ export default function App() {
             if (navigator.onLine) {
                 flushCloud().catch(() => {});
                 refreshGcal().catch(() => {});
+                refreshFromCloud('online').catch(() => {});
             }
         };
+        // 다른 기기에서 고친 걸 보려고, 다시 볼 때 클라우드에서 받아와 합칩니다(30초에 한 번).
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') refreshFromCloud('visible').catch(() => {});
+        };
+        const onFocus = () => refreshFromCloud('focus').catch(() => {});
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onFocus);
         window.addEventListener('hashchange', onHash);
         window.addEventListener('popstate', onPop);
         window.addEventListener('online', onLine);
@@ -88,6 +97,8 @@ export default function App() {
             window.removeEventListener('popstate', onPop);
             window.removeEventListener('online', onLine);
             window.removeEventListener('offline', onLine);
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onFocus);
         };
     }, []);
 
@@ -435,11 +446,13 @@ export default function App() {
                                 <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
                                 <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em className={todayRest.off ? 'day-rest-mark' : undefined}>{clock.weekday}요일</em></h1>
                                 <p className="muted">{headingSub}</p>
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} />
                             </div>
                         ) : (
                             <div className="date-block">
                                 <h1 className="title-font">{heading}</h1>
                                 <p className="muted">{headingSub}</p>
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} />
                             </div>
                         )}
                         <div className="top-tools">

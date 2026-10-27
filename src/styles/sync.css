@@ -1,0 +1,53 @@
+/* 동기화 칩: 작고 말랑하게. 쨈 제목 글꼴이 있으면 그걸, 없으면 지금 제목 글꼴을 씁니다. */
+.sync-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 3px 10px 3px 8px;
+    min-height: 24px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--ink-sub);
+    box-shadow: var(--neo-inset);
+    font-family: var(--font-display, var(--font-title));
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    max-width: 100%;
+    vertical-align: middle;
+    user-select: none;
+}
+.sync-chip .sync-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #7FB685;
+    box-shadow: 0 0 0 3px rgba(127, 182, 133, 0.22);
+}
+.sync-chip.is-syncing .sync-dot {
+    background: #E3B15B;
+    box-shadow: 0 0 0 3px rgba(227, 177, 91, 0.25);
+    animation: sync-breathe 1.4s ease-in-out infinite;
+}
+.sync-chip.is-offline .sync-dot {
+    background: #A39C9D;
+    box-shadow: 0 0 0 3px rgba(163, 156, 157, 0.22);
+}
+.sync-chip.is-login { color: var(--accent); }
+.sync-chip.is-login .sync-dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+@keyframes sync-breathe {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(0.72); opacity: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sync-chip.is-syncing .sync-dot { animation: none; }
+}
+.lock-note { font-size: 13px; margin: 6px 0 0; }
+.start-sub { font-size: 13px; margin: 6px 2px 0; }

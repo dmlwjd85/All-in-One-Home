@@ -15,6 +15,7 @@ import { setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { DEFAULT_PERIODS, isHm } from '../lib/period.js';
 import { useUi } from './context.jsx';
+import { LockNote } from './SyncChip.jsx';
 import { Btn } from './bits.jsx';
 
 const PUBLIC_LABELS = {
@@ -315,6 +316,7 @@ export function Settings() {
                     }
                 }}>구글 로그인</Btn>}
                 {data.auth?.uid && <p>{data.auth.name ? `${data.auth.name} 선생님으로 연결됐어요.` : '구글 계정으로 연결됐어요.'}</p>}
+                {cloudReady() && <LockNote />}
                 {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
                 <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>

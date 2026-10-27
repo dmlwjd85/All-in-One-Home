@@ -54,10 +54,42 @@ export function cloudReady() {
 
 let bundle = null;
 
+/** 공용 컴퓨터 모드인지. db.js가 같은 키에 적어 둡니다(이 파일은 db.js를 불러오지 않아요). */
+function sharedPcOn() {
+    try {
+        return localStorage.getItem('ssug-gyomu-shared') === '1';
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 공용 컴퓨터에서는 로그인을 이 탭에만 둡니다(browserSessionPersistence).
+ * 그냥 두면 파이어베이스 기본값(브라우저에 계속 남음)이라 창을 닫아도 다음 사람이 이어서 열 수 있었어요.
+ */
+let sessionApplied = null;
+async function keepLoginInTab(auth) {
+    if (!auth || sessionApplied === auth) return;
+    try {
+        const { browserSessionPersistence, setPersistence } = await import('firebase/auth');
+        await setPersistence(auth, browserSessionPersistence);
+        sessionApplied = auth;
+    } catch {
+        /* 못 바꿔도 30분 잠금과 로그아웃은 그대로 작동합니다. */
+    }
+}
+
+function loginMode() {
+    return bundle ? bundle.memoryOnly : sharedPcOn();
+}
+
 export async function loadFirebase({ memoryOnly = false } = {}) {
     const config = newFirebaseConfig();
     if (!config) return null;
-    if (bundle && bundle.memoryOnly === memoryOnly) return bundle;
+    if (bundle && bundle.memoryOnly === memoryOnly) {
+        if (memoryOnly || sharedPcOn()) await keepLoginInTab(bundle.auth);
+        return bundle;
+    }
     const [{ initializeApp, getApps }, { getAuth }, firestore] = await Promise.all([
         import('firebase/app'),
         import('firebase/auth'),
@@ -78,12 +110,14 @@ export async function loadFirebase({ memoryOnly = false } = {}) {
     } catch {
         db = firestore.getFirestore(app);
     }
-    bundle = { app, auth: getAuth(app), db, memoryOnly };
+    const auth = getAuth(app);
+    if (memoryOnly || sharedPcOn()) await keepLoginInTab(auth);
+    bundle = { app, auth, db, memoryOnly };
     return bundle;
 }
 
 export async function signInGoogle() {
-    const ready = await loadFirebase();
+    const ready = await loadFirebase({ memoryOnly: loginMode() });
     if (!ready) {
         const error = new Error('설정 없음');
         error.code = 'no-config';
@@ -115,7 +149,7 @@ export async function signInGoogle() {
 }
 
 export async function finishRedirectSignIn() {
-    const ready = await loadFirebase();
+    const ready = await loadFirebase({ memoryOnly: loginMode() });
     if (!ready) return null;
     const { getRedirectResult } = await import('firebase/auth');
     try {

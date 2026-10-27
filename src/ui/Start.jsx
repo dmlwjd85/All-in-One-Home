@@ -24,6 +24,22 @@ export function Start() {
         setStep('class');
     }
 
+    async function googleStart() {
+        try {
+            const cred = await signInGoogle();
+            if (!cred?.user) return;
+            await setAuth({ uid: cred.user.uid, name: cred.user.displayName || '', email: cred.user.email || '' });
+            const current = snapshot();
+            if (current.profile.started && current.students.length) {
+                go('#/today');
+                return;
+            }
+            await afterChoice();
+        } catch (error) {
+            showToast(loginHint(error));
+        }
+    }
+
     return (
         <div style={{ maxWidth: 480, margin: '0 auto', padding: 20 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -35,23 +51,19 @@ export function Start() {
             {step === 'choose' && (
                 <div className="solid-card" style={{ padding: 16 }}>
                     <p style={{ marginTop: 0 }}>학생 기록은 선생님 자리에만 둡니다. 광고는 없어요.</p>
-                    <Btn className="primary-btn block" onClick={afterChoice}>이 기기에서만 써 볼게요</Btn>
-                    <Btn className="chip block" style={{ marginTop: 8 }} disabled={!cloudReady()} onClick={async () => {
-                        try {
-                            const cred = await signInGoogle();
-                            if (!cred?.user) return;
-                            await setAuth({ uid: cred.user.uid, name: cred.user.displayName || '', email: cred.user.email || '' });
-                            const current = snapshot();
-                            if (current.profile.started && current.students.length) {
-                                go('#/today');
-                                return;
-                            }
-                            await afterChoice();
-                        } catch (error) {
-                            showToast(loginHint(error));
-                        }
-                    }}>구글 로그인</Btn>
-                    {!cloudReady() && <p className="muted">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
+                    {cloudReady() ? (
+                        <>
+                            <Btn className="primary-btn block" onClick={googleStart}>구글로 로그인하고 시작</Btn>
+                            <p className="muted start-sub">한 번만 로그인하면 폰과 컴퓨터에서 같은 기록을 이어서 봐요.</p>
+                            <Btn className="chip block" style={{ marginTop: 8 }} onClick={afterChoice}>이 기기에서만 써 볼게요</Btn>
+                        </>
+                    ) : (
+                        <>
+                            <Btn className="primary-btn block" onClick={afterChoice}>이 기기에서만 써 볼게요</Btn>
+                            <Btn className="chip block" style={{ marginTop: 8 }} disabled onClick={googleStart}>구글 로그인</Btn>
+                            <p className="muted">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>
+                        </>
+                    )}
                 </div>
             )}
             {step === 'migrate' && plan && (

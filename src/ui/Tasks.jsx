@@ -5,6 +5,7 @@ import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem,
 import { useUi } from './context.jsx';
 import { Btn, IconTrash } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
+import { LockNote } from './SyncChip.jsx';
 
 export function Tasks() {
     const { data, clock, showToast } = useUi();
@@ -108,6 +109,7 @@ export function Tasks() {
                 </article>
             ))}
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
+            {(notes.some((row) => row.localOnly) || groups.some(([, rows]) => rows.some((row) => row.localOnly))) && <LockNote />}
         </div>
     );
 }
