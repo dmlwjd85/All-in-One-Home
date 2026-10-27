@@ -2648,11 +2648,13 @@ try {
                     lockLeft: Math.round(row.querySelector('button').getBoundingClientRect().left),
                     have: Math.round(time.getBoundingClientRect().width),
                     need: Math.ceil(need),
+                    lockOneLine: (() => { const button = row.querySelector('button'); const range = document.createRange(); range.selectNodeContents(button); return range.getBoundingClientRect().height <= parseFloat(getComputedStyle(button).fontSize) * 1.6; })(),
                 };
             }));
             check(rows.length === 10 && new Set(rows.map((row) => `${row.timeLeft}/${row.lockLeft}`)).size === 1, `${width} 교시 설정 줄이 어긋납니다: ${JSON.stringify(rows.map((row) => [row.name, row.timeLeft, row.lockLeft]))}`);
             check(rows.every((row) => row.have >= row.need), `${width} 교시 설정 시각이 잘립니다: ${JSON.stringify(rows.filter((row) => row.have < row.need))}`);
             check(rows.every((row) => row.oneLine), `${width} '10교시'가 줄바꿈됩니다: ${JSON.stringify(rows.filter((row) => !row.oneLine).map((row) => row.name))}`);
+            check(rows.every((row) => row.lockOneLine), `${width} 교시 설정 잠금 버튼 글자가 줄바꿈됩니다: ${JSON.stringify(rows.filter((row) => !row.lockOneLine).map((row) => row.name))}`);
             if (width === 360) {
                 await page.evaluate(() => document.querySelectorAll('.tt-row')[9].scrollIntoView({ block: 'center' }));
                 await page.screenshot({ path: resolve(shots, 'timetable-settings-360.png') });

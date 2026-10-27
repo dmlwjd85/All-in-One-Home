@@ -893,6 +893,7 @@ button.glass[aria-pressed="true"]:active {
 .tt-row { display: grid; grid-template-columns: 3em minmax(0, 1fr) 70px 84px; gap: 6px; align-items: center; }
 .tt-row strong { white-space: nowrap; min-width: 40px; }
 /* 첫 열과 잠금 열은 모든 줄이 같은 폭이라 줄이 맞습니다. 좁은 화면에서는 시각이 잘리지 않게 칸을 줄입니다. */
+.tt-row > .chip { width: 100%; padding-left: 8px; padding-right: 8px; }
 @media (max-width: 520px) {
     .tt-row { grid-template-columns: 3em minmax(0, 1fr) 62px 72px; gap: 4px; }
     .tt-row input[type="time"] { padding-left: 8px; padding-right: 8px; }
