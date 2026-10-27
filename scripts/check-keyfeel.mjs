@@ -905,6 +905,9 @@ check(popTok < 0.8, `뽁과 톡이 너무 같습니다. ${popTok.toFixed(2)}`);
 
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
+/* QA 1차 9번: audioSession은 소리 판을 처음 만들 때 한 번, 아무도 정하지 않은('auto') 때만 'ambient'로 바꿉니다. */
+const sessionSets = feel.match(/audioSession\.type = /g) || [];
+check(sessionSets.length === 1 && /if \(!ctx\) \{[\s\S]{0,600}audioSession\.type === 'auto'\) navigator\.audioSession\.type = 'ambient'/.test(feel), 'audioSession을 누를 때마다 바꾸거나 다른 쪽이 정한 값을 덮습니다.');
 /** 연타 측정(mixTypeBurst)의 예전 소리 음높이도 실제 재생처럼 main의 ±3%(0.97~1.03)여야 합니다. */
 const typeSource = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
 const burstPitch = typeSource.slice(typeSource.indexOf('export function mixTypeBurst')).match(/const pitch = legacy \? ([^:]+) :/);

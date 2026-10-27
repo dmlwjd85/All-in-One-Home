@@ -26,6 +26,10 @@ check(!burstText.includes('getBoundingClientRect') && !burstText.includes('offse
 const foilCss = readFileSync(resolve(root, 'src/ui/foilCup.css'), 'utf8');
 check(!foilCss.includes(':root'), '컵 색이 화면 글자색을 덮습니다.');
 check(foilCss.includes('.52s') && foilCss.includes('--cup-j1: #9E1630') && foilCss.includes('scale(1.1, .86)') && foilCss.includes('(c) 2026 쨈 폰트 팀'), '완성본 시간·딸기 색·눌림·저작권이 없습니다.');
+/* QA 1차 7번: 접시 그림자는 앱 색(쨈)이나 중립 색이어야 합니다. 푸른빛(80, 90, 200)은 앱 색과 따로 놉니다. */
+check(!/rgba\(\s*80\s*,\s*90\s*,\s*200/.test(foilCss) && foilCss.includes('0 6px 20px -6px rgba(138, 35, 64, .30)'), '쨈 접시 그림자가 앱 색이 아닙니다.');
+/* 가계부 #31: 막대 위 컵 복사본·조각(0.38초, 방울 10~16px, 은박 14×9px)과 어두운 화면 조각 테두리 */
+check(foilCss.includes('animation: cup-bit .38s') && foilCss.includes('width: 14px;\n    height: 9px;') && foilCss.includes('html.dark .cup-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }') && foilCss.includes('html.dark .cup-foil { border-color: rgba(255,255,255,.8); }'), '가계부 #31 조각 크기·시간·어두운 화면 테두리가 다릅니다.');
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
 check(appText.includes('aria-label="쨈 빠른 입력 열기"') && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않습니다.');
 /* QA 1차 1번: 휴대폰에는 단축키가 없으므로, 빠른 입력 안에 + 화면으로 가는 단추가 있어야 합니다. */
