@@ -2724,16 +2724,74 @@ try {
             const toast = await page.evaluate(() => document.querySelector('.toast')?.innerText || '');
             check(toast.includes(noticeBlankToast), `빈 알림장을 저장했을 때 저장하지 않았다는 안내가 없습니다: ${JSON.stringify(toast)}`);
             check(view.empty && !view.saved, `빈 알림장을 저장한 뒤 저장했다는 안내가 보입니다: ${JSON.stringify(view)}`);
+            const blankUndo = await page.evaluate(() => /되돌\s*리\s*기/.test(document.querySelector('.toast')?.textContent || ''));
+            check(!blankUndo, `저장하지 않았다는 안내에 되돌리기 버튼이 붙어 있습니다: ${JSON.stringify(blank)}`);
             if (!blank) await page.screenshot({ path: resolve(shots, 'notice_blank_save_390_light.png') });
         }
         const blankVaults = await noticeVaults(page);
         check(![...blankVaults.cloud, ...blankVaults.local].some((row) => row.date === noticeDay), `빈 알림장이 저장되었습니다: ${JSON.stringify(blankVaults)}`);
 
-        // 예전에 저장된 빈 행이 있어도 저장했다고 하지 않습니다.
-        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        // 예전에 저장된 빈 행(빈 글, 띄어쓰기만 있는 글)이 있어도 저장했다고 하지 않고, 빈 칸 저장도 되돌리기 없이 막습니다.
+        for (const old of ['', ' ']) {
+            await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: old, source: 'app' }]);
+            await noticeOpen(page, 'light', noticeDay);
+            view = await noticeView(page);
+            check(view.empty && !view.saved, `이미 있던 빈 알림장 행을 저장된 알림장으로 칩니다: ${JSON.stringify({ old, view })}`);
+            await noticeSave(page, '', noticeBlankToast);
+            const oldToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+            check(oldToast.includes(noticeBlankToast) && !/되돌\s*리\s*기/.test(oldToast), `예전 빈 행에서 빈 칸을 저장했을 때 안내가 다릅니다: ${JSON.stringify({ old, oldToast })}`);
+        }
+
+        // 지난 알림장 목록에는 비어 있거나 띄어쓰기만 있는 예전 행을 카드로 보이지 않습니다. 데이터는 그대로 둡니다.
+        await noticeSeed(page, [
+            { id: noticeOther, date: noticeOther, text: ' ', source: 'app' },
+            { id: addDaysYmd(todayYmd, 3), date: addDaysYmd(todayYmd, 3), text: '', source: 'app' },
+        ]);
         await noticeOpen(page, 'light', noticeDay);
         view = await noticeView(page);
-        check(view.empty && !view.saved, `이미 있던 빈 알림장 행을 저장된 알림장으로 칩니다: ${JSON.stringify(view)}`);
+        check(view.list.length === 0, `지난 알림장 목록에 빈 카드가 보입니다: ${JSON.stringify(view.list)}`);
+        check(view.empty && !view.saved, `빈 예전 행만 있을 때 빈 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        const keptBlank = await noticeVaults(page);
+        check(keptBlank.cloud.length === 2, `빈 예전 행을 숨기면서 데이터까지 지웠습니다: ${JSON.stringify(keptBlank)}`);
+
+        // 저장한 날의 글을 모두 지우고 저장하면 그 날 알림장을 비우고, 되돌리면 예전 글이 그대로 돌아옵니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '줄넘기 챙기기');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
+        await noticeSave(page, '', noticeEmptyHint);
+        const clearToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(clearToast.includes('이 날 알림장을 비웠어요.') && /되돌\s*리\s*기/.test(clearToast), `알림장을 비웠다는 안내나 되돌리기 버튼이 없습니다: ${JSON.stringify(clearToast)}`);
+        const clearedVaults = await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
+        check(![...clearedVaults.cloud, ...clearedVaults.local].some((row) => row.date === noticeDay), `글을 모두 지우고 저장했는데 알림장이 남아 있습니다: ${JSON.stringify(clearedVaults)}`);
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `알림장을 비운 뒤에도 저장했다는 안내가 남아 있습니다: ${JSON.stringify(view)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_cleared_390_light.png') });
+        const clearUndone = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        check(clearUndone, '알림장을 비운 뒤 되돌리기 버튼을 누를 수 없습니다.');
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeSavedHint).catch(() => {});
+        const restored = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
+        check(restored.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'), `비운 알림장을 되돌렸는데 예전 글이 돌아오지 않았습니다: ${JSON.stringify(restored)}`);
+        view = await noticeView(page);
+        const restoredBox = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value || '');
+        check(view.saved && !view.empty && restoredBox === '줄넘기 챙기기', `비운 알림장을 되돌린 뒤 화면이 예전 글로 돌아오지 않았습니다: ${JSON.stringify({ view, restoredBox })}`);
+
+        // 기기에만 둔 민감한 알림장을 비우면 기기에서만 지우고, 클라우드 쪽에는 아무것도 생기지 않습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '알레르기 약 챙기기');
+        await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay));
+        await noticeSave(page, '', noticeEmptyHint);
+        const localCleared = await noticeVaultsUntil(page, (v) => !v.local.some((row) => row.date === noticeDay));
+        check(!localCleared.local.some((row) => row.date === noticeDay), `기기에만 둔 알림장을 비웠는데 기기에 남아 있습니다: ${JSON.stringify(localCleared)}`);
+        check(!localCleared.cloud.some((row) => row.date === noticeDay || /알레르기/.test(row.text || '')), `기기에만 둔 알림장을 비우다가 클라우드 쪽에 글이 생겼습니다: ${JSON.stringify(localCleared)}`);
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent))?.click());
+        const localBack = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay));
+        check(localBack.local.some((row) => row.date === noticeDay && row.text === '알레르기 약 챙기기') && !localBack.cloud.some((row) => /알레르기/.test(row.text || '')), `기기에만 둔 알림장을 되돌린 결과가 다릅니다: ${JSON.stringify(localBack)}`);
 
         // 다른 날 알림장이 있으면 두 안내 모두 없이 목록만 보입니다.
         await noticeSeed(page);
@@ -2785,6 +2843,12 @@ try {
         const lum = rgb.length === 3 ? rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0) : 0;
         check(lum > 0.3, `다크에서 알림장 안내 글자가 어둡습니다: ${view.hintColor}`);
         await page.screenshot({ path: resolve(shots, 'notice_hint_saved_360_dark.png') });
+        await noticeSave(page, '', noticeEmptyHint);
+        view = await noticeView(page);
+        const darkToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(view.empty && !view.saved && darkToast.includes('이 날 알림장을 비웠어요.'), `360 다크에서 알림장을 비운 화면이 다릅니다: ${JSON.stringify({ view, darkToast })}`);
+        check(!view.pageOverflow, `360에서 알림장을 비운 화면이 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_cleared_360_dark.png') });
     }, 800);
 
 } catch (error) {

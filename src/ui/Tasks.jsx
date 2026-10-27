@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
@@ -136,10 +136,27 @@ export function Notice() {
     const notices = joined(data, 'notices');
     const current = notices.find((row) => row.date === date);
     const [text, setText] = useState(current?.text || '');
+    const cleared = useRef(null);
+    const others = notices.filter((row) => row.date !== date && String(row.text || '').trim());
     const events = joined(data, 'events').filter((row) => row.date === date);
 
+    useEffect(() => {
+        // 비운 알림장을 되돌리면 입력칸에도 예전 글을 다시 넣습니다.
+        if (cleared.current?.date === date && current?.text === cleared.current.text) {
+            cleared.current = null;
+            setText((prev) => prev.trim() ? prev : current.text);
+        }
+    }, [current?.text, date]);
+
     async function save(next) {
-        if (!next.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
+        if (!next.trim()) {
+            if (!current?.text?.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
+            const failed = await removeItem('notices', current.id);
+            if (failed?.storageFailed) return;
+            cleared.current = { date, text: current.text };
+            showToast('이 날 알림장을 비웠어요.', true);
+            return;
+        }
         const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() }, { from: current ? (current.localOnly ? 'local' : 'cloud') : undefined });
         if (result?.storageFailed) return;
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
@@ -170,13 +187,13 @@ export function Notice() {
                 <Btn className="primary-btn" style={{ flex: 1 }} onClick={() => save(text)}>저장</Btn>
             </div>
             <h3>지난 알림장</h3>
-            {notices.filter((row) => row.date !== date).slice(0, 8).map((row) => (
+            {others.slice(0, 8).map((row) => (
                 <Btn key={row.id} block className="glass" style={{ marginBottom: 8, padding: 12, textAlign: 'left' }} onClick={() => go(`#/notice/${row.date}`)}>
                     <strong>{row.date}</strong>
                     <span className="muted" style={{ display: 'block' }}>{row.text}</span>
                 </Btn>
             ))}
-            {!notices.some((row) => row.date !== date) && <p className="muted">{current?.text?.trim() ? '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.' : '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.'}</p>}
+            {!others.length && <p className="muted">{current?.text?.trim() ? '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.' : '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.'}</p>}
         </div>
     );
 }
