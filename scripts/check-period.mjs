@@ -314,8 +314,9 @@ check(/\.work-setup-form \.primary-btn \{ flex: 0 0 auto;/.test(css), '넓은 �
 const demoMod = await import('../src/lib/demo.js');
 check(demoMod.DEMO_WORK?.workStart === '08:40' && demoMod.DEMO_WORK?.workEnd === '16:40', '데모에 출퇴근 시각이 없습니다.');
 check(/const local = data\.profile\.demo && !saved\.workStart && !saved\.workEnd \? \{ \.\.\.saved, \.\.\.DEMO_WORK \} : saved;/.test(homeSrc) && !/patchPeriodLocal/.test(homeSrc), '데모 출퇴근 시각이 이 기기 설정에 저장되거나 데모가 아닌 때도 쓰입니다.');
-const subjectAt = scheduleSrc.indexOf('name="subject"');
-check(subjectAt > 0 && subjectAt < scheduleSrc.indexOf('칸 잠그기') && subjectAt < scheduleSrc.indexOf('onClick={closeEdit}>닫기<') && subjectAt < scheduleSrc.indexOf('전담 아님'), '칸 편집 폼에서 과목 칸보다 잠그기·닫기가 먼저 나옵니다.');
+const editForm = scheduleSrc.slice(scheduleSrc.indexOf('className="solid-card tt-edit"'));
+const subjectAt = editForm.indexOf('<input className="field" name="subject"');
+check(subjectAt > 0 && subjectAt < editForm.indexOf('칸 잠그기') && subjectAt < editForm.indexOf('onClick={closeEdit}>닫기<') && subjectAt < editForm.indexOf('전담 아님'), '칸 편집 폼에서 과목 칸보다 잠그기·닫기가 먼저 나옵니다.');
 
 const allText = ['src/lib/period.js', 'src/lib/periodLocal.js', 'src/ui/WorkTimer.jsx', 'src/ui/TimetableSettings.jsx', 'src/ui/Home.jsx', 'src/lib/demo.js'].map(read).join('\n');
 check(!/쓱|잼|JAM|콕/.test(allText), '금지 표기가 들어 있습니다.');
