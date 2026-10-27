@@ -6,6 +6,10 @@
     글자 소리에서 옮겨 온 소리(뽁·띵·물방울·방귀 등)는 typesound의 합성을 그대로 쓰고, 한 가지 소리라 누를 때만 냅니다. */
 
 import { TYPE_FADE_IN_SEC, TYPE_VOICES, isSensitiveControl, isTextControl, normalizeTypeVoice, renderTypeStroke, typeOutput, typePitchRate, typeStrokeGain } from './typesound.js';
+/* 키보드 테마 소리(kb-…)는 파일이라 kbsound.js가 받고 고릅니다. 여기서는 아래 몇 줄로만 이어 붙입니다. */
+import { KB_VOICE_GAIN, isKbVoice, kbBuffers, kbVoiceLoaded, loadKbVoice } from './kbsound.js';
+
+export { KB_VOICES, KB_VOICE_GAIN, isKbVoice, kbVoiceLoaded, loadKbVoice, pickVariant } from './kbsound.js';
 
 const SOUND_KEY = 'ssug-gyomu-key-sound';
 const VIBE_KEY = 'ssug-gyomu-key-vibrate';
@@ -153,7 +157,7 @@ export function isTypePressVoice(id) {
 }
 
 export function normalizeKeyVoice(id) {
-    return KEY_VOICES.some((item) => item.id === id) || isTypePressVoice(id) ? id : DEFAULT_VOICE;
+    return KEY_VOICES.some((item) => item.id === id) || isTypePressVoice(id) || isKbVoice(id) ? id : DEFAULT_VOICE;
 }
 
 /** 누를 때 소리를 낼 요소. 꺼진 버튼, 민감한 칸, 글 입력칸은 소리 없이 지나갑니다. */
@@ -298,6 +302,7 @@ export const TYPE_PRESS_STEPS = { small: 1, mid: 2, loud: 3 };
 /** 소리마다 실제로 곱하는 크기. 옮겨 온 소리는 예전 글자 소리 크기(typeStrokeGain)를 기준으로 합니다. */
 export function keyPressGain(voice, volume) {
     const id = normalizeKeyVoice(voice);
+    if (isKbVoice(id)) return KB_VOICE_GAIN * TYPE_PRESS_STEPS[normalizeKeyVolume(volume)];
     if (!isTypePressVoice(id)) return keyVolumeGain(volume);
     return typeStrokeGain(id) * TYPE_PRESS_STEPS[normalizeKeyVolume(volume)];
 }
@@ -434,6 +439,7 @@ export function renderKeyPair(voice, sampleRate = 48000) {
 }
 
 function buffersFor(audio, voice) {
+    if (isKbVoice(voice)) return kbBuffers(voice, audio);
     const key = `${voice}:${audio.sampleRate}`;
     let hit = pairCache.get(key);
     if (!hit) {
@@ -525,7 +531,8 @@ function launch(audio, voice, volume, events, when) {
     const parts = events.filter((event) => buffers[event.part]);
     if (!parts.length) return;
     const now = Number.isFinite(when) ? when : (audio.currentTime || 0);
-    const moved = isTypePressVoice(voice);
+    /* 키보드 테마 소리도 파일 소리라 옮겨 온 소리와 같은 2ms 시작·리미터를 씁니다. */
+    const moved = isTypePressVoice(voice) || isKbVoice(voice);
     const plan = planKeyPress(active, now, parts.length);
     for (const entry of plan.fade) releaseVoice(entry, audio, KEY_FADE_SEC);
     for (const entry of plan.drop) {
@@ -640,8 +647,8 @@ export function withKeyAudio(fn) {
 }
 
 /** 연타를 샘플로 섞어 피크와 샘플 간 점프를 잽니다. 실제 재생과 같은 planKeyPress 규칙으로 앞 소리를 줄입니다. */
-export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = KEY_FADE_SEC * 1000, sampleRate = 48000 } = {}) {
-    const pair = renderKeyPair(voice, sampleRate);
+export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = KEY_FADE_SEC * 1000, sampleRate = 48000, down = null } = {}) {
+    const pair = down ? { down } : renderKeyPair(voice, sampleRate);
     const gain = keyPressGain(voice, volume);
     const gap = Math.max(0, Math.round((sampleRate * gapMs) / 1000));
     const fade = Math.max(1, Math.round((sampleRate * fadeMs) / 1000));
@@ -705,6 +712,11 @@ export function previewKeyVoice(id) {
     armed = false;
     const voice = normalizeKeyVoice(id || keyVoiceId());
     const volume = keyVolumeId();
+    if (isKbVoice(voice) && !kbVoiceLoaded(voice)) {
+        unlockKeyAudio();
+        loadKbVoice(voice, ctx).then((ok) => { if (ok && !muted) previewKeyVoice(voice); });
+        return;
+    }
     withAudio((audio) => {
         launch(audio, voice, volume, [
             { part: 'down', at: 0, rate: pressRate(voice) },
@@ -743,6 +755,8 @@ export function playKey(part = 'down') {
     armed = true;
     const voice = keyVoiceId();
     const volume = keyVolumeId();
+    /* 테마 소리를 아직 받지 않았으면 이번 누름은 조용히 지나가고(뗌 소리도 없음) 받기만 시작합니다. */
+    if (isKbVoice(voice) && !kbVoiceLoaded(voice)) { armed = false; loadKbVoice(voice, ctx); return; }
     withAudio((audio) => {
         launch(audio, voice, volume, [{ part: 'down', at: 0, rate: pressRate(voice) }]);
     });
