@@ -2584,6 +2584,55 @@ try {
             });
         }
     }
+
+    // 알림장 부제와 지난 알림장 안내: 빈 상태, 저장 직후, 390 한 줄을 지킵니다.
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(async () => {
+            for (const name of ['ssug-gyomu', 'ssug-gyomu-local']) {
+                const db = await new Promise((resolveDb, reject) => {
+                    const req = indexedDB.open(name);
+                    req.onsuccess = () => resolveDb(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+                if (!db.objectStoreNames.contains('kv')) continue;
+                const store = db.transaction('kv', 'readwrite').objectStore('kv');
+                const state = await new Promise((resolveState, reject) => {
+                    const req = store.get('state');
+                    req.onsuccess = () => resolveState(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+                if (!state) continue;
+                state.notices = [];
+                if (state.local) state.local.notices = [];
+                await new Promise((resolvePut, reject) => {
+                    const req = store.put(state, 'state');
+                    req.onsuccess = resolvePut;
+                    req.onerror = () => reject(req.error);
+                });
+            }
+        });
+        await page.goto(`${origin}?mode=light&at=08:42#/notice`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForSelector('textarea[aria-label="알림장"]');
+        await delay(300);
+        const emptyHint = '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.';
+        const savedHint = '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.';
+        const sub = await page.evaluate(() => {
+            const p = document.querySelector('.date-block p');
+            if (!p) return null;
+            return { text: p.innerText.trim(), lines: Math.round(p.getBoundingClientRect().height / parseFloat(getComputedStyle(p).lineHeight)) };
+        });
+        check(sub?.text === '복사해서 붙여 넣어요', `알림장 부제가 바뀌었습니다: ${sub?.text}`);
+        check(sub?.lines === 1, `390에서 알림장 부제가 한 줄이 아닙니다: ${sub?.lines}줄`);
+        const before = await page.evaluate(() => document.body.innerText);
+        check(before.includes(emptyHint), '지난 알림장이 없을 때 빈 안내가 보이지 않습니다.');
+        await page.type('textarea[aria-label="알림장"]', '줄넘기 챙기기');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, savedHint).catch(() => {});
+        const after = await page.evaluate(() => document.body.innerText);
+        check(after.includes(savedHint), '알림장을 저장한 뒤 저장했다는 안내가 보이지 않습니다.');
+        check(!after.includes(emptyHint), '알림장을 저장한 뒤에도 "저장하면 여기에 모여요" 빈 안내가 그대로 보입니다.');
+    }, 844);
+
 } catch (error) {
     failures.push(error?.message || String(error));
 }
