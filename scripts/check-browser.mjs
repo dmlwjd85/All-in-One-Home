@@ -2433,6 +2433,9 @@ try {
                         hasLeave: Boolean(leave),
                         coversLeave: hits(tipBox, leave),
                         leaveOnScreen: Boolean(leave && leave.top < viewBottom && leave.bottom > 0),
+                        /* 지금 교시(⏰ N교시까지 …)는 타이머가 있어도 첫 화면에 다 보여야 하고, 탭·타이머에 가리면 안 됩니다. */
+                        nowShown: Boolean(kicker && kicker.top >= 0 && kicker.bottom <= viewBottom && !hits(kicker, tab) && !hits(kicker, leave)),
+                        cellUnderTab: cells.some((cell) => hits(cell, tab)),
                         text: tip?.innerText || '',
                         toast,
                         coversQuick: hits(tipBox, quick),
@@ -2457,7 +2460,9 @@ try {
                         layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
-                        && (layout.hasLeave ? layout.leaveOnScreen && !layout.coversLeave : layout.sixthOnScreen && !layout.sixthUnderTab),
+                        && (layout.hasLeave
+                            ? layout.leaveOnScreen && !layout.coversLeave && layout.nowShown && !layout.sixthUnderTab && !layout.cellUnderTab
+                            : layout.sixthOnScreen && !layout.sixthUnderTab),
                         `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
                     );
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
