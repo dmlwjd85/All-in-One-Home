@@ -2585,37 +2585,102 @@ try {
         }
     }
 
-    // 알림장 부제와 지난 알림장 안내: 빈 상태, 저장 직후, 390 한 줄을 지킵니다.
-    await withDemo(390, 'light', async (page) => {
-        await page.evaluate(async () => {
-            for (const name of ['ssug-gyomu', 'ssug-gyomu-local']) {
-                const db = await new Promise((resolveDb, reject) => {
-                    const req = indexedDB.open(name);
-                    req.onsuccess = () => resolveDb(req.result);
-                    req.onerror = () => reject(req.error);
-                });
-                if (!db.objectStoreNames.contains('kv')) continue;
-                const store = db.transaction('kv', 'readwrite').objectStore('kv');
-                const state = await new Promise((resolveState, reject) => {
-                    const req = store.get('state');
-                    req.onsuccess = () => resolveState(req.result || null);
-                    req.onerror = () => reject(req.error);
-                });
-                if (!state) continue;
-                state.notices = [];
-                if (state.local) state.local.notices = [];
-                await new Promise((resolvePut, reject) => {
-                    const req = store.put(state, 'state');
-                    req.onsuccess = resolvePut;
-                    req.onerror = () => reject(req.error);
-                });
-            }
+    // 알림장 부제와 지난 알림장 안내: 빈 상태, 저장 직후, 다른 날, 민감한 글, 되돌리기, 빈 칸 저장, 좁은 폭, 다크를 지킵니다.
+    const noticeEmptyHint = '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.';
+    const noticeSavedHint = '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.';
+    const noticeBlankToast = '적은 내용이 없어서 저장하지 않았어요.';
+    const noticeDay = addDaysYmd(todayYmd, 1);
+    const noticeOther = addDaysYmd(todayYmd, 2);
+    const noticeVaults = (page) => page.evaluate(async () => {
+        const read = (name) => new Promise((resolveRead, reject) => {
+            const req = indexedDB.open(name);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains('kv')) { resolveRead(null); return; }
+                const get = db.transaction('kv').objectStore('kv').get('state');
+                get.onsuccess = () => resolveRead(get.result || null);
+                get.onerror = () => reject(get.error);
+            };
         });
-        await page.goto(`${origin}?mode=light&at=08:42#/notice`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const main = await read('ssug-gyomu');
+        const local = await read('ssug-gyomu-local');
+        return { cloud: main?.notices || [], local: [...(local?.notices || []), ...(local?.local?.notices || []), ...(main?.local?.notices || [])] };
+    });
+    const noticeVaultsUntil = async (page, test) => {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+            const vaults = await noticeVaults(page);
+            if (test(vaults)) return vaults;
+            await delay(150);
+        }
+        return noticeVaults(page);
+    };
+    const noticeSeed = (page, cloud = [], local = []) => page.evaluate(async (cloudRows, localRows) => {
+        for (const [name, rows] of [['ssug-gyomu', cloudRows], ['ssug-gyomu-local', localRows]]) {
+            const db = await new Promise((resolveDb, reject) => {
+                const req = indexedDB.open(name);
+                req.onsuccess = () => resolveDb(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            if (!db.objectStoreNames.contains('kv')) continue;
+            const store = db.transaction('kv', 'readwrite').objectStore('kv');
+            const state = await new Promise((resolveState, reject) => {
+                const req = store.get('state');
+                req.onsuccess = () => resolveState(req.result || null);
+                req.onerror = () => reject(req.error);
+            });
+            if (!state) continue;
+            state.notices = rows;
+            if (state.local) state.local.notices = [];
+            await new Promise((resolvePut, reject) => {
+                const req = store.put(state, 'state');
+                req.onsuccess = resolvePut;
+                req.onerror = () => reject(req.error);
+            });
+        }
+    }, cloud, local);
+    let noticeLoads = 0;
+    const noticeOpen = async (page, mode, day) => {
+        // 주소가 같으면 해시만 바뀌어 다시 읽지 않으므로, 매번 다른 주소로 새로 엽니다.
+        noticeLoads += 1;
+        await page.goto(`${origin}?mode=${mode}&at=08:42&load=${noticeLoads}#/notice/${day}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForSelector('textarea[aria-label="알림장"]');
         await delay(300);
-        const emptyHint = '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.';
-        const savedHint = '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.';
+    };
+    const noticeView = (page) => page.evaluate((emptyHint, savedHint) => {
+        const body = document.body.innerText;
+        const title = [...document.querySelectorAll('h3')].find((el) => el.innerText.trim() === '지난 알림장');
+        const list = [];
+        for (let el = title?.nextElementSibling; el; el = el.nextElementSibling) {
+            if (el.tagName === 'BUTTON') list.push(el.innerText.replace(/\s+/g, ' ').trim());
+        }
+        const hint = [...document.querySelectorAll('p')].find((el) => el.innerText.trim() === emptyHint || el.innerText.trim() === savedHint);
+        const root = document.documentElement;
+        return {
+            empty: body.includes(emptyHint),
+            saved: body.includes(savedHint),
+            list,
+            hintOverflow: hint ? hint.scrollWidth > hint.clientWidth + 1 || hint.getBoundingClientRect().right > root.clientWidth + 1 : false,
+            pageOverflow: root.scrollWidth > root.clientWidth + 1,
+            hintColor: hint ? getComputedStyle(hint).color : '',
+            dark: root.classList.contains('dark'),
+        };
+    }, noticeEmptyHint, noticeSavedHint);
+    const noticeSave = async (page, text, expect = noticeSavedHint) => {
+        await page.evaluate((value) => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, value);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }, text);
+        await delay(100);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
+        if (expect) await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, expect).catch(() => {});
+        await delay(300);
+    };
+
+    await withDemo(390, 'light', async (page) => {
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
         const sub = await page.evaluate(() => {
             const p = document.querySelector('.date-block p');
             if (!p) return null;
@@ -2623,15 +2688,104 @@ try {
         });
         check(sub?.text === '복사해서 붙여 넣어요', `알림장 부제가 바뀌었습니다: ${sub?.text}`);
         check(sub?.lines === 1, `390에서 알림장 부제가 한 줄이 아닙니다: ${sub?.lines}줄`);
-        const before = await page.evaluate(() => document.body.innerText);
-        check(before.includes(emptyHint), '지난 알림장이 없을 때 빈 안내가 보이지 않습니다.');
+        let view = await noticeView(page);
+        check(view.empty && !view.saved, `지난 알림장이 없을 때 빈 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 저장하기 전에 적기만 하면 아직 빈 안내입니다.
         await page.type('textarea[aria-label="알림장"]', '줄넘기 챙기기');
+        await delay(200);
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `알림장을 적기만 하고 저장하지 않았는데 저장했다는 안내가 보입니다: ${JSON.stringify(view)}`);
+
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
-        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, savedHint).catch(() => {});
-        const after = await page.evaluate(() => document.body.innerText);
-        check(after.includes(savedHint), '알림장을 저장한 뒤 저장했다는 안내가 보이지 않습니다.');
-        check(!after.includes(emptyHint), '알림장을 저장한 뒤에도 "저장하면 여기에 모여요" 빈 안내가 그대로 보입니다.');
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeSavedHint).catch(() => {});
+        view = await noticeView(page);
+        check(view.saved, '알림장을 저장한 뒤 저장했다는 안내가 보이지 않습니다.');
+        check(!view.empty, '알림장을 저장한 뒤에도 "저장하면 여기에 모여요" 빈 안내가 그대로 보입니다.');
+        check(!view.hintOverflow && !view.pageOverflow, `390에서 알림장 저장 안내가 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+
+        // 되돌리기 뒤에는 빈 안내로 돌아갑니다.
+        const undone = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기');
+            button?.click();
+            return Boolean(button);
+        });
+        check(undone, '알림장을 저장한 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeEmptyHint).catch(() => {});
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `알림장을 되돌린 뒤 빈 안내로 돌아가지 않습니다: ${JSON.stringify(view)}`);
+
+        // 빈 칸이나 띄어쓰기만 있으면 저장하지 않고 알려 줍니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        for (const blank of ['', '   \n ']) {
+            await noticeSave(page, blank, noticeBlankToast);
+            view = await noticeView(page);
+            const toast = await page.evaluate(() => document.querySelector('.toast')?.innerText || '');
+            check(toast.includes(noticeBlankToast), `빈 알림장을 저장했을 때 저장하지 않았다는 안내가 없습니다: ${JSON.stringify(toast)}`);
+            check(view.empty && !view.saved, `빈 알림장을 저장한 뒤 저장했다는 안내가 보입니다: ${JSON.stringify(view)}`);
+            if (!blank) await page.screenshot({ path: resolve(shots, 'notice_blank_save_390_light.png') });
+        }
+        const blankVaults = await noticeVaults(page);
+        check(![...blankVaults.cloud, ...blankVaults.local].some((row) => row.date === noticeDay), `빈 알림장이 저장되었습니다: ${JSON.stringify(blankVaults)}`);
+
+        // 예전에 저장된 빈 행이 있어도 저장했다고 하지 않습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `이미 있던 빈 알림장 행을 저장된 알림장으로 칩니다: ${JSON.stringify(view)}`);
+
+        // 다른 날 알림장이 있으면 두 안내 모두 없이 목록만 보입니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeOther);
+        await noticeSave(page, '체육복 챙기기', null);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.text === '체육복 챙기기'));
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.some((row) => row.includes('체육복 챙기기')), `다른 날 알림장이 있을 때 안내 없이 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+        await noticeSave(page, '줄넘기 챙기기', null);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.length === 1, `이 날과 다른 날을 모두 저장했을 때 안내 없이 다른 날 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 민감한 다른 날만 있으면 이 기기에만 남고, 안내 없이 목록이 보입니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeOther);
+        await noticeSave(page, '보건실 들르기', null);
+        let vaults = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.text === '보건실 들르기'));
+        check(!vaults.cloud.some((row) => String(row.text).includes('보건실')), `민감한 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(vaults.cloud)}`);
+        check(vaults.local.some((row) => row.text === '보건실 들르기'), '민감한 다른 날 알림장이 이 기기에 남지 않았습니다.');
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.some((row) => row.includes('보건실 들르기')), `민감한 다른 날 알림장만 있을 때 안내 없이 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 민감한 이 날 알림장을 저장해도 저장 안내가 나오고, 클라우드 쪽에는 없습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '알레르기 약 챙기기');
+        view = await noticeView(page);
+        check(view.saved && !view.empty, `민감한 이 날 알림장을 저장했는데 저장 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        vaults = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.text === '알레르기 약 챙기기'));
+        check(!vaults.cloud.some((row) => String(row.text).includes('알레르기')), `민감한 이 날 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(vaults.cloud)}`);
+        check(vaults.local.some((row) => row.text === '알레르기 약 챙기기'), '민감한 이 날 알림장이 이 기기에 남지 않았습니다.');
+        await page.screenshot({ path: resolve(shots, 'notice_hint_sensitive_390_light.png') });
     }, 844);
+
+    // 360 다크: 두 안내가 좁은 폭에서 넘치지 않고, 다크 글자로 보입니다.
+    await withDemo(360, 'dark', async (page) => {
+        await noticeSeed(page);
+        await noticeOpen(page, 'dark', noticeDay);
+        let view = await noticeView(page);
+        check(view.dark, '알림장 다크 화면이 다크로 열리지 않습니다.');
+        check(view.empty && !view.hintOverflow && !view.pageOverflow, `360 다크에서 알림장 빈 안내가 없거나 넘칩니다: ${JSON.stringify(view)}`);
+        await noticeSave(page, '줄넘기 챙기기');
+        view = await noticeView(page);
+        check(view.saved && !view.empty, `360 다크에서 알림장 저장 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        check(!view.hintOverflow && !view.pageOverflow, `360에서 알림장 저장 안내가 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+        const rgb = (view.hintColor.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+        const lum = rgb.length === 3 ? rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0) : 0;
+        check(lum > 0.3, `다크에서 알림장 안내 글자가 어둡습니다: ${view.hintColor}`);
+        await page.screenshot({ path: resolve(shots, 'notice_hint_saved_360_dark.png') });
+    }, 800);
 
 } catch (error) {
     failures.push(error?.message || String(error));
