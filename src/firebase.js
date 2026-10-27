@@ -83,19 +83,11 @@ function loginMode() {
     return bundle ? bundle.memoryOnly : sharedPcOn();
 }
 
-export async function loadFirebase({ memoryOnly = false } = {}) {
-    const config = newFirebaseConfig();
-    if (!config) return null;
-    if (bundle && bundle.memoryOnly === memoryOnly) {
-        if (memoryOnly || sharedPcOn()) await keepLoginInTab(bundle.auth);
-        return bundle;
-    }
-    const [{ initializeApp, getApps }, { getAuth }, firestore] = await Promise.all([
-        import('firebase/app'),
-        import('firebase/auth'),
-        import('firebase/firestore'),
-    ]);
-    const app = getApps().find((item) => item.name === '[DEFAULT]') || initializeApp(config);
+/**
+ * 파이어스토어를 엽니다. 공용 컴퓨터면 메모리 캐시만 쓰고, 예전에 이 기기에 남은 캐시(IndexedDB)는 비웁니다.
+ * (예전에는 이미 연 인스턴스가 있으면 새 설정이 무시돼서, 공용 PC로 바꿔도 학생 기록이 캐시에 남았어요.)
+ */
+async function openDb(firestore, app, memoryOnly) {
     let cache;
     try {
         cache = memoryOnly
@@ -110,9 +102,50 @@ export async function loadFirebase({ memoryOnly = false } = {}) {
     } catch {
         db = firestore.getFirestore(app);
     }
+    if (memoryOnly) await firestore.clearIndexedDbPersistence(db).catch(() => {});
+    return db;
+}
+
+let opening = Promise.resolve();
+
+/**
+ * memoryOnly: 메모리 캐시가 필요함(공용 컴퓨터, 이 기기 저장소를 못 쓸 때). 한 번 메모리로 바뀌면 그대로 둡니다.
+ * persist: 공용 컴퓨터 모드를 끈 경우처럼 이 기기 캐시로 되돌릴 때만 true.
+ */
+export async function loadFirebase({ memoryOnly = false, persist = false } = {}) {
+    const config = newFirebaseConfig();
+    if (!config) return null;
+    const run = opening.then(() => openBundle(config, memoryOnly, persist));
+    opening = run.then(() => undefined, () => undefined);
+    return run;
+}
+
+async function openBundle(config, memoryOnly, persist) {
+    const wantMemory = memoryOnly || (!persist && sharedPcOn());
+    if (bundle) {
+        const toMemory = wantMemory && !bundle.memoryOnly;
+        const toDisk = persist && !wantMemory && bundle.memoryOnly;
+        if (!toMemory && !toDisk) {
+            if (bundle.memoryOnly || sharedPcOn()) await keepLoginInTab(bundle.auth);
+            return bundle;
+        }
+    }
+    const [{ initializeApp, getApps }, { getAuth }, firestore] = await Promise.all([
+        import('firebase/app'),
+        import('firebase/auth'),
+        import('firebase/firestore'),
+    ]);
+    const app = getApps().find((item) => item.name === '[DEFAULT]') || initializeApp(config);
+    if (bundle?.db) {
+        // 캐시 방식을 바꿀 때는 열려 있던 것을 닫아야 새 설정이 먹고, 디스크 캐시도 비울 수 있어요.
+        const old = bundle.db;
+        await firestore.terminate(old).catch(() => {});
+        if (wantMemory) await firestore.clearIndexedDbPersistence(old).catch(() => {});
+    }
+    const db = await openDb(firestore, app, wantMemory);
     const auth = getAuth(app);
-    if (memoryOnly || sharedPcOn()) await keepLoginInTab(auth);
-    bundle = { app, auth, db, memoryOnly };
+    if (wantMemory || sharedPcOn()) await keepLoginInTab(auth);
+    bundle = { app, auth, db, memoryOnly: wantMemory };
     return bundle;
 }
 

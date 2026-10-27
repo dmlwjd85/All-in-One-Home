@@ -6,8 +6,7 @@
  * - updatedAt이 없는 옛 기록은 예전처럼 이 기기 것을 남깁니다(덮어쓰지 않음).
  * - 지운 기록은 대기열에 남겨 두었다가, 클라우드에서도 지워질 때까지 다시 시도합니다.
  */
-import { cloudDocId, toCloudRow } from './cloudShape.js';
-import { isSensitiveText } from './sensitive.js';
+import { cloudDocId, fromCloudRow, toCloudRow } from './cloudShape.js';
 
 /** 화면 이름 → 클라우드 문서 묶음 이름. 정리함·보관함은 따로 다루므로 넣지 않습니다. */
 export const SYNC_BUCKETS = [
@@ -23,6 +22,10 @@ export const SYNC_BUCKETS = [
 export const FORGET_LIMIT = 500;
 export const FORGET_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000;
 export const REFRESH_GAP_MS = 30 * 1000;
+/** 서버 시각보다 이만큼 넘게 앞선 시각은 믿지 않습니다. */
+export const FUTURE_SLACK_MS = 60 * 1000;
+/** 서버 시각을 잴 때 왕복이 이보다 길면 버립니다(오차가 커서). */
+export const CLOCK_MAX_RTT_MS = 5000;
 
 /** ISO 글, 숫자(ms), 파이어베이스 Timestamp 모두 ms로 바꿉니다. 모르면 0. */
 export function timeOf(value) {
@@ -89,12 +92,24 @@ export function keyOf(cloudName, id) {
 /**
  * 클라우드 것을 가져올 때 이 기기에만 있는 칸은 살립니다.
  * - 출처(source)는 이 기기 표시를 그대로 둡니다(보관함·충돌 표시가 바뀌지 않게).
- * - 학생 메모가 민감해서 클라우드에 없으면 이 기기 메모를 지우지 않습니다.
+ * - 클라우드로 못 가는 칸(민감한 메모·사유, 클라우드 모양에 없는 칸)은 클라우드 쪽이 비어 있으면 이 기기 값을 둡니다.
+ *   예: 민감한 출결 메모가 있어 줄째로 안 올라간 출결을 다른 기기가 '지각'으로 고쳐도 메모·사유는 남습니다.
  */
+function blank(value) {
+    return value == null || value === '' || (Array.isArray(value) && !value.length);
+}
+
 export function takeRemote(cloudName, local, remote) {
     const next = { ...local, ...remote, id: local.id };
     if (local.source) next.source = local.source;
-    if (cloudName === 'students' && isSensitiveText(local.memo) && !remote.memo) next.memo = local.memo;
+    const shaped = toCloudRow(cloudName, local);
+    const reach = shaped ? fromCloudRow(cloudName, shaped.id, shaped.body) || {} : {};
+    for (const [key, value] of Object.entries(local)) {
+        if (key === 'id' || key === 'updatedAt' || key === 'source') continue;
+        if (blank(value) || !blank(remote?.[key])) continue;
+        if (shaped && sameRow(reach[key], value)) continue;
+        next[key] = value;
+    }
     return next;
 }
 
@@ -115,6 +130,7 @@ export function mergeBucket(cloudName, local = [], remote = [], { since = 0, for
     }
     const taken = [];
     const removed = [];
+    const kept = [];
     const out = [];
     const used = new Set();
     for (const row of local || []) {
@@ -130,6 +146,8 @@ export function mergeBucket(cloudName, local = [], remote = [], { since = 0, for
                 taken.push(next);
             } else {
                 out.push(row);
+                // 이 기기 것이 더 최근인데 클라우드에는 옛 판이 있으면 다시 올리게 알려 줍니다.
+                if (timeOf(row?.updatedAt) > timeOf(match.updatedAt)) kept.push(row);
             }
             continue;
         }
@@ -146,10 +164,21 @@ export function mergeBucket(cloudName, local = [], remote = [], { since = 0, for
         out.push(row);
         taken.push(row);
     }
-    return { rows: out, taken, removed };
+    return { rows: out, taken, removed, kept };
 }
 
-/** 줄 단위로 비교해 바뀐 것에만 updatedAt을 붙입니다. 같은 시각을 그대로 둔 고침만 새로 찍습니다. */
+/**
+ * 고친 시각을 하나 정합니다. 앞서 찍힌 시각보다는 늘 뒤입니다(하이브리드 논리 시계).
+ * 그래서 시계가 늦은 기기가 남의 고침을 받은 뒤 고쳐도, 받은 것보다 앞선 시각이 찍히지 않아요.
+ */
+export function stampAfter(nowIso, previous) {
+    const now = timeOf(nowIso);
+    const before = timeOf(previous);
+    if (before && before >= now) return new Date(before + 1).toISOString();
+    return nowIso;
+}
+
+/** 줄 단위로 비교해 바뀐 것에만 updatedAt을 붙입니다. 같은 시각을 그대로 둔 고침과 시각 없이 새로 만든 줄을 새로 찍습니다. */
 export function stampList(prevList = [], nextList = [], nowIso, { force = false } = {}) {
     if (!Array.isArray(nextList)) return nextList;
     const before = new Map();
@@ -165,12 +194,14 @@ export function stampList(prevList = [], nextList = [], nowIso, { force = false 
         }
         if (force) {
             // 되돌리기: 시각은 빼고 내용만 견줘서, 달라졌으면 지금 고친 것으로 찍습니다.
-            if (sameRow({ ...old, updatedAt: '' }, { ...row, updatedAt: '' })) return { ...row, updatedAt: old.updatedAt };
-            return { ...row, updatedAt: nowIso };
+            if (sameContent(old, row)) return { ...row, updatedAt: old.updatedAt };
+            return { ...row, updatedAt: stampAfter(nowIso, old.updatedAt) };
         }
-        if (row.updatedAt !== old.updatedAt) return row;
-        if (sameRow(old, row)) return row;
-        return { ...row, updatedAt: nowIso };
+        // 받아 온 줄처럼 시각이 함께 바뀐 줄은 그 시각을 둡니다.
+        if (row.updatedAt && row.updatedAt !== old.updatedAt) return row;
+        // 시각 없이 새 객체로 저장했어도 내용이 같으면 옛 시각을 이어 둡니다.
+        if (sameContent(old, row)) return row.updatedAt === old.updatedAt ? row : { ...row, updatedAt: old.updatedAt };
+        return { ...row, updatedAt: stampAfter(nowIso, old.updatedAt) };
     });
 }
 
@@ -182,12 +213,22 @@ function sameRow(a, b) {
     }
 }
 
+/** 칸 순서와 updatedAt은 빼고 내용만 견줍니다. */
+function sameContent(a, b) {
+    const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+    keys.delete('updatedAt');
+    for (const key of keys) {
+        if (!sameRow(a?.[key], b?.[key])) return false;
+    }
+    return true;
+}
+
 /** 시간표는 요일(또는 날짜)마다 따로 시각을 둡니다. */
 export function stampTimetable(prevTable = {}, nextTable = {}, prevStamps = {}, nowIso) {
     const stamps = { ...(prevStamps || {}) };
     const days = new Set([...Object.keys(prevTable || {}), ...Object.keys(nextTable || {})]);
     for (const day of days) {
-        if (!sameRow(prevTable?.[day] ?? null, nextTable?.[day] ?? null)) stamps[day] = nowIso;
+        if (!sameRow(prevTable?.[day] ?? null, nextTable?.[day] ?? null)) stamps[day] = stampAfter(nowIso, stamps[day]);
     }
     return stamps;
 }
@@ -307,10 +348,82 @@ export async function drainQueue(queue = [], uid, remove, { timeoutMs = 12000 } 
 
 /* ---------- 다시 볼 때 받아오기 ---------- */
 
-/** online은 바로, 다시 보이기·포커스는 30초에 한 번만 받아옵니다. */
+/** online·로그인·다시 맞추기·옛 판 발견은 바로, 다시 보이기·포커스는 30초에 한 번만 받아옵니다. */
+const REFRESH_NOW = new Set(['online', 'login', 'retry', 'stale']);
+
 export function shouldRefresh({ reason = 'visible', now = Date.now(), lastAt = 0, gapMs = REFRESH_GAP_MS, hidden = false } = {}) {
     if (hidden) return false;
-    if (reason === 'online' || reason === 'login') return true;
+    if (REFRESH_NOW.has(reason)) return true;
     if (!lastAt) return true;
     return now - lastAt >= gapMs;
+}
+
+/* ---------- 기기 시계 맞추기 ---------- */
+
+/**
+ * 서버 시각과 이 기기 시계의 차이(ms)를 어림합니다. 크리스티안 방식: 서버가 찍은 시각은 보낸 때와 받은 때의 한가운데쯤.
+ * 왕복이 너무 길거나 서버 시각이 없으면 null(이번 값은 버림).
+ */
+export function estimateOffset({ sentAt, receivedAt, serverAt, maxRtt = CLOCK_MAX_RTT_MS } = {}) {
+    const sent = Number(sentAt);
+    const got = Number(receivedAt);
+    const server = timeOf(serverAt);
+    if (!server || !Number.isFinite(sent) || !Number.isFinite(got) || got < sent) return null;
+    if (got - sent > maxRtt) return null;
+    return Math.round(server - (sent + got) / 2);
+}
+
+/**
+ * 클라우드에 올릴 고친 시각(ms). serverNow는 서버 기준 지금(기기 시계 + 어림한 차이).
+ * 없거나 서버 기준으로 1분 넘게 앞선 시각이면 지금 시각을 씁니다.
+ */
+export function uploadTime(value, serverNow) {
+    const ms = timeOf(value);
+    if (!ms || ms > serverNow + FUTURE_SLACK_MS) return serverNow;
+    return ms;
+}
+
+/** 서버 기준으로 앞날에 찍힌 줄 시각을 지금으로 당깁니다. 바뀐 줄이 없으면 같은 목록을 돌려줍니다. */
+export function clampFutureStamps(list, serverNow) {
+    if (!Array.isArray(list)) return list;
+    let changed = false;
+    const out = list.map((row) => {
+        const ms = timeOf(row?.updatedAt);
+        if (!ms || ms <= serverNow + FUTURE_SLACK_MS) return row;
+        changed = true;
+        return { ...row, updatedAt: new Date(serverNow).toISOString() };
+    });
+    return changed ? out : list;
+}
+
+/* ---------- 올리기 전에 서버 판 보기 ---------- */
+
+/**
+ * 시각 있는 줄을 올리기 전에 서버 판을 보고 정합니다.
+ * - 'write': 올립니다(서버에 없고 본 적도 없음, 또는 이 기기 것이 같거나 더 최근).
+ * - 'stale': 서버 쪽이 더 최근이라 올리지 않습니다. 받아 와서 합치면 서버 것이 들어옵니다.
+ * - 'gone': 전에 있던 문서가 서버에서 없어졌습니다. 다른 기기에서 지운 것이라 지운 쪽을 따릅니다
+ *   (인터넷이 끊긴 채로 고친 것보다 지운 것이 이깁니다).
+ */
+export function pushDecision({ exists = false, serverMs = 0, localMs = 0, seen = false } = {}) {
+    if (!exists) return seen ? 'gone' : 'write';
+    if (serverMs && serverMs > localMs) return 'stale';
+    return 'write';
+}
+
+/** 클라우드 묶음에서 빠지면서 같은 id가 이 기기 전용 칸으로 옮겨 간 줄(민감한 내용으로 고친 경우). */
+export function movedToLocal(prev = {}, next = {}) {
+    const out = [];
+    for (const [localName, cloudName] of SYNC_BUCKETS) {
+        const localIds = new Set((next?.local?.[localName] || []).map((row) => String(row?.id ?? '')));
+        if (!localIds.size) continue;
+        const nextIds = new Set((next?.[localName] || []).map((row) => cloudIdOf(cloudName, row)).filter(Boolean));
+        for (const row of prev?.[localName] || []) {
+            if (!row || row.source === 'demo') continue;
+            const id = cloudIdOf(cloudName, row);
+            if (!id || nextIds.has(id) || !localIds.has(String(row.id))) continue;
+            out.push({ name: cloudName, id });
+        }
+    }
+    return out;
 }

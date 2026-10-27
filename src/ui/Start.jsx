@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import titles from '../data/legacyTitles.json';
-import { applyLegacy, finishSetup, loadDemo, previewLegacy, setAuth, snapshot } from '../lib/db.js';
+import { applyLegacy, finishSetup, loadDemo, patchProfile, previewLegacy, setAuth, snapshot } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle } from '../firebase.js';
 import { useUi } from './context.jsx';
 import { Btn, Symbol } from './bits.jsx';
@@ -13,6 +13,14 @@ export function Start() {
     const [names, setNames] = useState(() => Array.from({ length: 32 }, () => ''));
     const [plan, setPlan] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [shared, setShared] = useState(() => Boolean(snapshot().profile.sharedPc));
+
+    // 학교 공용 PC라면 로그인하기 전에 켜야, 탭을 닫을 때 로그아웃되고 이 컴퓨터에 기록이 남지 않습니다.
+    async function toggleShared() {
+        const next = !shared;
+        setShared(next);
+        await patchProfile({ sharedPc: next });
+    }
 
     async function afterChoice() {
         const found = previewLegacy(titles);
@@ -56,6 +64,8 @@ export function Start() {
                             <Btn className="primary-btn block" onClick={googleStart}>구글로 로그인하고 시작</Btn>
                             <p className="muted start-sub">한 번만 로그인하면 폰과 컴퓨터에서 같은 기록을 이어서 봐요.</p>
                             <Btn className="chip block" style={{ marginTop: 8 }} onClick={afterChoice}>이 기기에서만 써 볼게요</Btn>
+                            <Btn className={shared ? 'chip block on' : 'chip block'} style={{ marginTop: 8 }} aria-pressed={shared} onClick={toggleShared}>{shared ? '공용 컴퓨터로 쓰는 중' : '여럿이 쓰는 컴퓨터예요'}</Btn>
+                            <p className="muted start-sub">{shared ? '탭을 닫으면 로그아웃되고, 학생 기록은 이 컴퓨터에 남지 않아요. 구글로 로그인해서 쓰세요.' : '학교 공용 PC라면 로그인하기 전에 눌러 주세요.'}</p>
                         </>
                     ) : (
                         <>

@@ -77,7 +77,7 @@ export function Tasks() {
                                 </Btn>
                                 {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
                                 <Btn className="icon-btn" aria-label="할 일 지우기" onClick={async () => {
-                                    const failed = await removeItem('todos', row.id);
+                                    const failed = await removeItem('todos', row.id, { local: Boolean(row.localOnly) });
                                     if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
                                 }}><IconTrash /></Btn>
                             </div>
@@ -105,7 +105,7 @@ export function Tasks() {
             {notes.map((row) => (
                 <article key={row.id} className="solid-card" style={{ padding: 12, marginBottom: 8 }}>
                     <p style={{ marginTop: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.pinned ? '📌 ' : ''}{row.text}</p>
-                    <Btn className="chip" onClick={() => removeItem('notes', row.id)}>지우기</Btn>
+                    <Btn className="chip" onClick={() => removeItem('notes', row.id, { local: Boolean(row.localOnly) })}>지우기</Btn>
                 </article>
             ))}
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}

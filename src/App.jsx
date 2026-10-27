@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { seoulParts } from './lib/date.js';
@@ -27,6 +27,7 @@ import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, Settings } from './ui/Settings.jsx';
 import { Start } from './ui/Start.jsx';
 import { SyncChip } from './ui/SyncChip.jsx';
+import { subscribeSync, syncStatus } from './lib/syncStatus.js';
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -41,6 +42,18 @@ export default function App() {
     const [search, setSearch] = useState(false);
     const [locked, setLocked] = useState(false);
     const [online, setOnline] = useState(() => navigator.onLine);
+    const sync = useSyncExternalStore(subscribeSync, syncStatus, syncStatus);
+    const sharedPc = Boolean(data?.profile?.sharedPc);
+    // 공용 컴퓨터에서는 못 올린 지우기 목록이 이 탭에만 있어서, 올리기 전에 탭을 닫으면 사라집니다. 닫기 전에 한 번 묻습니다.
+    useEffect(() => {
+        if (!sharedPc || !(sync.queued > 0)) return undefined;
+        const hold = (event) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', hold);
+        return () => window.removeEventListener('beforeunload', hold);
+    }, [sharedPc, sync.queued]);
     const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
     const [tipFolded, setTipFolded] = useState(false);
     const toastTimer = useRef(0);
@@ -75,9 +88,12 @@ export default function App() {
         const onLine = () => {
             setOnline(navigator.onLine);
             if (navigator.onLine) {
-                flushCloud().catch(() => {});
                 refreshGcal().catch(() => {});
-                refreshFromCloud('online').catch(() => {});
+                // 먼저 받아와 합친 뒤에 올립니다. 오프라인에서 고친 옛 값이 다른 기기의 새 값을 덮지 않게요.
+                // 받아오기를 못 했을 때만 바로 올리기를 따로 해 봅니다.
+                refreshFromCloud('online')
+                    .then((result) => (result?.ok ? null : flushCloud()))
+                    .catch(() => {});
             }
         };
         // 다른 기기에서 고친 걸 보려고, 다시 볼 때 클라우드에서 받아와 합칩니다(30초에 한 번).
@@ -437,6 +453,7 @@ export default function App() {
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
+                    {data.profile.sharedPc && sync.queued > 0 && <p className="solid-card" style={{ padding: 12 }} role="status">지운 기록 {sync.queued}개가 아직 클라우드에 반영되지 않았어요. 인터넷이 연결될 때까지 이 탭을 닫지 말아 주세요.</p>}
                     <header className="topbar">
                         {(route.name === 'student' || route.name === 'legacy') && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={() => history.back()}>‹</Btn>
@@ -446,13 +463,13 @@ export default function App() {
                                 <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
                                 <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em className={todayRest.off ? 'day-rest-mark' : undefined}>{clock.weekday}요일</em></h1>
                                 <p className="muted">{headingSub}</p>
-                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} />
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
                             </div>
                         ) : (
                             <div className="date-block">
                                 <h1 className="title-font">{heading}</h1>
                                 <p className="muted">{headingSub}</p>
-                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} />
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
                             </div>
                         )}
                         <div className="top-tools">

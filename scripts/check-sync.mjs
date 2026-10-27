@@ -2,12 +2,15 @@
 import {
     FORGET_LIMIT, FORGET_MAX_AGE_MS, REFRESH_GAP_MS, diffCloudRows, drainQueue, forgottenIds, mergeBucket, mergeTimetable,
     normalizeQueue, queueAdd, queueDropPresent, remoteWins, shouldRefresh, stampList, stampTimetable, timeOf,
+    FUTURE_SLACK_MS, clampFutureStamps, estimateOffset, movedToLocal, pushDecision, stampAfter, takeRemote, uploadTime,
 } from '../src/lib/sync.js';
 import { chipState, resetSyncStatusForTest, syncBegin, syncEnd, syncQueued, syncStatus, syncAuthKnown, agoLabel } from '../src/lib/syncStatus.js';
 import { toCloudRow } from '../src/lib/cloudShape.js';
 import {
-    boot, cycleAttendance, finishSetup, removeItem, setAttendance, setAuth, snapshot, syncMetaForTest, undo, update, useVaultsForTest,
+    boot, cycleAttendance, finishSetup, removeItem, setAttendance, setAuth, snapshot, syncMetaForTest, undo, update, useMemoryOnlyForTest, useVaultsForTest,
 } from '../src/lib/db.js';
+
+import { readFileSync } from 'node:fs';
 
 const failures = [];
 let count = 0;
@@ -141,15 +144,82 @@ check(timeOf({ toMillis: () => 5 }) === 5 && timeOf({ seconds: 2, nanoseconds: 0
     check(!shouldRefresh({ reason: 'visible', now, lastAt: 0, hidden: true }), '숨은 화면에서 받아옵니다.');
 }
 
+/* ---------- 2차 검수: 받아오기·시각 찍기·시계 차이·올리기 판단 ---------- */
+{
+    const t1 = T('2026-10-27T10:00:00+09:00');
+    const t2 = T('2026-10-27T11:00:00+09:00');
+    // 받아 와도 이 기기 출처(source)는 남습니다.
+    const got = mergeBucket('records', [{ id: 'q1', kind: '관찰', date: '2026-10-27', text: '옛 글', source: 'legacy', updatedAt: t1 }], [{ id: 'q1', kind: '관찰', date: '2026-10-27', text: '새 글', source: 'app', updatedAt: t2 }]);
+    check(got.rows[0].text === '새 글' && got.rows[0].source === 'legacy', `받아오면서 출처가 바뀌었습니다: ${JSON.stringify(got.rows[0])}`);
+
+    // 민감한 메모가 있어 이 기기에만 있던 출결 메모·사유는 다른 기기가 상태를 고쳐도 남습니다.
+    const att = { id: '2026-10-27_s1', date: '2026-10-27', sid: 's1', status: '결석', reason: '질병', note: '보건실 다녀옴', updatedAt: t1 };
+    const fromB = { id: '2026-10-27_s1', date: '2026-10-27', sid: 's1', status: '지각', reason: '', period: '', paper: false, note: '', source: 'app', updatedAt: t2 };
+    const merged = mergeBucket('attendance', [att], [fromB]).rows[0];
+    check(merged.status === '지각' && merged.note === '보건실 다녀옴' && merged.reason === '질병', `받아오면서 이 기기 출결 메모·사유가 지워졌습니다: ${JSON.stringify(merged)}`);
+    // 클라우드까지 갔던 메모를 다른 기기에서 지웠으면 지운 쪽을 따릅니다.
+    const plain = { ...att, note: '늦잠', reason: '' };
+    check(mergeBucket('attendance', [plain], [fromB]).rows[0].note === '', '다른 기기에서 지운 메모가 되살아났습니다.');
+    check(takeRemote('todos', { id: 'x', title: '가', due: '2026-10-28' }, { id: 'x', title: '나', due: '' }).due === '', '클라우드로 가는 칸을 비운 고침이 무시됐습니다.');
+    check(got.kept.length === 0, '클라우드가 더 최근인데 다시 올리라고 했습니다.');
+    const keptRun = mergeBucket('records', [{ id: 'q2', kind: '관찰', date: '2026-10-27', text: '이 기기 최근', updatedAt: t2 }], [{ id: 'q2', kind: '관찰', date: '2026-10-27', text: '클라우드 옛 글', updatedAt: t1 }]);
+    check(keptRun.kept.some((row) => row.id === 'q2'), '이 기기가 더 최근인데 다시 올리라고 하지 않았습니다(두 기기가 계속 다를 수 있음).');
+
+    // 시각 찍기
+    const prev = [{ id: 'a', text: '가', updatedAt: t1 }];
+    check(stampList(prev, [{ id: 'a', text: '나' }], t2)[0].updatedAt === t2, '새 객체로 저장한 고침에 시각이 안 찍혔습니다.');
+    check(stampList(prev, [{ text: '가', id: 'a' }], t2)[0].updatedAt === t1, '내용이 같은 새 객체가 시각을 잃었거나 새로 찍혔습니다.');
+    const later = T('2026-10-27T10:30:00+09:00');
+    check(stampList(prev, [{ id: 'a', text: '다', updatedAt: later }], t2)[0].updatedAt === later, '받아 온 줄의 시각을 지금으로 덮었습니다.');
+    check(stampList(prev, [{ id: 'a', text: '가', updatedAt: '' }], t2, { force: true })[0].updatedAt === t1, '되돌린 줄이 내용이 같은데 새 시각을 받았습니다.');
+    check(stampList(prev, [{ id: 'a', text: '라' }], t2, { force: true })[0].updatedAt === t2, '되돌려 내용이 달라진 줄에 시각이 안 찍혔습니다.');
+    // 늦은 시계: 받은 시각보다 앞선 시각을 찍지 않습니다.
+    check(stampAfter(t1, t2) === new Date(Date.parse(t2) + 1).toISOString() && stampAfter(t2, t1) === t2, '고친 시각이 앞서 찍힌 시각보다 앞섭니다.');
+    check(stampList([{ id: 'a', text: '가', updatedAt: t2 }], [{ id: 'a', text: '나' }], t1)[0].updatedAt > t2, '시계가 늦은 기기의 고침이 받은 것보다 옛 것으로 찍혔습니다.');
+
+    // 시계 차이(크리스티안 방식)
+    check(estimateOffset({ sentAt: 1000, receivedAt: 1200, serverAt: 601100 }) === 600000, '시계 차이를 잘못 쟀습니다.');
+    check(estimateOffset({ sentAt: 0, receivedAt: 6000, serverAt: 9000 }) === null, '왕복이 너무 긴 측정을 버리지 않았습니다.');
+    check(estimateOffset({ sentAt: 0, receivedAt: 10, serverAt: null }) === null, '서버 시각이 없는데 차이를 정했습니다.');
+    const serverNow = Date.parse('2026-10-27T12:00:00+09:00');
+    check(uploadTime(serverNow + 10 * 60 * 1000, serverNow) === serverNow, '10분 앞선 기기 시각을 그대로 올렸습니다.');
+    check(uploadTime(serverNow + FUTURE_SLACK_MS - 1, serverNow) === serverNow + FUTURE_SLACK_MS - 1, '1분 안쪽 시각을 바꿨습니다.');
+    check(uploadTime(serverNow - 3600_000, serverNow) === serverNow - 3600_000, '고친 시각 대신 서버 지금 시각을 올렸습니다.');
+    check(uploadTime('', serverNow) === serverNow, '시각 없는 줄에 서버 시각을 안 넣었습니다.');
+    const list = [{ id: 'f', updatedAt: new Date(serverNow + 600_000).toISOString() }, { id: 'g', updatedAt: t1 }];
+    const clamped = clampFutureStamps(list, serverNow);
+    check(clamped[0].updatedAt === new Date(serverNow).toISOString() && clamped[1] === list[1], '앞날 시각을 지금으로 당기지 않았습니다.');
+    check(clampFutureStamps([list[1]], serverNow).length === 1 && clampFutureStamps(list.slice(1), serverNow)[0] === list[1], '바뀐 게 없는데 새 목록을 만들었습니다.');
+
+    // 올리기 전 서버 판 보기
+    check(pushDecision({ exists: true, serverMs: 20, localMs: 10 }) === 'stale', '서버가 더 최근인데 덮어썼습니다.');
+    check(pushDecision({ exists: true, serverMs: 10, localMs: 10 }) === 'write' && pushDecision({ exists: true, serverMs: 0, localMs: 10 }) === 'write', '이 기기 것이 같거나 최근인데 안 올렸습니다.');
+    check(pushDecision({ exists: false, seen: true }) === 'gone' && pushDecision({ exists: false, seen: false }) === 'write', '서버에서 지운 것과 새 문서를 구분하지 못했습니다.');
+
+    // 이 기기 전용으로 옮겨 간 줄
+    const before = { records: [{ id: 'm1', kind: '관찰', date: '2026-10-27', text: '보통 글' }], local: { records: [] } };
+    const after = { records: [], local: { records: [{ id: 'm1', kind: '관찰', date: '2026-10-27', text: '보건 상담' }] } };
+    check(movedToLocal(before, after).some((item) => item.name === 'records' && item.id === 'm1'), '이 기기 전용으로 옮긴 줄을 찾지 못했습니다.');
+    check(!movedToLocal(before, { records: [], local: { records: [] } }).length, '그냥 지운 줄을 옮긴 것으로 봤습니다.');
+    check(!movedToLocal(before, { records: [], local: { records: [{ id: 'm9', kind: '관찰', date: '2026-10-27', text: '다른 글' }] } }).length, '이 기기 칸에 다른 글만 있는데 지운 줄을 옮긴 것으로 봤습니다.');
+
+    // 로그인 계정이 없으면 대기열에 넣지 않습니다.
+    check(queueAdd([], [{ name: 'records', id: 'x' }], '').length === 0, '계정 없이 대기열에 넣었습니다.');
+}
+
 /* ---------- 동기화 칩 ---------- */
 {
     resetSyncStatusForTest();
     const now = Date.parse('2026-10-27T12:00:00+09:00');
     check(chipState({ cloudReady: false, signedIn: true, online: true, now }) === null, '클라우드 설정이 없는데 칩이 보입니다.');
-    check(chipState({ cloudReady: true, signedIn: false, online: true, now }) === null, '로그인 확인 전에 로그인 필요가 먼저 보입니다.');
+    const wait = chipState({ cloudReady: true, signedIn: false, online: true, now });
+    check(wait?.kind === 'wait' && wait.label === '', '로그인 확인 전에는 글 없는 빈 자리만 잡아야 합니다(늦게 나타나 화면이 밀리지 않게).');
     syncAuthKnown();
     check(chipState({ cloudReady: true, signedIn: false, online: true, now })?.label === '로그인이 필요해요', '로그인 필요 칩이 다릅니다.');
-    check(chipState({ cloudReady: true, signedIn: true, online: false, now })?.label === '오프라인', '오프라인 칩이 다릅니다.');
+    check(chipState({ cloudReady: true, signedIn: true, online: false, now })?.label === '연결 기다리는 중', '오프라인 칩이 다릅니다.');
+    check(!chipState({ cloudReady: true, signedIn: true, online: false, now }).label.includes('끊겼'), '오프라인 칩이 배너와 같은 말을 합니다.');
+    check(chipState({ cloudReady: true, signedIn: false, guest: true, online: true, now })?.kind === 'local', '이 기기에서만 쓰는 사람에게 로그인 재촉 칩이 보입니다.');
+    check(chipState({ cloudReady: true, signedIn: false, guest: true, online: true, now }).label === '이 기기에만 저장', '이 기기에만 저장 칩 문구가 다릅니다.');
     syncBegin();
     check(chipState({ cloudReady: true, signedIn: true, online: true, now })?.label === '동기화 중', '올리는 중 칩이 다릅니다.');
     syncEnd({ ok: true, at: now - 3 * 60 * 1000 });
@@ -160,9 +230,14 @@ check(timeOf({ toMillis: () => 5 }) === 5 && timeOf({ seconds: 2, nanoseconds: 0
     syncQueued(0);
     syncBegin();
     syncEnd({ ok: false, pending: 1 });
-    check(chipState({ cloudReady: true, signedIn: true, online: true, now })?.kind === 'syncing' && syncStatus().failed, '실패한 뒤 동기화됨으로 보입니다.');
+    const bad = chipState({ cloudReady: true, signedIn: true, online: true, now });
+    check(bad?.kind === 'error' && bad.retry && syncStatus().failed, `실패한 뒤 오류 칩이 안 보입니다: ${JSON.stringify(bad)}`);
+    syncBegin();
+    check(chipState({ cloudReady: true, signedIn: true, online: true, now })?.kind === 'syncing', '다시 맞추는 동안에는 동기화 중이어야 합니다.');
+    syncEnd({ ok: true, at: now });
+    check(chipState({ cloudReady: true, signedIn: true, online: true, now })?.kind === 'synced', '다시 맞춘 뒤 동기화됨으로 안 돌아옵니다.');
     check(agoLabel(now - 10_000, now) === '방금' && agoLabel(now - 2 * 3600_000, now) === '2시간 전', '시간 문구가 다릅니다.');
-    const words = ['오프라인', '로그인이 필요해요', '동기화 중', '동기화됨'];
+    const words = ['연결 기다리는 중', '로그인이 필요해요', '이 기기에만 저장', '동기화하지 못했어요', '동기화 중', '동기화됨'];
     check(words.every((word) => /^[가-힣 ]+$/.test(word)), '칩 문구에 한글 말고 다른 글자가 섞였습니다.');
 }
 
@@ -245,6 +320,65 @@ check(timeOf({ toMillis: () => 5 }) === 5 && timeOf({ seconds: 2, nanoseconds: 0
     const before = syncMetaForTest().queue.length;
     await update((draft) => { draft.records = []; return draft; });
     check(syncMetaForTest().queue.length === before, '사용자가 지우지 않은 변경이 대기열에 들어갔습니다.');
+}
+
+/* ---------- db 2차 검수: 이 기기 전용으로 옮김, 같은 id 짝, 공용 컴퓨터 대기열 ---------- */
+{
+    function makeVault() {
+        const bag = new Map();
+        return {
+            bag,
+            async get(key) { return bag.has(key) ? structuredClone(bag.get(key)) : undefined; },
+            async set(key, value) { bag.set(key, structuredClone(value)); },
+            async remove(key) { bag.delete(key); },
+        };
+    }
+    const main = makeVault();
+    useVaultsForTest(main, makeVault(), makeVault());
+    await boot('');
+    await finishSetup({ className: '6학년 3반', rosterText: '1 가나' });
+    await setAuth({ uid: 'teacher-2', name: '' });
+    const row = { id: 'mv1', kind: '관찰', date: '2026-10-27', text: '보통 관찰', source: 'app' };
+    await update((draft) => { draft.records = [...draft.records, row]; return draft; });
+    // 민감한 말을 넣어 이 기기 전용으로 옮기면 클라우드 판도 지워야 합니다(안 그러면 다른 기기에서 옛 글이 살아남).
+    await update((draft) => {
+        draft.records = draft.records.filter((item) => item.id !== 'mv1');
+        draft.local.records = [...draft.local.records, { ...row, text: '보건 상담' }];
+        return draft;
+    });
+    check(syncMetaForTest().queue.some((item) => item.name === 'records' && item.id === 'mv1'), '이 기기 전용으로 옮긴 글이 지우기 대기열에 없습니다.');
+
+    // 사용자가 지운 게 아닌 변경(가져오기·이 기기 비우기)은 클라우드 글을 지우지 않습니다.
+    await update((draft) => { draft.records = [...draft.records, { id: 'cl1', kind: '관찰', date: '2026-10-27', text: '남길 글', source: 'app' }]; return draft; });
+    await update((draft) => { draft.records = []; return draft; });
+    check(!syncMetaForTest().queue.some((item) => item.id === 'cl1'), '지우기가 아닌 변경인데 클라우드 글을 지우기 대기열에 넣었습니다.');
+
+    // 같은 id가 클라우드 칸과 이 기기 칸에 함께 있으면, 누른 쪽만 지웁니다.
+    await update((draft) => {
+        draft.todos = [...draft.todos, { id: 'tw', title: '클라우드 할 일', done: false }];
+        draft.local.todos = [...(draft.local.todos || []), { id: 'tw', title: '보건 서류', done: false }];
+        return draft;
+    });
+    await removeItem('todos', 'tw', { local: true });
+    check(snapshot().todos.some((item) => item.id === 'tw') && !snapshot().local.todos.some((item) => item.id === 'tw'), '이 기기 할 일을 지웠는데 같은 id 클라우드 할 일까지 지워졌습니다.');
+    await removeItem('todos', 'tw', { local: false });
+    check(!snapshot().todos.some((item) => item.id === 'tw'), '클라우드 할 일이 안 지워졌습니다.');
+
+    // 공용 컴퓨터: 지우기 대기열은 이 기기 저장소(IndexedDB)에 쓰지 않습니다.
+    const savedBefore = JSON.stringify(main.bag.get('cloudForget') || []);
+    useMemoryOnlyForTest(true);
+    await update((draft) => { draft.notes = [...draft.notes, { id: 'sh1', text: '공용 메모', pinned: false }]; return draft; });
+    await removeItem('notes', 'sh1');
+    check(syncMetaForTest().queue.some((item) => item.id === 'sh1'), '공용 컴퓨터에서 지운 메모가 대기열에 없습니다.');
+    check(JSON.stringify(main.bag.get('cloudForget') || []) === savedBefore, '공용 컴퓨터인데 지우기 대기열을 이 기기 저장소에 남겼습니다.');
+    useMemoryOnlyForTest(false);
+}
+
+/* ---------- 올리기 코드가 서버 기준 시각과 거래(transaction) 판단을 쓰는지 ---------- */
+{
+    const cloudSrc = readFileSync(new URL('../src/lib/cloud.js', import.meta.url), 'utf8');
+    check(/Timestamp\.fromMillis\(uploadTime\(value, serverNow\(\)\)\)/.test(cloudSrc), '올릴 때 고친 시각을 서버 기준으로 거르지 않습니다(앞선 시계가 늘 이김).');
+    check(/runTransaction\(/.test(cloudSrc) && /pushDecision\(/.test(cloudSrc), '시각 있는 줄을 서버 판을 보지 않고 덮어씁니다.');
 }
 
 if (failures.length) {
