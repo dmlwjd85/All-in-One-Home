@@ -60,6 +60,13 @@ const LEGACY_GAIN = 0.032;
 export function typeStrokeGain(voice) {
     return LEGACY_VOICES.has(voice) ? LEGACY_GAIN : TYPE_GAIN;
 }
+/** 글자 소리는 2ms 동안 키우며 시작합니다. 누를 때로 옮긴 소리도 같은 시작을 씁니다. */
+export const TYPE_FADE_IN_SEC = 0.002;
+/** 글자 소리의 음높이 흔들림. 예전 네 소리는 main 그대로 ±3%, 나머지는 0.96–1.08 입니다. */
+export function typePitchRate(voice, roll) {
+    const pitch = Number.isFinite(roll) ? roll : 0.5;
+    return LEGACY_VOICES.has(normalizeTypeVoice(voice)) ? 0.97 + pitch * 0.06 : 0.96 + pitch * 0.12;
+}
 
 const DEFAULT_VOICE = 'ppok';
 const SAME_TURN_MS = 12;
@@ -533,6 +540,11 @@ function typeBus(audio) {
     return busIn;
 }
 
+/** 누를 때로 옮긴 소리도 글자 소리와 같은 리미터를 거치게 합니다. */
+export function typeOutput(audio) {
+    return typeBus(audio);
+}
+
 function releaseNode(entry) {
     if (!entry || entry.released) return;
     entry.released = true;
@@ -581,10 +593,8 @@ function launch(audio, voice, kind = 'tap', when) {
     const src = audio.createBufferSource();
     const gain = audio.createGain();
     src.buffer = bufferFor(audio, voice, kind);
-    const roll = Math.random();
-    const pitch = Number.isFinite(roll) ? roll : 0.5;
     const legacy = LEGACY_VOICES.has(normalizeTypeVoice(voice));
-    src.playbackRate.value = legacy ? 0.97 + pitch * 0.06 : 0.96 + pitch * 0.12;
+    src.playbackRate.value = typePitchRate(voice, Math.random());
     const wobble = Math.random();
     const level = legacy ? LEGACY_GAIN : Math.min(0.049, TYPE_GAIN * (0.9 + (Number.isFinite(wobble) ? wobble : 0.5) * 0.2));
     const param = gain.gain;
@@ -592,7 +602,7 @@ function launch(audio, voice, kind = 'tap', when) {
     if (typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function') {
         try {
             param.setValueAtTime(0, now);
-            param.linearRampToValueAtTime(level, now + 0.002);
+            param.linearRampToValueAtTime(level, now + TYPE_FADE_IN_SEC);
         } catch {
             param.value = level;
         }

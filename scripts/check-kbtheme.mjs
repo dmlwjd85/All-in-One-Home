@@ -67,10 +67,12 @@ class FakeAudioContext {
         sources.push(src); return src;
     }
     createGain() {
-        const gain = { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {}, setTargetAtTime() {} }, connect() {}, disconnect() {} };
+        const events = [];
+        const gain = { gain: { value: 0, events, setValueAtTime(v, t) { events.push({ type: 'set', value: v, time: t }); }, linearRampToValueAtTime(v, t) { events.push({ type: 'ramp', value: v, time: t }); }, cancelScheduledValues() {}, setTargetAtTime() {} }, connect(to) { gain.to = to; }, disconnect() {} };
         gains.push(gain); return gain;
     }
     createDynamicsCompressor() { const p = () => ({ value: 0, setValueAtTime() {} }); return { threshold: p(), knee: p(), ratio: p(), attack: p(), release: p(), connect() {}, disconnect() {} }; }
+    createWaveShaper() { return { kind: 'limiter', curve: null, oversample: 'none', connect() {}, disconnect() {} }; }
     decodeAudioData(data) {
         const path = bodies.get(data);
         const wav = readWav(`${root}/public/${path}`);
@@ -113,6 +115,19 @@ playKey('up');
 check(sources.length === before, '받는 사이 손을 떼면 뗌 소리만 납니다(반쪽 소리).');
 check(fetched.filter((f) => f.startsWith('sounds/kb/jelly-')).length === 4, `젤리 소리 파일 받기 수가 다릅니다: ${fetched.join()}`);
 check(await loadKbVoice('kb-jelly') && fetched.filter((f) => f.startsWith('sounds/kb/jelly-')).length === 4, '받은 소리 파일을 다시 받습니다.');
+
+/* #42 QA 2차: 테마 소리도 옮겨 온 소리처럼 0에서 2ms 동안 키우며 시작하고, 글자 소리와 같은 리미터를 거칩니다. */
+{
+    const { TYPE_FADE_IN_SEC } = await import('../src/ui/typesound.js');
+    const g0 = gains.length;
+    playKey('down');
+    const g = gains.slice(g0).find((x) => x.gain.value > 0);
+    const ev = g?.gain.events || [];
+    check(ev.length === 2 && ev[0].type === 'set' && ev[0].value === 0 && ev[1].type === 'ramp' && Math.abs(ev[1].value - g.gain.value) < 1e-12
+        && Math.abs(ev[1].time - ev[0].time - TYPE_FADE_IN_SEC) < 1e-9, `테마 소리가 2ms 페이드인 없이 시작합니다. ${JSON.stringify(ev)}`);
+    check(g?.to?.kind === 'limiter', '테마 소리가 글자 소리와 같은 리미터를 거치지 않습니다.');
+    playKey('up');
+}
 
 /* 한 번 누름에 한 소리, 뗄 때 한 소리 */
 for (let n = 0; n < 12; n += 1) {

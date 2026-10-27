@@ -241,6 +241,21 @@ a.chip,
     gap: 8px;
     margin-top: 8px;
 }
+.moved-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+}
+.moved-note p {
+    flex: 1 1 auto;
+    margin: 0;
+    min-width: 0;
+    word-break: keep-all;
+}
+.moved-note .chip {
+    flex: 0 0 auto;
+}
 .hotkey-list { display: grid; gap: 8px; }
 .hotkey-row {
     display: grid;

@@ -5,7 +5,7 @@
     연달은 누름은 이전 소리를 4ms 동안 줄인 뒤 끊습니다. 바로 끊지 않아 지지직 소리가 나지 않습니다.
     글자 소리에서 옮겨 온 소리(뽁·띵·물방울·방귀 등)는 typesound의 합성을 그대로 쓰고, 한 가지 소리라 누를 때만 냅니다. */
 
-import { TYPE_VOICES, isSensitiveControl, isTextControl, renderTypeStroke, typeStrokeGain } from './typesound.js';
+import { TYPE_FADE_IN_SEC, TYPE_VOICES, isSensitiveControl, isTextControl, normalizeTypeVoice, renderTypeStroke, typeOutput, typePitchRate, typeStrokeGain } from './typesound.js';
 /* 키보드 테마 소리(kb-…)는 파일이라 kbsound.js가 받고 고릅니다. 여기서는 아래 몇 줄로만 이어 붙입니다. */
 import { KB_VOICE_GAIN, isKbVoice, kbBuffers, kbVoiceLoaded, loadKbVoice } from './kbsound.js';
 
@@ -19,6 +19,9 @@ const NOTICE_KEY = 'ssug-gyomu-key-sound-notice';
 /** 글자 소리 종류. 누를 때 소리 종류가 아직 없을 때 처음 값으로 한 번만 가져옵니다. 원래 값은 그대로 둡니다. */
 const TYPE_VOICE_KEY = 'ssug-gyomu-type-voice';
 const TYPE_SOUND_KEY = 'ssug-gyomu-type-sound';
+/** 글자 소리를 누를 때 소리로 옮긴 기기에만 남는 값. 옮긴 소리 id를 적고, 안내를 닫으면 'closed'가 됩니다. */
+const MOVED_KEY = 'ssug-gyomu-key-voice-moved';
+const MOVED_CLOSED = 'closed';
 
 /** 버튼·탭·토글·체크 칸·고르기 칸·펼치기와 하단 키캡 버튼. 글 입력칸은 넣지 않습니다. */
 export const PRESS_SELECTOR = 'button, a, label.chip, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], input[type="checkbox"], input[type="radio"], select, summary, .fab, .desk-fab';
@@ -27,7 +30,7 @@ export const MAX_KEY_VOICES = 6;
 export const KEY_FADE_SEC = 0.004;
 
 export const KEY_VOICES = [
-    { id: 'munggeul', label: '몽글', hint: '저소음' },
+    { id: 'munggeul', label: '몽글', hint: '말랑' },
     { id: 'mongdol', label: '몽돌', hint: '도각' },
     { id: 'linear', label: '적축', hint: '리니어' },
     { id: 'tactile', label: '갈축', hint: '택타일' },
@@ -164,7 +167,29 @@ function sensitiveField(el) {
     return FIELD_TAGS.includes(String(el?.tagName || '').toUpperCase()) && isSensitiveControl(el);
 }
 
-/** 꺼진 칸(:disabled), 꺼진 fieldset 안, aria-disabled, data-sensitive 안쪽은 조용합니다. */
+/** fieldset의 첫 legend. 자식 목록을 못 읽으면 undefined(첫 legend로 봅니다)입니다. */
+function firstLegend(fieldset) {
+    try {
+        if (!fieldset.children) return undefined;
+        return [...fieldset.children].find((kid) => String(kid.tagName).toUpperCase() === 'LEGEND') || null;
+    } catch {
+        return undefined;
+    }
+}
+
+/** 꺼진 fieldset 안인지. HTML 규칙처럼 그 fieldset의 첫 legend 안은 켜져 있습니다. */
+function offByFieldset(el) {
+    let child = el;
+    for (let node = el.parentElement; node; child = node, node = node.parentElement) {
+        if (String(node.tagName).toUpperCase() !== 'FIELDSET' || !node.hasAttribute('disabled')) continue;
+        const legend = firstLegend(node);
+        const inLegend = String(child.tagName).toUpperCase() === 'LEGEND' && (legend === undefined || legend === child);
+        if (!inLegend) return true;
+    }
+    return false;
+}
+
+/** 꺼진 칸(:disabled), 꺼진 fieldset 안(첫 legend 안은 빼고), aria-disabled, data-sensitive 안쪽은 조용합니다. */
 function pressOff(el) {
     let off = false;
     try {
@@ -173,7 +198,7 @@ function pressOff(el) {
         off = false;
     }
     return off || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
-        || Boolean(el.closest('fieldset[disabled]') || el.closest('[aria-disabled="true"]') || el.closest('[data-sensitive]'));
+        || offByFieldset(el) || Boolean(el.closest('[aria-disabled="true"]') || el.closest('[data-sensitive]'));
 }
 
 export function pressTarget(target) {
@@ -195,16 +220,44 @@ export function keyVoiceId(storage) {
     try {
         const store = readStore(storage);
         let value = store?.getItem?.(VOICE_KEY);
-        if (value == null) {
-            const typed = store?.getItem?.(TYPE_VOICE_KEY);
-            if (isTypePressVoice(typed) && store?.getItem?.(TYPE_SOUND_KEY) === '1') {
-                store.setItem(VOICE_KEY, typed);
-                value = typed;
+        if (value == null && store?.getItem?.(TYPE_SOUND_KEY) === '1') {
+            /* main은 종류를 고르지 않았거나 모르는 값이면 뽁을 냈습니다. 그때 듣던 소리를 그대로 옮깁니다. */
+            const heard = normalizeTypeVoice(store.getItem(TYPE_VOICE_KEY));
+            if (isTypePressVoice(heard)) {
+                store.setItem(VOICE_KEY, heard);
+                store.setItem(MOVED_KEY, heard);
+                value = heard;
             }
         }
         return normalizeKeyVoice(value);
     } catch {
         return DEFAULT_VOICE;
+    }
+}
+
+/** 글자 소리에서 옮겨 온 소리 id. 실제로 옮긴 기기에서 안내를 닫기 전까지만 돌려주고, 아니면 null 입니다. */
+export function keyVoiceMoved(storage) {
+    try {
+        const store = readStore(storage);
+        if (store?.getItem?.(VOICE_KEY) == null) keyVoiceId(store);
+        const moved = store?.getItem?.(MOVED_KEY);
+        return moved && moved !== MOVED_CLOSED && isTypePressVoice(moved) ? moved : null;
+    } catch {
+        return null;
+    }
+}
+
+/** 옮김 안내를 닫습니다. 다시 열어도 나오지 않습니다. */
+export function closeKeyVoiceMoved(storage) {
+    try {
+        const store = readStore(storage);
+        if (store?.getItem?.(MOVED_KEY) == null) return false;
+        store.setItem(MOVED_KEY, MOVED_CLOSED);
+        return true;
+    } catch {
+        return false;
+    } finally {
+        emitPrefs();
     }
 }
 
@@ -252,6 +305,12 @@ export function keyPressGain(voice, volume) {
     if (isKbVoice(id)) return KB_VOICE_GAIN * TYPE_PRESS_STEPS[normalizeKeyVolume(volume)];
     if (!isTypePressVoice(id)) return keyVolumeGain(volume);
     return typeStrokeGain(id) * TYPE_PRESS_STEPS[normalizeKeyVolume(volume)];
+}
+
+/** 누름마다 음높이. 옮겨 온 소리는 main 글자 소리와 같은 흔들림(예전 네 소리 0.97–1.03, 나머지 0.96–1.08)을 씁니다. */
+export function pressRate(voice, random = Math.random) {
+    const id = normalizeKeyVoice(voice);
+    return isTypePressVoice(id) ? typePitchRate(id, random()) : keyPitchRate(random);
 }
 
 /** 0.94–1.06. 매 누름이 같은 높이면 기계음처럼 들립니다. */
@@ -465,11 +524,15 @@ export function planKeyPress(entries, now, count) {
     return { fade, drop: over.slice(-1), stop: [...tails, ...over.slice(0, -1)], keep: [...over.slice(-1), ...rest.slice(rest.length - room)] };
 }
 
-function launch(audio, voice, volume, events) {
+/** 옮겨 온 소리는 main 글자 소리처럼 2ms 동안 키우며 시작하고, 글자 소리와 같은 리미터(웨이브셰이퍼)를 거칩니다.
+    다른 소리는 지금처럼 압축기 버스를 씁니다. */
+function launch(audio, voice, volume, events, when) {
     const buffers = buffersFor(audio, voice);
     const parts = events.filter((event) => buffers[event.part]);
     if (!parts.length) return;
-    const now = audio.currentTime || 0;
+    const now = Number.isFinite(when) ? when : (audio.currentTime || 0);
+    /* 키보드 테마 소리도 파일 소리라 옮겨 온 소리와 같은 2ms 시작·리미터를 씁니다. */
+    const moved = isTypePressVoice(voice) || isKbVoice(voice);
     const plan = planKeyPress(active, now, parts.length);
     for (const entry of plan.fade) releaseVoice(entry, audio, KEY_FADE_SEC);
     for (const entry of plan.drop) {
@@ -478,21 +541,43 @@ function launch(audio, voice, volume, events) {
     }
     for (const entry of plan.stop) releaseVoice(entry, audio, 0);
     const gainValue = keyPressGain(voice, volume);
-    const dest = masterBus(audio);
+    const dest = moved ? typeOutput(audio) : masterBus(audio);
     const created = parts.map((event) => {
         const src = audio.createBufferSource();
         const gain = audio.createGain();
         src.buffer = buffers[event.part];
         src.playbackRate.value = event.rate;
-        gain.gain.value = gainValue;
+        const at = now + event.at;
+        const param = gain.gain;
+        param.value = gainValue;
+        if (moved && typeof param.setValueAtTime === 'function' && typeof param.linearRampToValueAtTime === 'function') {
+            try {
+                param.setValueAtTime(0, at);
+                param.linearRampToValueAtTime(gainValue, at + TYPE_FADE_IN_SEC);
+            } catch {
+                param.value = gainValue;
+            }
+        }
         src.connect(gain);
         gain.connect(dest);
-        const at = now + event.at;
         src.start(at);
         const seconds = src.buffer?.length && src.buffer?.sampleRate ? src.buffer.length / src.buffer.sampleRate / (event.rate || 1) : Infinity;
         return { src, gain, startedAt: at, until: at + seconds, fading: false, dropped: false };
     });
     active = [...plan.keep, ...created];
+}
+
+/** 검사와 실측이 실제 재생과 같은 launch로 한 번 누름을 그립니다. OfflineAudioContext에도 씁니다. */
+export function scheduleKeyPress(audio, { voice = 'munggeul', volume = 'small', part = 'down', when = 0 } = {}) {
+    const id = normalizeKeyVoice(voice);
+    launch(audio, id, normalizeKeyVolume(volume), [{ part: part === 'up' ? 'up' : 'down', at: 0, rate: pressRate(id) }], when);
+}
+
+export function resetKeyGraphForTest() {
+    active = [];
+    busCtx = null;
+    busIn = null;
+    pairCache.clear();
 }
 
 function sharedContext() {
@@ -634,8 +719,8 @@ export function previewKeyVoice(id) {
     }
     withAudio((audio) => {
         launch(audio, voice, volume, [
-            { part: 'down', at: 0, rate: keyPitchRate() },
-            { part: 'up', at: 0.07, rate: keyPitchRate() },
+            { part: 'down', at: 0, rate: pressRate(voice) },
+            { part: 'up', at: 0.07, rate: pressRate(voice) },
         ]);
     });
 }
@@ -650,7 +735,7 @@ export function playKey(part = 'down') {
         const voice = keyVoiceId();
         const volume = keyVolumeId();
         withAudio((audio) => {
-            launch(audio, voice, volume, [{ part: 'up', at: 0, rate: keyPitchRate() }]);
+            launch(audio, voice, volume, [{ part: 'up', at: 0, rate: pressRate(voice) }]);
         });
         return;
     }
@@ -673,6 +758,6 @@ export function playKey(part = 'down') {
     /* 테마 소리를 아직 받지 않았으면 이번 누름은 조용히 지나가고(뗌 소리도 없음) 받기만 시작합니다. */
     if (isKbVoice(voice) && !kbVoiceLoaded(voice)) { armed = false; loadKbVoice(voice, ctx); return; }
     withAudio((audio) => {
-        launch(audio, voice, volume, [{ part: 'down', at: 0, rate: keyPitchRate() }]);
+        launch(audio, voice, volume, [{ part: 'down', at: 0, rate: pressRate(voice) }]);
     });
 }
