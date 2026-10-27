@@ -2913,6 +2913,137 @@ try {
             });
         }
     }
+
+    /* 시간표 칸 편집: 폰에서도 화면 안(하단 탭 위)에 열리고, 과목 칸으로 포커스가 가며, Esc·닫기로 닫으면 연 칸으로 돌아갑니다. */
+    for (const [width, height, count] of [[390, 844, 10], [360, 800, 6], [1280, 900, 6]]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate((count) => {
+                localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ level: '초', count, cellLocks: count === 10 ? ['mon-1', 'mon-10'] : [] }));
+            }, count);
+            await page.evaluate((hash) => { location.hash = hash; }, `#/schedule/table/${todayYmd}`);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('.tt-grid button.solid-card');
+            const cells = await page.$$eval('.tt-grid button.solid-card', (list) => list.map((el) => el.getAttribute('aria-label')));
+            const day = cells[0].split(' ')[0];
+            check(cells.filter((label) => label.startsWith(`${day} `)).length === count, `${width} 시간표가 ${count}교시까지 보이지 않습니다: ${cells.length}`);
+            if (count === 10 && day === '월') {
+                const locked = await page.$$eval('.tt-grid button.tt-locked', (list) => list.map((el) => `${el.innerText.trim()}|${el.getAttribute('aria-label')}`));
+                check(locked.some((item) => /^🔒 \S+\|월 1교시 \S+, 잠김$/.test(item)) && locked.includes('🔒|월 10교시 잠김') && !locked.some((item) => item.includes('🔒 잠김')), `잠긴 칸에 과목이 함께 보이지 않습니다: ${JSON.stringify(locked)}`);
+            }
+            for (const [period, how] of [[1, 'Escape'], [count, '닫기']]) {
+                const label = cells.find((item) => item.startsWith(`${day} ${period}교시 `));
+                await page.evaluate((label) => [...document.querySelectorAll('.tt-grid button.solid-card')].find((el) => el.getAttribute('aria-label') === label).click(), label);
+                await page.waitForSelector('form.tt-edit input[name="subject"]');
+                await delay(250);
+                const box = await page.evaluate(() => {
+                    const form = document.querySelector('form.tt-edit').getBoundingClientRect();
+                    const tab = document.querySelector('.tabbar');
+                    const tabOn = tab && getComputedStyle(tab).display !== 'none';
+                    const tabTop = tabOn ? Math.min(...[tab, ...tab.querySelectorAll('*')].map((el) => el.getBoundingClientRect()).filter((rect) => rect.height > 0).map((rect) => rect.top)) : Infinity;
+                    const main = document.querySelector('.main')?.getBoundingClientRect();
+                    const bottom = Math.min(window.innerHeight, tabTop, main && !tabOn ? main.bottom : Infinity);
+                    return { top: Math.round(form.top), bottom: Math.round(form.bottom), limit: Math.round(bottom), focus: document.activeElement?.getAttribute('name') || '' };
+                });
+                check(box.top >= 0 && box.bottom <= box.limit && box.focus === 'subject', `${width} ${count}교시 ${period}교시 편집 폼이 화면 밖이거나 과목 칸에 포커스가 없습니다: ${JSON.stringify(box)}`);
+                if (period === count) await page.screenshot({ path: resolve(shots, `timetable-edit-${width}.png`) });
+                if (how === 'Escape') await page.keyboard.press('Escape');
+                else await page.evaluate(() => [...document.querySelectorAll('form.tt-edit button')].find((el) => el.innerText.trim() === '닫기')?.click());
+                await page.waitForFunction(() => !document.querySelector('form.tt-edit'));
+                const back = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') || '');
+                check(back === label, `${width} ${how}로 닫은 뒤 포커스가 연 칸으로 돌아가지 않습니다: ${back} / ${label}`);
+            }
+        }, height);
+    }
+
+    /* 잠금 풀기: 잠긴 칸과 잠긴 교시를 마우스와 키보드로 풀 수 있고, 풀린 뒤 aria-pressed=false와 저장값이 맞습니다. 교시 전체가 잠긴 칸은 칸 잠금으로 바뀌지 않습니다. */
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(() => { localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ level: '초', count: 6, cellLocks: ['mon-2', 'mon-3'], locks: [5, 6] })); });
+        await page.evaluate((hash) => { location.hash = hash; }, `#/schedule/table/${todayYmd}`);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('.tt-grid button.solid-card');
+        const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'));
+        const toastHas = (text) => page.waitForFunction((text) => [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes(text)), { timeout: 3000 }, text).then(() => true, () => false);
+        const cellOf = (period) => page.evaluateHandle((period) => [...document.querySelectorAll('.tt-grid button.solid-card')].find((el) => el.getAttribute('aria-label').startsWith(`월 ${period}교시 `)), period);
+        for (const [period, how] of [[2, '마우스'], [3, '키보드']]) {
+            await (await cellOf(period)).click();
+            await page.waitForSelector('form.tt-edit input[name="subject"]');
+            const selector = `form.tt-edit button[aria-label="월 ${period}교시 칸 잠금 풀기"]`;
+            const before = await page.$eval(selector, (el) => el.getAttribute('aria-pressed')).catch(() => '');
+            if (how === '마우스') await page.click(selector);
+            else { await page.focus(selector); await page.keyboard.press('Enter'); }
+            const toast = await toastHas('이 칸 잠금을 풀었어요');
+            const after = await page.$eval(`form.tt-edit button[aria-label="월 ${period}교시 칸 잠그기"]`, (el) => el.getAttribute('aria-pressed')).catch(() => '');
+            const cellLocks = (await saved()).cellLocks || [];
+            check(before === 'true' && after === 'false' && toast && !cellLocks.includes(`mon-${period}`), `${how}로 잠긴 칸(월 ${period}교시)을 풀지 못합니다: ${JSON.stringify({ before, after, toast, cellLocks })}`);
+            await page.keyboard.press('Escape');
+            await page.waitForFunction(() => !document.querySelector('form.tt-edit'));
+        }
+        const cell5 = await cellOf(5);
+        const box5 = await cell5.boundingBox();
+        await page.mouse.move(box5.x + box5.width / 2, box5.y + box5.height / 2);
+        await page.mouse.down();
+        await delay(800);
+        await page.mouse.up();
+        const guide = await toastHas('5교시 전체가 잠겨 있어요');
+        await page.keyboard.press('Escape');
+        const kept = await saved();
+        check(guide && !(kept.cellLocks || []).includes('mon-5') && (kept.locks || []).includes(5), `교시 전체가 잠긴 칸을 길게 누르면 칸 잠금으로 바뀝니다: ${JSON.stringify({ guide, kept })}`);
+        for (const [period, how] of [[5, '마우스'], [6, '키보드']]) {
+            const selector = `.tt-grid button[aria-label="${period}교시 잠금 풀기"]`;
+            const before = await page.$eval(selector, (el) => el.getAttribute('aria-pressed')).catch(() => '');
+            if (how === '마우스') await page.click(selector);
+            else { await page.focus(selector); await page.keyboard.press('Enter'); }
+            await page.waitForSelector(`.tt-grid button[aria-label="${period}교시 잠그기"]`, { timeout: 3000 }).catch(() => {});
+            const after = await page.$eval(`.tt-grid button[aria-label="${period}교시 잠그기"]`, (el) => el.getAttribute('aria-pressed')).catch(() => '');
+            const locks = (await saved()).locks || [];
+            check(before === 'true' && after === 'false' && !locks.includes(period), `${how}로 잠긴 ${period}교시를 풀지 못합니다: ${JSON.stringify({ before, after, locks })}`);
+        }
+    });
+
+    /* 교시 설정: 첫 열 폭이 줄마다 같고, 시각이 잘리지 않고, '10교시'가 줄바꿈되지 않습니다. 저장 안 한 길이가 있으면 학교급을 바꾸기 전에 묻습니다. */
+    for (const width of [360, 390, 1280]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate(() => { localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ level: '초', count: 10, locks: [3] })); });
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('.tt-row');
+            const rows = await page.evaluate(() => [...document.querySelectorAll('.tt-row')].map((row) => {
+                const time = row.querySelector('input[type="time"]');
+                const probe = time.cloneNode();
+                probe.style.cssText = 'width:auto;min-width:0;position:absolute;left:0;top:0;visibility:hidden';
+                row.appendChild(probe);
+                const need = probe.getBoundingClientRect().width;
+                probe.remove();
+                const name = row.querySelector('strong');
+                return {
+                    name: name.innerText.trim(),
+                    oneLine: name.getBoundingClientRect().height <= parseFloat(getComputedStyle(name).lineHeight) + 1,
+                    timeLeft: Math.round(time.getBoundingClientRect().left),
+                    lockLeft: Math.round(row.querySelector('button').getBoundingClientRect().left),
+                    have: Math.round(time.getBoundingClientRect().width),
+                    need: Math.ceil(need),
+                    lockOneLine: (() => { const button = row.querySelector('button'); const range = document.createRange(); range.selectNodeContents(button); return range.getBoundingClientRect().height <= parseFloat(getComputedStyle(button).fontSize) * 1.6; })(),
+                };
+            }));
+            check(rows.length === 10 && new Set(rows.map((row) => `${row.timeLeft}/${row.lockLeft}`)).size === 1, `${width} 교시 설정 줄이 어긋납니다: ${JSON.stringify(rows.map((row) => [row.name, row.timeLeft, row.lockLeft]))}`);
+            check(rows.every((row) => row.have >= row.need), `${width} 교시 설정 시각이 잘립니다: ${JSON.stringify(rows.filter((row) => row.have < row.need))}`);
+            check(rows.every((row) => row.oneLine), `${width} '10교시'가 줄바꿈됩니다: ${JSON.stringify(rows.filter((row) => !row.oneLine).map((row) => row.name))}`);
+            check(rows.every((row) => row.lockOneLine), `${width} 교시 설정 잠금 버튼 글자가 줄바꿈됩니다: ${JSON.stringify(rows.filter((row) => !row.lockOneLine).map((row) => row.name))}`);
+            if (width === 360) {
+                await page.evaluate(() => document.querySelectorAll('.tt-row')[9].scrollIntoView({ block: 'center' }));
+                await page.screenshot({ path: resolve(shots, 'timetable-settings-360.png') });
+                const len = await page.$('.tt-row input[aria-label="1교시 길이(분)"]');
+                await len.click({ clickCount: 3 });
+                await len.type('35');
+                let asked = '';
+                page.once('dialog', async (dialog) => { asked = dialog.message(); await dialog.dismiss(); });
+                await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '중학교')?.click());
+                await delay(200);
+                const level = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}').level);
+                check(asked.includes('수업 길이') && level === '초', `저장하지 않은 길이가 있는데 학교급을 묻지 않고 바꿉니다: ${asked} / ${level}`);
+            }
+        }, width >= 900 ? 900 : 800);
+    }
 } catch (error) {
     failures.push(error?.message || String(error));
 }

@@ -88,6 +88,10 @@ export function freezeClock(hm) {
     frozenHm = /^\d{2}:\d{2}$/.test(hm || '') ? hm : null;
 }
 
+export function clockFrozen() {
+    return Boolean(frozenHm);
+}
+
 export function seoulParts(date = new Date()) {
     const fmt = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Seoul',

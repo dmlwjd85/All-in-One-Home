@@ -8,6 +8,8 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
 import { EventLine } from './EventLine.jsx';
+import { isLocked, tableRow, withUsedCount } from '../lib/periodLocal.js';
+import { usePeriodLocal } from './usePeriodLocal.js';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
 
@@ -38,7 +40,8 @@ export function Day() {
     const [memo, setMemo] = useState(dayNote?.text || '');
     const rest = restInfo(date, joined(data, 'events'));
     const dayKey = dayKeyFromYmd(date);
-    const table = data.timetable?.[dayKey] || {};
+    const local = withUsedCount(data.timetable, usePeriodLocal());
+    const table = tableRow(data.timetable, dayKey, local);
     const school = Boolean(DAY_LABEL[dayKey]);
     const studentOf = (sid) => {
         const row = data.students.find((item) => item.id === sid);
@@ -78,7 +81,8 @@ export function Day() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>시간표</h2>
                 {school && !rest.off && (
                     <div style={{ display: 'grid', gap: 6 }}>
-                        {Array.from({ length: 6 }, (_, index) => {
+                        {Array.from({ length: local.count }, (_, index) => {
+                            if (isLocked(local, dayKey, index + 1)) return null;
                             const subject = table[`p${index + 1}`] || '';
                             const special = table[`s${index + 1}`];
                             return <p key={index} style={{ margin: 0 }}>{index + 1}교시 {subject || '비어 있음'}{special ? ' · 전담' : ''}</p>;

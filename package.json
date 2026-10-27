@@ -26,6 +26,7 @@
     "check:seal": "node scripts/check-seal.mjs",
     "check:quickbar": "node scripts/check-quickbar.mjs",
     "check:gcal": "node scripts/check-gcal.mjs",
+    "check:period": "node scripts/check-period.mjs",
     "check:rules": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-rules.mjs\"",
     "check:browser": "node scripts/check-browser.mjs"
   },

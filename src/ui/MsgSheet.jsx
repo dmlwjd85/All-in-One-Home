@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEFAULT_PERIODS } from '../lib/period.js';
+import { allStarts } from '../lib/periodLocal.js';
 import { clipboardHint, EVENT_KINDS, parseSchoolMessages, readClipboard } from '../lib/msgParse.js';
 import { saveParsed } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -158,7 +158,7 @@ export function MsgSheet({ onClose }) {
 
     function apply(text) {
         speech.stop();
-        const periods = data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS;
+        const periods = allStarts(data.profile.periodStarts);
         const parsed = parseSchoolMessages(text, { now: new Date(), periods });
         setRaw(text);
         if (!parsed.items.length) {
@@ -231,7 +231,7 @@ export function MsgSheet({ onClose }) {
                                 key={item.id}
                                 item={item}
                                 clock={clock}
-                                periods={data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS}
+                                periods={allStarts(data.profile.periodStarts)}
                                 onPatch={patch}
                             />
                         ))}

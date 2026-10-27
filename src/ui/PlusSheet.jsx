@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_PERIODS } from '../lib/period.js';
+import { allStarts } from '../lib/periodLocal.js';
 import { clipboardHint, readClipboard } from '../lib/msgParse.js';
 import { joinedRecords, saveParsed, saveQuick, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
@@ -75,7 +75,7 @@ export function PlusSheet({ onClose, onPick }) {
     const box = useRef(null);
     const speech = useSpeechDictation(text, setText);
     const recent = useMemo(() => recentStudents(data.students, joinedRecords(data)), [data]);
-    const periods = data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS;
+    const periods = allStarts(data.profile.periodStarts);
     const keptCount = items.filter((item) => item.include !== false).length;
 
     useEffect(() => { box.current?.focus(); }, []);
