@@ -41,10 +41,10 @@ function publicLabel(name) {
     return PUBLIC_LABELS[name] || '기록';
 }
 
-/** 글자 소리에서 옮겨 온 누를 때 소리. 적축·갈축·청축처럼 이름이 겹치면 설명을 붙여 구별합니다. */
+/** 글자 소리에서 옮겨 온 누를 때 소리. 적축·갈축·청축처럼 이름이 겹치면 직선·걸림·딸깍처럼 짧은 결 이름만 씁니다. 저장 값(id)은 그대로입니다. */
 const PRESS_TYPE_VOICES = TYPE_VOICES.map((voice) => ({
     ...voice,
-    chip: KEY_VOICES.some((item) => item.label === voice.label) ? `${voice.label} ${voice.hint}` : voice.label,
+    chip: KEY_VOICES.some((item) => item.label === voice.label) ? voice.hint : voice.label,
 }));
 
 function KeyPick({ pressed, label, ariaLabel, onPick }) {
@@ -161,6 +161,8 @@ export function Settings() {
                         setVibeOn(next);
                     }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
                 </div>
+                <p className="muted">누를 때 소리가 나요. 버튼이나 탭, 켜고 끄는 단추처럼 손으로 누르는 곳에서 짧게 들리고, 글자를 적거나 말로 적는 동안에는 조용해요.</p>
+                {typeOn && <p className="muted" data-type-moved="1">이제 소리는 글자를 적을 때 대신 버튼을 누를 때 나요. 고르셨던 소리는 그대로 옮겨 두었어요.</p>}
                 <p className="muted" style={{ margin: '10px 0 0' }}>소리 종류</p>
                 <div className="key-picks" role="group" aria-label="누를 때 소리 종류">
                     {KEY_VOICES.map((voice) => (
@@ -218,8 +220,7 @@ export function Settings() {
                         />
                     ))}
                 </div>
-                <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
-                <p className="muted">누를 때 소리가 나요. 버튼이나 탭, 켜고 끄는 단추, 체크 칸처럼 손으로 누르는 곳에서 짧게 들려요. 글자를 적을 때는 조용해요. 몽글·청축처럼 누를 때와 뗄 때 소리가 따로 있으면 두 번, 뽁·띵처럼 한 번 나는 소리는 누를 때만 들려요. 되는 기기에서는 살짝 떨리기도 해요. 처음에는 몽글, 작게로 두었어요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요. 몽글·청축처럼 누를 때와 뗄 때 소리가 따로 있으면 두 번, 뽁·띵처럼 한 번 나는 소리는 누를 때만 들려요. 되는 기기에서는 살짝 떨리기도 해요. 처음에는 몽글, 작게로 두었어요.</p>
                 {TYPE_SOUND_SHOWN && (<>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

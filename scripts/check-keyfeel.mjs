@@ -2,6 +2,8 @@
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import {
+    TYPE_PRESS_STEPS,
+    keyPressGain,
     KEY_FADE_SEC,
     KEY_VOICES,
     KEY_VOICE_MS,
@@ -247,6 +249,34 @@ const worst = burstNotes.reduce((best, line) => {
 }, { peak: 0, line: '' });
 console.log(`연타 최대 피크 ${worst.peak.toFixed(4)} (${worst.line})`);
 
+/** QA 1차: 옮겨 온 뽁·띵의 RMS·피크를 main 글자 소리(0.032, 음높이 1)와 비교합니다. 작게는 같고, 크게는 3배 안팎입니다. */
+function rmsOf(data) {
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 1) sum += data[i] * data[i];
+    return Math.sqrt(sum / Math.max(1, data.length));
+}
+const levelNotes = [];
+for (const sampleRate of [44100, 48000]) {
+    for (const id of ['ppok', 'ting']) {
+        const main = renderMainTypeVoice(id, sampleRate);
+        const mainRms = rmsOf(main) * MAIN_TYPE_GAIN;
+        const mainPeak = peakOf(main) * MAIN_TYPE_GAIN;
+        const down = renderKeyPair(id, sampleRate).down;
+        for (const volumeId of ['small', 'mid', 'loud']) {
+            const gain = keyPressGain(id, volumeId);
+            const rmsRatio = (rmsOf(down) * gain) / mainRms;
+            const peakRatio = (peakOf(down) * gain) / mainPeak;
+            levelNotes.push(`${id}@${sampleRate} ${volumeId} RMS×${rmsRatio.toFixed(3)} 피크×${peakRatio.toFixed(3)}`);
+            if (volumeId === 'small') check(Math.abs(rmsRatio - 1) < 0.01 && Math.abs(peakRatio - 1) < 0.01, `${id} 작게가 main 글자 소리와 다릅니다. RMS×${rmsRatio} 피크×${peakRatio}`);
+            if (volumeId === 'loud') check(rmsRatio >= 2.5 && rmsRatio <= 3.2 && peakRatio >= 2.5 && peakRatio <= 3.2, `${id} 크게가 main 글자 소리보다 너무 크거나 작습니다. RMS×${rmsRatio} 피크×${peakRatio}`);
+        }
+    }
+}
+const keyStep = keyVolumeGain('loud') / keyVolumeGain('small');
+check(TYPE_PRESS_STEPS.small === 1 && TYPE_PRESS_STEPS.mid > 1 && TYPE_PRESS_STEPS.loud > TYPE_PRESS_STEPS.mid && TYPE_PRESS_STEPS.loud <= keyStep, `옮겨 온 소리 크기 단계가 다른 소리 비율(${keyStep.toFixed(2)})을 넘습니다.`);
+check(KEY_VOICES.every((voice) => keyPressGain(voice.id, 'loud') === keyVolumeGain('loud')), '몽글·청축 같은 누를 때 소리 크기가 바뀌었습니다.');
+console.log(`옮겨 온 소리 크기(main 글자 소리 대비): ${levelNotes.join(' / ')}`);
+
 const store = memory();
 check(keyVoiceId(store) === 'munggeul' && keyVolumeId(store) === 'small', '기본 소리나 크기가 몽글·작게가 아닙니다.');
 check(keySoundEnabled(store) && keyVibeEnabled(store), '소리와 진동 기본이 켜져 있지 않습니다.');
@@ -329,6 +359,19 @@ setKeyVolume('loud');
 playKey('down');
 check(sources.at(-1).buffer.length === Math.round((rate * KEY_VOICE_MS.click.down) / 1000), '고른 청축이 재생되지 않습니다.');
 check(gains.at(-1).gain.value === keyVolumeGain('loud'), '크게가 적용되지 않습니다.');
+/** 옮겨 온 소리는 재생할 때도 예전 글자 소리 크기를 기준으로 합니다. */
+for (const [voiceId, base] of [['ppok', MAIN_TYPE_GAIN], ['ting', MAIN_TYPE_GAIN], ['red', TYPE_GAIN]]) {
+    setKeyVoice(voiceId);
+    for (const volumeId of ['small', 'mid', 'loud']) {
+        setKeyVolume(volumeId);
+        playKey('down');
+        const want = base * TYPE_PRESS_STEPS[volumeId];
+        check(Math.abs(gains.at(-1).gain.value - want) < 1e-12, `${voiceId} ${volumeId} 재생 크기가 ${want} 가 아닙니다. ${gains.at(-1).gain.value}`);
+    }
+}
+setKeyVoice('click');
+setKeyVolume('loud');
+playKey('down');
 setKeyMuted(true);
 check(sources.at(-1).stopped, '받아쓰기 중에 나던 소리를 끊지 않습니다.');
 const mutedCount = sources.length;
@@ -527,6 +570,7 @@ check(typeGains.length === 4 && typeGains.every((gain, index) => {
 
 /** 누를 때 소리를 낼 곳: 실제 PRESS_SELECTOR 문자열을 읽어 가짜 요소에 맞춰 봅니다. */
 function simpleMatch(el, sel) {
+    if (sel.trim() === ':disabled') return Boolean(el.pseudoDisabled);
     const m = sel.trim().match(/^([a-z]*)((?:\.[\w-]+)*)((?:\[[^\]]+\])*)$/i);
     if (!m) throw new Error(`모르는 선택자 ${sel}`);
     if (m[1] && el.tagName !== m[1].toUpperCase()) return false;
@@ -591,6 +635,9 @@ const silent = [
     ['검색 칸', 'input', { type: 'search' }],
     ['여러 줄 칸', 'textarea', {}],
     ['민감한 체크 칸', 'input', { type: 'checkbox', 'data-sensitive': '1' }],
+    ['민감한 버튼', 'button', { 'data-sensitive': '1' }],
+    ['민감한 role=button', 'div', { role: 'button', 'data-sensitive': '' }],
+    ['민감한 링크', 'a', { href: '#/', 'data-sensitive': '1' }],
     ['인증 고르기 칸', 'select', { 'aria-label': '인증 방법' }],
     ['비밀번호 보기 체크 칸', 'input', { type: 'checkbox', name: 'show-password' }],
 ];
@@ -598,6 +645,39 @@ for (const [label, tag, attrs] of silent) {
     const { host, child } = inside(tag, attrs);
     check(pressTarget(child) === null && pressTarget(host) === null, `${label}에서 소리가 납니다.`);
 }
+/** 꺼짐 판단: :disabled, 꺼진 fieldset 안, 바깥 aria-disabled, 바깥 data-sensitive 를 하나씩 봅니다. */
+const inheritOff = fakeEl('button');
+inheritOff.pseudoDisabled = true;
+check(pressTarget(inheritOff) === null && pressTarget(fakeEl('span', {}, inheritOff)) === null, ':disabled 로 꺼진 버튼에서 소리가 납니다.');
+const offSet = fakeEl('fieldset', { disabled: '' });
+const offSetButton = fakeEl('button', {}, offSet);
+check(pressTarget(offSetButton) === null && pressTarget(fakeEl('span', {}, offSetButton)) === null, '꺼진 fieldset 안 버튼에서 소리가 납니다.');
+const offSetTab = fakeEl('div', { role: 'tab' }, fakeEl('div', {}, offSet));
+check(pressTarget(offSetTab) === null, '꺼진 fieldset 안 탭에서 소리가 납니다.');
+const onSet = fakeEl('fieldset');
+const onSetButton = fakeEl('button', {}, onSet);
+check(pressTarget(onSetButton) === onSetButton, '켜진 fieldset 안 버튼이 조용합니다.');
+const ariaOffGroup = fakeEl('div', { 'aria-disabled': 'true' });
+const ariaOffButton = fakeEl('button', {}, ariaOffGroup);
+check(pressTarget(ariaOffButton) === null && pressTarget(fakeEl('span', {}, ariaOffButton)) === null, 'aria-disabled 묶음 안 버튼에서 소리가 납니다.');
+const ariaOnButton = fakeEl('button', { 'aria-disabled': 'false' });
+check(pressTarget(ariaOnButton) === ariaOnButton, 'aria-disabled="false" 버튼이 조용합니다.');
+const secretBox = fakeEl('div', { 'data-sensitive': '1' });
+const secretButton = fakeEl('button', {}, secretBox);
+check(pressTarget(secretButton) === null && pressTarget(fakeEl('span', {}, secretButton)) === null, 'data-sensitive 묶음 안 버튼에서 소리가 납니다.');
+const secretLabel = fakeEl('label', {}, secretBox);
+secretLabel.control = fakeEl('input', { type: 'checkbox' });
+check(pressTarget(fakeEl('span', {}, secretLabel)) === null, 'data-sensitive 묶음 안 체크 칸 이름에서 소리가 납니다.');
+const farLabel = fakeEl('label');
+farLabel.control = fakeEl('input', { type: 'checkbox' }, fakeEl('div', { 'data-sensitive': '1' }));
+check(pressTarget(fakeEl('span', {}, farLabel)) === null, '바깥 이름표가 data-sensitive 묶음 안 체크 칸을 가리킬 때 소리가 납니다.');
+const farOffLabel = fakeEl('label');
+farOffLabel.control = fakeEl('input', { type: 'checkbox' }, fakeEl('fieldset', { disabled: '' }));
+check(pressTarget(fakeEl('span', {}, farOffLabel)) === null, '바깥 이름표가 꺼진 fieldset 안 체크 칸을 가리킬 때 소리가 납니다.');
+const farAriaLabel = fakeEl('label');
+farAriaLabel.control = fakeEl('input', { type: 'checkbox' }, fakeEl('div', { 'aria-disabled': 'true' }));
+check(pressTarget(fakeEl('span', {}, farAriaLabel)) === null, '바깥 이름표가 aria-disabled 묶음 안 체크 칸을 가리킬 때 소리가 납니다.');
+
 const chipField = fakeEl('label', { class: 'chip' });
 check(pressTarget(fakeEl('input', { type: 'text' }, chipField)) === null, '칩 안 글 입력칸에서 소리가 납니다.');
 const textLabel = fakeEl('label');
@@ -606,19 +686,32 @@ check(pressTarget(fakeEl('span', {}, textLabel)) === null, '글 입력칸 이름
 check(pressTarget(fakeEl('div')) === null && pressTarget(null) === null, '아무것도 아닌 곳에서 소리가 납니다.');
 for (const sel of ['button', 'a', 'label.chip', '[role="button"]']) check(PRESS_SELECTOR.split(', ').includes(sel), `예전 누름 대상 ${sel}이 빠졌습니다.`);
 
-/** 저장값 옮기기: 글자 소리 종류만 있으면 한 번 누를 때 소리로 가져오고, 원래 값은 그대로 둡니다. */
+/** 저장값 옮기기: 글자 소리를 켜 둔(type-sound=1) 기기만 글자 소리 종류를 한 번 누를 때 소리로 가져오고, 원래 값은 그대로 둡니다. */
 const moveBag = memory();
+moveBag.setItem('ssug-gyomu-type-sound', '1');
 moveBag.setItem('ssug-gyomu-type-voice', 'ting');
 check(keyVoiceId(moveBag) === 'ting' && moveBag.getItem('ssug-gyomu-key-voice') === 'ting' && moveBag.getItem('ssug-gyomu-type-voice') === 'ting', '글자 소리 종류를 누를 때 소리로 한 번 가져오지 않습니다.');
 setKeyVoice('click', moveBag);
 check(keyVoiceId(moveBag) === 'click' && moveBag.getItem('ssug-gyomu-type-voice') === 'ting', '옮긴 뒤 고른 누를 때 소리를 글자 소리가 다시 덮습니다.');
 const keepBag = memory();
+keepBag.setItem('ssug-gyomu-type-sound', '1');
 keepBag.setItem('ssug-gyomu-key-voice', 'mongdol');
 keepBag.setItem('ssug-gyomu-type-voice', 'bang');
 check(keyVoiceId(keepBag) === 'mongdol' && keepBag.getItem('ssug-gyomu-type-voice') === 'bang', '이미 고른 누를 때 소리를 글자 소리가 덮습니다.');
 const freshBag = memory();
 check(keyVoiceId(freshBag) === 'munggeul' && keyVolumeId(freshBag) === 'small' && freshBag.getItem('ssug-gyomu-key-voice') === null, '처음 쓰는 기기의 몽글·작게가 바뀌거나 값을 새로 씁니다.');
+/** QA 1차: 글자 소리를 켠 적 없이 종류만 남은 기기(type-voice=bang, key-voice·type-sound 없음)는 몽글 그대로입니다. */
+const bangOnlyBag = memory();
+bangOnlyBag.setItem('ssug-gyomu-type-voice', 'bang');
+check(keyVoiceId(bangOnlyBag) === 'munggeul' && bangOnlyBag.getItem('ssug-gyomu-key-voice') === null && bangOnlyBag.getItem('ssug-gyomu-type-voice') === 'bang', '글자 소리를 켠 적 없는 기기의 남은 종류(방귀)를 누를 때 소리로 옮깁니다.');
+for (const off of ['0', '', 'true']) {
+    const bag = memory();
+    bag.setItem('ssug-gyomu-type-sound', off);
+    bag.setItem('ssug-gyomu-type-voice', 'ting');
+    check(keyVoiceId(bag) === 'munggeul' && bag.getItem('ssug-gyomu-key-voice') === null, `글자 소리가 '${off}'인 기기의 종류를 옮깁니다.`);
+}
 const oddBag = memory();
+oddBag.setItem('ssug-gyomu-type-sound', '1');
 oddBag.setItem('ssug-gyomu-type-voice', 'nothing');
 check(keyVoiceId(oddBag) === 'munggeul' && oddBag.getItem('ssug-gyomu-key-voice') === null && oddBag.getItem('ssug-gyomu-type-voice') === 'nothing', '모르는 글자 소리 값을 옮기거나 지웁니다.');
 for (const voice of TYPE_VOICES) {
@@ -779,6 +872,19 @@ check(feel.includes("const VOICE_KEY = 'ssug-gyomu-key-voice'") && feel.includes
 check(!/removeItem/.test(feel) && !feel.includes('setItem(TYPE_VOICE_KEY'), '누를 때 소리가 글자 소리 저장값을 지우거나 바꿉니다.');
 check(appSource.includes('return pressTarget(target);') && appSource.includes('pressTarget(el) !== el'), '누름과 키보드가 같은 누름 대상 규칙을 쓰지 않습니다.');
 check(settings.includes('PRESS_TYPE_VOICES') && settings.includes('aria-label="누를 때 장난 소리"'), '누를 때 소리 종류에 뽁·띵·방귀 같은 소리가 없습니다.');
+/** QA 1차: 겹치는 칩 이름, 안내 순서, 글자 소리를 켜 둔 기기 안내. */
+const chipMatch = settings.match(/chip: KEY_VOICES\.some\(\(item\) => item\.label === voice\.label\) \? ([^:]+) : voice\.label/);
+const chipNames = chipMatch ? TYPE_VOICES.map((voice) => (KEY_VOICES.some((item) => item.label === voice.label) ? Function('voice', `return ${chipMatch[1]};`)(voice) : voice.label)) : [];
+const allChips = [...KEY_VOICES.map((voice) => voice.label), ...chipNames];
+check(chipNames.length === TYPE_VOICES.length && new Set(allChips).size === allChips.length, `누를 때 소리 칩 이름이 겹칩니다. ${allChips.join(',')}`);
+check(allChips.every((name) => allChips.every((other) => other === name || !other.startsWith(name))), `누를 때 소리 칩 이름이 서로 앞부분을 나눠 씁니다. ${allChips.join(',')}`);
+const soundFrom = settings.indexOf('<h2 className="title-font" style={{ marginTop: 0 }}>소리</h2>');
+const descAt = settings.indexOf('누를 때 소리가 나요', soundFrom);
+const kindAt = settings.indexOf('>소리 종류</p>', soundFrom);
+const sizeAt = settings.indexOf('>소리 크기</p>', soundFrom);
+check(soundFrom > 0 && descAt > soundFrom && descAt < kindAt && kindAt < sizeAt, '설정 소리 칸이 설명 → 종류 → 크기 순서가 아닙니다.');
+check(!settings.includes('체크 칸처럼'), '앱에 없는 체크 칸을 예로 듭니다.');
+check(/\{typeOn && <p className="muted"[^>]*>이제 소리는 글자를 적을 때 대신 버튼을 누를 때 나요\. 고르셨던 소리는 그대로 옮겨 두었어요\.<\/p>\}/.test(settings) && settings.indexOf('이제 소리는 글자를') < hideFrom, '글자 소리를 켜 둔 기기에 옮김 안내가 없습니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));

@@ -5,7 +5,7 @@
     연달은 누름은 이전 소리를 4ms 동안 줄인 뒤 끊습니다. 바로 끊지 않아 지지직 소리가 나지 않습니다.
     글자 소리에서 옮겨 온 소리(뽁·띵·물방울·방귀 등)는 typesound의 합성을 그대로 쓰고, 한 가지 소리라 누를 때만 냅니다. */
 
-import { TYPE_VOICES, isSensitiveControl, isTextControl, renderTypeStroke } from './typesound.js';
+import { TYPE_VOICES, isSensitiveControl, isTextControl, renderTypeStroke, typeStrokeGain } from './typesound.js';
 
 const SOUND_KEY = 'ssug-gyomu-key-sound';
 const VIBE_KEY = 'ssug-gyomu-key-vibrate';
@@ -14,6 +14,7 @@ const VOLUME_KEY = 'ssug-gyomu-key-volume';
 const NOTICE_KEY = 'ssug-gyomu-key-sound-notice';
 /** 글자 소리 종류. 누를 때 소리 종류가 아직 없을 때 처음 값으로 한 번만 가져옵니다. 원래 값은 그대로 둡니다. */
 const TYPE_VOICE_KEY = 'ssug-gyomu-type-voice';
+const TYPE_SOUND_KEY = 'ssug-gyomu-type-sound';
 
 /** 버튼·탭·토글·체크 칸·고르기 칸·펼치기와 하단 키캡 버튼. 글 입력칸은 넣지 않습니다. */
 export const PRESS_SELECTOR = 'button, a, label.chip, [role="button"], [role="tab"], [role="switch"], [role="menuitem"], input[type="checkbox"], input[type="radio"], select, summary, .fab, .desk-fab';
@@ -154,18 +155,30 @@ export function normalizeKeyVoice(id) {
 
 /** 누를 때 소리를 낼 요소. 꺼진 버튼, 민감한 칸, 글 입력칸은 소리 없이 지나갑니다. */
 const FIELD_TAGS = ['INPUT', 'SELECT', 'TEXTAREA'];
-/** 비밀번호·인증번호 같은 칸. 버튼 이름에 '인증'이 들어가도 버튼은 그대로 소리를 냅니다. */
+/** 비밀번호·인증번호 같은 칸. 버튼 이름에 '인증'이 들어가도 버튼은 그대로 소리를 냅니다. data-sensitive 는 pressOff 가 자기·바깥까지 봅니다. */
 function sensitiveField(el) {
-    return FIELD_TAGS.includes(String(el?.tagName || '').toUpperCase()) ? isSensitiveControl(el) : Boolean(el?.hasAttribute?.('data-sensitive'));
+    return FIELD_TAGS.includes(String(el?.tagName || '').toUpperCase()) && isSensitiveControl(el);
+}
+
+/** 꺼진 칸(:disabled), 꺼진 fieldset 안, aria-disabled, data-sensitive 안쪽은 조용합니다. */
+function pressOff(el) {
+    let off = false;
+    try {
+        off = Boolean(el.matches?.(':disabled'));
+    } catch {
+        off = false;
+    }
+    return off || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
+        || Boolean(el.closest('fieldset[disabled]') || el.closest('[aria-disabled="true"]') || el.closest('[data-sensitive]'));
 }
 
 export function pressTarget(target) {
     if (!target || typeof target.closest !== 'function') return null;
-    if (isTextControl(target) || sensitiveField(target)) return null;
+    if (isTextControl(target) || sensitiveField(target) || target.closest('[data-sensitive]')) return null;
     const label = target.closest('label');
     const control = label && !label.matches(PRESS_SELECTOR) ? label.control : null;
     const el = target.closest(PRESS_SELECTOR) || (control?.matches?.(PRESS_SELECTOR) ? control : null);
-    if (!el || el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true') return null;
+    if (!el || pressOff(el)) return null;
     if (isTextControl(el) || sensitiveField(el)) return null;
     return el;
 }
@@ -180,7 +193,7 @@ export function keyVoiceId(storage) {
         let value = store?.getItem?.(VOICE_KEY);
         if (value == null) {
             const typed = store?.getItem?.(TYPE_VOICE_KEY);
-            if (isTypePressVoice(typed)) {
+            if (isTypePressVoice(typed) && store?.getItem?.(TYPE_SOUND_KEY) === '1') {
                 store.setItem(VOICE_KEY, typed);
                 value = typed;
             }
@@ -224,6 +237,16 @@ export function setKeyVolume(id, storage) {
 
 export function keyVolumeGain(id) {
     return KEY_VOLUMES.find((item) => item.id === normalizeKeyVolume(id)).gain;
+}
+
+/** 글자 소리에서 옮겨 온 소리의 크기 배수. 작게는 예전 글자 소리와 같고, 크게는 다른 소리(약 3.6배)보다 조금 덜 키웁니다. */
+export const TYPE_PRESS_STEPS = { small: 1, mid: 2, loud: 3 };
+
+/** 소리마다 실제로 곱하는 크기. 옮겨 온 소리는 예전 글자 소리 크기(typeStrokeGain)를 기준으로 합니다. */
+export function keyPressGain(voice, volume) {
+    const id = normalizeKeyVoice(voice);
+    if (!isTypePressVoice(id)) return keyVolumeGain(volume);
+    return typeStrokeGain(id) * TYPE_PRESS_STEPS[normalizeKeyVolume(volume)];
 }
 
 /** 0.94–1.06. 매 누름이 같은 높이면 기계음처럼 들립니다. */
@@ -448,7 +471,7 @@ function launch(audio, voice, volume, events) {
         entry.dropped = true;
     }
     for (const entry of plan.stop) releaseVoice(entry, audio, 0);
-    const gainValue = keyVolumeGain(volume);
+    const gainValue = keyPressGain(voice, volume);
     const dest = masterBus(audio);
     const created = parts.map((event) => {
         const src = audio.createBufferSource();
@@ -535,7 +558,7 @@ export function withKeyAudio(fn) {
 /** 연타를 샘플로 섞어 피크와 샘플 간 점프를 잽니다. 실제 재생과 같은 planKeyPress 규칙으로 앞 소리를 줄입니다. */
 export function mixKeyBurst({ voice = 'click', volume = 'loud', count = 8, gapMs = 15, fadeMs = KEY_FADE_SEC * 1000, sampleRate = 48000 } = {}) {
     const pair = renderKeyPair(voice, sampleRate);
-    const gain = keyVolumeGain(volume);
+    const gain = keyPressGain(voice, volume);
     const gap = Math.max(0, Math.round((sampleRate * gapMs) / 1000));
     const fade = Math.max(1, Math.round((sampleRate * fadeMs) / 1000));
     const short = Math.max(1, Math.round(sampleRate * 0.002));

@@ -56,6 +56,10 @@ export const TYPE_GAIN = 0.028;
 /** 예전부터 있던 소리(방귀 포함). 저장된 값이 그대로 같은 소리로 나도록 합성·크기·음높이 흔들림을 main 그대로 둡니다. */
 const LEGACY_VOICES = new Set(['ppok', 'ting', 'drop', 'bang']);
 const LEGACY_GAIN = 0.032;
+/** 글자를 적을 때 나던 크기. 예전 네 소리는 0.032, 나머지는 TYPE_GAIN(흔들림 가운데) 입니다. */
+export function typeStrokeGain(voice) {
+    return LEGACY_VOICES.has(voice) ? LEGACY_GAIN : TYPE_GAIN;
+}
 
 const DEFAULT_VOICE = 'ppok';
 const SAME_TURN_MS = 12;
