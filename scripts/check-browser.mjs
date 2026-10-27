@@ -517,6 +517,12 @@ async function openPlus(page) {
     await page.waitForSelector('[data-screen="plus"]');
 }
 
+// 붙여넣기로 연 ＋는 더보기가 펼쳐져 있습니다. 한 화면 맞춤은 접은 기본 화면에서 봅니다(펼친 뒤 스크롤은 예전과 같음).
+async function foldPlus(page) {
+    await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('접기'))?.click());
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.includes('더보기')), { timeout: 5000 });
+}
+
 async function clickPlus(page, label) {
     await openPlus(page);
     const direct = await page.evaluate((text) => {
@@ -941,8 +947,6 @@ try {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await page.screenshot({ path: resolve(shots, 'after_home_390.png') });
         await openPlus(page);
-        const plus = await choiceFit(page, 'plus');
-        reportChoice('＋ 메뉴 390', plus);
         const face = await page.evaluate(() => ({
             field: Boolean(document.querySelector('[data-screen="plus"] textarea')),
             buttons: [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()),
@@ -953,6 +957,8 @@ try {
         }
         // QA 2차 1번: 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기가 이미 펼쳐져 있습니다(접기 단추가 보임).
         check(face.buttons.some((item) => item.includes('접기')) && !face.buttons.some((item) => item.includes('더보기')), `붙여넣기로 연 ＋에 더보기가 펼쳐져 있지 않습니다: ${face.buttons.join(' / ')}`);
+        await foldPlus(page);
+        reportChoice('＋ 메뉴 390', await choiceFit(page, 'plus'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('회의록 작성') && document.body.innerText.includes('보호자'));
         const moreLabels = await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
@@ -1312,6 +1318,7 @@ try {
         await audit(page, '홈 16:9');
         await page.screenshot({ path: resolve(shots, 'after_home_16x9.png') });
         await openPlus(page);
+        await foldPlus(page);
         const plus = await choiceFit(page, 'plus');
         reportChoice('＋ 메뉴 16:9', plus);
         await audit(page, '＋ 16:9');
