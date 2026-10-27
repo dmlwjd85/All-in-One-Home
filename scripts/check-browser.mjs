@@ -2783,6 +2783,16 @@ try {
         const restoredBox = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value || '');
         check(view.saved && !view.empty && restoredBox === '줄넘기 챙기기', `비운 알림장을 되돌린 뒤 화면이 예전 글로 돌아오지 않았습니다: ${JSON.stringify({ view, restoredBox })}`);
 
+        // 이미 저장된 글이 있는 날을 새로 열어 비우고 바로 되돌려도, 입력칸이 예전 글로 다시 찹니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent))?.click());
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '리코더 챙기기', { timeout: 5000 }).catch(() => {});
+        const seededBack = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+        check(seededBack === '리코더 챙기기', `저장된 날을 새로 열어 비운 뒤 되돌렸는데 입력칸이 예전 글로 돌아오지 않았습니다: ${JSON.stringify(seededBack)}`);
+
         // 기기에만 둔 민감한 알림장을 비우면 기기에서만 지우고, 클라우드 쪽에는 아무것도 생기지 않으며 다른 날 클라우드 행은 그대로입니다.
         await noticeSeed(page, [{ id: noticeOther, date: noticeOther, text: '체육복 챙기기', source: 'app' }]);
         await noticeOpen(page, 'light', noticeDay);
