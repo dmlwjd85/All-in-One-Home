@@ -486,7 +486,7 @@ a.chip,
         border-radius: 24px;
         max-height: min(86dvh, 820px);
     }
-    /* 가운데 콕 키캡(64px) 오른쪽 끝에서 16px 띄웁니다. 900~1000px에서도 겹치지 않습니다. */
+    /* 가운데 키캡(64px) 오른쪽 끝에서 16px 띄웁니다. 900~1000px에서도 겹치지 않습니다. */
     .toast { left: auto; right: 24px; width: min(420px, calc(50vw - 72px)); bottom: 24px; }
     .home-brand { display: none; }
     .home-quick-title { display: block; }
