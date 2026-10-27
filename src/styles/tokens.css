@@ -44,6 +44,9 @@
     --seal-seed: #5C1830;
     --seal-rim: rgba(255, 255, 255, .9);
     --seal-wall: rgba(255, 255, 255, .22);
+    /* 키보드 테마(kbtheme.css)의 주 버튼 그림자가 씁니다. main 값 그대로입니다. */
+    --keycap-side: #6B2246;
+    --keycap-shadow: rgba(46, 42, 43, .24);
     --glow: rgba(167, 61, 116, .28);
     --shadow: 6px 6px 14px #C8C3BB, -6px -6px 14px #FFFFFF;
     --neo-shadow: #C8C3BB;
@@ -121,6 +124,8 @@
     --seal-seed: #F6E4EA;
     --seal-rim: rgba(255, 255, 255, .55);
     --seal-wall: rgba(255, 255, 255, .14);
+    --keycap-side: #5C1C3C;
+    --keycap-shadow: rgba(0, 0, 0, .5);
     --glow: rgba(0, 0, 0, .4);
     --shadow: 6px 6px 14px #161314, -6px -6px 14px #3E393A;
     --neo-shadow: #161314;

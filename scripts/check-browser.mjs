@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
+import { build as viteBuild } from 'vite';
 import { addDaysYmd, fromYmd, monthTitle, seoulYmd, startOfWeekMon, weekdayKo } from '../src/lib/date.js';
 
 /**
@@ -210,6 +211,24 @@ async function waitServer() {
         await delay(250);
     }
     throw new Error('미리보기가 열리지 않았습니다.');
+}
+
+/** 누를 때 소리·글자 소리 모듈을 한 파일로 묶어 페이지에 넣습니다. 실제 Web Audio 그래프로 크기를 잽니다. */
+async function pressProbeCode() {
+    const out = await viteBuild({
+        configFile: false,
+        logLevel: 'silent',
+        root,
+        publicDir: false,
+        build: {
+            write: false,
+            minify: false,
+            emptyOutDir: false,
+            lib: { entry: resolve(root, 'scripts/fixtures/press-probe.js'), name: 'PressProbe', formats: ['iife'], fileName: () => 'press-probe.js' },
+        },
+    });
+    const result = Array.isArray(out) ? out[0] : out;
+    return result.output.find((chunk) => chunk.type === 'chunk').code;
 }
 
 const failures = [];
@@ -2025,7 +2044,7 @@ try {
             const initial = await page.evaluate(() => ({
                 voice: localStorage.getItem('ssug-gyomu-key-voice'),
                 volume: localStorage.getItem('ssug-gyomu-key-volume'),
-                soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
+                soft: document.querySelector('[aria-label="몽글 말랑"]')?.getAttribute('aria-pressed'),
                 small: document.querySelector('[aria-label="작게"]')?.getAttribute('aria-pressed'),
                 on: [...document.querySelectorAll('button')].some((el) => el.innerText.includes('누를 때 소리 켜짐')),
             }));
@@ -2041,32 +2060,60 @@ try {
             const kept = await page.evaluate(() => ({
                 click: document.querySelector('[aria-label="청축 클릭"]')?.getAttribute('aria-pressed'),
                 loud: document.querySelector('[aria-label="크게"]')?.getAttribute('aria-pressed'),
-                soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
+                soft: document.querySelector('[aria-label="몽글 말랑"]')?.getAttribute('aria-pressed'),
             }));
             check(kept.click === 'true' && kept.loud === 'true' && kept.soft === 'false', '고른 소리가 다시 열어도 남지 않습니다.');
-            const typeFirst = await page.evaluate(() => ({
-                stored: localStorage.getItem('ssug-gyomu-type-voice'),
-                ppok: document.querySelector('[aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+            /* 글자 소리는 숨겨 둡니다. 켜 둔 기기에서도 칸이 없고 글을 적어도 소리가 없으며, 저장값은 그대로입니다. */
+            await page.evaluate(() => {
+                localStorage.setItem('ssug-gyomu-type-sound', '1');
+                localStorage.setItem('ssug-gyomu-type-voice', 'bang');
+            });
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.waitForSelector('[aria-label="누를 때 장난 소리"]');
+            const hidden = await page.evaluate(() => {
+                window.__soundStarts = 0;
+                const start = AudioBufferSourceNode.prototype.start;
+                AudioBufferSourceNode.prototype.start = function countStart(...args) {
+                    window.__soundStarts += 1;
+                    return start.apply(this, args);
+                };
+                const text = document.querySelector('[data-screen="settings"]')?.innerText || document.body.innerText;
+                return {
+                    picks: document.querySelectorAll('.type-picks').length,
+                    words: [
+                        ...[...document.querySelectorAll('p, button, span')].filter((el) => el.innerText.trim() === '글자를 적을 때').map(() => '글자를 적을 때'),
+                        ...['글자 소리 켜짐', '글자 소리 꺼짐', '적을 때 소리'].filter((word) => text.includes(word)),
+                    ],
+                    pressBang: document.querySelector('[aria-label="누를 때 장난 소리"] [aria-label="방귀 뿌우"]')?.getAttribute('aria-pressed'),
+                };
+            });
+            check(hidden.picks === 0 && hidden.words.length === 0, `숨긴 글자 소리가 설정에 보입니다. ${JSON.stringify(hidden)}`);
+            check(hidden.pressBang === 'false', '누를 때 장난 소리에 방귀가 없거나 이미 골라져 있습니다.');
+            check(await page.evaluate(() => !document.querySelector('[data-type-moved]')), '이미 고른 누를 때 소리가 있는데 옮김 안내가 나옵니다.');
+            await page.focus('[aria-label="학급 이름"]');
+            await page.keyboard.type('ab c', { delay: 30 });
+            await page.keyboard.press('Backspace');
+            await page.keyboard.press('Enter');
+            await delay(120);
+            const typed = await page.evaluate(() => ({
+                starts: window.__soundStarts,
+                sound: localStorage.getItem('ssug-gyomu-type-sound'),
+                voice: localStorage.getItem('ssug-gyomu-type-voice'),
+                key: localStorage.getItem('ssug-gyomu-key-voice'),
             }));
-            check(typeFirst.stored === null && typeFirst.ppok === 'true', '글자 소리 처음 선택이 뽁이 아닙니다.');
-            const typeLabels = { ppok: '뽁 통통', ting: '띵 실로폰', drop: '물방울 또록', red: '적축 직선', bang: '방귀 뿌우' };
-            for (const [id, label] of Object.entries(typeLabels)) {
-                await page.evaluate((value) => localStorage.setItem('ssug-gyomu-type-voice', value), id);
-                await page.reload({ waitUntil: 'domcontentloaded' });
-                await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
-                await page.evaluate(() => { location.hash = '#/settings'; });
-                await page.waitForSelector(`[aria-label="${label}"]`);
-                const shown = await page.evaluate((want) => ({
-                    pressed: [...document.querySelectorAll('.type-picks button[aria-pressed="true"]')].map((el) => el.getAttribute('aria-label')),
-                    stored: localStorage.getItem('ssug-gyomu-type-voice'),
-                    want,
-                }), label);
-                check(shown.pressed.length === 1 && shown.pressed[0] === label && shown.stored === id, `저장된 글자 소리 ${id}가 ${label}로 보이지 않습니다. ${shown.pressed.join(',')}`);
-            }
-            // 다시 열면 스크롤이 이어져 칩이 아래 쨈 버튼 뒤에 걸릴 수 있어, 가운데로 옮긴 뒤 누릅니다.
-            await page.$eval('[aria-label="띵 실로폰"]', (el) => el.scrollIntoView({ block: 'center' }));
-            await page.click('[aria-label="띵 실로폰"]');
-            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-type-voice') === 'ting');
+            check(typed.starts === 0, `글자를 적을 때 소리가 납니다. ${typed.starts}번`);
+            check(typed.sound === '1' && typed.voice === 'bang' && typed.key === 'click', `글자 소리 저장값이 바뀌었습니다. ${JSON.stringify(typed)}`);
+            await page.click('[aria-label="뽁 통통"]');
+            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'ppok');
+            const picked = await page.evaluate(() => ({
+                ppok: document.querySelector('[aria-label="누를 때 소리 종류"] [aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+                click: document.querySelector('[aria-label="청축 클릭"]')?.getAttribute('aria-pressed'),
+                starts: window.__soundStarts,
+                voice: localStorage.getItem('ssug-gyomu-type-voice'),
+            }));
+            check(picked.ppok === 'true' && picked.click === 'false' && picked.starts >= 1 && picked.voice === 'bang', `누를 때 소리로 뽁을 고를 수 없습니다. ${JSON.stringify(picked)}`);
         }, width === 1920 ? 1080 : 844);
     }
 
@@ -2099,6 +2146,252 @@ try {
         }));
         check(saved.sound === '0' && saved.seen === '1' && !saved.toast, '소리 끄기가 저장되지 않았습니다.');
     });
+
+    /** QA 2차 N2: 옮겨 온 소리 '작게'의 실제 재생 크기(OfflineAudioContext로 그린 피크·RMS)가 글자 소리와 ±5% 안인지 봅니다. */
+    const probeCode = await pressProbeCode();
+    await withDemo(390, 'light', async (page) => {
+        await page.addScriptTag({ content: probeCode });
+        const levels = await page.evaluate(async () => {
+            const { keyfeel, typesound } = window.PressProbe;
+            const rate = 48000;
+            const frames = Math.round(rate * 0.4);
+            const seeded = (seed) => {
+                let x = (seed * 2654435761) >>> 0 || 1;
+                return () => {
+                    x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+                    return x / 4294967296;
+                };
+            };
+            const measure = async (draw, seed) => {
+                keyfeel.resetKeyGraphForTest();
+                typesound.resetTypeGraphForTest();
+                const ctx = new OfflineAudioContext(1, frames, rate);
+                const nativeRandom = Math.random;
+                Math.random = seeded(seed);
+                try {
+                    draw(ctx);
+                } finally {
+                    Math.random = nativeRandom;
+                }
+                const data = (await ctx.startRendering()).getChannelData(0);
+                let peak = 0;
+                let sum = 0;
+                for (let i = 0; i < data.length; i += 1) {
+                    peak = Math.max(peak, Math.abs(data[i]));
+                    sum += data[i] * data[i];
+                }
+                return { peak, rms: Math.sqrt(sum / data.length) };
+            };
+            const rows = [];
+            for (const voice of typesound.TYPE_VOICES.map((item) => item.id)) {
+                let keyPeak = 0;
+                let keyRms = 0;
+                let typePeak = 0;
+                let typeRms = 0;
+                let seedWorst = 1;
+                for (let seed = 1; seed <= 24; seed += 1) {
+                    const key = await measure((ctx) => keyfeel.scheduleKeyPress(ctx, { voice, volume: 'small', when: 0.01 }), seed);
+                    const type = await measure((ctx) => typesound.scheduleTypeBurst(ctx, { voice, kind: 'tap', count: 1, when: 0.01 }), seed);
+                    keyPeak += key.peak;
+                    keyRms += key.rms;
+                    typePeak += type.peak;
+                    typeRms += type.rms;
+                    if (['ppok', 'ting', 'drop', 'bang'].includes(voice)) {
+                        seedWorst = Math.max(seedWorst, key.peak / type.peak, type.peak / key.peak, key.rms / type.rms, type.rms / key.rms);
+                    }
+                }
+                rows.push({ voice, peak: keyPeak / typePeak, rms: keyRms / typeRms, typePeak: typePeak / 24, seedWorst });
+            }
+            return rows;
+        });
+        const line = levels.map((row) => `${row.voice} 피크×${row.peak.toFixed(3)} RMS×${row.rms.toFixed(3)}`).join(' / ');
+        console.log(`옮겨 온 소리 작게 실제 재생 크기(글자 소리 대비, 48kHz 24회 평균): ${line}`);
+        check(levels.length >= 13 && levels.every((row) => row.typePeak > 0.001), `실제 재생 크기를 잴 수 없습니다. ${JSON.stringify(levels)}`);
+        const off = levels.filter((row) => Math.abs(row.peak - 1) > 0.05 || Math.abs(row.rms - 1) > 0.05);
+        check(off.length === 0, `옮겨 온 소리 작게가 글자 소리와 ±5%를 넘습니다. ${off.map((row) => `${row.voice} 피크×${row.peak.toFixed(3)} RMS×${row.rms.toFixed(3)}`).join(', ')}`);
+        const seedOff = levels.filter((row) => row.seedWorst > 1.05);
+        check(seedOff.length === 0, `예전 네 소리가 같은 흔들림에서 글자 소리와 다르게 납니다. ${seedOff.map((row) => `${row.voice} ×${row.seedWorst.toFixed(3)}`).join(', ')}`);
+    });
+
+    /** QA 2차: 누름 규칙을 실제 브라우저 이벤트로 봅니다. 꺼진 fieldset·aria-disabled 묶음·data-sensitive 묶음은 조용하고, 첫 legend 안과 label.chip은 소리가 납니다. */
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.body.innerText.includes('오늘 우리 반') || document.body.innerText.includes('오늘은 수업이 없어요'));
+        await page.evaluate(() => {
+            window.__soundStarts = 0;
+            const start = AudioBufferSourceNode.prototype.start;
+            AudioBufferSourceNode.prototype.start = function countStart(...args) {
+                window.__soundStarts += 1;
+                return start.apply(this, args);
+            };
+            const stage = document.createElement('div');
+            stage.id = 'press-stage';
+            stage.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#fff;display:flex;flex-wrap:wrap;gap:6px;padding:6px;align-content:flex-start';
+            stage.innerHTML = `
+                <button type="button" data-case="plain">버튼</button>
+                <label class="chip" data-case="chip">칩 라벨</label>
+                <fieldset disabled style="margin:0;padding:4px">
+                    <legend><button type="button" data-case="legend">첫 legend 버튼</button></legend>
+                    <div role="button" data-case="setRole">꺼진 묶음 role=button</div>
+                    <button type="button" data-case="setButton">꺼진 묶음 버튼</button>
+                </fieldset>
+                <div aria-disabled="true"><button type="button" data-case="ariaGroup">aria-disabled 묶음 버튼</button></div>
+                <div role="button" aria-disabled="true" data-case="ariaSelf">aria-disabled 단추</div>
+                <div data-sensitive="1"><button type="button" data-case="sensitiveButton">민감 묶음 버튼</button><a href="#/" data-case="sensitiveLink">민감 묶음 링크</a></div>`;
+            for (const el of stage.querySelectorAll('[data-case]')) el.style.cssText = 'min-width:120px;min-height:44px;display:inline-flex;align-items:center;padding:0 8px;border:1px solid #888';
+            document.body.appendChild(stage);
+        });
+        const expectSound = { plain: true, chip: true, legend: true, setRole: false, setButton: false, ariaGroup: false, ariaSelf: false, sensitiveButton: false, sensitiveLink: false };
+        const heard = {};
+        for (const name of Object.keys(expectSound)) {
+            const before = await page.evaluate(() => window.__soundStarts);
+            const box = await page.$eval(`[data-case="${name}"]`, (el) => {
+                const rect = el.getBoundingClientRect();
+                return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            });
+            await page.mouse.move(box.x, box.y);
+            await page.mouse.down();
+            await delay(30);
+            await page.mouse.up();
+            await delay(120);
+            heard[name] = (await page.evaluate(() => window.__soundStarts)) - before;
+        }
+        const wrong = Object.entries(expectSound).filter(([name, on]) => (heard[name] > 0) !== on);
+        check(wrong.length === 0, `누름 소리 규칙이 브라우저에서 어긋납니다. ${wrong.map(([name, on]) => `${name}: ${on ? '나야 함' : '조용해야 함'} ${heard[name]}번`).join(', ')}`);
+        console.log(`누름 장면 소리 횟수: ${Object.entries(heard).map(([name, count]) => `${name} ${count}`).join(' / ')}`);
+    });
+
+    /** QA 2차 N1: 글자 소리를 실제로 옮긴 기기에만 옮김 안내가 나오고, 닫으면 다시 나오지 않습니다. 누를 때 소리를 끈 기기에는 소리가 난다고 하지 않습니다. */
+    const openSoundSettings = async (page, seed) => {
+        await page.evaluate((items) => {
+            localStorage.clear();
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            for (const [key, value] of Object.entries(items)) localStorage.setItem(key, value);
+            location.hash = '#/settings';
+        }, seed);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
+        await page.evaluate(() => document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' }));
+        await delay(150);
+        return page.evaluate(() => {
+            const note = document.querySelector('[data-type-moved]');
+            const close = note?.querySelector('[aria-label="옮긴 소리 안내 닫기"]')?.getBoundingClientRect();
+            const text = note?.querySelector('p')?.getBoundingClientRect();
+            return {
+                shown: Boolean(note),
+                id: note?.getAttribute('data-type-moved') || '',
+                text: note?.innerText || '',
+                closeSize: close ? [Math.round(close.width), Math.round(close.height)] : null,
+                overflow: Boolean(note && note.scrollWidth > note.clientWidth + 1),
+                overlap: Boolean(close && text && close.left < text.right - 1 && close.right > text.left + 1 && close.top < text.bottom - 1 && close.bottom > text.top + 1),
+                moved: localStorage.getItem('ssug-gyomu-key-voice-moved'),
+                voice: localStorage.getItem('ssug-gyomu-key-voice'),
+            };
+        });
+    };
+    const soundSection = async (page) => page.$('[aria-label="누를 때 소리 종류"]').then((el) => el.evaluateHandle((node) => node.closest('section')));
+    for (const mode of ['light', 'dark']) {
+        for (const width of [390, 1280]) {
+            await withDemo(width, mode, async (page) => {
+                const opened = await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'red' });
+                check(opened.shown && opened.id === 'red' && opened.voice === 'red' && opened.moved === 'red', `${width} ${mode} 글자 소리를 옮긴 기기에 옮김 안내가 없습니다. ${JSON.stringify(opened)}`);
+                check(opened.text.includes('‘적축·매끈’') && opened.text.includes('이제 버튼이나 탭을 누르면 이 소리가 나요') && !opened.text.includes('꺼져'), `${width} ${mode} 옮김 안내 말이 켜짐에 맞지 않습니다. ${opened.text}`);
+                check(opened.closeSize && opened.closeSize[0] >= 44 && opened.closeSize[1] >= 44 && !opened.overflow && !opened.overlap, `${width} ${mode} 옮김 안내 닫기 단추가 작거나 겹칩니다. ${JSON.stringify(opened)}`);
+                await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, `settings-moved-${width}-${mode}.png`) });
+                await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+                await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
+                const closedKey = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-voice-moved'));
+                await page.reload({ waitUntil: 'domcontentloaded' });
+                await page.evaluate(() => { location.hash = '#/settings'; });
+                await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
+                await page.evaluate(() => document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' }));
+                await delay(150);
+                const after = await page.evaluate(() => ({
+                    shown: Boolean(document.querySelector('[data-type-moved]')),
+                    voice: localStorage.getItem('ssug-gyomu-key-voice'),
+                    red: document.querySelector('[aria-label="적축 매끈"]')?.getAttribute('aria-pressed'),
+                }));
+                check(closedKey === 'closed' && !after.shown && after.voice === 'red' && after.red === 'true', `${width} ${mode} 닫은 옮김 안내가 다시 나오거나 고른 소리가 바뀝니다. ${closedKey} ${JSON.stringify(after)}`);
+                await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, `settings-moved-closed-${width}-${mode}.png`) });
+            }, 844);
+        }
+    }
+    /** 맨 아래까지 내리면 크기 칩과 각 화면 마지막 내용이 하단 탭(가운데 단추 포함) 위로 12px 이상 올라와야 합니다.
+     *  홈 표시줄이 없는 기기(0)와 있는 기기(34px)를 모두 봅니다. 본문 아래 여백은 탭 높이 + 16px 이상입니다. */
+    const bottomFit = async (page, inset) => {
+        const cdp = await page.createCDPSession();
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 0, right: 0, bottom: inset } });
+        await delay(150);
+        return page.evaluate(async () => {
+            const s = document.scrollingElement; s.scrollTop = s.scrollHeight;
+            await new Promise((r) => setTimeout(r, 200));
+            const tab = document.querySelector('.tabbar').getBoundingClientRect();
+            const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
+            const cover = Math.min(tab.top, fab ? fab.top : tab.top);
+            const main = document.querySelector('.main');
+            let low = -Infinity;
+            for (const el of main.querySelectorAll('*')) {
+                const r = el.getBoundingClientRect();
+                if (!r.width || !r.height || getComputedStyle(el).position === 'fixed' || el.closest('.tabbar,.sheet,[role=dialog]')) continue;
+                low = Math.max(low, r.bottom);
+            }
+            const sizes = document.querySelector('[aria-label="누를 때 소리 크기"]')?.getBoundingClientRect();
+            return {
+                tabTop: Math.round(tab.top), cover: Math.round(cover), low: Math.round(low), sizes: sizes ? Math.round(sizes.bottom) : null,
+                pad: parseFloat(getComputedStyle(main).paddingBottom), tabH: Math.round(tab.height),
+                note: Boolean(document.querySelector('[data-type-moved]')),
+            };
+        });
+    };
+    for (const width of [360, 390]) {
+        for (const state of ['note', 'closed']) {
+            await withDemo(width, 'light', async (page) => {
+                await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'red' });
+                if (state === 'closed') {
+                    await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+                    await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
+                }
+                const pads = {};
+                for (const inset of [0, 34]) {
+                    const fit = await bottomFit(page, inset);
+                    pads[inset] = fit.pad;
+                    const at = `${width} ${state} 홈 표시줄 ${inset}px`;
+                    check(fit.note === (state === 'note'), `${at} 옮김 안내 상태가 다릅니다.`);
+                    check(fit.sizes !== null && fit.cover - fit.sizes >= 12, `${at} 맨 아래에서 크기 칩이 탭에 가립니다. 칩 ${fit.sizes} / 탭 ${fit.tabTop} / 가운데 단추 ${fit.cover}`);
+                    check(fit.cover - fit.low >= 12, `${at} 설정 마지막 내용이 탭에 가립니다. ${fit.low} / ${fit.cover}`);
+                    check(fit.pad >= fit.tabH + 16, `${at} 본문 아래 여백 ${fit.pad}px가 탭 ${fit.tabH}px + 16px보다 작습니다.`);
+                    if (inset === 34) await page.screenshot({ path: resolve(soundShotDir, `settings-bottom-${width}-${state}.png`) });
+                    console.log(`설정 맨 아래 ${at}: 크기 칩과 탭 사이 ${fit.tabTop - fit.sizes}px, 마지막 내용과 가운데 단추 사이 ${fit.cover - fit.low}px`);
+                }
+                check(pads[34] - pads[0] >= 33, `${width} ${state} 홈 표시줄만큼 본문 아래 여백이 늘지 않습니다. ${pads[0]} → ${pads[34]}`);
+            }, 844);
+        }
+    }
+    for (const [label, hash] of [['홈', '#/today'], ['할 일', '#/todo'], ['시간표', '#/schedule']]) {
+        await withDemo(360, 'light', async (page) => {
+            await page.evaluate((h) => { location.hash = h; }, hash);
+            await delay(400);
+            for (const inset of [0, 34]) {
+                const fit = await bottomFit(page, inset);
+                check(fit.cover - fit.low >= 12, `360 ${label} 홈 표시줄 ${inset}px 맨 아래 내용이 탭에 가립니다. ${fit.low} / ${fit.cover}`);
+                check(fit.pad >= fit.tabH + 16, `360 ${label} 홈 표시줄 ${inset}px 본문 아래 여백 ${fit.pad}px가 탭 ${fit.tabH}px + 16px보다 작습니다.`);
+                if (inset === 34) await page.screenshot({ path: resolve(soundShotDir, `${hash.slice(2)}-bottom-360.png`) });
+                console.log(`${label} 맨 아래 360 홈 표시줄 ${inset}px: 마지막 내용과 가운데 단추 사이 ${fit.cover - fit.low}px`);
+            }
+        }, 844);
+    }
+    await withDemo(390, 'light', async (page) => {
+        const caseH = await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1' });
+        check(caseH.shown && caseH.id === 'ppok' && caseH.voice === 'ppok' && caseH.text.includes('‘뽁’'), `H: 글자 소리만 켠 기기가 main 기본 뽁으로 옮겨 안내되지 않습니다. ${JSON.stringify(caseH)}`);
+        const caseK = await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'bang', 'ssug-gyomu-key-voice': 'linear' });
+        check(!caseK.shown && caseK.voice === 'linear' && caseK.moved === null, `K: 이미 고른 소리가 있는데 옮기거나 안내합니다. ${JSON.stringify(caseK)}`);
+        const caseL = await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'blue', 'ssug-gyomu-key-sound': '0' });
+        check(caseL.shown && caseL.text.includes('‘청축·딸깍’') && caseL.text.includes('꺼져 있어요') && !caseL.text.includes('누르면 이 소리가 나요'), `L: 누를 때 소리를 끈 기기에 소리가 난다고 안내합니다. ${JSON.stringify(caseL)}`);
+        await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, 'settings-moved-off-390-light.png') });
+        const plain = await openSoundSettings(page, {});
+        check(!plain.shown && plain.moved === null, `글자 소리를 쓴 적 없는 기기에 옮김 안내가 나옵니다. ${JSON.stringify(plain)}`);
+    }, 844);
 
     for (const mode of ['light', 'dark']) {
         for (const width of [360, 390, 1920]) {
