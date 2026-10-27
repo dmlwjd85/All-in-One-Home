@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { clearNotice, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -135,26 +136,46 @@ export function Notice() {
     const date = route.params.date || addDaysYmd(clock.ymd, 1);
     const notices = joined(data, 'notices');
     const current = notices.find((row) => row.date === date);
-    const [text, setText] = useState(current?.text || '');
-    const cleared = useRef(null);
+    const dbText = current?.text || '';
+    const [text, setText] = useState(dbText);
+    const [synced, setSynced] = useState(dbText);
+    const [saving, setSaving] = useState(false);
+    const busy = useRef(false);
     const others = notices.filter((row) => row.date !== date && String(row.text || '').trim());
     const events = joined(data, 'events').filter((row) => row.date === date);
 
     useEffect(() => {
-        // 비운 알림장을 되돌리면 입력칸에도 예전 글을 다시 넣습니다.
-        if (cleared.current?.date === date && current?.text === cleared.current.text) {
-            cleared.current = null;
-            setText((prev) => prev.trim() ? prev : current.text);
-        }
-    }, [current?.text, date]);
+        // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로일 때만 새 글로 채웁니다.
+        if (dbText === synced) return;
+        setText((prev) => prev === synced ? dbText : prev);
+        setSynced(dbText);
+    }, [dbText]);
 
     async function save(next) {
+        if (busy.current) return;
+        busy.current = true;
+        setSaving(true);
+        try {
+            await saveOnce(next);
+        } finally {
+            busy.current = false;
+            setSaving(false);
+        }
+    }
+
+    async function saveOnce(next) {
         if (!next.trim()) {
             if (!current?.text?.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
-            const failed = await removeItem('notices', current.id);
+            const before = current.text;
+            const failed = await clearNotice(current);
             if (failed?.storageFailed) return;
-            cleared.current = { date, text: current.text };
-            showToast('이 날 알림장을 비웠어요.', true);
+            showToast('이 날 알림장을 비웠어요.', false, {
+                label: '되돌리기',
+                onClick: async () => {
+                    const result = await saveNotice(date, before);
+                    if (!result?.storageFailed) showToast('');
+                },
+            });
             return;
         }
         const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() }, { from: current ? (current.localOnly ? 'local' : 'cloud') : undefined });
@@ -184,7 +205,7 @@ export function Notice() {
                         showToast('복사하지 못했어요. 글을 선택해 주세요.');
                     }
                 }}>복사</Btn>
-                <Btn className="primary-btn" style={{ flex: 1 }} onClick={() => save(text)}>저장</Btn>
+                <Btn className="primary-btn" style={{ flex: 1 }} disabled={saving} aria-busy={saving} onClick={() => save(text)}>저장</Btn>
             </div>
             <h3>지난 알림장</h3>
             {others.slice(0, 8).map((row) => (
