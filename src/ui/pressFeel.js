@@ -74,15 +74,21 @@ export function pressDown(target, options = {}) {
     /* QA 1차 6번: Enter는 누르는 순간 열리면서 글자 칸으로 초점이 옮겨 가, 버튼에는 keyup이 오지 않습니다.
        그래서 창 전체에서 Enter·Space를 뗄 때도 풀어 줍니다. */
     const onKeyUp = (event) => { if (event.key === 'Enter' || event.key === ' ') onUp(); };
+    /* QA 2차 5번: 누른 채 다른 창·앱으로 가면 pointerup·keyup이 오지 않으므로, 창이 초점을 잃거나 화면이 가려질 때도 풉니다. */
+    const onHide = () => { if (document.visibilityState === 'hidden') onUp(); };
     button._pressStop = () => {
         window.removeEventListener('pointerup', onUp, true);
         window.removeEventListener('pointercancel', onUp, true);
         window.removeEventListener('keyup', onKeyUp, true);
+        window.removeEventListener('blur', onUp);
+        document.removeEventListener('visibilitychange', onHide);
         button._pressStop = null;
     };
     window.addEventListener('pointerup', onUp, true);
     window.addEventListener('pointercancel', onUp, true);
     window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('blur', onUp);
+    document.addEventListener('visibilitychange', onHide);
     if (options.silent || !jamFeelEnabled()) return;
     playJam('pop');
     vibratePress();

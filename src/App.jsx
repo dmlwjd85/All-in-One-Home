@@ -480,7 +480,7 @@ export default function App() {
         showToast,
         openQuick: (kind, extra = {}) => setFlow({ id: 'quick', kind: kind || '관찰', ...extra }),
         openFlow: (next) => setFlow(next),
-        openPlus: () => setPlus(true),
+        openPlus: (opts) => setPlus(opts?.more ? 'more' : true),
         go,
         openHotkeyHelp: () => setHelp(true),
         route,
@@ -632,6 +632,7 @@ export default function App() {
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet
+                        startMore={plus === 'more'}
                         onClose={() => setPlus(false)}
                         onPick={(action) => {
                             setPlus(false);

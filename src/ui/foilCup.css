@@ -55,6 +55,7 @@ html.dark .foil-fab .fab-disc { box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); 
 
 .foil-fab .cup-svg { display: block; overflow: visible; }
 .foil-fab .cup-seed { fill: var(--cup-seed); }
+.foil-fab .cup-pulp { fill: url(#cupd-pulp); }
 .foil-fab .cup-edge { stroke: var(--cup-edge); }
 .foil-fab .cup-rimtop { fill: var(--cup-rimtop); }
 .foil-fab .cup-ink { fill: var(--cup-ink); stroke: var(--cup-ink); stroke-linejoin: round; }
@@ -67,6 +68,11 @@ html.dark .foil-fab .fab-disc { box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); 
 .foil-fab .cup-d2,
 .foil-fab .cup-lbl2 { display: none; }
 @container cupd (min-width: 49px) {
+    .foil-fab .cup-d2 { display: inline; }
+}
+/* 가계부 a67fca6와 같이 고해상도 화면(2dppx 이상)은 접시 크기와 상관없이 엠보 점·가는 주름·씨 반사까지 그립니다. */
+@media (min-resolution: 2dppx), (-webkit-min-device-pixel-ratio: 2) {
+    .foil-fab .cup-d1,
     .foil-fab .cup-d2 { display: inline; }
 }
 @container cupd (min-width: 80px) {

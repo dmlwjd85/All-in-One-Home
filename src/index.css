@@ -514,6 +514,8 @@ a.chip,
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* QA 2차 5번: 어두운 화면에서 --primary(#A73D74)는 바탕(#2A2627)과 2.5:1뿐이라, 밝은 --accent(#E08B9A, 약 6:1)로 초점 테두리를 그립니다. */
+.dark :focus-visible, .dark .field:focus { outline-color: var(--accent); }
 
 .home-grid { display: grid; gap: 12px; }
 .home-leave { padding: 14px; border-radius: var(--radius-xl); }

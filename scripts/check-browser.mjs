@@ -948,9 +948,11 @@ try {
             buttons: [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()),
         }));
         check(face.field, '＋에 입력창이 없습니다.');
-        for (const label of ['출결', '상담', '할 일', '일정', '더보기']) {
+        for (const label of ['출결', '상담', '할 일', '일정']) {
             if (!face.buttons.some((item) => item.includes(label))) failures.push(`＋에 ${label}이 없습니다.`);
         }
+        // QA 2차 1번: 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기가 이미 펼쳐져 있습니다(접기 단추가 보임).
+        check(face.buttons.some((item) => item.includes('접기')) && !face.buttons.some((item) => item.includes('더보기')), `붙여넣기로 연 ＋에 더보기가 펼쳐져 있지 않습니다: ${face.buttons.join(' / ')}`);
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.includes('더보기'))?.click());
         await page.waitForFunction(() => document.body.innerText.includes('회의록 작성') && document.body.innerText.includes('보호자'));
         const moreLabels = await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].map((el) => el.innerText.replace(/\s+/g, ' ').trim()));
@@ -2889,6 +2891,46 @@ try {
                     await page.keyboard.press('Escape');
                     await page.waitForFunction(() => !document.querySelector('.quick-bar.is-open'), { timeout: 3000 }).catch(() => {});
                 }
+                /* QA 2차 5번: 누른 채 창이 초점을 잃거나(blur) 화면이 가려지면(visibilitychange hidden) 눌림이 풀려야 합니다. */
+                const lost = await page.evaluate(async (sel) => {
+                    const el = document.querySelector(sel);
+                    const rect = el.getBoundingClientRect();
+                    const down = () => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 7, button: 0, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 }));
+                    const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+                    down();
+                    await wait(120);
+                    const before = el.dataset.press;
+                    window.dispatchEvent(new Event('blur'));
+                    await wait(50);
+                    const blur = el.dataset.press;
+                    down();
+                    await wait(120);
+                    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+                    document.dispatchEvent(new Event('visibilitychange'));
+                    delete document.visibilityState;
+                    await wait(50);
+                    const hidden = el.dataset.press;
+                    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 7 }));
+                    return { before, blur, hidden, pressed: el.classList.contains('is-pressed') };
+                }, selector);
+                check(lost.before === 'down' && lost.blur === 'rest' && lost.hidden === 'rest' && !lost.pressed, `${width} ${mode} 창 초점을 잃거나 화면이 가려져도 쨈 컵 눌림이 풀리지 않습니다: ${JSON.stringify(lost)}`);
+                /* QA 2차 5번: 키보드 초점 테두리는 바탕과 3:1 이상이어야 합니다(어두운 화면 포함). */
+                const ring = await page.evaluate((sel) => {
+                    const el = document.querySelector(sel);
+                    el.focus();
+                    const rgb = (text) => (text.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+                    const lum = ([r, g, b]) => [r, g, b].map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+                    const style = getComputedStyle(el);
+                    const probe = document.createElement('div');
+                    probe.style.background = 'var(--bg)';
+                    document.body.append(probe);
+                    const bg = getComputedStyle(probe).backgroundColor;
+                    probe.remove();
+                    const a = lum(rgb(style.outlineColor));
+                    const b = lum(rgb(bg));
+                    return { visible: el.matches(':focus-visible'), style: style.outlineStyle, color: style.outlineColor, bg, ratio: Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100 };
+                }, selector);
+                check(ring.visible && ring.style !== 'none' && ring.ratio >= 3, `${width} ${mode} 키보드 초점 테두리가 바탕과 3:1이 안 됩니다: ${JSON.stringify(ring)}`);
                 await clickPlus(page, '관찰');
                 await page.waitForFunction(() => document.body.innerText.includes('누구'));
                 await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());

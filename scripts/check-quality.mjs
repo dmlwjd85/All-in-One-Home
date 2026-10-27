@@ -1,4 +1,5 @@
 /** 파싱, 옮기기, 대비, 공휴일, 글꼴, 화면 문구를 확인합니다. */
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';
@@ -564,6 +565,33 @@ const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 check(!bits.includes('KokMark') && !bits.includes('kok-mark'), '쓰지 않는 하단 버튼 글자 윤곽이 남아 있습니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
 check((appText.match(/<SealCup \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 2, '하단 버튼 글자가 가계부 쨈 컵과 다릅니다.');
+// QA 2차 2번: 컵 그림 자체가 가계부 a67fca6 cupD.js와 같아야 합니다. 바꿀 수 있는 것은 그라디언트 id 'cupd-jam' → 'cupdjam'(화면 문구 검사 때문) 하나뿐이고, 색은 foilCup.css 변수로만 바꿉니다.
+{
+    const cupSrc = readFileSync(`${root}/src/ui/cupD.js`, 'utf8');
+    const svg = (cupSrc.match(/export const CUP_SVG = '([^']*)';/) || [])[1] || '';
+    const original = svg.replace(/cupdjam/g, 'cupd-jam');
+    const count = (re) => (svg.match(re) || []).length;
+    const pathDs = [...svg.matchAll(/<path\b[^>]*\sd="([^"]+)"/g)].map((m) => m[1]);
+    const shape = createHash('sha256').update(original).digest('hex');
+    check(shape === '2a885d914f940782c192d52572137eafa95d50eb60bae540551fe641b063d33a', `컵 그림이 가계부 a67fca6 원본과 다릅니다(지문 ${shape.slice(0, 12)}).`);
+    check(count(/<path\b/g) === 43 && count(/<(ellipse|circle|rect)\b/g) === 62 && original.length === 15588, `컵 그림의 경로 수·모양 수가 원본(경로 43, 원·사각 62)과 다릅니다: 경로 ${count(/<path\b/g)}, 원·사각 ${count(/<(ellipse|circle|rect)\b/g)}`);
+    const need = {
+        '뚜껑 위 쨈 방울': 'M46.6 28.6Q46.8 25.6 50.2 25.4Q54.4 25.4 54.6 28.4Q54.6 30.6 51 30.8Q46.6 30.9 46.6 28.6Z',
+        '호일 반사 띠': 'M7.6 24.6L17.4 9.2H21.2L9.6 28.6Z',
+        '호일 반사 띠(가는 줄)': 'M12.4 29.6L22 12.6L22.9 13.5L13.6 30.4Z',
+        '접힌 면 왼쪽(그늘)': 'M8.2 21.6L18.6 25.4L9.4 25.8Z',
+        '접힌 면 왼쪽(빛)': 'M8.2 21.6L18.6 25.4L12.2 21.2Z',
+        '접힌 면 오른쪽(그늘)': 'M44.2 15.2L55.8 19.6L45.6 19.2Z',
+        '접힌 면 오른쪽(빛)': 'M44.2 15.2L55.8 19.6L50.6 15.4Z',
+    };
+    for (const [name, d] of Object.entries(need)) check(pathDs.includes(d), `컵 그림에 ${name}이 없습니다.`);
+    check(/<path class="cup-pulp" d="M27\.6 44\.2/.test(svg) && svg.includes('stroke-opacity=".6" stroke-width=".8"'), '컵 그림의 과육과 과육 빛(1배에서도 보이는 것)이 없습니다.');
+    check(/<ellipse class="cup-seed" cx="19" cy="46" rx="1\.25" ry="0\.68"/.test(svg) && count(/class="cup-seed"/g) === 10, '컵 그림의 씨 크기가 원본(1.25)과 다릅니다.');
+    check(!svg.includes('cupd-jam') && count(/url\(#cupdjam\)/g) === 4, '컵 그림의 쨈 그라디언트 id가 바뀌었습니다.');
+    const cupCss = readFileSync(`${root}/src/ui/foilCup.css`, 'utf8');
+    check(cupCss.includes('.foil-fab .cup-pulp { fill: url(#cupd-pulp); }'), '과육에 색이 칠해지지 않습니다(검게 보임).');
+    check(/@media \(min-resolution: 2dppx\), \(-webkit-min-device-pixel-ratio: 2\) \{\s*\.foil-fab \.cup-d1,\s*\.foil-fab \.cup-d2 \{ display: inline; \}/.test(cupCss), '고해상도 화면에서 컵 세부 묘사가 가계부처럼 켜지지 않습니다.');
+}
 check(appText.includes('누를 때 소리가 나요') && appText.includes('>끄기<') && !appText.includes('콕'), '소리 안내 문구가 없습니다.');
 check(/const onKey = \(event\) => \{\n\s+if \(locked\) return;/.test(appText), '잠금 중에 단축키가 먹습니다.');
 check(appText.includes('compositionupdate') && appText.includes('noteCompositionUpdate(event?.data)'), '조합이 바뀌는 글자를 기록하지 않습니다.');

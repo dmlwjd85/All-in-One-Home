@@ -92,6 +92,8 @@ check(JSON.stringify(localStore.dump() || {}).includes('학폭') && !JSON.string
 const undoneSecret = await undo();
 check(undoneSecret && !snapshot().local.records.some((row) => String(row.text || '').includes('학폭')), '민감한 관찰 되돌리기가 기기에서 지우지 않습니다.');
 check(!JSON.stringify(localStore.dump() || {}).includes('학폭'), '되돌린 민감한 관찰이 기기 저장소에 남습니다.');
+// QA 2차 4번: 되돌린 뒤에도 민감한 행 id가 클라우드 삭제 대기열에 오르면 안 됩니다(이 기기에만 있던 글이므로).
+check(secretRow?.id && !queuedCloudKeys().some((key) => key === `records/${secretRow.id}` || key.endsWith(`/${secretRow.id}`)), `되돌린 민감한 관찰이 클라우드 삭제 대기열에 올랐습니다: ${JSON.stringify(queuedCloudKeys())}`);
 
 const note = await saveQuick({ text: '운동회 안내', kind: '메모', date: '2026-10-26' });
 const noteId = snapshot().notes.find((row) => row.text === '운동회 안내')?.id;
@@ -322,7 +324,11 @@ if (!failures.length) {
         });
         await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
         await tapPage.waitForSelector('.tabbar .fab');
+        // QA 2차 1번: 손가락이 누른 횟수를 셉니다. main은 '+ → 더보기 → 메시지' 3번이므로 3번을 넘으면 안 됩니다.
+        let taps = 0;
+        const path = [];
         await tapPage.tap('.tabbar .fab');
+        taps += 1; path.push('쨈');
         await tapPage.waitForSelector('.quick-bar.is-open .quick-paste', { timeout: 3000 }).catch(() => {});
         const paste = await tapPage.evaluate(() => {
             const el = document.querySelector('.quick-bar.is-open .quick-paste');
@@ -332,50 +338,85 @@ if (!failures.length) {
         });
         check(paste && paste.text === '메시지·회의록 붙여넣기' && paste.h >= 44 && paste.inView, `휴대폰에서 빠른 입력에 '메시지·회의록 붙여넣기' 단추가 보이지 않습니다: ${JSON.stringify(paste)}`);
         await delay(500);
-        if (paste) await tapPage.tap('.quick-bar.is-open .quick-paste');
+        if (paste) {
+            await tapPage.tap('.quick-bar.is-open .quick-paste');
+            taps += 1; path.push('붙여넣기');
+        }
         const plusOpen = await tapPage.waitForSelector('[data-screen="plus"]', { timeout: 3000 }).then(() => true, () => false);
-        const tapText = async (text) => {
-            const handle = await tapPage.evaluateHandle((label) => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim().endsWith(label)) || null, text);
-            const el = handle.asElement();
-            if (!el) return false;
-            await el.evaluate((node) => node.scrollIntoView({ block: 'center' }));
-            await el.tap();
-            return true;
-        };
+        await delay(300);
+        // 화면을 굴리지 않고 지금 보이는 단추만 셉니다. 보이지 않으면 사람처럼 더보기를 한 번 더 누릅니다(그만큼 횟수가 늘어 실패).
+        const findTile = (label) => tapPage.evaluateHandle((text) => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => {
+            const r = el.getBoundingClientRect();
+            return el.innerText.trim().endsWith(text) && r.width > 0 && r.top >= 0 && r.bottom <= innerHeight;
+        }) || null, label).then((handle) => handle.asElement());
+        let tile = plusOpen ? await findTile('메시지 붙여넣기') : null;
+        if (plusOpen && !tile) {
+            const more = await findTile('더보기');
+            if (more) {
+                await more.tap();
+                taps += 1; path.push('더보기');
+                await delay(300);
+                tile = await findTile('메시지 붙여넣기');
+            }
+        }
         const barGone = await tapPage.evaluate(() => !document.querySelector('.quick-bar.is-open'));
-        const moreTapped = plusOpen && await tapText('더보기');
         const tiles = await tapPage.evaluate(() => (document.querySelector('[data-screen="plus"] [aria-label="더 보기"]')?.textContent || ''));
-        const msgTapped = moreTapped && await tapText('메시지 붙여넣기');
-        const msgOpen = msgTapped && await tapPage.waitForSelector('[data-screen="message"]', { timeout: 3000 }).then(() => true, () => false);
-        const plusState = { bar: !barGone, minutes: tiles.includes('회의록 작성'), msg: msgOpen };
+        if (tile) {
+            await tile.tap();
+            taps += 1; path.push('메시지 붙여넣기');
+        }
+        const msgOpen = Boolean(tile) && await tapPage.waitForSelector('[data-screen="message"]', { timeout: 3000 }).then(() => true, () => false);
+        const plusState = { bar: !barGone, minutes: tiles.includes('회의록 작성'), msg: msgOpen, taps, path: path.join(' → ') };
         check(plusOpen && !plusState.bar && plusState.msg && plusState.minutes, `휴대폰에서 탭으로 + 화면(메시지·회의록)이 열리지 않습니다: ${JSON.stringify({ plusOpen, ...plusState })}`);
+        check(msgOpen && taps <= 3, `메시지·회의록까지 ${taps}번 눌러야 합니다(3번 이하여야 함): ${plusState.path}`);
+        console.log(`메시지·회의록까지 누른 횟수: ${taps}번 (${plusState.path})`);
 
         /* 가계부 #31 연타 보호: 컵을 두 번 빠르게 탭하면 두 번째 탭이 막 열린 막대(칩)에 닿아도 저장 검사가 돌지 않습니다.
            0.5초 뒤 일부러 누른 칩은 그대로 받습니다. */
-        await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
-        await tapPage.waitForSelector('.tabbar .fab');
-        // 손가락은 컵 접시 아래쪽(가운데에서 왼쪽 10px·아래 14px)을 누릅니다. 360 폭에서는 열린 막대의 '할 일' 칩 자리입니다.
-        const cupAt = await tapPage.evaluate(() => { const r = document.querySelector('.tabbar .fab .fab-disc').getBoundingClientRect(); return { x: r.x + r.width / 2 - 10, y: r.y + r.height / 2 + 14 }; });
-        await tapPage.evaluate(() => {
-            window.__sawGhost = false;
-            new MutationObserver(() => {
-                if (document.querySelector('.fab-ghost.is-burst') && document.querySelectorAll('.cup-burst .cup-bit').length === 12) window.__sawGhost = true;
-            }).observe(document.body, { childList: true });
-        });
-        await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
-        await delay(90);
-        const under = await tapPage.evaluate(({ x, y }) => {
+        // QA 2차 3번: 상자가 바쁘면 두 탭 사이가 길어져(400ms 넘으면 일부러 누른 탭으로 봄) 가끔 실패했습니다.
+        // 두 탭의 pointerdown 간격을 페이지 안에서 재고, 300ms를 넘으면 그 회차는 버리고 다시 해 봅니다(최대 4번).
+        let cupAt = null;
+        let under = null;
+        let burst = null;
+        let gap = Infinity;
+        const gaps = [];
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+            await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+            await tapPage.waitForSelector('.tabbar .fab');
+            // 손가락은 컵 접시 아래쪽(가운데에서 왼쪽 10px·아래 14px)을 누릅니다. 360 폭에서는 열린 막대의 '할 일' 칩 자리입니다.
+            cupAt = await tapPage.evaluate(() => { const r = document.querySelector('.tabbar .fab .fab-disc').getBoundingClientRect(); return { x: r.x + r.width / 2 - 10, y: r.y + r.height / 2 + 14 }; });
+            await tapPage.evaluate(() => {
+                window.__sawGhost = false;
+                window.__downs = [];
+                window.addEventListener('pointerdown', (event) => { window.__downs.push(event.timeStamp); }, true);
+                new MutationObserver(() => {
+                    if (document.querySelector('.fab-ghost.is-burst') && document.querySelectorAll('.cup-burst .cup-bit').length === 12) window.__sawGhost = true;
+                }).observe(document.body, { childList: true });
+            });
+            await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
+            await delay(90);
+            await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
+            await delay(400);
+            burst = await tapPage.evaluate(() => ({
+                toast: document.querySelector('.toast')?.innerText || '',
+                open: Boolean(document.querySelector('.quick-bar.is-open')),
+                ghost: window.__sawGhost === true,
+                left: document.querySelectorAll('.fab-ghost, .cup-burst').length,
+                downs: window.__downs.length,
+                gap: window.__downs.length >= 2 ? window.__downs[1] - window.__downs[0] : Infinity,
+            }));
+            gap = burst.gap;
+            gaps.push(Number.isFinite(gap) ? Math.round(gap) : -1);
+            if (gap <= 300) break;
+            console.log(`연타 검사 ${attempt + 1}회차: 두 탭 간격 ${Math.round(gap)}ms라 다시 합니다.`);
+        }
+        // 컵 자리를 막대 칩이 덮는지는 연타가 끝난 뒤(막대가 열린 채) 확인합니다. 두 탭 사이에 재지 않아 간격이 늘지 않습니다.
+        under = await tapPage.evaluate(({ x, y }) => {
             const el = document.elementFromPoint(x, y);
             return { inBar: Boolean(el?.closest('.quick-bar.is-open')), chip: el?.closest('.quick-chip')?.dataset.kind || '' };
         }, cupAt);
-        await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
-        await delay(400);
-        const burst = await tapPage.evaluate(() => ({
-            toast: document.querySelector('.toast')?.innerText || '',
-            open: Boolean(document.querySelector('.quick-bar.is-open')),
-            ghost: window.__sawGhost === true,
-            left: document.querySelectorAll('.fab-ghost, .cup-burst').length,
-        }));
+        console.log(`연타 검사 두 탭 간격: ${gaps.join(', ')}ms`);
+        check(gap <= 300, `연타 검사의 두 탭 간격이 4번 모두 300ms를 넘어 검사하지 못했습니다: ${gaps.join(', ')}ms`);
         check(under.inBar && under.chip, `휴대폰에서 열린 막대의 칩이 컵 자리를 덮지 않아 연타 검사를 할 수 없습니다: ${JSON.stringify(under)}`);
         check(burst.ghost && burst.left === 0, `막대가 컵을 덮을 때 컵 복사본·쨈 방울 12개가 터지고 사라지지 않습니다: ${JSON.stringify(burst)}`);
         check(burst.open && !burst.toast.includes('한 줄만'), `컵 연타의 두 번째 탭이 막대에서 저장 검사를 일으킵니다: ${JSON.stringify(burst)}`);

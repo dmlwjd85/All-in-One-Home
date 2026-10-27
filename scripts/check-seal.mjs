@@ -31,7 +31,7 @@ check(!/rgba\(\s*80\s*,\s*90\s*,\s*200/.test(foilCss) && foilCss.includes('0 6px
 /* 가계부 #31: 막대 위 컵 복사본·조각(0.38초, 방울 10~16px, 은박 14×9px)과 어두운 화면 조각 테두리 */
 check(foilCss.includes('animation: cup-bit .38s') && foilCss.includes('width: 14px;\n    height: 9px;') && foilCss.includes('html.dark .cup-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }') && foilCss.includes('html.dark .cup-foil { border-color: rgba(255,255,255,.8); }'), '가계부 #31 조각 크기·시간·어두운 화면 테두리가 다릅니다.');
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
-check(appText.includes('aria-label="쨈 빠른 입력 열기"') && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않습니다.');
+check((appText.match(/aria-label="쨈 빠른 입력 열기"/g) || []).length === 2 && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않거나, 휴대폰·데스크톱 두 버튼 중 하나의 이름이 바뀌었습니다(QA 2차 M2).');
 /* QA 1차 1번: 휴대폰에는 단축키가 없으므로, 빠른 입력 안에 + 화면으로 가는 단추가 있어야 합니다. */
 const quickText = readFileSync(resolve(root, 'src/ui/QuickBar.jsx'), 'utf8');
 check(quickText.includes('메시지·회의록 붙여넣기') && quickText.includes('openPlus') && /className="quick-paste"[\s\S]{0,200}onClick=\{openPaste\}/.test(quickText), '빠른 입력에 + 화면으로 가는 단추가 없습니다.');

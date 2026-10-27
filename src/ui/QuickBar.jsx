@@ -138,12 +138,12 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         }).catch(() => keepText('저장하지 못했어요.'));
     }
 
-    /* 휴대폰에서 + 화면(메시지·회의록 붙여넣기)으로 가는 길. 빠른 입력을 닫고 바로 엽니다. */
+    /* 휴대폰에서 + 화면(메시지·회의록 붙여넣기)으로 가는 길. 빠른 입력을 닫고 더보기를 펼친 채 엽니다(쨈 → 붙여넣기 → 칸, 세 번). */
     function openPaste() {
         try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
         setListening(false);
         onClose();
-        openPlus?.();
+        openPlus?.({ more: true });
     }
 
     function saveChip(kind, event) {
