@@ -3104,6 +3104,49 @@ try {
         await delay(300);
     };
 
+    const noticeType = (page, value) => page.evaluate(async (next) => {
+        const box = document.querySelector('textarea[aria-label="알림장"]');
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, next);
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((done) => setTimeout(done, 100));
+    }, value);
+    const noticeUndoClick = (page) => page.evaluate(() => {
+        const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+        button?.click();
+        return Boolean(button);
+    });
+    // 저장된 글을 비운 뒤 새 글을 쓰다가 되돌려, 입력칸 위에 되돌린 글이 보이는 상태를 만듭니다.
+    const noticeRestoredSetup = async (page, mode, saved = '리코더 챙기기') => {
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: saved, source: 'app' }]);
+        await noticeOpen(page, mode, noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeType(page, '단소 챙기기');
+        await noticeUndoClick(page);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === saved));
+        await page.waitForSelector('[role="group"][aria-label="되돌린 글"]', { timeout: 5000 }).catch(() => {});
+        await delay(200);
+    };
+    const noticeRestoredView = (page) => page.evaluate(() => {
+        const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
+        const root = document.documentElement;
+        if (!panel) return { shown: false, pageOverflow: root.scrollWidth > root.clientWidth + 1 };
+        const note = panel.querySelector('.restored-note');
+        const button = [...panel.querySelectorAll('button')].find((el) => el.innerText.trim() === '되돌린 글 불러오기');
+        const line = parseFloat(getComputedStyle(note).lineHeight) || 20;
+        const rect = panel.getBoundingClientRect();
+        const brect = button?.getBoundingClientRect();
+        return {
+            shown: true,
+            note: note.textContent,
+            label: panel.innerText,
+            button: Boolean(button),
+            lines: Math.round(note.clientHeight / line),
+            clamped: note.scrollHeight > note.clientHeight + 1,
+            overflow: rect.right > root.clientWidth + 1 || (brect ? brect.right > root.clientWidth + 1 : true) || root.scrollWidth > root.clientWidth + 1,
+        };
+    });
+
     await withDemo(390, 'light', async (page) => {
         await noticeSeed(page);
         await noticeOpen(page, 'light', noticeDay);
@@ -3555,7 +3598,84 @@ try {
         check(!failToast.includes('되돌렸어요') && failToast.includes('저장 공간'), `저장에 실패했는데 되돌렸다는 안내가 뜨거나 저장 공간 안내가 없습니다: ${JSON.stringify(failToast)}`);
         check(failVaults.cloud.some((row) => row.date === noticeDay && row.text === ''), `저장에 실패했는데 비운 알림장이 바뀌었습니다: ${JSON.stringify(failVaults)}`);
         await page.screenshot({ path: resolve(shots, 'notice_undo_fail_360_light.png') });
+        // 저장에 실패하면 입력칸에 쓰던 글을 그대로 두고 저장 공간 안내만 띄웁니다(DB는 원래 글 그대로).
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        await noticeSave(page, '단소 챙기기', null);
+        await delay(900);
+        const saveFailBox = await noticeBox(page);
+        const saveFailToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const saveFailVaults = await noticeVaults(page);
+        check(saveFailBox === '단소 챙기기', `저장에 실패했는데 입력칸에 쓰던 글이 사라졌습니다: ${JSON.stringify(saveFailBox)}`);
+        check(saveFailToast.includes('저장 공간') && !saveFailToast.includes('저장했어요'), `저장에 실패했는데 저장 공간 안내가 없거나 저장했다는 안내가 뜹니다: ${JSON.stringify(saveFailToast)}`);
+        check(saveFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `저장에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(saveFailVaults)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_save_fail_typed_360_light.png') });
+        await noticeSave(page, '단소 챙기기', null);
+        const saveRetry = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'));
+        check(saveRetry.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'), `저장 공간이 돌아온 뒤 다시 저장했는데 저장되지 않았습니다: ${JSON.stringify(saveRetry)}`);
+
+        // 비우기에 실패하면 "비웠어요" 토스트가 저장 공간 안내를 덮지 않고, 저장된 글도 그대로입니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        await noticeSave(page, '', null);
+        await delay(900);
+        const clearFailToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const clearFailVaults = await noticeVaults(page);
+        check(clearFailToast.includes('저장 공간') && !clearFailToast.includes('비웠어요'), `비우기에 실패했는데 비웠다는 안내가 저장 공간 안내를 덮었습니다: ${JSON.stringify(clearFailToast)}`);
+        check(clearFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `비우기에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(clearFailVaults)}`);
+
+        // N10: 쓰던 글을 남긴 채 되돌리면 입력칸 위에 되돌린 글을 보여 주고, 불러오기로 입력칸에 채울 수 있습니다.
+        await noticeRestoredSetup(page, 'light');
+        const restoredPanel = await noticeRestoredView(page);
+        check(restoredPanel.shown && restoredPanel.note === '리코더 챙기기' && restoredPanel.label.includes('저장하면 지금 쓰는 글로 바뀌어요') && restoredPanel.button, `쓰던 글을 남긴 채 되돌렸는데 되돌린 글이 입력칸 위에 보이지 않습니다: ${JSON.stringify(restoredPanel)}`);
+        check(await noticeBox(page) === '단소 챙기기', '되돌린 글을 보여 주면서 쓰던 글을 바꿨습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '되돌린 글 불러오기')?.click());
+        await delay(300);
+        const loadedBox = await noticeBox(page);
+        const afterLoad = await noticeRestoredView(page);
+        check(loadedBox === '리코더 챙기기' && !afterLoad.shown, `되돌린 글 불러오기를 눌렀는데 입력칸에 되돌린 글이 채워지지 않았거나 안내가 남았습니다: ${JSON.stringify({ loadedBox, afterLoad })}`);
+        // 쓰던 글을 그대로 저장하면 되돌린 글 안내는 사라집니다.
+        await noticeRestoredSetup(page, 'light');
+        await noticeSave(page, '단소 챙기기', null);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'));
+        const afterSave = await noticeRestoredView(page);
+        check(!afterSave.shown, `쓰던 글을 저장했는데 되돌린 글 안내가 남았습니다: ${JSON.stringify(afterSave)}`);
+
+        // 공백만 쓴 칸은 빈칸과 같게 봅니다: 되돌리면 되돌린 글로 채우고, 쓰던 글 안내·되돌린 글 표시는 없습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeType(page, '   ');
+        check(await noticeUndoClick(page), '공백을 쓴 뒤 비우기 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'));
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('되돌렸어요'), { timeout: 5000 }).catch(() => {});
+        await delay(200);
+        const spaceBox = await noticeBox(page);
+        const spaceToast = await noticeToast();
+        const spacePanel = await noticeRestoredView(page);
+        check(spaceBox === '리코더 챙기기' && spaceToast.includes('알림장을 되돌렸어요.') && !spaceToast.includes('쓰던 글') && !spacePanel.shown, `공백만 쓴 칸에서 되돌렸는데 빈칸과 다르게 다룹니다: ${JSON.stringify({ spaceBox, spaceToast, spacePanel })}`);
     }, 800);
+
+    // 되돌린 글 표시: 360·390·1280, 밝은·어두운 화면에서 넘치지 않고 두 줄 안에 보이는지 찍어 둡니다.
+    for (const [width, mode] of [[360, 'light'], [360, 'dark'], [390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']]) {
+        await withDemo(width, mode, async (page) => {
+            await noticeRestoredSetup(page, mode, '리코더 챙기기, 실내화 주머니, 우유 급식 신청서, 체험 학습 동의서를 꼭 챙겨 오세요. 내일은 체육 수업이 있어요.');
+            const view = await noticeRestoredView(page);
+            check(view.shown && view.button && !view.overflow && view.lines <= 2 && (width >= 900 || view.clamped), `${width} ${mode}에서 되돌린 글 표시가 넘치거나 두 줄을 넘깁니다: ${JSON.stringify(view)}`);
+            await page.screenshot({ path: resolve(shots, `notice_restored_${width}_${mode}.png`) });
+        }, width >= 900 ? 900 : 800);
+    }
 } catch (error) {
     failures.push(error?.message || String(error));
 }

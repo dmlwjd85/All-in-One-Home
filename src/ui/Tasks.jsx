@@ -131,7 +131,7 @@ function NoteBox() {
     );
 }
 
-// 열려 있는 알림장 화면의 날짜·입력칸 글·DB 글. 화면을 떠나면 비웁니다.
+// 열려 있는 알림장 화면의 날짜·입력칸 글·DB 글과 되돌린 글을 보여 줄 함수. 화면을 떠나면 비웁니다.
 const liveNotice = { current: null };
 
 export function Notice() {
@@ -144,20 +144,23 @@ export function Notice() {
     const [text, setText] = useState(dbText);
     const [synced, setSynced] = useState(dbText);
     const [saving, setSaving] = useState(false);
+    // 쓰던 글을 남긴 채 되돌렸을 때 입력칸 위에 보여 줄 되돌린 글
+    const [restored, setRestored] = useState('');
     const busy = useRef(false);
     const others = notices.filter((row) => row.date !== date && String(row.text || '').trim());
     const events = joined(data, 'events').filter((row) => row.date === date);
 
     useEffect(() => {
         // 되돌리기 안내가 지금 입력칸에 쓰던 글이 있는지 알 수 있게, 열려 있는 알림장 화면의 상태를 적어 둡니다.
-        liveNotice.current = { date, text, synced };
+        liveNotice.current = { date, text, synced, showRestored: setRestored };
     });
     useEffect(() => () => { liveNotice.current = null; }, []);
 
     useEffect(() => {
-        // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로일 때만 새 글로 채웁니다.
+        // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로이거나 비어 있을(공백만 포함) 때만 새 글로 채웁니다.
+        // 저장하는 동안에는 입력칸을 그대로 둡니다. 저장에 실패해 DB가 원래대로 돌아가도 쓰던 글이 사라지지 않아요.
         if (dbText === synced) return;
-        setText((prev) => prev === synced ? dbText : prev);
+        if (!busy.current) setText((prev) => prev === synced || !prev.trim() ? dbText : prev);
         setSynced(dbText);
     }, [dbText]);
 
@@ -186,6 +189,7 @@ export function Notice() {
                     const typing = Boolean(live && live.date === date && live.text.trim() && live.text !== live.synced);
                     const result = await restoreNoticeDay(cleared.before);
                     if (result?.storageFailed) return;
+                    if (typing) live.showRestored(pickNotice(cleared.before, date)?.text || '');
                     showToast(typing ? '알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.' : '알림장을 되돌렸어요.');
                 },
             });
@@ -203,6 +207,15 @@ export function Notice() {
                 <strong>{date === addDaysYmd(clock.ymd, 1) ? '내일' : date}</strong>
                 <Btn className="icon-btn" aria-label="다음 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, 1)}`); }}>›</Btn>
             </div>
+            {restored && restored === dbText && text.trim() && text !== dbText && (
+                <div className="glass" role="group" aria-label="되돌린 글" style={{ marginTop: 12, padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <span className="muted" style={{ display: 'block', fontSize: 13 }}>되돌린 글이에요. 저장하면 지금 쓰는 글로 바뀌어요.</span>
+                        <span className="restored-note" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 14, wordBreak: 'break-all' }}>{restored}</span>
+                    </div>
+                    <Btn className="chip" style={{ flexShrink: 0 }} onClick={() => { setText(dbText); setRestored(''); }}>되돌린 글 불러오기</Btn>
+                </div>
+            )}
             <textarea className="field" rows={8} aria-label="알림장" style={{ marginTop: 12 }} value={text} onChange={(event) => setText(event.target.value)} placeholder="내일 알림장을 적어 주세요" />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <Btn className="chip" onClick={() => {
