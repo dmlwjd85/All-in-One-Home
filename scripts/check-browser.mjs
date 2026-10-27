@@ -2363,6 +2363,163 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 정리함에'));
     }, 844);
+    // 숨은 반대쪽 행과 메모 민감어: 알림장·하루 메모·일정 줄을 실제 화면으로 고칩니다.
+    await withDemo(390, 'light', async (page) => {
+        const readVaults = () => page.evaluate(async () => {
+            const read = (name) => new Promise((resolveRead, reject) => {
+                const req = indexedDB.open(name);
+                req.onerror = () => reject(req.error);
+                req.onsuccess = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('kv')) { resolveRead(null); return; }
+                    const get = db.transaction('kv').objectStore('kv').get('state');
+                    get.onsuccess = () => resolveRead(get.result || null);
+                    get.onerror = () => reject(get.error);
+                };
+            });
+            return { main: await read('ssug-gyomu'), local: await read('ssug-gyomu-local') };
+        });
+        const rowOf = (side, bucket, id) => (side?.[bucket] || []).find((row) => row.id === id) || null;
+        const until = async (test) => {
+            for (let attempt = 0; attempt < 40; attempt += 1) {
+                const vaults = await readVaults();
+                if (test(vaults)) return vaults;
+                await delay(150);
+            }
+            return readVaults();
+        };
+        const typeInto = (selector, value) => page.evaluate((sel, text) => {
+            const box = document.querySelector(sel);
+            if (!box) return false;
+            const proto = box.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, 'value').set.call(box, text);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+        }, selector, value);
+        const clickText = (label, scope = 'body') => page.evaluate((text, sel) => {
+            const button = [...document.querySelectorAll(`${sel} button`)].find((el) => el.innerText.trim() === text);
+            button?.click();
+            return Boolean(button);
+        }, label, scope);
+        const open = async (hash) => {
+            await page.goto(`${origin}?mode=light&at=08:42${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForFunction(() => document.querySelector('main, #root')?.innerText?.length > 0, { timeout: 15000 });
+        };
+
+        await page.evaluate(async () => {
+            const open = (name) => new Promise((resolveDb, reject) => {
+                const req = indexedDB.open(name);
+                req.onsuccess = () => resolveDb(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            const swap = async (name, edit) => {
+                const db = await open(name);
+                const store = db.transaction('kv', 'readwrite').objectStore('kv');
+                const state = await new Promise((resolveState, reject) => {
+                    const req = store.get('state');
+                    req.onsuccess = () => resolveState(req.result || {});
+                    req.onerror = () => reject(req.error);
+                });
+                edit(state);
+                await new Promise((resolvePut, reject) => {
+                    const req = store.put(state, 'state');
+                    req.onsuccess = () => resolvePut();
+                    req.onerror = () => reject(req.error);
+                });
+            };
+            const add = (state, bucket, row) => { state[bucket] = [...(state[bucket] || []), row]; };
+            await swap('ssug-gyomu', (state) => {
+                add(state, 'notices', { id: '2026-12-01', date: '2026-12-01', text: '준비물 가위', source: 'app' });
+                add(state, 'notices', { id: '2026-12-02', date: '2026-12-02', text: '체육복 챙기기', source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-03', date: '2026-12-03', text: '체험학습 서류', pinned: false, source: 'app' });
+                add(state, 'events', { id: 'qa-ev-1', date: '2026-12-07', time: '09:00', title: '현장체험 안내문', kind: '학급', memo: '', source: 'app' });
+                add(state, 'events', { id: 'qa-ev-2', date: '2026-12-07', time: '13:00', title: '학부모 공개수업', kind: '학급', memo: '', source: 'app' });
+            });
+            await swap('ssug-gyomu-local', (state) => {
+                add(state, 'notices', { id: '2026-12-01', date: '2026-12-01', text: '민원 전화 회신하기', source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-03', date: '2026-12-03', text: '보건실 다녀옴', pinned: false, source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-04', date: '2026-12-04', text: '건강 상담 메모', pinned: false, source: 'app' });
+                add(state, 'events', { id: 'qa-ev-1', date: '2026-12-07', time: '08:50', title: '현장체험 출발', kind: '학급', memo: '알레르기 약 챙기기', source: 'app' });
+            });
+        });
+
+        // 알림장: 클라우드 행을 고쳐도 숨은 기기 행이 남습니다.
+        await open('#/notice/2026-12-01');
+        const noticeShown = await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '준비물 가위', { timeout: 8000 }).then(() => true, () => false);
+        check(noticeShown, '숨은 행 검사: 알림장 화면에 클라우드 알림장이 먼저 나오지 않습니다.');
+        await typeInto('textarea[aria-label="알림장"]', '준비물 풀');
+        check(await clickText('저장'), '숨은 행 검사: 알림장 저장 단추가 없습니다.');
+        let vaults = await until((v) => rowOf(v.main, 'notices', '2026-12-01')?.text === '준비물 풀');
+        check(rowOf(vaults.main, 'notices', '2026-12-01')?.text === '준비물 풀', '숨은 행 검사: 알림장 화면에서 고친 글이 클라우드에 들어가지 않습니다.');
+        check(rowOf(vaults.local, 'notices', '2026-12-01')?.text === '민원 전화 회신하기', '숨은 행 검사: 알림장을 고치자 숨은 기기 전용 알림장이 지워졌습니다.');
+
+        // 알림장: 민감어로 고치면 클라우드에서 빠지고 기기에만 남습니다.
+        await open('#/notice/2026-12-02');
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '체육복 챙기기', { timeout: 8000 }).catch(() => {});
+        await typeInto('textarea[aria-label="알림장"]', '민원 서류 챙기기');
+        await clickText('저장');
+        vaults = await until((v) => Boolean(rowOf(v.local, 'notices', '2026-12-02')));
+        check(rowOf(vaults.local, 'notices', '2026-12-02')?.text === '민원 서류 챙기기', '숨은 행 검사: 민감어 알림장이 기기에 남지 않습니다.');
+        check(!rowOf(vaults.main, 'notices', '2026-12-02'), '숨은 행 검사: 민감어로 고친 알림장의 예전 글이 클라우드에 남았습니다.');
+
+        // 하루 메모: 기기 행을 고쳐도 숨은 클라우드 메모가 남습니다.
+        await open('#/day/2026-12-03');
+        const memoShown = await page.waitForFunction(() => document.querySelector('textarea[aria-label="하루 메모"]')?.value === '보건실 다녀옴', { timeout: 8000 }).then(() => true, () => false);
+        check(memoShown, '숨은 행 검사: 하루 메모 화면에 기기 전용 메모가 나오지 않습니다.');
+        await typeInto('textarea[aria-label="하루 메모"]', '보건실 다녀옴, 다시 확인');
+        check(await clickText('하루 메모 저장'), '숨은 행 검사: 하루 메모 저장 단추가 없습니다.');
+        vaults = await until((v) => rowOf(v.local, 'notes', 'day-2026-12-03')?.text === '보건실 다녀옴, 다시 확인');
+        check(rowOf(vaults.local, 'notes', 'day-2026-12-03')?.text === '보건실 다녀옴, 다시 확인', '숨은 행 검사: 하루 메모를 고친 글이 기기에 남지 않습니다.');
+        check(rowOf(vaults.main, 'notes', 'day-2026-12-03')?.text === '체험학습 서류', '숨은 행 검사: 하루 메모를 고치자 숨은 클라우드 메모가 지워졌습니다.');
+
+        // 하루 메모: 민감어를 빼면 기기 행은 없어지고 클라우드로 옮겨집니다.
+        await open('#/day/2026-12-04');
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="하루 메모"]')?.value === '건강 상담 메모', { timeout: 8000 }).catch(() => {});
+        await typeInto('textarea[aria-label="하루 메모"]', '상담 메모 정리');
+        await clickText('하루 메모 저장');
+        vaults = await until((v) => Boolean(rowOf(v.main, 'notes', 'day-2026-12-04')));
+        check(rowOf(vaults.main, 'notes', 'day-2026-12-04')?.text === '상담 메모 정리', '숨은 행 검사: 민감어를 뺀 하루 메모가 클라우드로 옮겨지지 않습니다.');
+        check(!rowOf(vaults.local, 'notes', 'day-2026-12-04'), '숨은 행 검사: 클라우드로 옮긴 하루 메모의 예전 민감 글이 기기에 남았습니다.');
+
+        // 일정 줄: 메모에 민감어가 있는 기기 일정은 제목만 고쳐도 기기에 남고, 숨은 클라우드 일정도 남습니다.
+        await open('#/day/2026-12-07');
+        const lineShown = await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="현장체험 출발 고치기"]')), { timeout: 8000 }).then(() => true, () => false);
+        check(lineShown, '숨은 행 검사: 일정 줄에 기기 전용 일정이 나오지 않습니다.');
+        await page.evaluate(() => document.querySelector('button[aria-label="현장체험 출발 고치기"]')?.click());
+        await page.waitForSelector('input[aria-label="현장체험 출발 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="현장체험 출발 고치기"]', '현장체험 출발 9시');
+        await page.evaluate(() => [...(document.querySelector('input[aria-label="현장체험 출발 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        vaults = await until((v) => [...(v.main?.events || []), ...(v.local?.events || [])].some((row) => row.title === '현장체험 출발 9시'));
+        check(rowOf(vaults.local, 'events', 'qa-ev-1')?.title === '현장체험 출발 9시', '숨은 행 검사: 메모에 민감어가 있는 일정이 기기에 남지 않습니다.');
+        check(rowOf(vaults.main, 'events', 'qa-ev-1')?.title === '현장체험 안내문', '숨은 행 검사: 일정 줄을 고치자 숨은 클라우드 일정이 지워지거나 바뀌었습니다.');
+        check(!(vaults.main?.events || []).some((row) => String(row.memo || '').includes('알레르기')), '숨은 행 검사: 메모에 민감어가 있는 일정이 클라우드 목록에 들어갔습니다.');
+
+        // 일정 줄: 클라우드 일정을 민감어로 고치면 클라우드에서 빠집니다.
+        await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="학부모 공개수업 고치기"]')), { timeout: 8000 }).catch(() => {});
+        await page.evaluate(() => document.querySelector('button[aria-label="학부모 공개수업 고치기"]')?.click());
+        await page.waitForSelector('input[aria-label="학부모 공개수업 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="학부모 공개수업 고치기"]', '학부모 공개수업 건강 상담');
+        await page.evaluate(() => [...(document.querySelector('input[aria-label="학부모 공개수업 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        vaults = await until((v) => Boolean(rowOf(v.local, 'events', 'qa-ev-2')));
+        check(rowOf(vaults.local, 'events', 'qa-ev-2')?.title === '학부모 공개수업 건강 상담', '숨은 행 검사: 민감어로 고친 일정이 기기에 남지 않습니다.');
+        check(!rowOf(vaults.main, 'events', 'qa-ev-2'), '숨은 행 검사: 민감어로 고친 일정의 예전 줄이 클라우드에 남았습니다.');
+
+        // 내보내기(기기 전용 기록 빼기): 민감한 글이 파일에 들어가지 않습니다.
+        await open('#/settings');
+        await page.evaluate(() => {
+            window.__qaExport = null;
+            const make = URL.createObjectURL.bind(URL);
+            URL.createObjectURL = (blob) => { blob.text().then((text) => { window.__qaExport = text; }); return make(blob); };
+        });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '기록 내려받기'), { timeout: 8000 }).catch(() => {});
+        check(await clickText('기록 내려받기'), '숨은 행 검사: 기록 내려받기 단추가 없습니다.');
+        const exported = await page.waitForFunction(() => window.__qaExport, { timeout: 5000 }).then((handle) => handle.jsonValue(), () => '');
+        check(exported.includes('준비물 풀'), '숨은 행 검사: 내보낸 파일을 읽지 못했습니다.');
+        check(exported.includes('현장체험 안내문') && exported.includes('체험학습 서류'), '숨은 행 검사: 숨은 클라우드 행이 내보낸 파일에서 빠졌습니다.');
+        const leaked = ['민원 전화 회신하기', '민원 서류 챙기기', '보건실 다녀옴', '알레르기 약 챙기기', '현장체험 출발 9시', '공개수업 건강 상담'].filter((text) => exported.includes(text));
+        check(leaked.length === 0, `숨은 행 검사: 기기 전용 기록을 빼고 내보냈는데 민감한 글이 들어갔습니다. ${leaked.join(', ')}`);
+    }, 844);
+
 } catch (error) {
     failures.push(error?.message || String(error));
 }
