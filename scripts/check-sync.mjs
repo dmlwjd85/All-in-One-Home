@@ -115,6 +115,7 @@ check(timeOf({ toMillis: () => 5 }) === 5 && timeOf({ seconds: 2, nanoseconds: 0
     check(normalizeQueue([{ uid: 'u1', name: 'records', id: 'old', at: now - FORGET_MAX_AGE_MS - 1 }], now).length === 0, '너무 오래된 대기열 항목이 남았습니다.');
     check(normalizeQueue(Array.from({ length: FORGET_LIMIT + 20 }, (_, i) => ({ uid: 'u1', name: 'records', id: `r${i}`, at: now })), now).length === FORGET_LIMIT, '대기열 개수 제한이 다릅니다.');
     check(normalizeQueue('망가진 값').length === 0 && normalizeQueue([null, { uid: 'u1' }]).length === 0, '망가진 대기열을 걸러 내지 못했습니다.');
+    check(normalizeQueue([{ name: 'records', id: 'r1', at: now }, { uid: '', name: 'notes', id: 'n1', at: now }], now).length === 0, '누구 것인지 모르는(uid 없는) 대기열 항목이 남았습니다.');
 
     let calls = 0;
     const flaky = async (name, id) => {
