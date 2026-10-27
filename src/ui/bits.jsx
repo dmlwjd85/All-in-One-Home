@@ -1,4 +1,5 @@
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
+import { JJAEM_D, JJAEM_PLACE, JJAEM_STOPS } from './jjaemMark.js';
 
 export function Btn({ className = '', block = false, ...props }) {
     return <button type="button" className={`tap ${block ? 'block' : ''} ${className}`} {...props} />;
@@ -12,11 +13,44 @@ export const Area = forwardRef(function Area(props, ref) {
     return <textarea ref={ref} className="field" {...props} />;
 });
 
-export function Symbol({ label = '메뉴' }) {
-    return <span className="symbol" aria-hidden="true">{label === '메뉴' ? '콕' : label}</span>;
+/** 로고 옆 모토. 쉼표 뒤에서만 줄이 바뀝니다. */
+export function Motto({ center = false }) {
+    return (
+        <p className={center ? 'brand-motto is-center' : 'brand-motto'}>
+            <span>생각나면 발라 두기,</span>{' '}
+            <span>틈나면 꺼내 먹기</span>
+        </p>
+    );
 }
 
-/** 하단 버튼 '콕'. 가계부와 같은 윤곽입니다.
+/** 빠른 입력과 할 일 빈 화면의 안내. 글자 그대로 둡니다. */
+export function SpreadHint({ center = false }) {
+    return (
+        <p className="muted spread-hint" style={center ? { textAlign: 'center' } : undefined}>생각나면 일단 여기 발라 두세요. 틈나면 간식처럼 처리해요.</p>
+    );
+}
+
+/** 헤더·잠금·시작 화면의 로고. 앱 아이콘과 같은 라일락 판, 같은 쨈 외곽선입니다. */
+export function Symbol() {
+    const id = `jjaem${useId().replace(/:/g, '')}`;
+    return (
+        <svg className="brand-symbol" viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+            <defs>
+                <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+                    {JJAEM_STOPS.map((color, index) => <stop key={color} offset={index === 0 ? '0' : index === 1 ? '0.55' : '1'} stopColor={color} />)}
+                </linearGradient>
+            </defs>
+            <rect width="512" height="512" rx="114" fill={`url(#${id})`} />
+            <g transform={JJAEM_PLACE}>
+                <g transform="translate(-13 1638) scale(1 -1)">
+                    <path fill="#fff" d={JJAEM_D} />
+                </g>
+            </g>
+        </svg>
+    );
+}
+
+/** 가계부와 같은 윤곽. 하단 버튼에 보이는 이름은 쨈이고, 이 패스는 검사에서 윤곽을 유지합니다.
     Pretendard Bold 1.3.9 U+CF55, x' = x − 58, y' = 1596 − y.
     Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
     with Reserved Font Name Pretendard.

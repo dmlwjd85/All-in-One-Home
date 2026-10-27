@@ -3,7 +3,7 @@ import titles from '../data/legacyTitles.json';
 import { applyLegacy, finishSetup, loadDemo, previewLegacy, setAuth, snapshot } from '../lib/db.js';
 import { cloudReady, loginHint, signInGoogle } from '../firebase.js';
 import { useUi } from './context.jsx';
-import { Btn, Symbol } from './bits.jsx';
+import { Btn, Motto, Symbol } from './bits.jsx';
 import { RosterSlots, rosterTextFromSlots } from './RosterSlots.jsx';
 
 export function Start() {
@@ -26,12 +26,12 @@ export function Start() {
 
     return (
         <div style={{ maxWidth: 480, margin: '0 auto', padding: 20 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="brand-lockup">
                 <Symbol />
-                <strong className="title-font" style={{ fontSize: 18 }}>콕</strong>
+                <h1 className="title-font font-display" style={{ fontSize: 32, lineHeight: '40px', margin: 0 }}>쨈 교무수첩</h1>
             </div>
-            <h1 className="title-font" style={{ fontSize: 32, lineHeight: '40px' }}>콕 교무수첩</h1>
-            <p style={{ fontSize: 16 }}>열자마자 콕, 적. 담임의 하루가 한 화면에 있어요.</p>
+            <Motto />
+            <p className="muted" style={{ fontSize: 15, marginTop: 4 }}>담임의 하루가 한 화면에 있어요.</p>
             {step === 'choose' && (
                 <div className="solid-card" style={{ padding: 16 }}>
                     <p style={{ marginTop: 0 }}>학생 기록은 선생님 자리에만 둡니다. 광고는 없어요.</p>

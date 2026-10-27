@@ -3,7 +3,7 @@ import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick, saveTextItem } from '../lib/db.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import { useUi } from './context.jsx';
-import { Area, Btn, TAGS } from './bits.jsx';
+import { Area, Btn, SpreadHint, TAGS } from './bits.jsx';
 import { ChoiceGrid, DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 
 const EVENT_OPTIONS = [
@@ -17,9 +17,9 @@ function stepsFor(flow) {
     if (flow.id === 'minutes') return ['meet', 'date', 'time', 'text'];
     const kind = flow.kind || '메모';
     if (['관찰', '상담', '칭찬', '보호자'].includes(kind)) return flow.no ? ['text'] : ['student', 'text'];
-    if (kind === '할 일') return ['date', 'text'];
-    if (kind === '일정') return ['eventKind', 'date', 'period', 'time', 'text'];
-    if (kind === '알림장') return ['date', 'text'];
+    if (kind === '할 일') return flow.date ? ['text'] : ['date', 'text'];
+    if (kind === '일정') return flow.date ? ['eventKind', 'period', 'time', 'text'] : ['eventKind', 'date', 'period', 'time', 'text'];
+    if (kind === '알림장') return flow.date ? ['text'] : ['date', 'text'];
     return ['text'];
 }
 
@@ -28,7 +28,7 @@ export function FlowSheet({ flow, onClose }) {
     const steps = stepsFor(flow);
     const [step, setStep] = useState(0);
     const [no, setNo] = useState(flow.no || 0);
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(flow.date || '');
     const [time, setTime] = useState('');
     const [period, setPeriod] = useState(0);
     const [eventKind, setEventKind] = useState('학급');
@@ -132,7 +132,8 @@ export function FlowSheet({ flow, onClose }) {
                 {name === 'text' && (
                     <>
                         {student && <p style={{ fontWeight: 800, marginTop: 0 }}>{student.no}번 {student.name}</p>}
-                        <Area data-flow-text rows={4} aria-label="내용" placeholder="한 줄로 적어도 충분해요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+                        <SpreadHint />
+                        <Area data-flow-text rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
                                 event.preventDefault();
                                 save();

@@ -1,5 +1,5 @@
 /** 화면에서 쓰는 주소가 라우터에 연결되어 있는지 봅니다. */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { resolveHash } from '../src/lib/routes.js';
 
@@ -21,6 +21,7 @@ const must = [
     ['#/today', 'today'],
     ['#/attend', 'attend'],
     ['#/attend/2026-10-19', 'attend'],
+    ['#/attend/2026-10-19/month', 'attend'],
     ['#/students', 'students'],
     ['#/students/12', 'student'],
     ['#/students/neis', 'neis'],
@@ -51,9 +52,15 @@ if (resolveHash('#/students/99', today).notice === '' && resolveHash('#/students
 }
 
 const hashes = new Set();
+let fileLinks = 0;
 for (const file of walk(join(root, 'src'))) {
     const text = readFileSync(file, 'utf8');
     for (const match of text.matchAll(/#\/[a-z][a-z0-9/_-]*/g)) hashes.add(match[0]);
+    for (const match of text.matchAll(/href="\.\/([^"#?]+)"/g)) {
+        fileLinks += 1;
+        const target = join(root, 'public', match[1]);
+        if (!existsSync(target) || !statSync(target).isFile()) failures.push(`${file.slice(root.length + 1)}: 안내 파일 ./${match[1]} 이 없습니다.`);
+    }
 }
 for (const hash of hashes) {
     if (hash.includes('${')) continue;
@@ -67,4 +74,4 @@ if (failures.length) {
     console.error(failures.join('\n'));
     process.exit(1);
 }
-console.log(`주소 ${must.length + hashes.size}개를 확인했습니다.`);
+console.log(`주소 ${must.length + hashes.size}개와 안내 파일 ${fileLinks}개를 확인했습니다.`);

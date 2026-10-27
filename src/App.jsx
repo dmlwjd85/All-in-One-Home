@@ -9,11 +9,11 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, KokMark, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { applyStoredFont } from './ui/fontpick.js';
 import { keySoundEnabled, keySoundNoticePending, playKey, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
-import { noteCompositionEnd, noteTypeInput, playTypeSound } from './ui/typesound.js';
-import { HOTKEY_ACTIONS, hotkeyLabel, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
+import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
@@ -24,7 +24,8 @@ import { Attend } from './ui/Attend.jsx';
 import { Neis, Student, Students } from './ui/Students.jsx';
 import { Schedule } from './ui/Schedule.jsx';
 import { Notice, Tasks } from './ui/Tasks.jsx';
-import { Legacy, Settings } from './ui/Settings.jsx';
+import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
+import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
 
 export default function App() {
@@ -42,9 +43,20 @@ export default function App() {
     const [online, setOnline] = useState(() => navigator.onLine);
     const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
     const [tipFolded, setTipFolded] = useState(false);
+    const [hotkeys, setHotkeys] = useState(() => loadHotkeys());
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+
+    useEffect(() => {
+        const sync = () => setHotkeys(loadHotkeys());
+        window.addEventListener('ssug-gyomu-hotkeys-changed', sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener('ssug-gyomu-hotkeys-changed', sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
 
     useEffect(() => {
         let stop = () => {};
@@ -154,11 +166,48 @@ export default function App() {
         };
     }, [data?.profile.sharedPc, locked]);
 
-    const go = useCallback((hash) => {
+    const go = useCallback((hash, options) => {
         const next = hash || '#/today';
         setHash(next);
-        if (location.hash !== next) location.hash = next;
+        if (location.hash === next) return;
+        if (options?.replace || options?.state) {
+            try {
+                const url = new URL(location.href);
+                url.hash = next;
+                const href = `${url.pathname}${url.search}${url.hash}`;
+                if (options.replace) history.replaceState(options.state || null, '', href);
+                else history.pushState(options.state, '', href);
+            } catch {
+                location.hash = next;
+            }
+            return;
+        }
+        location.hash = next;
     }, []);
+
+    const goBack = useCallback(() => {
+        if (history.state?.appFrom || history.state?.rosterFrom) {
+            history.back();
+            return;
+        }
+        const parent = route.name === 'day'
+            ? (route.params.date ? `#/schedule/month/${route.params.date}` : '#/schedule')
+            : route.name === 'roster'
+                ? '#/settings'
+                : route.name === 'student'
+                    ? '#/students'
+                    : route.name === 'legacy'
+                        ? (route.params.page ? '#/settings/legacy' : '#/settings')
+                        : '#/today';
+        try {
+            const url = new URL(location.href);
+            url.hash = parent;
+            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            location.replace(parent);
+        }
+        setHash(parent);
+    }, [route.name, route.params.date, route.params.page]);
 
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
@@ -239,16 +288,26 @@ export default function App() {
     useEffect(() => {
         const unlock = () => unlockKeyAudio();
         const onInput = (event) => {
-            if (!noteTypeInput(event)) return;
-            playTypeSound();
+            if (noteTypeInput(event)) playTypeSound();
         };
+        const onTypeKey = (event) => {
+            const kind = noteTypeKey(event);
+            if (kind) playTypeSound(kind);
+        };
+        const onCompositionUpdate = (event) => noteCompositionUpdate(event?.data);
         document.addEventListener('pointerdown', unlock, true);
         document.addEventListener('keydown', unlock, true);
+        document.addEventListener('keydown', onTypeKey, true);
+        document.addEventListener('compositionstart', noteCompositionStart, true);
+        document.addEventListener('compositionupdate', onCompositionUpdate, true);
         document.addEventListener('compositionend', noteCompositionEnd, true);
         document.addEventListener('input', onInput, true);
         return () => {
             document.removeEventListener('pointerdown', unlock, true);
             document.removeEventListener('keydown', unlock, true);
+            document.removeEventListener('keydown', onTypeKey, true);
+            document.removeEventListener('compositionstart', noteCompositionStart, true);
+            document.removeEventListener('compositionupdate', onCompositionUpdate, true);
             document.removeEventListener('compositionend', noteCompositionEnd, true);
             document.removeEventListener('input', onInput, true);
         };
@@ -330,14 +389,17 @@ export default function App() {
     }
 
     if (!data) {
-        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>콕 교무수첩을 열고 있어요.</p></div>;
+        return <div className="app-bg" style={{ padding: 32 }}><p className="title-font" style={{ fontSize: 22 }}>쨈 교무수첩을 열고 있어요.</p></div>;
     }
 
     if (locked) {
         return (
             <div className="app-bg" style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24 }}>
-                <div className="solid-card" style={{ padding: 24, maxWidth: 360, width: '100%' }}>
-                    <p className="title-font" style={{ fontSize: 26, margin: '0 0 8px' }}>화면을 잠가 두었어요</p>
+                <div className="solid-card" style={{ padding: 24, maxWidth: 360, width: '100%', display: 'grid', justifyItems: 'center' }}>
+                    <Symbol />
+                    <p className="title-font" style={{ fontSize: 18, margin: '12px 0 0' }}>쨈 교무수첩</p>
+                    <Motto center />
+                    <p className="title-font font-display" style={{ fontSize: 26, margin: '12px 0 8px' }}>화면을 잠가 두었어요</p>
                     <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터라 30분 동안 가만히 있으면 이렇게 가려 둡니다.</p>
                     <Btn className="primary-btn block" onClick={() => setLocked(false)}>다시 열기</Btn>
                 </div>
@@ -374,7 +436,7 @@ export default function App() {
         ['일정', '#/schedule', '📅'],
     ];
     const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
-    const tip = showSoundTip ? { id: 'key-sound', text: '콕, 누를 때 소리가 나요', sound: true } : dailyTip;
+    const tip = showSoundTip ? { id: 'key-sound', text: '누를 때 소리가 나요', sound: true } : dailyTip;
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
     let screen = <Home />;
@@ -386,6 +448,8 @@ export default function App() {
     if (route.name === 'todo') screen = <Tasks />;
     if (route.name === 'notice') screen = <Notice key={route.params.date || 'next'} />;
     if (route.name === 'settings') screen = <Settings />;
+    if (route.name === 'roster') screen = <RosterSettings />;
+    if (route.name === 'day') screen = <Day key={route.params.date} />;
     if (route.name === 'legacy') screen = <Legacy />;
 
     const titles = {
@@ -396,8 +460,10 @@ export default function App() {
         neis: ['나이스에 옮길 것', '복사해서 옮긴 뒤 표시해 두세요'],
         schedule: ['일정·시간표', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
-        notice: ['알림장', '복사해서 다른 앱에 붙여 넣어요'],
-        settings: ['설정', '이 기기와 학급'],
+        notice: ['알림장', '복사해서 붙여 넣어요'],
+        settings: ['설정', '학급, 소리, 단축키, 계정'],
+        roster: ['명단', '번호에 이름을 적어 주세요'],
+        day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],
         legacy: ['예전 수첩', '쪽은 읽기만 됩니다'],
         start: ['시작', ''],
     };
@@ -410,9 +476,12 @@ export default function App() {
         <Ui.Provider value={ui}>
             <div className="app-bg app-frame" data-ready="1">
                 <aside className="side">
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 12px' }}>
-                        <Symbol />
-                        <strong className="title-font" style={{ fontSize: 18 }}>콕 교무수첩</strong>
+                    <div className="side-brand">
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 0' }}>
+                            <Symbol />
+                            <strong className="title-font" style={{ fontSize: 18, lineHeight: '24px' }}>쨈 교무수첩</strong>
+                        </div>
+                        <Motto />
                     </div>
                     {MENU.map(([label, href]) => {
                         const on = menuSelected(route.name, href);
@@ -420,15 +489,15 @@ export default function App() {
                             <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(menuTarget(href, clock.ymd))}>{label}</Btn>
                         );
                     })}
-                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>기본으로 / 키를 누르면 콕이 열려요. 설정에서 바꿀 수 있어요.</p>
+                    <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>{kokHotkeyHint(hotkeys)}</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
                     <header className="topbar">
-                        {(route.name === 'student' || route.name === 'legacy') && (
-                            <Btn className="icon-btn" aria-label="뒤로" onClick={() => history.back()}>‹</Btn>
+                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
+                            <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
                         {route.name === 'today' ? (
                             <div className="date-block">
@@ -448,7 +517,7 @@ export default function App() {
                                 const next = dark ? 'light' : 'dark';
                                 import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
-                            <Btn className={route.name === 'settings' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings'} onClick={() => go('#/settings')}><IconSettings /></Btn>
+                            <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
                     </header>
@@ -482,9 +551,9 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
+                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
                         ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 800, fontSize: 13 }}>
+                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
                                     <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
                                     {label}
@@ -493,7 +562,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><KokMark /></Btn>
+                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
                 {plus && (
                     <PlusSheet
                         onClose={() => setPlus(false)}
@@ -584,10 +653,10 @@ function SearchSheet({ onClose }) {
                 <input className="field" autoFocus placeholder="이름, 번호, 기록 단어" value={q} onChange={(event) => setQ(event.target.value)} aria-label="찾을 말" />
                 <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                     {students.slice(0, 8).map((row) => (
-                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(`#/students/${row.no}`); onClose(); }}>{row.no}번 {row.name}</Btn>
+                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(`#/students/${row.no}`, { state: { appFrom: 'find' } }); onClose(); }}>{row.no}번 {row.name}</Btn>
                     ))}
                     {records.map((row) => (
-                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students'); onClose(); }}>{row.text}</Btn>
+                        <Btn key={row.id} block className="chip" style={{ justifyContent: 'flex-start' }} onClick={() => { jump(row.sid ? `#/students/${data.students.find((item) => item.id === row.sid)?.no || ''}` : '#/students', { state: { appFrom: 'find' } }); onClose(); }}>{row.text}</Btn>
                     ))}
                     {query && !students.length && !records.length && <p className="muted">찾는 말이 기록에 없어요.</p>}
                 </div>

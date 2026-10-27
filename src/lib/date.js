@@ -146,13 +146,13 @@ export function monthTitle(ym) {
     return `${y}년 ${Number(m)}월`;
 }
 
-/** 할 일 마감. 예: 10/28(수), D-3. 오늘은 D-day, 지난 날은 D+n. */
+/** 할 일 마감. 예: 10/28(수), D-3. 오늘은 디데이, 지난 날은 D+n. */
 export function dueLabel(due, today) {
     if (!isValidYmd(due) || !isValidYmd(today)) return '';
     const month = Number(due.slice(5, 7));
     const day = Number(due.slice(8, 10));
     const diff = Math.round((fromYmd(due).getTime() - fromYmd(today).getTime()) / 86400000);
-    const mark = diff === 0 ? 'D-day' : (diff > 0 ? `D-${diff}` : `D+${-diff}`);
+    const mark = diff === 0 ? '디데이' : (diff > 0 ? `D-${diff}` : `D+${-diff}`);
     return `${month}/${day}(${weekdayKo(due)}), ${mark}`;
 }
 

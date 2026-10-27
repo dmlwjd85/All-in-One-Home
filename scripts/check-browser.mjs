@@ -1,6 +1,6 @@
 /** 360·390·1280에서 넘침과 버튼 크기, 주요 흐름을 확인하고 화면을 저장합니다. */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import puppeteer from 'puppeteer-core';
@@ -33,7 +33,19 @@ async function pinBrowserClock(page) {
         try {
             new PerformanceObserver((list) => {
                 for (const entry of list.getEntries()) {
-                    if (!entry.hadRecentInput) window.__cls += entry.value;
+                    if (!entry.hadRecentInput) {
+                        window.__cls += entry.value;
+                        (window.__shifts ||= []).push({
+                            value: Number(entry.value.toFixed(5)),
+                            at: Math.round(entry.startTime),
+                            nodes: (entry.sources || []).map((src) => {
+                                const el = src.node?.nodeType === 1 ? src.node : src.node?.parentElement;
+                                const r = src.currentRect;
+                                const p = src.previousRect;
+                                return `${el?.className || el?.nodeName || '?'} "${(src.node?.textContent || '').trim().slice(0, 16)}" ${p?.y}→${r?.y} ${p?.height}→${r?.height}`;
+                            }),
+                        });
+                    }
                 }
             }).observe({ type: 'layout-shift', buffered: true });
         } catch {
@@ -295,6 +307,17 @@ async function ensureBrowser() {
 async function resetBrowser() {
     if (browser) await browser.close().catch(() => {});
     browser = null;
+}
+
+/** CSS unicode-range 에 이 글자 번호가 들어 있는지 봅니다. */
+function unicodeRangeHas(range, code) {
+    return String(range).split(',').some((part) => {
+        const m = part.trim().match(/^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i);
+        if (!m) return false;
+        const lo = parseInt(m[1], 16);
+        const hi = m[2] ? parseInt(m[2], 16) : lo;
+        return code >= lo && code <= hi;
+    });
 }
 
 async function withPage(width, fn) {
@@ -572,6 +595,44 @@ async function tipCover(page) {
 }
 
 try {
+    const indexHtml = readFileSync(resolve(root, 'index.html'), 'utf8');
+    const fontsCss = readFileSync(resolve(root, 'public/fonts/fonts.css'), 'utf8');
+    const screenCss = readFileSync(resolve(root, 'src/index.css'), 'utf8');
+    const tokenCss = readFileSync(resolve(root, 'src/styles/tokens.css'), 'utf8');
+    const firstFont = resolve(root, 'public/fonts/JJAEMBody-Regular.first.woff2');
+    check(indexHtml.includes('href="./fonts/JJAEMBody-Regular.first.woff2" as="font"'), '첫 화면 글꼴 preload가 없습니다.');
+    check(!indexHtml.includes('href="./fonts/JJAEMBody-Regular.ks.woff2"'), '본문 전체 파일을 미리 받습니다.');
+    for (const name of ['JJAEMBody-Regular.first.woff2', 'JJAEMBody-Bold.first.woff2', 'JJAEM-TitleFlat-Regular.first.woff2']) {
+        check(indexHtml.includes(`<link rel="preload" href="./fonts/${name}" as="font" type="font/woff2" crossorigin>`), `첫 화면 글꼴 ${name} 미리 받기 줄이 없습니다.`);
+    }
+    check(['400 1em "JJAEM Body"', '700 1em "JJAEM Body"', '400 1em "JJAEM Title Flat"'].every((face) => indexHtml.includes(`'${face}'`)) && indexHtml.includes('document.fonts.load(face,'), '전체 글꼴을 화면과 같은 글꼴 묶음으로 받지 않습니다.');
+    check(/getItem\('ssug-gyomu-tips'\) \|\| q\.get\('demo'\) === '1'\) \{\s*warmFonts\(\);/.test(indexHtml), '오늘 화면으로 바로 여는 경우 전체 글꼴을 미리 받지 않아 화면이 밀릴 수 있습니다.');
+    check(/\} else \{\s*addEventListener\('load', function \(\) \{\s*\(window\.requestIdleCallback[^\n]*\(warmFonts/.test(indexHtml), '처음 로그인 화면이 쉬는 틈에 다음 화면 글꼴을 받아 두지 않습니다.');
+    check(!/rel = 'preload'|\.rel = "preload"/.test(indexHtml), '전체 글꼴을 따로 미리 받기 링크로 받아 같은 파일을 두 번 받을 수 있습니다.');
+    check(existsSync(firstFont) && statSync(firstFont).size < 32 * 1024, '첫 화면 글꼴이 작지 않습니다.');
+    const jjaemFaces = fontsCss.split('@font-face').slice(1).filter((block) => block.includes("'JJAEM"));
+    check(jjaemFaces.length >= 4 && jjaemFaces.every((block) => block.includes('font-display: swap') && !/font-display:\s*block/.test(block)), '쨈 글꼴이 swap이 아닙니다.');
+    /** QA 9차 O1·O5·O7·O9: 글꼴 칸 순서, 첫 화면 범위, 전체 파일 받기 글자, 쉬는 틈이 없는 엔진의 대체 경로. */
+    const faceList = fontsCss.split('@font-face').slice(1).map((block) => ({
+        family: (block.match(/font-family:\s*'([^']+)'/) || [])[1] || '',
+        weight: ((block.match(/font-weight:\s*([^;]+);/) || [])[1] || '').trim(),
+        file: (block.match(/url\('\.\/([^']+)'\)/) || [])[1] || '',
+        range: ((block.match(/unicode-range:\s*([^;]+);/) || [])[1] || '').trim(),
+    }));
+    for (const [family, weight] of [['JJAEM Body', '400'], ['JJAEM Body', '700'], ['JJAEM Title Flat', '400']]) {
+        const ks = faceList.findIndex((face) => face.family === family && face.weight === weight && face.file.endsWith('.ks.woff2'));
+        const first = faceList.findIndex((face) => face.family === family && face.weight === weight && face.file.endsWith('.first.woff2'));
+        check(ks >= 0 && first > ks && !faceList[ks].range && Boolean(faceList[first].range), `${family} ${weight}: 전체 파일(.ks)이 첫 화면 파일(.first)보다 앞에 있지 않습니다. 뒤에 적은 칸을 먼저 보므로 첫 화면이 큰 파일을 받게 됩니다.`);
+        check(first >= 0 && !unicodeRangeHas(faceList[first].range, 0xD7A3), `${family} ${weight}: 전체 파일을 깨우는 글자 '힣'이 첫 화면 파일 범위에 들어 있습니다.`);
+    }
+    const titleFirst = faceList.find((face) => face.family === 'JJAEM Title Flat' && face.file.endsWith('.first.woff2'));
+    check([...'쨈 교무수첩'].every((ch) => unicodeRangeHas(titleFirst?.range || '', ch.codePointAt(0))), `첫 화면 제목 '쨈 교무수첩' 글자가 제목 첫 화면 파일 범위에 다 들어 있지 않습니다. ${titleFirst?.range}`);
+    check(indexHtml.includes("document.fonts.load(face, '\\uD7A3')"), "전체 글꼴을 '힣'(U+D7A3, 첫 화면 범위 밖)으로 깨우지 않습니다. 첫 화면 글자로 깨우면 큰 파일을 받지 않습니다.");
+    check(indexHtml.includes('(window.requestIdleCallback || function (run) { setTimeout(run, 200); })(warmFonts, { timeout: 4000 });'), '쉬는 틈(requestIdleCallback)이 없는 엔진에서 200ms 뒤 전체 글꼴을 받는 대체 경로가 없습니다.');
+    check(tokenCss.includes("--font-display: 'JJAEM Title Flat'"), '제목 글꼴이 쨈 제목 평면이 아닙니다.');
+    check(screenCss.includes('.cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }'), '오늘이 고른 날이면 안쪽 링이 없습니다.');
+    check(screenCss.includes('.dark .cal-grid .tap.cal-today .num { color: var(--bg); }'), '다크 오늘 칸 글자가 바탕색이 아닙니다.');
+    check(screenCss.includes('data-font-sample="plain"] { font-family: var(--font-jjaem); }'), '기본 글꼴 견본이 쨈 본문이 아닙니다.');
     await waitServer();
     await ensureBrowser();
     const scenes = [
@@ -616,6 +677,10 @@ try {
             await page.evaluate(() => { location.hash = '#/settings'; });
             await delay(200);
             await audit(page, `설정 ${width}`);
+            if (width === 390) {
+                const sample = await page.evaluate(() => getComputedStyle(document.querySelector('[data-font-sample="plain"]')).fontFamily);
+                check(String(sample).includes('JJAEM Body'), `기본 글꼴 견본이 쨈 본문이 아닙니다. ${sample}`);
+            }
             if (width === 360) {
                 const covered = await tipCover(page);
                 if (covered) failures.push(`설정: ${covered}`);
@@ -731,6 +796,17 @@ try {
             };
         });
         check(feel.tap && feel.focused && feel.pressed === 'false' && feel.hits.length === 2 && feel.hits.every((n) => n === 8), '출결 요약이 다른 버튼과 같은 콕 진동·포커스·aria가 아닙니다.');
+        const seatType = await page.evaluate(() => {
+            const seat = document.querySelector('.cell-grid button');
+            const num = seat?.querySelector('.num');
+            const name = num?.nextElementSibling;
+            return {
+                numWeight: num ? getComputedStyle(num).fontWeight : '',
+                numSize: num ? getComputedStyle(num).fontSize : '',
+                nameWeight: name ? getComputedStyle(name).fontWeight : '',
+            };
+        });
+        check(seatType.numSize === '12px' && Number(seatType.numWeight) <= 400 && Number(seatType.nameWeight) >= 700, `12px 번호가 보통 굵기가 아닙니다. ${JSON.stringify(seatType)}`);
         const seats = () => page.evaluate(() => [...document.querySelectorAll('.cell-grid button')].map((el) => el.innerText.replace(/\s+/g, ' ')));
         const pressBox = (name) => page.evaluate((label) => {
             [...document.querySelectorAll('button[aria-pressed]')].find((el) => el.innerText.includes(label))?.click();
@@ -738,6 +814,22 @@ try {
         await pressBox('결석');
         let names = await seats();
         check(names.length === 1 && names[0].includes('박서준'), '결석 칸이 그 학생만 보여 주지 않습니다.');
+        const smallType = await page.evaluate(() => {
+            const bold = [];
+            let status = 0;
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            while (walker.nextNode()) {
+                const text = walker.currentNode.textContent.trim();
+                const el = walker.currentNode.parentElement;
+                if (!text || !el || !el.getClientRects().length) continue;
+                const style = getComputedStyle(el);
+                if (style.visibility === 'hidden' || parseFloat(style.fontSize) >= 14) continue;
+                if (el.closest('.cell-grid') && text === '결석') status += 1;
+                if (Number(style.fontWeight) >= 600) bold.push(`${text.slice(0, 12)} ${style.fontSize}/${style.fontWeight}`);
+            }
+            return { bold, status };
+        });
+        check(smallType.status >= 1 && smallType.bold.length === 0, `14px보다 작은 글자가 굵습니다. ${JSON.stringify(smallType)}`);
         const pressedShadow = await page.evaluate(() => {
             const probe = document.createElement('div');
             document.body.appendChild(probe);
@@ -770,7 +862,7 @@ try {
         names = await seats();
         check(names.some((item) => item.includes('김하늘')) && names.some((item) => item.includes('박서준')), '출석 칸을 다시 눌러도 전체가 나오지 않습니다.');
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이번 달')?.click());
-        await delay(150);
+        await page.waitForFunction(() => location.hash.endsWith('/month') && [...document.querySelectorAll('button.solid-card')].some((el) => el.innerText.includes('박서준')));
         const monthRow = await page.evaluate(() => {
             const button = [...document.querySelectorAll('button.solid-card')].find((el) => !el.hasAttribute('aria-pressed') && el.innerText.includes('박서준') && el.classList.contains('tap'));
             button?.click();
@@ -778,6 +870,10 @@ try {
         });
         check(monthRow, '이번 달 학생 줄이 버튼이 아닙니다.');
         await page.waitForFunction(() => (document.querySelector('h1')?.innerText || '').includes('박서준'));
+        await page.click('[aria-label="뒤로"]');
+        await page.waitForFunction(() => location.hash.endsWith('/month'));
+        const monthKept = await page.evaluate(() => [...document.querySelectorAll('button.chip')].some((el) => el.innerText.trim() === '이번 달' && el.classList.contains('on')));
+        check(monthKept, '학생에서 돌아오면 이번 달 보기가 오늘로 돌아갑니다.');
         await page.evaluate(() => { location.hash = '#/attend'; });
         await page.waitForFunction(() => document.body.innerText.includes('출석·결석'));
         const clicked = await page.evaluate(() => {
@@ -1220,18 +1316,39 @@ try {
         await page.waitForFunction(() => document.body.innerText.includes('14:00–16:00') && document.body.innerText.includes('학부모 진로 특강'));
         let week = await page.evaluate(() => document.body.innerText);
         check(week.includes('14:00–16:00') && week.includes('학부모 진로 특강'), `끝 시각이 ${label} 주간에 보이지 않습니다.`);
-        if (!(week.includes('08:50') && week.includes('과학관'))) {
+        async function showCalendar(monthTitle = '') {
+            await page.evaluate(() => { location.hash = '#/schedule'; });
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
             await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
             await page.waitForSelector('.cal-grid');
+            if (!monthTitle) return;
+            for (let back = 0; back < 8; back += 1) {
+                const title = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
+                if (title === monthTitle) return;
+                const year = Number((title.match(/(\d{4})년/) || [])[1] || 0);
+                const month = Number((title.match(/(\d{1,2})월/) || [])[1] || 0);
+                const targetYear = Number((monthTitle.match(/(\d{4})년/) || [])[1] || 0);
+                const targetMonth = Number((monthTitle.match(/(\d{1,2})월/) || [])[1] || 0);
+                await page.click(year * 12 + month < targetYear * 12 + targetMonth ? '[aria-label="다음 달"]' : '[aria-label="이전 달"]');
+            }
+        }
+        if (!(week.includes('08:50') && week.includes('과학관'))) {
+            await showCalendar();
             let found = false;
             for (let hop = 0; hop < 3 && !found; hop += 1) {
                 const count = await page.evaluate(() => document.querySelectorAll('.cal-grid button').length);
-                for (let index = 0; index < count; index += 1) {
+                for (let index = 0; index < count && !found; index += 1) {
                     const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
                     if (!marked) continue;
+                    const monthTitle = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
                     const body = await page.evaluate(async (n) => {
+                        const before = location.hash;
                         document.querySelectorAll('.cal-grid button')[n].click();
-                        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                        const start = performance.now();
+                        while (location.hash === before && performance.now() - start < 1500) {
+                            await new Promise((resolve) => requestAnimationFrame(resolve));
+                        }
+                        await new Promise((resolve) => requestAnimationFrame(resolve));
                         return document.body.innerText;
                     }, index);
                     if (body.includes('과학관') && body.includes('08:50')) {
@@ -1239,6 +1356,7 @@ try {
                         found = true;
                         break;
                     }
+                    await showCalendar(monthTitle);
                 }
                 if (!found) await page.click('[aria-label="다음 달"]');
             }
@@ -1247,7 +1365,7 @@ try {
         check(week.includes('과학관') && week.includes('08:50') && !week.includes('08:50–'), `끝 시각 없는 일정이 ${label}에서 범위로 보입니다.`);
         await audit(page, `주간 일정 ${label}`);
         await page.screenshot({ path: resolve(shots, `after_time_span_${label}.png`) });
-        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await showCalendar();
         for (let hop = 0; hop < 8; hop += 1) {
             const title = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
             if (title === todayMonthLabel) break;
@@ -1267,6 +1385,314 @@ try {
     }
     await withDemo(390, 'light', async (page) => { await savedTimeSpan(page, '390'); }, 844);
     await withDemo(360, 'light', async (page) => { await savedTimeSpan(page, '360'); }, 844);
+
+    async function calendarPanel(page) {
+        const todayHash = `#/schedule/month/${todayYmd}`;
+        await page.evaluate(() => { location.hash = '#/schedule'; });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        await page.waitForSelector('.cal-grid');
+        const todayRing = await page.evaluate(() => {
+            const el = document.querySelector('.cal-grid button.cal-today.cal-picked');
+            const probe = document.createElement('div');
+            document.body.appendChild(probe);
+            probe.style.boxShadow = 'inset 0 0 0 2px var(--ink)';
+            const expected = getComputedStyle(probe).boxShadow;
+            probe.remove();
+            return { found: Boolean(el), shadow: el ? getComputedStyle(el).boxShadow : '', expected };
+        });
+        check(todayRing.found && todayRing.shadow === todayRing.expected, `오늘이 고른 날이면 안쪽 링이 없습니다. ${JSON.stringify(todayRing)}`);
+        const opened = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            today: document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false,
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+        }));
+        check(opened.panel === todayYmd && opened.today && opened.monthOn, `달력을 열면 오늘 패널이 아닙니다. ${JSON.stringify(opened)}`);
+        const lenBeforeCells = await page.evaluate(() => history.length);
+        const otherDay = todayDay === 15 ? 16 : 15;
+        const laterDay = todayDay === 30 ? 28 : 30;
+        async function clickInMonthDay(day) {
+            await page.evaluate((value) => {
+                const hit = [...document.querySelectorAll('.cal-grid button')].find((el) => Number(el.querySelector('.num')?.textContent) === value && !String(el.getAttribute('style') || '').includes('ink-sub'));
+                hit?.click();
+            }, day);
+            const ymd = `${todayYmd.slice(0, 8)}${String(day).padStart(2, '0')}`;
+            await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${ymd}`);
+        }
+        await clickInMonthDay(otherDay);
+        await clickInMonthDay(laterDay);
+        const lenAfterCells = await page.evaluate(() => history.length);
+        check(lenAfterCells === lenBeforeCells, '날짜 칸을 누를 때마다 기록이 쌓입니다.');
+        const marks = await page.evaluate((today, picked) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const byDay = (day) => buttons.find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            const todayEl = byDay(today);
+            const pickedEl = byDay(picked);
+            return {
+                todayCurrent: todayEl?.getAttribute('aria-current') || '',
+                pickedCurrent: pickedEl?.getAttribute('aria-current') || '',
+                todayRing: Boolean(todayEl?.classList.contains('cal-picked')),
+                pickedRing: Boolean(pickedEl?.classList.contains('cal-picked')),
+            };
+        }, todayDay, laterDay);
+        check(marks.pickedCurrent === 'date' && marks.pickedRing && marks.todayCurrent !== 'date' && !marks.todayRing, `고른 칸과 오늘 칸이 구분되지 않습니다. ${JSON.stringify(marks)}`);
+        const todayDisk = await page.evaluate((today, picked) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const byDay = (day) => buttons.find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            const disk = (el) => {
+                const num = el?.querySelector('.num');
+                if (!num) return null;
+                const style = getComputedStyle(num);
+                const radius = Number.parseFloat(style.borderRadius) || 0;
+                return {
+                    today: el.classList.contains('cal-today'),
+                    picked: el.classList.contains('cal-picked'),
+                    radius,
+                    filled: style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent',
+                };
+            };
+            const weekend = buttons.find((el) => el.classList.contains('day-rest') && !el.classList.contains('cal-today') && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            return { today: disk(byDay(today)), picked: disk(byDay(picked)), weekend: disk(weekend) };
+        }, todayDay, laterDay);
+        check(
+            todayDisk.today?.today && todayDisk.today.filled && todayDisk.today.radius >= 10 && !todayDisk.today.picked
+            && todayDisk.picked?.picked && !todayDisk.picked.today && !todayDisk.picked.filled
+            && todayDisk.weekend && !todayDisk.weekend.today && !todayDisk.weekend.filled,
+            `오늘 칸이 채운 동그라미로 주말·고른 날과 구분되지 않습니다. ${JSON.stringify(todayDisk)}`,
+        );
+        await page.click('[aria-label="다음 달"]');
+        const [year, month] = todayYmd.split('-').map(Number);
+        const nextDate = new Date(year, month, 1);
+        const nextYm = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
+        const first = `${nextYm}-01`;
+        const nextTitle = monthTitle(nextYm);
+        await page.waitForFunction((hash, title) => location.hash === hash && document.body.innerText.includes(title), {}, `#/schedule/month/${first}`, nextTitle);
+        const moved = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            text: document.querySelector('[data-cal-panel]')?.innerText || '',
+            hash: location.hash,
+        }));
+        check(moved.panel === first && moved.text.includes('1일') && !moved.text.includes('오늘') && !moved.hash.includes('/day/'), `다음 달 패널이 1일이 아닙니다. ${JSON.stringify(moved)}`);
+        await page.evaluate((day) => {
+            const hit = [...document.querySelectorAll('.cal-grid button')].find((el) => Number(el.querySelector('.num')?.textContent) === day && !String(el.getAttribute('style') || '').includes('ink-sub'));
+            hit?.click();
+        }, 15);
+        const picked = `${nextYm}-15`;
+        await page.waitForFunction((hash) => location.hash === hash && !location.hash.includes('/day/'), {}, `#/schedule/month/${picked}`);
+        const pickedPanel = await page.evaluate(() => document.querySelector('[data-cal-panel]')?.innerText || '');
+        check(pickedPanel.includes('15일') && !pickedPanel.includes('오늘'), `날짜 칸을 눌러도 패널이 그 날이 아닙니다. ${pickedPanel}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 날 일지')?.click());
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/day/${picked}`);
+        await page.evaluate(() => history.back());
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${picked}`);
+        const back = await page.evaluate(() => ({
+            panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            grid: Boolean(document.querySelector('.cal-grid')),
+        }));
+        check(back.panel === picked && back.monthOn && !back.weekOn && back.grid, `일지에서 돌아오면 달력 보기가 풀립니다. ${JSON.stringify(back)}`);
+        await page.click('[aria-label="이전 달"]');
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        const returned = await page.evaluate(() => document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false);
+        check(returned, '오늘이 있는 달로 돌아오면 패널이 오늘이 아닙니다.');
+        await page.evaluate(() => { location.hash = '#/schedule/month'; });
+        await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
+        const bareMonth = await page.evaluate(() => ({
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            grid: Boolean(document.querySelector('.cal-grid')),
+        }));
+        check(bareMonth.monthOn && !bareMonth.weekOn && bareMonth.grid, `날짜 없는 달력이 주 보기로 열립니다. ${JSON.stringify(bareMonth)}`);
+        await page.evaluate(() => { location.hash = '#/schedule/month/2026-02-30'; });
+        await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, todayHash);
+        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')));
+        check(badMonth, '잘못된 달력 날짜가 주 보기로 열립니다.');
+        await page.evaluate(() => { location.hash = '#/schedule/table'; });
+        await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/table/${todayYmd}`);
+        const bareTable = await page.evaluate(() => ({
+            tableOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+        }));
+        check(bareTable.tableOn && !bareTable.weekOn, `날짜 없는 시간표가 주 보기로 열립니다. ${JSON.stringify(bareTable)}`);
+        await page.evaluate(() => { location.hash = '#/schedule/table/2026-13-01'; });
+        await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, `#/schedule/table/${todayYmd}`);
+        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')));
+        check(badTable, '잘못된 시간표 날짜가 주 보기로 열립니다.');
+        await audit(page, '달력 패널');
+    }
+    await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
+
+    async function darkTodayContrast(width) {
+        await withDemo(width, 'dark', async (page) => {
+            await page.evaluate(() => { location.hash = '#/schedule'; });
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForSelector('.cal-today .num');
+            const ratio = await page.evaluate(() => {
+                const style = getComputedStyle(document.querySelector('.cal-today .num'));
+                const parse = (color) => {
+                    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+                };
+                const lum = (rgb) => {
+                    const parts = rgb.map((value) => {
+                        const channel = value / 255;
+                        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+                    });
+                    return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+                };
+                const fg = parse(style.color);
+                const bg = parse(style.backgroundColor);
+                if (!fg || !bg) return 0;
+                const left = lum(fg);
+                const right = lum(bg);
+                const [hi, lo] = left > right ? [left, right] : [right, left];
+                return (hi + 0.05) / (lo + 0.05);
+            });
+            check(ratio >= 4.5, `${width} 다크 오늘 동그라미 대비 ${Number(ratio).toFixed(2)} 가 4.5보다 낮습니다.`);
+        }, width >= 900 ? 800 : 844);
+    }
+    await darkTodayContrast(390);
+    await darkTodayContrast(1280);
+
+    async function saveRoster(page) {
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 저장'), { timeout: 15000 });
+        const before = await page.evaluate(() => history.length);
+        check(before > 1, `앞선 기록이 없어 명단 저장을 구분하지 못합니다. 기록 ${before}`);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
+        try {
+            await page.waitForFunction(() => location.hash === '#/settings' && location.hostname === '127.0.0.1', { timeout: 4000 });
+        } catch {
+            const where = await page.evaluate(() => location.href).catch(() => '');
+            check(false, `명단을 저장하면 앱 밖으로 나갑니다. ${where}`);
+            return;
+        }
+        const stayed = await page.evaluate(() => ({
+            hash: location.hash,
+            host: location.hostname,
+            outside: document.body.innerText.includes('다른 사이트'),
+        }));
+        check(stayed.hash === '#/settings' && stayed.host === '127.0.0.1' && !stayed.outside, `명단을 저장한 뒤 설정에 머물지 않습니다. ${JSON.stringify(stayed)}`);
+    }
+
+    async function withRosterEntry(previous, label) {
+        const current = await ensureBrowser();
+        const context = await current.createBrowserContext();
+        const page = await context.newPage();
+        page.setDefaultTimeout(20000);
+        await pinBrowserClock(page);
+        await page.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        try {
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.goto(previous, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/settings/roster`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await saveRoster(page);
+        } catch (error) {
+            check(false, `${label} 명단 저장 시험이 멈추었습니다. ${error?.message || error}`);
+        }
+        await context.close().catch(() => {});
+    }
+    await withRosterEntry('about:blank', '주소로 연');
+    await withRosterEntry('data:text/html,<title>outside</title><p>다른 사이트</p>', '다른 사이트에서 연');
+
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(() => { location.hash = '#/settings'; });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 고치기'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 고치기')?.click());
+        await page.waitForFunction(() => location.hash === '#/settings/roster' && history.state?.rosterFrom === 'settings');
+        const marked = await page.evaluate(() => history.state?.rosterFrom === 'settings');
+        check(marked, '설정에서 명단으로 들어올 때 표시가 없습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
+        await page.waitForFunction(() => location.hash === '#/settings');
+        const shared = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'));
+            return button?.getAttribute('aria-pressed') || '';
+        });
+        check(shared === 'false' || shared === 'true', '공용 컴퓨터 버튼에 눌림 상태가 없습니다.');
+        await page.evaluate(() => history.back());
+        let leftSettings = false;
+        try {
+            await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/settings', { timeout: 3000 });
+            leftSettings = true;
+        } catch {
+            leftSettings = false;
+        }
+        const afterBack = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
+        check(leftSettings && afterBack.host === '127.0.0.1' && afterBack.hash !== '#/settings', `설정에서 들어온 명단 저장이 설정 기록을 하나 더 남깁니다. ${JSON.stringify(afterBack)}`);
+    }, 844);
+
+    async function directBack(width) {
+        const current = await ensureBrowser();
+        const context = await current.createBrowserContext();
+        const page = await context.newPage();
+        page.setDefaultTimeout(20000);
+        await pinBrowserClock(page);
+        await page.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await page.setViewport({ width, height: width >= 900 ? 800 : 844, deviceScaleFactor: 1 });
+        const outside = 'data:text/html;charset=utf-8,<title>다른 사이트</title><p>다른 사이트</p>';
+        const day = '#/day/2026-10-23';
+        const cases = [
+            [`${origin}?demo=1&at=08:42&mode=light${day}`, '#/schedule/month/2026-10-23'],
+            [`${origin}?demo=1&at=08:42&mode=light#/settings/roster`, '#/settings'],
+            [`${origin}?demo=1&at=08:42&mode=light#/students/1`, '#/students'],
+            [`${origin}?demo=1&at=08:42&mode=light#/legacy/5`, '#/settings/legacy'],
+            [`${origin}?demo=1&at=08:42&mode=light#/settings/legacy`, '#/settings'],
+        ];
+        try {
+            for (const [url, parent] of cases) {
+                await page.goto(outside, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.waitForSelector('[aria-label="뒤로"]');
+                const marked = await page.evaluate(() => Boolean(history.state?.appFrom || history.state?.rosterFrom));
+                check(!marked, `${width} 주소로 연 ${url} 에 앱 안 표시가 있습니다.`);
+                await page.click('[aria-label="뒤로"]');
+                let stayed = false;
+                try {
+                    await page.waitForFunction((expected) => location.hostname === '127.0.0.1' && location.hash === expected, { timeout: 4000 }, parent);
+                    stayed = true;
+                } catch {
+                    stayed = false;
+                }
+                const where = await page.evaluate(() => ({ hash: location.hash, host: location.hostname, title: document.title }));
+                const leftApp = where.host !== '127.0.0.1' || where.title === '다른 사이트';
+                check(stayed && !leftApp && where.hash === parent, leftApp
+                    ? `${width}에서 ‹ 가 앱 밖에 나갑니다. ${url} → ${JSON.stringify(where)}`
+                    : `${width}에서 ‹ 의 상위 화면이 아닙니다. ${url} → ${JSON.stringify(where)}`);
+            }
+            await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.evaluate(() => { location.hash = '#/schedule/month/2026-10-23'; });
+            await page.waitForFunction(() => location.hash === '#/schedule/month/2026-10-23');
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '이 날 일지'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 날 일지')?.click());
+            await page.waitForFunction(() => location.hash === '#/day/2026-10-23' && history.state?.appFrom === 'schedule');
+            await page.click('[aria-label="뒤로"]');
+            await page.waitForFunction(() => location.hash === '#/schedule/month/2026-10-23');
+            await page.evaluate(() => history.back());
+            let leftMonth = false;
+            try {
+                await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/schedule/month/2026-10-23', { timeout: 3000 });
+                leftMonth = true;
+            } catch {
+                leftMonth = false;
+            }
+            const returned = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
+            check(leftMonth && returned.host === '127.0.0.1' && returned.hash === '#/today', `${width}에서 앱 안 ‹ 가 달력 기록을 덮습니다. ${JSON.stringify(returned)}`);
+        } catch (error) {
+            check(false, `${width} ‹ 버튼 시험이 멈추었습니다. ${error?.message || error}`);
+        }
+        await context.close().catch(() => {});
+    }
+    await directBack(390);
+    await directBack(1280);
 
     async function weekdayDeadline(page, label) {
         await openPlus(page);
@@ -1623,6 +2049,27 @@ try {
                 soft: document.querySelector('[aria-label="몽글 저소음"]')?.getAttribute('aria-pressed'),
             }));
             check(kept.click === 'true' && kept.loud === 'true' && kept.soft === 'false', '고른 소리가 다시 열어도 남지 않습니다.');
+            const typeFirst = await page.evaluate(() => ({
+                stored: localStorage.getItem('ssug-gyomu-type-voice'),
+                ppok: document.querySelector('[aria-label="뽁 통통"]')?.getAttribute('aria-pressed'),
+            }));
+            check(typeFirst.stored === null && typeFirst.ppok === 'true', '글자 소리 처음 선택이 뽁이 아닙니다.');
+            const typeLabels = { ppok: '뽁 통통', ting: '띵 실로폰', drop: '물방울 또록', red: '적축 직선', bang: '방귀 뿌우' };
+            for (const [id, label] of Object.entries(typeLabels)) {
+                await page.evaluate((value) => localStorage.setItem('ssug-gyomu-type-voice', value), id);
+                await page.reload({ waitUntil: 'domcontentloaded' });
+                await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
+                await page.evaluate(() => { location.hash = '#/settings'; });
+                await page.waitForSelector(`[aria-label="${label}"]`);
+                const shown = await page.evaluate((want) => ({
+                    pressed: [...document.querySelectorAll('.type-picks button[aria-pressed="true"]')].map((el) => el.getAttribute('aria-label')),
+                    stored: localStorage.getItem('ssug-gyomu-type-voice'),
+                    want,
+                }), label);
+                check(shown.pressed.length === 1 && shown.pressed[0] === label && shown.stored === id, `저장된 글자 소리 ${id}가 ${label}로 보이지 않습니다. ${shown.pressed.join(',')}`);
+            }
+            await page.click('[aria-label="띵 실로폰"]');
+            await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-type-voice') === 'ting');
         }, width === 1920 ? 1080 : 844);
     }
 
@@ -1637,7 +2084,7 @@ try {
                 toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
             };
         });
-        check(notice.text.includes('콕') && notice.text.includes('누를 때 소리가 나요') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
+        check(notice.text.includes('누를 때 소리가 나요') && !notice.text.includes('콕') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
         await page.click('[aria-label="할 일 고르기"]');
         await delay(80);
         const during = await page.evaluate(() => ({
@@ -1707,7 +2154,7 @@ try {
                 check(layout.cls < 0.001, `${width} ${mode}에서 화면이 밀립니다: ${layout.cls}`);
                 if (width < 900) {
                     check(
-                        layout.visible && layout.text.includes('콕') && layout.text.includes('누를 때 소리가 나요')
+                        layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
                         && layout.sixthOnScreen && !layout.sixthUnderTab,
@@ -1719,12 +2166,14 @@ try {
                         sixth: Math.round((document.querySelectorAll('.period-row button')[5] || document.querySelector('.rest-banner'))?.getBoundingClientRect().top ?? -1),
                         cls: window.__cls || 0,
                         toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
+                        shifts: window.__shifts || [],
+                        fonts: [...document.fonts].filter((face) => face.status !== 'unloaded').map((face) => `${face.family} ${face.weight} ${face.status}`),
                     }));
-                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls}`);
+                    check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls} ${JSON.stringify({ shifts: after.shifts, fonts: after.fonts })}`);
                 } else {
                     check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
                     await page.evaluate(() => { location.hash = '#/settings'; });
-                    await page.waitForFunction(() => document.body.innerText.includes('콕, 누를 때 소리가 나요'));
+                    await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요') && !document.body.innerText.includes('콕'));
                     const settings = await page.evaluate(() => {
                         const hits = (a, b) => Boolean(
                             a && b && a.width > 0 && b.width > 0
@@ -1732,13 +2181,13 @@ try {
                             && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5,
                         );
                         const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('누를 때 소리'));
-                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('콕, 누를 때 소리가 나요'));
+                        const note = [...document.querySelectorAll('p')].find((el) => el.offsetParent && el.innerText.includes('누를 때 소리가 나요'));
                         note?.scrollIntoView({ block: 'end' });
                         const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                         const noteBox = note?.getBoundingClientRect();
                         const buttonBox = button?.getBoundingClientRect();
                         return {
-                            phrase: note?.innerText.includes('콕, 누를 때 소리가 나요') || false,
+                            phrase: (note?.innerText.includes('누를 때 소리가 나요') && !note.innerText.includes('콕')) || false,
                             off: Boolean(button),
                             under: hits(buttonBox, fab) || hits(noteBox, fab),
                             aboveFab: Boolean(noteBox && fab && noteBox.bottom <= fab.top + 0.5),
@@ -1764,7 +2213,7 @@ try {
         await delay(400);
         const offlineText = await page.evaluate(() => document.body.innerText).catch(() => '');
         check(
-            offlineText.includes('콕') || offlineText.includes('오늘') || offlineText.includes('인터넷'),
+            offlineText.includes('쨈') || offlineText.includes('오늘') || offlineText.includes('인터넷'),
             '오프라인에서 껍데기가 열리지 않습니다.',
         );
     });
@@ -1773,6 +2222,50 @@ try {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        const titleFace = await page.evaluate(() => {
+            const el = document.querySelector('h1.font-display');
+            const link = document.querySelector('link[rel="preload"][as="font"]');
+            const style = el ? getComputedStyle(el) : null;
+            return { family: style?.fontFamily || '', size: style?.fontSize || '', preload: link?.getAttribute('href') || '' };
+        });
+        check(titleFace.size === '32px' && titleFace.family.includes('JJAEM Title Flat'), `32px 제목이 쨈 제목 평면이 아닙니다. ${JSON.stringify(titleFace)}`);
+        check(titleFace.preload.includes('JJAEMBody-Regular.first.woff2') && !titleFace.preload.includes('JJAEMBody-Regular.ks.woff2'), `첫 화면 글꼴 preload가 작은 파일이 아닙니다. ${titleFace.preload}`);
+        const fontLoads = await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise((done) => { setTimeout(done, 600); });
+            // 쉬는 틈 받기는 CI가 바쁘면 늦게 시작할 수 있어 최대 8초까지 기다립니다.
+            for (let waited = 0; waited < 8000 && performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).length < 3; waited += 200) {
+                await new Promise((done) => { setTimeout(done, 200); });
+            }
+            const nav = performance.getEntriesByType('navigation')[0];
+            const loadEnd = nav?.loadEventEnd || 0;
+            const fonts = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.woff2')).map((entry) => ({ name: entry.name.split('/').pop().split('?')[0], start: entry.startTime }));
+            return { loadEnd, before: fonts.filter((entry) => !loadEnd || entry.start < loadEnd).map((entry) => entry.name), after: fonts.filter((entry) => loadEnd && entry.start >= loadEnd).map((entry) => entry.name) };
+        });
+        const firstFonts = fontLoads.before;
+        check(
+            ['JJAEMBody-Regular.first.woff2', 'JJAEMBody-Bold.first.woff2', 'JJAEM-TitleFlat-Regular.first.woff2'].every((name) => firstFonts.includes(name))
+                && !firstFonts.some((name) => name.includes('.ks.')),
+            `첫 화면에서 큰 글꼴 파일을 받습니다. ${JSON.stringify(fontLoads)}`,
+        );
+        const idleFonts = ['JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2', 'JJAEM-TitleFlat-Regular.ks.woff2'];
+        check(
+            fontLoads.loadEnd > 0 && idleFonts.every((name) => fontLoads.after.filter((item) => item === name).length === 1),
+            `로그인 화면을 다 그린 뒤 다음 화면 글꼴을 한 번씩 받아 두지 않습니다. ${JSON.stringify(fontLoads)}`,
+        );
+        const titleChars = await page.evaluate(() => {
+            const seen = new Set();
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                const el = node.parentElement;
+                if (el && getComputedStyle(el).fontFamily.replace(/["']/g, '').startsWith('JJAEM Title Flat')) [...node.textContent].forEach((ch) => seen.add(ch));
+            }
+            return [...seen].join('');
+        });
+        const fontsNow = readFileSync(resolve(root, 'public/fonts/fonts.css'), 'utf8');
+        const titleRange = ((fontsNow.split('@font-face').find((block) => block.includes('JJAEM-TitleFlat-Regular.first.woff2')) || '').match(/unicode-range:\s*([^;]+);/) || [])[1] || '';
+        const missingTitle = [...titleChars].filter((ch) => !/\s/.test(ch) && !unicodeRangeHas(titleRange, ch.codePointAt(0)));
+        check(titleChars.includes('쨈') && missingTitle.length === 0, `로그인 화면 제목 글자 중 첫 화면 제목 파일에 없는 글자가 있어 큰 파일을 받습니다. ${missingTitle.join('')}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('예시 학급으로 둘러보기'));
         const before = await page.evaluate(() => {
@@ -1799,6 +2292,60 @@ try {
         check(todo.y === 0 && todo.main === 0, `할 일 화면이 맨 위가 아닙니다. scrollY ${todo.y}, main ${todo.main}`);
     });
 
+    await withPage(390, async (page) => {
+        /** 쉬는 틈(requestIdleCallback)이 없는 엔진(예: 예전 Safari)에서도 로그인 화면을 다 그린 뒤 전체 글꼴을 한 번씩 받아야 합니다. */
+        await page.evaluateOnNewDocument(() => {
+            try { delete window.requestIdleCallback; } catch { /* 지울 수 없으면 아래에서 비웁니다. */ }
+            window.requestIdleCallback = undefined;
+        });
+        await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        const noIdle = await page.evaluate(async () => {
+            for (let waited = 0; waited < 8000 && performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).length < 3; waited += 200) {
+                await new Promise((done) => { setTimeout(done, 200); });
+            }
+            const loadEnd = performance.getEntriesByType('navigation')[0]?.loadEventEnd || 0;
+            const ks = performance.getEntriesByType('resource').filter((entry) => entry.name.includes('.ks.woff2')).map((entry) => ({ name: entry.name.split('/').pop().split('?')[0], start: entry.startTime }));
+            return { idle: typeof window.requestIdleCallback, loadEnd, ks };
+        });
+        check(
+            noIdle.idle === 'undefined' && noIdle.loadEnd > 0
+                && ['JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2', 'JJAEM-TitleFlat-Regular.ks.woff2'].every((name) => noIdle.ks.filter((item) => item.name === name && item.start >= noIdle.loadEnd).length === 1),
+            `쉬는 틈이 없는 엔진에서 로그인 화면 뒤 전체 글꼴을 받지 않습니다. ${JSON.stringify(noIdle)}`,
+        );
+    });
+
+    await withDemo(390, 'light', async (page) => {
+        /** 출결 말고 다른 화면에서도 14px보다 작은 글자는 보통 굵기여야 합니다. 10월 달력에는 개천절·한글날이 있습니다. */
+        const smallBold = [];
+        for (const [hash, ready] of [
+            ['#/today', '오늘'],
+            ['#/schedule/month/2026-10-09', '한글날'],
+            ['#/todo', '할 일'],
+            ['#/students', '이하은'],
+            ['#/settings', '글꼴'],
+        ]) {
+            await page.evaluate((next) => { location.hash = next; }, hash);
+            await page.waitForFunction((word) => document.body.innerText.includes(word), {}, ready);
+            await delay(250);
+            const found = await page.evaluate(() => {
+                const bold = [];
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const text = walker.currentNode.textContent.trim();
+                    const el = walker.currentNode.parentElement;
+                    if (!text || !el || !el.getClientRects().length) continue;
+                    const style = getComputedStyle(el);
+                    if (style.visibility === 'hidden' || parseFloat(style.fontSize) >= 14) continue;
+                    if (Number(style.fontWeight) >= 600) bold.push(`${text.slice(0, 12)} ${style.fontSize}/${style.fontWeight}`);
+                }
+                return bold;
+            });
+            if (found.length) smallBold.push(`${hash}: ${found.join(', ')}`);
+        }
+        check(smallBold.length === 0, `출결 밖 화면에서 14px보다 작은 글자가 굵습니다. ${smallBold.join(' / ')}`);
+    });
+
     await withDemo(390, 'light', async (page) => {
         await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
         await openPlus(page);
@@ -1816,6 +2363,163 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
         await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 정리함에'));
     }, 844);
+    // 숨은 반대쪽 행과 메모 민감어: 알림장·하루 메모·일정 줄을 실제 화면으로 고칩니다.
+    await withDemo(390, 'light', async (page) => {
+        const readVaults = () => page.evaluate(async () => {
+            const read = (name) => new Promise((resolveRead, reject) => {
+                const req = indexedDB.open(name);
+                req.onerror = () => reject(req.error);
+                req.onsuccess = () => {
+                    const db = req.result;
+                    if (!db.objectStoreNames.contains('kv')) { resolveRead(null); return; }
+                    const get = db.transaction('kv').objectStore('kv').get('state');
+                    get.onsuccess = () => resolveRead(get.result || null);
+                    get.onerror = () => reject(get.error);
+                };
+            });
+            return { main: await read('ssug-gyomu'), local: await read('ssug-gyomu-local') };
+        });
+        const rowOf = (side, bucket, id) => (side?.[bucket] || []).find((row) => row.id === id) || null;
+        const until = async (test) => {
+            for (let attempt = 0; attempt < 40; attempt += 1) {
+                const vaults = await readVaults();
+                if (test(vaults)) return vaults;
+                await delay(150);
+            }
+            return readVaults();
+        };
+        const typeInto = (selector, value) => page.evaluate((sel, text) => {
+            const box = document.querySelector(sel);
+            if (!box) return false;
+            const proto = box.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, 'value').set.call(box, text);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+        }, selector, value);
+        const clickText = (label, scope = 'body') => page.evaluate((text, sel) => {
+            const button = [...document.querySelectorAll(`${sel} button`)].find((el) => el.innerText.trim() === text);
+            button?.click();
+            return Boolean(button);
+        }, label, scope);
+        const open = async (hash) => {
+            await page.goto(`${origin}?mode=light&at=08:42${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForFunction(() => document.querySelector('main, #root')?.innerText?.length > 0, { timeout: 15000 });
+        };
+
+        await page.evaluate(async () => {
+            const open = (name) => new Promise((resolveDb, reject) => {
+                const req = indexedDB.open(name);
+                req.onsuccess = () => resolveDb(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            const swap = async (name, edit) => {
+                const db = await open(name);
+                const store = db.transaction('kv', 'readwrite').objectStore('kv');
+                const state = await new Promise((resolveState, reject) => {
+                    const req = store.get('state');
+                    req.onsuccess = () => resolveState(req.result || {});
+                    req.onerror = () => reject(req.error);
+                });
+                edit(state);
+                await new Promise((resolvePut, reject) => {
+                    const req = store.put(state, 'state');
+                    req.onsuccess = () => resolvePut();
+                    req.onerror = () => reject(req.error);
+                });
+            };
+            const add = (state, bucket, row) => { state[bucket] = [...(state[bucket] || []), row]; };
+            await swap('ssug-gyomu', (state) => {
+                add(state, 'notices', { id: '2026-12-01', date: '2026-12-01', text: '준비물 가위', source: 'app' });
+                add(state, 'notices', { id: '2026-12-02', date: '2026-12-02', text: '체육복 챙기기', source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-03', date: '2026-12-03', text: '체험학습 서류', pinned: false, source: 'app' });
+                add(state, 'events', { id: 'qa-ev-1', date: '2026-12-07', time: '09:00', title: '현장체험 안내문', kind: '학급', memo: '', source: 'app' });
+                add(state, 'events', { id: 'qa-ev-2', date: '2026-12-07', time: '13:00', title: '학부모 공개수업', kind: '학급', memo: '', source: 'app' });
+            });
+            await swap('ssug-gyomu-local', (state) => {
+                add(state, 'notices', { id: '2026-12-01', date: '2026-12-01', text: '민원 전화 회신하기', source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-03', date: '2026-12-03', text: '보건실 다녀옴', pinned: false, source: 'app' });
+                add(state, 'notes', { id: 'day-2026-12-04', date: '2026-12-04', text: '건강 상담 메모', pinned: false, source: 'app' });
+                add(state, 'events', { id: 'qa-ev-1', date: '2026-12-07', time: '08:50', title: '현장체험 출발', kind: '학급', memo: '알레르기 약 챙기기', source: 'app' });
+            });
+        });
+
+        // 알림장: 클라우드 행을 고쳐도 숨은 기기 행이 남습니다.
+        await open('#/notice/2026-12-01');
+        const noticeShown = await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '준비물 가위', { timeout: 8000 }).then(() => true, () => false);
+        check(noticeShown, '숨은 행 검사: 알림장 화면에 클라우드 알림장이 먼저 나오지 않습니다.');
+        await typeInto('textarea[aria-label="알림장"]', '준비물 풀');
+        check(await clickText('저장'), '숨은 행 검사: 알림장 저장 단추가 없습니다.');
+        let vaults = await until((v) => rowOf(v.main, 'notices', '2026-12-01')?.text === '준비물 풀');
+        check(rowOf(vaults.main, 'notices', '2026-12-01')?.text === '준비물 풀', '숨은 행 검사: 알림장 화면에서 고친 글이 클라우드에 들어가지 않습니다.');
+        check(rowOf(vaults.local, 'notices', '2026-12-01')?.text === '민원 전화 회신하기', '숨은 행 검사: 알림장을 고치자 숨은 기기 전용 알림장이 지워졌습니다.');
+
+        // 알림장: 민감어로 고치면 클라우드에서 빠지고 기기에만 남습니다.
+        await open('#/notice/2026-12-02');
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '체육복 챙기기', { timeout: 8000 }).catch(() => {});
+        await typeInto('textarea[aria-label="알림장"]', '민원 서류 챙기기');
+        await clickText('저장');
+        vaults = await until((v) => Boolean(rowOf(v.local, 'notices', '2026-12-02')));
+        check(rowOf(vaults.local, 'notices', '2026-12-02')?.text === '민원 서류 챙기기', '숨은 행 검사: 민감어 알림장이 기기에 남지 않습니다.');
+        check(!rowOf(vaults.main, 'notices', '2026-12-02'), '숨은 행 검사: 민감어로 고친 알림장의 예전 글이 클라우드에 남았습니다.');
+
+        // 하루 메모: 기기 행을 고쳐도 숨은 클라우드 메모가 남습니다.
+        await open('#/day/2026-12-03');
+        const memoShown = await page.waitForFunction(() => document.querySelector('textarea[aria-label="하루 메모"]')?.value === '보건실 다녀옴', { timeout: 8000 }).then(() => true, () => false);
+        check(memoShown, '숨은 행 검사: 하루 메모 화면에 기기 전용 메모가 나오지 않습니다.');
+        await typeInto('textarea[aria-label="하루 메모"]', '보건실 다녀옴, 다시 확인');
+        check(await clickText('하루 메모 저장'), '숨은 행 검사: 하루 메모 저장 단추가 없습니다.');
+        vaults = await until((v) => rowOf(v.local, 'notes', 'day-2026-12-03')?.text === '보건실 다녀옴, 다시 확인');
+        check(rowOf(vaults.local, 'notes', 'day-2026-12-03')?.text === '보건실 다녀옴, 다시 확인', '숨은 행 검사: 하루 메모를 고친 글이 기기에 남지 않습니다.');
+        check(rowOf(vaults.main, 'notes', 'day-2026-12-03')?.text === '체험학습 서류', '숨은 행 검사: 하루 메모를 고치자 숨은 클라우드 메모가 지워졌습니다.');
+
+        // 하루 메모: 민감어를 빼면 기기 행은 없어지고 클라우드로 옮겨집니다.
+        await open('#/day/2026-12-04');
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="하루 메모"]')?.value === '건강 상담 메모', { timeout: 8000 }).catch(() => {});
+        await typeInto('textarea[aria-label="하루 메모"]', '상담 메모 정리');
+        await clickText('하루 메모 저장');
+        vaults = await until((v) => Boolean(rowOf(v.main, 'notes', 'day-2026-12-04')));
+        check(rowOf(vaults.main, 'notes', 'day-2026-12-04')?.text === '상담 메모 정리', '숨은 행 검사: 민감어를 뺀 하루 메모가 클라우드로 옮겨지지 않습니다.');
+        check(!rowOf(vaults.local, 'notes', 'day-2026-12-04'), '숨은 행 검사: 클라우드로 옮긴 하루 메모의 예전 민감 글이 기기에 남았습니다.');
+
+        // 일정 줄: 메모에 민감어가 있는 기기 일정은 제목만 고쳐도 기기에 남고, 숨은 클라우드 일정도 남습니다.
+        await open('#/day/2026-12-07');
+        const lineShown = await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="현장체험 출발 고치기"]')), { timeout: 8000 }).then(() => true, () => false);
+        check(lineShown, '숨은 행 검사: 일정 줄에 기기 전용 일정이 나오지 않습니다.');
+        await page.evaluate(() => document.querySelector('button[aria-label="현장체험 출발 고치기"]')?.click());
+        await page.waitForSelector('input[aria-label="현장체험 출발 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="현장체험 출발 고치기"]', '현장체험 출발 9시');
+        await page.evaluate(() => [...(document.querySelector('input[aria-label="현장체험 출발 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        vaults = await until((v) => [...(v.main?.events || []), ...(v.local?.events || [])].some((row) => row.title === '현장체험 출발 9시'));
+        check(rowOf(vaults.local, 'events', 'qa-ev-1')?.title === '현장체험 출발 9시', '숨은 행 검사: 메모에 민감어가 있는 일정이 기기에 남지 않습니다.');
+        check(rowOf(vaults.main, 'events', 'qa-ev-1')?.title === '현장체험 안내문', '숨은 행 검사: 일정 줄을 고치자 숨은 클라우드 일정이 지워지거나 바뀌었습니다.');
+        check(!(vaults.main?.events || []).some((row) => String(row.memo || '').includes('알레르기')), '숨은 행 검사: 메모에 민감어가 있는 일정이 클라우드 목록에 들어갔습니다.');
+
+        // 일정 줄: 클라우드 일정을 민감어로 고치면 클라우드에서 빠집니다.
+        await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="학부모 공개수업 고치기"]')), { timeout: 8000 }).catch(() => {});
+        await page.evaluate(() => document.querySelector('button[aria-label="학부모 공개수업 고치기"]')?.click());
+        await page.waitForSelector('input[aria-label="학부모 공개수업 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="학부모 공개수업 고치기"]', '학부모 공개수업 건강 상담');
+        await page.evaluate(() => [...(document.querySelector('input[aria-label="학부모 공개수업 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        vaults = await until((v) => Boolean(rowOf(v.local, 'events', 'qa-ev-2')));
+        check(rowOf(vaults.local, 'events', 'qa-ev-2')?.title === '학부모 공개수업 건강 상담', '숨은 행 검사: 민감어로 고친 일정이 기기에 남지 않습니다.');
+        check(!rowOf(vaults.main, 'events', 'qa-ev-2'), '숨은 행 검사: 민감어로 고친 일정의 예전 줄이 클라우드에 남았습니다.');
+
+        // 내보내기(기기 전용 기록 빼기): 민감한 글이 파일에 들어가지 않습니다.
+        await open('#/settings');
+        await page.evaluate(() => {
+            window.__qaExport = null;
+            const make = URL.createObjectURL.bind(URL);
+            URL.createObjectURL = (blob) => { blob.text().then((text) => { window.__qaExport = text; }); return make(blob); };
+        });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '기록 내려받기'), { timeout: 8000 }).catch(() => {});
+        check(await clickText('기록 내려받기'), '숨은 행 검사: 기록 내려받기 단추가 없습니다.');
+        const exported = await page.waitForFunction(() => window.__qaExport, { timeout: 5000 }).then((handle) => handle.jsonValue(), () => '');
+        check(exported.includes('준비물 풀'), '숨은 행 검사: 내보낸 파일을 읽지 못했습니다.');
+        check(exported.includes('현장체험 안내문') && exported.includes('체험학습 서류'), '숨은 행 검사: 숨은 클라우드 행이 내보낸 파일에서 빠졌습니다.');
+        const leaked = ['민원 전화 회신하기', '민원 서류 챙기기', '보건실 다녀옴', '알레르기 약 챙기기', '현장체험 출발 9시', '공개수업 건강 상담'].filter((text) => exported.includes(text));
+        check(leaked.length === 0, `숨은 행 검사: 기기 전용 기록을 빼고 내보냈는데 민감한 글이 들어갔습니다. ${leaked.join(', ')}`);
+    }, 844);
+
     /* 콕 키캡: 크기·측면·눌림·터치 영역·그림자와, 토스트가 키캡을 덮지 않는지 계산된 스타일로 봅니다. */
     for (const width of [360, 390, 900, 960, 1000, 1920]) {
         for (const mode of ['light', 'dark']) {

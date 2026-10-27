@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GCAL_MODE_HINT, googleClientId } from '../lib/gcalCore.js';
+import { GCAL_MODE_HINT, GCAL_SHARED_ERROR, googleClientId } from '../lib/gcalCore.js';
 import {
     answerGcalUpload,
     connectGcal,
@@ -50,7 +50,7 @@ export function GcalSettings() {
         <section className="glass" style={{ padding: 14 }} aria-label="구글 캘린더">
             <h2 className="title-font" style={{ marginTop: 0 }}>구글 캘린더</h2>
             {!clientId && <p>구글 캘린더 연동은 준비 중이에요. 연결 값이 오면 여기서 켤 수 있어요.</p>}
-            {clientId && shared && <p>공용 컴퓨터에서는 캘린더 연동을 켜지 않아요. 콕 일정은 그대로예요.</p>}
+            {clientId && shared && <p>{GCAL_SHARED_ERROR}</p>}
             {clientId && !shared && (
                 <>
                     <p className="muted" style={{ marginTop: 0 }}>{GCAL_MODE_HINT}</p>
@@ -64,18 +64,18 @@ export function GcalSettings() {
                             className={mode === 'write' ? 'choice-tile on' : 'choice-tile'}
                             aria-pressed={mode === 'write'}
                             onClick={() => run(() => switchGcalMode('write'))}
-                        >콕 일정도 구글에 넣기</Btn>
+                        >만든 일정도 구글에 넣기</Btn>
                     </div>
                     {!signedIn && <p>구글 로그인 후 캘린더를 연결할 수 있어요.</p>}
                     {signedIn && !gcal.enabled && (
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} aria-busy={busy} onClick={() => run(() => connectGcal(mode))}>구글 캘린더 연동 켜기</Btn>
                     )}
                     {signedIn && gcal.enabled && (
-                        <p>{mode === 'write' ? '콕 일정을 구글에도 넣고 있어요.' : '구글 일정을 보는 중이에요.'}</p>
+                        <p>{mode === 'write' ? '만든 일정을 구글에도 넣고 있어요.' : '구글 일정을 보는 중이에요.'}</p>
                     )}
                     {signedIn && gcal.enabled && gcal.needsUploadAsk && mode === 'write' && (
-                        <div className="gcal-ask" role="group" aria-label="기존 콕 일정 올리기">
-                            <p>이미 적어 둔 콕 일정을 구글 캘린더에 한꺼번에 올릴까요? 건강처럼 이 기기에만 둔 일정은 올리지 않아요.</p>
+                        <div className="gcal-ask" role="group" aria-label="이미 적어 둔 일정 올리기">
+                            <p>이미 적어 둔 일정을 구글 캘린더에 한꺼번에 올릴까요? 민감한 일정은 이 기기에만 두고 구글로 보내지 않아요.</p>
                             <Btn className="primary-btn block" aria-busy={busy} onClick={() => run(async () => {
                                 const result = await answerGcalUpload(true);
                                 if (result?.ok) showToast('적어 둔 일정을 구글 캘린더에 올렸어요.');
@@ -93,7 +93,7 @@ export function GcalSettings() {
                             <Btn className="chip" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>
                             <Btn className="chip" aria-busy={busy} onClick={() => run(async () => {
                                 await disconnectGcal();
-                                showToast('연동을 껐어요. 콕 일정과 구글에 이미 올라간 일정은 그대로예요.');
+                                showToast('연동을 껐어요. 여기에 적어 둔 일정과 구글에 이미 올라간 일정은 그대로예요.');
                                 return { ok: true };
                             })}>연동 끄기</Btn>
                         </div>

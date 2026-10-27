@@ -11,7 +11,10 @@ const REASONS = ['질병', '미인정', '출석인정', '기타'];
 export function Attend() {
     const { data, clock, route, go } = useUi();
     const date = route.params.date || clock.ymd;
-    const [month, setMonth] = useState(false);
+    const month = route.params.span === 'month';
+    function attendHash(ymd, span) {
+        return span === 'month' ? `#/attend/${ymd}/month` : `#/attend/${ymd}`;
+    }
     const [reasonFor, setReasonFor] = useState(null);
     const [filter, setFilter] = useState('');
     const marks = data.attendance.filter((row) => row.date === date);
@@ -40,10 +43,10 @@ export function Attend() {
 
     function openRecord(student) {
         if (student?.no >= 1 && student?.no <= 50) {
-            go(`#/students/${student.no}`);
+            go(`#/students/${student.no}`, { state: { appFrom: 'attend' } });
             return;
         }
-        setMonth(false);
+        go(attendHash(date, ''), { replace: true });
         setReasonFor(student);
     }
 
@@ -56,22 +59,22 @@ export function Attend() {
     return (
         <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(`#/attend/${addDaysYmd(date, -1)}`)}>‹</Btn>
+                <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(attendHash(addDaysYmd(date, -1), month ? 'month' : ''))}>‹</Btn>
                 <strong className={restInfo(date, joined(data, 'events')).off ? 'title-font day-rest-mark' : 'title-font'} style={{ fontSize: 18 }}>{formatKoDate(date, { today: clock.ymd })}{restInfo(date, joined(data, 'events')).off ? ` · 휴일` : ''}</strong>
-                <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(`#/attend/${addDaysYmd(date, 1)}`)}>›</Btn>
+                <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(attendHash(addDaysYmd(date, 1), month ? 'month' : ''))}>›</Btn>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8, margin: '12px 0' }}>
                 {boxes.map(([label, value, color]) => (
                     <Btn key={label} block className="solid-card" aria-pressed={filter === label} onClick={() => pickBox(label)} style={{ padding: '8px 4px', textAlign: 'center', minHeight: 64, display: 'grid', alignContent: 'center', justifyItems: 'center' }}>
-                        <span className="num title-font" style={{ fontSize: 26, color, lineHeight: '30px' }}>{value}</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, lineHeight: '16px' }}>{label}</span>
+                        <span className="num title-font font-display" style={{ fontSize: 26, color, lineHeight: '30px' }}>{value}</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, lineHeight: '16px' }}>{label}</span>
                     </Btn>
                 ))}
             </div>
             <p className="muted" style={{ marginTop: 0 }}>친구를 누르면 출석·결석·지각·조퇴·결과 중에서 바로 고릅니다.</p>
             <div style={{ display: 'flex', gap: 8 }}>
-                <Btn className={month ? 'chip' : 'chip on'} onClick={() => setMonth(false)}>오늘</Btn>
-                <Btn className={month ? 'chip on' : 'chip'} onClick={() => setMonth(true)}>이번 달</Btn>
+                <Btn className={month ? 'chip' : 'chip on'} onClick={() => go(attendHash(date, ''), { replace: true })}>오늘</Btn>
+                <Btn className={month ? 'chip on' : 'chip'} onClick={() => go(attendHash(date, 'month'), { replace: true })}>이번 달</Btn>
             </div>
             {month ? <MonthTable students={visibleStudents} attendance={data.attendance} ym={date.slice(0, 7)} onOpen={openRecord} emptyHint={data.students.length ? '이 상태인 친구가 없어요.' : '명단이 없으면 월 출결을 만들 수 없어요.'} /> : (
                 <div className="attend-layout" style={{ marginTop: 12 }}>
@@ -116,11 +119,11 @@ const STATUSES = [
 
 function Seat({ student, mark, onOpen }) {
     return (
-        <Btn block className="solid-card" style={{ minHeight: 64, background: mark ? statusBg(mark.status) : 'var(--solid)', fontWeight: 800 }} onClick={onOpen}>
+        <Btn block className="solid-card" style={{ minHeight: 64, background: mark ? statusBg(mark.status) : 'var(--solid)', fontWeight: 400 }} onClick={onOpen}>
             <span style={{ display: 'grid', justifyItems: 'center' }}>
-                <span className="num muted" style={{ fontSize: 12 }}>{student.no}</span>
-                <span>{student.name}</span>
-                {mark && <span style={{ color: statusColor(mark.status), fontSize: 12 }}>{mark.status}</span>}
+                <span className="num muted" style={{ fontSize: 12, fontWeight: 400 }}>{student.no}</span>
+                <span style={{ fontWeight: 800 }}>{student.name}</span>
+                {mark && <span style={{ color: statusColor(mark.status), fontSize: 12, fontWeight: 400 }}>{mark.status}</span>}
             </span>
         </Btn>
     );

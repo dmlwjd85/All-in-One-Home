@@ -4,7 +4,7 @@ import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick } from '../lib/db.js';
 import { joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
-import { Area, Btn, KINDS, TAGS } from './bits.jsx';
+import { Area, Btn, KINDS, SpreadHint, TAGS } from './bits.jsx';
 import { recentStudents } from './capture.js';
 
 export function QuickSheet({ initial, onClose }) {
@@ -49,9 +49,9 @@ export function QuickSheet({ initial, onClose }) {
 
     return (
         <div className="sheet-back" onClick={onClose}>
-            <div className="sheet" role="dialog" aria-modal="true" aria-label="콕, 적" onClick={(event) => event.stopPropagation()} data-screen="quick">
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="쨈 교무수첩" onClick={(event) => event.stopPropagation()} data-screen="quick">
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>콕, 적</h2>
+                <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>쨈 교무수첩</h2>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {KINDS.map((item) => (
                         <Btn key={item.id} className={kind === item.id ? 'chip on' : 'chip'} onClick={() => setKind(item.id)}>{item.emoji} {item.label}</Btn>
@@ -75,7 +75,8 @@ export function QuickSheet({ initial, onClose }) {
                         )}
                     </>
                 )}
-                <Area ref={box} rows={4} aria-label="내용" placeholder="한 줄로 적어도 충분해요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} style={{ marginTop: 12 }} />
+                <SpreadHint />
+                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {(TAGS[kind] || []).map((tag) => (
                         <Btn key={tag} className={tags.includes(tag) ? 'chip on' : 'chip'} onClick={() => setTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])}>#{tag}</Btn>

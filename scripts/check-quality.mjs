@@ -13,11 +13,11 @@ import { restInfo } from '../src/lib/daymark.js';
 import { isPublicHoliday } from '../src/lib/holidays.js';
 import { parseRoster } from '../src/lib/roster.js';
 import { buildExport, validateBackupText } from '../src/lib/backup.js';
-import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
+import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, saveTextItem, setTimetable, snapshot, subscribeStorageIssue, update, useVaultsForTest } from '../src/lib/db.js';
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
-import { isSensitiveControl, isTextControl, noteCompositionEnd, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
-import { assignHotkey, defaultHotkeys, hotkeyFromEvent, isStoredHotkey, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
-import { menuSelected, menuTarget } from '../src/ui/menu.js';
+import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
+import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
+import { menuSelected, menuTarget, tabSelected } from '../src/ui/menu.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
 
@@ -54,7 +54,7 @@ check(isPublicHoliday('2026-03-01'), '삼일절이 빠졌습니다.');
 check(isPublicHoliday('2026-02-17'), '설날이 빠졌습니다.');
 check(isPublicHoliday('2026-05-05') && isPublicHoliday('2026-10-03') && isPublicHoliday('2026-12-25'), '공휴일이 빠졌습니다.');
 check(dueLabel('2026-10-28', '2026-10-25') === '10/28(수), D-3', `마감 표시가 다릅니다. ${dueLabel('2026-10-28', '2026-10-25')}`);
-check(dueLabel('2026-10-25', '2026-10-25') === '10/25(일), D-day', '오늘 마감 표시가 다릅니다.');
+check(dueLabel('2026-10-25', '2026-10-25') === '10/25(일), 디데이', '오늘 마감 표시가 다릅니다.');
 check(restInfo('2026-10-23', []).off === false, '평일 금요일을 휴일로 봤습니다.');
 check(restInfo('2026-10-24', []).off && restInfo('2026-10-25', []).off, '토·일을 휴일로 보지 않습니다.');
 check(restInfo('2026-10-09', []).off && restInfo('2026-10-09', []).label.includes('한글'), '한글날을 휴일로 보지 않습니다.');
@@ -181,6 +181,7 @@ const pairs = [
     ['강조 카드', '#A73D74', '#E8E4DE'],
     ['강조 노란', '#A73D74', '#F2E6C4'],
     ['다크 강조', '#E08B9A', '#2A2627'],
+    ['다크 오늘 칸', '#2A2627', '#E08B9A'],
     ['다크 강조 카드', '#E08B9A', '#2A2627'],
     ['토스트', '#F6F2EE', '#2E2A2B'],
     ['토스트 동작', '#F0A8BA', '#2E2A2B'],
@@ -255,23 +256,271 @@ check(isSensitiveControl(fakeControl('INPUT', { type: 'text', autocomplete: 'one
 check(!isSensitiveControl(fakeControl('INPUT', { type: 'text', 'aria-label': '학급 이름' })), '학급 이름 칸을 비밀번호로 봅니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'text', autocomplete: 'one-time-code' }) }), '인증 번호 칸에서 글자 소리가 납니다.');
 const composing = fakeControl('INPUT', { type: 'text' });
-let jamoSounds = 0;
+const soundStore = {
+    map: new Map(),
+    getItem(key) { return this.map.has(key) ? this.map.get(key) : null; },
+    setItem(key, value) { this.map.set(key, String(value)); },
+    removeItem(key) { this.map.delete(key); },
+};
+soundStore.setItem('ssug-gyomu-type-sound', '1');
+const previousStorage = globalThis.localStorage;
+globalThis.localStorage = soundStore;
+
+/** Chromium 로그와 같은 순서. 확정은 input → 마이크로태스크 → compositionend.
+    받침이 넘어갈 때는 insertText와 새 조합이 한 키의 12ms 안에 함께 옵니다.
+    noteTypeInput이 참이면(문자열 'later' 포함) 그 자리에서 소리로 셉니다. */
+let strokeAt = 1000;
+async function replayIme(steps) {
+    let sounds = 0;
+    for (const step of steps) {
+        const kind = step[0];
+        if (kind === 'gap') {
+            strokeAt += 80;
+            continue;
+        }
+        if (kind === 'micro') {
+            await Promise.resolve();
+            continue;
+        }
+        if (kind === 'start') {
+            noteCompositionStart();
+            continue;
+        }
+        if (kind === 'end') {
+            noteCompositionEnd();
+            continue;
+        }
+        if (kind === 'update') {
+            noteCompositionUpdate(step[1]);
+            continue;
+        }
+        if (kind === 'input') {
+            strokeAt += 0.3;
+            const decision = noteTypeInput({
+                inputType: step[1],
+                data: step[2],
+                isComposing: step[3],
+                target: composing,
+            }, strokeAt);
+            if (decision) sounds += 1;
+        }
+    }
+    return sounds;
+}
+function syllable(data) {
+    return [
+        ['update', data],
+        ['input', 'insertCompositionText', data, true],
+    ];
+}
+function confirm(data) {
+    return [
+        ['gap'],
+        ['update', data],
+        ['input', 'insertCompositionText', data, true],
+        ['micro'],
+        ['end'],
+    ];
+}
+/** 한 키에서 받침이 빠지고 다음 글자가 같은 순간에 시작됩니다. */
+function splitBatchim(kept, next, { commitText = false } = {}) {
+    const steps = [
+        ['gap'],
+        ['update', kept],
+        ['input', 'insertCompositionText', kept, true],
+        ['end'],
+    ];
+    if (commitText) steps.push(['input', 'insertText', kept, false]);
+    steps.push(['start'], ['update', next], ['input', 'insertCompositionText', next, true]);
+    return steps;
+}
+/** 받침이 이미 있는 글자를 확정하고 새 첫소리를 같은 키에서 시작합니다. */
+function commitAndStart(committed, next) {
+    return [
+        ['gap'],
+        ['end'],
+        ['input', 'insertText', committed, false],
+        ['start'],
+        ['update', next],
+        ['input', 'insertCompositionText', next, true],
+    ];
+}
+const words = [
+    {
+        name: '아아',
+        keys: 4,
+        steps: [
+            ['start'],
+            ...syllable('ㅇ'),
+            ['gap'], ...syllable('아'),
+            ['gap'], ...syllable('앙'),
+            ...splitBatchim('아', '아'),
+            ...confirm('아'),
+        ],
+    },
+    {
+        name: '나라',
+        keys: 4,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㄴ'),
+            ['gap'], ...syllable('나'),
+            ['gap'], ...syllable('날'),
+            ...splitBatchim('나', '라', { commitText: true }),
+            ...confirm('라'),
+        ],
+    },
+    {
+        name: '하하하',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('핳'),
+            ...splitBatchim('하', '하', { commitText: true }),
+            ['gap'], ...syllable('핳'),
+            ...splitBatchim('하', '하', { commitText: true }),
+            ...confirm('하'),
+        ],
+    },
+    {
+        name: '사랑해',
+        keys: 7,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅅ'),
+            ['gap'], ...syllable('사'),
+            ['gap'], ...syllable('살'),
+            ...splitBatchim('사', '라', { commitText: true }),
+            ['gap'], ...syllable('랑'),
+            ...commitAndStart('랑', 'ㅎ'),
+            ['gap'], ...syllable('해'),
+            ...confirm('해'),
+        ],
+    },
+    {
+        name: '한글',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('한'),
+            ...commitAndStart('한', 'ㄱ'),
+            ['gap'], ...syllable('그'),
+            ['gap'], ...syllable('글'),
+            ...confirm('글'),
+        ],
+    },
+    {
+        name: '안녕',
+        keys: 6,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅇ'),
+            ['gap'], ...syllable('아'),
+            ['gap'], ...syllable('안'),
+            ...commitAndStart('안', 'ㄴ'),
+            ['gap'], ...syllable('녀'),
+            ['gap'], ...syllable('녕'),
+            ...confirm('녕'),
+        ],
+    },
+    {
+        name: 'ㅋㅋㅋ',
+        keys: 3,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅋ'),
+            ...commitAndStart('ㅋ', 'ㅋ'),
+            ...commitAndStart('ㅋ', 'ㅋ'),
+            ...confirm('ㅋ'),
+        ],
+    },
+    {
+        name: '학교에서',
+        keys: 9,
+        steps: [
+            ['gap'], ['start'],
+            ...syllable('ㅎ'),
+            ['gap'], ...syllable('하'),
+            ['gap'], ...syllable('학'),
+            ...commitAndStart('학', 'ㄱ'),
+            ['gap'], ...syllable('교'),
+            ['gap'], ...syllable('굥'),
+            ...splitBatchim('교', '에', { commitText: true }),
+            ['gap'], ...syllable('엣'),
+            ...splitBatchim('에', '서', { commitText: true }),
+            ...confirm('서'),
+        ],
+    },
+];
+for (const word of words) {
+    const sounds = await replayIme(word.steps);
+    check(sounds === word.keys, `${word.name}는 ${word.keys}타인데 소리가 ${sounds}번입니다.`);
+}
+const safariHangul = await replayIme([
+    ['gap'], ['start'],
+    ...syllable('ㅎ'),
+    ['gap'], ...syllable('하'),
+    ['gap'], ...syllable('한'),
+    ['gap'], ...syllable('한ㄱ'),
+    ['gap'], ...syllable('한그'),
+    ['gap'], ...syllable('한글'),
+    ['gap'], ['end'],
+    ['input', 'insertCompositionText', '한글', false],
+]);
+check(safariHangul === 6, `Safari에서 한글 6타에 소리가 ${safariHangul}번입니다.`);
+noteCompositionStart();
+let bareSafari = 0;
+let bareAt = strokeAt + 80;
 for (let i = 0; i < 6; i += 1) {
-    if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: true, target: composing })) jamoSounds += 1;
+    bareAt += 80;
+    if (acceptTypeInput({ inputType: 'insertCompositionText', isComposing: true, target: composing }, bareAt)) bareSafari += 1;
 }
 noteCompositionEnd();
-if (shouldTypeSound({ inputType: 'insertCompositionText', isComposing: false, target: composing })) jamoSounds += 1;
-check(jamoSounds === 6, `자모 6타에 소리가 ${jamoSounds}번입니다.`);
-check(shouldTypeSound({ inputType: 'insertCompositionText', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
+bareAt += 80;
+if (acceptTypeInput({ inputType: 'insertCompositionText', isComposing: false, target: composing }, bareAt)) bareSafari += 1;
+check(bareSafari === 6, `Safari 조합 종료 알림에 소리가 ${bareSafari}번입니다.`);
+const repeatAt = bareAt + 80;
+check(noteTypeInput({ inputType: 'insertText', data: 'a', target: composing }, repeatAt) === true, '일반 글자에서 소리가 나지 않습니다.');
+check(noteTypeInput({ inputType: 'insertText', data: 'b', target: composing }, repeatAt + 1) === false, '12ms 안의 같은 타를 두 번 울립니다.');
+check(noteTypeInput({ inputType: 'insertText', data: 'c', target: composing }, repeatAt + 40) === true, '다음 글자 소리를 12ms 거름이 삼킵니다.');
+noteCompositionStart();
+check(shouldTypeSound({ inputType: 'insertCompositionText', data: 'ㄱ', target: fakeControl('INPUT', { type: 'text' }) }), '한글 조합 중에 글자 소리를 건너뜁니다.');
 check(!shouldTypeSound({ inputType: 'insertFromComposition', target: fakeControl('INPUT', { type: 'text' }) }), '조합이 끝날 때 소리가 한 번 더 납니다.');
 check(!shouldTypeSound({ inputType: 'insertText', target: fakeControl('INPUT', { type: 'password' }) }), '비밀번호 칸에서 글자 소리를 냅니다.');
 check(!shouldTypeSound({ inputType: 'insertFromPaste', target: fakeControl('TEXTAREA') }), '붙여넣기에도 글자마다 소리를 내려 합니다.');
+if (previousStorage === undefined) delete globalThis.localStorage;
+else globalThis.localStorage = previousStorage;
 
 const attendTarget = menuTarget('#/attend', '2026-10-26');
 const attendRoute = resolveHash(attendTarget, '2026-10-26');
 check(attendTarget === '#/attend/2026-10-26' && attendRoute.name === 'attend' && attendRoute.replace === '', '출결 메뉴가 날짜 주소로 바로 열리지 않습니다.');
+const attendMonth = resolveHash('#/attend/2026-10-26/month', '2026-10-19');
+check(attendMonth.name === 'attend' && attendMonth.params.date === '2026-10-26' && attendMonth.params.span === 'month' && attendMonth.replace === '', '이번 달 출결 주소가 유지되지 않습니다.');
 check(menuSelected('attend', '#/attend') && !menuSelected('today', '#/attend'), '출결 화면에서 출결 메뉴가 켜지지 않습니다.');
 check(menuSelected('student', '#/students') && menuSelected('legacy', '#/settings') && menuSelected('schedule', '#/schedule'), '다른 화면의 메뉴 선택이 꺼집니다.');
+check(resolveHash('#/day/2026-10-26', '2026-10-19').name === 'day' && resolveHash('#/day/2026-10-26', '2026-10-19').params.date === '2026-10-26', '날짜 일지 주소가 열리지 않습니다.');
+check(resolveHash('#/day', '2026-10-26').name === 'day' && resolveHash('#/day', '2026-10-26').params.date === '2026-10-26' && !resolveHash('#/day', '2026-10-26').notice, '날짜 없는 일지가 오늘로 이어지지 않습니다.');
+const missingDay = resolveHash('#/day/2026-02-30', '2026-10-26');
+check(missingDay.name === 'schedule' && missingDay.notice.includes('달력에 없어요'), '없는 날짜가 안내 없이 일정으로 갑니다.');
+check(resolveHash('#/day/2026-10-26', '2026-10-19').notice === '', '있는 날짜 일지에 안내를 붙입니다.');
+check(menuSelected('day', '#/schedule') && tabSelected('일정', 'day') && !menuSelected('day', '#/today'), '날짜 일지에서 일정 메뉴가 켜지지 않습니다.');
+check(resolveHash('#/settings/roster', '2026-10-26').name === 'roster' && menuSelected('roster', '#/settings'), '명단 화면이 설정 메뉴에 속하지 않습니다.');
+const monthRoute = resolveHash('#/schedule/month/2026-11-15', '2026-10-26');
+check(monthRoute.name === 'schedule' && monthRoute.params.view === '달력' && monthRoute.params.date === '2026-11-15' && monthRoute.replace === '', '달력 주소가 고른 날을 담지 않습니다.');
+const weekRoute = resolveHash('#/schedule/week/2026-11-15', '2026-10-26');
+check(weekRoute.name === 'schedule' && weekRoute.params.view === '주' && weekRoute.params.date === '2026-11-15' && weekRoute.params.week === '2026-11-15', '주 주소가 고른 날을 담지 않습니다.');
+const bareMonth = resolveHash('#/schedule/month', '2026-10-26');
+check(bareMonth.params.view === '달력' && bareMonth.params.date === '2026-10-26' && bareMonth.replace === '#/schedule/month/2026-10-26' && !bareMonth.notice, '날짜 없는 달력이 주 보기로 풀립니다.');
+const missingMonth = resolveHash('#/schedule/month/2026-02-30', '2026-10-26');
+check(missingMonth.params.view === '달력' && missingMonth.params.date === '2026-10-26' && missingMonth.replace === '#/schedule/month/2026-10-26' && missingMonth.notice.includes('달력에 없어요'), '잘못된 달력 날짜가 주 보기로 풀립니다.');
+const bareTable = resolveHash('#/schedule/table', '2026-10-26');
+check(bareTable.params.view === '시간표' && bareTable.params.date === '2026-10-26' && bareTable.replace === '#/schedule/table/2026-10-26' && !bareTable.notice, '날짜 없는 시간표가 주 보기로 풀립니다.');
+const missingTable = resolveHash('#/schedule/table/2026-13-01', '2026-10-26');
+check(missingTable.params.view === '시간표' && missingTable.params.date === '2026-10-26' && missingTable.replace === '#/schedule/table/2026-10-26' && missingTable.notice.includes('달력에 없어요'), '잘못된 시간표 날짜가 주 보기로 풀립니다.');
 
 const hotStore = {
     map: new Map(),
@@ -280,34 +529,66 @@ const hotStore = {
     removeItem(key) { this.map.delete(key); },
 };
 check(defaultHotkeys().plus === '/' && defaultHotkeys().help === '?' && defaultHotkeys().attend === '', '단축키 기본이 / 와 물음표가 아닙니다.');
-check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 콕이 / 가 아닙니다.');
+check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 발라 두기가 / 가 아닙니다.');
 const moved = assignHotkey(loadHotkeys(hotStore), 'attend', '/');
-check(moved.movedFrom === '콕 열기' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 콕에 그대로 둡니다.');
+check(moved.movedFrom === '발라 두기' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 발라 두기에 그대로 둡니다.');
 check(hotkeyFromEvent({ key: 'A' }) === 'a' && hotkeyFromEvent({ key: 'k', ctrlKey: true }) === '', 'Ctrl 조합이나 대문자를 그대로 받습니다.');
 check(hotkeyFromEvent({ key: 'F3' }) === '' && hotkeyFromEvent({ key: 'F6' }) === '' && hotkeyFromEvent({ key: 'F5' }) === '' && hotkeyFromEvent({ key: 'F12' }) === '', '브라우저 기능키를 단축키로 받습니다.');
 check(hotkeyFromEvent({ key: 'F8' }) === 'F8' && isStoredHotkey('F8') && !isStoredHotkey('F3') && !isStoredHotkey('F6'), '브라우저가 쓰지 않는 기능키까지 막거나, 막은 키를 저장합니다.');
-check(passesThroughCapture({ key: 'Tab' }) && !passesThroughCapture({ key: 'a' }), 'Tab이 단축키 칸에 갇힙니다.');
+check(passesThroughCapture({ key: 'Tab' }) && passesThroughCapture({ key: 'Tab', shiftKey: true }) && passesThroughCapture({ key: 'Shift' }) && passesThroughCapture({ key: 'Control' }) && passesThroughCapture({ key: 'Alt' }) && passesThroughCapture({ key: 'Meta' }) && !passesThroughCapture({ key: 'a' }), 'Shift+Tab이나 수정 키가 단축키 칸에 갇힙니다.');
 check(shortcutBlocked({ key: 'a', target: fakeControl('INPUT', { type: 'text' }) }), '글자 칸에서 단축키가 먹습니다.');
 check(shortcutBlocked({ key: 'Process', isComposing: true, target: { tagName: 'BODY' } }), '한글 조합 중에 단축키가 먹습니다.');
-check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 콕을 열지 않습니다.');
-check(matchHotkey({ key: '/', target: fakeControl('TEXTAREA') }, defaultHotkeys()) === '', '글자 칸의 / 가 콕을 엽니다.');
+check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 발라 두기를 열지 않습니다.');
+check(matchHotkey({ key: '/', target: fakeControl('TEXTAREA') }, defaultHotkeys()) === '', '글자 칸의 / 가 발라 두기를 엽니다.');
 saveHotkeys(moved.map, hotStore);
 check(loadHotkeys(hotStore).attend === '/' && loadHotkeys(hotStore).plus === '', '옮긴 단축키가 저장되지 않습니다.');
 resetHotkeys(hotStore);
 check(loadHotkeys(hotStore).plus === '/' && loadHotkeys(hotStore).attend === '', '기본값으로 되돌리기가 남지 않습니다.');
+hotStore.setItem('ssug-gyomu-hotkeys', JSON.stringify({ plus: 'F6', attend: '/' }));
+const legacyKeys = loadHotkeys(hotStore);
+const legacyValues = Object.values(legacyKeys).filter(Boolean);
+check(legacyKeys.attend === '/' && legacyKeys.plus === '' && legacyKeys.help === '?' && new Set(legacyValues).size === legacyValues.length, '예전 F6 저장이 발라 두기와 출결을 같은 / 로 겹치게 합니다.');
+check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, legacyKeys) === 'attend', '겹친 / 가 발라 두기를 엽니다.');
+const freshDefaults = resetHotkeys(hotStore);
+const freshValues = Object.values(freshDefaults).filter(Boolean);
+check(freshDefaults.plus === '/' && freshDefaults.attend === '' && freshDefaults.help === '?' && new Set(freshValues).size === freshValues.length, '기본으로 되돌리면 같은 키가 두 동작에 걸립니다.');
+check(kokHotkeyHint(defaultHotkeys()) === '기본으로 / 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.', '기본 발라 두기 안내가 달라졌습니다.');
+check(kokHotkeyHint(legacyKeys) === '발라 두는 키는 아직 없어요. 설정에서 정해 주시면 돼요.' && !kokHotkeyHint(legacyKeys).includes('/'), '발라 두기 키가 없는데 사이드바가 빗금을 말합니다.');
+check(kokHotkeyHint({ ...defaultHotkeys(), plus: 'a' }) === 'A 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.', '바꾼 키를 사이드바가 따라가지 않습니다.');
+check(hotkeyFootnote(legacyKeys).includes('아직 없어요') && !hotkeyFootnote(legacyKeys).includes('/ 키'), '키가 없는데 단축키 안내가 빗금을 말합니다.');
+check(hotkeyFootnote(defaultHotkeys()).includes('?') && hotkeyFootnote(defaultHotkeys()).includes('/'), '기본 단축키 안내가 빠졌습니다.');
+check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNote(legacyKeys).includes('/'), '키가 없는데 휴대폰 안내가 빗금을 말합니다.');
 
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';
-check(bits.includes('viewBox="0 0 1652 1774"'), '콕 글자 틀이 가계부와 다릅니다.');
-check(bits.includes(ledgerPath), '콕 글자 윤곽이 가계부와 다릅니다.');
+check(bits.includes('viewBox="0 0 1652 1774"'), '버튼 글자 틀이 가계부와 다릅니다.');
+check(bits.includes(ledgerPath), '버튼 글자 윤곽이 가계부와 다릅니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
-check(appText.includes('콕, 누를 때 소리가 나요') && appText.includes('>끄기<'), '소리 안내 문구가 없습니다.');
+check(appText.includes('누를 때 소리가 나요') && appText.includes('>끄기<') && !appText.includes('콕'), '소리 안내 문구가 없습니다.');
 check(/const onKey = \(event\) => \{\n\s+if \(locked\) return;/.test(appText), '잠금 중에 단축키가 먹습니다.');
-check(appText.includes('compositionend'), '한글 조합이 끝날 때 소리를 한 번 더 냅니다.');
-check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('콕, 누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
+check(appText.includes('compositionupdate') && appText.includes('noteCompositionUpdate(event?.data)'), '조합이 바뀌는 글자를 기록하지 않습니다.');
+check(appText.includes('if (noteTypeInput(event)) playTypeSound();'), '글자 소리를 조합이 끝난 뒤에 미루면 마이크로태스크가 먼저 울립니다.');
+check(!appText.includes('finishTypeSoundTurn') && !appText.includes('queueMicrotask'), '동작하지 않는 소리 미루기가 남아 있습니다.');
+check(!appText.includes('기본으로 / 키를 누르면 발라 두기가 열려요'), '사이드바 안내가 저장된 키를 따라가지 않습니다.');
+check(appText.includes('kokHotkeyHint(hotkeys)'), '사이드바가 키 안내를 그리지 않습니다.');
+const typeText = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+check(typeText.includes('function noteCompositionUpdate') && !typeText.includes('dropHeld') && !typeText.includes('finishTypeSoundTurn') && !typeText.includes('heldStroke'), '받침이 넘어갈 때 소리를 미루는 옛 경로가 남아 있습니다.');
+const formText = readFileSync(`${root}/src/ui/HotkeyForm.jsx`, 'utf8');
+check(formText.includes('hotkeyFootnote(map)') && formText.includes('hotkeyPhoneNote(map)'), '단축키 안내가 저장된 키를 따라가지 않습니다.');
+check(!formText.includes('기본으로는 / 키가 콕을 엽니다.') && !formText.includes('휴대폰에서는 기본으로 / 키가 콕을 엽니다.'), '단축키 화면에 빗금 안내가 고정되어 있습니다.');
+check(!appText.includes('setKeySoundAnnouncer') && !appText.includes("showToast('누를 때 소리가 나요'"), '소리 안내가 나타났다 사라지는 토스트이면 안 됩니다.');
 
+const settingsText = readFileSync(`${root}/src/ui/Settings.jsx`, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const settingsWords = [
+    ...[...settingsText.matchAll(/>([^<{]+)</g)].map((match) => match[1]),
+    ...[...settingsText.matchAll(/(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)].map((match) => match[2]).filter((value) => /[가-힣]/.test(value)),
+];
+for (const value of settingsWords) {
+    const jargon = value.match(/\d+\s*px|\bpx\b|\bbold\b|\bregular\b|서브셋|부분집합|\bsubset\b|woff|unicode|font-weight|preload|폰트 파일/i);
+    if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
+}
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v17'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v21'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';
@@ -507,6 +788,62 @@ await (async () => {
     check(fingerprint(snapshot()) === kept, '일반 저장에 실패했는데 화면에 새 기록이 남았습니다.');
     check(!JSON.stringify(mainStore.dump()).includes('남지 않을 할 일'), '실패한 일반 저장이 메인 저장소에 남았습니다.');
     check(JSON.stringify(localStore.dump()) === localBefore, '실패한 일반 저장이 로컬 저장소를 바꿨습니다.');
+
+    mainStore.heal();
+    localStore.heal();
+    const blank = await saveTextItem('notes', { id: 'day-blank', text: '   ', date: '2026-11-03', source: 'app' });
+    check(blank?.ok === false && !snapshot().notes.some((row) => row.id === 'day-blank') && !snapshot().local.notes.some((row) => row.id === 'day-blank'), '빈 메모가 기록으로 남습니다.');
+
+    async function expectOneSide(bucket, id, where) {
+        const cloud = (snapshot()[bucket] || []).filter((row) => row.id === id);
+        const local = (snapshot().local[bucket] || []).filter((row) => row.id === id);
+        check(where === 'cloud' ? cloud.length === 1 && local.length === 0 : cloud.length === 0 && local.length === 1, `${bucket} ${id} 가 ${where} 한쪽에만 있지 않습니다. 클라우드 ${cloud.length}, 기기 ${local.length}`);
+        return where === 'cloud' ? cloud[0] : local[0];
+    }
+    await saveTextItem('notes', { id: 'day-qa', text: '일반 메모', date: '2026-11-03', pinned: false, source: 'app' });
+    await expectOneSide('notes', 'day-qa', 'cloud');
+    await saveTextItem('notes', { id: 'day-qa', text: '학폭 관련 민원 상담', date: '2026-11-03', pinned: false, source: 'app' }, { from: 'cloud' });
+    const hiddenNote = await expectOneSide('notes', 'day-qa', 'local');
+    check(hiddenNote?.text === '학폭 관련 민원 상담' && toCloudRow('notes', hiddenNote) === null, '민감 메모를 클라우드 모양으로 올립니다.');
+    await saveTextItem('notes', { id: 'day-qa', text: '다시 일반', date: '2026-11-03', pinned: false, source: 'app' }, { from: 'local' });
+    const restoredNote = await expectOneSide('notes', 'day-qa', 'cloud');
+    check(restoredNote?.text === '다시 일반' && toCloudRow('notes', restoredNote) !== null, '일반 메모로 되돌리면 기기 사본이 남거나 클라우드로 가지 않습니다.');
+
+    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 걷기', done: false, due: '2026-11-04', source: 'app' });
+    await expectOneSide('todos', 'todo-qa', 'cloud');
+    await saveTextItem('todos', { id: 'todo-qa', title: '학폭 관련 민원 상담', done: false, due: '2026-11-04', source: 'app' }, { from: 'cloud' });
+    const hiddenTodo = await expectOneSide('todos', 'todo-qa', 'local');
+    check(toCloudRow('todos', hiddenTodo) === null, '민감 할 일을 클라우드로 보냅니다.');
+    await saveTextItem('todos', { id: 'todo-qa', title: '준비물 다시 걷기', done: false, due: '2026-11-04', source: 'app' }, { from: 'local' });
+    await expectOneSide('todos', 'todo-qa', 'cloud');
+
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '이야기를 들었어요', tags: ['교우'], source: 'app' });
+    await expectOneSide('records', 'rec-qa', 'cloud');
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '학폭 관련 민원 상담', tags: ['교우'], source: 'app' }, { from: 'cloud' });
+    const hiddenRecord = await expectOneSide('records', 'rec-qa', 'local');
+    check(toCloudRow('records', hiddenRecord) === null, '민감 상담을 클라우드로 보냅니다.');
+    await saveTextItem('records', { id: 'rec-qa', date: '2026-11-04', kind: '상담', text: '다시 이야기를 들었어요', tags: ['교우'], source: 'app' }, { from: 'local' });
+    await expectOneSide('records', 'rec-qa', 'cloud');
+
+    await saveQuick({ text: '준비물 가위', kind: '알림장', date: '2026-11-09' });
+    await expectOneSide('notices', '2026-11-09', 'cloud');
+    await saveQuick({ text: '학폭 관련 민원 상담', kind: '알림장', date: '2026-11-09' });
+    check(!snapshot().notices.some((row) => String(row.text).includes('학폭')) && snapshot().local.notices.some((row) => String(row.text).includes('학폭')), '민감 알림장이 클라우드로 갑니다.');
+    /** QA 9차 dbloss9: 같은 날 클라우드 알림장을 고쳐도 숨은 이 기기 전용 민감 알림장은 그대로 남아야 합니다(main과 같음). */
+    const shownNotice = snapshot().notices.find((row) => row.id === '2026-11-09');
+    await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: `${shownNotice?.text}\n색종이`, source: 'app' }, { from: 'cloud' });
+    const cloudNotice = snapshot().notices.filter((row) => row.id === '2026-11-09').map((row) => row.text);
+    const localNotice = snapshot().local.notices.filter((row) => row.id === '2026-11-09').map((row) => row.text);
+    check(JSON.stringify(cloudNotice) === JSON.stringify(['준비물 가위\n색종이']), `클라우드 알림장 고친 글이 남지 않습니다. ${JSON.stringify(cloudNotice)}`);
+    check(JSON.stringify(localNotice) === JSON.stringify(['학폭 관련 민원 상담']), `클라우드 알림장을 고치자 이 기기 전용 민감 알림장이 지워졌습니다. ${JSON.stringify(localNotice)}`);
+    /** 어느 행을 고쳤는지 모르면(from 없음) 반대쪽 같은 아이디는 지우지 않습니다. */
+    await saveTextItem('notices', { id: '2026-11-09', date: '2026-11-09', text: '내일은 소풍', source: 'app' });
+    check(snapshot().local.notices.some((row) => row.id === '2026-11-09' && row.text === '학폭 관련 민원 상담'), '고친 쪽을 모르는 저장이 이 기기 전용 알림장을 지웁니다.');
+
+    const counsel = await saveQuick({ text: '학폭 관련 민원 상담', kind: '상담', no: 1, date: '2026-11-10' });
+    check(counsel.ok && !snapshot().records.some((row) => String(row.text).includes('학폭')) && snapshot().local.records.some((row) => String(row.text).includes('학폭')), '상담 저장이 민감 기록을 이 기기로 보내지 않습니다.');
+    const counselRow = snapshot().local.records.find((row) => String(row.text).includes('학폭'));
+    check(toCloudRow('records', counselRow) === null, '기기 상담을 클라우드 기록으로 바꿉니다.');
 })().catch((error) => {
     failures.push(error?.message || String(error));
 });

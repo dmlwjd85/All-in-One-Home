@@ -4,7 +4,7 @@ const FONT_KEY = 'ssug-gyomu-font';
 
 export const FONT_CHOICES = [
     { id: 'soft', label: '부드러운', hint: '둥근 고딕' },
-    { id: 'plain', label: '기본', hint: '지금 쓰는 고딕' },
+    { id: 'plain', label: '기본', hint: '쨈 본문' },
     { id: 'neat', label: '단정한', hint: '가지런한 고딕' },
 ];
 

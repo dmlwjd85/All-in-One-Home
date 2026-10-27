@@ -24,10 +24,10 @@ export function menuSelected(routeName, href) {
     if (href === '#/attend') return routeName === 'attend';
     if (href === '#/students') return routeName === 'students' || routeName === 'student';
     if (href === '#/students/neis') return routeName === 'neis';
-    if (href === '#/schedule') return routeName === 'schedule';
+    if (href === '#/schedule') return routeName === 'schedule' || routeName === 'day';
     if (href === '#/todo') return routeName === 'todo';
     if (href === '#/notice') return routeName === 'notice';
-    if (href === '#/settings') return routeName === 'settings' || routeName === 'legacy';
+    if (href === '#/settings') return routeName === 'settings' || routeName === 'legacy' || routeName === 'roster';
     return false;
 }
 
@@ -35,6 +35,6 @@ export function tabSelected(label, routeName) {
     if (label === '오늘') return routeName === 'today';
     if (label === '할 일') return routeName === 'todo';
     if (label === '기록') return routeName === 'students' || routeName === 'student' || routeName === 'neis';
-    if (label === '일정') return routeName === 'schedule';
+    if (label === '일정') return routeName === 'schedule' || routeName === 'day';
     return false;
 }

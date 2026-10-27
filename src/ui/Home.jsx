@@ -6,7 +6,7 @@ import { joined, joinedRecords } from '../lib/db.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
-import { Btn, studentName } from './bits.jsx';
+import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
 
@@ -50,7 +50,7 @@ export function Home() {
                             <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>오늘은 수업이 없어요</span>
                             <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
                         </div>
-                        <h2 className="title-font" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
+                        <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
                         <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{todayRest.label === '휴일' ? '시간표와 출결 대신 쉽니다. 필요하면 출결 보기를 누르세요.' : `${todayRest.label}${iraParticle(todayRest.label)} 수업과 출결 대신 쉽니다.`}</p>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, fontWeight: 700 }}>
                             <span>할 일 {left}개 남음</span>
@@ -62,7 +62,7 @@ export function Home() {
                             <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>⏰ {period.text}</span>
                             <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
                         </div>
-                        <h2 className="title-font" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>
+                        <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {marks.map((row) => {
                                 const student = data.students.find((item) => item.id === row.sid);
@@ -85,8 +85,13 @@ export function Home() {
             </section>
 
             <section className="glass home-quick" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 6px', fontSize: 16 }}>일은 콕에서 시작해요</h3>
-                <p className="muted" style={{ margin: 0 }}>가운데 콕에 한 줄을 적으면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
+                <div className="home-brand">
+                    <Symbol />
+                    <p className="title-font home-brand-name">쨈 교무수첩</p>
+                    <Motto />
+                </div>
+                <h3 className="home-quick-title" style={{ margin: '0 0 6px', fontSize: 16 }}>생각나면 발라 두기</h3>
+                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
             </section>
 
             <section className="glass home-time" style={{ padding: 14 }}>
@@ -105,8 +110,8 @@ export function Home() {
                             const on = period.index === index;
                             const specialist = table[`s${index + 1}`];
                             return (
-                                <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 800, fontSize: 13 }}>
-                                    <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
+                                <Btn key={index} className={on ? 'block neo-in' : 'block neo'} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 500, fontSize: 13 }}>
+                                    <span style={{ display: 'grid' }}><span style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{label || `${index + 1}교시`}</span><span style={{ fontWeight: 500, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{specialist ? ` ${specialist}` : ''}</span></span>
                                 </Btn>
                             );
                         })}
@@ -127,7 +132,7 @@ export function Home() {
                         </div>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
-                    {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 적어 둔 할 일이 없어요.</p>}
+                    {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 발라 둔 할 일이 없어요.</p>}
                     {(data.inbox || []).length > 0 && (
                         <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>정리함 {(data.inbox || []).length}개</Btn>
                     )}
@@ -157,7 +162,7 @@ export function Home() {
             </section>
 
             <section className="glass home-recent" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 적은 것</h3>
+                <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 발라 둔 것</h3>
                 <div style={{ display: 'grid', gap: 10 }}>
                     {feed.map((row) => (
                         <div key={row.id} style={{ display: 'flex', gap: 10 }}>
@@ -171,7 +176,7 @@ export function Home() {
                     {!feed.length && (
                         <div>
                             <ClayMark />
-                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. 콕에 한 줄이면 누가기록에 쌓을 수 있어요.</p>
+                            <p className="muted" style={{ margin: 0, textAlign: 'center' }}>아직 기록이 없어요. 생각나면 발라 두면 누가기록에 쌓여요.</p>
                         </div>
                     )}
                 </div>

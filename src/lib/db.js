@@ -458,6 +458,24 @@ function put(list, row) {
     else list.unshift(row);
 }
 
+function dropId(list, id) {
+    return (list || []).filter((item) => item?.id !== id);
+}
+
+/**
+ * 화면이 고치던 그 행(from)이 클라우드↔이 기기 사이를 옮겨 갈 때만 옛 자리의 같은 아이디를 지웁니다.
+ * from 을 모르거나 같은 쪽에 남으면 반대쪽은 건드리지 않습니다(main과 같음). 숨은 이 기기 전용 행은 지우지 않습니다.
+ */
+function relocate(draft, bucket, row, local, from) {
+    if (!draft.local) draft.local = {};
+    if (!Array.isArray(draft[bucket])) draft[bucket] = [];
+    if (!Array.isArray(draft.local[bucket])) draft.local[bucket] = [];
+    if (local && from === 'cloud') draft[bucket] = dropId(draft[bucket], row.id);
+    if (!local && from === 'local') draft.local[bucket] = dropId(draft.local[bucket], row.id);
+    put(local ? draft.local[bucket] : draft[bucket], { ...row, source: row.source || 'app' });
+    return draft;
+}
+
 export async function saveQuick(input, now = new Date()) {
     const text = String(input.text || '').trim();
     if (!text) return { ok: false, message: '한 줄만 적어도 남길 수 있어요.' };
@@ -769,11 +787,16 @@ export async function receiveOne(id, no) {
     });
 }
 
-export async function saveTextItem(bucket, row) {
-    const sensitive = isSensitiveText(row.text || row.title || '', row.tags);
+/** from: 화면이 고치던 행이 'cloud'(클라우드)인지 'local'(이 기기)인지. 새 행이면 비워 둡니다. */
+export async function saveTextItem(bucket, row, { from } = {}) {
+    const text = String(row.text || '');
+    const title = String(row.title || '');
+    if (bucket === 'notes' && !text.trim() && !title.trim()) {
+        return { ok: false, message: '한 줄만 적어도 남길 수 있어요.', sensitive: false };
+    }
+    const sensitive = isSensitiveText(text || title, row.tags) || isSensitiveText(row.memo) || isSensitiveText(row.note);
     const failed = await update((draft) => {
-        const target = sensitive ? draft.local[bucket] : draft[bucket];
-        put(target, { ...row, source: row.source || 'app' });
+        relocate(draft, bucket, row, sensitive, from);
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, sensitive };
@@ -917,7 +940,7 @@ export async function forgetLegacyImports() {
 
 export function exportFile(includeLocal) {
     const data = buildExport(state, { includeLocal, at: new Date().toISOString() });
-    downloadJson(`콕교무수첩-${seoulYmd()}.json`, data);
+    downloadJson(`쨈 교무수첩-${seoulYmd()}.json`, data);
     return data;
 }
 
@@ -986,7 +1009,7 @@ export async function importText(text, mode, hooks = {}) {
         const exportedAt = new Date().toISOString();
         const payload = buildExport(state, { includeLocal: true, at: exportedAt });
         JSON.stringify(payload);
-        downloadJson(`콕교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
+        downloadJson(`쨈 교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
         await hooks.onPhase?.('prepared');
         const next = structuredClone(state);
         next.local.backup = { exportedAt, payload };

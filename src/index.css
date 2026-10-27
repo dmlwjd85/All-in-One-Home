@@ -101,6 +101,7 @@ a.hero-pill,
 }
 
 .title-font { font-family: var(--font-title); font-weight: 700; text-shadow: var(--title-effect); }
+.font-display { font-family: var(--font-display); font-weight: 400; text-shadow: none; }
 .muted { color: var(--ink-sub); }
 .num { font-variant-numeric: tabular-nums; }
 
@@ -119,7 +120,7 @@ a.hero-pill,
     display: block;
     color: var(--accent);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     line-height: 16px;
 }
 .date-block h1 {
@@ -134,13 +135,16 @@ a.hero-pill,
     flex-wrap: wrap;
     align-items: baseline;
     gap: 6px;
+    font-family: var(--font-display);
     font-size: 32px;
+    font-weight: 400;
     line-height: 38px;
 }
 .date-block h1 em {
     font-style: normal;
+    font-family: var(--font-body);
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--ink-sub);
 }
 .date-block p { margin: 2px 0 0; font-size: 13px; }
@@ -247,18 +251,56 @@ a.chip,
 .hotkey-row > span { min-width: 0; overflow-wrap: anywhere; }
 .hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 8px; }
 
-.symbol {
+.brand-symbol {
     width: 36px;
     height: 36px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    color: var(--on-primary);
-    background: var(--primary);
-    font-family: var(--font-title);
-    font-size: 16px;
-    text-shadow: none;
-    box-shadow: none;
+    display: block;
+    flex: none;
+}
+.brand-lockup {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.brand-motto {
+    margin: 6px 0 0;
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 700;
+    color: var(--ink);
+}
+.brand-motto.is-center { text-align: center; }
+.brand-motto span { white-space: nowrap; }
+.side-brand .brand-motto {
+    margin: 8px 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+.home-brand {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    align-items: center;
+    margin: 0 0 4px;
+}
+.home-brand .brand-symbol { width: 24px; height: 24px; }
+.home-brand-name {
+    margin: 0;
+    font-size: 15px;
+    line-height: 20px;
+    white-space: nowrap;
+}
+.home-brand .brand-motto {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 18px;
+}
+.home-quick-title { display: none; }
+.spread-hint {
+    margin: 0 0 8px;
+    line-height: 22px;
 }
 
 .tabbar {
@@ -303,6 +345,15 @@ a.chip,
     padding: 0;
     justify-self: center;
 }
+.fab-name {
+    position: relative;
+    z-index: 2;
+    font-family: var(--font-title);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+}
+.desk-fab .fab-name { font-family: var(--font-display); font-size: 26px; font-weight: 400; }
 .fab::after,
 .desk-fab::after {
     content: "";
@@ -435,8 +486,10 @@ a.chip,
         border-radius: 24px;
         max-height: min(86dvh, 820px);
     }
-    /* 가운데 콕 키캡(64px) 오른쪽 끝에서 16px 띄웁니다. 900~1000px에서도 겹치지 않습니다. */
+    /* 가운데 키캡(64px) 오른쪽 끝에서 16px 띄웁니다. 900~1000px에서도 겹치지 않습니다. */
     .toast { left: auto; right: 24px; width: min(420px, calc(50vw - 72px)); bottom: 24px; }
+    .home-brand { display: none; }
+    .home-quick-title { display: block; }
     .home-grid {
         display: grid;
         grid-template-columns: minmax(260px, 340px) minmax(0, 1.2fr) minmax(240px, 1fr);
@@ -483,7 +536,7 @@ a.chip,
 .num-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .num-tile { flex-direction: column; min-height: 56px; padding: 6px 4px; }
 .num-tile .num { font-size: 18px; line-height: 22px; }
-.num-tile .num-name { font-size: 13px; line-height: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.num-tile .num-name { font-size: 13px; line-height: 18px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .period-picks { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .period-picks .tap { min-width: 0; width: 100%; padding: 0; }
 .time-picks { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -619,6 +672,9 @@ button.neo, a.neo, [role="button"].neo { box-shadow: var(--neo-raise-sm); }
 .cal-grid .tap.neo-in {
     box-shadow: inset 2px 2px 4px var(--neo-shadow), inset -1px -1px 3px var(--neo-highlight);
 }
+.cal-grid .tap.cal-picked {
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
 
 .tap:active:not(.desk-fab) { transform: translateY(2px); }
 .chip:active,
@@ -674,7 +730,7 @@ button.glass[aria-pressed="true"]:active {
     gap: 8px;
 }
 .choice-tile[data-font-sample="soft"] { font-family: var(--font-soft); }
-.choice-tile[data-font-sample="plain"] { font-family: var(--font-plain); }
+.choice-tile[data-font-sample="plain"] { font-family: var(--font-jjaem); }
 .choice-tile[data-font-sample="neat"] { font-family: var(--font-neat); }
 .font-grid .choice-tile { flex-direction: column; min-height: 72px; }
 
@@ -702,12 +758,24 @@ button.glass[aria-pressed="true"]:active {
     padding: 0 10px;
 }
 .todo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.todo-due { flex: none; font-size: 12px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.todo-due { flex: none; font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
 
 .day-rest { background: var(--rest-bg); }
 .day-rest-mark { color: var(--rest-ink); font-weight: 800; }
 .rest-banner { border-radius: 16px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .cal-grid .tap.day-rest { background: var(--rest-bg); }
+.cal-grid .tap.cal-today .num {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-primary);
+}
+.dark .cal-grid .tap.cal-today .num { color: var(--bg); }
+.cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }
+.cal-grid .day-rest-mark { font-weight: 500; }
 
 .gcal-modes {
     display: grid;
@@ -731,7 +799,7 @@ button.glass[aria-pressed="true"]:active {
     background: var(--st-early-bg);
     color: var(--st-early);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: 500;
     line-height: 16px;
     vertical-align: 1px;
 }
@@ -754,7 +822,7 @@ button.glass[aria-pressed="true"]:active {
 .gcal-mark {
     color: var(--st-early);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 500;
     line-height: 14px;
 }
 @media (max-width: 389px) {

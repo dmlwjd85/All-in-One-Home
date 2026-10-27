@@ -1,3 +1,6 @@
+/** 예전 클레이 시안 도구입니다. 지금 아이콘은 scripts/make-jjaem-icon.mjs 가 만듭니다. */
+console.error('아이콘은 node scripts/make-jjaem-icon.mjs 로 만듭니다.');
+process.exit(1);
 /** 고른 클레이 시안(가방·노트·사과)을 앱 아이콘 PNG로 저장합니다. */
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
