@@ -9,7 +9,8 @@ import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
-import { isLocked, readPeriodLocal, tableRow, toggleCellLock, togglePeriodLock } from '../lib/periodLocal.js';
+import { eulReul } from '../lib/period.js';
+import { isLocked, readPeriodLocal, tableRow, toggleCellLock, togglePeriodLock, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
@@ -39,7 +40,7 @@ export function Schedule() {
     const pickedRest = restInfo(focus, classEvents);
     const specialist = [];
     DAYS.forEach(([key, label]) => {
-        const local = readPeriodLocal();
+        const local = withUsedCount(data.timetable, readPeriodLocal());
         const row = tableRow(data.timetable, key, local);
         for (let period = 1; period <= local.count; period += 1) {
             if (row[`s${period}`]) specialist.push(`${label} ${period}교시 ${row[`p${period}`] || ''} 전담 시간이 비어요`.replace(/\s+/g, ' '));
@@ -152,23 +153,29 @@ function Timetable({ data, todayKey, weekStart, events }) {
     const [edit, setEdit] = useState(null);
     const [specialOn, setSpecialOn] = useState(false);
     const { showToast } = useUi();
-    const local = usePeriodLocal();
+    const local = withUsedCount(data.timetable, usePeriodLocal());
     const press = useRef({ timer: 0, held: false });
     const count = local.count;
+    /* 칸 잠금. 길게 누르기와 편집 칸의 잠금 버튼이 같이 씁니다. */
+    function lockCell(dayKey, period) {
+        const locked = isLocked(local, dayKey, period);
+        if (locked && local.locks.includes(period)) { showToast(`${period}교시 전체가 잠겨 있어요. 왼쪽 숫자 ${period}${eulReul(period)} 눌러 풀어 주세요.`); return false; }
+        toggleCellLock(dayKey, period);
+        showToast(locked ? '이 칸 잠금을 풀었어요.' : '이 칸을 잠갔어요. 다시 길게 누르거나 잠금 풀기를 누르면 풀려요.');
+        return true;
+    }
     function holdStart(dayKey, period) {
         clearTimeout(press.current.timer);
         press.current.held = false;
         press.current.timer = setTimeout(() => {
             press.current.held = true;
-            const locked = isLocked(local, dayKey, period);
-            if (locked && local.locks.includes(period)) { showToast(`${period}교시 전체가 잠겨 있어요. 왼쪽 ${period}을 눌러 풀어 주세요.`); return; }
-            toggleCellLock(dayKey, period);
-            showToast(locked ? '이 칸 잠금을 풀었어요.' : '이 칸을 잠갔어요. 다시 길게 누르면 풀려요.');
+            lockCell(dayKey, period);
         }, 550);
     }
     function holdEnd() {
         clearTimeout(press.current.timer);
     }
+    const editLocked = Boolean(edit && isLocked(local, edit.day, edit.period));
     const days = DAYS.map(([key, label], index) => {
         const ymd = addDaysYmd(weekStart, index);
         return { key, label, ymd, rest: restInfo(ymd, events) };
@@ -176,7 +183,7 @@ function Timetable({ data, todayKey, weekStart, events }) {
     return (
         <div style={{ marginTop: 12, minWidth: 0 }}>
             <p className="muted">칸을 누르면 과목을 고칠 수 있어요. 공휴일·휴업일이면 그 요일은 수업 대신 휴일로 보여요. 전담이면 상담 시간으로 보여 드려요.</p>
-            <p className="muted">왼쪽 교시 숫자를 누르면 그 교시가 통째로 잠기고, 칸 하나는 길게 누르면 잠겨요. 잠긴 교시는 홈에서 빠져요.</p>
+            <p className="muted">왼쪽 교시 숫자를 누르면 그 교시가 통째로 잠기고, 칸 하나는 길게 누르거나, 칸을 열어 '이 칸 잠그기'를 누르면 잠겨요. 잠긴 교시는 홈에 🔒로 보이고 시간 안내에서 빠져요.</p>
             <div className="tt-grid" style={{ gridTemplateRows: `auto repeat(${count}, minmax(44px, auto))` }}>
                 <span />
                 {days.map((day) => (
@@ -196,7 +203,7 @@ function Timetable({ data, todayKey, weekStart, events }) {
                     return (
                         <Btn key={`h${index}`} className={locked ? 'tt-period is-locked' : 'tt-period'} aria-pressed={locked} aria-label={locked ? `${index + 1}교시 잠금 풀기` : `${index + 1}교시 잠그기`} style={{ gridColumn: 1, gridRow: index + 2, fontWeight: 800 }} onClick={() => {
                             togglePeriodLock(index + 1);
-                            showToast(locked ? `${index + 1}교시 잠금을 풀었어요.` : `${index + 1}교시를 잠갔어요. 홈과 시간 안내에서 빠져요.`);
+                            showToast(locked ? `${index + 1}교시 잠금을 풀었어요.` : `${index + 1}교시를 잠갔어요. 시간 안내에서 빠져요.`);
                         }}>
                             {locked ? `🔒${index + 1}` : index + 1}
                         </Btn>
@@ -205,14 +212,14 @@ function Timetable({ data, todayKey, weekStart, events }) {
                 {days.map((day) => (day.rest.off ? null : Array.from({ length: count }, (_, index) => {
                     const row = tableRow(data.timetable, day.key, local);
                     const locked = isLocked(local, day.key, index + 1);
+                    const subject = row[`p${index + 1}`] || '';
                     return (
-                        <Btn key={`${day.key}-${index}`} className={locked ? 'solid-card block tt-locked' : 'solid-card block'} aria-label={locked ? `${day.label} ${index + 1}교시 잠김` : undefined} style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: index + 2 }}
+                        <Btn key={`${day.key}-${index}`} className={locked ? 'solid-card block tt-locked' : 'solid-card block'} aria-label={`${day.label} ${index + 1}교시 ${locked ? '잠김' : (subject || '비움')}${!locked && row[`s${index + 1}`] ? ' 전담' : ''}`} style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: index + 2 }}
                             onPointerDown={() => holdStart(day.key, index + 1)} onPointerUp={holdEnd} onPointerLeave={holdEnd} onPointerCancel={holdEnd}
                             onContextMenu={(event) => event.preventDefault()}
                             onClick={() => {
                             if (press.current.held) { press.current.held = false; return; }
-                            if (locked) { showToast('잠긴 칸이에요. 길게 누르면 풀려요.'); return; }
-                            setEdit({ day: day.key, period: index + 1, subject: row[`p${index + 1}`] || '' });
+                            setEdit({ day: day.key, label: day.label, period: index + 1, subject });
                             setSpecialOn(Boolean(row[`s${index + 1}`]));
                         }}>
                             {locked ? '🔒 잠김' : <>{row[`p${index + 1}`] || '비움'}{row[`s${index + 1}`] ? ' 전담' : ''}</>}
@@ -228,7 +235,14 @@ function Timetable({ data, todayKey, weekStart, events }) {
                     if (saved?.storageFailed) return;
                     setEdit(null);
                 }}>
-                    <strong>{edit.period}교시</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <strong>{edit.label} {edit.period}교시</strong>
+                        {local.locks.includes(edit.period) ? (
+                            <span className="muted">🔒 {edit.period}교시 전체가 잠겨 있어요</span>
+                        ) : (
+                            <Btn className={editLocked ? 'chip on' : 'chip'} aria-pressed={editLocked} aria-label={editLocked ? `${edit.label} ${edit.period}교시 칸 잠금 풀기` : `${edit.label} ${edit.period}교시 칸 잠그기`} onClick={() => lockCell(edit.day, edit.period)}>{editLocked ? '🔒 잠금 풀기' : '이 칸 잠그기'}</Btn>
+                        )}
+                    </div>
                     <input className="field" name="subject" aria-label="과목" defaultValue={edit.subject} style={{ marginTop: 8 }} />
                     <Btn className={specialOn ? 'chip on' : 'chip'} style={{ marginTop: 8 }} onClick={() => setSpecialOn((value) => !value)}>{specialOn ? '전담 시간이에요' : '전담 아님'}</Btn>
                     <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>시간표 저장</Btn>

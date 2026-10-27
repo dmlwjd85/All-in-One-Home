@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { patchProfile } from '../lib/db.js';
 import { LEVEL_LENGTH, MAX_PERIODS, isHm } from '../lib/period.js';
-import { allLengths, allStarts, patchPeriodLocal } from '../lib/periodLocal.js';
+import { allLengths, allStarts, patchPeriodLocal, usedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { Btn } from './bits.jsx';
 
@@ -15,10 +15,13 @@ export function TimetableSettings({ data, showToast }) {
     const [lengths, setLengths] = useState(() => allLengths(local).map(String));
     const [workStart, setWorkStart] = useState(local.workStart);
     const [workEnd, setWorkEnd] = useState(local.workEnd);
-    const count = local.count;
+    /* 과목이 들어 있는 교시는 교시 수를 줄여도 숨기지 않습니다. */
+    const count = usedCount(data.timetable, local);
 
     function pickLevel(level) {
         const next = String(LEVEL_LENGTH[level]);
+        const custom = local.lengths.some((item) => Number(item) > 0);
+        if (custom && !window.confirm('따로 고친 수업 길이가 학교급 기본값으로 바뀌어요. 바꿀까요?')) return;
         setLengths(Array.from({ length: MAX_PERIODS }, () => next));
         patchPeriodLocal({ level, lengths: [] });
         showToast(`${LEVEL_NAME[level]} 기준으로 한 교시를 ${next}분으로 맞췄어요.`);
@@ -27,7 +30,7 @@ export function TimetableSettings({ data, showToast }) {
     return (
         <section className="glass tt-settings" style={{ padding: 14 }} aria-label="시간표와 출퇴근">
             <h2 className="title-font" style={{ marginTop: 0 }}>시간표와 출퇴근</h2>
-            <p className="muted" style={{ marginTop: 0 }}>출근·퇴근 시각을 적어 두면 홈에 퇴근까지 남은 시간이 보여요. 비워 두면 타이머는 숨어요. 이 기기에만 저장해요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>출근·퇴근 시각을 함께 적어 두면 출근 뒤부터 홈에 퇴근까지 남은 시간이 보여요. 비워 두면 타이머는 숨어요. 이 기기에만 저장해요.</p>
             <div className="tt-work">
                 <label>
                     <span className="muted">출근</span>
@@ -40,6 +43,7 @@ export function TimetableSettings({ data, showToast }) {
             </div>
             <Btn className="chip" style={{ marginTop: 8 }} onClick={() => {
                 if ((workStart && !isHm(workStart)) || (workEnd && !isHm(workEnd))) { showToast('시각은 08:30처럼 골라 주세요.'); return; }
+                if (workEnd && !workStart) { showToast('출근 시각도 함께 골라 주세요. 타이머는 출근부터 퇴근까지 보여요.'); return; }
                 if (workStart && workEnd && workEnd <= workStart) { showToast('퇴근 시각은 출근 시각보다 늦어야 해요.'); return; }
                 patchPeriodLocal({ workStart: workStart || '', workEnd: workEnd || '' });
                 showToast(workEnd ? `퇴근 ${workEnd}까지 남은 시간을 홈에 보여 드릴게요.` : '퇴근 시각을 비워서 타이머를 숨겼어요.');
@@ -56,12 +60,13 @@ export function TimetableSettings({ data, showToast }) {
             <h3 style={{ margin: '18px 0 6px', fontSize: 16 }}>하루 교시 수</h3>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {COUNTS.map((n) => (
-                    <Btn key={n} className={count === n ? 'chip on' : 'chip'} aria-pressed={count === n} onClick={() => patchPeriodLocal({ count: n })}>{n}교시</Btn>
+                    <Btn key={n} className={local.count === n ? 'chip on' : 'chip'} aria-pressed={local.count === n} onClick={() => patchPeriodLocal({ count: n })}>{n}교시</Btn>
                 ))}
             </div>
 
             <h3 style={{ margin: '18px 0 6px', fontSize: 16 }}>교시별 시작과 길이</h3>
-            <p className="muted" style={{ marginTop: 0 }}>잠근 교시는 홈과 시간 안내에서 빠져요. 9·10교시는 이 기기에만 저장해요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>잠근 교시는 홈에 🔒로 보이고 시간 안내에서 빠져요. 9·10교시는 이 기기에만 저장해요.</p>
+            {count > local.count && <p className="muted" style={{ marginTop: 0 }}>시간표에 {count}교시까지 과목이 있어서 {count}교시까지 보여 드려요. 과목을 지우면 정한 교시 수로 돌아가요.</p>}
             <div className="tt-rows">
                 {Array.from({ length: count }, (_, index) => {
                     const n = index + 1;

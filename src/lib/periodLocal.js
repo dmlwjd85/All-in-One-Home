@@ -127,6 +127,25 @@ export function toggleCellLock(day, period) {
     return patchPeriodLocal({ cellLocks });
 }
 
+/** 쓰는 교시 수. 교시 수를 적게 정했어도 과목이 들어 있는 교시까지는 숨기지 않습니다. */
+export function usedCount(timetable, local = readPeriodLocal()) {
+    let used = local.count;
+    const days = new Set([...Object.keys(timetable || {}), ...Object.keys(local.extra || {})]);
+    for (const day of days) {
+        const row = tableRow(timetable, day, local);
+        for (let n = used + 1; n <= MAX_PERIODS; n += 1) {
+            if (row[`p${n}`]) used = n;
+        }
+    }
+    return used;
+}
+
+/** 교시 수를 쓰는 교시 수로 올린 설정. 저장값은 바꾸지 않습니다. */
+export function withUsedCount(timetable, local = readPeriodLocal()) {
+    const count = usedCount(timetable, local);
+    return count === local.count ? local : { ...local, count };
+}
+
 /** 오늘 수업이 있는 마지막 교시. 과목이 하나도 없으면 교시 수를 씁니다. */
 export function lastPeriod(row, local, day) {
     let last = 0;

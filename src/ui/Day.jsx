@@ -8,7 +8,7 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
 import { EventLine } from './EventLine.jsx';
-import { isLocked, tableRow } from '../lib/periodLocal.js';
+import { isLocked, tableRow, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
@@ -40,7 +40,7 @@ export function Day() {
     const [memo, setMemo] = useState(dayNote?.text || '');
     const rest = restInfo(date, joined(data, 'events'));
     const dayKey = dayKeyFromYmd(date);
-    const local = usePeriodLocal();
+    const local = withUsedCount(data.timetable, usePeriodLocal());
     const table = tableRow(data.timetable, dayKey, local);
     const school = Boolean(DAY_LABEL[dayKey]);
     const studentOf = (sid) => {

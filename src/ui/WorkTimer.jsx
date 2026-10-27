@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react';
 import { clockFrozen, seoulParts } from '../lib/date.js';
-import { isHm, workTimer } from '../lib/period.js';
+import { leaveProblem, workTimer } from '../lib/period.js';
 import { leaveFor, setLeave, subscribePeriodLocal } from '../lib/periodLocal.js';
 import { Btn } from './bits.jsx';
 
-function secondsNow() {
-    const parts = seoulParts();
-    return parts.hour * 3600 + parts.minute * 60 + (clockFrozen() ? 0 : new Date().getSeconds());
+/** 서울 시각과 자정부터 지난 초. 홈 문구와 타이머가 같은 값을 씁니다. */
+export function clockNow() {
+    const date = new Date();
+    const parts = seoulParts(date);
+    return { ...parts, sec: parts.hour * 3600 + parts.minute * 60 + (clockFrozen() ? 0 : date.getSeconds()) };
 }
 
-/** 퇴근(조퇴)까지 남은 시간. 1분마다, 10분 안쪽이면 1초마다 다시 셉니다. 탭이 가려지면 멈춥니다. */
+/** 홈 시계. 1분마다, 10분 안쪽이면 1초마다 정각(초·분 경계)에 맞춰 다시 셉니다. 탭이 가려지면 멈춥니다. */
 export function useWorkClock(fast) {
-    const [sec, setSec] = useState(() => secondsNow());
+    const [now, setNow] = useState(() => clockNow());
     useEffect(() => {
         let timer = 0;
         const tick = () => {
-            setSec(secondsNow());
-            const wait = fast ? 1000 : 60000 - (Date.now() % 60000);
+            setNow(clockNow());
+            const wait = fast ? 1000 - (Date.now() % 1000) : 60000 - (Date.now() % 60000);
             timer = setTimeout(tick, wait);
         };
         const start = () => {
@@ -35,7 +37,7 @@ export function useWorkClock(fast) {
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [fast]);
-    return sec;
+    return now;
 }
 
 export function useLeave(ymd) {
@@ -47,14 +49,15 @@ export function useLeave(ymd) {
     return leave;
 }
 
-export function WorkTimer({ ymd, local, leave, showToast }) {
-    const [fast, setFast] = useState(false);
+/** 10분 안쪽이면 초 단위로 셉니다. 홈이 이 값으로 시계를 빠르게 돌립니다. */
+export function wantsFast(timer) {
+    return Boolean(timer.show && !timer.done && timer.remain <= 660);
+}
+
+export function WorkTimer({ ymd, local, leave, showToast, now }) {
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(leave || '');
-    const sec = useWorkClock(fast);
-    const timer = workTimer(sec, { workStart: local.workStart, workEnd: local.workEnd, leave });
-    const wantFast = Boolean(timer.show && !timer.done && timer.remain <= 660);
-    useEffect(() => { if (wantFast !== fast) setFast(wantFast); }, [wantFast, fast]);
+    const timer = workTimer(now.sec, { workStart: local.workStart, workEnd: local.workEnd, leave });
     if (!timer.show) return null;
     const percent = timer.progress == null ? null : Math.round(timer.progress * 100);
     return (
@@ -84,7 +87,8 @@ export function WorkTimer({ ymd, local, leave, showToast }) {
             {open && (
                 <form className="leave-form" onSubmit={(event) => {
                     event.preventDefault();
-                    if (!isHm(draft)) { showToast?.('조퇴 시각은 14:30처럼 골라 주세요.'); return; }
+                    const problem = leaveProblem(draft, now.hm, { workStart: local.workStart, workEnd: local.workEnd });
+                    if (problem) { showToast?.(problem); return; }
                     setLeave(ymd, draft);
                     setOpen(false);
                     showToast?.(`오늘은 ${draft}까지 셀게요. 내일은 원래 퇴근 시각으로 돌아가요.`);

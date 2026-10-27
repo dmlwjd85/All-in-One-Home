@@ -127,7 +127,7 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
         out.periodEnd = Number(range[2]);
         out.hm = starts[out.period - 1] || '';
         out.label = `${out.period}~${out.periodEnd}교시`;
-    } else if (one && ((Number(one[1]) >= 1 && Number(one[1]) <= 7) || (one[1] === '10' && starts[9]))) {
+    } else if (one && Number(one[1]) >= 1 && Number(one[1]) <= 10 && starts[Number(one[1]) - 1]) {
         out.period = Number(one[1]);
         out.hm = starts[out.period - 1] || '';
         out.label = `${out.period}교시`;

@@ -888,7 +888,8 @@ button.glass[aria-pressed="true"]:active {
 .tt-work { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .tt-work label { display: grid; gap: 4px; font-weight: 700; }
 .tt-rows { display: grid; gap: 6px; }
-.tt-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) 70px auto; gap: 6px; align-items: center; }
+.tt-row { display: grid; grid-template-columns: max-content minmax(0, 1fr) 70px auto; gap: 6px; align-items: center; }
+.tt-row strong { white-space: nowrap; min-width: 40px; }
 .tt-row.is-locked strong { color: var(--ink-sub); }
 .tt-len { display: flex; align-items: center; gap: 4px; font-weight: 700; }
 .tt-len .field { min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }

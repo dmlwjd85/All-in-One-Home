@@ -41,7 +41,16 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
     const last = opts.last > 0 ? Math.min(opts.last, list.length) : list.length;
     const skip = new Set(opts.skip || []);
     const lengths = opts.lengths || [];
-    let prevEnd = null;
+    const slotEnd = (i) => {
+        const start = minutesOf(list[i]);
+        const length = Number(lengths[i]) > 0 ? Number(lengths[i]) : 40;
+        const nextStart = list[i + 1] ? minutesOf(list[i + 1]) : Infinity;
+        return Math.min(start + length, nextStart);
+    };
+    /* 점심은 4교시가 끝난 뒤부터 5교시 시작 전까지입니다. 잠긴 교시는 빈 시간일 뿐 점심이 아닙니다. */
+    const lunchFrom = list.length > 4 ? slotEnd(3) : null;
+    const lunchTo = list.length > 4 ? minutesOf(list[4]) : null;
+    const inLunch = lunchFrom != null && lunchTo - lunchFrom >= 30 && now >= lunchFrom && now < lunchTo;
     for (let i = 0; i < last; i += 1) {
         if (skip.has(i + 1)) continue;
         const start = minutesOf(list[i]);
@@ -49,7 +58,7 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
         const name = subject ? `${i + 1}교시 ${subject}` : `${i + 1}교시`;
         if (now < start) {
             const minutes = start - now;
-            const lunch = prevEnd != null && now >= prevEnd && start - prevEnd >= 30;
+            const lunch = inLunch;
             return {
                 index: i,
                 phase: lunch ? 'lunch' : 'before',
@@ -58,9 +67,7 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
                 text: lunch ? `점심시간이에요. ${name}까지 ${minutes}분` : `${name}까지 ${minutes}분`,
             };
         }
-        const length = Number(lengths[i]) > 0 ? Number(lengths[i]) : 40;
-        const nextStart = list[i + 1] ? minutesOf(list[i + 1]) : Infinity;
-        const end = Math.min(start + length, nextStart);
+        const end = slotEnd(i);
         if (now < end) {
             return {
                 index: i,
@@ -70,7 +77,9 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
                 text: `${name} 중이에요`,
             };
         }
-        prevEnd = end;
+    }
+    if (inLunch) {
+        return { index: -1, phase: 'lunch', minutes: lunchTo - now, text: '점심시간이에요.' };
     }
     if (workEnd != null || now < 18 * 60) {
         return { index: -1, phase: 'afterschool', minutes: 0, text: '방과후 시간이에요.' };
@@ -80,12 +89,12 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
 
 /**
  * 퇴근(또는 조퇴)까지 남은 시간. sec 는 자정부터 지난 초입니다.
- * 퇴근 시각이 없거나 출근 전이면 show 가 false 입니다.
+ * 출근·퇴근 시각 중 하나라도 없거나 출근 전이면 show 가 false 입니다.
  */
 export function workTimer(sec, { workStart = '', workEnd = '', leave = '' } = {}) {
     const target = isHm(leave) ? leave : (isHm(workEnd) ? workEnd : '');
     const label = isHm(leave) ? '조퇴' : '퇴근';
-    if (!target) return { show: false };
+    if (!target || !isHm(workStart)) return { show: false };
     const endSec = minutesOf(target) * 60;
     const startSec = isHm(workStart) ? minutesOf(workStart) * 60 : null;
     if (startSec != null && sec < startSec) return { show: false };
@@ -106,4 +115,19 @@ export function workTimer(sec, { workStart = '', workEnd = '', leave = '' } = {}
         left = m ? `${m}분 ${String(s).padStart(2, '0')}초` : `${s}초`;
     }
     return { ...base, done: false, remain, progress, seconds: remain <= 600, left, text: `${label}까지 ${left}` };
+}
+
+/** 조퇴 시각이 알맞은지 봅니다. 출근 뒤, 지금 뒤, 퇴근 전만 받습니다. 괜찮으면 빈 문자열입니다. */
+export function leaveProblem(hm, nowHm, { workStart = '', workEnd = '' } = {}) {
+    if (!isHm(hm)) return '조퇴 시각은 14:30처럼 골라 주세요.';
+    const at = minutesOf(hm);
+    if (isHm(workStart) && at <= minutesOf(workStart)) return `출근 시각(${workStart})보다 늦은 시각으로 골라 주세요.`;
+    if (isHm(workEnd) && at >= minutesOf(workEnd)) return `퇴근 시각(${workEnd})보다 이른 시각으로 골라 주세요.`;
+    if (isHm(nowHm) && at <= minutesOf(nowHm)) return '이미 지난 시각이에요. 지금보다 늦은 시각으로 골라 주세요.';
+    return '';
+}
+
+/** 숫자 뒤에 붙는 '을/를'. 2·4·5·9처럼 받침이 없으면 '를'입니다. */
+export function eulReul(n) {
+    return [2, 4, 5, 9].includes(Math.abs(Number(n)) % 10) ? '를' : '을';
 }
