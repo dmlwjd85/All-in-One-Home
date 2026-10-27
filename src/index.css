@@ -494,7 +494,7 @@ a.chip,
 .home-leave.is-done .leave-big { font-size: 28px; line-height: 36px; }
 .leave-bar { height: 12px; border-radius: 999px; background: var(--bg); box-shadow: var(--neo-inset); overflow: hidden; }
 .leave-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
-.leave-ends { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; font-weight: 700; }
+.leave-ends { display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px; font-weight: 700; }
 .leave-form { display: grid; gap: 8px; margin-top: 12px; }
 .leave-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .leave-row .primary-btn { padding: 0 14px; min-height: 44px; }

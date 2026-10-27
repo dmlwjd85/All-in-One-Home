@@ -2426,8 +2426,13 @@ try {
                     const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                     const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
+                    /* 데모에도 퇴근 타이머가 생겨 폰 첫 화면에서는 시간표가 아래로 내려갑니다. 그때는 타이머가 보이고 팁에 가리지 않는지 봅니다. */
+                    const leave = document.querySelector('.home-leave')?.getBoundingClientRect();
                     return {
                         visible,
+                        hasLeave: Boolean(leave),
+                        coversLeave: hits(tipBox, leave),
+                        leaveOnScreen: Boolean(leave && leave.top < viewBottom && leave.bottom > 0),
                         text: tip?.innerText || '',
                         toast,
                         coversQuick: hits(tipBox, quick),
@@ -2452,7 +2457,7 @@ try {
                         layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
-                        && layout.sixthOnScreen && !layout.sixthUnderTab,
+                        && (layout.hasLeave ? layout.leaveOnScreen && !layout.coversLeave : layout.sixthOnScreen && !layout.sixthUnderTab),
                         `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
                     );
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
