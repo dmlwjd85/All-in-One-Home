@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { KEY_VOICES, KEY_VOLUMES, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
-import { TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
+import { KEY_VOICES, KEY_VOLUMES, closeKeyVoiceMoved, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVoiceMoved, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
+import { TYPE_SOUND_SHOWN, TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
@@ -41,6 +41,17 @@ function publicLabel(name) {
     return PUBLIC_LABELS[name] || '기록';
 }
 
+/** 글자 소리에서 옮겨 온 누를 때 소리. 적축·갈축·청축처럼 이름이 겹치면 축 이름 뒤에 결을 붙여 어느 축인지 보이게 합니다. 저장 값(id)은 그대로입니다. */
+const PRESS_CHIP_NAMES = { red: '적축·매끈', brown: '갈축·톡', blue: '청축·딸깍' };
+const PRESS_TYPE_VOICES = TYPE_VOICES.map((voice) => {
+    const chip = PRESS_CHIP_NAMES[voice.id] || voice.label;
+    return { ...voice, chip, aria: PRESS_CHIP_NAMES[voice.id] ? chip.replace('·', ' ') : `${voice.label} ${voice.hint}` };
+});
+
+function movedChipName(id) {
+    return PRESS_TYPE_VOICES.find((voice) => voice.id === id)?.chip || '';
+}
+
 function KeyPick({ pressed, label, ariaLabel, onPick }) {
     return (
         <Btn
@@ -79,6 +90,7 @@ export function Settings() {
     const [vibeOn, setVibeOn] = useState(() => keyVibeEnabled());
     const [voiceId, setVoiceId] = useState(() => keyVoiceId());
     const [volumeId, setVolumeId] = useState(() => keyVolumeId());
+    const [movedId, setMovedId] = useState(() => keyVoiceMoved());
     const [typeOn, setTypeOn] = useState(() => typeSoundEnabled());
     const [typeId, setTypeId] = useState(() => typeVoiceId());
     useEffect(() => subscribeKeyPrefs(() => {
@@ -86,6 +98,7 @@ export function Settings() {
         setVibeOn(keyVibeEnabled());
         setVoiceId(keyVoiceId());
         setVolumeId(keyVolumeId());
+        setMovedId(keyVoiceMoved());
     }), []);
 
     return (
@@ -155,6 +168,19 @@ export function Settings() {
                         setVibeOn(next);
                     }}>{vibeOn ? '진동 켜짐' : '진동 꺼짐'}</Btn>
                 </div>
+                <p className="muted">누를 때 소리가 나요. 버튼이나 탭, 켜고 끄는 단추처럼 손으로 누르는 곳에서 짧게 들리고, 글자를 적거나 말로 적는 동안에는 조용해요.</p>
+                {movedId && voiceId === movedId && (
+                    <div className="moved-note" data-type-moved={movedId}>
+                        <p className="muted">
+                            글자를 적을 때 나던 ‘{movedChipName(movedId)}’ 소리를 버튼을 누를 때로 옮겨 두었어요.
+                            {soundOn ? ' 이제 버튼이나 탭을 누르면 이 소리가 나요.' : ' 지금은 누를 때 소리가 꺼져 있어요. 켜면 이 소리로 들려요.'}
+                        </p>
+                        <Btn className="chip" aria-label="옮긴 소리 안내 닫기" onClick={() => {
+                            closeKeyVoiceMoved();
+                            setMovedId(null);
+                        }}>닫기</Btn>
+                    </div>
+                )}
                 <p className="muted" style={{ margin: '10px 0 0' }}>소리 종류</p>
                 <div className="key-picks" role="group" aria-label="누를 때 소리 종류">
                     {KEY_VOICES.map((voice) => (
@@ -163,6 +189,33 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPick={() => {
+                                setKeyVoice(voice.id);
+                                previewKeyVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                    {PRESS_TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={voiceId === voice.id}
+                            label={voice.chip}
+                            ariaLabel={voice.aria}
+                            onPick={() => {
+                                setKeyVoice(voice.id);
+                                previewKeyVoice(voice.id);
+                            }}
+                        />
+                    ))}
+                </div>
+                <p className="muted" style={{ margin: '10px 0 0' }}>장난 소리</p>
+                <div className="key-picks" role="group" aria-label="누를 때 장난 소리">
+                    {PRESS_TYPE_VOICES.filter((voice) => voice.playful).map((voice) => (
+                        <KeyPick
+                            key={voice.id}
+                            pressed={voiceId === voice.id}
+                            label={voice.chip}
+                            ariaLabel={voice.aria}
                             onPick={() => {
                                 setKeyVoice(voice.id);
                                 previewKeyVoice(voice.id);
@@ -185,8 +238,8 @@ export function Settings() {
                         />
                     ))}
                 </div>
-                <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요.</p>
-                <p className="muted">누를 때 소리가 나요. 버튼을 누를 때와 뗄 때 짧게 소리가 나고, 되는 기기에서는 살짝 떨립니다. 기본은 몽글, 작게입니다. 교실에서도 작게 들려요. 말로 적는 동안에는 소리를 내지 않아요.</p>
+                <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요. 몽글·청축처럼 누를 때와 뗄 때 소리가 따로 있으면 두 번, 뽁·띵처럼 한 번 나는 소리는 누를 때만 들려요. 되는 기기에서는 살짝 떨리기도 해요. 처음에는 몽글, 작게로 두었어요.</p>
+                {TYPE_SOUND_SHOWN && (<>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Btn className={typeOn ? 'chip on' : 'chip'} aria-pressed={typeOn} onClick={() => {
@@ -228,6 +281,7 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">칸을 누르면 미리 들려 드려요. 소리를 꺼 두어도 여기서는 들을 수 있고, 고른 소리는 이 기기에 남아요.</p>
+                </>)}
             </section>
 
             <section className="glass" style={{ padding: 14 }} data-screen="hotkeys">
