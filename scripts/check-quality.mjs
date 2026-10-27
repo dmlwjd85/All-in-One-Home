@@ -588,7 +588,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v21'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v22'"), '캐시 판이 올라가지 않았습니다.');
 const helperStart = sw.indexOf('function assetSuffix');
 const helperEnd = sw.indexOf('/* stale-assets-end */');
 const helper = helperStart >= 0 && helperEnd > helperStart ? sw.slice(helperStart, helperEnd) : '';

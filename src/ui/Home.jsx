@@ -9,14 +9,26 @@ import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
+import { allLengths, allStarts, isLocked, lastPeriod, tableRow } from '../lib/periodLocal.js';
+import { usePeriodLocal } from './usePeriodLocal.js';
+import { WorkTimer, useLeave } from './WorkTimer.jsx';
 
 export function Home() {
-    const { data, clock, go } = useUi();
+    const { data, clock, go, showToast } = useUi();
     const [attendStudent, setAttendStudent] = useState(null);
     const day = dayKeyFromYmd(clock.ymd);
-    const table = data.timetable[day] || {};
-    const labels = [1, 2, 3, 4, 5, 6].map((index) => table[`p${index}`] || '');
-    const period = periodStatus(clock.hm, data.profile.periodStarts, labels);
+    const local = usePeriodLocal();
+    const leave = useLeave(clock.ymd);
+    const table = tableRow(data.timetable, day, local);
+    const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
+    const period = periodStatus(clock.hm, allStarts(data.profile.periodStarts, local), labels, {
+        last: lastPeriod(table, local, day),
+        skip: labels.map((_, index) => index + 1).filter((n) => isLocked(local, day, n)),
+        lengths: allLengths(local),
+        workStart: local.workStart,
+        workEnd: leave || local.workEnd,
+        endLabel: leave ? '조퇴' : '퇴근',
+    });
     const marks = data.attendance.filter((row) => row.date === clock.ymd);
     const checked = data.profile.checkedDates.includes(clock.ymd);
     const count = data.profile.classSize || data.students.length;
@@ -40,9 +52,10 @@ export function Home() {
     const birthdays = data.students.filter((row) => row.birthday && row.birthday === clock.ymd.slice(5));
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
+    const timer = !todayRest.off && (local.workEnd || leave) ? <WorkTimer ymd={clock.ymd} local={local} leave={leave} showToast={showToast} /> : null;
 
     return (
-        <div className="home-grid">
+        <div className={timer ? 'home-grid has-leave' : 'home-grid'}>
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
@@ -83,6 +96,7 @@ export function Home() {
                     </>
                 )}
             </section>
+            {timer}
 
             <section className="glass home-quick" style={{ padding: 14 }}>
                 <div className="home-brand">
@@ -105,8 +119,9 @@ export function Home() {
                         <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : '시간표는 오늘 없어요.'}</span>
                     </div>
                 ) : (
-                    <div className="period-row" style={{ marginTop: 10 }}>
+                    <div className="period-row" style={{ marginTop: 10, gridTemplateColumns: `repeat(${labels.length > 6 ? Math.ceil(labels.length / 2) : labels.length}, minmax(0, 1fr))` }}>
                         {labels.map((label, index) => {
+                            if (isLocked(local, day, index + 1)) return null;
                             const on = period.index === index;
                             const specialist = table[`s${index + 1}`];
                             return (

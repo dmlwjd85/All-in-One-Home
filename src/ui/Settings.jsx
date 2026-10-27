@@ -13,7 +13,8 @@ import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
 import { setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
-import { DEFAULT_PERIODS, isHm } from '../lib/period.js';
+import { clearPeriodLocal } from '../lib/periodLocal.js';
+import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 
@@ -64,10 +65,8 @@ export function Settings() {
     const { data, showToast, go, openHotkeyHelp } = useUi();
     const [className, setClassName] = useState(data.profile.className || '');
     const [font, setFontId] = useState(() => fontId());
-    const [periodsOpen, setPeriodsOpen] = useState(false);
     const [oldOpen, setOldOpen] = useState(false);
     const [publicOpen, setPublicOpen] = useState(false);
-    const [periods, setPeriods] = useState(data.profile.periodStarts?.length ? data.profile.periodStarts : DEFAULT_PERIODS);
     const [phrase, setPhrase] = useState('');
     const [wipe, setWipe] = useState('');
     const [gcalWipe, setGcalWipe] = useState('keep');
@@ -100,21 +99,9 @@ export function Settings() {
                     if (saved?.storageFailed) return;
                     showToast('학급 이름을 저장했어요.');
                 }}>학급 저장</Btn>
-                <Btn className="chip" style={{ marginTop: 8 }} aria-expanded={periodsOpen} onClick={() => setPeriodsOpen((open) => !open)}>{periodsOpen ? '교시 시각 접기' : '교시 시각 펼치기'}</Btn>
-                {periodsOpen && (
-                    <div>
-                        {periods.map((value, index) => (
-                            <input key={index} className="field" style={{ marginTop: 8 }} aria-label={`${index + 1}교시 시작`} value={value} onChange={(event) => setPeriods((prev) => prev.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
-                        ))}
-                        <Btn className="chip" style={{ marginTop: 8 }} onClick={async () => {
-                            if (periods.some((item) => !isHm(item))) { showToast('시각은 09:00처럼 적어 주세요.'); return; }
-                            const saved = await patchProfile({ periodStarts: periods });
-                            if (saved?.storageFailed) return;
-                            showToast('교시 시각을 저장했어요.');
-                        }}>시각 저장</Btn>
-                    </div>
-                )}
             </section>
+
+            <TimetableSettings data={data} showToast={showToast} />
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
@@ -300,6 +287,7 @@ export function Settings() {
                         await settleGcalQueue();
                         if (plan.dropRemote) await disconnectGcal();
                         await forgetGcalLocal();
+                        clearPeriodLocal();
                         showToast('이 앱의 기록을 지웠어요.');
                     })();
                 }}>계정과 기록 삭제</Btn>

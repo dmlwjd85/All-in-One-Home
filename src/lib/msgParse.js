@@ -118,16 +118,16 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
     const src = String(text || '');
     const starts = (periods && periods.length ? periods : DEFAULT_PERIODS);
     const out = { hm: '', hmEnd: '', period: 0, periodEnd: 0, assumedPm: false, label: '' };
-    const tilde = src.match(/(\d)\s*[~～\-–—]\s*(\d)\s*교시/);
-    const comma = src.match(/(\d)\s*[,·]\s*(\d)\s*교시/);
+    const tilde = src.match(/(?<!\d)(10|\d)\s*[~～\-–—]\s*(10|\d)\s*교시/);
+    const comma = src.match(/(?<!\d)(10|\d)\s*[,·]\s*(10|\d)\s*교시/);
     const range = tilde || (comma && Math.abs(Number(comma[1]) - Number(comma[2])) === 1 ? comma : null);
-    const one = src.match(/(\d)\s*교시/);
+    const one = src.match(/(?<!\d)(10|\d)\s*교시/);
     if (range) {
         out.period = Number(range[1]);
         out.periodEnd = Number(range[2]);
         out.hm = starts[out.period - 1] || '';
         out.label = `${out.period}~${out.periodEnd}교시`;
-    } else if (one && Number(one[1]) >= 1 && Number(one[1]) <= 7) {
+    } else if (one && ((Number(one[1]) >= 1 && Number(one[1]) <= 7) || (one[1] === '10' && starts[9]))) {
         out.period = Number(one[1]);
         out.hm = starts[out.period - 1] || '';
         out.label = `${out.period}교시`;
@@ -352,9 +352,9 @@ export function tidyTitle(text) {
     t = t.replace(/(?<![\d~～])[~～]+(?![\d~～])/g, ' ');
     t = t.replace(/점심\s*시간|점심/g, ' ');
     if (afterSchoolIsClock(t)) t = t.replace(/방과\s*후(?:\s*에|\s*까지)?(?:\s*시간)?(?:에|까지)?/g, ' ');
-    t = t.replace(/\d\s*[~～\-–—]\s*\d\s*교시/g, ' ');
-    t = t.replace(/\d(?:\s*[,·]\s*\d)+\s*교시/g, ' ');
-    t = t.replace(/\d\s*교시(?!\s*보결)(?:\s*까지)?/g, ' ');
+    t = t.replace(/(?:10|\d)\s*[~～\-–—]\s*(?:10|\d)\s*교시/g, ' ');
+    t = t.replace(/(?:10|\d)(?:\s*[,·]\s*(?:10|\d))+\s*교시/g, ' ');
+    t = t.replace(/(?:10|\d)\s*교시(?!\s*보결)(?:\s*까지)?/g, ' ');
     t = t.replace(/(?:^|\s)\d{1,2}[.)](?=\s)/g, ' ');
     t = t.replace(/(?:을|를)\s*(제출|회신|작성|입력|업로드|탑재)/g, ' $1');
     t = t.replace(/알려\s*주(?:세요|십시요|시기\s*바랍니다)?/g, '회신');
@@ -481,7 +481,7 @@ function salvageTitle(text) {
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
     t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
-    t = t.replace(/점심\s*시간|\d\s*교시(?!\s*보결)/g, ' ');
+    t = t.replace(/점심\s*시간|(?:10|\d)\s*교시(?!\s*보결)/g, ' ');
     t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다|으)/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
     t = t.replace(/연기된|연기한|미뤄진|미루어진/g, ' ');
@@ -2773,8 +2773,8 @@ function stripEventClause(text) {
     return src
         .replace(/교직원\s*회의|회의(?!록)|연수|공개수업|협의회|행사|출장/g, ' ')
         .replace(/장소\s*[:：]\s*[^\n,]+/g, ' ')
-        .replace(/\d(?:\s*[,·~～\-–—]\s*\d)+\s*교시/g, ' ')
-        .replace(/\d\s*교시/g, ' ');
+        .replace(/(?:10|\d)(?:\s*[,·~～\-–—]\s*(?:10|\d))+\s*교시/g, ' ')
+        .replace(/(?:10|\d)\s*교시/g, ' ');
 }
 
 function titlesOverlap(left, right) {

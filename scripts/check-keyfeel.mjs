@@ -536,7 +536,7 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v21'"), '서비스 워커가 v21이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v22'"), '서비스 워커가 v22가 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');

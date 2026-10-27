@@ -53,6 +53,7 @@ jobs:
           npm run check:brand
           npm run check:icons
           npm run check:gcal
+          npm run check:period
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules
