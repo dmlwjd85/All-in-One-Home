@@ -5,10 +5,13 @@ import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem,
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
+import { DetailSheet } from './DetailSheet.jsx';
+import { isClipped } from '../lib/detail.js';
 
 export function Tasks() {
     const { data, clock, showToast } = useUi();
     const [title, setTitle] = useState('');
+    const [detail, setDetail] = useState(null);
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
     const notes = joined(data, 'notes');
@@ -70,8 +73,15 @@ export function Tasks() {
                     {rows.map((row) => (
                         <article key={row.id} className="todo-block">
                             <div className="todo-line">
-                                <Btn className="todo-main" onClick={() => toggleTodo(row.id)}>
+                                <Btn className="todo-check" aria-label={row.done ? '다시 남기기' : '끝냄 표시'} aria-pressed={Boolean(row.done)} onClick={() => toggleTodo(row.id)}>
                                     <span aria-hidden="true">{row.done ? '☑' : '☐'}</span>
+                                </Btn>
+                                <Btn className="todo-main" data-todo-title="1" onClick={(event) => {
+                                    /* 잘린 제목은 자세히 보기, 다 보이는 제목은 예전처럼 끝냄 표시. 체크 칸은 늘 끝냄 표시입니다. */
+                                    const title = event.currentTarget.querySelector('.todo-title');
+                                    if (isClipped(title)) setDetail(row);
+                                    else toggleTodo(row.id);
+                                }}>
                                     <span className="todo-title">{row.localOnly ? '🔒 ' : ''}{row.title}</span>
                                 </Btn>
                                 {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
@@ -108,6 +118,7 @@ export function Tasks() {
                 </article>
             ))}
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
+            {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={() => toggleTodo(detail.id)} />}
         </div>
     );
 }

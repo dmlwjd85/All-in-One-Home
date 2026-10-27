@@ -8,8 +8,10 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
 import { EventLine } from './EventLine.jsx';
-import { isLocked, tableRow, withUsedCount } from '../lib/periodLocal.js';
+import { isLocked, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
+import { DayTimetable } from './DayTimetable.jsx';
+import { tableForDateWithLocal } from '../lib/semester.js';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
 
@@ -41,7 +43,7 @@ export function Day() {
     const rest = restInfo(date, joined(data, 'events'));
     const dayKey = dayKeyFromYmd(date);
     const local = withUsedCount(data.timetable, usePeriodLocal());
-    const table = tableRow(data.timetable, dayKey, local);
+    const table = tableForDateWithLocal(data, date, local);
     const school = Boolean(DAY_LABEL[dayKey]);
     const studentOf = (sid) => {
         const row = data.students.find((item) => item.id === sid);
@@ -79,18 +81,9 @@ export function Day() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>시간표</h2>
-                {school && !rest.off && (
-                    <div style={{ display: 'grid', gap: 6 }}>
-                        {Array.from({ length: local.count }, (_, index) => {
-                            if (isLocked(local, dayKey, index + 1)) return null;
-                            const subject = table[`p${index + 1}`] || '';
-                            const special = table[`s${index + 1}`];
-                            return <p key={index} style={{ margin: 0 }}>{index + 1}교시 {subject || '비어 있음'}{special ? ' · 전담' : ''}</p>;
-                        })}
-                    </div>
-                )}
+                {school && !rest.off && <DayTimetable data={data} date={date} table={table} count={local.count} hidden={(period) => isLocked(local, dayKey, period)} />}
                 {(!school || rest.off) && <p className="muted">{weekdayKo(date)}요일은 수업 시간표가 없어요.</p>}
-                <Btn className="chip" style={{ marginTop: 8 }} onClick={() => go('#/schedule')}>시간표 고치기</Btn>
+                <Btn className="chip" style={{ marginTop: 8 }} onClick={() => go('#/schedule')}>기본(요일) 시간표 고치기</Btn>
             </section>
 
             <section className="glass" style={{ padding: 14 }}>

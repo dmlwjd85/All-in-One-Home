@@ -1,6 +1,11 @@
 import { addDaysYmd, fromYmd } from './date.js';
 
 /** 음력 명절을 양력으로 적은 범위 (한국 월력요항 기준) */
+/** 선거일(공휴일). 확정된 해만 넣습니다. */
+const ELECTION_DAYS = {
+    2026: { date: '2026-06-03', name: '전국동시지방선거일' },
+};
+
 export const LUNAR_YEAR_MIN = 2020;
 export const LUNAR_YEAR_MAX = 2035;
 
@@ -93,6 +98,10 @@ const buildYear = (year) => {
     pushMark(map, ymd(y, 10, 3), { id: 'foundation', kind: 'holiday', name: '개천절', short: '개천절' });
     pushMark(map, ymd(y, 10, 9), { id: 'hangeul', kind: 'holiday', name: '한글날', short: '한글날' });
     pushMark(map, ymd(y, 12, 25), { id: 'christmas', kind: 'holiday', name: '크리스마스', short: '성탄절' });
+
+    // 선거일(공직선거법상 공휴일)
+    const election = ELECTION_DAYS[y];
+    if (election) pushMark(map, election.date, { id: 'election', kind: 'holiday', name: election.name, short: '선거일' });
 
     if (laborIsHoliday) {
         pushMark(map, ymd(y, 5, 1), { id: 'labor', kind: 'holiday', name: '근로자의날', short: '근로자날' });
