@@ -11,7 +11,10 @@ import {
     PRESS_SELECTOR,
     KEY_VOLUMES,
     keyPitchRate,
+    closeKeyVoiceMoved,
     keySoundEnabled,
+    keyVoiceMoved,
+    pressRate,
     keySoundNoticePending,
     keyVibeEnabled,
     keyVoiceId,
@@ -657,6 +660,24 @@ check(pressTarget(offSetTab) === null, '꺼진 fieldset 안 탭에서 소리가 
 const onSet = fakeEl('fieldset');
 const onSetButton = fakeEl('button', {}, onSet);
 check(pressTarget(onSetButton) === onSetButton, '켜진 fieldset 안 버튼이 조용합니다.');
+/** QA 2차 N3: HTML 규칙처럼 꺼진 fieldset의 첫 legend 안은 켜져 있습니다. 두 번째 legend와 legend 밖은 꺼져 있습니다. */
+const legendSet = fakeEl('fieldset', { disabled: '' });
+const firstLegend = fakeEl('legend', {}, legendSet);
+const secondLegend = fakeEl('legend', {}, legendSet);
+const bodyDiv = fakeEl('div', {}, legendSet);
+legendSet.children = [fakeEl('div', {}, legendSet), firstLegend, secondLegend, bodyDiv];
+const legendButton = fakeEl('button', {}, firstLegend);
+check(pressTarget(legendButton) === legendButton && pressTarget(fakeEl('span', {}, legendButton)) === legendButton, '꺼진 fieldset의 첫 legend 안 버튼이 조용합니다.');
+check(pressTarget(fakeEl('button', {}, secondLegend)) === null, '꺼진 fieldset의 두 번째 legend 안 버튼에서 소리가 납니다.');
+check(pressTarget(fakeEl('button', {}, bodyDiv)) === null, '꺼진 fieldset의 legend 밖 버튼에서 소리가 납니다.');
+const outerOff = fakeEl('fieldset', { disabled: '' });
+const innerSet = fakeEl('fieldset', { disabled: '' }, outerOff);
+const innerLegendButton = fakeEl('button', {}, fakeEl('legend', {}, innerSet));
+check(pressTarget(innerLegendButton) === null, '바깥 fieldset이 꺼졌는데 안쪽 legend 버튼에서 소리가 납니다.');
+const outerLegendSet = fakeEl('fieldset', { disabled: '' });
+const outerLegend = fakeEl('legend', {}, outerLegendSet);
+const nestedOn = fakeEl('button', {}, fakeEl('fieldset', {}, outerLegend));
+check(pressTarget(nestedOn) === nestedOn, '첫 legend 안 켜진 fieldset 버튼이 조용합니다.');
 const ariaOffGroup = fakeEl('div', { 'aria-disabled': 'true' });
 const ariaOffButton = fakeEl('button', {}, ariaOffGroup);
 check(pressTarget(ariaOffButton) === null && pressTarget(fakeEl('span', {}, ariaOffButton)) === null, 'aria-disabled 묶음 안 버튼에서 소리가 납니다.');
@@ -710,10 +731,31 @@ for (const off of ['0', '', 'true']) {
     bag.setItem('ssug-gyomu-type-voice', 'ting');
     check(keyVoiceId(bag) === 'munggeul' && bag.getItem('ssug-gyomu-key-voice') === null, `글자 소리가 '${off}'인 기기의 종류를 옮깁니다.`);
 }
+/** main은 모르는 글자 소리 값이면 뽁을 냈습니다. 그 소리를 옮기되 글자 소리 저장값은 그대로 둡니다. */
 const oddBag = memory();
 oddBag.setItem('ssug-gyomu-type-sound', '1');
 oddBag.setItem('ssug-gyomu-type-voice', 'nothing');
-check(keyVoiceId(oddBag) === 'munggeul' && oddBag.getItem('ssug-gyomu-key-voice') === null && oddBag.getItem('ssug-gyomu-type-voice') === 'nothing', '모르는 글자 소리 값을 옮기거나 지웁니다.');
+check(keyVoiceId(oddBag) === 'ppok' && oddBag.getItem('ssug-gyomu-key-voice') === 'ppok' && oddBag.getItem('ssug-gyomu-type-voice') === 'nothing', '모르는 글자 소리 값을 main처럼 뽁으로 옮기지 않거나 저장값을 지웁니다.');
+/** QA 2차 N1: 실제로 옮긴 기기에만 안내가 남고, 닫으면 다시 나오지 않습니다. */
+const caseH = memory();
+caseH.setItem('ssug-gyomu-type-sound', '1');
+check(keyVoiceMoved(caseH) === 'ppok' && caseH.getItem('ssug-gyomu-key-voice') === 'ppok' && caseH.getItem('ssug-gyomu-key-voice-moved') === 'ppok', 'H: 글자 소리만 켠 기기가 main 기본 뽁으로 옮겨지지 않거나 안내가 없습니다.');
+check(caseH.getItem('ssug-gyomu-type-voice') === null, 'H: 글자 소리 종류를 새로 적습니다.');
+check(closeKeyVoiceMoved(caseH) === true && keyVoiceMoved(caseH) === null && caseH.getItem('ssug-gyomu-key-voice-moved') === 'closed', 'H: 안내를 닫아도 남습니다.');
+check(keyVoiceId(caseH) === 'ppok' && keyVoiceMoved(caseH) === null, 'H: 닫은 안내가 다시 나옵니다.');
+const caseK = memory();
+caseK.setItem('ssug-gyomu-type-sound', '1');
+caseK.setItem('ssug-gyomu-type-voice', 'bang');
+caseK.setItem('ssug-gyomu-key-voice', 'linear');
+check(keyVoiceId(caseK) === 'linear' && keyVoiceMoved(caseK) === null && caseK.getItem('ssug-gyomu-key-voice-moved') === null, 'K: 이미 고른 누를 때 소리가 있는데 옮기거나 안내합니다.');
+const caseL = memory();
+caseL.setItem('ssug-gyomu-type-sound', '1');
+caseL.setItem('ssug-gyomu-type-voice', 'blue');
+caseL.setItem('ssug-gyomu-key-sound', '0');
+check(keyVoiceMoved(caseL) === 'blue' && keySoundEnabled(caseL) === false, 'L: 누를 때 소리를 끈 기기에서 옮김 값이나 꺼짐이 맞지 않습니다.');
+const caseOff = memory();
+caseOff.setItem('ssug-gyomu-type-voice', 'blue');
+check(keyVoiceMoved(caseOff) === null && caseOff.getItem('ssug-gyomu-key-voice') === null, '글자 소리를 끈 기기에 옮김 안내가 나옵니다.');
 for (const voice of TYPE_VOICES) {
     const bag = memory();
     check(setKeyVoice(voice.id, bag) === voice.id && keyVoiceId(bag) === voice.id, `누를 때 소리로 ${voice.label}을 고를 수 없습니다.`);
@@ -813,7 +855,15 @@ playKey('down');
 playKey('up');
 const ppokTap = renderTypeStroke('ppok', 'tap', rate).samples.length;
 check(liveSources.length === ppokFrom + 1 && liveSources.at(-1).buffer.length === ppokTap, '뽁을 골랐는데 누를 때 한 번만 나지 않습니다.');
-check(liveSources.at(-1).stopAt == null && !liveGains.at(-1).gain.events.length, '뽁을 떼면 누를 때 소리가 끊깁니다.');
+const ppokEvents = liveGains.at(-1).gain.events;
+check(liveSources.at(-1).stopAt == null && !ppokEvents.some((event) => event.type === 'ramp' && event.value === 0), '뽁을 떼면 누를 때 소리가 끊깁니다.');
+/** QA 2차 N2: 옮겨 온 소리의 음높이 흔들림은 main 글자 소리(MAIN_TYPE_PITCH)와 같습니다. 다른 소리는 0.94–1.06 입니다. */
+check(['ppok', 'ting', 'drop', 'bang'].every((voice) => Math.abs(pressRate(voice, () => 0) - 0.97) < 1e-9 && Math.abs(pressRate(voice, () => 1) - 1.03) < 1e-9)
+    && Math.abs(pressRate('red', () => 0) - 0.96) < 1e-9 && Math.abs(pressRate('red', () => 1) - 1.08) < 1e-9
+    && Math.abs(pressRate('munggeul', () => 0) - keyPitchRate(() => 0)) < 1e-9, '옮겨 온 소리의 음높이 흔들림이 글자 소리와 다릅니다.');
+/** QA 2차 N2: 옮겨 온 소리는 main 글자 소리처럼 0에서 2ms 동안 키우며 시작합니다. */
+check(ppokEvents.length === 2 && ppokEvents[0].type === 'set' && ppokEvents[0].value === 0 && ppokEvents[1].type === 'ramp'
+    && Math.abs(ppokEvents[1].time - ppokEvents[0].time - 0.002) < 1e-9 && ppokEvents[1].value > 0, `옮겨 온 뽁이 2ms 페이드인 없이 시작합니다. ${JSON.stringify(ppokEvents)}`);
 previewKeyVoice('bang');
 check(liveSources.length === ppokFrom + 2, '방귀 미리듣기가 한 번 나지 않습니다.');
 setKeyVoice('munggeul');
@@ -873,18 +923,32 @@ check(!/removeItem/.test(feel) && !feel.includes('setItem(TYPE_VOICE_KEY'), '누
 check(appSource.includes('return pressTarget(target);') && appSource.includes('pressTarget(el) !== el'), '누름과 키보드가 같은 누름 대상 규칙을 쓰지 않습니다.');
 check(settings.includes('PRESS_TYPE_VOICES') && settings.includes('aria-label="누를 때 장난 소리"'), '누를 때 소리 종류에 뽁·띵·방귀 같은 소리가 없습니다.');
 /** QA 1차: 겹치는 칩 이름, 안내 순서, 글자 소리를 켜 둔 기기 안내. */
-const chipMatch = settings.match(/chip: KEY_VOICES\.some\(\(item\) => item\.label === voice\.label\) \? ([^:]+) : voice\.label/);
-const chipNames = chipMatch ? TYPE_VOICES.map((voice) => (KEY_VOICES.some((item) => item.label === voice.label) ? Function('voice', `return ${chipMatch[1]};`)(voice) : voice.label)) : [];
+/** QA 2차: 옮겨 온 적축·갈축·청축은 축 이름 뒤에 결을 붙입니다. 화면 읽기 이름도 서로 달라야 합니다. */
+const chipMatch = settings.match(/const PRESS_CHIP_NAMES = (\{[^}]+\});/);
+const chipMap = chipMatch ? Function(`return ${chipMatch[1]};`)() : null;
+const chipNames = chipMap ? TYPE_VOICES.map((voice) => chipMap[voice.id] || voice.label) : [];
 const allChips = [...KEY_VOICES.map((voice) => voice.label), ...chipNames];
 check(chipNames.length === TYPE_VOICES.length && new Set(allChips).size === allChips.length, `누를 때 소리 칩 이름이 겹칩니다. ${allChips.join(',')}`);
-check(allChips.every((name) => allChips.every((other) => other === name || !other.startsWith(name))), `누를 때 소리 칩 이름이 서로 앞부분을 나눠 씁니다. ${allChips.join(',')}`);
+check(chipMap && chipMap.red === '적축·매끈' && chipMap.brown === '갈축·톡' && chipMap.blue === '청축·딸깍', `옮겨 온 축 이름이 적축·매끈·갈축·톡·청축·딸깍이 아닙니다. ${JSON.stringify(chipMap)}`);
+check(TYPE_VOICES.every((voice) => {
+    const clash = KEY_VOICES.find((item) => item.label === voice.label);
+    return !clash || (chipMap?.[voice.id] || '').startsWith(`${voice.label}·`);
+}), '이름이 겹치는 옮겨 온 소리에 결 이름이 붙지 않았습니다.');
+const pressAria = [...KEY_VOICES.map((voice) => `${voice.label} ${voice.hint}`), ...TYPE_VOICES.map((voice) => (chipMap?.[voice.id] ? chipMap[voice.id].replace('·', ' ') : `${voice.label} ${voice.hint}`))];
+check(new Set(pressAria).size === pressAria.length && settings.includes('ariaLabel={voice.aria}'), `누를 때 소리 화면 읽기 이름이 겹칩니다. ${pressAria.join(',')}`);
+check(KEY_VOICES.find((voice) => voice.id === 'munggeul')?.hint === '말랑', '몽글 결 이름이 말랑이 아닙니다.');
 const soundFrom = settings.indexOf('<h2 className="title-font" style={{ marginTop: 0 }}>소리</h2>');
 const descAt = settings.indexOf('누를 때 소리가 나요', soundFrom);
 const kindAt = settings.indexOf('>소리 종류</p>', soundFrom);
 const sizeAt = settings.indexOf('>소리 크기</p>', soundFrom);
 check(soundFrom > 0 && descAt > soundFrom && descAt < kindAt && kindAt < sizeAt, '설정 소리 칸이 설명 → 종류 → 크기 순서가 아닙니다.');
 check(!settings.includes('체크 칸처럼'), '앱에 없는 체크 칸을 예로 듭니다.');
-check(/\{typeOn && <p className="muted"[^>]*>이제 소리는 글자를 적을 때 대신 버튼을 누를 때 나요\. 고르셨던 소리는 그대로 옮겨 두었어요\.<\/p>\}/.test(settings) && settings.indexOf('이제 소리는 글자를') < hideFrom, '글자 소리를 켜 둔 기기에 옮김 안내가 없습니다.');
+/** QA 2차 N1: 옮긴 기기에만, 지금 켜짐·꺼짐에 맞는 말로, 닫기 단추와 함께 안내합니다. */
+const movedAt = settings.indexOf('{movedId && voiceId === movedId && (');
+check(movedAt > 0 && movedAt < hideFrom && settings.includes('useState(() => keyVoiceMoved())') && settings.includes('data-type-moved={movedId}'), '실제로 옮긴 기기에만 옮김 안내를 보이지 않습니다.');
+check(/\{soundOn \? ' 이제 버튼이나 탭을 누르면 이 소리가 나요\.' : ' 지금은 누를 때 소리가 꺼져 있어요\. 켜면 이 소리로 들려요\.'\}/.test(settings), '옮김 안내가 소리 켜짐·꺼짐에 맞는 말을 고르지 않습니다.');
+check(/aria-label="옮긴 소리 안내 닫기" onClick=\{\(\) => \{\s+closeKeyVoiceMoved\(\);\s+setMovedId\(null\);/.test(settings), '옮김 안내에 닫기 단추가 없습니다.');
+check(feel.includes("const MOVED_KEY = 'ssug-gyomu-key-voice-moved'"), '옮김 안내 키가 ssug-gyomu-key-voice-moved 가 아닙니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));
