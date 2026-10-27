@@ -3074,6 +3074,9 @@ try {
         });
         check(clearUndone, '알림장을 비운 뒤 되돌리기 버튼을 누를 수 없습니다.');
         await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeSavedHint).catch(() => {});
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('알림장을 되돌렸어요.'), { timeout: 5000 }).catch(() => {});
+        const undoToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(undoToast.includes('알림장을 되돌렸어요.'), `비운 알림장을 되돌렸는데 되돌렸다는 안내가 없습니다: ${JSON.stringify(undoToast)}`);
         const restored = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
         check(restored.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'), `비운 알림장을 되돌렸는데 예전 글이 돌아오지 않았습니다: ${JSON.stringify(restored)}`);
         view = await noticeView(page);
@@ -3248,6 +3251,111 @@ try {
         check(view.empty && !view.saved && darkToast.includes('이 날 알림장을 비웠어요.'), `360 다크에서 알림장을 비운 화면이 다릅니다: ${JSON.stringify({ view, darkToast })}`);
         check(!view.pageOverflow, `360에서 알림장을 비운 화면이 옆으로 넘칩니다: ${JSON.stringify(view)}`);
         await page.screenshot({ path: resolve(shots, 'notice_cleared_360_dark.png') });
+    }, 800);
+
+    // 360 밝은 화면: 비운 날(빈 클라우드 행이 남은 날)에 ＋의 알림장으로 다시 넣는 경우(S5a 일반·S5b 민감)와,
+    // 쓰던 글이 있을 때 되돌리기로 DB 글이 바뀌어도 쓰던 글을 덮어쓰지 않는지(M4) 봅니다.
+    const noticeBox = (page) => page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+    const noticeQuick = async (page, day, value) => {
+        await clickPlus(page, '알림장');
+        await page.waitForSelector('[data-screen="flow"] [aria-label="날짜"]', { timeout: 8000 });
+        const pick = (ymd) => page.evaluate((target) => {
+            const button = document.querySelector(`[data-screen="flow"] button[aria-label="${target}"]`);
+            button?.click();
+            return Boolean(button);
+        }, ymd);
+        if (!(await pick(day))) {
+            await page.click('[data-screen="flow"] button[aria-label="다음 달"]');
+            await delay(200);
+            await pick(day);
+        }
+        await page.waitForSelector('[data-screen="flow"] [data-flow-text]', { timeout: 8000 });
+        await page.evaluate((text) => {
+            const box = document.querySelector('[data-screen="flow"] [data-flow-text]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, text);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }, value);
+        await delay(100);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="flow"] button')].find((el) => el.innerText.trim() === '알림장 남기기')?.click());
+        await page.waitForFunction(() => !document.querySelector('[data-screen="flow"]'), { timeout: 8000 }).catch(() => {});
+        await delay(300);
+    };
+    await withDemo(360, 'light', async (page) => {
+        // S5a: 비운 날에 일반 알림장을 넣으면 글 앞에 빈 줄 없이 새 글만 들어갑니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeQuick(page, noticeDay, '우유 급식 신청서');
+        const quickPlain = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && String(row.text).includes('우유')));
+        const plainRow = quickPlain.cloud.find((row) => row.date === noticeDay);
+        check(plainRow?.text === '우유 급식 신청서', `비운 날에 ＋로 알림장을 넣었더니 글 앞에 빈 줄이 붙거나 글이 다릅니다: ${JSON.stringify(plainRow?.text)}`);
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '우유 급식 신청서', { timeout: 5000 }).catch(() => {});
+        const plainBox = await noticeBox(page);
+        check(plainBox === '우유 급식 신청서', `비운 날에 ＋로 넣은 알림장이 알림장 화면 입력칸에 그대로 보이지 않습니다: ${JSON.stringify(plainBox)}`);
+
+        // S5b: 비운 날에 민감한 알림장을 넣으면 알림장 화면에도 그 글이 보이고, 클라우드 쪽에는 올라가지 않습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeQuick(page, noticeDay, '지호 학폭 관련 보호자 연락');
+        const quickSecret = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay && String(row.text).includes('학폭')));
+        check(quickSecret.local.some((row) => row.date === noticeDay && row.text === '지호 학폭 관련 보호자 연락'), `비운 날에 ＋로 넣은 민감한 알림장이 이 기기에 그대로 남지 않았습니다: ${JSON.stringify(quickSecret)}`);
+        check(!quickSecret.cloud.some((row) => /학폭/.test(row.text || '')), `민감한 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(quickSecret.cloud)}`);
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '지호 학폭 관련 보호자 연락', { timeout: 5000 }).catch(() => {});
+        await noticeOpen(page, 'light', noticeDay);
+        const secretBox = await noticeBox(page);
+        const secretView = await noticeView(page);
+        check(secretBox === '지호 학폭 관련 보호자 연락' && secretView.saved, `비운 날에 넣은 민감한 알림장이 알림장 화면에서 빈칸으로 보입니다: ${JSON.stringify({ secretBox, secretView })}`);
+        await page.screenshot({ path: resolve(shots, 'notice_quick_sensitive_360_light.png') });
+
+        // M4-1: 저장 뒤 새 글을 쓰던 중에 저장을 되돌려도, 쓰던 글은 그대로 남습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '줄넘기 챙기기');
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '되돌리기'), { timeout: 5000 }).catch(() => {});
+        const typingUndo = await page.evaluate(async () => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, '줄넘기와 물통 챙기기');
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise((done) => setTimeout(done, 100));
+            const button = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기');
+            button?.click();
+            return Boolean(button);
+        });
+        check(typingUndo, '알림장을 저장한 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
+        await delay(400);
+        const keptTyping = await noticeBox(page);
+        check(keptTyping === '줄넘기와 물통 챙기기', `쓰던 글이 있는데 저장을 되돌리자 입력칸을 덮어썼습니다: ${JSON.stringify(keptTyping)}`);
+
+        // M4-2: 비운 뒤 새 글을 쓰던 중에 비우기를 되돌려도, 예전 글이 쓰던 글을 덮어쓰지 않고 되돌렸다는 안내가 뜹니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        const typingClearUndo = await page.evaluate(async () => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, '단소 챙기기');
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise((done) => setTimeout(done, 100));
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        check(typingClearUndo, '알림장을 비운 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'));
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('알림장을 되돌렸어요.'), { timeout: 5000 }).catch(() => {});
+        const keptClearTyping = await noticeBox(page);
+        const typingToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(keptClearTyping === '단소 챙기기', `쓰던 글이 있는데 비우기를 되돌리자 예전 글로 입력칸을 덮어썼습니다: ${JSON.stringify(keptClearTyping)}`);
+        check(typingToast.includes('알림장을 되돌렸어요.'), `비운 알림장을 되돌렸는데 되돌렸다는 안내가 없습니다: ${JSON.stringify(typingToast)}`);
+        const undoToastBox = await page.evaluate(() => {
+            const toast = document.querySelector('.toast');
+            const root = document.documentElement;
+            if (!toast) return null;
+            const rect = toast.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, width: root.clientWidth, pageOverflow: root.scrollWidth > root.clientWidth + 1 };
+        });
+        check(undoToastBox && undoToastBox.left >= 0 && undoToastBox.right <= undoToastBox.width + 1 && !undoToastBox.pageOverflow, `360에서 되돌렸다는 안내가 옆으로 넘칩니다: ${JSON.stringify(undoToastBox)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_undo_toast_360_light.png') });
     }, 800);
 
 } catch (error) {

@@ -135,7 +135,8 @@ export function Notice() {
     const { data, clock, route, showToast, go } = useUi();
     const date = route.params.date || addDaysYmd(clock.ymd, 1);
     const notices = joined(data, 'notices');
-    const current = notices.find((row) => row.date === date);
+    // 그 날 행이 둘(비운 클라우드 행 + 이 기기 민감 행)이면 글이 있는 행을 먼저 보여 줍니다.
+    const current = notices.find((row) => row.date === date && String(row.text || '').trim()) || notices.find((row) => row.date === date);
     const dbText = current?.text || '';
     const [text, setText] = useState(dbText);
     const [synced, setSynced] = useState(dbText);
@@ -173,7 +174,7 @@ export function Notice() {
                 label: '되돌리기',
                 onClick: async () => {
                     const result = await saveNotice(date, before);
-                    if (!result?.storageFailed) showToast('');
+                    if (!result?.storageFailed) showToast('알림장을 되돌렸어요.');
                 },
             });
             return;
