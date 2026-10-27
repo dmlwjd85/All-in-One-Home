@@ -231,7 +231,48 @@ export async function flushCloud() {
         cloudHashes = result.hashes;
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
+    await forgetQueuedCloud();
     return result;
+}
+
+/*
+ * 되돌리기로 사라진 행은 클라우드 문서도 지웁니다(488149c에서 되살림).
+ * pushUserData는 setDoc(merge)만 하므로, 지우지 않으면 다음에 당겨 올 때 되살아납니다.
+ * 대기열은 메모리에만 두고 새 저장 키는 만들지 않습니다. 로그인 전이면 대기열에만 남습니다.
+ */
+const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices'];
+const cloudForget = new Set();
+
+/** 검사에서 클라우드 삭제 대기열을 봅니다. */
+export function queuedCloudKeys() {
+    return [...cloudForget];
+}
+
+function queueCloudForget(bucket, id) {
+    if (!CLOUD_BUCKETS.includes(bucket) || !id) return;
+    const key = `${bucket}/${id}`;
+    cloudForget.add(key);
+    if (Object.prototype.hasOwnProperty.call(cloudHashes, key)) {
+        delete cloudHashes[key];
+        if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
+    }
+}
+
+async function forgetQueuedCloud() {
+    if (!cloudForget.size || !state.auth?.uid || !syncAvailable()) return;
+    const uid = state.auth.uid;
+    const memory = memoryOnly || state.profile?.sharedPc;
+    for (const key of [...cloudForget]) {
+        const slash = key.indexOf('/');
+        const bucket = key.slice(0, slash);
+        const id = key.slice(slash + 1);
+        if ((state[bucket] || []).some((row) => String(row?.id) === id)) {
+            cloudForget.delete(key);
+            continue;
+        }
+        const result = await deleteUserDoc(uid, bucket, id, { memoryOnly: memory }).catch(() => ({ ok: false }));
+        if (result?.ok) cloudForget.delete(key);
+    }
 }
 
 function unionById(local = [], remote = []) {
@@ -331,6 +372,13 @@ export async function undo() {
         tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
         return false;
     }
+    for (const bucket of CLOUD_BUCKETS) {
+        const kept = new Set((prev[bucket] || []).map((row) => row?.id).filter(Boolean));
+        for (const row of current[bucket] || []) {
+            if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id);
+        }
+    }
+    await flushCloud().catch(() => {});
     return true;
 }
 

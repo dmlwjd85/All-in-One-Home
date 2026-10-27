@@ -559,11 +559,11 @@ check(hotkeyFootnote(legacyKeys).includes('아직 없어요') && !hotkeyFootnote
 check(hotkeyFootnote(defaultHotkeys()).includes('?') && hotkeyFootnote(defaultHotkeys()).includes('/'), '기본 단축키 안내가 빠졌습니다.');
 check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNote(legacyKeys).includes('/'), '키가 없는데 휴대폰 안내가 빗금을 말합니다.');
 
+// QA 1차 8번: 하단 버튼은 이제 가계부와 같은 쨈 컵(SealCup)과 글자 '쨈'을 그립니다. 쓰지 않던 글자 윤곽(KokMark)은 지웠습니다.
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
-const ledgerPath = 'M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z';
-check(bits.includes('viewBox="0 0 1652 1774"'), '버튼 글자 틀이 가계부와 다릅니다.');
-check(bits.includes(ledgerPath), '버튼 글자 윤곽이 가계부와 다릅니다.');
+check(!bits.includes('KokMark') && !bits.includes('kok-mark'), '쓰지 않는 하단 버튼 글자 윤곽이 남아 있습니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
+check((appText.match(/<SealCup \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 2, '하단 버튼 글자가 가계부 쨈 컵과 다릅니다.');
 check(appText.includes('누를 때 소리가 나요') && appText.includes('>끄기<') && !appText.includes('콕'), '소리 안내 문구가 없습니다.');
 check(/const onKey = \(event\) => \{\n\s+if \(locked\) return;/.test(appText), '잠금 중에 단축키가 먹습니다.');
 check(appText.includes('compositionupdate') && appText.includes('noteCompositionUpdate(event?.data)'), '조합이 바뀌는 글자를 기록하지 않습니다.');

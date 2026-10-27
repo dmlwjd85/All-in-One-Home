@@ -64,3 +64,9 @@ Enter는 강조된 칩으로 저장합니다. 강조가 없으면 직전에 저�
 - 다른 앱의 링크는 웹앱이 아니라 브라우저로 열린다는 정리: [PWAs on iOS](https://progressivewebapps.com/platforms/ios-safari/)
 - 단축어에서 `webapp://`로 연다는 사용자 보고: [Ask Different](https://apple.stackexchange.com/questions/352980/opening-homescreen-web-app-with-a-shortcut)
 - 홈 화면 웹앱과 Safari의 저장 자리가 나뉜다는 설명: [goulet.dev](https://goulet.dev/posts/qr-code-pwa-link-with-token/)
+
+## 메시지·회의록으로 가는 길(QA 1차 1번)
+
+휴대폰에는 단축키('/')가 없으므로 빠른 입력 막대 맨 위 날짜 줄 오른쪽에 '메시지·회의록 붙여넣기' 단추를 둡니다. 누르면 막대가 닫히고 + 화면(할 일 고르기)이 열립니다. 거기서 바로 긴 글을 붙여 넣거나 '⋯ 더보기'에서 '메시지 붙여넣기'·'회의록 작성'을 고릅니다. 첫 화면 안내문도 이 단추 이름을 그대로 씁니다.
+
+저장이 실패하면(기기 저장 공간이 가득 참 등) 적던 글을 입력칸에 되돌려 두고 "적던 글은 쨈 버튼을 다시 누르면 그대로 있어요."라고 알려 줍니다.

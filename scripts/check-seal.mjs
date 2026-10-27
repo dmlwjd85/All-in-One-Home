@@ -27,7 +27,10 @@ const foilCss = readFileSync(resolve(root, 'src/ui/foilCup.css'), 'utf8');
 check(!foilCss.includes(':root'), '컵 색이 화면 글자색을 덮습니다.');
 check(foilCss.includes('.52s') && foilCss.includes('--cup-j1: #9E1630') && foilCss.includes('scale(1.1, .86)') && foilCss.includes('(c) 2026 쨈 폰트 팀'), '완성본 시간·딸기 색·눌림·저작권이 없습니다.');
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
-check(appText.includes('aria-label="할 일 고르기"') && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않습니다.');
+check(appText.includes('aria-label="쨈 빠른 입력 열기"') && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않습니다.');
+/* QA 1차 1번: 휴대폰에는 단축키가 없으므로, 빠른 입력 안에 + 화면으로 가는 단추가 있어야 합니다. */
+const quickText = readFileSync(resolve(root, 'src/ui/QuickBar.jsx'), 'utf8');
+check(quickText.includes('메시지·회의록 붙여넣기') && quickText.includes('openPlus') && /className="quick-paste"[\s\S]{0,200}onClick=\{openPaste\}/.test(quickText), '빠른 입력에 + 화면으로 가는 단추가 없습니다.');
 
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => existsSync(path));
 if (!chrome) failures.push('브라우저가 없습니다.');
@@ -87,7 +90,7 @@ if (!failures.length) {
         check(light.fill === SEAL_FILL.light.toUpperCase(), `밝은 컵 색이 ${light.fill} 입니다.`);
         check(light.jam === '#9E1630', `딸기 쨈 색이 ${light.jam} 입니다.`);
         check(light.plate === '#F2F3F6', `밝은 접시 색이 ${light.plate} 입니다.`);
-        check(light.label === '할 일 고르기', '접근성 이름이 바뀌었습니다.');
+        check(light.label === '쨈 빠른 입력 열기' && light.label.startsWith(light.name), `접근성 이름이 보이는 글자(쨈)로 시작하지 않거나 하는 일과 다릅니다: ${light.label}`);
         check(light.name === '쨈', `버튼 이름이 ${light.name} 입니다.`);
         check(light.drops === DROP_COUNT, `방울이 ${light.drops}개입니다.`);
         check(!light.dupIds && !light.rawId, '컵 그림 아이디가 겹치거나 접두가 없습니다.');

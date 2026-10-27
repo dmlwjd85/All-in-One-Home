@@ -502,10 +502,18 @@ async function controlBoxes(page, selector, label) {
     if (result.small.length) failures.push(`${label} 44px 미만: ${result.small.join(', ')}`);
 }
 
+/* + 화면은 사람이 가는 길 그대로 엽니다: 보이는 쨈 버튼 → 빠른 입력의 '메시지·회의록 붙여넣기'. */
 async function openPlus(page) {
     await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }));
+        const buttons = [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')];
+        const visible = buttons.find((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        });
+        visible?.click();
     });
+    await page.waitForSelector('.quick-bar.is-open .quick-paste');
+    await page.evaluate(() => document.querySelector('.quick-bar.is-open .quick-paste')?.click());
     await page.waitForSelector('[data-screen="plus"]');
 }
 
@@ -738,7 +746,7 @@ try {
                 });
                 check(
                     underFab.length === 2 && underFab.every((row) => !row.under),
-                    `1920에서 출결 16·17번 줄이 할 일 고르기 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
+                    `1920에서 출결 16·17번 줄이 쨈 버튼 아래로 지나갑니다: ${JSON.stringify(underFab)}`,
                 );
             }
             await audit(page, `출결 너비 ${width}`);
@@ -2105,6 +2113,7 @@ try {
             }));
             check(typed.starts === 0, `글자를 적을 때 소리가 납니다. ${typed.starts}번`);
             check(typed.sound === '1' && typed.voice === 'bang' && typed.key === 'click', `글자 소리 저장값이 바뀌었습니다. ${JSON.stringify(typed)}`);
+            await page.$eval('[aria-label="뽁 통통"]', (el) => el.scrollIntoView({ block: 'center' }));
             await page.click('[aria-label="뽁 통통"]');
             await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'ppok');
             const picked = await page.evaluate(() => ({
@@ -2129,7 +2138,7 @@ try {
             };
         });
         check(notice.text.includes('누를 때 소리가 나요') && !notice.text.includes('콕') && notice.off && !notice.toast, '처음 소리 안내가 팁에 없습니다.');
-        await page.click('[aria-label="할 일 고르기"]');
+        await page.click('[aria-label="쨈 빠른 입력 열기"]');
         await delay(80);
         const during = await page.evaluate(() => ({
             toast: [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요')),
@@ -2857,6 +2866,29 @@ try {
                 check(pressed.down.press === 'down' && Math.abs(matrix[0] - 1.1) < 0.01 && Math.abs(matrix[3] - 0.86) < 0.01, `${width} ${mode} 누르는 동안 쨈 컵이 1.1×0.86으로 눌리지 않습니다: ${pressed.down.transform}`);
                 check(/0\.07s/.test(pressed.down.duration), `${width} ${mode} 쨈 컵 눌림 전환이 70ms가 아닙니다: ${pressed.down.duration}`);
                 check(pressed.up.press === 'rest' && pressed.up.transform === 'none', `${width} ${mode} 뗀 쨈 컵이 원래대로 돌아오지 않습니다: ${pressed.up.transform}`);
+                /* QA 1차 6번(M10): 키보드 Enter·Space도 누르는 동안 눌리고, 떼면 돌아와야 합니다.
+                   Enter는 누르는 순간 열려 글자 칸으로 초점이 가므로 버튼 대신 창에서 뗌을 받습니다. */
+                for (const key of ['Enter', 'Space']) {
+                    await page.evaluate((sel) => document.querySelector(sel).focus(), selector);
+                    await page.keyboard.down(key);
+                    await delay(200);
+                    const keyDown = await page.evaluate((sel) => {
+                        const el = document.querySelector(sel);
+                        return { transform: getComputedStyle(el.querySelector('.cup-squish')).transform, press: el.dataset.press };
+                    }, selector);
+                    await page.keyboard.up(key);
+                    await delay(700);
+                    const keyUp = await page.evaluate((sel) => {
+                        const el = document.querySelector(sel);
+                        return { transform: getComputedStyle(el.querySelector('.cup-squish')).transform, press: el.dataset.press, open: Boolean(document.querySelector('.quick-bar.is-open')) };
+                    }, selector);
+                    const keyMatrix = /matrix\(([^)]+)\)/.exec(keyDown.transform)?.[1].split(',').map(Number) || [];
+                    check(keyDown.press === 'down' && Math.abs(keyMatrix[0] - 1.1) < 0.01 && Math.abs(keyMatrix[3] - 0.86) < 0.01, `${width} ${mode} ${key}를 누르는 동안 쨈 컵이 눌리지 않습니다: ${keyDown.press} ${keyDown.transform}`);
+                    check(keyUp.press === 'rest' && keyUp.transform === 'none', `${width} ${mode} ${key}를 뗀 뒤 쨈 컵이 돌아오지 않습니다: ${keyUp.press} ${keyUp.transform}`);
+                    check(keyUp.open, `${width} ${mode} ${key}로 빠른 입력이 열리지 않습니다.`);
+                    await page.keyboard.press('Escape');
+                    await page.waitForFunction(() => !document.querySelector('.quick-bar.is-open'), { timeout: 3000 }).catch(() => {});
+                }
                 await clickPlus(page, '관찰');
                 await page.waitForFunction(() => document.body.innerText.includes('누구'));
                 await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('이하은'))?.click());

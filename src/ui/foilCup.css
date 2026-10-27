@@ -37,12 +37,13 @@ html.dark .foil-fab {
     width: 60px;
     height: 60px;
     border-radius: 9999px;
-    box-shadow: 0 6px 20px -6px rgba(80, 90, 200, .35);
+    box-shadow: 0 6px 20px -6px rgba(138, 35, 64, .30); /* QA 1차 7번: 푸른 빛 대신 쨈 색 그림자 */
     position: relative;
     background: var(--cup-plate);
     border: 1px solid var(--cup-rim);
     container: cupd / inline-size;
 }
+html.dark .foil-fab .fab-disc { box-shadow: 0 6px 20px -6px rgba(0, 0, 0, .45); }
 
 .foil-fab .fab-disc .cup-svg { width: 52px; height: 52px; }
 .foil-fab .fab-txt {
@@ -159,4 +160,67 @@ html.dark .foil-fab {
     .foil-fab.is-popping .cup-blob,
     .foil-fab.is-popping .cup-word,
     .foil-fab.is-popping .cup-pp { animation: none; }
+}
+
+/* 가계부 #31 옮김(cupBurst.js): 열린 빠른 입력 막대가 컵을 덮을 때 막대 위에 겹치는 컵 복사본과 조각.
+   모두 누름을 통과시키고 transform·opacity 만 움직입니다. */
+.foil-fab.fab-ghost { position: fixed; z-index: 60; display: block; margin: 0; pointer-events: none; }
+.fab-ghost .fab-disc { margin: 0; }
+.foil-fab.fab-ghost.is-burst { animation: ghost-pop .15s ease-in both; }
+.foil-fab.is-burst .cup-body { animation: cup-squash .16s cubic-bezier(.3, .7, .4, 1); }
+.foil-fab.is-burst .cup-lid { animation: cup-peel .16s cubic-bezier(.3, .7, .4, 1) both; }
+.foil-fab.is-burst .cup-blob { animation: cup-blob .16s cubic-bezier(.2, .9, .3, 1.2); }
+.foil-fab.is-burst .cup-pp { animation: cup-pp .18s ease-out both; }
+@keyframes ghost-pop {
+    0%, 40% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: scale(1.35); }
+}
+.cup-burst {
+    --cup-j1: #9E1630;
+    --cup-j2: #5E0A1C;
+    --cup-j3: #C02A42;
+    --cup-edge: #6B7482;
+    --cup-rimside1: #C9CED6;
+    --cup-rimside2: #98A1AE;
+    position: fixed;
+    z-index: 61;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+.cup-bit {
+    position: absolute;
+    left: calc(var(--s, 8px) / -2);
+    top: calc(var(--s, 8px) / -2);
+    width: var(--s, 8px);
+    height: var(--s, 8px);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75) 0 18%, transparent 24%), linear-gradient(160deg, var(--cup-j3), var(--cup-j1) 55%, var(--cup-j2));
+    box-shadow: 0 1px 2px rgba(0,0,0,.25);
+    opacity: 0;
+    animation: cup-bit .38s var(--d, 0ms) both;
+}
+.cup-foil {
+    --s: 12px;
+    border-radius: 1px 4px 2px 3px;
+    width: 14px;
+    height: 9px;
+    background: linear-gradient(125deg, #FFFFFF 0 18%, var(--cup-rimside1) 40%, #FFFFFF 52%, var(--cup-rimside2) 78%, var(--cup-rimside1));
+    border: .5px solid var(--cup-edge);
+}
+/* 어두운 화면: 남색 바탕에서도 조각이 보이게 밝은 테두리 */
+html.dark .cup-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }
+html.dark .cup-foil { border-color: rgba(255,255,255,.8); }
+@keyframes cup-bit {
+    0% { opacity: 1; transform: translate(0, 0) scale(.4) rotate(0); animation-timing-function: cubic-bezier(.05, .8, .25, 1); }
+    45% { opacity: 1; transform: translate(calc(var(--dx) * .9), calc(var(--dy) * .9)) scale(1) rotate(calc(var(--a, 0deg) * .7)); animation-timing-function: ease-in; }
+    100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 14px)) scale(.6) rotate(var(--a, 0deg)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .foil-fab.fab-ghost.is-burst,
+    .foil-fab.is-burst .cup-body,
+    .foil-fab.is-burst .cup-lid,
+    .foil-fab.is-burst .cup-blob,
+    .foil-fab.is-burst .cup-pp,
+    .cup-bit { animation: none; }
 }

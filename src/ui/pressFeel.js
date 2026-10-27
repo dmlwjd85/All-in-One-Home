@@ -71,13 +71,18 @@ export function pressDown(target, options = {}) {
         stopWatch(button);
         pressUp(button, options);
     };
+    /* QA 1차 6번: Enter는 누르는 순간 열리면서 글자 칸으로 초점이 옮겨 가, 버튼에는 keyup이 오지 않습니다.
+       그래서 창 전체에서 Enter·Space를 뗄 때도 풀어 줍니다. */
+    const onKeyUp = (event) => { if (event.key === 'Enter' || event.key === ' ') onUp(); };
     button._pressStop = () => {
         window.removeEventListener('pointerup', onUp, true);
         window.removeEventListener('pointercancel', onUp, true);
+        window.removeEventListener('keyup', onKeyUp, true);
         button._pressStop = null;
     };
     window.addEventListener('pointerup', onUp, true);
     window.addEventListener('pointercancel', onUp, true);
+    window.addEventListener('keyup', onKeyUp, true);
     if (options.silent || !jamFeelEnabled()) return;
     playJam('pop');
     vibratePress();

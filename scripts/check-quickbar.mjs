@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { replaceRoster, saveQuick, snapshot, undo, useVaultsForTest } from '../src/lib/db.js';
+import { queuedCloudKeys, replaceRoster, saveQuick, snapshot, undo, useVaultsForTest } from '../src/lib/db.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { quickDate, quickDateLabel, textFromField } from '../src/ui/quickText.js';
 import { nameCandidates, quickSaveDate, studentNoFor, suggestKind } from '../src/ui/quickMatch.js';
@@ -87,6 +87,7 @@ const secret = await saveQuick({ text: '학폭 상담을 적습니다', kind: '�
 const secretRow = snapshot().local.records.find((row) => String(row.text || '').includes('학폭'));
 check(secret.ok && secret.message.includes('이 기기에만') && secretRow, '민감한 관찰이 이 기기에만 남지 않습니다.');
 check(!snapshot().records.some((row) => String(row.text || '').includes('학폭')), '민감한 관찰이 클라우드 목록에 있습니다.');
+check(!queuedCloudKeys().includes(`records/${secretRow?.id}`), '민감한 관찰을 클라우드에서 지우라고 올립니다.');
 check(JSON.stringify(localStore.dump() || {}).includes('학폭') && !JSON.stringify(mainStore.dump() || {}).includes('학폭'), '민감한 관찰의 저장소가 바뀌었습니다.');
 const undoneSecret = await undo();
 check(undoneSecret && !snapshot().local.records.some((row) => String(row.text || '').includes('학폭')), '민감한 관찰 되돌리기가 기기에서 지우지 않습니다.');
@@ -98,6 +99,7 @@ check(note.ok && noteId && JSON.stringify(mainStore.dump() || {}).includes('운�
 const undone = await undo();
 check(undone && !snapshot().notes.some((row) => row.text === '운동회 안내'), '되돌리기가 화면 기록에서 지우지 않습니다.');
 check(!JSON.stringify(mainStore.dump() || {}).includes('운동회 안내'), '되돌리기가 기기 저장소에서 지우지 않습니다.');
+check(queuedCloudKeys().includes(`notes/${noteId}`), '되돌리기가 클라우드 쪽을 지우지 않습니다.');
 
 await replaceRoster('1 민준\n2 민서');
 const linked = await saveQuick({ text: '민준이 발표를 잘했어요', kind: '관찰', no: 1, date: '2026-10-26' });
@@ -110,6 +112,8 @@ check(!snapshot().records.some((row) => String(row.text || '').includes('민준 
 
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => existsSync(path));
 if (!chrome) failures.push('브라우저가 없습니다.');
+
+const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 
 if (!failures.length) {
     const port = 4179;
@@ -308,6 +312,99 @@ if (!failures.length) {
             document.querySelector('[aria-label="말로 입력"]')?.click();
         });
         await page.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('키보드의 마이크'));
+
+        /* QA 1차 1번: 휴대폰 폭에서 손가락 탭만으로 + 화면(메시지·회의록)을 엽니다. '/' 단축키를 쓰지 않습니다. */
+        const tapPage = await browser.newPage();
+        await tapPage.setViewport({ width: 360, height: 780, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+        await tapPage.evaluateOnNewDocument(() => {
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-theme', 'light');
+        });
+        await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+        await tapPage.waitForSelector('.tabbar .fab');
+        await tapPage.tap('.tabbar .fab');
+        await tapPage.waitForSelector('.quick-bar.is-open .quick-paste', { timeout: 3000 }).catch(() => {});
+        const paste = await tapPage.evaluate(() => {
+            const el = document.querySelector('.quick-bar.is-open .quick-paste');
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { text: el.innerText.trim(), h: r.height, inView: r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+        });
+        check(paste && paste.text === '메시지·회의록 붙여넣기' && paste.h >= 44 && paste.inView, `휴대폰에서 빠른 입력에 '메시지·회의록 붙여넣기' 단추가 보이지 않습니다: ${JSON.stringify(paste)}`);
+        await delay(500);
+        if (paste) await tapPage.tap('.quick-bar.is-open .quick-paste');
+        const plusOpen = await tapPage.waitForSelector('[data-screen="plus"]', { timeout: 3000 }).then(() => true, () => false);
+        const tapText = async (text) => {
+            const handle = await tapPage.evaluateHandle((label) => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim().endsWith(label)) || null, text);
+            const el = handle.asElement();
+            if (!el) return false;
+            await el.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+            await el.tap();
+            return true;
+        };
+        const barGone = await tapPage.evaluate(() => !document.querySelector('.quick-bar.is-open'));
+        const moreTapped = plusOpen && await tapText('더보기');
+        const tiles = await tapPage.evaluate(() => (document.querySelector('[data-screen="plus"] [aria-label="더 보기"]')?.textContent || ''));
+        const msgTapped = moreTapped && await tapText('메시지 붙여넣기');
+        const msgOpen = msgTapped && await tapPage.waitForSelector('[data-screen="message"]', { timeout: 3000 }).then(() => true, () => false);
+        const plusState = { bar: !barGone, minutes: tiles.includes('회의록 작성'), msg: msgOpen };
+        check(plusOpen && !plusState.bar && plusState.msg && plusState.minutes, `휴대폰에서 탭으로 + 화면(메시지·회의록)이 열리지 않습니다: ${JSON.stringify({ plusOpen, ...plusState })}`);
+
+        /* 가계부 #31 연타 보호: 컵을 두 번 빠르게 탭하면 두 번째 탭이 막 열린 막대(칩)에 닿아도 저장 검사가 돌지 않습니다.
+           0.5초 뒤 일부러 누른 칩은 그대로 받습니다. */
+        await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+        await tapPage.waitForSelector('.tabbar .fab');
+        // 손가락은 컵 접시 아래쪽(가운데에서 왼쪽 10px·아래 14px)을 누릅니다. 360 폭에서는 열린 막대의 '할 일' 칩 자리입니다.
+        const cupAt = await tapPage.evaluate(() => { const r = document.querySelector('.tabbar .fab .fab-disc').getBoundingClientRect(); return { x: r.x + r.width / 2 - 10, y: r.y + r.height / 2 + 14 }; });
+        await tapPage.evaluate(() => {
+            window.__sawGhost = false;
+            new MutationObserver(() => {
+                if (document.querySelector('.fab-ghost.is-burst') && document.querySelectorAll('.cup-burst .cup-bit').length === 12) window.__sawGhost = true;
+            }).observe(document.body, { childList: true });
+        });
+        await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
+        await delay(90);
+        const under = await tapPage.evaluate(({ x, y }) => {
+            const el = document.elementFromPoint(x, y);
+            return { inBar: Boolean(el?.closest('.quick-bar.is-open')), chip: el?.closest('.quick-chip')?.dataset.kind || '' };
+        }, cupAt);
+        await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
+        await delay(400);
+        const burst = await tapPage.evaluate(() => ({
+            toast: document.querySelector('.toast')?.innerText || '',
+            open: Boolean(document.querySelector('.quick-bar.is-open')),
+            ghost: window.__sawGhost === true,
+            left: document.querySelectorAll('.fab-ghost, .cup-burst').length,
+        }));
+        check(under.inBar && under.chip, `휴대폰에서 열린 막대의 칩이 컵 자리를 덮지 않아 연타 검사를 할 수 없습니다: ${JSON.stringify(under)}`);
+        check(burst.ghost && burst.left === 0, `막대가 컵을 덮을 때 컵 복사본·쨈 방울 12개가 터지고 사라지지 않습니다: ${JSON.stringify(burst)}`);
+        check(burst.open && !burst.toast.includes('한 줄만'), `컵 연타의 두 번째 탭이 막대에서 저장 검사를 일으킵니다: ${JSON.stringify(burst)}`);
+        {
+            await delay(500);
+            await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
+            const later = await tapPage.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('한 줄만'), { timeout: 3000 }).then(() => true, () => false);
+            check(later, '연타 보호가 너무 넓어 0.5초 뒤 일부러 누른 칩도 무시합니다.');
+        }
+
+        /* QA 1차 5번: 저장이 실패하면 적던 글을 되돌려 두고, 쉬운 말로 알려 줍니다. */
+        await tapPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+        await tapPage.waitForSelector('.tabbar .fab');
+        await tapPage.evaluate(() => document.querySelector('.tabbar .fab').click());
+        await tapPage.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function () { throw new DOMException('저장 공간이 가득 찼어요', 'QuotaExceededError'); };
+            const field = document.querySelector('.quick-field');
+            field.value = '실패 확인 메모';
+            field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        });
+        await tapPage.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('그대로 있어요'), { timeout: 5000 }).catch(() => {});
+        const kept = await tapPage.evaluate(() => {
+            IDBObjectStore.prototype.put = window.__qaPut;
+            return { value: document.querySelector('.quick-field')?.value || '', toast: document.querySelector('.toast')?.innerText || '' };
+        });
+        check(kept.value === '실패 확인 메모' && kept.toast.includes('그대로 있어요'), `저장이 실패했을 때 적던 글이 사라지거나 안내가 없습니다: ${JSON.stringify(kept)}`);
+        await tapPage.close();
 
         const invitePage = await browser.newPage();
         await invitePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });

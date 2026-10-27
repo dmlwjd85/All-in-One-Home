@@ -12,6 +12,7 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { SealCup } from './ui/SealCup.jsx';
 import { playFoilPop } from './ui/sealBurst.js';
+import { guardCupBurst, playCupGhost } from './ui/cupBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
 import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
@@ -57,6 +58,7 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+    useEffect(() => guardCupBurst(), []);
 
     /* 키보드 테마는 이 기기에 둔 값만 봅니다. 테마 소리를 골라 두었으면 쉬는 틈에 파일을 받아 첫 누름부터 들리게 합니다. */
     useEffect(() => {
@@ -468,6 +470,7 @@ export default function App() {
         setQuickInvite(false);
         setQuickOpen(true);
         playFoilPop(event?.currentTarget);
+        playCupGhost(event?.currentTarget);
     }
 
     const ui = {
@@ -614,7 +617,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
+                            <Btn key={label} className="fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -625,7 +628,7 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab foil-fab" aria-label="할 일 고르기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
+                <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
                 {plus && (
                     <PlusSheet

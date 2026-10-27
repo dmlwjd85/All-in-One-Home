@@ -17,9 +17,11 @@ import {
 
 const CHIPS = ['일정', '할 일', '관찰', '메모'];
 const SPEECH_NOTE = 'ssug-gyomu-speech-notice';
+/** 저장이 안 됐을 때. 적던 글은 입력칸에 되돌려 둡니다. */
+const KEPT_NOTE = '적던 글은 쨈 버튼을 다시 누르면 그대로 있어요.';
 
 export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
-    const { showToast, data } = useUi();
+    const { showToast, data, openPlus } = useUi();
     const students = data?.students || [];
     const barRef = useRef(null);
     const lastKind = useRef('메모');
@@ -100,6 +102,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         lastKind.current = used;
         const date = quickSaveDate(used, text, dateYmd, new Date());
         const no = studentNoFor(text, students, picked.current);
+        const pickedBefore = picked.current;
         if (inputRef.current) inputRef.current.value = '';
         composing.current = null;
         picked.current = null;
@@ -111,9 +114,19 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const body = { kind: used, text, date };
         if (no) body.no = no;
         if (used === '할 일') body.due = date;
+        /* 저장이 안 되면 적던 글을 입력칸에 돌려 둡니다. 그 사이 새로 적은 글이 있으면 건드리지 않습니다. */
+        const keepText = (message) => {
+            const input = inputRef.current;
+            if (input && !input.value) {
+                input.value = text;
+                picked.current = pickedBefore;
+                setLive(text);
+            }
+            showToast(`${message} ${KEPT_NOTE}`);
+        };
         saveQuick(body, new Date()).then((result) => {
             if (!result?.ok) {
-                showToast(result?.message || '한 줄만 적어도 남길 수 있어요.');
+                keepText(result?.message || '저장하지 못했어요.');
                 return;
             }
             let message = result.message;
@@ -122,7 +135,15 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                 if (label) message = message.replace('일정에 넣었어요.', `${label} 일정에 넣었어요.`);
             }
             showToast(message, true);
-        });
+        }).catch(() => keepText('저장하지 못했어요.'));
+    }
+
+    /* 휴대폰에서 + 화면(메시지·회의록 붙여넣기)으로 가는 길. 빠른 입력을 닫고 바로 엽니다. */
+    function openPaste() {
+        try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
+        setListening(false);
+        onClose();
+        openPlus?.();
     }
 
     function saveChip(kind, event) {
@@ -227,7 +248,15 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             aria-hidden={open ? 'false' : 'true'}
             onSubmit={(event) => event.preventDefault()}
         >
-            <p className="quick-date">{quickDateLabel(dateYmd)}</p>
+            <div className="quick-head">
+                <p className="quick-date">{quickDateLabel(dateYmd)}</p>
+                <Btn
+                    className="quick-paste"
+                    tabIndex={open ? 0 : -1}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openPaste}
+                >메시지·회의록 붙여넣기</Btn>
+            </div>
             {candidates.length > 0 && (
                 <div className="quick-names" role="listbox" aria-label="이름 후보">
                     {candidates.map((student) => (
