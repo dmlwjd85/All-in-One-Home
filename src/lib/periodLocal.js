@@ -155,6 +155,13 @@ export function lastPeriod(row, local, day) {
     return last || local.count;
 }
 
+/** 시간 안내에서 건너뛸 교시. 잠긴 교시와, 과목이 하나라도 있는 날의 빈 교시입니다. */
+export function skipPeriods(row, local, day) {
+    const periods = Array.from({ length: local.count }, (_, i) => i + 1);
+    const filled = periods.some((n) => row[`p${n}`]);
+    return periods.filter((n) => isLocked(local, day, n) || (filled && !row[`p${n}`]));
+}
+
 /** 오늘만 쓰는 조퇴 시각. 날짜가 바뀌면 저절로 원래 퇴근 시각으로 돌아갑니다. */
 export function leaveFor(ymd) {
     const saved = readJson(LEAVE_KEY) || {};

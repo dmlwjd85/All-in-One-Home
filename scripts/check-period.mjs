@@ -203,6 +203,34 @@ check(items.length === 1 && items[0].title === '보충수업' && items[0].time =
 const plain = parseSchoolMessages('내일 10교시 보충수업', { now: new Date('2026-10-27T09:00:00+09:00') }).items;
 check(!plain.some((row) => /^1\s/.test(row.title)), '10교시의 1이 일정 이름에 남습니다.');
 
+/* QA 2차: 10교시만 과목이 있는 날, 출근 시각과 같은 조퇴, 모두 잠긴 날, 빈·잠긴 교시 건너뛰기, 일정 이름 찌꺼기 */
+check(local.usedCount({}, { ...sixLocal, extra: { mon: { p10: '자습' } } }) === 10, '10교시에만 과목이 있으면 10교시가 숨겨집니다.');
+check(local.usedCount({}, { ...sixLocal, extra: { mon: { p9: '자습' } } }) === 9, '9교시에만 과목이 있으면 9교시가 숨겨집니다.');
+check(/출근/.test(leaveProblem('08:30', '08:00', { workStart: '08:30', workEnd: '16:40' })), '출근 시각과 같은 조퇴 시각을 받습니다.');
+check(leaveProblem('08:31', '08:00', { workStart: '08:30', workEnd: '16:40' }) === '', '출근 1분 뒤 조퇴 시각을 막습니다.');
+const allSkip = [1, 2, 3, 4, 5, 6];
+for (const hm of ['08:42', '09:10', '12:30', '15:30']) {
+    const row = periodStatus(hm, DEFAULT_PERIODS, six, { ...opts, skip: allSkip });
+    check(row.phase === 'nolesson' && row.text === '오늘 수업은 모두 잠겼어요. 16:40에 퇴근해요.' && !/방과후|교시|점심/.test(row.text), `모두 잠긴 날 ${hm} 문구가 퇴근 기준이 아닙니다: ${row.text}`);
+}
+check(periodStatus('09:10', DEFAULT_PERIODS, six, { last: 6, skip: allSkip }).text === '오늘 수업은 모두 잠겼어요.', '퇴근 시각 없이 모두 잠긴 날 문구가 틀립니다.');
+check(periodStatus('16:41', DEFAULT_PERIODS, six, { ...opts, skip: allSkip }).phase === 'off' && periodStatus('08:10', DEFAULT_PERIODS, six, { ...opts, skip: allSkip }).phase === 'early', '모두 잠긴 날 출근 전·퇴근 뒤 문구가 바뀌었습니다.');
+check(periodStatus('09:10', DEFAULT_PERIODS, six, { ...opts, skip: [1, 2, 3] }).phase !== 'nolesson', '일부만 잠긴 날을 모두 잠긴 날로 봅니다.');
+const lateRow = { p1: '국어', p2: '수학', p3: '사회', p4: '과학', p5: '체육', p6: '음악', p9: '보충', p10: '자습' };
+check(JSON.stringify(local.skipPeriods(lateRow, tenLocal, 'mon')) === '[7,8]', `빈 7·8교시를 건너뛰지 않습니다: ${local.skipPeriods(lateRow, tenLocal, 'mon')}`);
+check(JSON.stringify(local.skipPeriods(lateRow, { ...tenLocal, cellLocks: ['mon-2'] }, 'mon')) === '[2,7,8]', '잠긴 교시를 건너뛰지 않습니다.');
+check(JSON.stringify(local.skipPeriods({}, tenLocal, 'mon')) === '[]', '과목이 없는 날에 교시를 건너뜁니다.');
+const lateLabels = Array.from({ length: 10 }, (_, i) => lateRow[`p${i + 1}`] || '');
+const lateNow = periodStatus('15:00', starts10, lateLabels, { last: 10, workEnd: '18:00', skip: local.skipPeriods(lateRow, tenLocal, 'mon') });
+check(/^9교시 보충/.test(lateNow.text) && !/[78]교시/.test(lateNow.text), `빈 교시를 '○교시까지'로 안내합니다: ${lateNow.text}`);
+const lockedNow = periodStatus('09:10', DEFAULT_PERIODS, six, { ...opts, skip: local.skipPeriods({ p1: '국어', p2: '수학', p3: '사회', p4: '과학', p5: '체육', p6: '음악' }, { ...sixLocal, cellLocks: ['mon-1'] }, 'mon') });
+check(lockedNow.text === '2교시 수학까지 30분', `잠긴 교시를 '○교시 중'으로 안내합니다: ${lockedNow.text}`);
+const msgNow = new Date('2026-10-27T09:00:00+09:00');
+for (const line of ['내일 제10교시 보충수업', '내일 11교시 보충수업', '내일 5 ~ 6 교시 보충수업', '내일 10,9교시 보충수업']) {
+    const got = parseSchoolMessages(line, { now: msgNow, periods: starts10 }).items;
+    check(got.length === 1 && got[0].title === '보충수업', `일정 이름에 찌꺼기가 남습니다(${line}): ${JSON.stringify(got.map((row) => row.title))}`);
+}
+
 /* 화면: 타이머는 홈 카드, 휴일엔 숨김, 백그라운드에서 멈춤 */
 const read = (rel) => readFileSync(join(root, rel), 'utf8');
 const timerSrc = read('src/ui/WorkTimer.jsx');
@@ -213,19 +241,25 @@ check(/useWorkClock\(fast\)/.test(homeSrc) && !/clock[,}][^\n]*= useUi\(\)/.test
 check(/leaveProblem\(draft, now\.hm/.test(timerSrc), '조퇴 시각을 확인하지 않습니다.');
 const scheduleSrc = read('src/ui/Schedule.jsx');
 check(/aria-pressed=\{editLocked\}/.test(scheduleSrc) && /칸 잠금 풀기/.test(scheduleSrc) && /칸 잠그기/.test(scheduleSrc) && /onClick=\{\(\) => lockCell\(edit\.day, edit\.period\)\}/.test(scheduleSrc), '키보드로 칸을 잠글 버튼이 없습니다.');
-check(!/잠긴 칸이에요/.test(scheduleSrc) && /\$\{locked \? '잠김'/.test(scheduleSrc), '잠긴 칸을 키보드로 열 수 없거나 읽어 주지 않습니다.');
+check(!/잠긴 칸이에요/.test(scheduleSrc) && /\$\{locked \? \(subject \? `\$\{subject\}, 잠김` : '잠김'\)/.test(scheduleSrc), '잠긴 칸을 키보드로 열 수 없거나 과목과 함께 읽어 주지 않습니다.');
+check(/\{locked \? \(subject \? `🔒 \$\{subject\}` : '🔒'\)/.test(scheduleSrc), "잠긴 칸에 '🔒 과목'이 보이지 않습니다.");
+check(/event\.key !== 'Escape' \|\| event\.nativeEvent\.isComposing/.test(scheduleSrc) && /opener\.current = event\.currentTarget/.test(scheduleSrc) && /onClick=\{closeEdit\}>닫기</.test(scheduleSrc) && /input\[name="subject"\]/.test(scheduleSrc), '칸 편집 폼을 Esc·닫기로 닫거나 포커스를 돌려주지 못합니다.');
+check(/\.tt-edit \{ scroll-margin-top: 16px; scroll-margin-bottom: calc\(96px/.test(read('src/index.css')), '폰에서 칸 편집 폼이 하단 탭에 가립니다.');
 check(/\$\{period\}\$\{eulReul\(period\)\}/.test(scheduleSrc) && !/\$\{period\}을/.test(scheduleSrc), "'5을'처럼 조사가 틀립니다.");
 const settingsSrc = read('src/ui/TimetableSettings.jsx');
 check(/if \(custom && !window\.confirm\(/.test(settingsSrc), '학교급을 바꿀 때 고친 길이를 묻지 않습니다.');
+check(/lengths\.some\(\(item, index\) => item !== saved\[index\]\)/.test(settingsSrc), '저장하지 않은 길이가 있어도 학교급을 묻지 않고 바꿉니다.');
 check(/if \(workEnd && !workStart\)/.test(settingsSrc), '출근 시각 없이 퇴근 시각만 저장됩니다.');
 check(/withUsedCount\(data\.timetable/.test(homeSrc) && /withUsedCount\(data\.timetable/.test(scheduleSrc) && /withUsedCount\(data\.timetable/.test(read('src/ui/Day.jsx')), '과목이 있는 교시를 숨기는 화면이 있습니다.');
 check(/slots\.some\(\(slot\) => slot\.label\) \? slots\.filter/.test(homeSrc) && /🔒/.test(homeSrc) && !/if \(isLocked\(local, day, index \+ 1\)\) return null/.test(homeSrc), '홈 시간표에 빈 교시가 남거나 잠긴 교시가 안 보입니다.');
 check(/!todayRest\.off && \(local\.workEnd \|\| leave\)/.test(homeSrc), '주말·휴일에도 타이머가 보입니다.');
+check(/skip: skipPeriods\(table, local, day\)/.test(homeSrc), '홈 안내가 빈 교시·잠긴 교시를 건너뛰지 않습니다.');
 check(homeSrc.indexOf('{timer}') > homeSrc.indexOf('home-hero') && homeSrc.indexOf('{timer}') < homeSrc.indexOf('home-quick'), '타이머 카드가 홈 첫 화면 위쪽에 없습니다.');
 const css = read('src/index.css');
 check(/\.home-grid\.has-leave \.home-leave \{ grid-column: 3; grid-row: 1; \}/.test(css), '넓은 화면에서 타이머가 오른쪽 위에 없습니다.');
 check(/\.tt-settings \{ max-width: 640px;/.test(css), '시간표 설정이 넓은 화면에서 옆으로 늘어납니다.');
 check(/\.tt-row strong \{ white-space: nowrap;/.test(css), "좁은 화면에서 '10교시'가 줄바꿈됩니다.");
+check(/\.tt-row \{ display: grid; grid-template-columns: 3em minmax\(0, 1fr\) 70px 84px;/.test(css) && /\.tt-row \{ grid-template-columns: 3em minmax\(0, 1fr\) 62px 72px; gap: 4px; \}/.test(css), '교시 설정 첫 열·잠금 열 폭이 줄마다 달라 줄이 어긋납니다.');
 
 const allText = ['src/lib/period.js', 'src/lib/periodLocal.js', 'src/ui/WorkTimer.jsx', 'src/ui/TimetableSettings.jsx'].map(read).join('\n');
 check(!/쓱|잼|JAM|콕/.test(allText), '금지 표기가 들어 있습니다.');

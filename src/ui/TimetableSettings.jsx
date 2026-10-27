@@ -20,7 +20,9 @@ export function TimetableSettings({ data, showToast }) {
 
     function pickLevel(level) {
         const next = String(LEVEL_LENGTH[level]);
-        const custom = local.lengths.some((item) => Number(item) > 0);
+        /* 저장한 길이뿐 아니라 아직 저장하지 않은 길이 수정도 묻습니다. */
+        const saved = allLengths(local).map(String);
+        const custom = local.lengths.some((item) => Number(item) > 0) || lengths.some((item, index) => item !== saved[index]);
         if (custom && !window.confirm('따로 고친 수업 길이가 학교급 기본값으로 바뀌어요. 바꿀까요?')) return;
         setLengths(Array.from({ length: MAX_PERIODS }, () => next));
         patchPeriodLocal({ level, lengths: [] });

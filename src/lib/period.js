@@ -40,6 +40,11 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
     }
     const last = opts.last > 0 ? Math.min(opts.last, list.length) : list.length;
     const skip = new Set(opts.skip || []);
+    /* 수업이 모두 잠긴 날은 수업·점심·방과후 문구 대신 퇴근 기준으로만 안내합니다. */
+    if (!Array.from({ length: last }, (_, i) => i + 1).some((n) => !skip.has(n))) {
+        const text = workEnd != null ? `오늘 수업은 모두 잠겼어요. ${opts.workEnd}에 ${endLabel}해요.` : '오늘 수업은 모두 잠겼어요.';
+        return { index: -1, phase: 'nolesson', minutes: workEnd != null ? workEnd - now : 0, text };
+    }
     const lengths = opts.lengths || [];
     const slotEnd = (i) => {
         const start = minutesOf(list[i]);

@@ -884,12 +884,20 @@ button.glass[aria-pressed="true"]:active {
 .tt-grid .tt-period.is-locked, .tt-grid .tt-locked { color: var(--ink-sub); box-shadow: var(--neo-inset); }
 .tt-grid .tt-locked { -webkit-touch-callout: none; user-select: none; }
 .tt-grid .solid-card { -webkit-touch-callout: none; }
+/* 칸 편집 폼은 열릴 때 화면 안으로 옵니다. 폰에서는 하단 탭에 가리지 않게 아래 여백을 둡니다. */
+.tt-edit { scroll-margin-top: 16px; scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .tt-settings { max-width: 640px; width: 100%; box-sizing: border-box; }
 .tt-work { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .tt-work label { display: grid; gap: 4px; font-weight: 700; }
 .tt-rows { display: grid; gap: 6px; }
-.tt-row { display: grid; grid-template-columns: max-content minmax(0, 1fr) 70px auto; gap: 6px; align-items: center; }
+.tt-row { display: grid; grid-template-columns: 3em minmax(0, 1fr) 70px 84px; gap: 6px; align-items: center; }
 .tt-row strong { white-space: nowrap; min-width: 40px; }
+/* 첫 열과 잠금 열은 모든 줄이 같은 폭이라 줄이 맞습니다. 좁은 화면에서는 시각이 잘리지 않게 칸을 줄입니다. */
+@media (max-width: 520px) {
+    .tt-row { grid-template-columns: 3em minmax(0, 1fr) 62px 72px; gap: 4px; }
+    .tt-row input[type="time"] { padding-left: 8px; padding-right: 8px; }
+    .tt-row input[type="time"]::-webkit-calendar-picker-indicator { display: none; }
+}
 .tt-row.is-locked strong { color: var(--ink-sub); }
 .tt-len { display: flex; align-items: center; gap: 4px; font-weight: 700; }
 .tt-len .field { min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }

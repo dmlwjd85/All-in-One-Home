@@ -155,6 +155,20 @@ function Timetable({ data, todayKey, weekStart, events }) {
     const { showToast } = useUi();
     const local = withUsedCount(data.timetable, usePeriodLocal());
     const press = useRef({ timer: 0, held: false });
+    /* 편집 칸을 연 칸. 닫으면 포커스를 이 칸으로 돌려 줍니다. */
+    const opener = useRef(null);
+    const formRef = useRef(null);
+    const editKey = edit ? `${edit.day}-${edit.period}` : '';
+    useEffect(() => {
+        if (!editKey || !formRef.current) return;
+        formRef.current.querySelector('input[name="subject"]')?.focus({ preventScroll: true });
+        formRef.current.scrollIntoView({ block: 'nearest' });
+    }, [editKey]);
+    function closeEdit() {
+        const back = opener.current;
+        if (back?.isConnected) back.focus();
+        setEdit(null);
+    }
     const count = local.count;
     /* 칸 잠금. 길게 누르기와 편집 칸의 잠금 버튼이 같이 씁니다. */
     function lockCell(dayKey, period) {
@@ -214,34 +228,43 @@ function Timetable({ data, todayKey, weekStart, events }) {
                     const locked = isLocked(local, day.key, index + 1);
                     const subject = row[`p${index + 1}`] || '';
                     return (
-                        <Btn key={`${day.key}-${index}`} className={locked ? 'solid-card block tt-locked' : 'solid-card block'} aria-label={`${day.label} ${index + 1}교시 ${locked ? '잠김' : (subject || '비움')}${!locked && row[`s${index + 1}`] ? ' 전담' : ''}`} style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: index + 2 }}
+                        <Btn key={`${day.key}-${index}`} className={locked ? 'solid-card block tt-locked' : 'solid-card block'} aria-label={`${day.label} ${index + 1}교시 ${locked ? (subject ? `${subject}, 잠김` : '잠김') : (subject || '비움')}${!locked && row[`s${index + 1}`] ? ' 전담' : ''}`} style={{ gridColumn: DAYS.findIndex(([key]) => key === day.key) + 2, gridRow: index + 2 }}
                             onPointerDown={() => holdStart(day.key, index + 1)} onPointerUp={holdEnd} onPointerLeave={holdEnd} onPointerCancel={holdEnd}
                             onContextMenu={(event) => event.preventDefault()}
-                            onClick={() => {
+                            onClick={(event) => {
                             if (press.current.held) { press.current.held = false; return; }
+                            opener.current = event.currentTarget;
                             setEdit({ day: day.key, label: day.label, period: index + 1, subject });
                             setSpecialOn(Boolean(row[`s${index + 1}`]));
                         }}>
-                            {locked ? '🔒 잠김' : <>{row[`p${index + 1}`] || '비움'}{row[`s${index + 1}`] ? ' 전담' : ''}</>}
+                            {locked ? (subject ? `🔒 ${subject}` : '🔒') : <>{row[`p${index + 1}`] || '비움'}{row[`s${index + 1}`] ? ' 전담' : ''}</>}
                         </Btn>
                     );
                 })))}
             </div>
             {edit && (
-                <form className="solid-card" style={{ padding: 12, marginTop: 12 }} onSubmit={async (event) => {
+                <form key={editKey} ref={formRef} className="solid-card tt-edit" style={{ padding: 12, marginTop: 12 }} onKeyDown={(event) => {
+                    if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeEdit();
+                }} onSubmit={async (event) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
                     const saved = await setTimetable(edit.day, edit.period, String(form.get('subject') || ''), specialOn ? '전담' : '');
                     if (saved?.storageFailed) return;
-                    setEdit(null);
+                    closeEdit();
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                         <strong>{edit.label} {edit.period}교시</strong>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
                         {local.locks.includes(edit.period) ? (
                             <span className="muted">🔒 {edit.period}교시 전체가 잠겨 있어요</span>
                         ) : (
                             <Btn className={editLocked ? 'chip on' : 'chip'} aria-pressed={editLocked} aria-label={editLocked ? `${edit.label} ${edit.period}교시 칸 잠금 풀기` : `${edit.label} ${edit.period}교시 칸 잠그기`} onClick={() => lockCell(edit.day, edit.period)}>{editLocked ? '🔒 잠금 풀기' : '이 칸 잠그기'}</Btn>
                         )}
+                        <Btn className="chip" aria-label={`${edit.label} ${edit.period}교시 편집 닫기`} onClick={closeEdit}>닫기</Btn>
+                        </div>
                     </div>
                     <input className="field" name="subject" aria-label="과목" defaultValue={edit.subject} style={{ marginTop: 8 }} />
                     <Btn className={specialOn ? 'chip on' : 'chip'} style={{ marginTop: 8 }} onClick={() => setSpecialOn((value) => !value)}>{specialOn ? '전담 시간이에요' : '전담 아님'}</Btn>

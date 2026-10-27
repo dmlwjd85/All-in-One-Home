@@ -9,7 +9,7 @@ import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
-import { allLengths, allStarts, isLocked, lastPeriod, tableRow, withUsedCount } from '../lib/periodLocal.js';
+import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, tableRow, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
 
@@ -26,7 +26,7 @@ export function Home() {
     const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
     const period = periodStatus(clock.hm, allStarts(data.profile.periodStarts, local), labels, {
         last: lastPeriod(table, local, day),
-        skip: labels.map((_, index) => index + 1).filter((n) => isLocked(local, day, n)),
+        skip: skipPeriods(table, local, day),
         lengths: allLengths(local),
         workStart: local.workStart,
         workEnd: leave || local.workEnd,

@@ -347,14 +347,14 @@ export function tidyTitle(text) {
     t = t.replace(/(?:^|\s)(?:오전|오후)(?=\s|$)/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?:이|가)?\s*(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?\s*(?:으로|로|에|까지)?/g, ' ');
+    t = t.replace(/(?:(?<![가-힣])제\s*)?(?:10|\d)\s*[~～\-–—]\s*(?:10|\d)\s*교시/g, ' ');
     t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
     t = t.replace(/ㅎㅎ|ㅋㅋ|ㅠㅠ|ㅜㅜ|ㅋ{2,}|ㅎ{2,}/g, ' ');
     t = t.replace(/(?<![\d~～])[~～]+(?![\d~～])/g, ' ');
     t = t.replace(/점심\s*시간|점심/g, ' ');
     if (afterSchoolIsClock(t)) t = t.replace(/방과\s*후(?:\s*에|\s*까지)?(?:\s*시간)?(?:에|까지)?/g, ' ');
-    t = t.replace(/(?:10|\d)\s*[~～\-–—]\s*(?:10|\d)\s*교시/g, ' ');
-    t = t.replace(/(?:10|\d)(?:\s*[,·]\s*(?:10|\d))+\s*교시/g, ' ');
-    t = t.replace(/(?:10|\d)\s*교시(?!\s*보결)(?:\s*까지)?/g, ' ');
+    t = t.replace(/(?:(?<![가-힣])제\s*)?(?:10|\d)(?:\s*[,·]\s*(?:10|\d))+\s*교시/g, ' ');
+    t = t.replace(/(?:(?<![가-힣])제\s*)?\d{1,2}\s*교시(?!\s*보결)(?:\s*까지)?/g, ' ');
     t = t.replace(/(?:^|\s)\d{1,2}[.)](?=\s)/g, ' ');
     t = t.replace(/(?:을|를)\s*(제출|회신|작성|입력|업로드|탑재)/g, ' $1');
     t = t.replace(/알려\s*주(?:세요|십시요|시기\s*바랍니다)?/g, '회신');
@@ -481,7 +481,7 @@ function salvageTitle(text) {
     t = t.replace(/(?<!\d)\d{1,2}\s*:\s*\d{2}/g, ' ');
     t = t.replace(/(?<!\d)\d{1,2}\s*시(?!간)(?:\s*\d{1,2}\s*분|\s*반)?/g, ' ');
     t = t.replace(/(?:^|\s)[~～\-–—]+(?=\s|$)/g, ' ');
-    t = t.replace(/점심\s*시간|(?:10|\d)\s*교시(?!\s*보결)/g, ' ');
+    t = t.replace(/점심\s*시간|(?:(?<![가-힣])제\s*)?\d{1,2}\s*교시(?!\s*보결)/g, ' ');
     t = t.replace(/(?:선생님들?\s*)?(?:항상\s*)?수고\s*많(?:으셨습니다|으십니다|습니다|으)/g, ' ');
     t = t.replace(/앞당겨(?:졌습니다|졌어요|집니다|요)?/g, ' ');
     t = t.replace(/연기된|연기한|미뤄진|미루어진/g, ' ');
@@ -762,7 +762,7 @@ const PERIOD_VERB_TAIL = '(?:되었(?:습니다|어요)?|됐습니다|됩니다|
 
 /** 붙어 있는 교시만 범위로 묶습니다. 떨어진 교시는 그대로 두어 카드로 나눕니다. */
 function listPeriodTokens(text) {
-    return String(text || '').replace(/(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g, (all, left, right) => (
+    return String(text || '').replace(/(?<!\d)(10|\d)\s*교시\s*(?:와|과|,|，)\s*(10|\d)\s*교시(?!\s*(?:에서|으로|로))/g, (all, left, right) => (
         Math.abs(Number(left) - Number(right)) === 1 ? `${left},${right}교시` : all
     ));
 }
@@ -770,7 +770,7 @@ function listPeriodTokens(text) {
 /** 2교시와 5교시, 2,5교시처럼 사이가 벌어진 교시는 교시마다 문장으로 나눕니다. */
 function splitListedPeriods(text) {
     const src = String(text || '');
-    const re = /(\d)\s*교시\s*(?:와|과|,|，)\s*(\d)\s*교시(?!\s*(?:에서|으로|로))|(\d)\s*[,·，]\s*(\d)\s*교시(?!\s*(?:에서|으로|로))/g;
+    const re = /(?<!\d)(10|\d)\s*교시\s*(?:와|과|,|，)\s*(10|\d)\s*교시(?!\s*(?:에서|으로|로))|(?<!\d)(10|\d)\s*[,·，]\s*(10|\d)\s*교시(?!\s*(?:에서|으로|로))/g;
     let found = null;
     let match = re.exec(src);
     while (match) {
