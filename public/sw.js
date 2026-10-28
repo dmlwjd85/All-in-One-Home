@@ -5,7 +5,7 @@
    cache:'no-cache'로 받아서, 브라우저가 10분짜리 사본을 새 파일인 것처럼 쓰지 않게 합니다.
    목록 주소에도 캐시 이름을 붙입니다. 예전 등록은 importScripts 만 HTTP 캐시를 보므로,
    같은 주소의 옛 목록을 읽으면 없는 파일로 설치가 실패합니다. */
-const CACHE = 'ssug-gyomu-shell-v33';
+const CACHE = 'ssug-gyomu-shell-v34';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts(`./precache-manifest.js?v=${CACHE}`);

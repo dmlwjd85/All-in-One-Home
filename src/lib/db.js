@@ -8,7 +8,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, deleteUserDoc, pullUserData, pushUserData, syncAvailable, unchangedSincePush } from './cloud.js';
-import { localSettingAts, PERIOD_KEYS } from './cloudShape.js';
+import { localSettingAts, PERIOD_KEYS, toCloudRow } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
@@ -295,7 +295,7 @@ export async function flushCloud() {
  * pushUserData는 setDoc(merge)만 하므로, 지우지 않으면 다음에 당겨 올 때 되살아납니다.
  * 대기열은 메모리에만 두고 새 저장 키는 만들지 않습니다. 로그인 전이면 대기열에만 남습니다.
  */
-const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices'];
+const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices', 'attendance'];
 const cloudForget = new Set();
 
 /** 검사에서 클라우드 삭제 대기열을 봅니다. */
@@ -852,12 +852,18 @@ export async function promoteInbox(id) {
     return result;
 }
 
+/* 출석으로 되돌린 줄은 클라우드 문서도 지웁니다. 안 지우면 다음 받기에서 예전 결석·지각이 되살아납니다. */
+function forgetAttendance(row) {
+    const shaped = row ? toCloudRow('attendance', row) : null;
+    if (shaped?.id) queueCloudForget('attendance', shaped.id);
+}
+
 export async function setAttendance(date, sid, status, extra = {}) {
     return update((draft) => {
         const id = `${date}_${sid}`;
         const index = draft.attendance.findIndex((row) => row.id === id);
         if (!status || status === '출석') {
-            if (index >= 0) draft.attendance.splice(index, 1);
+            if (index >= 0) forgetAttendance(draft.attendance.splice(index, 1)[0]);
         } else if (index >= 0) {
             draft.attendance[index] = {
                 ...draft.attendance[index],
@@ -890,7 +896,7 @@ export async function cycleAttendance(date, sid) {
         const current = index >= 0 ? draft.attendance[index].status : '';
         const next = CYCLE[(CYCLE.indexOf(current) + 1) % (CYCLE.length + 1)] || '';
         if (!next) {
-            if (index >= 0) draft.attendance.splice(index, 1);
+            if (index >= 0) forgetAttendance(draft.attendance.splice(index, 1)[0]);
         } else if (index >= 0) draft.attendance[index] = { ...draft.attendance[index], status: next };
         else draft.attendance.unshift({ id, date, sid, status: next, reason: '', note: '', paper: false, source: 'app' });
         if (!draft.profile.checkedDates.includes(date)) draft.profile.checkedDates.push(date);

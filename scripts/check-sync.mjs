@@ -1,6 +1,6 @@
 /** 웹·태블릿·휴대폰 동기화: 받은 자료를 합칠 때 잃는 것 없이, 고친 쪽이 이기는지 클라우드 없이 확인합니다. */
 import { readFileSync } from 'node:fs';
-import { absorbCloudForTest, clippedCopy, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
+import { absorbCloudForTest, clippedCopy, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
@@ -193,6 +193,31 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
     check(/tellStorageIssue\(cloudRejectedMessage\(keys\)\)/.test(dbSrc), '거절 알림이 화면 알림으로 가지 않습니다.');
     check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');
+}
+
+/* 11) 출결 고치기가 다음 받기에서 되돌아가지 않습니다. */
+{
+    const base = { id: '2026-10-27_s9', date: '2026-10-27', sid: 's9', status: '결석', reason: '질병', note: '병원', period: '', paper: false, source: 'app' };
+    const shaped = toCloudRow('attendance', { ...base, reason: '', note: '' });
+    check(['reason', 'note', 'period'].every((k) => (shaped.clear || []).includes(k)), `비운 출결 칸을 클라우드에서 지우지 않습니다: ${JSON.stringify(shaped.clear)}`);
+    check(!(toCloudRow('attendance', base).clear || []).includes('reason'), '채운 사유를 지우라고 합니다.');
+    /* 클라우드 병합 결과를 흉내 냅니다: 예전 문서 + 새 본문 − 지울 칸 */
+    const oldDoc = toCloudRow('attendance', base).body;
+    const merged = { ...oldDoc, ...shaped.body };
+    (shaped.clear || []).forEach((k) => { delete merged[k]; });
+    const edited = { ...base, reason: '', note: '' };
+    await absorbCloudForTest({ attendance: [edited] }, {});
+    const h = Object.fromEntries([mark('attendance', edited)]);
+    await absorbCloudForTest({ attendance: [fromCloudRow('attendance', shaped.id, merged)] }, h);
+    const got = snapshot().attendance.find((r) => r.id === base.id);
+    check(got && got.reason === '' && got.note === '', `고친 출결이 예전 사유·메모로 돌아왔습니다: ${JSON.stringify(got)}`);
+    /* 출석으로 되돌리면 클라우드 문서를 지우도록 줄을 세웁니다. 안 그러면 다음 받기에서 예전 결석이 되살아납니다. */
+    await setAttendance('2026-10-27', 's9', '출석');
+    check(!snapshot().attendance.some((r) => r.id === base.id), '출석으로 되돌린 줄이 남았습니다.');
+    check(queuedCloudKeys().includes('attendance/2026-10-27_s9'), '출석으로 되돌린 출결의 클라우드 삭제가 줄에 없습니다.');
+    await setAttendance('2026-10-28', 's9', '지각');
+    for (let i = 0; i < 8 && snapshot().attendance.some((r) => r.id === '2026-10-28_s9'); i += 1) await cycleAttendance('2026-10-28', 's9');
+    check(!snapshot().attendance.some((r) => r.id === '2026-10-28_s9') && queuedCloudKeys().includes('attendance/2026-10-28_s9'), '눌러 돌리기로 지운 출결의 클라우드 삭제가 줄에 없습니다.');
 }
 
 if (failures.length) {
