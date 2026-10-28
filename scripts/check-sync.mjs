@@ -4,6 +4,9 @@ import { absorbCloudForTest, snapshot, useVaultsForTest } from '../src/lib/db.js
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
+import { resolveHash } from '../src/lib/routes.js';
+import { MENU, menuSelected } from '../src/ui/menu.js';
+import { isMinutes, minutesList, minutesProblem, minutesRow, minutesTitle, readMinutesDraft, writeMinutesDraft } from '../src/lib/minutes.js';
 
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -105,6 +108,58 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     const cloudSrc = readFileSync('src/lib/cloud.js', 'utf8');
     check(/if \(set\.exists\(\)\) out\.settings = fromCloudSettings\(set\.data\(\)\);/.test(cloudSrc), '받기에서 settings/device 를 읽어 넣지 않습니다.');
     check(/runTransaction[\s\S]{0,400}mergeSettings/.test(cloudSrc), '설정 올리기가 클라우드 값과 칸 단위로 합치지 않고 통째로 덮습니다.');
+}
+
+/* 8) 회의록: 여러 줄 본문·제목·참석자 왕복, #38 옛 회의록('meet-…', 제목 없음) 그대로 읽기, 임시 저장. */
+{
+    const body = '안건\n- 체험학습 장소\n\n결정\n- 다음 주 금요일\r\n할 일\n- 동의서 회수   ';
+    const row = minutesRow({ title: ' 학년 협의회 ', date: '2026-10-28', attendees: '김선생, 이선생', text: body, tags: ['학년회의'] }, 1761600000000);
+    check(row.id === 'meet-1761600000000' && row.title === '학년 협의회' && row.tags[0] === '회의' && row.tags.includes('학년회의'), `새 회의록 모양이 다릅니다: ${JSON.stringify(row)}`);
+    check(row.text.split('\n').length === 7 && !row.text.includes('\r') && row.text.endsWith('동의서 회수'), `회의록 줄바꿈이 보존되지 않습니다: ${JSON.stringify(row.text)}`);
+    const up = toCloudRow('notes', row);
+    check(up && up.body.title === '학년 협의회' && up.body.attendees === '김선생, 이선생' && up.body.text === row.text, `회의록이 올릴 모양에서 칸을 잃었습니다: ${JSON.stringify(up)}`);
+    const back = fromCloudRow('notes', up.id, up.body);
+    check(back.text === row.text && back.title === row.title && back.attendees === row.attendees && back.date === row.date && isMinutes(back), `회의록이 다른 기기에서 그대로 오지 않습니다: ${JSON.stringify(back)}`);
+    const long = toCloudRow('notes', { ...row, text: '가'.repeat(19000) });
+    check(long?.body.text.length === 19000, '긴 회의록 본문(19000자)이 잘렸습니다.');
+    const old = { id: 'meet-1761500000000', text: '학년회의 14:00 체험학습 안내', date: '2026-10-20', tags: ['회의', '학년회의'], pinned: false, source: 'app' };
+    const oldUp = toCloudRow('notes', old);
+    check(oldUp && !('title' in oldUp.body) && !('attendees' in oldUp.body), `옛 회의록에 없는 칸이 붙었습니다: ${JSON.stringify(oldUp?.body)}`);
+    const oldBack = fromCloudRow('notes', oldUp.id, oldUp.body);
+    check(oldBack.text === old.text && isMinutes(oldBack) && minutesTitle(oldBack) === '학년회의', `옛 회의록을 회의록으로 읽지 못했습니다: ${JSON.stringify(oldBack)}`);
+    check(minutesTitle({ text: '\n  첫 줄 제목\n둘째', tags: ['회의'] }) === '첫 줄 제목' && minutesTitle({ id: 'meet-1', text: '' }) === '제목 없는 회의록', '회의록 제목 대신 보여 줄 글이 다릅니다.');
+    const edited = minutesRow({ id: old.id, title: '고친 제목', date: old.date, text: `${old.text}\n추가 줄`, tags: old.tags });
+    check(edited.id === old.id && edited.tags.join() === '회의,학년회의', `옛 회의록을 고치면 id·회의 종류가 바뀝니다: ${JSON.stringify(edited)}`);
+    const list = minutesList([{ id: 'note-1', text: '그냥 메모', tags: [] }, old, row]);
+    check(list.length === 2 && list[0].id === row.id, `회의록 목록이 메모를 섞거나 날짜순이 아닙니다: ${JSON.stringify(list.map((it) => it.id))}`);
+    check(minutesProblem({ title: '', date: '2026-10-28', text: 'a' }) && minutesProblem({ title: 'a', date: '', text: 'a' }) && minutesProblem({ title: 'a', date: '2026-10-28', text: ' \n ' }) && !minutesProblem({ title: 'a', date: '2026-10-28', text: 'a\nb' }), '회의록 저장 전 확인이 다릅니다.');
+    const mem = new Map();
+    const store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    writeMinutesDraft('new', { title: '쓰는 중', text: '첫 줄\n둘째 줄' }, store);
+    writeMinutesDraft(old.id, { title: '고치는 중', text: 'x' }, store);
+    check(readMinutesDraft('new', store)?.text === '첫 줄\n둘째 줄' && readMinutesDraft(old.id, store)?.title === '고치는 중', '회의록 임시 저장을 다시 읽지 못합니다.');
+    writeMinutesDraft('new', null, store);
+    check(!readMinutesDraft('new', store) && readMinutesDraft(old.id, store), '임시 저장 하나를 지우면 다른 임시 저장까지 지워집니다.');
+    store.setItem('ssug-gyomu-minutes-draft', '{깨짐');
+    check(readMinutesDraft('new', store) === null, '깨진 임시 저장에서 멈춥니다.');
+    const ui = readFileSync('src/ui/Minutes.jsx', 'utf8');
+    const area = ui.match(/<Area id="minutes-text"[\s\S]*?\/>\n/)?.[0] || '';
+    check(area && !/onKeyDown|onKeyUp|onKeyPress/.test(area), '회의록 본문 칸이 키를 가로챕니다(Enter는 줄바꿈이어야 합니다).');
+    check(!/<form/.test(ui), '회의록 화면에 form이 있어 Enter로 제출될 수 있습니다.');
+    const app = readFileSync('src/App.jsx', 'utf8');
+    check(!app.includes("setFlow({ id: 'minutes' })"), "회의록이 아직 Enter로 저장되는 예전 흐름(FlowSheet)으로 열립니다.");
+}
+
+/* 9) 회의록 주소와 메뉴 */
+{
+    const t = '2026-10-28';
+    const r = (h) => resolveHash(h, t);
+    check(r('#/minutes').name === 'minutes' && r('#/minutes').params.mode === 'list', '#/minutes 가 회의록 목록이 아닙니다.');
+    check(r('#/minutes/new').params.mode === 'new', '#/minutes/new 가 새 회의록이 아닙니다.');
+    check(r('#/minutes/meet-1761600000000').params.mode === 'view' && r('#/minutes/meet-1761600000000').params.id === 'meet-1761600000000', '회의록 보기 주소가 다릅니다.');
+    check(r('#/minutes/meet-1/edit').params.mode === 'edit', '회의록 고치기 주소가 다릅니다.');
+    check(r('#/minutes/<script>').params.mode === 'list' && r('#/minutes/<script>').replace === '#/minutes', '이상한 회의록 주소를 목록으로 돌리지 않습니다.');
+    check(MENU.some(([label, href]) => label === '회의록' && href === '#/minutes') && menuSelected('minutes', '#/minutes'), '메뉴에 회의록이 없습니다.');
 }
 
 if (failures.length) {
