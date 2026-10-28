@@ -56,6 +56,7 @@ jobs:
           npm run check:gcal
           npm run check:period
           npm run check:five
+          npm run check:sync
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules
@@ -70,6 +71,7 @@ jobs:
         run: |
           npm run check:seal
           npm run check:quickbar
+          npm run check:academic
           for day in 2026-10-23 2026-10-24 2026-10-25 2026-10-26 2026-10-31 2026-11-01 2026-12-25 2026-12-31 2027-01-01; do
             echo "브라우저 시계 ${day}"
             FIXED_NOW="${day}T08:42:00+09:00" npm run check:browser

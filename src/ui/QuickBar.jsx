@@ -68,9 +68,15 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!Ctor || typeof Ctor.available !== 'function') return undefined;
         let cancel = false;
-        Ctor.available({ langs: ['ko-KR'], processLocally: true }).then((status) => {
-            if (!cancel) localSpeech.current = status === 'available';
-        }).catch(() => {});
+        /* 브라우저마다 available 이 없거나, 던지거나, 약속(Promise)이 아닌 값을 돌려줍니다. 어느 쪽이든 팝업은 그대로 엽니다. */
+        try {
+            const asked = Ctor.available({ langs: ['ko-KR'], processLocally: true });
+            Promise.resolve(asked).then((status) => {
+                if (!cancel) localSpeech.current = status === 'available';
+            }).catch(() => {});
+        } catch {
+            localSpeech.current = false;
+        }
         return () => { cancel = true; };
     }, [open]);
 
@@ -241,6 +247,13 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const candidates = nameCandidates(live, students);
 
     return (
+        <>
+        <div
+            className={`quick-scrim${open ? ' is-open' : ''}`}
+            aria-hidden="true"
+            data-quick-scrim="1"
+            onClick={() => onClose()}
+        />
         <form
             ref={barRef}
             className={`quick-bar${open ? ' is-open' : ''}${invite ? ' is-invite' : ''}`}
@@ -256,6 +269,13 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={openPaste}
                 >메시지·회의록 붙여넣기</Btn>
+                <Btn
+                    className="quick-close"
+                    aria-label="쨈 빠른 입력 닫기"
+                    tabIndex={open ? 0 : -1}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onClose()}
+                >✕</Btn>
             </div>
             {candidates.length > 0 && (
                 <div className="quick-names" role="listbox" aria-label="이름 후보">
@@ -311,5 +331,6 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                 ))}
             </div>
         </form>
+        </>
     );
 }

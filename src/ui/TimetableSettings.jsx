@@ -8,7 +8,7 @@ import { Btn } from './bits.jsx';
 const COUNTS = [5, 6, 7, 8, 9, 10];
 const LEVEL_NAME = { 초: '초등학교', 중: '중학교', 고: '고등학교' };
 
-/** 교시 수·시작 시각·수업 길이·잠금·출퇴근 시각. 1~8교시 시작 시각만 계정에 저장되고, 나머지는 이 기기에만 둡니다. */
+/** 교시 수·시작 시각·수업 길이·잠금·출퇴근 시각. 로그인하면 settings/device 문서로 다른 기기와 같이 씁니다(오늘 조퇴 시각만 이 기기). */
 export function TimetableSettings({ data, showToast }) {
     const local = usePeriodLocal();
     const [starts, setStarts] = useState(() => allStarts(data.profile.periodStarts, local));
@@ -32,7 +32,7 @@ export function TimetableSettings({ data, showToast }) {
     return (
         <section className="glass tt-settings" style={{ padding: 14 }} aria-label="시간표와 출퇴근">
             <h2 className="title-font" style={{ marginTop: 0 }}>시간표와 출퇴근</h2>
-            <p className="muted" style={{ marginTop: 0 }}>출근·퇴근 시각을 함께 적어 두면 출근 뒤부터 홈에 퇴근까지 남은 시간이 보여요. 비워 두면 타이머는 숨어요. 이 기기에만 저장해요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>출근·퇴근 시각을 함께 적어 두면 출근 뒤부터 홈에 퇴근까지 남은 시간이 보여요. 비워 두면 타이머는 숨어요. 로그인하면 웹·태블릿·휴대폰이 같이 써요.</p>
             <div className="tt-work">
                 <label>
                     <span className="muted">출근</span>
@@ -67,7 +67,7 @@ export function TimetableSettings({ data, showToast }) {
             </div>
 
             <h3 style={{ margin: '18px 0 6px', fontSize: 16 }}>교시별 시작과 길이</h3>
-            <p className="muted" style={{ marginTop: 0 }}>잠근 교시는 홈에 🔒로 보이고 시간 안내에서 빠져요. 9·10교시는 이 기기에만 저장해요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>잠근 교시는 홈에 🔒로 보이고 시간 안내에서 빠져요. 9·10교시도 로그인하면 다른 기기와 같이 써요.</p>
             {count > local.count && <p className="muted" style={{ marginTop: 0 }}>시간표에 {count}교시까지 과목이 있어서 {count}교시까지 보여 드려요. 과목을 지우면 정한 교시 수로 돌아가요.</p>}
             <div className="tt-rows">
                 {Array.from({ length: count }, (_, index) => {

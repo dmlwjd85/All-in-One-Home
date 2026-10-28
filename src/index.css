@@ -409,27 +409,72 @@ a.chip,
     padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
     box-shadow: 0 -10px 24px rgba(46, 42, 43, .16);
 }
+/* 쨈 팝업: 아래 탭 바는 그대로 두고 그 위에 카드로 뜹니다(가계부처럼 컵 자리에서 펼쳐짐).
+   닫기: ✕ · 바탕 누르기 · 뒤로 가기 · 쨈 버튼 다시. 키보드가 올라오면 키보드 바로 위로 옮깁니다. */
+.quick-scrim {
+    position: fixed;
+    z-index: 44;
+    inset: 0 0 calc(70px + env(safe-area-inset-bottom)) 0;
+    background: rgba(46, 42, 43, .28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+}
+.quick-scrim.is-open { opacity: 1; pointer-events: auto; }
 .quick-bar {
+    --quick-bottom: calc(70px + env(safe-area-inset-bottom) + 10px);
     position: fixed;
     z-index: 45;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    left: 10px;
+    right: 10px;
+    bottom: var(--quick-bottom);
+    max-width: 560px;
+    margin: 0 auto;
     display: grid;
     gap: 8px;
-    margin: 0;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    padding: 10px 12px 12px;
     background: var(--bg);
-    border-radius: 18px 18px 0 0;
-    box-shadow: 0 -8px 20px rgba(46, 42, 43, .16);
-    transform: translateY(140%);
+    border-radius: 22px;
+    box-shadow: 0 10px 30px rgba(46, 42, 43, .22), 0 0 0 1px var(--line);
+    transform: translateY(24px);
     opacity: 0;
     pointer-events: none;
 }
 .quick-bar.is-open {
-    transform: translateY(calc(-1 * var(--quick-lift, 0px)));
+    /* 키보드가 탭 바를 가리면(lift 가 탭 바보다 크면) 키보드 위 8px 에 붙습니다. */
+    transform: translateY(calc(-1 * max(0px, var(--quick-lift, 0px) - var(--quick-bottom) + 8px)));
     opacity: 1;
     pointer-events: auto;
+}
+@media (min-width: 900px) {
+    .quick-scrim { inset: 0; }
+    .quick-bar { --quick-bottom: 128px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .quick-bar.is-bloom {
+        -webkit-mask: radial-gradient(circle closest-side, #000 calc(100% - 1px), transparent) calc(var(--bloom-x, 50%) - 150vmax) calc(var(--bloom-y, 100%) - 150vmax) / 300vmax 300vmax no-repeat;
+        mask: radial-gradient(circle closest-side, #000 calc(100% - 1px), transparent) calc(var(--bloom-x, 50%) - 150vmax) calc(var(--bloom-y, 100%) - 150vmax) / 300vmax 300vmax no-repeat;
+        animation: quick-bloom .3s cubic-bezier(.25, .8, .25, 1) backwards;
+    }
+}
+@keyframes quick-bloom {
+    from {
+        -webkit-mask-size: 48px 48px; mask-size: 48px 48px;
+        -webkit-mask-position: calc(var(--bloom-x, 50%) - 24px) calc(var(--bloom-y, 100%) - 24px);
+        mask-position: calc(var(--bloom-x, 50%) - 24px) calc(var(--bloom-y, 100%) - 24px);
+    }
+}
+.quick-close {
+    flex: 0 0 auto;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 14px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink-sub);
 }
 .quick-date {
     margin: 0;
@@ -446,6 +491,7 @@ a.chip,
 }
 .quick-paste {
     flex: 0 0 auto;
+    margin-left: auto;
     padding: 0 12px;
     border-radius: 14px;
     background: var(--bg);
@@ -488,7 +534,7 @@ a.chip,
     border-radius: 14px;
 }
 .quick-bar.is-open ~ .toast {
-    bottom: calc(260px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
+    bottom: calc(340px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
 }
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
@@ -1031,3 +1077,35 @@ button.glass[aria-pressed="true"]:active {
 .day-tt-cell { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 12px; }
 .term-tile .term-date { white-space: nowrap; }
 .event-line-text { display: block; width: 100%; min-height: 44px; margin: 0 0 8px; padding: 4px; text-align: left; border-radius: 12px; overflow-wrap: anywhere; font-weight: inherit; }
+
+/* 설정 > 학사일정: 넣을 칸 고르기 + 한 번 누르는 달력 */
+.acad-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
+.acad-field { min-height: 56px; flex-direction: column; gap: 2px; padding: 6px 4px; }
+.acad-field strong { font-size: 14px; }
+.acad-month { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 6px; }
+.acad-nav { width: 44px; min-width: 44px; height: 44px; font-size: 20px; }
+.acad-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.acad-week { text-align: center; font-size: 12px; padding: 2px 0; }
+.acad-day {
+    min-width: 0; min-height: 44px; padding: 2px 0; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+    background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-size: 14px;
+}
+.acad-day.is-out { opacity: .45; }
+.acad-day[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+.acad-day.is-offDays { background: var(--accent); color: var(--on-primary); }
+.acad-mark { font-size: 10px; line-height: 1.1; font-weight: 800; white-space: nowrap; }
+.acad-problem { color: var(--danger, #c0392b); font-weight: 800; margin: 8px 0 0; }
+/* 설정 > 기본 시간표 */
+.dtt-grid { display: grid; gap: 4px; align-items: center; }
+.dtt-head { text-align: center; font-size: 14px; }
+.dtt-period { text-align: center; font-size: 13px; }
+.dtt-cell { min-width: 0; min-height: 44px; padding: 0 4px; text-align: center; font-size: 14px; }
+.default-tt .term-fill { margin-top: 12px; }
+@media (min-width: 900px) {
+    .acad-grid, .acad-month { max-width: 520px; }
+}
+/* 360px 폭에서도 날짜 칸이 44px 이상: 달력만 카드 안쪽 여백까지 넓히고 틈을 줄입니다. */
+@media (max-width: 400px) {
+    .academic .acad-grid { margin: 0 -10px; gap: 1px; }
+}

@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -118,7 +119,12 @@ if (!chrome) failures.push('브라우저가 없습니다.');
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 
 if (!failures.length) {
-    const port = 4179;
+    /* 다른 검사·미리보기와 겹치지 않게: QUICKBAR_PORT 가 있으면 그 값, 없으면 빈 포트를 고릅니다. */
+    const port = Number(process.env.QUICKBAR_PORT) || await new Promise((done, fail) => {
+        const probe = createServer();
+        probe.once('error', fail);
+        probe.listen(0, '127.0.0.1', () => { const { port: free } = probe.address(); probe.close(() => done(free)); });
+    });
     const origin = `http://127.0.0.1:${port}/`;
     const preview = spawn(process.execPath, [resolve(root, 'node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
         cwd: root,
@@ -413,18 +419,65 @@ if (!failures.length) {
         // 컵 자리를 막대 칩이 덮는지는 연타가 끝난 뒤(막대가 열린 채) 확인합니다. 두 탭 사이에 재지 않아 간격이 늘지 않습니다.
         under = await tapPage.evaluate(({ x, y }) => {
             const el = document.elementFromPoint(x, y);
-            return { inBar: Boolean(el?.closest('.quick-bar.is-open')), chip: el?.closest('.quick-chip')?.dataset.kind || '' };
+            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+            const bar = document.querySelector('.quick-bar.is-open')?.getBoundingClientRect();
+            return { cup: Boolean(el?.closest('.tabbar .foil-fab')), inBar: Boolean(el?.closest('.quick-bar.is-open')), tabTop: tab ? Math.round(tab.top) : -1, barBottom: bar ? Math.round(bar.bottom) : -1 };
         }, cupAt);
         console.log(`연타 검사 두 탭 간격: ${gaps.join(', ')}ms`);
         check(gap <= 300, `연타 검사의 두 탭 간격이 4번 모두 300ms를 넘어 검사하지 못했습니다: ${gaps.join(', ')}ms`);
-        check(under.inBar && under.chip, `휴대폰에서 열린 막대의 칩이 컵 자리를 덮지 않아 연타 검사를 할 수 없습니다: ${JSON.stringify(under)}`);
-        check(burst.ghost && burst.left === 0, `막대가 컵을 덮을 때 컵 복사본·쨈 방울 12개가 터지고 사라지지 않습니다: ${JSON.stringify(burst)}`);
-        check(burst.open && !burst.toast.includes('한 줄만'), `컵 연타의 두 번째 탭이 막대에서 저장 검사를 일으킵니다: ${JSON.stringify(burst)}`);
+        /* 쨈 팝업: 아래 탭 바는 그대로(컵이 보이고 눌림), 팝업은 탭 바 위에 뜹니다. */
+        check(under.cup && !under.inBar && under.barBottom > 0 && under.barBottom <= under.tabTop, `팝업이 아래 탭 바(쨈 컵)를 덮거나 바꿉니다: ${JSON.stringify(under)}`);
+        check(burst.ghost && burst.left === 0, `쨈 버튼을 누를 때 컵 복사본·쨈 방울 12개가 터지고 사라지지 않습니다: ${JSON.stringify(burst)}`);
+        check(burst.open && !burst.toast.includes('한 줄만'), `컵 연타의 두 번째 탭이 팝업을 바로 닫거나 저장 검사를 일으킵니다: ${JSON.stringify(burst)}`);
         {
             await delay(500);
             await tapPage.touchscreen.tap(cupAt.x, cupAt.y);
-            const later = await tapPage.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('한 줄만'), { timeout: 3000 }).then(() => true, () => false);
-            check(later, '연타 보호가 너무 넓어 0.5초 뒤 일부러 누른 칩도 무시합니다.');
+            const later = await tapPage.waitForFunction(() => !document.querySelector('.quick-bar.is-open'), { timeout: 3000 }).then(() => true, () => false);
+            check(later, '0.5초 뒤 쨈 버튼을 다시 누르면 팝업이 닫혀야 합니다.');
+        }
+
+        /* 닫는 네 가지 길(✕ · 바탕 · 뒤로 가기 · 쨈 다시)마다 화면이 처음 그대로 돌아오는지 봅니다. */
+        {
+            const shape = () => tapPage.evaluate(() => {
+                const tab = document.querySelector('.tabbar');
+                const r = tab.getBoundingClientRect();
+                return JSON.stringify({
+                    tab: [Math.round(r.top), Math.round(r.height), getComputedStyle(tab).display, tab.innerText.replace(/\s+/g, ' ')],
+                    open: Boolean(document.querySelector('.quick-bar.is-open')),
+                    scrim: Boolean(document.querySelector('.quick-scrim.is-open')),
+                    ghosts: document.querySelectorAll('.fab-ghost, .cup-burst').length,
+                    hash: location.hash,
+                    lift: document.documentElement.style.getPropertyValue('--quick-lift') || '',
+                });
+            });
+            await tapPage.goto(`${origin}?demo=1&mode=light#/today`, { waitUntil: 'networkidle0' });
+            await tapPage.waitForSelector('.tabbar .fab');
+            const before = await shape();
+            const histBefore = await tapPage.evaluate(() => history.length);
+            const ways = {
+                '✕ 단추': async () => {
+                    const box = await tapPage.evaluate(() => { const r = document.querySelector('.quick-bar.is-open .quick-close').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height }; });
+                    check(box.w >= 44 && box.h >= 44, `✕ 단추가 44px보다 작습니다: ${JSON.stringify(box)}`);
+                    await tapPage.touchscreen.tap(box.x, box.y);
+                },
+                '바탕 누르기': async () => { await tapPage.touchscreen.tap(20, 40); },
+                '뒤로 가기': async () => { await tapPage.goBack({ waitUntil: 'networkidle0' }).catch(() => {}); },
+                '쨈 다시': async () => { await delay(450); await tapPage.evaluate(() => document.querySelector('.tabbar .fab').click()); },
+            };
+            for (const [label, close] of Object.entries(ways)) {
+                await tapPage.evaluate(() => document.querySelector('.tabbar .fab').click());
+                await delay(120);
+                const opened = await tapPage.evaluate(() => Boolean(document.querySelector('.quick-bar.is-open')) && Boolean(document.querySelector('.quick-scrim.is-open')));
+                check(opened, `${label}: 쨈 팝업이 열리지 않습니다.`);
+                const tabWhileOpen = await shape();
+                check(JSON.parse(tabWhileOpen).tab.join('|') === JSON.parse(before).tab.join('|'), `${label}: 팝업이 열린 동안 아래 탭 바가 바뀝니다: ${tabWhileOpen}`);
+                await close();
+                await delay(500);
+                const after = await shape();
+                check(after === before, `${label}로 닫은 뒤 화면이 처음과 다릅니다: ${after} / ${before}`);
+            }
+            const histAfter = await tapPage.evaluate(() => history.length);
+            check(histAfter <= histBefore + 1, `팝업을 여닫을 때마다 뒤로 가기 기록이 쌓입니다: ${histBefore} → ${histAfter}`);
         }
 
         /* QA 1차 5번: 저장이 실패하면 적던 글을 되돌려 두고, 쉬운 말로 알려 줍니다. */

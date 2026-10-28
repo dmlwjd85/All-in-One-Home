@@ -16,7 +16,6 @@ export const afterFrame = (fn) => (typeof requestAnimationFrame === 'function'
     ? requestAnimationFrame(() => setTimeout(fn, 0))
     : setTimeout(fn, 0));
 
-const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 const BITS = [[-120, -330, 16, 0], [-55, -400, 12, 10], [10, -370, 15, 0], [75, -410, 11, 20], [130, -320, 14, 10], [-160, -270, 11, 20], [160, -280, 13, 10], [-25, -300, 10, 20]];
@@ -49,7 +48,8 @@ export function playCupGhost(button) {
         const disc = cup.querySelector('.fab-disc');
         if (!bar || !disc || !cup.isConnected) return;
         const r = disc.getBoundingClientRect();
-        if (!r.width || !overlaps(r, bar.getBoundingClientRect())) return;
+        /* 팝업이 컵을 덮지 않아도(아래 탭 바는 그대로) 컵 자리에서 쨈이 튑니다(가계부와 같은 느낌). */
+        if (!r.width) return;
         clearGhosts();
         const g = document.createElement('span');
         g.className = `foil-fab fab-ghost ${reduced ? 'is-flash' : 'is-burst'}`;
@@ -120,4 +120,32 @@ export function guardCupBurst(win = window) {
         win.removeEventListener('click', onClick, true);
         win.removeEventListener('keydown', onKeyDown, true);
     };
+}
+
+let bloomTimer = 0;
+/** 가계부 fabPop.bloomSheet 처럼 팝업이 컵 자리에서 원으로 0.3초 펼쳐지게 합니다(mask라 누름은 막지 않음). */
+export function bloomQuickBar(button, bar = document.querySelector('.quick-bar')) {
+    const cup = button?.closest?.('.foil-fab')?.querySelector('.fab-disc') || button;
+    if (!bar || !cup?.getBoundingClientRect || reduceMotion()) return;
+    const r = cup.getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    if (!r.width || !b.width) return;
+    bar.style.setProperty('--bloom-x', `${Math.round(r.left + r.width / 2 - b.left)}px`);
+    bar.style.setProperty('--bloom-y', `${Math.round(r.top + r.height / 2 - b.top)}px`);
+    bar.classList.remove('is-bloom');
+    bar.classList.add('is-bloom');
+    clearTimeout(bloomTimer);
+    bloomTimer = setTimeout(() => bar.classList.remove('is-bloom'), 340);
+}
+
+/** 쨈 팝업을 닫은 뒤: 열 때 붙인 것(열림 표시·펼침·컵 복사본·키보드 높이)을 모두 걷어 화면을 처음처럼 둡니다. */
+export function resetQuickLayer() {
+    const bar = document.querySelector('.quick-bar');
+    if (bar) {
+        bar.classList.remove('is-open', 'is-bloom', 'is-invite');
+        bar.setAttribute('aria-hidden', 'true');
+    }
+    clearTimeout(bloomTimer);
+    clearGhosts();
+    document.querySelectorAll('.foil-fab.is-popping, .foil-fab.is-pressed').forEach((el) => el.classList.remove('is-popping', 'is-pressed'));
 }

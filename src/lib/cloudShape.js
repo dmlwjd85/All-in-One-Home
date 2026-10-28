@@ -209,9 +209,14 @@ function toTable(row) {
     const id = row.id;
     if (!(id === 'mon' || id === 'tue' || id === 'wed' || id === 'thu' || id === 'fri' || /^\d{4}-\d{2}-\d{2}$/.test(id || ''))) return null;
     const body = {};
-    for (let period = 1; period <= 8; period += 1) {
-        if (row[`p${period}`]) body[`p${period}`] = String(row[`p${period}`]).slice(0, 20);
-        if (row[`s${period}`]) body[`s${period}`] = String(row[`s${period}`]).slice(0, 20);
+    for (let period = 1; period <= 10; period += 1) {
+        for (const key of [`p${period}`, `s${period}`]) {
+            if (!row[key]) continue;
+            const value = String(row[key]).slice(0, 20);
+            /* 9·10교시(그날만 고친 방과후 등)는 규칙처럼 민감 낱말을 빼고 올립니다. */
+            if (period >= 9 && isSensitiveText(value)) continue;
+            body[key] = value;
+        }
     }
     if (!Object.keys(body).length) return null;
     return { id, body, stamps: stamps(['updatedAt']) };
@@ -318,7 +323,7 @@ export function fromCloudRow(collection, id, data = {}) {
     }
     if (collection === 'timetable') {
         const body = {};
-        for (let period = 1; period <= 8; period += 1) {
+        for (let period = 1; period <= 10; period += 1) {
             if (data[`p${period}`]) body[`p${period}`] = data[`p${period}`];
             if (data[`s${period}`]) body[`s${period}`] = data[`s${period}`];
         }
@@ -326,3 +331,151 @@ export function fromCloudRow(collection, id, data = {}) {
     }
     return null;
 }
+
+/** 여러 기기(웹·태블릿·휴대폰)가 같이 쓰는 설정 한 문서: users/{uid}/settings/device.
+    9·10교시 과목, 교시 수·길이·잠금, 출퇴근 시각, 1~8교시 시작 시각, 그날 고친 날 표시, 학사일정.
+    오늘 조퇴 시각은 그 기기 그날만의 값이라 올리지 않습니다. at 은 마지막으로 고친 시각(ms)이고, 더 늦은 쪽이 이깁니다. */
+const HM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const YMD = /^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+const SUBJECT_KEY = /^[ps](9|10)$/;
+
+/* 9·10교시 과목: 이 기기는 { mon: { p9 } } 모양, 클라우드에는 'mon-p9=방과후|…' 글자 하나로 둡니다(규칙 계산을 줄이려고). 둘 다 읽습니다. */
+function flatExtra(extra = {}) {
+    const out = {};
+    for (const [day, row] of Object.entries(cleanExtra(extra))) for (const [key, value] of Object.entries(row)) out[`${day}-${key}`] = value;
+    return out;
+}
+
+function cleanExtra(extra = {}) {
+    const out = {};
+    const nested = {};
+    /* 클라우드 모양 'mon-p9=방과후|tue-p10=보충' 도 읽습니다. */
+    if (typeof extra === 'string') extra = Object.fromEntries(extra.split('|').map((item) => item.split('=')).filter((kv) => kv.length === 2));
+    for (const [key, value] of Object.entries(extra && typeof extra === 'object' ? extra : {})) {
+        const m = /^(mon|tue|wed|thu|fri)-([ps](?:9|10))$/.exec(key);
+        if (m) (nested[m[1]] ||= {})[m[2]] = value;
+        else if (value && typeof value === 'object') nested[key] = { ...(nested[key] || {}), ...value };
+    }
+    for (const day of ['mon', 'tue', 'wed', 'thu', 'fri']) {
+        const row = nested[day];
+        if (!row || typeof row !== 'object') continue;
+        const clean = {};
+        for (const [key, value] of Object.entries(row)) {
+            if (SUBJECT_KEY.test(key) && typeof value === 'string' && value.length <= 20 && !isSensitiveText(value)) clean[key] = value;
+        }
+        if (Object.keys(clean).length) out[day] = clean;
+    }
+    return out;
+}
+
+/** 설정 칸(무리)마다 고친 시각. 한 기기가 학사일정을, 다른 기기가 9교시를 고쳐도 둘 다 남도록 칸 단위로 합칩니다. */
+export const SETTING_PARTS = ['period', 'extra', 'periodStarts', 'ttEdited', 'academic'];
+const PERIOD_KEYS = ['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd'];
+const ACADEMIC_YEAR = /^20(2[4-9]|3[0-5])$/;
+const AT_MAX = 4102444800000;
+const atNum = (v) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= AT_MAX ? Number(v) : 0);
+
+export function localSettingAts(profile = {}, local = {}) {
+    const legacy = atNum(profile.settingsAt);
+    const legacyLocal = atNum(local.syncAt);
+    const p = profile.settingsAts || {};
+    const l = local.syncAts || {};
+    return {
+        period: atNum(l.period ?? legacyLocal),
+        extra: atNum(l.extra ?? legacyLocal),
+        periodStarts: atNum(p.periodStarts ?? legacy),
+        ttEdited: atNum(p.ttEdited ?? legacy),
+        academic: atNum(p.academic ?? legacy),
+    };
+}
+
+function cleanSettingAcademic(academic = {}) {
+    const out = {};
+    const years = Object.keys(academic || {}).filter((year) => ACADEMIC_YEAR.test(year)).sort().slice(-4);
+    for (const year of years) {
+        const row = academic[year];
+        if (!row || typeof row !== 'object') continue;
+        const clean = {};
+        for (const key of ['firstStart', 'firstEnd', 'secondStart', 'secondEnd']) if (YMD.test(row[key] || '')) clean[key] = row[key];
+        const off = (row.offDays || []).filter((v) => YMD.test(v)).slice(0, 40);
+        if (off.length) clean.offDays = off;
+        if (Object.keys(clean).length) out[year] = clean;
+    }
+    return out;
+}
+
+/* 클라우드에는 숫자 목록을 '45,45,40' 글자로 둡니다(규칙이 한 번에 검사). 받을 때는 글자·목록 모두 읽습니다. */
+function csvList(v) {
+    if (typeof v === 'string') return v ? v.split(',').map(Number) : [];
+    return Array.isArray(v) ? v.map(Number) : [];
+}
+const toCsv = (list) => list.join(',');
+
+function cleanPeriodPart(local = {}) {
+    return {
+        level: ['초', '중', '고'].includes(local.level) ? local.level : '초',
+        count: Number.isInteger(local.count) && local.count >= 1 && local.count <= 10 ? local.count : 6,
+        lengths: csvList(local.lengths).slice(0, 10).map((n) => (Number.isInteger(n) && n >= 0 && n <= 120 ? n : 0)),
+        extraStarts: (local.extraStarts || []).filter((v) => HM.test(v)).slice(0, 2),
+        locks: csvList(local.locks).filter((n) => Number.isInteger(n) && n >= 1 && n <= 10).slice(0, 10),
+        cellLocks: (typeof local.cellLocks === 'string' ? (local.cellLocks ? local.cellLocks.split(',') : []) : (local.cellLocks || [])).filter((v) => /^(mon|tue|wed|thu|fri)-([1-9]|10)$/.test(v)).slice(0, 50),
+        workStart: HM.test(local.workStart || '') ? local.workStart : '',
+        workEnd: HM.test(local.workEnd || '') ? local.workEnd : '',
+    };
+}
+
+function cloudPeriodLocal(local) {
+    const part = cleanPeriodPart(local);
+    const extra = Object.entries(flatExtra(local.extra)).map(([k, v]) => `${k}=${v}`).join('|');
+    return { ...part, lengths: toCsv(part.lengths), locks: toCsv(part.locks), cellLocks: part.cellLocks.join(','), extra };
+}
+
+export function toCloudSettings(state, local = {}) {
+    const profile = state?.profile || {};
+    const ats = localSettingAts(profile, local);
+    const body = {
+        at: Math.max(...SETTING_PARTS.map((part) => ats[part])),
+        ats,
+        periodLocal: cloudPeriodLocal(local),
+        periodStarts: (profile.periodStarts || []).filter((v) => HM.test(v)).slice(0, 8),
+        ttEdited: (profile.ttEdited || []).filter((v) => YMD.test(v)).slice(-400),
+        academic: cleanSettingAcademic(profile.academic),
+    };
+    return { body, stamps: ['updatedAt'] };
+}
+
+export function fromCloudSettings(data = {}) {
+    if (!data || typeof data !== 'object' || !(atNum(data.at) > 0)) return null;
+    const at = atNum(data.at);
+    const local = data.periodLocal && typeof data.periodLocal === 'object' ? data.periodLocal : {};
+    const ats = {};
+    /* 칸별 시각이 없는 예전 문서는 문서 시각을 모든 칸에 씁니다. */
+    for (const part of SETTING_PARTS) ats[part] = data.ats && typeof data.ats === 'object' ? atNum(data.ats[part]) : at;
+    return {
+        at,
+        ats,
+        periodLocal: { ...cleanPeriodPart(local), extra: cleanExtra(local.extra) },
+        periodStarts: Array.isArray(data.periodStarts) ? data.periodStarts.filter((v) => HM.test(v)).slice(0, 8) : [],
+        ttEdited: Array.isArray(data.ttEdited) ? data.ttEdited.filter((v) => YMD.test(v)).slice(-400) : [],
+        academic: cleanSettingAcademic(data.academic && typeof data.academic === 'object' ? data.academic : {}),
+    };
+}
+
+/** 이 기기 설정(mine)과 클라우드 설정(theirs)을 칸마다 더 늦게 고친 쪽으로 합칩니다. 같은 시각이면 이 기기 쪽. */
+export function mergeSettings(mine, theirs) {
+    if (!theirs) return mine;
+    if (!mine) return theirs;
+    const out = { ...mine, ats: { ...mine.ats }, periodLocal: { ...mine.periodLocal } };
+    for (const part of SETTING_PARTS) {
+        if (!((theirs.ats?.[part] || 0) > (mine.ats?.[part] || 0))) continue;
+        out.ats[part] = theirs.ats[part];
+        if (part === 'period') for (const key of PERIOD_KEYS) out.periodLocal[key] = theirs.periodLocal[key];
+        else if (part === 'extra') out.periodLocal.extra = theirs.periodLocal.extra;
+        else out[part] = theirs[part];
+    }
+    out.at = Math.max(...SETTING_PARTS.map((part) => out.ats[part] || 0));
+    out.periodLocal = cloudPeriodLocal(out.periodLocal);
+    return out;
+}
+
+export { PERIOD_KEYS };

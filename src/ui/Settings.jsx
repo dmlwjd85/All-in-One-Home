@@ -18,6 +18,8 @@ import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebas
 import { setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
+import { AcademicSettings } from './AcademicSettings.jsx';
+import { DefaultTimetable } from './DefaultTimetable.jsx';
 import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
@@ -128,6 +130,10 @@ export function Settings() {
             </section>
 
             <TimetableSettings data={data} showToast={showToast} />
+
+            <DefaultTimetable data={data} />
+
+            <AcademicSettings data={data} showToast={showToast} />
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
