@@ -326,3 +326,66 @@ export function fromCloudRow(collection, id, data = {}) {
     }
     return null;
 }
+
+/** 여러 기기(웹·태블릿·휴대폰)가 같이 쓰는 설정 한 문서: users/{uid}/settings/device.
+    9·10교시 과목, 교시 수·길이·잠금, 출퇴근 시각, 1~8교시 시작 시각, 그날 고친 날 표시, 학사일정.
+    오늘 조퇴 시각은 그 기기 그날만의 값이라 올리지 않습니다. at 은 마지막으로 고친 시각(ms)이고, 더 늦은 쪽이 이깁니다. */
+const HM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const YMD = /^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+const SUBJECT_KEY = /^[ps](9|10)$/;
+
+function cleanExtra(extra = {}) {
+    const out = {};
+    for (const day of ['mon', 'tue', 'wed', 'thu', 'fri']) {
+        const row = extra?.[day];
+        if (!row || typeof row !== 'object') continue;
+        const clean = {};
+        for (const [key, value] of Object.entries(row)) {
+            if (SUBJECT_KEY.test(key) && typeof value === 'string' && value.length <= 20 && !isSensitiveText(value)) clean[key] = value;
+        }
+        if (Object.keys(clean).length) out[day] = clean;
+    }
+    return out;
+}
+
+export function toCloudSettings(state, local = {}) {
+    const profile = state?.profile || {};
+    const body = {
+        at: Math.max(Number(profile.settingsAt) || 0, Number(local.syncAt) || 0),
+        periodLocal: {
+            level: ['초', '중', '고'].includes(local.level) ? local.level : '초',
+            count: Number.isInteger(local.count) && local.count >= 1 && local.count <= 10 ? local.count : 6,
+            lengths: (local.lengths || []).slice(0, 10).map((n) => (Number(n) >= 0 && Number(n) <= 120 ? Number(n) : 0)),
+            extraStarts: (local.extraStarts || []).slice(0, 2).filter((v) => HM.test(v)),
+            locks: (local.locks || []).filter((n) => Number.isInteger(n) && n >= 1 && n <= 10).slice(0, 10),
+            cellLocks: (local.cellLocks || []).filter((v) => /^(mon|tue|wed|thu|fri)-([1-9]|10)$/.test(v)).slice(0, 50),
+            workStart: HM.test(local.workStart || '') ? local.workStart : '',
+            workEnd: HM.test(local.workEnd || '') ? local.workEnd : '',
+            extra: cleanExtra(local.extra),
+        },
+        periodStarts: (profile.periodStarts || []).slice(0, 8).filter((v) => HM.test(v)),
+        ttEdited: (profile.ttEdited || []).filter((v) => YMD.test(v)).slice(-400),
+        academic: {},
+    };
+    for (const [year, row] of Object.entries(profile.academic || {})) {
+        if (!/^20[2-9][0-9]$/.test(year) || !row || typeof row !== 'object') continue;
+        const clean = {};
+        for (const key of ['firstStart', 'firstEnd', 'secondStart', 'secondEnd']) if (YMD.test(row[key] || '')) clean[key] = row[key];
+        const off = (row.offDays || []).filter((v) => YMD.test(v)).slice(0, 40);
+        if (off.length) clean.offDays = off;
+        if (Object.keys(clean).length) body.academic[year] = clean;
+    }
+    return { body, stamps: ['updatedAt'] };
+}
+
+export function fromCloudSettings(data = {}) {
+    if (!data || typeof data !== 'object' || !(Number(data.at) > 0)) return null;
+    const local = data.periodLocal && typeof data.periodLocal === 'object' ? data.periodLocal : {};
+    return {
+        at: Number(data.at),
+        periodLocal: { ...local, extra: cleanExtra(local.extra) },
+        periodStarts: Array.isArray(data.periodStarts) ? data.periodStarts.filter((v) => HM.test(v)) : [],
+        ttEdited: Array.isArray(data.ttEdited) ? data.ttEdited.filter((v) => YMD.test(v)) : [],
+        academic: data.academic && typeof data.academic === 'object' ? data.academic : {},
+    };
+}

@@ -160,6 +160,27 @@ service cloud.firestore {
       }
 
       // 시간표: 문서 id = 요일 mon~fri (기본표) 또는 날짜(그날만 바뀐 표)
+      // 기기끼리 같이 쓰는 설정 한 문서(교시 길이·9·10교시·출퇴근·시작 시각·학사일정·그날 고친 날 표시).
+      match /settings/{key} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && key == 'device'
+          && d().keys().hasOnly(['at', 'periodLocal', 'periodStarts', 'ttEdited', 'academic', 'updatedAt'])
+          && d().at is int && d().at > 0
+          && (!('periodLocal' in d()) || (d().periodLocal is map
+              && d().periodLocal.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])
+              && (!('lengths' in d().periodLocal) || (d().periodLocal.lengths is list && d().periodLocal.lengths.size() <= 10))
+              && (!('extraStarts' in d().periodLocal) || (d().periodLocal.extraStarts is list && d().periodLocal.extraStarts.size() <= 2))
+              && (!('locks' in d().periodLocal) || (d().periodLocal.locks is list && d().periodLocal.locks.size() <= 10))
+              && (!('cellLocks' in d().periodLocal) || (d().periodLocal.cellLocks is list && d().periodLocal.cellLocks.size() <= 50))
+              && (!('extra' in d().periodLocal) || (d().periodLocal.extra is map
+                  && d().periodLocal.extra.keys().hasOnly(['mon', 'tue', 'wed', 'thu', 'fri'])))))
+          && (!('periodStarts' in d()) || (d().periodStarts is list && d().periodStarts.size() <= 8))
+          && (!('ttEdited' in d()) || (d().ttEdited is list && d().ttEdited.size() <= 400))
+          && (!('academic' in d()) || (d().academic is map && d().academic.size() <= 10))
+          && optTs('updatedAt');
+      }
+
       match /timetable/{key} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)

@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
-import { eventBodyWithoutEndTime, fromCloudRow, toCloudRow } from '../src/lib/cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudRow, fromCloudSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
 
@@ -126,6 +126,27 @@ try {
     }
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));
+
+    /* 기기끼리 같이 쓰는 설정: 휴대폰에서 올린 9교시·학사일정이 PC에서 그대로 읽히는지. */
+    {
+        const phone = testEnv.authenticatedContext('teacher-sync').firestore();
+        const pc = testEnv.authenticatedContext('teacher-sync').firestore();
+        const shaped = toCloudSettings({ profile: {
+            settingsAt: 1767225600000,
+            ttEdited: ['2026-04-01'],
+            periodStarts: ['09:00', '09:50', '10:50', '11:40', '13:20', '14:10', '15:00', '15:50'],
+            academic: { 2026: { firstStart: '2026-03-03', firstEnd: '2026-07-21', secondStart: '2026-08-18', secondEnd: '2027-02-10', offDays: ['2026-05-04'] } },
+        } }, { level: '중', count: 7, lengths: [45], extraStarts: ['16:40', '17:30'], locks: [9], cellLocks: ['mon-9'], workStart: '08:20', workEnd: '16:40', extra: { mon: { p9: '방과후' } } });
+        await expectAllow('기기 설정 올리기', () => setDoc(doc(phone, 'users/teacher-sync/settings/device'), shaped.body));
+        const snap = await getDoc(doc(pc, 'users/teacher-sync/settings/device'));
+        const back = snap.exists() ? fromCloudSettings(snap.data()) : null;
+        if (!back || back.periodLocal.extra?.mon?.p9 !== '방과후' || back.academic?.['2026']?.firstEnd !== '2026-07-21' || back.periodLocal.count !== 7) {
+            failures.push(`다른 기기에서 설정을 그대로 읽지 못했습니다. ${JSON.stringify(back)}`);
+        }
+        await expectDeny('다른 이름의 설정 문서', () => setDoc(doc(phone, 'users/teacher-sync/settings/other'), shaped.body));
+        await expectDeny('모르는 칸이 든 설정', () => setDoc(doc(phone, 'users/teacher-sync/settings/device'), { ...shaped.body, leave: '14:00' }));
+        await expectDeny('남의 설정', () => setDoc(doc(testEnv.authenticatedContext('teacher-b').firestore(), 'users/teacher-sync/settings/device'), shaped.body));
+    }
 
     const uid = 'teacher-span';
     const deviceA = testEnv.authenticatedContext(uid).firestore();

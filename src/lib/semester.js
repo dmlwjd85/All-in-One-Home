@@ -1,6 +1,7 @@
 /** 기본 시간표를 1학기·2학기·1년 수업일에 채우는 계산. 화면과 저장 없이 검사할 수 있게 순수 함수로 둡니다. */
 import { addDaysYmd, dayKeyFromYmd, isValidYmd } from './date.js';
 import { restInfo } from './daymark.js';
+import { academicSource, academicYear } from './academic.js';
 
 export const TERM_CHOICES = [
     { id: 'first', label: '1학기' },
@@ -13,12 +14,15 @@ const MAX_PERIOD = 8;
 
 /** 학년도 기본값. 학사일정에 개학·방학 일정이 있으면 그 날짜를 먼저 씁니다.
     1학기 3/2~7/24, 2학기 8/17~다음 해 2/12(겨울방학 일정이 있으면 그 전날까지). */
-export function termRange(id, schoolYear = 2026, events = []) {
+export function termRange(id, schoolYear = 2026, events = [], academic = academicSource()) {
     const y = Number(schoolYear) || 2026;
-    const found = findTermMarks(y, events);
+    /* 설정에 넣은 학사일정이 일정 목록 글자보다 먼저입니다. */
+    const set = academicYear(y, academic);
+    const marks = findTermMarks(y, events);
+    const found = { ...marks, ...set, any: marks.any || Object.keys(set).length > 0, set: Object.keys(set).length > 0 };
     const first = { from: found.firstStart || `${y}-03-02`, to: found.firstEnd || `${y}-07-24` };
     const second = { from: found.secondStart || `${y}-08-17`, to: found.secondEnd || `${y + 1}-02-12` };
-    const source = found.any ? '학사일정' : '기본값';
+    const source = found.set ? '우리 학교' : found.any ? '학사일정' : '기본값';
     if (id === 'first') return { ...first, source };
     if (id === 'second') return { ...second, source };
     return { from: first.from, to: second.to, source };

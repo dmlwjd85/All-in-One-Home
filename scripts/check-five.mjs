@@ -1,7 +1,10 @@
 /** 자세히 보기 팝업, 학기 시간표 채우기, 그날 시간표, 스크롤 탭 방지 검사. */
 import { readFileSync } from 'node:fs';
 import { detailRows } from '../src/lib/detail.js';
-import { planTermFill, schoolDays, tableForDate, termDays, termRange } from '../src/lib/semester.js';
+import { planTermFill, schoolDays, tableForDate, tableForDateWithLocal, termDays, termRange } from '../src/lib/semester.js';
+import { academicOffEvents, academicProblem, cleanAcademic, setAcademicSource } from '../src/lib/academic.js';
+import { restInfo } from '../src/lib/daymark.js';
+import { fromCloudSettings, toCloudSettings } from '../src/lib/cloudShape.js';
 import { isTap, tapHandlers, TAP_SLOP } from '../src/ui/tapGuard.js';
 
 let failed = 0;
@@ -94,8 +97,67 @@ const ui = ['Settings', 'Home', 'Tasks', 'Day', 'Schedule', 'TermFill', 'DayTime
 check(!/onTouchStart=/.test(ui) && !/onPointerDown=\{\(\)\s*=>\s*set/.test(ui), 'touchstart/pointerdown에서 바로 바꾸는 곳이 남았습니다.');
 check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
 
+/* 그날 시간표 + 이 기기 9·10교시(tableForDateWithLocal) */
+{
+    const local = { extra: { mon: { p9: '방과후', s9: '전담' } } };
+    const base = { timetable: { mon: { p1: '국어', p2: '수학' } }, profile: { ttEdited: [] } };
+    const mon = tableForDateWithLocal(base, '2026-10-26', local);
+    check(mon.p1 === '국어' && mon.p9 === '방과후' && mon.s9 === '전담', `요일 줄에 9교시가 붙지 않았습니다: ${JSON.stringify(mon)}`);
+    const own = tableForDateWithLocal({ ...base, timetable: { ...base.timetable, '2026-10-26': { p1: '체육' } } }, '2026-10-26', local);
+    check(own.p1 === '체육' && !own.p2 && own.p9 === '방과후', `그날 줄이 요일 줄보다 먼저가 아니거나 9교시가 빠졌습니다: ${JSON.stringify(own)}`);
+    const clash = tableForDateWithLocal({ ...base, timetable: { ...base.timetable, '2026-10-26': { p9: '보충' } } }, '2026-10-26', local);
+    check(clash.p9 === '보충', '그날 따로 적은 9교시가 이 기기 값에 덮였습니다.');
+    const emptyEdited = tableForDateWithLocal({ timetable: { mon: { p1: '국어' }, '2026-10-26': {} }, profile: { ttEdited: ['2026-10-26'] } }, '2026-10-26', {});
+    check(!emptyEdited.p1, '그날 비워 둔(고친) 날에 요일 시간표가 다시 들어갔습니다.');
+    const tue = tableForDateWithLocal(base, '2026-10-27', local);
+    check(!tue.p9 && !tue.p1, '다른 요일에 월요일 9교시가 붙었습니다.');
+    check(Object.keys(tableForDateWithLocal({}, '2026-10-26', undefined)).length === 0, '빈 자료에서 오류 없이 빈 줄이 나오지 않습니다.');
+}
+
+/* 학사일정: 설정에 넣은 날이 학기 타일·수업일·휴일에 반영 */
+{
+    const academic = cleanAcademic({ 2026: { firstStart: '2026-03-03', firstEnd: '2026-07-21', secondStart: '2026-08-18', secondEnd: '2027-02-10', offDays: ['2026-05-04', '2026-05-04', 'x'] }, abc: { firstStart: '2026-03-03' } });
+    check(!academic.abc && academic['2026'].offDays.length === 1, `학사일정 정리가 이상합니다: ${JSON.stringify(academic)}`);
+    const f = termRange('first', 2026, [], academic);
+    const s2 = termRange('second', 2026, [], academic);
+    check(f.from === '2026-03-03' && f.to === '2026-07-21' && f.source === '우리 학교', `학사일정 1학기 범위가 다릅니다: ${JSON.stringify(f)}`);
+    check(s2.from === '2026-08-18' && s2.to === '2027-02-10', `학사일정 2학기 범위가 다릅니다: ${JSON.stringify(s2)}`);
+    const marked2 = termRange('first', 2026, [{ date: '2026-07-17', title: '여름방학식' }], academic);
+    check(marked2.to === '2026-07-21', '설정 학사일정보다 일정 글자를 먼저 썼습니다.');
+    const offs = academicOffEvents(academic);
+    check(offs.some((row) => row.title === '재량휴업일' && row.date === '2026-05-04'), '재량휴업일이 휴일로 바뀌지 않았습니다.');
+    check(offs.some((row) => row.title === '여름방학' && row.date === '2026-07-22' && row.end === '2026-08-17'), `여름방학 기간이 다릅니다: ${JSON.stringify(offs)}`);
+    check(offs.some((row) => row.title === '겨울방학' && row.date === '2027-02-11' && row.end === '2027-02-28'), '종업식 뒤 겨울방학이 없습니다.');
+    setAcademicSource(academic);
+    check(restInfo('2026-05-04', []).off && restInfo('2026-05-04', []).label === '재량휴업일', '재량휴업일이 휴일 표시에 없습니다.');
+    check(restInfo('2026-08-03', []).off, '여름방학 날이 휴일 표시에 없습니다.');
+    check(!restInfo('2026-08-18', []).off, '2학기 개학일이 휴일로 나옵니다.');
+    const yearDays = termDays('year', 2026, []);
+    check(yearDays[0] === '2026-03-03' && !yearDays.includes('2026-05-04') && !yearDays.includes('2026-08-03') && yearDays.includes('2026-08-18') && yearDays[yearDays.length - 1] === '2027-02-10', '1년 수업일에 학사일정이 반영되지 않았습니다.');
+    setAcademicSource({});
+    check(academicProblem({ firstStart: '2026-07-01', firstEnd: '2026-03-01' }).includes('뒤여야'), '날짜 순서가 거꾸로여도 막지 않습니다.');
+    check(academicProblem(academic['2026']) === '', '바른 학사일정을 막습니다.');
+    const ac = readFileSync('src/ui/AcademicSettings.jsx', 'utf8');
+    check(!/<select|type="date"|type=\{?"date/.test(ac) && ac.includes('monthCells') && ac.includes('onClick={() => tapDay'), '학사일정 입력이 한 번 누르는 달력이 아닙니다.');
+}
+
+/* 기기끼리 같이 쓰는 설정(settings/device) 모양 */
+{
+    const shaped = toCloudSettings({ profile: { settingsAt: 5, ttEdited: ['2026-04-01', 'bad'], periodStarts: ['09:00', '9시'], academic: { 2026: { firstStart: '2026-03-03', offDays: ['2026-05-04'] } } } },
+        { syncAt: 9, level: '중', count: 7, lengths: [45], extraStarts: ['16:40'], locks: [9], cellLocks: ['mon-9', 'bad'], workStart: '08:20', workEnd: '', extra: { mon: { p9: '방과후', p3: '국어', x: 1 }, sat: { p9: '?' } } });
+    const body = shaped.body;
+    check(body.at === 9 && body.ttEdited.length === 1 && body.periodStarts.length === 1, `설정 시각·목록 정리가 이상합니다: ${JSON.stringify(body)}`);
+    check(body.periodLocal.extra.mon.p9 === '방과후' && !body.periodLocal.extra.mon.p3 && !body.periodLocal.extra.sat, '9·10교시 밖 칸이나 주말이 올라갑니다.');
+    check(!('leave' in body) && !JSON.stringify(body).includes('leave-early'), '오늘 조퇴 시각이 올라갑니다.');
+    const back = fromCloudSettings(JSON.parse(JSON.stringify(body)));
+    check(back?.at === 9 && back.periodLocal.count === 7 && back.academic['2026'].firstStart === '2026-03-03', '받은 설정을 되살리지 못했습니다.');
+    check(fromCloudSettings({}) === null, '빈 설정 문서를 받아들였습니다.');
+    const sensitive = toCloudSettings({ profile: {} }, { extra: { mon: { p9: '민준 학폭 상담' } } }).body;
+    check(!sensitive.periodLocal.extra.mon, '민감한 9교시 글이 올라갑니다.');
+}
+
 /* 캐시 판 */
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v27"), '서비스 워커가 v27이 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v28"), '서비스 워커가 v28이 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');

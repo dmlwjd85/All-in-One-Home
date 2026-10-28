@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
@@ -12,7 +12,7 @@ import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
 import { SealCup } from './ui/SealCup.jsx';
 import { playFoilPop } from './ui/sealBurst.js';
-import { guardCupBurst, playCupGhost } from './ui/cupBurst.js';
+import { bloomQuickBar, guardCupBurst, playCupGhost, resetQuickLayer } from './ui/cupBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
 import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
@@ -44,6 +44,9 @@ export default function App() {
     const [quickOpen, setQuickOpen] = useState(false);
     const [quickInvite, setQuickInvite] = useState(false);
     const quickInput = useRef(null);
+    const quickOpenRef = useRef(false);
+    const quickPushed = useRef(false);
+    const quickOpenedAt = useRef(-Infinity);
     const pendingQuick = useRef(false);
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
@@ -58,6 +61,18 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+    // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다. 1분에 한 번까지만.
+    useEffect(() => {
+        const again = () => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); };
+        document.addEventListener('visibilitychange', again);
+        window.addEventListener('focus', again);
+        window.addEventListener('online', again);
+        return () => {
+            document.removeEventListener('visibilitychange', again);
+            window.removeEventListener('focus', again);
+            window.removeEventListener('online', again);
+        };
+    }, []);
     useEffect(() => guardCupBurst(), []);
 
     /* 키보드 테마는 이 기기에 둔 값만 봅니다. 테마 소리를 골라 두었으면 쉬는 틈에 파일을 받아 첫 누름부터 들리게 합니다. */
@@ -105,7 +120,15 @@ export default function App() {
     useEffect(() => {
         const timer = setInterval(() => setClock(seoulParts()), 30000);
         const onHash = () => setHash(location.hash || '#/today');
-        const onPop = () => setHash(location.hash || '#/today');
+        const onPop = () => {
+            setHash(location.hash || '#/today');
+            /* 뒤로 가기: 열린 쨈 팝업만 닫습니다(열 때 넣어 둔 기록 한 칸이 빠진 것). */
+            if (quickOpenRef.current && history.state?.quickJam !== 1) {
+                quickInput.current?.blur();
+                setQuickOpen(false);
+                setQuickInvite(false);
+            }
+        };
         const onLine = () => {
             setOnline(navigator.onLine);
             if (navigator.onLine) {
@@ -211,8 +234,33 @@ export default function App() {
         };
     }, [data?.profile.sharedPc, locked]);
 
+    /* 쨈 팝업: 열면 뒤로 가기 기록을 한 칸 넣고, 어떤 길로 닫든(✕·바탕·뒤로·쨈 다시·Esc·저장) 화면을 처음 그대로 돌려 둡니다. */
+    useEffect(() => {
+        quickOpenRef.current = quickOpen;
+        if (quickOpen) {
+            quickOpenedAt.current = performance.now();
+            if (history.state?.quickJam !== 1) {
+                try { history.pushState({ ...(history.state || {}), quickJam: 1 }, '', location.href); quickPushed.current = true; } catch { /* 기록을 못 넣어도 ✕로 닫힙니다. */ }
+            }
+            return;
+        }
+        resetQuickLayer();
+        if (!quickPushed.current) {
+            /* 새로 고침 뒤 남은 옛 팝업 기록은 뒤로 가지 않고 표시만 지웁니다. */
+            if (history.state?.quickJam === 1) {
+                try { const { quickJam, ...rest } = history.state; history.replaceState(rest, '', location.href); } catch { /* 그대로 둡니다. */ }
+            }
+            return;
+        }
+        quickPushed.current = false;
+        if (history.state?.quickJam === 1) {
+            try { history.back(); } catch { /* 이미 빠졌습니다. */ }
+        }
+    }, [quickOpen]);
+
     const go = useCallback((hash, options) => {
         const next = hash || '#/today';
+        if (quickOpenRef.current) { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }
         setHash(next);
         if (location.hash === next) return;
         if (options?.replace || options?.state) {
@@ -461,6 +509,11 @@ export default function App() {
     }
 
     function openQuickBar(event) {
+        /* 열려 있으면 쨈 버튼이 닫기입니다. 막 연 뒤 0.4초 안의 두 번째 탭(연타)은 무시합니다. */
+        if (quickOpenRef.current) {
+            if (performance.now() - quickOpenedAt.current > 400) closeQuickBar();
+            return;
+        }
         const bar = document.querySelector('.quick-bar');
         if (bar) {
             bar.classList.add('is-open');
@@ -470,7 +523,14 @@ export default function App() {
         setQuickInvite(false);
         setQuickOpen(true);
         playFoilPop(event?.currentTarget);
+        bloomQuickBar(event?.currentTarget);
         playCupGhost(event?.currentTarget);
+    }
+
+    function closeQuickBar() {
+        quickInput.current?.blur();
+        setQuickOpen(false);
+        setQuickInvite(false);
     }
 
     const ui = {
@@ -629,7 +689,7 @@ export default function App() {
                     ))}
                 </nav>
                 <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
-                <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={() => { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }} />
+                <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
                 {plus && (
                     <PlusSheet
                         startMore={plus === 'more'}

@@ -1,5 +1,6 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, toCloudProfile, toCloudRow } from './cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { readPeriodLocal } from './periodLocal.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
 const COLLECTIONS = [
@@ -49,7 +50,7 @@ export function prepareEventWrite(body) {
     return { body, retryWithoutEndTime: Boolean(body?.endTime) };
 }
 
-function fingerprint(body, clear = []) {
+export function fingerprint(body, clear = []) {
     return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
 
@@ -66,6 +67,18 @@ async function stamp(firestore, body, names, previous) {
     });
     return next;
 }
+
+/** 이 기기 줄이 마지막으로 올린 모양 그대로인지(=이 기기에서 그 뒤로 안 고쳤는지). 그럴 때만 다른 기기 값으로 바꿉니다. */
+export function unchangedSincePush(hashes, cloudName, row) {
+    const shaped = toCloudRow(cloudName, row);
+    if (!shaped) return false;
+    const key = `${cloudName}/${shaped.id}`;
+    if (!hashes || !hashes[key]) return false;
+    const body = cloudName === 'events' ? prepareEventWrite(shaped.body).body : shaped.body;
+    return hashes[key] === fingerprint(body, shaped.clear || []);
+}
+
+export const CLOUD_COLLECTIONS = COLLECTIONS;
 
 export function syncAvailable() {
     return cloudReady();
@@ -120,6 +133,21 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         }
     }
 
+    /* 기기끼리 같이 쓰는 설정. 규칙이 아직 이 문서를 모르면 거절되지만 다른 기록은 그대로 올라갑니다. */
+    const settings = toCloudSettings(state, readPeriodLocal());
+    if (settings.body.at > 0) {
+        const mark = fingerprint(settings.body);
+        if (nextHashes['settings/device'] !== mark) {
+            try {
+                const body = await stamp(firestore, settings.body, settings.stamps);
+                await setDoc(doc(ready.db, 'users', uid, 'settings', 'device'), body);
+                nextHashes['settings/device'] = mark;
+            } catch (error) {
+                if (retryable(error)) pending += 1;
+            }
+        }
+    }
+
     for (const [localName, cloudName] of COLLECTIONS) {
         for (const row of state[localName] || []) {
             const shaped = toCloudRow(cloudName, row);
@@ -153,7 +181,14 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         legacyPages: [],
         inbox: [],
         timetable: {},
+        settings: null,
     };
+    try {
+        const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
+        if (set.exists()) out.settings = fromCloudSettings(set.data());
+    } catch {
+        /* 규칙을 올리기 전에는 읽기가 거절됩니다. 나머지는 그대로 받습니다. */
+    }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));
         snap.forEach((item) => {

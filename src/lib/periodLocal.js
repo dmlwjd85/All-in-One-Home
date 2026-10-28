@@ -1,4 +1,4 @@
-/** 이 기기에만 두는 시간표 설정입니다. 서버(Firestore)로 보내지 않습니다.
+/** 시간표 설정입니다. 로그인하면 users/{uid}/settings/device 로 다른 기기와 같이 씁니다(오늘 조퇴 시각은 빼고).
     9·10교시 과목, 교시 수, 수업 길이, 잠금, 출퇴근 시각, 오늘 조퇴 시각을 담습니다.
     공용 PC 모드에서는 메모리에만 둡니다. */
 import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
@@ -71,8 +71,10 @@ export function readPeriodLocal() {
     };
 }
 
-export function patchPeriodLocal(patch) {
+export function patchPeriodLocal(patch, { fromCloud = false } = {}) {
+    /* syncAt: 다른 기기와 비교할 마지막 고친 시각. 클라우드에서 받은 값은 그 시각을 그대로 둡니다. */
     const next = { ...readPeriodLocal(), ...patch };
+    if (!fromCloud) next.syncAt = Date.now();
     writeJson(PERIOD_LOCAL_KEY, next);
     return next;
 }

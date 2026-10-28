@@ -1,12 +1,13 @@
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
-import { setExtraPeriod } from './periodLocal.js';
+import { patchPeriodLocal, readPeriodLocal, setExtraPeriod, subscribePeriodLocal } from './periodLocal.js';
+import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { deleteUserDoc, pullUserData, pushUserData, syncAvailable } from './cloud.js';
+import { CLOUD_COLLECTIONS, deleteUserDoc, pullUserData, pushUserData, syncAvailable, unchangedSincePush } from './cloud.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
@@ -60,6 +61,7 @@ let cloudHashes = {};
 let connectTask = null;
 
 function emit() {
+    setAcademicSource(state?.profile?.academic);
     const snap = snapshot();
     listeners.forEach((fn) => fn(snap));
 }
@@ -194,10 +196,20 @@ async function revertMemory(previous, undoable) {
     emit();
 }
 
+function sharedSettingsKey(profile = {}) {
+    return JSON.stringify([profile.ttEdited || [], profile.academic || {}, profile.periodStarts || []]);
+}
+
+/* 이 기기 시간표 설정(교시 길이·9·10교시 등)이 바뀌면 다른 기기와 같이 쓰도록 올립니다. */
+subscribePeriodLocal(() => { flushCloud().catch(() => {}); });
+
 export async function update(recipe, { undoable = false } = {}) {
     const previous = structuredClone(state);
     if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
+    if (next !== previous && next?.profile && sharedSettingsKey(next.profile) !== sharedSettingsKey(previous.profile) && next.profile.settingsAt === previous.profile?.settingsAt) {
+        next.profile.settingsAt = Date.now();
+    }
     state = next;
     mirrorTheme(state.profile.theme);
     emit();
@@ -211,6 +223,12 @@ export async function update(recipe, { undoable = false } = {}) {
     }
     flushCloud().catch(() => {});
     return null;
+}
+
+/** 검사용: 다른 기기에서 받은 자료를 합치는 길을 클라우드 없이 돌립니다. */
+export async function absorbCloudForTest(remote, hashes) {
+    if (hashes) cloudHashes = hashes;
+    return update((draft) => absorbCloud(draft, remote));
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
@@ -322,6 +340,30 @@ function dropRegisteredInbox(draft) {
     return draft;
 }
 
+/** 양쪽에 다 있는 줄: 이 기기에서 올린 뒤 고친 적 없으면 다른 기기에서 고친 값으로 바꿉니다.
+    이 기기에서 고친 게 아직 안 올라갔으면 이 기기 값이 남고 곧 올라갑니다. 지우는 일은 하지 않습니다. */
+function refreshShared(local = [], remote = [], cloudName, hashes) {
+    const byId = new Map((remote || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
+    return local.map((row) => {
+        const other = row?.id ? byId.get(String(row.id)) : null;
+        if (!other || !unchangedSincePush(hashes, cloudName, row)) return row;
+        return { ...row, ...other };
+    });
+}
+
+/** 기기끼리 같이 쓰는 설정: 더 늦게 고친 쪽이 통째로 이깁니다. */
+function absorbSettings(draft, settings) {
+    if (!settings) return;
+    const local = readPeriodLocal();
+    const localAt = Math.max(Number(draft.profile.settingsAt) || 0, Number(local.syncAt) || 0);
+    if (settings.at <= localAt) return;
+    draft.profile.ttEdited = [...(settings.ttEdited || [])].sort();
+    draft.profile.academic = cleanAcademic(settings.academic);
+    if ((settings.periodStarts || []).length) draft.profile.periodStarts = settings.periodStarts;
+    draft.profile.settingsAt = settings.at;
+    patchPeriodLocal({ ...settings.periodLocal, syncAt: settings.at }, { fromCloud: true });
+}
+
 function absorbCloud(draft, remote) {
     const remoteHas = (remote.students || []).length || (remote.records || []).length;
     if (draft.profile.demo && remoteHas) {
@@ -335,6 +377,10 @@ function absorbCloud(draft, remote) {
         draft.notes = draft.notes.filter(keep);
         draft.profile.demo = false;
     }
+    for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
+        if (localName === 'inbox') continue;
+        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, cloudHashes);
+    }
     draft.students = unionById(draft.students, remote.students);
     draft.attendance = unionById(draft.attendance, remote.attendance);
     draft.records = unionById(draft.records, remote.records);
@@ -345,8 +391,11 @@ function absorbCloud(draft, remote) {
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
     draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
     for (const [day, value] of Object.entries(remote.timetable || {})) {
-        if (!draft.timetable[day] || !Object.keys(draft.timetable[day]).length) draft.timetable[day] = value;
+        const mine = draft.timetable[day];
+        if (!mine || !Object.keys(mine).length) draft.timetable[day] = value;
+        else if (unchangedSincePush(cloudHashes, 'timetable', { id: day, ...mine })) draft.timetable[day] = value;
     }
+    absorbSettings(draft, remote.settings);
     if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
     if (remote.profile?.classSize && !draft.profile.classSize) draft.profile.classSize = remote.profile.classSize;
     if ((remote.students || []).length || remote.profile?.className) {
@@ -860,6 +909,16 @@ export async function removeItem(bucket, id) {
     }, { undoable: true });
 }
 
+/** 학사일정 한 학년도를 저장합니다. 빈 칸은 지웁니다. */
+export async function saveAcademicYear(year, row) {
+    return update((draft) => {
+        const next = { ...(draft.profile.academic || {}), [String(year)]: row };
+        draft.profile.academic = cleanAcademic(next);
+        draft.profile.settingsAt = Date.now();
+        return draft;
+    }, { undoable: true });
+}
+
 export async function patchProfile(patch) {
     const failed = await update((draft) => {
         draft.profile = { ...draft.profile, ...patch };
@@ -1149,9 +1208,26 @@ async function connectCloud(uid) {
     await flushCloud();
     const remote = await pullUserData(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
-    const hasRemote = remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
+    const hasRemote = remote.settings || remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
     if (!hasRemote) return;
     await update((draft) => absorbCloud(draft, remote));
+}
+
+let lastRefresh = 0;
+/** 앱으로 돌아오거나 창을 다시 볼 때 다른 기기에서 고친 것을 받아 옵니다(1분에 한 번까지). */
+export async function refreshFromCloud({ force = false } = {}) {
+    const uid = state.auth?.uid;
+    if (!uid || !syncAvailable() || connectTask?.uid !== uid) return { skipped: true };
+    const now = Date.now();
+    if (!force && now - lastRefresh < 60000) return { skipped: true };
+    lastRefresh = now;
+    try {
+        await connectTask.promise;
+        await connectCloud(uid);
+        return { ok: true };
+    } catch {
+        return { ok: false };
+    }
 }
 
 export async function setAuth(auth) {
