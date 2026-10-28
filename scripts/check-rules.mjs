@@ -156,6 +156,17 @@ async function settingsSuite(env) {
     await allow('가장 큰 설정', () => setDoc(ref(phone), biggest));
     await allow('가벼운 설정', () => setDoc(ref(phone), light));
     await deny('학사일정 5개 학년도', () => setDoc(ref(phone), { ...light, academic: { 2024: {}, 2025: {}, 2026: {}, 2027: {}, 2028: {} } }));
+    /* 이스케이프: '|'·'=' 가 든 과목명이 그대로 왕복되고, 크기 한도(1000)를 넘으면 거절됩니다. */
+    const esc = toCloudSettings({ profile: SETTINGS_PROFILE }, { ...SETTINGS_LOCAL, extra: { mon: { p9: 'A|B반' }, tue: { p10: '1=1반' }, wed: { s9: '100%' } } }).body;
+    await allow('9교시 | = % 과목명', () => setDoc(ref(phone), esc));
+    const escBack = fromCloudSettings((await getDoc(ref(pc))).data() || {}).periodLocal.extra;
+    if (escBack?.mon?.p9 !== 'A|B반' || escBack?.tue?.p10 !== '1=1반' || escBack?.wed?.s9 !== '100%') out.push(`이스케이프한 과목명이 그대로 돌아오지 않았습니다. ${JSON.stringify(escBack)}`);
+    await deny('9교시 날 % 글자', () => setDoc(ref(phone), pl({ extra: 'mon-p9=100%' })));
+    const fat = Array.from({ length: 20 }, (_, i) => `${['mon', 'tue', 'wed', 'thu', 'fri'][i % 5]}-${['p9', 'p10', 's9', 's10'][Math.floor(i / 5)]}=${'%7C'.repeat(20)}`).join('|');
+    if (fat.length <= 1000) out.push('크기 한도 검사용 글자가 1000자를 넘지 않습니다.');
+    await deny('9교시 1000자 넘음', () => setDoc(ref(phone), { ...light, periodLocal: { ...light.periodLocal, extra: fat } }));
+    await deny('학사일정 넷째 학년도 값', () => setDoc(ref(phone), { ...light, academic: { 2024: {}, 2025: {}, 2026: {}, 2027: { memo: '학생 상담' } } }));
+    await deny('updatedAt 글자', () => setDoc(ref(phone), { ...body, updatedAt: '학생 상담' }));
     await allow('빈 9교시 설정', () => setDoc(ref(phone), pl({ extra: '', lengths: '', locks: '', cellLocks: '', workStart: '', workEnd: '' })));
     /* 날짜별 시간표 9·10교시 */
     const tt = (fs, row) => setDoc(doc(fs, 'users/teacher-sync/timetable/2026-10-28'), row);
@@ -174,7 +185,10 @@ const RULE_MUTANTS = [
     ['읽기 열기', "allow read, delete: if isOwner(uid) && key == 'device';", 'allow read, delete: if true;'],
     ['at 검사 빼기', "&& v.at is int && v.at > 0 && v.at <= 4102444800000", ''],
     ['periodLocal 키 제한 빼기', "&& p.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])\n", '\n'],
-    ['extra 칸 이름 제한 빼기', "e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}){0,19})?$')", "e.matches('(?s).*')"],
+    ['extra 칸 이름 제한 빼기', "e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}){0,19})?$')", "e.matches('(?s).*')"],
+    ['R_extraSize', "e is string && e.size() <= 1000", 'e is string'],
+    ['R_acadAt3', "&& acadAt(a, 0) && acadAt(a, 1) && acadAt(a, 2) && acadAt(a, 3);", '&& acadAt(a, 0) && acadAt(a, 1) && acadAt(a, 2);'],
+    ['R_updatedAt', "&& (!('updatedAt' in v) || v.updatedAt is timestamp);", ';'],
     ['ttEdited 크기 빼기', "joinedOk(v.ttEdited, 400,", 'joinedOk(v.ttEdited, 100000,'],
     ['칸 시각 검사 빼기', "&& setAtsOk(v.ats)", ''],
     ['academic 크기 빼기', "a is map && a.size() <= 4", 'a is map'],

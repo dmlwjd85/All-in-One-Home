@@ -7,6 +7,22 @@ import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
 
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
+
+/* 9·10교시 과목명의 '|'·'='·'%' 이스케이프 왕복과 옛 글자 읽기 */
+{
+    const names = { mon: { p9: 'A|B반' }, tue: { p10: '1=1반' }, wed: { s9: '100%' }, thu: { s10: '%7C그대로' } };
+    const up = toCloudSettings({ profile: { settingsAt: 1767225600000 } }, { extra: names }).body;
+    const text = up.periodLocal.extra;
+    check(text.split('|').length === 4 && text.split('|').every((it) => it.split('=').length === 2), `이스케이프 뒤에도 구분 글자가 섞였습니다: ${text}`);
+    const back = fromCloudSettings(up).periodLocal.extra;
+    check(JSON.stringify(back) === JSON.stringify(names), `이스케이프한 과목명이 그대로 돌아오지 않습니다: ${JSON.stringify(back)}`);
+    const old = fromCloudSettings({ ...up, periodLocal: { ...up.periodLocal, extra: 'mon-p9=방과후|tue-p10=보충 50%' } }).periodLocal.extra;
+    check(old.mon?.p9 === '방과후' && old.tue?.p10 === '보충 50%', `옛 글자 모양을 읽지 못했습니다: ${JSON.stringify(old)}`);
+    const nested = fromCloudSettings({ ...up, periodLocal: { ...up.periodLocal, extra: { mon: { p9: '방과후' } } } }).periodLocal.extra;
+    check(nested.mon?.p9 === '방과후', '옛 맵 모양을 읽지 못했습니다.');
+    const huge = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, { p9: '|'.repeat(20), p10: '='.repeat(20), s9: '%'.repeat(20), s10: '|'.repeat(20) }]));
+    check(toCloudSettings({ profile: { settingsAt: 1767225600000 } }, { extra: huge }).body.periodLocal.extra.length <= 1000, '9교시 글자가 규칙 크기 한도(1000)를 넘습니다.');
+}
 const vault = () => { const map = new Map(); return { get: async (k) => map.get(k), set: async (k, v) => { map.set(k, v); }, remove: async (k) => { map.delete(k); } }; };
 useVaultsForTest(vault(), vault(), vault());
 

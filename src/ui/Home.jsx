@@ -14,6 +14,7 @@ import { usePeriodLocal } from './usePeriodLocal.js';
 import { WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
+import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
 
 export function Home() {
@@ -72,7 +73,7 @@ export function Home() {
     const sumEvent = events.length || googleWeek.length
         ? `${events[0] ? `${weekdayKo(events[0].date)} ${Number(events[0].date.slice(5, 7))}/${Number(events[0].date.slice(8))} ${events[0].title}` : googleWeek[0].title}${events.length + googleWeek.length > 1 ? ` 외 ${events.length + googleWeek.length - 1}` : ''}`
         : '이번 주 일정은 아직 없어요';
-    const sumRecent = feed.length ? `${feed[0].title} · ${feed[0].text || ''}` : '아직 기록이 없어요';
+    const sumRecent = recentSummary(feed[0]);
 
     return (
         <div className={timer ? 'home-grid has-leave' : 'home-grid'}>
