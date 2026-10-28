@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
-import { flushCloudNow, joined, markChecked, setAttendance } from '../lib/db.js';
+import { clearAttendDraft, flushCloudNow, joined, markChecked, setAttendance, writeAttendDraft } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
@@ -143,12 +143,31 @@ export function ReasonSheet({ student, mark, date, onClose }) {
     const [saving, setSaving] = useState(false);
     const extra = () => ({ note, paper, period });
     /* 상태·교시·사유는 누르는 즉시 저장됩니다. 메모와 서류는 사유나 '저장'을 눌러야 저장되므로 따로 봅니다. */
-    const dirty = Boolean(status && status !== '출석') && (note !== (mark?.note || '') || paper !== Boolean(mark?.paper));
+    /* 확인창은 '저장'이나 사유를 누르기 전 처음 열었을 때 값과 비교합니다(입력은 0.3초마다 기기에 남지만, 아직 확정 전). */
+    const base = useRef({ note: mark?.note || '', paper: Boolean(mark?.paper) });
+    const dirty = Boolean(status && status !== '출석') && (note !== base.current.note || paper !== base.current.paper);
     const live = useRef({});
     live.current = { dirty, status, note, paper, period };
+    const typed = useRef(false);
+
+    /* 입력할 때마다 0.3초 뒤 이 기기에 바로 남깁니다(회의록 임시본처럼). */
+    useEffect(() => {
+        if (!typed.current) { typed.current = true; return undefined; }
+        if (!status || status === '출석') return undefined;
+        const timer = setTimeout(() => {
+            writeAttendDraft({ date, sid: student.id, status, note, paper, period });
+            setAttendance(date, student.id, status, { note, paper, period }).catch(() => {});
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [note, paper]);
 
     function tryClose() {
-        if (live.current.dirty && !window.confirm(LEAVE_ASK)) return;
+        if (live.current.dirty) {
+            if (!window.confirm(LEAVE_ASK)) return;
+            /* 저장하지 않고 닫으면 처음 값으로 되돌립니다. */
+            setAttendance(date, student.id, status, { ...base.current, period }).catch(() => {});
+        }
+        clearAttendDraft();
         onClose();
     }
 
@@ -162,17 +181,19 @@ export function ReasonSheet({ student, mark, date, onClose }) {
 
     /* 앱을 닫거나 다른 앱으로 넘어가면 적던 메모·서류를 이 기기에 먼저 남기고 올립니다. */
     useEffect(() => {
+        /* 앱 전체 올리기(App)보다 먼저 돌도록 capture로 걸고, 임시본은 동기로 남깁니다. */
         const keep = () => {
             const now = live.current;
             if (!now.dirty) return;
+            writeAttendDraft({ date, sid: student.id, status: now.status, note: now.note, paper: now.paper, period: now.period });
             setAttendance(date, student.id, now.status, { note: now.note, paper: now.paper, period: now.period }).catch(() => {});
         };
         const onHide = () => { if (document.visibilityState === 'hidden') keep(); };
-        document.addEventListener('visibilitychange', onHide);
-        window.addEventListener('pagehide', keep);
+        document.addEventListener('visibilitychange', onHide, true);
+        window.addEventListener('pagehide', keep, true);
         return () => {
-            document.removeEventListener('visibilitychange', onHide);
-            window.removeEventListener('pagehide', keep);
+            document.removeEventListener('visibilitychange', onHide, true);
+            window.removeEventListener('pagehide', keep, true);
         };
     }, [date, student.id]);
 
@@ -180,6 +201,7 @@ export function ReasonSheet({ student, mark, date, onClose }) {
         setStatus(next);
         if (next === '출석') {
             await setAttendance(date, student.id, '');
+            clearAttendDraft();
             onClose();
             return;
         }
@@ -195,6 +217,7 @@ export function ReasonSheet({ student, mark, date, onClose }) {
 
     async function chooseReason(next) {
         await setAttendance(date, student.id, status, { ...extra(), reason: next });
+        clearAttendDraft();
         onClose();
     }
 
@@ -206,6 +229,8 @@ export function ReasonSheet({ student, mark, date, onClose }) {
                 const failed = await setAttendance(date, student.id, status, extra());
                 if (failed?.storageFailed) return;
             }
+            clearAttendDraft();
+            base.current = { note, paper };
             const where = await flushCloudNow();
             ui?.showToast?.(where === 'later' ? LATER_TOAST : SAVED_TOAST);
             onClose();

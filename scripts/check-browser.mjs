@@ -3358,8 +3358,8 @@ try {
             await again.$eval('[aria-label="메모"]', (el) => { el.select?.(); });
             await again.keyboard.press('Backspace');
             await again.type('[aria-label="메모"]', '숨김 저장');
+            /* 입력 0.3초가 지나기 전에 숨기고 곧바로 닫습니다(숨김 처리만으로 남아야 함). */
             await again.evaluate(() => window.dispatchEvent(new Event('pagehide')));
-            await delay(400);
             await again.close({ runBeforeUnload: false });
             const third = await context.newPage();
             await pinBrowserClock(third);
@@ -3369,6 +3369,42 @@ try {
             await delay(300);
             const hidden = await third.evaluate(() => document.querySelector('.attend-layout aside')?.innerText || '');
             check(hidden.includes('숨김 저장'), `${width} 앱을 닫을 때 적던 출결 메모가 사라졌습니다: ${hidden.slice(0, 200)}`);
+            /* 숨김 알림 없이 바로 꺼져도(강제 종료) 입력 0.3초 뒤면 이 기기에 남아 있어야 합니다. */
+            await third.evaluate(() => document.querySelector('.cell-grid button')?.click());
+            await third.waitForSelector('[data-screen="attend-status"]');
+            await third.evaluate(() => [...document.querySelectorAll('[data-screen="attend-status"] button')].find((b) => b.innerText.trim() === '지각')?.click());
+            await third.waitForSelector('[aria-label="메모"]');
+            await third.$eval('[aria-label="메모"]', (el) => { el.select?.(); });
+            await third.keyboard.press('Backspace');
+            await third.type('[aria-label="메모"]', '바로 꺼짐');
+            await delay(700);
+            /* 숨김 알림 없이도 0.3초 뒤 이 기기 임시본에 남아 있어야 합니다. */
+            const draftNow = await third.evaluate(() => localStorage.getItem('ssug-gyomu-attend-draft') || '');
+            check(draftNow.includes('바로 꺼짐'), `${width} 입력 0.3초 뒤 출결 메모가 기기에 남지 않았습니다: ${draftNow.slice(0, 200)}`);
+            /* 숨김·닫기 알림이 오기 전에 이미 기기에 있어야 하므로, 닫지 않은 채 새 창으로 엽니다. */
+            const fourth = await context.newPage();
+            await pinBrowserClock(fourth);
+            await fourth.setViewport({ width, height: 800, deviceScaleFactor: 1 });
+            await fourth.goto(`${origin}?at=08:42&mode=light#/attend`, { waitUntil: 'domcontentloaded' });
+            await fourth.waitForSelector('.cell-grid button');
+            await delay(300);
+            const killed = await fourth.evaluate(() => document.querySelector('.attend-layout aside')?.innerText || '');
+            await third.close({ runBeforeUnload: false });
+            check(killed.includes('바로 꺼짐'), `${width} 입력한 출결 메모가 바로 꺼졌을 때 사라졌습니다(입력 즉시 저장 안 됨): ${killed.slice(0, 200)}`);
+            /* 저장하지 않고 닫기를 고르면 시트가 닫히고, 적던 메모는 처음 값으로 돌아갑니다. */
+            await fourth.evaluate(() => document.querySelector('.cell-grid button')?.click());
+            await fourth.waitForSelector('[data-screen="attend-status"]');
+            await fourth.evaluate(() => [...document.querySelectorAll('[data-screen="attend-status"] button')].find((b) => b.innerText.trim() === '지각')?.click());
+            await fourth.waitForSelector('[aria-label="메모"]');
+            await fourth.type('[aria-label="메모"]', ' 버릴 메모');
+            await delay(500);
+            const accepted = [];
+            fourth.on('dialog', async (dialog) => { accepted.push(dialog.message()); await dialog.accept(); });
+            await fourth.keyboard.press('Escape');
+            await delay(400);
+            const after = await fourth.evaluate(() => ({ open: Boolean(document.querySelector('[data-screen="attend-status"]')), side: document.querySelector('.attend-layout aside')?.innerText || '' }));
+            check(accepted.length === 1 && !after.open && !after.side.includes('버릴 메모') && after.side.includes('바로 꺼짐'), `${width} 저장하지 않고 닫기가 묻지 않거나 적던 메모를 되돌리지 않습니다: ${JSON.stringify({ accepted, after: { ...after, side: after.side.slice(0, 120) } })}`);
+            await fourth.close({ runBeforeUnload: false });
         });
     }
 } catch (error) {

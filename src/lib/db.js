@@ -276,9 +276,28 @@ export function tellRejectedForTest(keys) {
     tellRejected(keys);
 }
 
-export async function flushCloud() {
-    if (!state.auth?.uid || !syncAvailable()) return { skipped: true };
-    const result = await pushUserData(state.auth.uid, state, {
+/* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
+let cloudApi = { push: pushUserData, pull: pullUserData, available: syncAvailable };
+export function useCloudForTest(api = null) {
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, available: () => true, ...api } : { push: pushUserData, pull: pullUserData, available: syncAvailable };
+}
+let signOutHook = null;
+export function useSignOutForTest(fn = null) { signOutHook = fn; }
+
+/*
+ * 올리기는 한 번에 하나씩 차례로 합니다. 앱 숨김 때 옛 상태로 시작한 올리기가 뒤늦게 끝나며
+ * 새 메모를 올린 뒤의 해시를 옛 해시로 덮지 않게 합니다(5차 검수 1번).
+ */
+let flushChain = Promise.resolve();
+export function flushCloud() {
+    const run = flushChain.then(flushCloudOnce, flushCloudOnce);
+    flushChain = run.then(() => undefined, () => undefined);
+    return run;
+}
+
+async function flushCloudOnce() {
+    if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
+    const result = await cloudApi.push(state.auth.uid, state, {
         memoryOnly: memoryOnly || state.profile.sharedPc,
         hashes: cloudHashes,
     });
@@ -296,7 +315,7 @@ export async function flushCloud() {
  * 연결이 없거나 오래 걸리면 'later'(기기에는 이미 저장됨, 다음에 다시 올림).
  */
 export async function flushCloudNow({ timeout = 8000 } = {}) {
-    if (!state.auth?.uid || !syncAvailable()) return 'local';
+    if (!state.auth?.uid || !cloudApi.available()) return 'local';
     let timer = 0;
     try {
         const result = await Promise.race([
@@ -410,7 +429,7 @@ function queueCloudForget(bucket, id, row = null) {
 }
 
 async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false } = {}) {
-    if (!cloudForget.size || !state.auth?.uid || (!skipSyncCheck && !syncAvailable())) return;
+    if (!cloudForget.size || !state.auth?.uid || (!skipSyncCheck && !cloudApi.available())) return;
     const uid = state.auth.uid;
     const memory = memoryOnly || state.profile?.sharedPc;
     for (const [entryKey, entry] of [...cloudForget]) {
@@ -710,6 +729,7 @@ export async function boot(query = '') {
         return snapshot();
     }
     emit();
+    await applyAttendDraft();
     return snapshot();
 }
 
@@ -1013,6 +1033,42 @@ export async function promoteInbox(id) {
 function forgetAttendance(row) {
     const shaped = row ? toCloudRow('attendance', row) : null;
     if (shaped?.id) queueCloudForget('attendance', shaped.id, row);
+}
+
+/*
+ * 출결 시트에서 적던 메모·서류: 입력하자마자(0.3초) 그리고 앱을 숨길 때 localStorage에 동기로 남깁니다.
+ * 기기 저장소(IndexedDB)는 비동기라 앱을 닫는 순간 끝나지 않을 수 있어서, 다시 열 때 이것을 먼저 되살립니다.
+ */
+export const ATTEND_DRAFT_KEY = 'ssug-gyomu-attend-draft';
+export function writeAttendDraft({ date, sid, status, note = '', paper = false, period = 0 }) {
+    if (!date || !sid || !status || status === '출석') return false;
+    try {
+        globalThis.localStorage?.setItem(ATTEND_DRAFT_KEY, JSON.stringify({ u: draftOwner(), date, sid, status, note: String(note).slice(0, 2000), paper: Boolean(paper), period: Number(period) || 0 }));
+        return true;
+    } catch { return false; }
+}
+/* 이 기기 자료의 주인: 로그인 중이면 그 계정, 아니면 마지막으로 쓴 계정(앱을 막 열면 로그인 표시가 아직 비어 있습니다). */
+function draftOwner() { return state.auth?.uid || lastCloudUid || ''; }
+export function clearAttendDraft() {
+    try { globalThis.localStorage?.removeItem(ATTEND_DRAFT_KEY); } catch { /* 없어도 됩니다. */ }
+}
+function readAttendDraft() {
+    try {
+        const d = JSON.parse(globalThis.localStorage?.getItem(ATTEND_DRAFT_KEY) || 'null');
+        if (!d || typeof d !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(d.date) || typeof d.sid !== 'string' || !d.sid || typeof d.status !== 'string') return null;
+        return d;
+    } catch { return null; }
+}
+/** 남은 임시본을 출결에 되살립니다. 다른 계정에서 적던 것은 버립니다. */
+export async function applyAttendDraft() {
+    const d = readAttendDraft();
+    if (!d) return false;
+    clearAttendDraft();
+    if ((d.u || '') !== draftOwner()) return false;
+    const row = state.attendance.find((r) => r.id === `${d.date}_${d.sid}`);
+    if (row && row.status === d.status && (row.note || '') === d.note && Boolean(row.paper) === d.paper) return false;
+    await setAttendance(d.date, d.sid, d.status, { note: d.note, paper: d.paper, ...(d.period ? { period: d.period } : {}) });
+    return true;
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
@@ -1431,6 +1487,7 @@ const accountKey = (uid) => `account:${uid}`;
  * 새 계정의 보관본이 있으면 되살리고 없으면 비운 뒤 새 계정 자료를 받아 옵니다. 보관에 실패하면 아무것도 바꾸지 않습니다.
  */
 async function switchAccountLocal(from, to) {
+    clearAttendDraft();
     const empty = emptyState();
     const pack = {
         data: Object.fromEntries(ACCOUNT_PARTS.map((part) => [part, structuredClone(state[part] ?? empty[part])])),
@@ -1504,7 +1561,7 @@ function writeDrafts(value) {
 /* 보관에 실패하면 로그아웃합니다. 화면에는 이전 계정 자료가 남으므로, 새 계정으로 올리거나 지우지 않게 합니다. */
 async function leaveAfterFailedSwitch() {
     try {
-        const { signOutFirebase } = await import('../firebase.js');
+        const { signOutFirebase } = signOutHook ? { signOutFirebase: signOutHook } : await import('../firebase.js');
         await signOutFirebase();
     } catch { /* 로그인 모듈이 없으면(검사) 로그인 표시만 비웁니다. */ }
 }
@@ -1512,7 +1569,7 @@ async function leaveAfterFailedSwitch() {
 async function connectCloud(uid) {
     await flushCloud();
     const seen = { ...cloudHashes };
-    const remote = await pullUserData(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
+    const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
     const hasRemote = remote.settings || remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
     if (!hasRemote) return;
@@ -1523,7 +1580,7 @@ let lastRefresh = 0;
 /** 앱으로 돌아오거나 창을 다시 볼 때 다른 기기에서 고친 것을 받아 옵니다(1분에 한 번까지). */
 export async function refreshFromCloud({ force = false } = {}) {
     const uid = state.auth?.uid;
-    if (!uid || !syncAvailable() || connectTask?.uid !== uid) return { skipped: true };
+    if (!uid || !cloudApi.available() || connectTask?.uid !== uid) return { skipped: true };
     const now = Date.now();
     if (!force && now - lastRefresh < 60000) return { skipped: true };
     lastRefresh = now;
