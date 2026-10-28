@@ -80,6 +80,14 @@ export async function stamp(firestore, body, names, previous) {
     return next;
 }
 
+/** 올리기와 같은 방식으로 이 줄의 해시를 셉니다(받아 온 줄을 '올린 것과 같다'고 적어 둘 때 씁니다). */
+export function rowMark(cloudName, row) {
+    const shaped = row ? toCloudRow(cloudName, row) : null;
+    if (!shaped?.id) return null;
+    const body = cloudName === 'events' ? prepareEventWrite(shaped.body).body : shaped.body;
+    return { key: `${cloudName}/${shaped.id}`, mark: fingerprint(body, shaped.clear || []) };
+}
+
 /** 이 기기 줄이 마지막으로 올린 모양 그대로인지(=이 기기에서 그 뒤로 안 고쳤는지). 그럴 때만 다른 기기 값으로 바꿉니다. */
 export function unchangedSincePush(hashes, cloudName, row) {
     const shaped = toCloudRow(cloudName, row);

@@ -647,6 +647,14 @@ a.chip,
     .cell-grid.wide { grid-template-columns: repeat(7, minmax(0, 1fr)); }
     .attend-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; align-items: start; }
 }
+/* 900~1279px: 세 칸이면 가운데 '오늘 할 일'이 글자 한 줄 폭까지 눌립니다. 두 칸으로 놓습니다. */
+@media (min-width: 900px) and (max-width: 1279px) {
+    .home-grid { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+    .home-quick, .home-grid.has-leave .home-quick { grid-column: 2; grid-row: 1; }
+    .home-event { grid-column: 1 / -1; grid-row: 3; }
+    .home-recent { grid-column: 1 / -1; grid-row: 4; }
+    .home-grid.has-leave .home-leave { grid-column: 1 / -1; grid-row: 5; }
+}
 
 .choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .choice-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }

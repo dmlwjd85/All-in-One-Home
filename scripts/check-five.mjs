@@ -165,7 +165,7 @@ check(recentSummary({ title: '', text: '' }) === '아직 기록이 없어요' &&
 check(joinSummary(['a', null, '']) === 'a', '빈 조각을 빼지 않습니다.');
 
 /* 캐시 판 */
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v39"), '서비스 워커가 v39이 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v40"), '서비스 워커가 v40이 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');
