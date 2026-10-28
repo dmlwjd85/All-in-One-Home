@@ -21,6 +21,7 @@ import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { Minutes } from './ui/Minutes.jsx';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
@@ -289,6 +290,8 @@ export default function App() {
                 ? '#/settings'
                 : route.name === 'student'
                     ? '#/students'
+                    : route.name === 'minutes' && route.params.mode !== 'list'
+                        ? (route.params.mode === 'edit' && route.params.id ? `#/minutes/${route.params.id}` : '#/minutes')
                     : route.name === 'legacy'
                         ? (route.params.page ? '#/settings/legacy' : '#/settings')
                         : '#/today';
@@ -300,7 +303,7 @@ export default function App() {
             location.replace(parent);
         }
         setHash(parent);
-    }, [route.name, route.params.date, route.params.page]);
+    }, [route.name, route.params.date, route.params.page, route.params.mode, route.params.id]);
 
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
@@ -333,7 +336,7 @@ export default function App() {
         }
         if (id === 'minutes') {
             closeLayers();
-            setFlow({ id: 'minutes' });
+            go('#/minutes/new');
             return;
         }
         if (id.startsWith('quick:')) {
@@ -577,6 +580,7 @@ export default function App() {
     if (route.name === 'roster') screen = <RosterSettings />;
     if (route.name === 'day') screen = <Day key={route.params.date} />;
     if (route.name === 'legacy') screen = <Legacy />;
+    if (route.name === 'minutes') screen = <Minutes />;
 
     const titles = {
         today: [clock.label, `${data.profile.className || '학급을 아직 안 적었어요'} · ${clock.clock}`],
@@ -587,6 +591,7 @@ export default function App() {
         schedule: ['일정·시간표', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],
+        minutes: ['회의록', '여러 줄로 적고 저장 버튼으로 남겨요'],
         settings: ['설정', '학급, 소리, 단축키, 계정'],
         roster: ['명단', '번호에 이름을 적어 주세요'],
         day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],
@@ -706,7 +711,7 @@ export default function App() {
                                 return;
                             }
                             if (action.id === 'minutes') {
-                                setFlow({ id: 'minutes' });
+                                go('#/minutes/new');
                                 return;
                             }
                             if (action.kind) setFlow({ id: 'quick', kind: action.kind });

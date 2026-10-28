@@ -92,6 +92,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const { doc, setDoc, deleteField } = firestore;
     const nextHashes = { ...hashes };
     let pending = 0;
+    const rejected = [];
     const write = async (name, id, shaped, migratedAt) => {
         const prepared = name === 'events' ? prepareEventWrite(shaped.body) : { body: shaped.body, retryWithoutEndTime: false };
         const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt);
@@ -113,10 +114,12 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     nextHashes[key] = fingerprint(fallback, clear);
                     return;
                 } catch (again) {
+                    if (denied(again)) rejected.push(key);
                     if (retryable(again)) pending += 1;
                     return;
                 }
             }
+            if (denied(error)) rejected.push(key);
             if (retryable(error)) pending += 1;
         }
     };
@@ -166,7 +169,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         if (!shaped) continue;
         await write('timetable', shaped.id, shaped);
     }
-    return { ok: pending === 0, hashes: nextHashes, pending };
+    return { ok: pending === 0, hashes: nextHashes, pending, rejected };
 }
 
 export async function pullUserData(uid, { memoryOnly = false } = {}) {

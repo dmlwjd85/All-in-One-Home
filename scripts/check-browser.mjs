@@ -990,18 +990,18 @@ try {
         await page.keyboard.press('Escape');
         await page.waitForFunction(() => !document.querySelector('[data-screen="flow"]'));
 
+        /* + → '회의록 작성'은 이제 Enter로 저장되던 흐름 대신 회의록 쓰기 화면을 엽니다. 회의 종류는 그 화면의 칩으로 고릅니다. */
         await clickPlus(page, '회의록 작성');
-        await page.waitForFunction(() => document.body.innerText.includes('회의 종류'));
-        const meet = await choiceFit(page, 'flow');
-        reportChoice('회의록 종류 390', meet);
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        const meetLabels = await page.evaluate(() => [...document.querySelectorAll('.minutes-kinds button')].map((el) => el.innerText.trim()));
         for (const label of ['학년회의', '교직원회의', '교과협의회', '학부모회의', '연수']) {
-            if (!meet.labels?.some((item) => item.includes(label))) failures.push(`회의 종류에 ${label}이 없습니다.`);
+            if (!meetLabels.includes(label)) failures.push(`회의 종류에 ${label}이 없습니다.`);
         }
+        check(!(await page.$('[data-screen="flow"]')), '회의록 작성이 아직 예전 흐름(FlowSheet)을 엽니다.');
         await page.screenshot({ path: resolve(shots, 'after_meet_kind_390.png') });
-        await page.evaluate(() => [...document.querySelectorAll('[data-screen="flow"] button')].find((el) => el.innerText.trim() === '교과협의회')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('날짜') && !document.body.innerText.includes('회의 종류'));
-        await page.keyboard.press('Escape');
-        await page.waitForFunction(() => !document.querySelector('[data-screen="flow"]'));
+        await page.evaluate(() => { location.hash = '#/today'; });
+        await page.waitForFunction(() => !document.querySelector('[data-screen="minutes-editor"]'));
+        await page.evaluate(() => localStorage.removeItem('ssug-gyomu-minutes-draft'));
 
         await page.evaluate(() => { location.hash = '#/attend'; });
         await page.waitForFunction(() => document.body.innerText.includes('출석·결석'));
@@ -3140,6 +3140,167 @@ try {
                 check(asked.includes('수업 길이') && level === '초', `저장하지 않은 길이가 있는데 학교급을 묻지 않고 바꿉니다: ${asked} / ${level}`);
             }
         }, width >= 900 ? 900 : 800);
+    }
+
+    /* 회의록: Enter는 줄바꿈만, 저장은 저장 버튼으로만, 임시 저장은 새로 고쳐도 남고, 옛 회의록(#38)도 보입니다. */
+    const minutesShots = resolve(shots, 'minutes');
+    mkdirSync(minutesShots, { recursive: true });
+    const minutesCount = (page) => page.evaluate(() => document.querySelectorAll('.minutes-item').length);
+    await withDemo(390, 'light', async (page) => {
+        await page.evaluate(() => localStorage.removeItem('ssug-gyomu-minutes-draft'));
+        /* 쨈 빠른 입력의 '회의' 칩: 적던 한 줄이 제목이 되고, 저장되지 않은 채 쓰기 화면이 열립니다. */
+        await page.evaluate(() => [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')].find((el) => el.getBoundingClientRect().width > 0)?.click());
+        await page.waitForSelector('.quick-bar.is-open input, .quick-bar.is-open textarea');
+        await page.type('.quick-bar.is-open input, .quick-bar.is-open textarea', '학년 협의회');
+        const meetChip = await page.evaluate(() => {
+            const el = document.querySelector('.quick-bar.is-open .quick-chip[data-kind="회의"]');
+            const r = el?.getBoundingClientRect();
+            return r ? { w: r.width, h: r.height } : null;
+        });
+        check(meetChip && meetChip.w >= 44 && meetChip.h >= 44, `쨈 '회의' 칩이 없거나 44px 미만입니다: ${JSON.stringify(meetChip)}`);
+        await controlBoxes(page, '.quick-bar.is-open .quick-chip', '쨈 분류 칩 390');
+        await page.evaluate(() => document.querySelector('.quick-bar.is-open .quick-chip[data-kind="회의"]')?.click());
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        check(await page.$eval('#minutes-title', (el) => el.value) === '학년 협의회', '쨈에 적던 글이 회의 제목으로 오지 않습니다.');
+        check((await page.evaluate(() => location.hash)) === '#/minutes/new', '쨈 회의 칩이 새 회의록 주소를 열지 않습니다.');
+
+        /* 본문에 Enter: 줄바꿈만 되고 저장·분류되지 않습니다. */
+        await page.click('#minutes-text');
+        await page.keyboard.type('안건');
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('- 체험학습 장소 정하기');
+        await page.keyboard.press('Enter');
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('결정');
+        await page.keyboard.down('Shift'); await page.keyboard.press('Enter'); await page.keyboard.up('Shift');
+        await page.keyboard.type('- 과학관');
+        const typed = await page.$eval('#minutes-text', (el) => el.value);
+        check(typed === '안건\n- 체험학습 장소 정하기\n\n결정\n- 과학관', `회의록 본문에서 Enter가 줄바꿈이 아닙니다: ${JSON.stringify(typed)}`);
+        check(await page.$('[data-screen="minutes-editor"]') && (await page.evaluate(() => location.hash)) === '#/minutes/new', 'Enter를 누르자 회의록 쓰기 화면을 떠났습니다(저장·분류).');
+        /* 날짜: 달력에서 한 번 눌러 고릅니다(드롭다운·스크롤 피커 없음). */
+        check(!(await page.$('[data-screen="minutes-editor"] select')), '회의록 화면에 드롭다운(select)이 있습니다.');
+        const picked = await page.evaluate(() => {
+            const cells = [...document.querySelectorAll('[data-screen="minutes-editor"] [aria-label="날짜"] button')].filter((el) => !el.disabled && el.innerText.trim() === '20');
+            cells[0]?.click();
+            return cells.length;
+        });
+        check(picked >= 1, '회의록 달력에서 날짜를 누를 수 없습니다.');
+        await page.waitForFunction(() => document.querySelector('[data-role="minutes-date"]')?.innerText.includes('20일'));
+        await page.type('#minutes-attendees', '1학년 담임');
+        await delay(500);
+        const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-minutes-draft') || '{}').new || null);
+        check(draft && draft.text === typed && draft.title === '학년 협의회' && draft.attendees === '1학년 담임', `회의록 임시 저장이 안 됩니다: ${JSON.stringify(draft)}`);
+        await page.screenshot({ path: resolve(minutesShots, 'editor-typed-390-light.png'), fullPage: true });
+
+        /* 새로 고쳐도(데모는 기록을 다시 깔지만) 쓰던 회의록은 남아 있습니다. */
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('[data-ready="1"]');
+        await delay(300);
+        await page.evaluate(() => { location.hash = '#/minutes'; });
+        await page.waitForSelector('[data-screen="minutes-list"]');
+        check(await page.evaluate(() => document.body.innerText.includes('쓰다 만 회의록이 있어요')), '목록에 쓰다 만 회의록 안내가 없습니다.');
+        check(await page.evaluate(() => [...document.querySelectorAll('.minutes-item')].some((el) => el.dataset.id === 'meet-demo-old' && el.innerText.includes('학년회의'))), '옛 회의록(meet-…)이 회의록 목록에 보이지 않습니다.');
+        const before = await minutesCount(page);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이어 쓰기')?.click());
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        const restored = await page.evaluate(() => ({ title: document.querySelector('#minutes-title')?.value, text: document.querySelector('#minutes-text')?.value, who: document.querySelector('#minutes-attendees')?.value, date: document.querySelector('[data-role="minutes-date"]')?.innerText }));
+        check(restored.title === '학년 협의회' && restored.text === typed && restored.who === '1학년 담임' && restored.date.includes('20일'), `새로 고친 뒤 쓰던 회의록이 돌아오지 않습니다: ${JSON.stringify(restored)}`);
+
+        /* 저장 버튼으로만 저장 → 보기(여러 줄 그대로) */
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-editor"] button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForSelector('[data-screen="minutes-view"]');
+        const shown = await page.$eval('[data-role="minutes-body"]', (el) => ({ text: el.textContent, lines: el.innerText.split('\n').length, ws: getComputedStyle(el).whiteSpace }));
+        check(shown.text === typed && shown.ws === 'pre-wrap' && shown.lines >= 5, `저장한 회의록이 여러 줄로 보이지 않습니다: ${JSON.stringify(shown)}`);
+        check(!(await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-minutes-draft') || '{}').new)), '저장한 뒤에도 임시 저장이 남아 있습니다.');
+        const savedId = await page.evaluate(() => location.hash.replace('#/minutes/', ''));
+        check(/^meet-\d+$/.test(savedId), `저장한 회의록 주소가 다릅니다: ${savedId}`);
+        await page.screenshot({ path: resolve(minutesShots, 'view-390-light.png'), fullPage: true });
+        /* 저장한 뒤 뒤로 가기는 빈 새 회의록이 아니라 목록으로 갑니다. */
+        await page.goBack();
+        await page.waitForFunction(() => location.hash !== '#/minutes/new' && document.querySelector('[data-screen="minutes-list"]'), { timeout: 5000 }).catch(() => {});
+        check((await page.evaluate(() => location.hash)) === '#/minutes' && await page.$('[data-screen="minutes-list"]'), `저장 뒤 뒤로 가기가 목록이 아닙니다: ${await page.evaluate(() => location.hash)}`);
+        await page.evaluate((id) => { location.hash = `#/minutes/${id}`; }, savedId);
+        await page.waitForSelector('[data-screen="minutes-view"]');
+
+        /* 고치기: id 그대로, 본문에 줄 추가 */
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-view"] button')].find((el) => el.innerText.trim() === '고치기')?.click());
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        await page.focus('#minutes-text');
+        await page.evaluate(() => { const el = document.querySelector('#minutes-text'); el.setSelectionRange(el.value.length, el.value.length); });
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('할 일: 동의서');
+        /* 고치다 남긴 임시본도 목록에 '이어 쓰기'가 보입니다. */
+        await delay(450);
+        await page.evaluate(() => { location.hash = '#/minutes'; });
+        await page.waitForSelector('[data-screen="minutes-list"]');
+        check(await page.$(`[data-draft-for="${savedId}"]`), '고치던 회의록의 이어 쓰기가 목록에 없습니다.');
+        await page.evaluate((id) => [...document.querySelectorAll(`[data-draft-for="${id}"] button`)].find((el) => el.innerText.trim() === '이어 쓰기')?.click(), savedId);
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        check((await page.evaluate(() => location.hash)) === `#/minutes/${savedId}/edit` && (await page.$eval('#minutes-text', (el) => el.value)).endsWith('할 일: 동의서'), '이어 쓰기로 고치던 내용이 돌아오지 않습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-editor"] button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForSelector('[data-screen="minutes-view"]');
+        check((await page.evaluate(() => location.hash)) === `#/minutes/${savedId}`, '고친 회의록의 id가 바뀌었습니다.');
+        check((await page.$eval('[data-role="minutes-body"]', (el) => el.textContent)) === `${typed}\n할 일: 동의서`, '고친 회의록 본문이 다릅니다.');
+        await page.evaluate(() => { location.hash = '#/minutes'; });
+        await page.waitForSelector('[data-screen="minutes-list"]');
+        check((await minutesCount(page)) === before + 1, `회의록 개수가 맞지 않습니다(고치기가 새로 하나를 더 만들었을 수 있음): ${before} → ${await minutesCount(page)}`);
+
+        /* 지우기: 한 번 확인 뒤에만 지웁니다. 그만두기를 누르면 그대로 있습니다. */
+        await page.evaluate((id) => { location.hash = `#/minutes/${id}`; }, savedId);
+        await page.waitForSelector('[data-screen="minutes-view"]');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-view"] button')].find((el) => el.innerText.trim() === '지우기')?.click());
+        await page.waitForSelector('.minutes-confirm');
+        await page.screenshot({ path: resolve(minutesShots, 'delete-confirm-390-light.png') });
+        await page.evaluate(() => [...document.querySelectorAll('.minutes-confirm button')].find((el) => el.innerText.trim() === '그만두기')?.click());
+        await page.waitForFunction(() => !document.querySelector('.minutes-confirm'));
+        check(await page.$('[data-screen="minutes-view"]'), '그만두기를 눌렀는데 회의록이 사라졌습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-view"] button')].find((el) => el.innerText.trim() === '지우기')?.click());
+        await page.waitForSelector('.minutes-confirm');
+        await page.evaluate(() => [...document.querySelectorAll('.minutes-confirm button')].find((el) => el.innerText.trim() === '지우기')?.click());
+        await page.waitForSelector('[data-screen="minutes-list"]');
+        check((await minutesCount(page)) === before, '확인한 뒤에도 회의록이 지워지지 않았습니다.');
+        check(await page.evaluate(() => [...document.querySelectorAll('.minutes-item')].some((el) => el.dataset.id === 'meet-demo-old')), '다른 회의록을 지우자 옛 회의록까지 사라졌습니다.');
+        /* 할 일·메모 화면에는 회의록이 섞이지 않고, 회의록으로 가는 단추가 있습니다. */
+        await page.evaluate(() => { location.hash = '#/todo'; });
+        await page.waitForFunction(() => document.body.innerText.includes('회의록 열기'));
+        check(!(await page.evaluate(() => [...document.querySelectorAll('article')].some((el) => el.innerText.includes('현장체험학습 안전 교육')))), '할 일·메모의 메모 목록에 회의록이 섞여 있습니다.');
+    }, 844);
+
+    /* 폭·밝기별 겹침·44px: 목록, 보기, 쓰기(달력 포함). 메뉴에 회의록이 보이고 켜집니다. */
+    for (const mode of ['light', 'dark']) {
+        for (const width of [390, 360, 900, 1920]) {
+            await withDemo(width, mode, async (page) => {
+                await page.evaluate(() => localStorage.removeItem('ssug-gyomu-minutes-draft'));
+                await page.evaluate(() => { location.hash = '#/minutes'; });
+                await page.waitForSelector('[data-screen="minutes-list"] .minutes-item');
+                if (width >= 900) {
+                    const menuOn = await page.evaluate(() => [...document.querySelectorAll('.side a, .side button')].some((el) => el.innerText.trim() === '회의록' && (el.getAttribute('aria-current') === 'page' || el.className.includes('on'))));
+                    check(menuOn, `${width} ${mode} 넓은 화면 메뉴에 회의록이 없거나 켜지지 않습니다.`);
+                }
+                await audit(page, `회의록 목록 ${width} ${mode}`);
+                await page.screenshot({ path: resolve(minutesShots, `list-${width}-${mode}.png`) });
+                await page.evaluate(() => document.querySelector('.minutes-item[data-id="meet-demo-old"]')?.click());
+                await page.waitForSelector('[data-screen="minutes-view"]');
+                await audit(page, `회의록 보기 ${width} ${mode}`);
+                await controlBoxes(page, '[data-screen="minutes-view"] button', `회의록 보기 단추 ${width} ${mode}`);
+                await page.screenshot({ path: resolve(minutesShots, `view-old-${width}-${mode}.png`) });
+                await page.evaluate(() => { location.hash = '#/minutes/new'; });
+                await page.waitForSelector('[data-screen="minutes-editor"]');
+                await page.type('#minutes-title', '교과 협의회 — 아주 긴 제목이 들어가도 줄이 넘치지 않는지 봅니다');
+                await page.type('#minutes-text', '첫 줄\n둘째 줄\n셋째 줄');
+                await audit(page, `회의록 쓰기 ${width} ${mode}`);
+                await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-kinds button', `회의 종류 칩 ${width} ${mode}`);
+                await controlBoxes(page, '[data-screen="minutes-editor"] [aria-label="날짜"] button', `회의록 달력 ${width} ${mode}`);
+                await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-save-row button', `회의록 저장 줄 ${width} ${mode}`);
+                const fields = await page.evaluate(() => ['#minutes-title', '#minutes-attendees', '#minutes-text'].map((sel) => {
+                    const r = document.querySelector(sel).getBoundingClientRect();
+                    return [sel, Math.round(r.height), Math.round(r.right), document.documentElement.clientWidth];
+                }));
+                check(fields.every(([, h, right, cw]) => h >= 44 && right <= cw + 1), `${width} ${mode} 회의록 입력칸이 작거나 넘칩니다: ${JSON.stringify(fields)}`);
+                await page.screenshot({ path: resolve(minutesShots, `editor-${width}-${mode}.png`), fullPage: true });
+                await page.evaluate(() => localStorage.removeItem('ssug-gyomu-minutes-draft'));
+            }, width >= 900 ? 900 : 844);
+        }
     }
 } catch (error) {
     failures.push(error?.message || String(error));

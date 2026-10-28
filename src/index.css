@@ -1134,3 +1134,58 @@ button.glass[aria-pressed="true"]:active {
     .fold-top > .btn, .fold-top > button:not(.fold-head) { flex: none; min-height: 44px; }
 }
 @media (min-width: 900px) { .fold-top { display: none; } }
+
+/* 회의록 화면: 목록 · 보기 · 쓰기. 버튼은 모두 44px 이상, 드롭다운 없이 탭으로 고릅니다. */
+.minutes { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 760px; }
+.minutes-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.minutes-actions > .primary-btn { padding: 0 20px; }
+.minutes-new { min-width: 160px; }
+.minutes-back { align-self: flex-start; }
+.minutes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.minutes-row { display: flex; flex-direction: column; gap: 6px; }
+.minutes-item {
+    width: 100%;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    text-align: left;
+    color: var(--ink);
+    box-shadow: var(--neo-raise-sm);
+}
+.minutes-item-title { font-weight: 800; overflow-wrap: anywhere; }
+.minutes-item-meta { font-size: 13px; color: var(--ink-sub); overflow-wrap: anywhere; }
+.minutes-item-line {
+    font-size: 14px;
+    color: var(--ink-sub);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.minutes-draft-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+.minutes-view-title { margin: 4px 0 0; font-size: 22px; line-height: 30px; overflow-wrap: anywhere; }
+.minutes-view-meta { margin: 0; color: var(--ink-sub); overflow-wrap: anywhere; }
+.minutes-body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 14px;
+    border-radius: 16px;
+    box-shadow: var(--neo-inset);
+    line-height: 1.7;
+    min-height: 120px;
+}
+.minutes-confirm { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; box-shadow: var(--neo-inset); }
+.minutes-confirm p { margin: 0; font-weight: 700; }
+.minutes-label { font-weight: 700; margin-top: 6px; overflow-wrap: anywhere; }
+.minutes-date-picked { margin-left: 6px; color: var(--accent); }
+.minutes-date { padding: 10px; border-radius: 16px; box-shadow: var(--neo-inset); }
+@media (max-width: 420px) { .minutes-date { padding: 0; box-shadow: none; } }
+.minutes-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+.minutes-text { min-height: 260px; resize: vertical; line-height: 1.7; padding: 12px 14px; font: inherit; }
+.minutes-kept { margin: 0; font-size: 13px; }
+.minutes-save { min-width: 140px; }
+.minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

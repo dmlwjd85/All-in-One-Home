@@ -202,13 +202,15 @@ service cloud.firestore {
           && optTs('updatedAt');
       }
 
-      // 메모
+      // 메모·회의록(회의록은 '회의' 태그, 제목·참석자는 회의록만 씁니다. 본문은 회의록에 맞게 20000자까지)
       match /notes/{nid} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(nid)
           && d().keys().hasAll(['text'])
-          && d().keys().hasOnly(['text', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt'])
-          && str(d().text, 1, 2000) && safeText(d().text)
+          && d().keys().hasOnly(['text', 'title', 'attendees', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt'])
+          && str(d().text, 1, 20000) && safeText(d().text)
+          && optStr('title', 60) && (!('title' in d()) || safeText(d().title))
+          && optStr('attendees', 200) && (!('attendees' in d()) || safeText(d().attendees))
           && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsOk(d().tags))
           && optBool('pinned')
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])

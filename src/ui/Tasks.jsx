@@ -7,14 +7,17 @@ import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 import { isClipped } from '../lib/detail.js';
+import { isMinutes } from '../lib/minutes.js';
 
 export function Tasks() {
-    const { data, clock, showToast } = useUi();
+    const { data, clock, showToast, go } = useUi();
     const [title, setTitle] = useState('');
     const [detail, setDetail] = useState(null);
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
-    const notes = joined(data, 'notes');
+    const allNotes = joined(data, 'notes');
+    const notes = allNotes.filter((row) => !isMinutes(row));
+    const meetings = allNotes.length - notes.length;
     const follows = joinedRecords(data).filter((row) => row.follow);
     const start = startOfWeekMon(clock.ymd);
     const end = addDaysYmd(start, 6);
@@ -117,6 +120,10 @@ export function Tasks() {
                     <Btn className="chip" onClick={() => removeItem('notes', row.id)}>지우기</Btn>
                 </article>
             ))}
+            <p className="minutes-link-row">
+                <span className="muted">{meetings ? `회의록 ${meetings}개는 회의록 화면에 있어요.` : '여러 줄 회의록은 회의록 화면에서 적어요.'}</span>
+                <Btn className="chip" onClick={() => go('#/minutes')}>회의록 열기</Btn>
+            </p>
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
             {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={() => toggleTodo(detail.id)} />}
         </div>
