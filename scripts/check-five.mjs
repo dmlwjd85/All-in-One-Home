@@ -5,6 +5,7 @@ import { planTermFill, schoolDays, tableForDate, tableForDateWithLocal, termDays
 import { academicOffEvents, academicProblem, cleanAcademic, setAcademicSource } from '../src/lib/academic.js';
 import { restInfo } from '../src/lib/daymark.js';
 import { fromCloudSettings, toCloudSettings } from '../src/lib/cloudShape.js';
+import { joinSummary, recentSummary } from '../src/lib/foldSummary.js';
 import { isTap, tapHandlers, TAP_SLOP } from '../src/ui/tapGuard.js';
 
 let failed = 0;
@@ -155,6 +156,13 @@ check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
     const sensitive = toCloudSettings({ profile: {} }, { extra: { mon: { p9: '민준 학폭 상담' } } }).body;
     check(sensitive.periodLocal.extra === '', '민감한 9교시 글이 올라갑니다.');
 }
+
+/* 최근 항목 요약: 빈 조각이면 끝에 ' · '가 남지 않습니다. */
+check(recentSummary({ title: '관찰', text: '' }) === '관찰', `최근 요약 끝에 구분 글자가 남습니다: ${recentSummary({ title: '관찰', text: '' })}`);
+check(recentSummary({ title: '관찰', text: '   ' }) === '관찰', '공백뿐인 내용이 요약에 남습니다.');
+check(recentSummary({ title: '관찰', text: '발표' }) === '관찰 · 발표', '최근 요약이 제목 · 내용 모양이 아닙니다.');
+check(recentSummary({ title: '', text: '' }) === '아직 기록이 없어요' && recentSummary(undefined) === '아직 기록이 없어요', '빈 최근 요약이 비어 보입니다.');
+check(joinSummary(['a', null, '']) === 'a', '빈 조각을 빼지 않습니다.');
 
 /* 캐시 판 */
 check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v29"), '서비스 워커가 v29가 아닙니다.');

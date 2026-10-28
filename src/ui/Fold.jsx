@@ -31,13 +31,16 @@ export function FoldCard({ id, className, title, summary, action, children }) {
     return (
         <section className={`glass fold ${className}`} data-fold={id} data-open={open ? '1' : '0'} style={{ padding: 14 }}>
             <div className="fold-top">
-                <Btn className="fold-head" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
-                <span className="fold-text">
-                    <strong className="fold-title">{title}</strong>
-                    {!open && <span className="fold-sum muted">{summary}</span>}
-                </span>
-                <span className="fold-arrow" aria-hidden="true">{open ? '▴' : '▾'}</span>
-            </Btn>
+                {/* 제목은 h3 안의 버튼: 스크린리더가 제목 사이로 옮겨 다니고, 눌러 펼칩니다. */}
+                <h3 className="fold-h">
+                    <Btn className="fold-head" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
+                        <span className="fold-text">
+                            <span className="fold-title">{title}</span>
+                            {!open && <span className="fold-sum muted">{summary}</span>}
+                        </span>
+                        <span className="fold-arrow" aria-hidden="true">{open ? '▴' : '▾'}</span>
+                    </Btn>
+                </h3>
             {open && action}
             </div>
             <div className="fold-body" id={bodyId}>{children}</div>

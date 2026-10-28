@@ -1118,7 +1118,9 @@ button.glass[aria-pressed="true"]:active {
         padding: 0; margin: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
     }
     .fold-text { display: grid; min-width: 0; gap: 2px; }
-    .fold-title { font-size: 16px; }
+    .fold-h { margin: 0; font: inherit; flex: 1; min-width: 0; }
+    .fold-h .fold-head { width: 100%; }
+    .fold-title { font-size: 16px; font-weight: 700; }
     .fold-sum { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
     .fold-arrow { flex: none; color: var(--accent); font-size: 16px; min-width: 24px; text-align: center; }
     .fold[data-open="0"] .fold-body { display: none; }
@@ -1128,7 +1130,7 @@ button.glass[aria-pressed="true"]:active {
 }
 @media (max-width: 899px) {
     .fold-top { display: flex; align-items: center; gap: 8px; }
-    .fold-top .fold-head { flex: 1; min-width: 0; }
+    .fold-top .fold-h { flex: 1; min-width: 0; }
     .fold-top > .btn, .fold-top > button:not(.fold-head) { flex: none; min-height: 44px; }
 }
 @media (min-width: 900px) { .fold-top { display: none; } }
