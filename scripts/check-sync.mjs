@@ -175,7 +175,7 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(notes.find((r) => r.id === 'meet-long1')?.text === long, '옛 판이 자른 회의록 본문이 이 기기 본문을 덮었습니다.');
     check(!('notes/meet-long1' in h), '잘린 회의록을 다시 올리도록 표시하지 않았습니다.');
     check(notes.find((r) => r.id === 'meet-short1')?.text === '다른 기기에서 고친 본문', '다른 기기에서 고친 짧은 본문이 따라오지 않습니다.');
-    check(clippedCopy(long, long.slice(0, 2000)) && !clippedCopy(long, long.slice(0, 1500) + '끝') && !clippedCopy('짧음', '짧'), '잘린 사본 판별이 다릅니다.');
+    check(clippedCopy(long, long.slice(0, 2000)) && !clippedCopy(long, long.slice(0, 1500)) && !clippedCopy(long, long.slice(0, 1999)) && !clippedCopy(long, long.slice(0, 1500) + '끝') && !clippedCopy('짧음', '짧'), '잘린 사본 판별이 다릅니다.');
     const told = [];
     const off = subscribeStorageIssue((m) => told.push(m));
     tellRejectedForTest(['notes/meet-a']);
@@ -183,6 +183,15 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     tellRejectedForTest([]);
     off();
     check(told.length === 1 && told[0].includes('회의록 1개'), `클라우드 거절 알림이 다릅니다(${told.join(' / ')}).`);
+    /* 거절 수집(cloud.js)과 알림 호출(flushCloud)이 빠지면 실패합니다. */
+    const cloudSrc = readFileSync(new URL('../src/lib/cloud.js', import.meta.url), 'utf8');
+    const dbSrc = readFileSync(new URL('../src/lib/db.js', import.meta.url), 'utf8');
+    check(/if \(denied\(error\)\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 쓰기 거절을 모으지 않습니다(error).');
+    check(/if \(denied\(again\)\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
+    check(/return \{[^}]*\brejected\b[^}]*\};\s*\}\s*$/m.test(cloudSrc), 'pushUserData가 거절 목록을 돌려주지 않습니다.');
+    const flushBody = dbSrc.slice(dbSrc.indexOf('export async function flushCloud()'), dbSrc.indexOf('export async function flushCloud()') + 800);
+    check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
+    check(/tellStorageIssue\(cloudRejectedMessage\(keys\)\)/.test(dbSrc), '거절 알림이 화면 알림으로 가지 않습니다.');
     check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');
 }
 

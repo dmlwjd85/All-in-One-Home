@@ -381,7 +381,8 @@ function dropRegisteredInbox(draft) {
 export function clippedCopy(mine, theirs) {
     const a = String(mine || '');
     const b = String(theirs || '');
-    return a.length > 2000 && b.length <= 2000 && b.length < a.length && a.startsWith(b);
+    /* v30은 String(text).slice(0, 2000) 그대로 올립니다. 정확히 2000자 앞부분일 때만 잘린 사본으로 봅니다. */
+    return a.length > 2000 && b.length === 2000 && a.startsWith(b);
 }
 
 function refreshShared(local = [], remote = [], cloudName, hashes) {
