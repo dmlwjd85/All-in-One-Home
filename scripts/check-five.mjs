@@ -157,7 +157,7 @@ check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
 }
 
 /* 캐시 판 */
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v28"), '서비스 워커가 v28이 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v29"), '서비스 워커가 v29가 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');

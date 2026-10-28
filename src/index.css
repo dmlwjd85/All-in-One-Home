@@ -1109,3 +1109,26 @@ button.glass[aria-pressed="true"]:active {
 @media (max-width: 400px) {
     .academic .acad-grid { margin: 0 -10px; gap: 1px; }
 }
+
+/* 오늘 화면 접히는 요약 카드(1안): 휴대폰(900px 미만)에서만 접고, 넓은 화면은 늘 펼칩니다. */
+.fold-head { display: none; }
+@media (max-width: 899px) {
+    .fold-head {
+        display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px;
+        padding: 0; margin: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+    }
+    .fold-text { display: grid; min-width: 0; gap: 2px; }
+    .fold-title { font-size: 16px; }
+    .fold-sum { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+    .fold-arrow { flex: none; color: var(--accent); font-size: 16px; min-width: 24px; text-align: center; }
+    .fold[data-open="0"] .fold-body { display: none; }
+    .fold[data-open="1"] .fold-body { margin-top: 0; }
+    .fold .fold-body .fold-hide { display: none !important; }
+    .fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+}
+@media (max-width: 899px) {
+    .fold-top { display: flex; align-items: center; gap: 8px; }
+    .fold-top .fold-head { flex: 1; min-width: 0; }
+    .fold-top > .btn, .fold-top > button:not(.fold-head) { flex: none; min-height: 44px; }
+}
+@media (min-width: 900px) { .fold-top { display: none; } }
