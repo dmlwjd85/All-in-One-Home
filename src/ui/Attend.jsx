@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
-import { joined, markChecked, setAttendance } from '../lib/db.js';
+import { flushCloudNow, joined, markChecked, setAttendance } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
@@ -129,20 +129,52 @@ function Seat({ student, mark, onOpen }) {
     );
 }
 
+export const SAVED_TOAST = '저장됐어요';
+export const LATER_TOAST = '기기에 저장됨, 나중에 다시 올려요';
+export const LEAVE_ASK = '저장하지 않은 메모·서류가 있어요. 저장하지 않고 닫을까요?';
+
 export function ReasonSheet({ student, mark, date, onClose }) {
-    useEffect(() => {
-        const onKey = (event) => {
-            if (event.key === 'Escape') onClose();
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    const ui = useUi();
     const [step, setStep] = useState('status');
     const [status, setStatus] = useState(mark?.status || '');
     const [note, setNote] = useState(mark?.note || '');
     const [paper, setPaper] = useState(Boolean(mark?.paper));
     const [period, setPeriod] = useState(Number(mark?.period) || 0);
+    const [saving, setSaving] = useState(false);
     const extra = () => ({ note, paper, period });
+    /* 상태·교시·사유는 누르는 즉시 저장됩니다. 메모와 서류는 사유나 '저장'을 눌러야 저장되므로 따로 봅니다. */
+    const dirty = Boolean(status && status !== '출석') && (note !== (mark?.note || '') || paper !== Boolean(mark?.paper));
+    const live = useRef({});
+    live.current = { dirty, status, note, paper, period };
+
+    function tryClose() {
+        if (live.current.dirty && !window.confirm(LEAVE_ASK)) return;
+        onClose();
+    }
+
+    useEffect(() => {
+        const onKey = (event) => {
+            if (event.key === 'Escape') tryClose();
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    });
+
+    /* 앱을 닫거나 다른 앱으로 넘어가면 적던 메모·서류를 이 기기에 먼저 남기고 올립니다. */
+    useEffect(() => {
+        const keep = () => {
+            const now = live.current;
+            if (!now.dirty) return;
+            setAttendance(date, student.id, now.status, { note: now.note, paper: now.paper, period: now.period }).catch(() => {});
+        };
+        const onHide = () => { if (document.visibilityState === 'hidden') keep(); };
+        document.addEventListener('visibilitychange', onHide);
+        window.addEventListener('pagehide', keep);
+        return () => {
+            document.removeEventListener('visibilitychange', onHide);
+            window.removeEventListener('pagehide', keep);
+        };
+    }, [date, student.id]);
 
     async function chooseStatus(next) {
         setStatus(next);
@@ -166,8 +198,24 @@ export function ReasonSheet({ student, mark, date, onClose }) {
         onClose();
     }
 
+    async function saveNow() {
+        if (saving) return;
+        setSaving(true);
+        try {
+            if (status && status !== '출석') {
+                const failed = await setAttendance(date, student.id, status, extra());
+                if (failed?.storageFailed) return;
+            }
+            const where = await flushCloudNow();
+            ui?.showToast?.(where === 'later' ? LATER_TOAST : SAVED_TOAST);
+            onClose();
+        } finally {
+            setSaving(false);
+        }
+    }
+
     return (
-        <div className="sheet-back" onClick={onClose}>
+        <div className="sheet-back" onClick={tryClose}>
             <div className="sheet" role="dialog" aria-modal="true" aria-label="출결" data-screen="attend-status" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
                 <h2 className="title-font" style={{ fontSize: 22, margin: '8px 0' }}>{student.no}번 {student.name}{status ? ` · ${status}` : ''}</h2>
@@ -185,6 +233,11 @@ export function ReasonSheet({ student, mark, date, onClose }) {
                         <Btn className={paper ? 'chip on' : 'chip'} style={{ margin: '8px 0' }} onClick={() => setPaper((value) => !value)}>{paper ? '서류 받음' : '서류 아직'}</Btn>
                         <ChoiceGrid label="사유" options={REASONS.map((item) => ({ id: item, label: item }))} onPick={chooseReason} />
                     </>
+                )}
+                {status && status !== '출석' && (
+                    <Btn className="primary-btn block attend-save" style={{ marginTop: 12, minHeight: 52, width: '100%' }} aria-label="출결 저장" data-dirty={dirty ? '1' : '0'} disabled={saving} onClick={saveNow}>
+                        {saving ? '저장하는 중…' : '저장'}
+                    </Btn>
                 )}
             </div>
         </div>

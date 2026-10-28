@@ -1,7 +1,7 @@
 /** 웹·태블릿·휴대폰 동기화: 받은 자료를 합칠 때 잃는 것 없이, 고친 쪽이 이기는지 클라우드 없이 확인합니다. */
 import { readFileSync } from 'node:fs';
 import { serverIds, newerThanDelete, guardedDelete, keepCloudDoc, printDigest, stamp as stampBody } from '../src/lib/cloud.js';
-import { setAuth, useAuthForTest, forgetQueuedCloudForTest, rememberPulledHashes, absorbCloudForTest, clippedCopy, pruneDeletedElsewhere, reloadCloudForgetForTest, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
+import { setAuth, useAuthForTest, forgetQueuedCloudForTest, rememberPulledHashes, absorbCloudForTest, stableHashes, clippedCopy, pruneDeletedElsewhere, reloadCloudForgetForTest, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest, update } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
@@ -391,6 +391,121 @@ useAuthForTest('u1');
     let gone = false;
     await guardedDelete({ get: async () => edited.body, del: async () => { gone = true; } }, 'attendance', shaped.id, { expect });
     check(!gone, '내용 확인 없이 고친 출결을 지웠습니다.');
+}
+
+/* 13) 휴대폰에서 받아 오는 도중에 고친 출결이 받아 온 옛 값으로 되돌아가지 않습니다(실사이트 v33 '출결 수정이 아예 안 됨'). */
+useAuthForTest('u1');
+{
+    const old = { id: '2026-10-28_m1', date: '2026-10-28', sid: 'm1', status: '결석', reason: '질병', note: '', period: '', paper: false, source: 'app' };
+    await absorbCloudForTest({ attendance: [old] }, {});
+    const seen = Object.fromEntries([mark('attendance', old)]);
+    /* 당기기 시작한 뒤 이 기기에서 지각으로 고치고, 올리기가 당기기보다 먼저 끝나 해시가 새 값이 된 상태 */
+    const mine = { ...old, status: '지각', note: '버스 늦음' };
+    await setAttendance(mine.date, mine.sid, '지각', { note: '버스 늦음' });
+    const now = Object.fromEntries([mark('attendance', snapshot().attendance.find((r) => r.id === old.id))]);
+    await absorbCloudForTest({ attendance: [old] }, now, seen);
+    const got = snapshot().attendance.find((r) => r.id === old.id);
+    check(got?.status === '지각' && got?.note === '버스 늦음', `받아 오는 도중 고친 출결이 옛 값으로 덮였습니다: ${JSON.stringify(got)}`);
+    /* 당기는 동안 아무것도 안 고쳤으면 다른 기기 값을 그대로 받습니다. */
+    const other = { ...old, id: '2026-10-28_m2', sid: 'm2' };
+    await absorbCloudForTest({ attendance: [other] }, {});
+    const h2 = Object.fromEntries([mark('attendance', other)]);
+    await absorbCloudForTest({ attendance: [{ ...other, status: '조퇴' }] }, h2, { ...h2 });
+    check(snapshot().attendance.find((r) => r.id === other.id)?.status === '조퇴', '다른 기기에서 고친 출결을 받지 않습니다.');
+    check(Object.keys(stableHashes({ a: '1', b: '1' }, { a: '1', b: '2' })).join() === 'a', 'stableHashes가 바뀐 해시를 빼지 않습니다.');
+    check(stableHashes(null, h2) === h2, 'seen이 없으면 지금 해시를 그대로 써야 합니다.');
+    const dbSrc2 = readFileSync(new URL('../src/lib/db.js', import.meta.url), 'utf8');
+    check(/const seen = \{ \.\.\.cloudHashes \};\s*const remote = await pullUserData/.test(dbSrc2), '당기기 전에 해시를 찍어 두지 않습니다.');
+    const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+    check(/pagehide', leave/.test(appSrc) && /visibilityState === 'hidden'\) flushCloud/.test(appSrc), '앱을 닫을 때 바로 올리지 않습니다.');
+}
+
+/* 15) 계정 전환 실패 길·해시 바꿔 넣기·기기 전용 자료·임시 회의록·오프라인 수정 뒤 지우기(4차 검수) */
+{
+    const mem = new Map();
+    globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    const plain = () => { const map = new Map(); return { map, get: async (k) => structuredClone(map.get(k)), set: async (k, v) => { map.set(k, structuredClone(v)); }, remove: async (k) => { map.delete(k); } }; };
+    const mainV = plain();
+    const localV = plain();
+    let failAccount = false;
+    let failState = false;
+    const authSeen = [];
+    const mainWrap = { ...mainV, set: async (k, v) => {
+        if (String(k).startsWith('account:')) { authSeen.push(snapshot().auth?.uid || null); if (failAccount) throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' }); }
+        if (k === 'state' && failState) throw Object.assign(new Error('quota'), { name: 'QuotaExceededError' });
+        return mainV.set(k, v);
+    } };
+    useVaultsForTest(mainWrap, localV, plain());
+    const row = (sid, extra = {}) => ({ id: `2026-10-29_${sid}`, date: '2026-10-29', sid, status: '결석', reason: '질병', note: '', period: '', paper: false, source: 'app', ...extra });
+
+    await setAuth({ uid: 'x1' });
+    await absorbCloudForTest({ attendance: [row('h1')], ids: { attendance: [row('h1').id] } }, {});
+    await update((d) => { d.local.records.push({ id: 'sec1', text: 'x1 상담 비밀', date: '2026-10-29' }); return d; });
+    mem.set('ssug-gyomu-minutes-draft', JSON.stringify({ new: { title: 'x1 임시 회의록' } }));
+
+    /* S8: 보관하는 동안 로그인 표시는 비어 있어야 합니다. */
+    await setAuth({ uid: 'x2' });
+    check(authSeen.length && authSeen.every((u) => u === null), `계정 보관 중에 로그인 표시가 남아 있었습니다: ${JSON.stringify(authSeen)}`);
+    /* S6: 기기 전용(민감) 자료도 계정 몫으로 나눕니다. 2번: 임시 회의록도. */
+    check(!snapshot().local.records.some((r) => r.id === 'sec1'), '다른 계정 화면에 이전 계정의 기기 전용 상담이 보입니다.');
+    check(!mem.has('ssug-gyomu-minutes-draft'), '다른 계정 화면에 이전 계정의 임시 회의록이 남았습니다.');
+    mem.set('ssug-gyomu-minutes-draft', JSON.stringify({ new: { title: 'x2 임시' } }));
+    await setAuth({ uid: 'x1' });
+    check(snapshot().local.records.some((r) => r.id === 'sec1'), '이전 계정으로 돌아왔는데 기기 전용 상담이 사라졌습니다.');
+    check((mem.get('ssug-gyomu-minutes-draft') || '').includes('x1 임시 회의록'), '이전 계정의 임시 회의록이 돌아오지 않았습니다.');
+    /* S3: 돌아온 계정의 해시를 되살려야, 지울 때 마지막으로 알던 요약을 붙입니다. */
+    await setAttendance('2026-10-29', 'h1', '출석');
+    const h1 = (JSON.parse(mem.get('ssug-gyomu-cloud-forget') || '{}').items || []).find((e) => e.u === 'x1' && e.k === 'attendance/2026-10-29_h1');
+    check(/^f[a-z0-9]{1,20}$/.test(h1?.x || ''), `계정을 오가고 나서 해시가 돌아오지 않아 지울 때 요약이 없습니다: ${JSON.stringify(h1)}`);
+
+    /* 4번: 동기화된 결석/질병을 오프라인에서 기타로 고친 뒤 출석으로 되돌리면, 서버에 늦게 도착한 '기타'도 지울 수 있어야 합니다. */
+    await absorbCloudForTest({ attendance: [row('o1')], ids: { attendance: [row('o1').id] } }, {});
+    await setAttendance('2026-10-29', 'o1', '결석', { reason: '기타' });
+    await setAttendance('2026-10-29', 'o1', '출석');
+    const late = toCloudRow('attendance', row('o1', { reason: '기타' }));
+    const other = toCloudRow('attendance', row('o1', { reason: '기타', note: '다른 기기' }));
+    let gone = 0;
+    await forgetQueuedCloudForTest(async (uid, bucket, id, opts) => {
+        if (id !== row('o1').id) return { ok: true };
+        const r1 = await guardedDelete({ get: async () => late.body, del: async () => { gone += 1; } }, bucket, id, opts);
+        const r2 = await guardedDelete({ get: async () => other.body, del: async () => { gone += 10; } }, bucket, id, opts);
+        return r1.ok && r2.ok ? { ok: true } : { ok: false };
+    });
+    check(gone === 1, `오프라인에서 기타로 고친 뒤 출석으로 되돌린 출결이 다시 연결하면 되살아납니다(또는 다른 기기 수정까지 지움): ${gone}`);
+
+    /* 1번·S5: 보관에 실패하면 전환을 멈추고 로그아웃합니다. 이전 계정 자료를 고쳐도 새 계정 몫으로 지우지 않습니다. */
+    const issues = [];
+    const stop = subscribeStorageIssue((m) => issues.push(m));
+    failAccount = true;
+    await absorbCloudForTest({ attendance: [row('q1')] }, {});
+    await setAuth({ uid: 'x3' });
+    failAccount = false;
+    check(snapshot().auth === null, `보관에 실패했는데 새 계정으로 로그인한 채 남았습니다: ${JSON.stringify(snapshot().auth)}`);
+    check(snapshot().local.records.some((r) => r.id === 'sec1') && snapshot().attendance.some((r) => r.sid === 'q1'), '보관에 실패했는데 화면 자료가 바뀌었습니다.');
+    check(issues.some((m) => m.includes('로그아웃')), `보관 실패를 알리지 않았습니다: ${JSON.stringify(issues)}`);
+    await setAttendance('2026-10-29', 'q1', '출석');
+    const items = JSON.parse(mem.get('ssug-gyomu-cloud-forget') || '{}').items || [];
+    check(!items.some((e) => e.u === 'x3'), `보관 실패 뒤 이전 계정 출결 지우기가 새 계정 몫으로 쌓였습니다: ${JSON.stringify(items.filter((e) => e.u === 'x3'))}`);
+
+    /* S9: 새 자료를 저장하다 실패하면 이전 화면 자료로 되돌립니다. */
+    failState = true;
+    await setAuth({ uid: 'x4' });
+    failState = false;
+    check(snapshot().local.records.some((r) => r.id === 'sec1'), '전환 저장에 실패했는데 이전 계정 자료로 되돌리지 않았습니다.');
+    check(snapshot().auth?.uid !== 'x4', '전환 저장에 실패했는데 새 계정으로 로그인했습니다.');
+    stop?.();
+
+    /* U4: 계정이 없는 예전 대기열 항목은 메모리에도 남기지 않습니다. */
+    mem.set('ssug-gyomu-cloud-forget', JSON.stringify({ last: 'x1', items: [{ k: 'attendance/2026-10-29_old', at: 1 }, { u: 'x1', k: 'attendance/2026-10-29_ok', at: 1 }] }));
+    reloadCloudForgetForTest();
+    useAuthForTest('x1');
+    check(!queuedCloudKeys().includes('attendance/2026-10-29_old') && queuedCloudKeys().includes('attendance/2026-10-29_ok'), `계정 없는 예전 대기열 항목을 남겼습니다: ${JSON.stringify(queuedCloudKeys())}`);
+    mem.set('ssug-gyomu-cloud-forget', JSON.stringify(['attendance/2026-10-29_arr']));
+    reloadCloudForgetForTest();
+    check(!queuedCloudKeys().includes('attendance/2026-10-29_arr'), '예전 배열 대기열 항목을 메모리에 남겼습니다.');
+    delete globalThis.localStorage;
+    useVaultsForTest(vault(), vault(), vault());
+    useAuthForTest('u1');
 }
 
 if (failures.length) {

@@ -11,6 +11,7 @@ import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, printDigest, pullUserDat
 import { localSettingAts, PERIOD_KEYS, toCloudRow } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
+import { MINUTES_DRAFT_KEY } from './minutes.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
@@ -241,9 +242,9 @@ export async function update(recipe, { undoable = false } = {}) {
 }
 
 /** 검사용: 다른 기기에서 받은 자료를 합치는 길을 클라우드 없이 돌립니다. */
-export async function absorbCloudForTest(remote, hashes) {
+export async function absorbCloudForTest(remote, hashes, seen = null) {
     if (hashes) cloudHashes = hashes;
-    return update((draft) => absorbCloud(draft, remote));
+    return update((draft) => absorbCloud(draft, remote, seen));
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
@@ -290,6 +291,28 @@ export async function flushCloud() {
     return result;
 }
 
+/**
+ * 저장 버튼용: 바로 클라우드에 올리고 결과를 알려 줍니다. 로그인 전이면 'local', 다 올렸으면 'cloud',
+ * 연결이 없거나 오래 걸리면 'later'(기기에는 이미 저장됨, 다음에 다시 올림).
+ */
+export async function flushCloudNow({ timeout = 8000 } = {}) {
+    if (!state.auth?.uid || !syncAvailable()) return 'local';
+    let timer = 0;
+    try {
+        const result = await Promise.race([
+            flushCloud(),
+            new Promise((resolve) => { timer = setTimeout(() => resolve({ timedOut: true }), timeout); }),
+        ]);
+        if (result?.skipped) return 'local';
+        if (result?.timedOut || result?.ok === false || (result?.rejected || []).length) return 'later';
+        return 'cloud';
+    } catch {
+        return 'later';
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /*
  * 되돌리기로 사라진 행은 클라우드 문서도 지웁니다(488149c에서 되살림).
  * pushUserData는 setDoc(merge)만 하므로, 지우지 않으면 다음에 당겨 올 때 되살아납니다.
@@ -326,14 +349,14 @@ function readCloudForget() {
             && typeof item.k === 'string' && /^[a-z]+\/[A-Za-z0-9_-]{1,120}$/.test(item.k)
             && Number.isFinite(item.at))
             .slice(-500)
-            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}) }]);
+            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}), ...(typeof item.y === 'string' && /^f[a-z0-9]{1,20}$/.test(item.y) ? { also: item.y } : {}) }]);
     } catch { return []; }
 }
 
 function saveCloudForget() {
     try {
         if (memoryOnly || state?.profile?.sharedPc) return;
-        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(e.expect ? { x: e.expect } : {}) }));
+        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(e.expect ? { x: e.expect } : {}), ...(e.also ? { y: e.also } : {}) }));
         if (list.length || lastCloudUid) globalThis.localStorage?.setItem(CLOUD_FORGET_KEY, JSON.stringify({ last: lastCloudUid, items: list }));
         else globalThis.localStorage?.removeItem(CLOUD_FORGET_KEY);
     } catch { /* 저장 공간이 없으면 이번 실행 동안만 기억합니다. */ }
@@ -366,14 +389,18 @@ export function queuedCloudKeys() {
     return [...cloudForget.values()].filter((e) => e.uid === uid).map((e) => e.key);
 }
 
-function queueCloudForget(bucket, id) {
+function queueCloudForget(bucket, id, row = null) {
     if (!CLOUD_BUCKETS.includes(bucket) || !id) return;
     const key = `${bucket}/${id}`;
     /* 로그아웃 상태나 로그인 확인 전이면 이 기기에서 마지막으로 쓴 계정에 붙입니다. 한 번도 로그인하지 않았으면 클라우드에 없으므로 남기지 않습니다. */
     const uid = state.auth?.uid || lastCloudUid;
     const expect = typeof cloudHashes?.[key] === 'string' ? printDigest(cloudHashes[key]) : null;
+    /* 오프라인에서 고친 뒤 지우면(결석/질병 → 기타 → 출석) 서버에는 아직 안 올라간 '기타'가 나중에 도착합니다. 지운 줄의 요약도 같이 받아 둡니다. */
+    const shaped = row && bucket === 'attendance' ? toCloudRow(bucket, row) : null;
+    const mine = shaped?.id ? printDigest(fingerprint(shaped.body, shaped.clear || [])) : null;
+    const also = mine && mine !== expect ? mine : null;
     if (uid) {
-        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at: Date.now(), ...(expect ? { expect } : {}) });
+        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at: Date.now(), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
         saveCloudForget();
     }
     if (Object.prototype.hasOwnProperty.call(cloudHashes, key)) {
@@ -396,7 +423,7 @@ async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false
             continue;
         }
         /* 클라우드 문서가 지운 시각보다 나중에 고쳐졌으면 지우지 않습니다. */
-        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: entry.at, expect: entry.expect || null }).catch(() => ({ ok: false }));
+        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: entry.at, expect: [entry.expect, entry.also].filter(Boolean).join(',') || null }).catch(() => ({ ok: false }));
         if (result?.ok) cloudForget.delete(entryKey);
     }
     saveCloudForget();
@@ -524,7 +551,21 @@ export function rememberPulledHashes(rows = [], remoteRows, hashes) {
     }
 }
 
-function absorbCloud(draft, remote) {
+/*
+ * 당겨 오는 동안 이 기기에서 고친 줄은 지킵니다. 당기기 전에 본 해시와 지금 해시가 다르면
+ * 그 사이에 이 기기 값을 올린 것이므로, 받아 온 옛 값으로 덮지 않습니다(휴대폰에서 고친 출결이 되돌아가던 원인).
+ */
+export function stableHashes(seen, now) {
+    if (!seen) return now;
+    const out = {};
+    for (const [key, value] of Object.entries(now || {})) {
+        if (seen[key] === value) out[key] = value;
+    }
+    return out;
+}
+
+function absorbCloud(draft, remote, seen = null) {
+    const guard = stableHashes(seen, cloudHashes);
     const remoteHas = (remote.students || []).length || (remote.records || []).length;
     if (draft.profile.demo && remoteHas) {
         const keep = (row) => row.source !== 'demo';
@@ -541,10 +582,14 @@ function absorbCloud(draft, remote) {
     for (const bucket of CLOUD_BUCKETS) {
         if (Array.isArray(remote[bucket])) remote = { ...remote, [bucket]: remote[bucket].filter((row) => !forgetQueuedFor(state.auth?.uid, `${bucket}/${row?.id}`)) };
     }
-    pruneDeletedElsewhere(draft, remote, cloudHashes);
+    const before = new Set(Object.keys(guard));
+    pruneDeletedElsewhere(draft, remote, guard);
     for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
         if (localName === 'inbox') continue;
-        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, cloudHashes);
+        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, guard);
+    }
+    if (guard !== cloudHashes) {
+        for (const key of before) if (!(key in guard)) delete cloudHashes[key];
     }
     draft.students = unionById(draft.students, remote.students);
     draft.attendance = unionById(draft.attendance, remote.attendance);
@@ -560,7 +605,7 @@ function absorbCloud(draft, remote) {
     for (const [day, value] of Object.entries(remote.timetable || {})) {
         const mine = draft.timetable[day];
         if (!mine || !Object.keys(mine).length) draft.timetable[day] = value;
-        else if (unchangedSincePush(cloudHashes, 'timetable', { id: day, ...mine })) draft.timetable[day] = value;
+        else if (unchangedSincePush(guard, 'timetable', { id: day, ...mine })) draft.timetable[day] = value;
     }
     absorbSettings(draft, remote.settings);
     if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
@@ -592,7 +637,7 @@ export async function undo() {
     for (const bucket of CLOUD_BUCKETS) {
         const kept = new Set((prev[bucket] || []).map((row) => row?.id).filter(Boolean));
         for (const row of current[bucket] || []) {
-            if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id);
+            if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id, row);
         }
     }
     await flushCloud().catch(() => {});
@@ -967,7 +1012,7 @@ export async function promoteInbox(id) {
 /* 출석으로 되돌린 줄은 클라우드 문서도 지웁니다. 안 지우면 다음 받기에서 예전 결석·지각이 되살아납니다. */
 function forgetAttendance(row) {
     const shaped = row ? toCloudRow('attendance', row) : null;
-    if (shaped?.id) queueCloudForget('attendance', shaped.id);
+    if (shaped?.id) queueCloudForget('attendance', shaped.id, row);
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
@@ -1391,6 +1436,8 @@ async function switchAccountLocal(from, to) {
         data: Object.fromEntries(ACCOUNT_PARTS.map((part) => [part, structuredClone(state[part] ?? empty[part])])),
         profile: Object.fromEntries(ACCOUNT_PROFILE.filter((name) => name in state.profile).map((name) => [name, structuredClone(state.profile[name])])),
         hashes: structuredClone(cloudHashes || {}),
+        /* 임시 회의록도 계정 몫입니다(다른 계정 화면에 보이지 않게). */
+        drafts: readDrafts(),
     };
     const local = structuredClone(state.local || empty.local);
     let saved;
@@ -1432,6 +1479,7 @@ async function switchAccountLocal(from, to) {
         return false;
     }
     undoStack = [];
+    writeDrafts(saved?.drafts ?? null);
     cloudHashes = structuredClone(saved?.hashes || {});
     if (!memoryOnly) {
         await mainVault.set('cloudHashes', cloudHashes).catch(() => {});
@@ -1443,13 +1491,32 @@ async function switchAccountLocal(from, to) {
 }
 const memoryStash = new Map();
 
+function readDrafts() {
+    try { return globalThis.localStorage?.getItem(MINUTES_DRAFT_KEY) ?? null; } catch { return null; }
+}
+function writeDrafts(value) {
+    try {
+        if (typeof value === 'string' && value) globalThis.localStorage?.setItem(MINUTES_DRAFT_KEY, value);
+        else globalThis.localStorage?.removeItem(MINUTES_DRAFT_KEY);
+    } catch { /* 저장 공간이 없으면 넘어갑니다. */ }
+}
+
+/* 보관에 실패하면 로그아웃합니다. 화면에는 이전 계정 자료가 남으므로, 새 계정으로 올리거나 지우지 않게 합니다. */
+async function leaveAfterFailedSwitch() {
+    try {
+        const { signOutFirebase } = await import('../firebase.js');
+        await signOutFirebase();
+    } catch { /* 로그인 모듈이 없으면(검사) 로그인 표시만 비웁니다. */ }
+}
+
 async function connectCloud(uid) {
     await flushCloud();
+    const seen = { ...cloudHashes };
     const remote = await pullUserData(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
     const hasRemote = remote.settings || remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
     if (!hasRemote) return;
-    await update((draft) => absorbCloud(draft, remote));
+    await update((draft) => absorbCloud(draft, remote, seen));
 }
 
 let lastRefresh = 0;
@@ -1479,10 +1546,15 @@ export async function setAuth(auth) {
         connectTask = null;
         const moved = await switchAccountLocal(from, next.uid);
         if (!moved) {
-            /* 보관에 실패하면 자료를 그대로 두고 새 계정과 동기화하지 않습니다(섞이거나 사라지지 않게). */
-            state = { ...state, auth: next };
+            /*
+             * 보관에 실패하면 자료를 그대로 두고 로그아웃 상태로 남깁니다. 로그인 표시를 새 계정으로 두면
+             * 이전 계정 자료를 고치거나 지운 것이 새 계정 몫으로 올라가거나 지워집니다(4차 검수 1번).
+             */
+            state = { ...state, auth: null };
             emit();
-            return;
+            tellStorageIssue('저장 공간이 부족해 계정을 바꾸지 못했어요. 이전 계정 자료를 지키려고 로그아웃했어요. 공간을 비운 뒤 다시 로그인해 주세요.');
+            await leaveAfterFailedSwitch();
+            return { switched: false };
         }
     }
     state = { ...state, auth: next };

@@ -251,7 +251,9 @@ export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } 
     if (expect && name === 'attendance') {
         const row = fromCloudRow(name, String(id), data);
         const shaped = row ? toCloudRow(name, row) : null;
-        if (!shaped || printDigest(fingerprint(shaped.body, shaped.clear || [])) !== expect) return true;
+        /* expect는 '요약' 하나 또는 쉼표로 이은 여럿(마지막으로 올린 값, 오프라인에서 고친 뒤 지운 값) */
+        const allowed = String(expect).split(',').filter(Boolean);
+        if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
         return false;
     }
     return newerThanDelete(data, notAfter);
