@@ -1,6 +1,6 @@
 /** 웹·태블릿·휴대폰 동기화: 받은 자료를 합칠 때 잃는 것 없이, 고친 쪽이 이기는지 클라우드 없이 확인합니다. */
 import { readFileSync } from 'node:fs';
-import { serverIds, newerThanDelete } from '../src/lib/cloud.js';
+import { serverIds, newerThanDelete, guardedDelete, keepCloudDoc, printDigest, stamp as stampBody } from '../src/lib/cloud.js';
 import { setAuth, useAuthForTest, forgetQueuedCloudForTest, rememberPulledHashes, absorbCloudForTest, clippedCopy, pruneDeletedElsewhere, reloadCloudForgetForTest, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
@@ -329,6 +329,68 @@ useAuthForTest('u1');
     const stamp = (ms) => ({ updatedAt: { toMillis: () => ms } });
     check(newerThanDelete(stamp(2000), 1000) === true, '지운 뒤 고친 문서를 지우려 합니다.');
     check(newerThanDelete(stamp(500), 1000) === false && newerThanDelete(null, 1000) === false, '지운 시각 전 문서는 지워야 합니다.');
+}
+
+/* 14) 계정 전환 때 자료 보관·되살림, 늦은 삭제 가드, 예전 대기열 형식 정리 */
+{
+    const mem = new Map();
+    globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    const att = (sid, extra = {}) => ({ id: `2026-10-27_${sid}`, date: '2026-10-27', sid, status: '결석', reason: '질병', note: '', period: '', paper: false, source: 'app', ...extra });
+    await setAuth({ uid: 'w1' });
+    await absorbCloudForTest({ attendance: [att('k1')], ids: { attendance: [att('k1').id] } }, {});
+    await setAttendance('2026-10-27', 'k1', '출석');
+    const k1Saved = (JSON.parse(mem.get('ssug-gyomu-cloud-forget') || '{}').items || []).find((e) => e.k === 'attendance/2026-10-27_k1');
+    check(/^f[a-z0-9]{1,20}$/.test(k1Saved?.x || ''), `지울 대기열에 마지막 내용 요약이 없거나 내용이 그대로 있습니다: ${JSON.stringify(k1Saved)}`);
+    await setAttendance('2026-10-27', 'k2', '결석'); // 아직 안 올린 변경
+    await setAuth({ uid: 'w2' });
+    check(!snapshot().attendance.some((r) => r.sid === 'k2'), '계정을 바꿨는데 이전 계정의 안 올린 출결이 보입니다.');
+    await absorbCloudForTest({ attendance: [att('k1', { status: '지각', reason: '' })], ids: { attendance: [att('k1').id] } });
+    await setAttendance('2026-10-27', 'k3', '결석');
+    await setAttendance('2026-10-27', 'k3', '출석'); // w2 대기열
+    await setAuth({ uid: 'w1' });
+    const back = snapshot().attendance;
+    check(!back.some((r) => r.sid === 'k1'), `w1로 돌아왔는데 지운 출결/다른 계정 지각이 보입니다: ${JSON.stringify(back.filter((r) => r.sid === 'k1'))}`);
+    check(back.some((r) => r.sid === 'k2' && r.status === '결석'), 'w1의 안 올린 출결이 계정 전환 뒤 사라졌습니다.');
+    check(queuedCloudKeys().includes('attendance/2026-10-27_k1'), 'w1의 지울 대기열이 계정 전환 뒤 사라졌습니다.');
+    const calls = [];
+    await forgetQueuedCloudForTest(async (uid, bucket, id, opts) => { calls.push({ uid, id, opts }); return { ok: true }; });
+    const k1 = calls.find((c) => c.id === '2026-10-27_k1');
+    check(k1?.uid === 'w1' && typeof k1?.opts?.expect === 'string', 'w1에 돌아와 지운 출결을 마지막으로 알던 내용과 함께 지워야 합니다.');
+    check(!calls.some((c) => c.id === '2026-10-27_k3'), 'w1에서 w2의 대기열을 처리했습니다.');
+    await setAuth({ uid: 'w2' });
+    check(snapshot().attendance.some((r) => r.sid === 'k1' && r.status === '지각'), 'w2로 돌아왔는데 w2 출결이 사라졌습니다.');
+    check(queuedCloudKeys().includes('attendance/2026-10-27_k3'), 'w2의 지울 대기열이 계정 전환 뒤 사라졌습니다.');
+    const savedItems = JSON.parse(mem.get('ssug-gyomu-cloud-forget') || '{}').items || [];
+    check(savedItems.every((e) => !e.x || /^f[a-z0-9]{1,20}$/.test(e.x)), `지울 대기열에 출결 내용이 요약 없이 남습니다: ${JSON.stringify(savedItems)}`);
+
+    /* 예전 배열 형식은 저장소에서 지웁니다. */
+    mem.set('ssug-gyomu-cloud-forget', JSON.stringify(['attendance/2026-10-27_old']));
+    reloadCloudForgetForTest();
+    check(!mem.has('ssug-gyomu-cloud-forget'), '예전 형식 대기열이 localStorage에 남았습니다.');
+    delete globalThis.localStorage;
+    useAuthForTest('u1');
+
+    /* 고친 시각은 서버 시각(serverTimestamp)으로 찍습니다. */
+    const fakeFs = { Timestamp: { now: () => 'DEVICE', fromDate: () => 'DEVICE' }, serverTimestamp: () => 'SERVER' };
+    const stamped = await stampBody(fakeFs, { a: 1 }, ['updatedAt']);
+    check(stamped.updatedAt === 'SERVER', '고친 시각을 기기 시계로 찍습니다.');
+
+    /* 늦은 삭제 가드 */
+    const stamp = (ms) => ({ updatedAt: { toMillis: () => ms } });
+    check(newerThanDelete(stamp(1000), 1000) === false, '지운 시각과 같은 문서는 지워야 합니다.');
+    const run = async (data, opts) => { let deleted = false; const r = await guardedDelete({ get: async () => data, del: async () => { deleted = true; } }, 'events', 'e1', opts); return { deleted, r }; };
+    check(!(await run(stamp(2000), { notAfter: 1000 })).deleted, '지운 뒤 고친 문서를 지웠습니다.');
+    check((await run(stamp(500), { notAfter: 1000 })).deleted, '지운 시각 전 문서를 지우지 않았습니다.');
+    check((await run(null, { notAfter: 1000 })).deleted, '없는 문서 지우기가 멈췄습니다.');
+    const a = att('k9');
+    const shaped = toCloudRow('attendance', a);
+    const expect = printDigest(fingerprint(shaped.body, shaped.clear || []));
+    check(!keepCloudDoc('attendance', shaped.id, shaped.body, { expect, notAfter: 0 }), '마지막으로 알던 출결과 같으면 지워야 합니다(시계와 상관없이).');
+    const edited = toCloudRow('attendance', { ...a, reason: '기타' });
+    check(keepCloudDoc('attendance', shaped.id, { ...edited.body, ...stamp(1) }, { expect, notAfter: 9e15 }), '다른 기기가 고친 출결을 지우려 합니다(시계와 상관없이).');
+    let gone = false;
+    await guardedDelete({ get: async () => edited.body, del: async () => { gone = true; } }, 'attendance', shaped.id, { expect });
+    check(!gone, '내용 확인 없이 고친 출결을 지웠습니다.');
 }
 
 if (failures.length) {

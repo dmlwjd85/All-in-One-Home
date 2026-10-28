@@ -50,12 +50,23 @@ export function prepareEventWrite(body) {
     return { body, retryWithoutEndTime: Boolean(body?.endTime) };
 }
 
+/** 내용을 남기지 않는 짧은 요약(FNV-1a). 지울 대기열에는 이 값만 둡니다. */
+export function printDigest(text) {
+    let h = 0x811c9dc5;
+    const str = String(text);
+    for (let i = 0; i < str.length; i += 1) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return `f${h.toString(36)}${str.length.toString(36)}`;
+}
+
 export function fingerprint(body, clear = []) {
     return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
 
-async function stamp(firestore, body, names, previous) {
-    const { Timestamp } = firestore;
+export async function stamp(firestore, body, names, previous) {
+    const { Timestamp, serverTimestamp } = firestore;
     const next = { ...body };
     names.forEach((name) => {
         if (name === 'migratedAt' && previous) {
@@ -63,7 +74,8 @@ async function stamp(firestore, body, names, previous) {
             next.migratedAt = Number.isNaN(date.getTime()) ? Timestamp.now() : Timestamp.fromDate(date);
             return;
         }
-        next[name] = Timestamp.now();
+        /* 고친 시각은 기기 시계가 아니라 서버 시각으로 찍습니다(늦은 삭제 비교가 기기 시계에 흔들리지 않게). */
+        next[name] = serverTimestamp();
     });
     return next;
 }
@@ -233,20 +245,39 @@ export function newerThanDelete(data, notAfter) {
     return ms != null && Number.isFinite(notAfter) && ms > notAfter;
 }
 
-export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfter = null } = {}) {
+/** 지운 뒤 다른 기기가 고쳤는지 봅니다. 출결은 마지막으로 알던 내용(expect)과 다르면 고친 것으로 봅니다. */
+export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } = {}) {
+    if (!data) return false;
+    if (expect && name === 'attendance') {
+        const row = fromCloudRow(name, String(id), data);
+        const shaped = row ? toCloudRow(name, row) : null;
+        if (!shaped || printDigest(fingerprint(shaped.body, shaped.clear || [])) !== expect) return true;
+        return false;
+    }
+    return newerThanDelete(data, notAfter);
+}
+
+/** 서버에서 문서를 읽어 지워도 될 때만 지웁니다. get·del을 바꿔 넣어 검사합니다. */
+export async function guardedDelete({ get, del }, name, id, opts = {}) {
+    if (Number.isFinite(opts.notAfter) || opts.expect) {
+        const data = await get();
+        if (keepCloudDoc(name, id, data, opts)) return { ok: true, kept: true };
+    }
+    await del();
+    return { ok: true };
+}
+
+export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfter = null, expect = null } = {}) {
     if (!uid || !name || !id || !syncAvailable()) return { skipped: true };
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
         const { doc, deleteDoc, getDocFromServer } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
-        if (Number.isFinite(notAfter)) {
-            /* 지운 뒤 다른 기기가 더 나중에 고쳤으면 그 수정을 남깁니다(서버에서 읽은 값만 믿습니다). */
-            const snap = await getDocFromServer(ref);
-            if (newerThanDelete(snap.exists() ? snap.data() : null, notAfter)) return { ok: true, kept: true };
-        }
-        await deleteDoc(ref);
-        return { ok: true };
+        return await guardedDelete({
+            get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },
+            del: () => deleteDoc(ref),
+        }, name, id, { notAfter, expect });
     } catch {
         return { ok: false };
     }
