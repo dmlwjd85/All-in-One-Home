@@ -1,5 +1,5 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
 import { readPeriodLocal } from './periodLocal.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -139,8 +139,14 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         const mark = fingerprint(settings.body);
         if (nextHashes['settings/device'] !== mark) {
             try {
-                const body = await stamp(firestore, settings.body, settings.stamps);
-                await setDoc(doc(ready.db, 'users', uid, 'settings', 'device'), body);
+                /* 통째로 덮지 않습니다: 클라우드 문서를 읽어 칸마다 더 늦게 고친 쪽을 남긴 뒤 씁니다.
+                   다른 기기가 먼저 고친 칸은 그대로 두고, 다음 받기에서 이 기기로 들어옵니다. */
+                const ref = doc(ready.db, 'users', uid, 'settings', 'device');
+                await firestore.runTransaction(ready.db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const merged = mergeSettings(settings.body, snap.exists() ? fromCloudSettings(snap.data()) : null);
+                    tx.set(ref, await stamp(firestore, merged, settings.stamps));
+                });
                 nextHashes['settings/device'] = mark;
             } catch (error) {
                 if (retryable(error)) pending += 1;

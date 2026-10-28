@@ -8,6 +8,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, deleteUserDoc, pullUserData, pushUserData, syncAvailable, unchangedSincePush } from './cloud.js';
+import { localSettingAts, PERIOD_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 
@@ -196,8 +197,24 @@ async function revertMemory(previous, undoable) {
     emit();
 }
 
-function sharedSettingsKey(profile = {}) {
-    return JSON.stringify([profile.ttEdited || [], profile.academic || {}, profile.periodStarts || []]);
+const PROFILE_SETTING_PARTS = ['periodStarts', 'ttEdited', 'academic'];
+const settingDefault = { periodStarts: [], ttEdited: [], academic: {} };
+const settingKey = (profile = {}, part) => JSON.stringify(profile[part] || settingDefault[part]);
+
+/* 바뀐 설정 칸만 그 칸의 고친 시각을 새로 찍습니다(칸 단위 합치기). */
+function bumpSettingAts(next, previous = {}) {
+    const ats = { ...(next.settingsAts || {}) };
+    let changed = false;
+    for (const part of PROFILE_SETTING_PARTS) {
+        if (settingKey(next, part) === settingKey(previous, part)) continue;
+        if ((next.settingsAts || {})[part] !== (previous.settingsAts || {})[part]) continue;
+        if (ats[part] === undefined) for (const p of PROFILE_SETTING_PARTS) ats[p] ??= Number(previous.settingsAt) || 0;
+        ats[part] = Date.now();
+        changed = true;
+    }
+    if (!changed) return;
+    next.settingsAts = ats;
+    next.settingsAt = Math.max(...PROFILE_SETTING_PARTS.map((p) => Number(ats[p]) || 0));
 }
 
 /* 이 기기 시간표 설정(교시 길이·9·10교시 등)이 바뀌면 다른 기기와 같이 쓰도록 올립니다. */
@@ -207,9 +224,7 @@ export async function update(recipe, { undoable = false } = {}) {
     const previous = structuredClone(state);
     if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
-    if (next !== previous && next?.profile && sharedSettingsKey(next.profile) !== sharedSettingsKey(previous.profile) && next.profile.settingsAt === previous.profile?.settingsAt) {
-        next.profile.settingsAt = Date.now();
-    }
+    if (next !== previous && next?.profile) bumpSettingAts(next.profile, previous.profile);
     state = next;
     mirrorTheme(state.profile.theme);
     emit();
@@ -351,17 +366,24 @@ function refreshShared(local = [], remote = [], cloudName, hashes) {
     });
 }
 
-/** 기기끼리 같이 쓰는 설정: 더 늦게 고친 쪽이 통째로 이깁니다. */
+/** 기기끼리 같이 쓰는 설정: 칸(교시 설정·9·10교시 과목·교시 시작·고친 날·학사일정)마다 더 늦게 고친 쪽을 받습니다. */
 function absorbSettings(draft, settings) {
     if (!settings) return;
     const local = readPeriodLocal();
-    const localAt = Math.max(Number(draft.profile.settingsAt) || 0, Number(local.syncAt) || 0);
-    if (settings.at <= localAt) return;
-    draft.profile.ttEdited = [...(settings.ttEdited || [])].sort();
-    draft.profile.academic = cleanAcademic(settings.academic);
-    if ((settings.periodStarts || []).length) draft.profile.periodStarts = settings.periodStarts;
-    draft.profile.settingsAt = settings.at;
-    patchPeriodLocal({ ...settings.periodLocal, syncAt: settings.at }, { fromCloud: true });
+    const mine = localSettingAts(draft.profile, local);
+    const theirs = settings.ats || { period: settings.at, extra: settings.at, periodStarts: settings.at, ttEdited: settings.at, academic: settings.at };
+    const newer = (part) => (Number(theirs[part]) || 0) > mine[part];
+    const profileAts = { periodStarts: mine.periodStarts, ttEdited: mine.ttEdited, academic: mine.academic };
+    if (newer('ttEdited')) { draft.profile.ttEdited = [...(settings.ttEdited || [])].sort(); profileAts.ttEdited = theirs.ttEdited; }
+    if (newer('academic')) { draft.profile.academic = cleanAcademic(settings.academic); profileAts.academic = theirs.academic; }
+    if (newer('periodStarts') && (settings.periodStarts || []).length) { draft.profile.periodStarts = settings.periodStarts; profileAts.periodStarts = theirs.periodStarts; }
+    draft.profile.settingsAts = profileAts;
+    draft.profile.settingsAt = Math.max(profileAts.periodStarts, profileAts.ttEdited, profileAts.academic);
+    const patch = {};
+    const syncAts = { period: mine.period, extra: mine.extra };
+    if (newer('period')) { for (const key of PERIOD_KEYS) if (settings.periodLocal && key in settings.periodLocal) patch[key] = settings.periodLocal[key]; syncAts.period = theirs.period; }
+    if (newer('extra')) { patch.extra = settings.periodLocal?.extra || {}; syncAts.extra = theirs.extra; }
+    if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra) }, { fromCloud: true });
 }
 
 function absorbCloud(draft, remote) {
@@ -914,7 +936,6 @@ export async function saveAcademicYear(year, row) {
     return update((draft) => {
         const next = { ...(draft.profile.academic || {}), [String(year)]: row };
         draft.profile.academic = cleanAcademic(next);
-        draft.profile.settingsAt = Date.now();
         return draft;
     }, { undoable: true });
 }

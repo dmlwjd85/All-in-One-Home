@@ -70,6 +70,137 @@ async function expectBlocked(label, op) {
     }
 }
 
+const SETTINGS_PROFILE = {
+    settingsAt: 1767225600000,
+    ttEdited: ['2026-04-01'],
+    periodStarts: ['09:00', '09:50', '10:50', '11:40', '13:20', '14:10', '15:00', '15:50'],
+    academic: { 2026: { firstStart: '2026-03-03', firstEnd: '2026-07-21', secondStart: '2026-08-18', secondEnd: '2027-02-10', offDays: ['2026-05-04'] } },
+};
+const SETTINGS_LOCAL = { level: '중', count: 7, lengths: [45], extraStarts: ['16:40', '17:30'], locks: [9], cellLocks: ['mon-9'], workStart: '08:20', workEnd: '16:40', extra: { mon: { p9: '방과후' } } };
+
+/** 설정 문서 검사 묶음. 규칙을 일부러 망가뜨린 판(아래 돌연변이)에서도 돌려, 하나라도 잡는지 봅니다. */
+async function settingsSuite(env) {
+    const out = [];
+    const deny = async (label, op) => { try { await assertFails(op()); } catch (error) { out.push(`${label} 요청이 거절되지 않았습니다. ${error?.message || error}`); } };
+    const allow = async (label, op) => { try { await assertSucceeds(op()); } catch (error) { out.push(`${label} 쓰기가 거절되었습니다. ${error?.message || error}`); } };
+    const phone = env.authenticatedContext('teacher-sync').firestore();
+    const pc = env.authenticatedContext('teacher-sync').firestore();
+    const other = env.authenticatedContext('teacher-b').firestore();
+    const ref = (fs, name = 'device') => doc(fs, `users/teacher-sync/settings/${name}`);
+    const shaped = toCloudSettings({ profile: SETTINGS_PROFILE }, SETTINGS_LOCAL);
+    const body = shaped.body;
+    await allow('기기 설정 올리기', () => setDoc(ref(phone), body));
+    const snap = await getDoc(ref(pc));
+    const back = snap.exists() ? fromCloudSettings(snap.data()) : null;
+    if (!back || back.periodLocal.extra?.mon?.p9 !== '방과후' || back.academic?.['2026']?.firstEnd !== '2026-07-21' || back.periodLocal.count !== 7 || back.ats?.academic !== 1767225600000) {
+        out.push(`다른 기기에서 설정을 그대로 읽지 못했습니다. ${JSON.stringify(back)}`);
+    }
+    const pl = (patch) => ({ ...body, periodLocal: { ...body.periodLocal, ...patch } });
+    const ac = (row) => ({ ...body, academic: { 2026: { ...body.academic['2026'], ...row } } });
+    await deny('남의 설정 읽기', () => getDoc(ref(other)));
+    await deny('남의 설정 쓰기', () => setDoc(ref(other), body));
+    await deny('다른 이름의 설정 문서', () => setDoc(ref(phone, 'other'), body));
+    await deny('모르는 칸이 든 설정', () => setDoc(ref(phone), { ...body, leave: '14:00' }));
+    const { at: _at, ...noAt } = body;
+    await deny('시각 없는 설정', () => setDoc(ref(phone), noAt));
+    await deny('시각 0인 설정', () => setDoc(ref(phone), { ...body, at: 0 }));
+    await deny('글자 시각', () => setDoc(ref(phone), { ...body, at: '1' }));
+    await deny('칸 시각에 모르는 칸', () => setDoc(ref(phone), { ...body, ats: { ...body.ats, memo: 1 } }));
+    const { ats: _ats, ...noAts } = body;
+    await deny('칸 시각 없는 설정', () => setDoc(ref(phone), noAts));
+    await deny('칸 시각이 글자', () => setDoc(ref(phone), { ...body, ats: { ...body.ats, academic: 'x' } }));
+    await deny('교시 설정 모르는 칸', () => setDoc(ref(phone), pl({ memo: '가' })));
+    await deny('교시 수 글자', () => setDoc(ref(phone), pl({ count: 'zzz' })));
+    await deny('교시 수 11', () => setDoc(ref(phone), pl({ count: 11 })));
+    await deny('학교급 모름', () => setDoc(ref(phone), pl({ level: '대' })));
+    await deny('교시 길이 글자', () => setDoc(ref(phone), pl({ lengths: 'a'.repeat(3000) })));
+    await deny('교시 길이 목록(글자 아님)', () => setDoc(ref(phone), pl({ lengths: ['a'.repeat(3000)] })));
+    await deny('교시 길이 121분', () => setDoc(ref(phone), pl({ lengths: '45,121' })));
+    await deny('교시 길이 11개', () => setDoc(ref(phone), pl({ lengths: Array(11).fill(40).join(',') })));
+    await deny('고정 교시 글자', () => setDoc(ref(phone), pl({ locks: '학생' })));
+    await deny('9교시 시작 글자', () => setDoc(ref(phone), pl({ extraStarts: ['방과후 상담'] })));
+    await deny('잠근 칸 글자', () => setDoc(ref(phone), pl({ cellLocks: '학생 이름' })));
+    await deny('출근 시각 글자', () => setDoc(ref(phone), pl({ workStart: '아침' })));
+    await deny('9교시 요일 sat', () => setDoc(ref(phone), pl({ extra: 'sat-p9=방과후' })));
+    await deny('9교시 note 칸', () => setDoc(ref(phone), pl({ extra: 'mon-note=가' })));
+    await deny('9교시 5000자', () => setDoc(ref(phone), pl({ extra: `mon-p9=${'가'.repeat(5000)}` })));
+    await deny('9교시 맵 모양', () => setDoc(ref(phone), pl({ extra: { mon: { p9: '방과후' } } })));
+    await deny('9교시 숫자', () => setDoc(ref(phone), pl({ extra: 3 })));
+    await deny('9교시 21칸', () => setDoc(ref(phone), pl({ extra: Array(21).fill('mon-p9=가').join('|') })));
+    await deny('잠근 칸 목록', () => setDoc(ref(phone), pl({ cellLocks: ['mon-9'] })));
+    await deny('9교시 = 로 숨김', () => setDoc(ref(phone), pl({ extra: 'mon-p9=a=b' })));
+    await deny('9교시 민감 낱말', () => setDoc(ref(phone), pl({ extra: 'mon-p9=보건 상담' })));
+    await deny('교시 시작 글자', () => setDoc(ref(phone), { ...body, periodStarts: ['학생 상담'] }));
+    await deny('교시 시작 9개', () => setDoc(ref(phone), { ...body, periodStarts: Array(9).fill('09:00') }));
+    await deny('고친 날 글자', () => setDoc(ref(phone), { ...body, ttEdited: ['학생 이름 상담'] }));
+    await deny('고친 날 쉼표 끼움', () => setDoc(ref(phone), { ...body, ttEdited: ['2026-04-01,2026-04-02'] }));
+    await deny('고친 날 401개', () => setDoc(ref(phone), { ...toCloudSettings({ profile: { settingsAt: 1767225600000 } }, {}).body, ttEdited: Array(401).fill('2026-04-01') }));
+    await deny('학사일정 memo', () => setDoc(ref(phone), ac({ memo: '가' })));
+    await deny('학사일정 날짜 글자', () => setDoc(ref(phone), ac({ firstEnd: '여름 전' })));
+    await deny('학사일정 쉬는 날 글자', () => setDoc(ref(phone), ac({ offDays: ['건강 검진'] })));
+    await deny('학사일정 쉬는 날 41개', () => setDoc(ref(phone), ac({ offDays: Array(41).fill('2026-05-04') })));
+    await deny('학사일정 연도 아님', () => setDoc(ref(phone), { ...body, academic: { memo: {} } }));
+    await deny('학사일정 다섯째 칸에 숨긴 글자', () => setDoc(ref(phone), { ...body, academic: { 2024: {}, 2025: {}, 2026: {}, 2027: {}, zz: { memo: '학생 상담' } } }));
+    /* 크기 제한만 보도록 다른 칸은 가볍게(계산 한도에 걸려 우연히 거절되지 않게). */
+    const light = toCloudSettings({ profile: { settingsAt: 1767225600000 } }, {}).body;
+    /* 실제로 쓸 수 있는 가장 큰 설정도 규칙 계산 한도(1000) 안에서 통과해야 합니다. */
+    const days = (y, n) => Array.from({ length: n }, (_, i) => `${y}-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + Math.floor(i / 12)).padStart(2, '0')}`);
+    const fullYear = (y) => ({ firstStart: `${y}-03-02`, firstEnd: `${y}-07-21`, secondStart: `${y}-08-18`, secondEnd: `${y + 1}-02-10`, offDays: days(y, 40) });
+    const biggest = toCloudSettings({ profile: {
+        settingsAt: 1767225600000, ttEdited: days(2026, 400).map((d, i) => d.replace('2026', String(2024 + (i % 4)))).filter((v, i, l) => l.indexOf(v) === i),
+        periodStarts: SETTINGS_PROFILE.periodStarts,
+        academic: { 2025: fullYear(2025), 2026: fullYear(2026), 2027: fullYear(2027), 2028: fullYear(2028) },
+    } }, { ...SETTINGS_LOCAL, count: 10, lengths: Array(10).fill(45), locks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], cellLocks: ['mon', 'tue', 'wed', 'thu', 'fri'].flatMap((d) => Array.from({ length: 10 }, (_, i) => `${d}-${i + 1}`)),
+        extra: Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, { p9: '방과후 영어', p10: '보충 수학', s9: '3-1', s10: '3-2' }])) }).body;
+    if (Object.keys(biggest.academic).length !== 4 || biggest.periodLocal.cellLocks.split(',').length !== 50) out.push('가장 큰 설정 모양을 만들지 못했습니다.');
+    await allow('가장 큰 설정', () => setDoc(ref(phone), biggest));
+    await allow('가벼운 설정', () => setDoc(ref(phone), light));
+    await deny('학사일정 5개 학년도', () => setDoc(ref(phone), { ...light, academic: { 2024: {}, 2025: {}, 2026: {}, 2027: {}, 2028: {} } }));
+    await allow('빈 9교시 설정', () => setDoc(ref(phone), pl({ extra: '', lengths: '', locks: '', cellLocks: '', workStart: '', workEnd: '' })));
+    /* 날짜별 시간표 9·10교시 */
+    const tt = (fs, row) => setDoc(doc(fs, 'users/teacher-sync/timetable/2026-10-28'), row);
+    const ttRow = toCloudRow('timetable', { id: '2026-10-28', p1: '국어', p9: '방과후', s10: '보충' });
+    await allow('날짜별 9·10교시', () => tt(phone, ttRow.body));
+    const ttSnap = await getDoc(doc(pc, 'users/teacher-sync/timetable/2026-10-28'));
+    if (ttSnap.data()?.p9 !== '방과후' || ttSnap.data()?.s10 !== '보충') out.push('날짜별 9·10교시가 다른 기기에서 읽히지 않습니다.');
+    await deny('날짜별 9교시 민감 낱말', () => tt(phone, { ...ttRow.body, p9: '투약 확인' }));
+    await deny('날짜별 10교시 21자', () => tt(phone, { ...ttRow.body, p10: '가'.repeat(21) }));
+    await deny('날짜별 11교시', () => tt(phone, { ...ttRow.body, p11: '가' }));
+    return out;
+}
+
+/* 규칙 돌연변이: 설정 검사를 하나씩 풀어 본 판에서 위 묶음이 실패해야 합니다(검사가 빈말이 아닌지). */
+const RULE_MUTANTS = [
+    ['읽기 열기', "allow read, delete: if isOwner(uid) && key == 'device';", 'allow read, delete: if true;'],
+    ['at 검사 빼기', "&& v.at is int && v.at > 0 && v.at <= 4102444800000", ''],
+    ['periodLocal 키 제한 빼기', "&& p.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])\n", '\n'],
+    ['extra 칸 이름 제한 빼기', "e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}){0,19})?$')", "e.matches('(?s).*')"],
+    ['ttEdited 크기 빼기', "joinedOk(v.ttEdited, 400,", 'joinedOk(v.ttEdited, 100000,'],
+    ['칸 시각 검사 빼기', "&& setAtsOk(v.ats)", ''],
+    ['academic 크기 빼기', "a is map && a.size() <= 4", 'a is map'],
+    ['academic 값 검사 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk(a[y]);", "y.matches('^20(2[4-9]|3[0-5])$');"],
+    ['academic 연도 이름 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk", 'acadYearOk'],
+    ['9교시 과목 검사 빼기', "function subjOk(m, k) { return !(k in m) || (str(m[k], 0, 20) && safeText(m[k])); }", 'function subjOk(m, k) { return true; }'],
+    ['교시 수 검사 빼기', "&& p.count is int && p.count >= 1 && p.count <= 10", ''],
+    ['교시 길이 검사 빼기', "csvOk(p.lengths, '^(([0-9]", "csvOk('', '^(([0-9]"],
+];
+async function rulesMutantCheck() {
+    const out = [];
+    let n = 0;
+    for (const [label, from, to] of RULE_MUTANTS) {
+        n += 1;
+        if (!rules.includes(from)) { out.push(`규칙 돌연변이 "${label}"의 원문을 규칙에서 찾지 못했습니다.`); continue; }
+        const env = await initializeTestEnvironment({ projectId: `demo-ssug-mut-${n}`, firestore: { rules: rules.replace(from, () => to), host, port: Number(portText) } });
+        try {
+            const found = await settingsSuite(env);
+            if (!found.length) out.push(`규칙 돌연변이 "${label}"을(를) 검사가 잡지 못했습니다.`);
+        } finally {
+            await env.cleanup();
+        }
+    }
+    return out;
+}
+
 try {
     await expectDeny('학생 메모 건강', () => setDoc(doc(db, 'users/teacher-a/students/s3'), { no: 3, name: '박서준', memo: '건강 특이' }));
     await expectDeny('학생 메모 보건', () => setDoc(doc(db, 'users/teacher-a/students/s5'), { no: 5, name: '강민우', memo: '보건실' }));
@@ -127,26 +258,8 @@ try {
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));
 
-    /* 기기끼리 같이 쓰는 설정: 휴대폰에서 올린 9교시·학사일정이 PC에서 그대로 읽히는지. */
-    {
-        const phone = testEnv.authenticatedContext('teacher-sync').firestore();
-        const pc = testEnv.authenticatedContext('teacher-sync').firestore();
-        const shaped = toCloudSettings({ profile: {
-            settingsAt: 1767225600000,
-            ttEdited: ['2026-04-01'],
-            periodStarts: ['09:00', '09:50', '10:50', '11:40', '13:20', '14:10', '15:00', '15:50'],
-            academic: { 2026: { firstStart: '2026-03-03', firstEnd: '2026-07-21', secondStart: '2026-08-18', secondEnd: '2027-02-10', offDays: ['2026-05-04'] } },
-        } }, { level: '중', count: 7, lengths: [45], extraStarts: ['16:40', '17:30'], locks: [9], cellLocks: ['mon-9'], workStart: '08:20', workEnd: '16:40', extra: { mon: { p9: '방과후' } } });
-        await expectAllow('기기 설정 올리기', () => setDoc(doc(phone, 'users/teacher-sync/settings/device'), shaped.body));
-        const snap = await getDoc(doc(pc, 'users/teacher-sync/settings/device'));
-        const back = snap.exists() ? fromCloudSettings(snap.data()) : null;
-        if (!back || back.periodLocal.extra?.mon?.p9 !== '방과후' || back.academic?.['2026']?.firstEnd !== '2026-07-21' || back.periodLocal.count !== 7) {
-            failures.push(`다른 기기에서 설정을 그대로 읽지 못했습니다. ${JSON.stringify(back)}`);
-        }
-        await expectDeny('다른 이름의 설정 문서', () => setDoc(doc(phone, 'users/teacher-sync/settings/other'), shaped.body));
-        await expectDeny('모르는 칸이 든 설정', () => setDoc(doc(phone, 'users/teacher-sync/settings/device'), { ...shaped.body, leave: '14:00' }));
-        await expectDeny('남의 설정', () => setDoc(doc(testEnv.authenticatedContext('teacher-b').firestore(), 'users/teacher-sync/settings/device'), shaped.body));
-    }
+    /* 기기끼리 같이 쓰는 설정: 휴대폰에서 올린 9교시·학사일정이 PC에서 그대로 읽히는지, 안쪽 값도 막는지. */
+    failures.push(...await settingsSuite(testEnv));
 
     const uid = 'teacher-span';
     const deviceA = testEnv.authenticatedContext(uid).firestore();
@@ -242,6 +355,7 @@ try {
 } finally {
     await testEnv.cleanup();
 }
+failures.push(...await rulesMutantCheck());
 
 if (failures.length) {
     console.error(failures.join('\n'));

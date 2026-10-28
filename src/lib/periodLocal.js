@@ -72,9 +72,20 @@ export function readPeriodLocal() {
 }
 
 export function patchPeriodLocal(patch, { fromCloud = false } = {}) {
-    /* syncAt: 다른 기기와 비교할 마지막 고친 시각. 클라우드에서 받은 값은 그 시각을 그대로 둡니다. */
-    const next = { ...readPeriodLocal(), ...patch };
-    if (!fromCloud) next.syncAt = Date.now();
+    /* syncAt·syncAts: 다른 기기와 비교할 고친 시각. extra(9·10교시 과목)와 나머지(교시 수·길이 등)를 따로 적어
+       두 기기가 서로 다른 칸을 고쳐도 칸 단위로 합칩니다. 클라우드에서 받은 값은 받은 시각을 그대로 둡니다. */
+    const prev = readPeriodLocal();
+    const next = { ...prev, ...patch };
+    if (!fromCloud) {
+        const now = Date.now();
+        const legacy = Number(prev.syncAt) || 0;
+        const ats = { period: prev.syncAts?.period ?? legacy, extra: prev.syncAts?.extra ?? legacy };
+        const keys = Object.keys(patch || {}).filter((key) => key !== 'syncAt' && key !== 'syncAts' && key !== 'leave');
+        if (keys.includes('extra')) ats.extra = now;
+        if (keys.some((key) => key !== 'extra')) ats.period = now;
+        next.syncAts = ats;
+        next.syncAt = now;
+    }
     writeJson(PERIOD_LOCAL_KEY, next);
     return next;
 }

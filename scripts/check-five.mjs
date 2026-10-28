@@ -147,13 +147,13 @@ check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
         { syncAt: 9, level: '중', count: 7, lengths: [45], extraStarts: ['16:40'], locks: [9], cellLocks: ['mon-9', 'bad'], workStart: '08:20', workEnd: '', extra: { mon: { p9: '방과후', p3: '국어', x: 1 }, sat: { p9: '?' } } });
     const body = shaped.body;
     check(body.at === 9 && body.ttEdited.length === 1 && body.periodStarts.length === 1, `설정 시각·목록 정리가 이상합니다: ${JSON.stringify(body)}`);
-    check(body.periodLocal.extra.mon.p9 === '방과후' && !body.periodLocal.extra.mon.p3 && !body.periodLocal.extra.sat, '9·10교시 밖 칸이나 주말이 올라갑니다.');
+    check(body.periodLocal.extra === 'mon-p9=방과후', '9·10교시 밖 칸이나 주말이 올라갑니다.');
     check(!('leave' in body) && !JSON.stringify(body).includes('leave-early'), '오늘 조퇴 시각이 올라갑니다.');
     const back = fromCloudSettings(JSON.parse(JSON.stringify(body)));
     check(back?.at === 9 && back.periodLocal.count === 7 && back.academic['2026'].firstStart === '2026-03-03', '받은 설정을 되살리지 못했습니다.');
     check(fromCloudSettings({}) === null, '빈 설정 문서를 받아들였습니다.');
     const sensitive = toCloudSettings({ profile: {} }, { extra: { mon: { p9: '민준 학폭 상담' } } }).body;
-    check(!sensitive.periodLocal.extra.mon, '민감한 9교시 글이 올라갑니다.');
+    check(sensitive.periodLocal.extra === '', '민감한 9교시 글이 올라갑니다.');
 }
 
 /* 캐시 판 */

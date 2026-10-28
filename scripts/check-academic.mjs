@@ -5,6 +5,8 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { academicOffEvents } from '../src/lib/academic.js';
+import { termRange } from '../src/lib/semester.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const shots = process.env.SHOT_DIR || '';
@@ -14,6 +16,24 @@ const check = (ok, message) => { if (!ok) failures.push(message); };
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => existsSync(path));
 if (!chrome) { console.error('브라우저가 없습니다.'); process.exit(1); }
+
+/* 브라우저 전에 계산부터: 방학 일정 모양과, 설정 학사일정이 일정 글자보다 먼저인지. */
+{
+    const academic = { 2026: { firstStart: '2026-03-03', firstEnd: '2026-07-21', secondStart: '2026-08-18', secondEnd: '2027-02-10', offDays: ['2026-05-04'] } };
+    const off = academicOffEvents(academic);
+    const summer = off.find((row) => row.id === 'acad-summer-2026');
+    check(summer?.title === '여름방학' && summer.date === '2026-07-22' && summer.end === '2026-08-17', `여름방학 일정이 틀립니다: ${JSON.stringify(summer)}`);
+    check(off.some((row) => row.date === '2026-05-04' && row.title === '재량휴업일'), '재량휴업일이 쉬는 날로 들어가지 않습니다.');
+    const winter = off.find((row) => row.id === 'acad-winter-after-2026');
+    check(winter?.title === '겨울방학' && winter.date === '2027-02-11' && winter.end === '2027-02-28', `종업식 뒤 겨울방학이 틀립니다: ${JSON.stringify(winter)}`);
+    check(!academicOffEvents({ 2026: { firstEnd: '2026-07-21', secondStart: '2026-07-22' } }).some((row) => row.id === 'acad-summer-2026'), '하루도 없는 여름방학이 생깁니다.');
+    const marks = [{ date: '2026-03-02', title: '개학식' }, { date: '2026-07-24', title: '여름방학식' }, { date: '2026-08-14', title: '2학기 개학' }];
+    const first = termRange('first', 2026, marks, academic);
+    const second = termRange('second', 2026, marks, academic);
+    check(first.from === '2026-03-03' && first.to === '2026-07-21' && second.from === '2026-08-18' && first.source === '우리 학교', `설정 학사일정이 일정 글자보다 먼저가 아닙니다: ${JSON.stringify([first, second])}`);
+    const fromMarks = termRange('first', 2026, marks, {});
+    check(fromMarks.from === '2026-03-02' && fromMarks.to === '2026-07-24' && fromMarks.source === '학사일정', `일정 글자로 학기를 찾지 못합니다: ${JSON.stringify(fromMarks)}`);
+}
 
 const port = Number(process.env.ACADEMIC_PORT) || await new Promise((done, fail) => {
     const probe = createServer();
