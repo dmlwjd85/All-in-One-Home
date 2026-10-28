@@ -202,9 +202,10 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));
-        out.ids[cloudName] = [];
+        /* 캐시에서 온 결과로는 지우기를 하지 않습니다. 서버에서 받은 목록만 ids에 둡니다. */
+        const ids = serverIds(snap);
+        if (ids) out.ids[cloudName] = ids;
         snap.forEach((item) => {
-            out.ids[cloudName].push(String(item.id));
             const row = fromCloudRow(cloudName, item.id, item.data());
             if (row) out[localName].push(row);
         });
@@ -217,13 +218,34 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     return out;
 }
 
-export async function deleteUserDoc(uid, name, id, { memoryOnly = false } = {}) {
+/** 서버에서 받은 결과일 때만 문서 id 목록을 돌려줍니다(캐시면 null). */
+export function serverIds(snap) {
+    if (snap?.metadata?.fromCache !== false) return null;
+    const ids = [];
+    snap.forEach((item) => ids.push(String(item.id)));
+    return ids;
+}
+
+/** 클라우드 문서가 지운 시각보다 나중에 고쳐졌는지 봅니다. */
+export function newerThanDelete(data, notAfter) {
+    const at = data?.updatedAt;
+    const ms = typeof at?.toMillis === 'function' ? at.toMillis() : null;
+    return ms != null && Number.isFinite(notAfter) && ms > notAfter;
+}
+
+export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfter = null } = {}) {
     if (!uid || !name || !id || !syncAvailable()) return { skipped: true };
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
-        const { doc, deleteDoc } = await import('firebase/firestore');
-        await deleteDoc(doc(ready.db, 'users', uid, name, String(id)));
+        const { doc, deleteDoc, getDocFromServer } = await import('firebase/firestore');
+        const ref = doc(ready.db, 'users', uid, name, String(id));
+        if (Number.isFinite(notAfter)) {
+            /* 지운 뒤 다른 기기가 더 나중에 고쳤으면 그 수정을 남깁니다(서버에서 읽은 값만 믿습니다). */
+            const snap = await getDocFromServer(ref);
+            if (newerThanDelete(snap.exists() ? snap.data() : null, notAfter)) return { ok: true, kept: true };
+        }
+        await deleteDoc(ref);
         return { ok: true };
     } catch {
         return { ok: false };
