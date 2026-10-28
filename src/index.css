@@ -1182,6 +1182,7 @@ button.glass[aria-pressed="true"]:active {
 .minutes-label { font-weight: 700; margin-top: 6px; overflow-wrap: anywhere; }
 .minutes-date-picked { margin-left: 6px; color: var(--accent); }
 .minutes-date { padding: 10px; border-radius: 16px; box-shadow: var(--neo-inset); }
+@media (max-width: 420px) { .minutes-date { padding: 0; box-shadow: none; } }
 .minutes-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .minutes-text { min-height: 260px; resize: vertical; line-height: 1.7; padding: 12px 14px; font: inherit; }
 .minutes-kept { margin: 0; font-size: 13px; }
