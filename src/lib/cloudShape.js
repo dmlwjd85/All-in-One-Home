@@ -55,7 +55,7 @@ export function toCloudRow(collection, row) {
     if (!row || row.source === 'demo') return null;
     // 학생 메모만 민감하면 이름·번호는 올리고 메모만 빼 둡니다.
     if (collection === 'students') return toStudent(row);
-    if (isSensitiveText(row.text, row.tags) || isSensitiveText(row.title) || isSensitiveText(row.note) || isSensitiveText(row.memo) || isSensitiveText(row.raw)) {
+    if (isSensitiveText(row.text, row.tags) || isSensitiveText(row.title) || isSensitiveText(row.note) || isSensitiveText(row.memo) || isSensitiveText(row.raw) || isSensitiveText(row.attendees)) {
         return null;
     }
     if (collection === 'attendance') return toAttendance(row);
@@ -156,7 +156,10 @@ function toNote(row) {
     const id = cloudDocId(row.id);
     const source = sourceOf(row.source);
     if (!id || !source || !String(row.text || '').trim()) return null;
-    const body = { text: String(row.text).slice(0, 2000), source };
+    const body = { text: String(row.text).slice(0, 20000), source };
+    /* 회의록(제목·참석자): 쓸 때만 올립니다. */
+    if (String(row.title || '').trim()) body.title = String(row.title).trim().slice(0, 60);
+    if (String(row.attendees || '').trim()) body.attendees = String(row.attendees).trim().slice(0, 200);
     if (row.date) body.date = row.date;
     if (Array.isArray(row.tags) && row.tags.length) body.tags = row.tags.slice(0, 10);
     if (typeof row.pinned === 'boolean') body.pinned = row.pinned;
@@ -292,6 +295,8 @@ export function fromCloudRow(collection, id, data = {}) {
         return {
             id,
             text: data.text || '',
+            ...(data.title ? { title: String(data.title) } : {}),
+            ...(data.attendees ? { attendees: String(data.attendees) } : {}),
             date: data.date || '',
             tags: data.tags || [],
             pinned: Boolean(data.pinned),

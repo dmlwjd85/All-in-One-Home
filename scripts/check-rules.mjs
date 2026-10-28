@@ -269,6 +269,31 @@ try {
         await expectDeny('정리함 source', () => setDoc(doc(db, 'users/teacher-a/inbox/badsource'), { ...inboxBase, source: 'msg' }));
         await expectDeny('정리함 endTime', () => setDoc(doc(db, 'users/teacher-a/inbox/badendtim'), { ...inboxBase, endTime: '16:00까지' }));
     }
+    /* 회의록(메모 + '회의' 태그): 여러 줄 본문·제목·참석자가 다른 기기에서 그대로 읽히고, 옛 회의록 모양도 계속 받습니다. */
+    {
+        const pcA = testEnv.authenticatedContext('teacher-a').firestore();
+        const longBody = Array.from({ length: 600 }, (_, i) => `${i + 1}. 안건을 이야기했습니다. 다음 주까지 정리합니다.`).join('\n');
+        const meet = toCloudRow('notes', { id: 'meet-1761600000000', title: '학년 협의회', attendees: '김선생, 이선생', date: '2026-10-28', text: longBody, tags: ['회의', '학년회의'], pinned: false, source: 'app' });
+        if (!meet || meet.body.text.length < 15000) failures.push('긴 회의록 본문을 올릴 모양으로 만들지 못했습니다.');
+        await expectAllow('긴 회의록', () => setDoc(doc(db, `users/teacher-a/notes/${meet.id}`), meet.body));
+        const back = fromCloudRow('notes', meet.id, (await getDoc(doc(pcA, `users/teacher-a/notes/${meet.id}`))).data() || {});
+        if (back?.text !== longBody || back?.title !== '학년 협의회' || back?.attendees !== '김선생, 이선생' || back?.date !== '2026-10-28') failures.push(`회의록이 다른 기기에서 그대로 읽히지 않습니다. ${JSON.stringify({ ...back, text: back?.text?.length })}`);
+        const old = toCloudRow('notes', { id: 'meet-1761500000000', text: '학년회의 14:00 체험학습 안내', date: '2026-10-20', tags: ['회의', '학년회의'], pinned: false, source: 'app' });
+        await expectAllow('옛 회의록 모양', () => setDoc(doc(db, `users/teacher-a/notes/${old.id}`), old.body));
+        const nb = meet.body;
+        await expectDeny('회의록 본문 20001자', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig01'), { ...nb, text: '가'.repeat(20001) }));
+        await expectDeny('회의록 제목 61자', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig02'), { ...nb, title: '가'.repeat(61) }));
+        await expectDeny('회의록 제목 숫자', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig03'), { ...nb, title: 3 }));
+        await expectDeny('회의록 참석자 201자', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig04'), { ...nb, attendees: '가'.repeat(201) }));
+        await expectDeny('회의록 참석자 목록', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig05'), { ...nb, attendees: ['김선생'] }));
+        await expectDeny('회의록 제목 민감 낱말', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig06'), { ...nb, title: '학폭 협의' }));
+        await expectDeny('회의록 참석자 민감 낱말', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig07'), { ...nb, attendees: '보건 선생님' }));
+        await expectDeny('회의록 본문 민감 낱말', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig08'), { ...nb, text: `${longBody}\n민원 처리` }));
+        await expectDeny('회의록 모르는 칸', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig09'), { ...nb, place: '교무실' }));
+        await expectDeny('회의록 빈 본문', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig10'), { ...nb, text: '' }));
+        await expectDeny('회의록 날짜 글자', () => setDoc(doc(db, 'users/teacher-a/notes/meetbig11'), { ...nb, date: '다음 주' }));
+        if (toCloudRow('notes', { id: 'meet-2', title: '협의', attendees: '보건 선생님', text: '안건', tags: ['회의'], source: 'app' })) failures.push('민감한 참석자가 든 회의록을 올리려 합니다.');
+    }
     const stranger = testEnv.unauthenticatedContext().firestore();
     await expectDeny('로그인 없이', () => setDoc(doc(stranger, 'users/teacher-a/students/s9'), { no: 9, name: '장하람' }));
 

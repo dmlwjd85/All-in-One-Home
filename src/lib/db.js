@@ -914,7 +914,7 @@ export async function saveTextItem(bucket, row, { from } = {}) {
     if (bucket === 'notes' && !text.trim() && !title.trim()) {
         return { ok: false, message: '한 줄만 적어도 남길 수 있어요.', sensitive: false };
     }
-    const sensitive = isSensitiveText(text || title, row.tags) || isSensitiveText(row.memo) || isSensitiveText(row.note);
+    const sensitive = isSensitiveText(text, row.tags) || isSensitiveText(title) || isSensitiveText(row.memo) || isSensitiveText(row.note) || isSensitiveText(row.attendees);
     const failed = await update((draft) => {
         relocate(draft, bucket, row, sensitive, from);
         return draft;
