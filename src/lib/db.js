@@ -296,7 +296,30 @@ export async function flushCloud() {
  * 대기열은 메모리에만 두고 새 저장 키는 만들지 않습니다. 로그인 전이면 대기열에만 남습니다.
  */
 const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices', 'attendance'];
-const cloudForget = new Set();
+/* 지울 대기열은 새로고침 뒤에도 남도록 이 기기(localStorage)에 둡니다. 공용 PC·메모리 모드에서는 남기지 않습니다. */
+const CLOUD_FORGET_KEY = 'ssug-gyomu-cloud-forget';
+const cloudForget = new Set(readCloudForget());
+
+function readCloudForget() {
+    try {
+        const list = JSON.parse(globalThis.localStorage?.getItem(CLOUD_FORGET_KEY) || '[]');
+        return Array.isArray(list) ? list.filter((key) => typeof key === 'string' && /^[a-z]+\/[A-Za-z0-9_-]{1,120}$/.test(key)).slice(-500) : [];
+    } catch { return []; }
+}
+
+function saveCloudForget() {
+    try {
+        if (memoryOnly || state?.profile?.sharedPc) return;
+        if (cloudForget.size) globalThis.localStorage?.setItem(CLOUD_FORGET_KEY, JSON.stringify([...cloudForget].slice(-500)));
+        else globalThis.localStorage?.removeItem(CLOUD_FORGET_KEY);
+    } catch { /* 저장 공간이 없으면 이번 실행 동안만 기억합니다. */ }
+}
+
+/** 검사용: 새로고침을 흉내 내어 저장된 대기열을 다시 읽습니다. */
+export function reloadCloudForgetForTest() {
+    cloudForget.clear();
+    readCloudForget().forEach((key) => cloudForget.add(key));
+}
 
 /** 검사에서 클라우드 삭제 대기열을 봅니다. */
 export function queuedCloudKeys() {
@@ -307,6 +330,7 @@ function queueCloudForget(bucket, id) {
     if (!CLOUD_BUCKETS.includes(bucket) || !id) return;
     const key = `${bucket}/${id}`;
     cloudForget.add(key);
+    saveCloudForget();
     if (Object.prototype.hasOwnProperty.call(cloudHashes, key)) {
         delete cloudHashes[key];
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
@@ -328,6 +352,7 @@ async function forgetQueuedCloud() {
         const result = await deleteUserDoc(uid, bucket, id, { memoryOnly: memory }).catch(() => ({ ok: false }));
         if (result?.ok) cloudForget.delete(key);
     }
+    saveCloudForget();
 }
 
 function unionById(local = [], remote = []) {
@@ -419,6 +444,25 @@ function absorbSettings(draft, settings) {
     if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra) }, { fromCloud: true });
 }
 
+/* 다른 기기에서 지운 출결: 이 기기에서 올린 뒤 고치지 않았고(해시 같음) 클라우드에 문서가 없으면 지웁니다.
+   해시가 없는 줄(처음 받기, 아직 안 올린 줄)이나 올린 뒤 고친 줄은 그대로 둡니다. */
+const PRUNE_BUCKETS = [['attendance', 'attendance']];
+
+export function pruneDeletedElsewhere(draft, remote, hashes) {
+    for (const [localName, cloudName] of PRUNE_BUCKETS) {
+        const ids = remote?.ids?.[cloudName];
+        if (!Array.isArray(ids)) continue;
+        const present = new Set(ids.map(String));
+        draft[localName] = (draft[localName] || []).filter((row) => {
+            const shaped = row ? toCloudRow(cloudName, row) : null;
+            if (!shaped?.id || present.has(String(shaped.id))) return true;
+            if (!unchangedSincePush(hashes, cloudName, row)) return true;
+            if (hashes) delete hashes[`${cloudName}/${shaped.id}`];
+            return false;
+        });
+    }
+}
+
 function absorbCloud(draft, remote) {
     const remoteHas = (remote.students || []).length || (remote.records || []).length;
     if (draft.profile.demo && remoteHas) {
@@ -432,6 +476,11 @@ function absorbCloud(draft, remote) {
         draft.notes = draft.notes.filter(keep);
         draft.profile.demo = false;
     }
+    /* 이 기기에서 지우고 아직 클라우드에서 못 지운 줄은 받아 오지 않습니다. */
+    for (const bucket of CLOUD_BUCKETS) {
+        if (Array.isArray(remote[bucket])) remote = { ...remote, [bucket]: remote[bucket].filter((row) => !cloudForget.has(`${bucket}/${row?.id}`)) };
+    }
+    pruneDeletedElsewhere(draft, remote, cloudHashes);
     for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
         if (localName === 'inbox') continue;
         draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, cloudHashes);

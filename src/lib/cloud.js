@@ -191,6 +191,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         inbox: [],
         timetable: {},
         settings: null,
+        /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
+        ids: {},
     };
     try {
         const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
@@ -200,7 +202,9 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));
+        out.ids[cloudName] = [];
         snap.forEach((item) => {
+            out.ids[cloudName].push(String(item.id));
             const row = fromCloudRow(cloudName, item.id, item.data());
             if (row) out[localName].push(row);
         });

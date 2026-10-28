@@ -1,6 +1,6 @@
 /** 웹·태블릿·휴대폰 동기화: 받은 자료를 합칠 때 잃는 것 없이, 고친 쪽이 이기는지 클라우드 없이 확인합니다. */
 import { readFileSync } from 'node:fs';
-import { absorbCloudForTest, clippedCopy, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
+import { absorbCloudForTest, clippedCopy, pruneDeletedElsewhere, reloadCloudForgetForTest, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
@@ -218,6 +218,44 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     await setAttendance('2026-10-28', 's9', '지각');
     for (let i = 0; i < 8 && snapshot().attendance.some((r) => r.id === '2026-10-28_s9'); i += 1) await cycleAttendance('2026-10-28', 's9');
     check(!snapshot().attendance.some((r) => r.id === '2026-10-28_s9') && queuedCloudKeys().includes('attendance/2026-10-28_s9'), '눌러 돌리기로 지운 출결의 클라우드 삭제가 줄에 없습니다.');
+}
+
+/* 12) 다른 기기에서 지운 출결은 이 기기에서도 지웁니다. 처음 받기·아직 안 올린 줄·올린 뒤 고친 줄은 남깁니다. 지울 대기열은 새로고침 뒤에도 남습니다. */
+{
+    const row = (sid, extra = {}) => ({ id: `2026-10-20_${sid}`, date: '2026-10-20', sid, status: '결석', reason: '질병', note: '', period: '', paper: false, source: 'app', ...extra });
+    const pushedRow = row('p1');
+    const editedRow = row('p2', { reason: '기타' });
+    const freshRow = row('p3');
+    const keptRow = row('p4');
+    const hashes = Object.fromEntries([mark('attendance', pushedRow), mark('attendance', row('p2')), mark('attendance', keptRow)]);
+    const draft = { attendance: [pushedRow, editedRow, freshRow, keptRow] };
+    pruneDeletedElsewhere(draft, { ids: { attendance: [keptRow.id] } }, hashes);
+    const left = draft.attendance.map((r) => r.sid).sort().join(',');
+    check(left === 'p2,p3,p4', `다른 기기에서 지운 출결 정리가 다릅니다: ${left}`);
+    check(!hashes['attendance/2026-10-20_p1'], '지운 출결의 해시가 남았습니다.');
+    const first = { attendance: [pushedRow] };
+    pruneDeletedElsewhere(first, { ids: { attendance: [] } }, {});
+    check(first.attendance.length === 1, '처음 받기(해시 없음)에 로컬 출결을 지웠습니다.');
+    const noIds = { attendance: [pushedRow] };
+    pruneDeletedElsewhere(noIds, { attendance: [] }, Object.fromEntries([mark('attendance', pushedRow)]));
+    check(noIds.attendance.length === 1, '문서 목록 없이 받은 자료로 로컬 출결을 지웠습니다.');
+
+    /* 실제 합치기 경로: 다른 기기가 지운 줄이 사라집니다. */
+    await absorbCloudForTest({ attendance: [pushedRow] }, {});
+    await absorbCloudForTest({ attendance: [], ids: { attendance: [] } }, Object.fromEntries([mark('attendance', pushedRow)]));
+    check(!snapshot().attendance.some((r) => r.id === pushedRow.id), '다른 기기에서 지운 출결이 합치기 뒤에도 남았습니다.');
+
+    /* 지울 대기열: localStorage에 남고, 대기 중인 줄은 받아 와도 되살아나지 않습니다. */
+    const mem = new Map();
+    globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+    await setAttendance('2026-10-21', 'q1', '결석');
+    await setAttendance('2026-10-21', 'q1', '출석');
+    check(JSON.parse(mem.get('ssug-gyomu-cloud-forget') || '[]').includes('attendance/2026-10-21_q1'), '지울 대기열이 localStorage에 남지 않습니다.');
+    reloadCloudForgetForTest();
+    check(queuedCloudKeys().includes('attendance/2026-10-21_q1'), '새로고침 뒤 지울 대기열이 사라졌습니다.');
+    await absorbCloudForTest({ attendance: [row('q1', { id: '2026-10-21_q1', date: '2026-10-21' })], ids: { attendance: ['2026-10-21_q1'] } }, {});
+    check(!snapshot().attendance.some((r) => r.id === '2026-10-21_q1'), '지우는 중인 출결이 받아 오기로 되살아났습니다.');
+    delete globalThis.localStorage;
 }
 
 if (failures.length) {
