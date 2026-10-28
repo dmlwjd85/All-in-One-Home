@@ -64,12 +64,18 @@ function MinutesListView({ rows }) {
             {rows.length ? (
                 <ul className="minutes-list" aria-label="회의록 목록">
                     {rows.map((item) => (
-                        <li key={item.id}>
+                        <li key={item.id} className="minutes-row">
                             <Btn className="minutes-item solid-card" data-id={item.id} onClick={() => go(`#/minutes/${item.id}`)}>
                                 <span className="minutes-item-title">{item.localOnly ? '🔒 ' : ''}{minutesTitle(item)}</span>
                                 <span className="minutes-item-meta">{dateLabel(item.date)}{item.attendees ? ` · ${item.attendees}` : ''}</span>
                                 {firstLine(item.text) ? <span className="minutes-item-line">{firstLine(item.text)}</span> : null}
                             </Btn>
+                            {readMinutesDraft(item.id) ? (
+                                <p className="minutes-draft-note" data-draft-for={item.id}>
+                                    <span>고치던 내용이 남아 있어요.</span>
+                                    <Btn className="chip" onClick={() => go(`#/minutes/${item.id}/edit`)}>이어 쓰기</Btn>
+                                </p>
+                            ) : null}
                         </li>
                     ))}
                 </ul>
@@ -199,7 +205,7 @@ function MinutesEditor({ row }) {
         }
         writeMinutesDraft(key, null);
         showToast(result?.sensitive || minutesSensitive(draft) ? '민감할 수 있는 낱말이 있어 이 기기에만 남겼어요.' : '회의록을 저장했어요.', true);
-        go(`#/minutes/${next.id}`);
+        go(`#/minutes/${next.id}`, { replace: true });
     }
 
     function cancel() {

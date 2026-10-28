@@ -255,6 +255,26 @@ export function useVaultsForTest(nextMain, nextLocal, nextInbox) {
     persistQueue = Promise.resolve();
 }
 
+/** 클라우드 규칙이 거절한 줄. 같은 묶음은 한 번만 알립니다. */
+let toldRejected = '';
+
+export function cloudRejectedMessage(keys = []) {
+    const minutes = keys.filter((key) => key.startsWith('notes/meet-')).length;
+    const what = minutes === keys.length ? '회의록' : '기록';
+    return `클라우드가 ${what} ${keys.length}개를 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.`;
+}
+
+function tellRejected(keys = []) {
+    const mark = [...keys].sort().join('|');
+    if (mark === toldRejected) return;
+    toldRejected = mark;
+    if (keys.length) tellStorageIssue(cloudRejectedMessage(keys));
+}
+
+export function tellRejectedForTest(keys) {
+    tellRejected(keys);
+}
+
 export async function flushCloud() {
     if (!state.auth?.uid || !syncAvailable()) return { skipped: true };
     const result = await pushUserData(state.auth.uid, state, {
@@ -265,6 +285,7 @@ export async function flushCloud() {
         cloudHashes = result.hashes;
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
+    if (Array.isArray(result?.rejected)) tellRejected(result.rejected);
     await forgetQueuedCloud();
     return result;
 }
@@ -357,11 +378,22 @@ function dropRegisteredInbox(draft) {
 
 /** 양쪽에 다 있는 줄: 이 기기에서 올린 뒤 고친 적 없으면 다른 기기에서 고친 값으로 바꿉니다.
     이 기기에서 고친 게 아직 안 올라갔으면 이 기기 값이 남고 곧 올라갑니다. 지우는 일은 하지 않습니다. */
+export function clippedCopy(mine, theirs) {
+    const a = String(mine || '');
+    const b = String(theirs || '');
+    return a.length > 2000 && b.length <= 2000 && b.length < a.length && a.startsWith(b);
+}
+
 function refreshShared(local = [], remote = [], cloudName, hashes) {
     const byId = new Map((remote || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
         if (!other || !unchangedSincePush(hashes, cloudName, row)) return row;
+        if (cloudName === 'notes' && clippedCopy(row.text, other.text)) {
+            /* 옛 판(v30)은 본문을 2000자로 잘라 다시 올립니다. 잘린 사본이면 이 기기 본문을 지키고 다시 올립니다. */
+            if (hashes) delete hashes[`${cloudName}/${row.id}`];
+            return { ...row, ...other, text: row.text };
+        }
         return { ...row, ...other };
     });
 }

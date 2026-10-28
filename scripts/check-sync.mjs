@@ -1,6 +1,6 @@
 /** 웹·태블릿·휴대폰 동기화: 받은 자료를 합칠 때 잃는 것 없이, 고친 쪽이 이기는지 클라우드 없이 확인합니다. */
 import { readFileSync } from 'node:fs';
-import { absorbCloudForTest, snapshot, useVaultsForTest } from '../src/lib/db.js';
+import { absorbCloudForTest, clippedCopy, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
 import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
@@ -160,6 +160,30 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(r('#/minutes/meet-1/edit').params.mode === 'edit', '회의록 고치기 주소가 다릅니다.');
     check(r('#/minutes/<script>').params.mode === 'list' && r('#/minutes/<script>').replace === '#/minutes', '이상한 회의록 주소를 목록으로 돌리지 않습니다.');
     check(MENU.some(([label, href]) => label === '회의록' && href === '#/minutes') && menuSelected('minutes', '#/minutes'), '메뉴에 회의록이 없습니다.');
+}
+
+/* 10) 옛 판(v30)이 2000자로 자른 회의록 본문은 이 기기 본문을 지키고 다시 올립니다. 클라우드 거절은 알립니다. */
+{
+    const long = Array.from({ length: 120 }, (_, i) => `${i + 1}. 학년 협의 내용 줄입니다`).join('\n');
+    check(long.length > 2000, '시험 본문이 2000자를 넘지 않습니다.');
+    const meet = { id: 'meet-long1', text: long, title: '학년회의', attendees: '1학년', date: '2026-10-27', tags: ['회의', '학년회의'], pinned: false, source: 'app' };
+    const other = { id: 'meet-short1', text: '짧은 회의록 본문', title: '교과협의', date: '2026-10-27', tags: ['회의'], pinned: false, source: 'app' };
+    await absorbCloudForTest({ notes: [meet, other] }, {});
+    const h = Object.fromEntries([mark('notes', meet), mark('notes', other)]);
+    await absorbCloudForTest({ notes: [{ ...meet, text: long.slice(0, 2000) }, { ...other, text: '다른 기기에서 고친 본문' }] }, h);
+    const notes = snapshot().notes;
+    check(notes.find((r) => r.id === 'meet-long1')?.text === long, '옛 판이 자른 회의록 본문이 이 기기 본문을 덮었습니다.');
+    check(!('notes/meet-long1' in h), '잘린 회의록을 다시 올리도록 표시하지 않았습니다.');
+    check(notes.find((r) => r.id === 'meet-short1')?.text === '다른 기기에서 고친 본문', '다른 기기에서 고친 짧은 본문이 따라오지 않습니다.');
+    check(clippedCopy(long, long.slice(0, 2000)) && !clippedCopy(long, long.slice(0, 1500) + '끝') && !clippedCopy('짧음', '짧'), '잘린 사본 판별이 다릅니다.');
+    const told = [];
+    const off = subscribeStorageIssue((m) => told.push(m));
+    tellRejectedForTest(['notes/meet-a']);
+    tellRejectedForTest(['notes/meet-a']);
+    tellRejectedForTest([]);
+    off();
+    check(told.length === 1 && told[0].includes('회의록 1개'), `클라우드 거절 알림이 다릅니다(${told.join(' / ')}).`);
+    check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');
 }
 
 if (failures.length) {

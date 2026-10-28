@@ -3215,6 +3215,12 @@ try {
         const savedId = await page.evaluate(() => location.hash.replace('#/minutes/', ''));
         check(/^meet-\d+$/.test(savedId), `저장한 회의록 주소가 다릅니다: ${savedId}`);
         await page.screenshot({ path: resolve(minutesShots, 'view-390-light.png'), fullPage: true });
+        /* 저장한 뒤 뒤로 가기는 빈 새 회의록이 아니라 목록으로 갑니다. */
+        await page.goBack();
+        await page.waitForFunction(() => location.hash !== '#/minutes/new' && document.querySelector('[data-screen="minutes-list"]'), { timeout: 5000 }).catch(() => {});
+        check((await page.evaluate(() => location.hash)) === '#/minutes' && await page.$('[data-screen="minutes-list"]'), `저장 뒤 뒤로 가기가 목록이 아닙니다: ${await page.evaluate(() => location.hash)}`);
+        await page.evaluate((id) => { location.hash = `#/minutes/${id}`; }, savedId);
+        await page.waitForSelector('[data-screen="minutes-view"]');
 
         /* 고치기: id 그대로, 본문에 줄 추가 */
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-view"] button')].find((el) => el.innerText.trim() === '고치기')?.click());
@@ -3223,6 +3229,14 @@ try {
         await page.evaluate(() => { const el = document.querySelector('#minutes-text'); el.setSelectionRange(el.value.length, el.value.length); });
         await page.keyboard.press('Enter');
         await page.keyboard.type('할 일: 동의서');
+        /* 고치다 남긴 임시본도 목록에 '이어 쓰기'가 보입니다. */
+        await delay(450);
+        await page.evaluate(() => { location.hash = '#/minutes'; });
+        await page.waitForSelector('[data-screen="minutes-list"]');
+        check(await page.$(`[data-draft-for="${savedId}"]`), '고치던 회의록의 이어 쓰기가 목록에 없습니다.');
+        await page.evaluate((id) => [...document.querySelectorAll(`[data-draft-for="${id}"] button`)].find((el) => el.innerText.trim() === '이어 쓰기')?.click(), savedId);
+        await page.waitForSelector('[data-screen="minutes-editor"]');
+        check((await page.evaluate(() => location.hash)) === `#/minutes/${savedId}/edit` && (await page.$eval('#minutes-text', (el) => el.value)).endsWith('할 일: 동의서'), '이어 쓰기로 고치던 내용이 돌아오지 않습니다.');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-editor"] button')].find((el) => el.innerText.trim() === '저장')?.click());
         await page.waitForSelector('[data-screen="minutes-view"]');
         check((await page.evaluate(() => location.hash)) === `#/minutes/${savedId}`, '고친 회의록의 id가 바뀌었습니다.');

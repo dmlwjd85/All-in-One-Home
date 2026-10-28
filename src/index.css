@@ -1142,6 +1142,7 @@ button.glass[aria-pressed="true"]:active {
 .minutes-new { min-width: 160px; }
 .minutes-back { align-self: flex-start; }
 .minutes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.minutes-row { display: flex; flex-direction: column; gap: 6px; }
 .minutes-item {
     width: 100%;
     min-height: 64px;
