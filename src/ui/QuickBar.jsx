@@ -4,6 +4,7 @@ import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 import { playSealBurst } from './sealBurst.js';
 import { quickDateLabel, textFromField } from './quickText.js';
+import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/minutes.js';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
@@ -16,12 +17,14 @@ import {
 } from './quickMatch.js';
 
 const CHIPS = ['일정', '할 일', '관찰', '메모'];
+/** '회의'는 저장하지 않고 회의록 화면을 엽니다. 적던 글은 회의 제목이 됩니다. */
+const MEET_CHIP = '회의';
 const SPEECH_NOTE = 'ssug-gyomu-speech-notice';
 /** 저장이 안 됐을 때. 적던 글은 입력칸에 되돌려 둡니다. */
 const KEPT_NOTE = '적던 글은 쨈 버튼을 다시 누르면 그대로 있어요.';
 
 export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
-    const { showToast, data, openPlus } = useUi();
+    const { showToast, data, openPlus, go } = useUi();
     const students = data?.students || [];
     const barRef = useRef(null);
     const lastKind = useRef('메모');
@@ -150,6 +153,25 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         setListening(false);
         onClose();
         openPlus?.({ more: true });
+    }
+
+    /* '회의': 저장하지 않고 회의록 화면을 엽니다. 적던 한 줄은 새 회의록의 제목(임시 저장)으로 옮깁니다. */
+    function openMinutes() {
+        const input = inputRef.current;
+        const text = input ? textFromField(input, composing.current).trim() : '';
+        if (text) {
+            const prev = readMinutesDraft('new') || {};
+            if (!String(prev.title || '').trim()) writeMinutesDraft('new', { ...prev, title: text.slice(0, MINUTES_TITLE_MAX) });
+        }
+        if (input) input.value = '';
+        composing.current = null;
+        picked.current = null;
+        setLive('');
+        setHint('');
+        try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
+        setListening(false);
+        onClose();
+        go?.('#/minutes/new');
     }
 
     function saveChip(kind, event) {
@@ -329,6 +351,13 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                         onClick={(event) => saveChip(kind, event)}
                     >{kind}</Btn>
                 ))}
+                <Btn
+                    className="quick-chip quick-chip-meet"
+                    data-kind={MEET_CHIP}
+                    aria-label="회의록 쓰기"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openMinutes}
+                >{MEET_CHIP}</Btn>
             </div>
         </form>
         </>

@@ -105,6 +105,15 @@ export function resolveHash(raw, today) {
     if (attend && isValidYmd(attend[1])) return pack('attend', { date: attend[1] }, `#/attend/${attend[1]}`, incoming);
     if (path.startsWith('/attend/')) return pack('attend', { date: today }, `#/attend/${today}`, incoming);
 
+    if (path === '/minutes' || path === '/meeting' || path === '/meetings') return pack('minutes', { mode: 'list', id: '' }, '#/minutes', incoming);
+    if (path === '/minutes/new') return pack('minutes', { mode: 'new', id: '' }, '#/minutes/new', incoming);
+    const minutesAt = path.match(/^\/minutes\/([A-Za-z0-9_-]{1,80})(\/edit)?$/);
+    if (minutesAt) {
+        const mode = minutesAt[2] ? 'edit' : 'view';
+        return pack('minutes', { mode, id: minutesAt[1] }, `#/minutes/${minutesAt[1]}${minutesAt[2] || ''}`, incoming);
+    }
+    if (path.startsWith('/minutes/')) return pack('minutes', { mode: 'list', id: '' }, '#/minutes', incoming, { notice: '그 회의록을 찾지 못했어요.' });
+
     if (path === '/notice') return pack('notice', { date: '' }, '#/notice', incoming);
     const notice = path.match(/^\/notice\/(\d{4}-\d{2}-\d{2})$/);
     if (notice && isValidYmd(notice[1])) return pack('notice', { date: notice[1] }, `#/notice/${notice[1]}`, incoming);
