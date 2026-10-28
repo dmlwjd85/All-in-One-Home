@@ -14,7 +14,13 @@ import { addDaysYmd, fromYmd, monthTitle, seoulYmd, startOfWeekMon, weekdayKo } 
  */
 const FIXED_NOW = process.env.FIXED_NOW || '2026-10-23T08:42:00+09:00';
 
+/* 오늘 화면 접는 카드(1안): 다른 흐름 검사는 펼친 채로 봅니다. 접힘 검사만 이 값을 끕니다. */
+let foldPreset = true;
+
 async function pinBrowserClock(page) {
+    await page.evaluateOnNewDocument((open) => {
+        if (open && !localStorage.getItem('ssug-gyomu-home-fold')) localStorage.setItem('ssug-gyomu-home-fold', JSON.stringify({ time: true, todo: true, event: true, recent: true }));
+    }, foldPreset);
     await page.evaluateOnNewDocument((iso) => {
         const fixed = new Date(iso).valueOf();
         const NativeDate = Date;
@@ -1657,6 +1663,45 @@ try {
         const afterBack = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
         check(leftSettings && afterBack.host === '127.0.0.1' && afterBack.hash !== '#/settings', `설정에서 들어온 명단 저장이 설정 기록을 하나 더 남깁니다. ${JSON.stringify(afterBack)}`);
     }, 844);
+
+    /* 오늘 화면 1안: 휴대폰에서는 카드가 한 줄 요약으로 접혀 있고, 누르면 펼치며, 카드마다 기억합니다. */
+    foldPreset = false;
+    try {
+        await withDemo(390, 'light', async (page) => {
+            const before = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k !== 'ssug-gyomu-home-fold').map((k) => [k, localStorage.getItem(k)])));
+            const shut = await page.evaluate(() => [...document.querySelectorAll('[data-fold]')].map((el) => {
+                const head = el.querySelector('.fold-head').getBoundingClientRect();
+                const sum = el.querySelector('.fold-sum');
+                return { id: el.dataset.fold, open: el.dataset.open, body: el.querySelector('.fold-body').getBoundingClientRect().height, h: head.height, w: head.width,
+                    sum: sum?.innerText.trim() || '', sumH: sum ? sum.getBoundingClientRect().height : 0, expanded: el.querySelector('.fold-head').getAttribute('aria-expanded') };
+            }));
+            check(shut.length === 4 && shut.every((c) => c.open === '0' && c.body === 0 && c.expanded === 'false'), `휴대폰 오늘 카드가 기본으로 접혀 있지 않습니다. ${JSON.stringify(shut)}`);
+            check(shut.every((c) => c.sum && c.sumH > 0 && c.sumH < 24), `접힌 카드에 한 줄 요약이 없거나 두 줄입니다. ${JSON.stringify(shut)}`);
+            check(shut.every((c) => c.h >= 44 && c.w >= 44), `접는 카드 머리가 44px보다 작습니다. ${JSON.stringify(shut)}`);
+            await controlBoxes(page, '.home-grid button, .home-grid a', '390 접힌 오늘 화면');
+            await audit(page, '390 접힌 오늘 화면');
+            await page.click('[data-fold="todo"] .fold-head');
+            await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1');
+            const opened = await page.evaluate(() => ({ body: document.querySelector('[data-fold="todo"] .fold-body').getBoundingClientRect().height, line: Boolean(document.querySelector('[data-fold="todo"] [data-home-todo]')), others: [...document.querySelectorAll('[data-fold]')].filter((el) => el.dataset.open === '1').length }));
+            check(opened.body > 0 && opened.line && opened.others === 1, `할 일 카드를 눌러도 펼쳐지지 않거나 다른 카드까지 펼쳐집니다. ${JSON.stringify(opened)}`);
+            await controlBoxes(page, '.home-grid button, .home-grid a', '390 펼친 오늘 화면');
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForSelector('[data-fold="todo"]');
+            const kept = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-fold]')].map((el) => [el.dataset.fold, el.dataset.open])));
+            check(kept.todo === '1' && kept.time === '0' && kept.event === '0' && kept.recent === '0', `카드 펼침 상태를 기억하지 못합니다. ${JSON.stringify(kept)}`);
+            await page.click('[data-fold="todo"] .fold-head');
+            await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '0');
+            const after = await page.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k !== 'ssug-gyomu-home-fold').map((k) => [k, localStorage.getItem(k)])));
+            const changed = Object.keys({ ...before, ...after }).filter((k) => before[k] !== after[k] && !/theme|sound|notice/.test(k));
+            check(!changed.length, `카드를 접고 펴는데 데이터가 바뀝니다. ${changed.join(', ')}`);
+        }, 844);
+        await withDemo(1280, 'light', async (page) => {
+            const wide = await page.evaluate(() => [...document.querySelectorAll('[data-fold]')].map((el) => ({ head: el.querySelector('.fold-head').getBoundingClientRect().height, body: el.querySelector('.fold-body').getBoundingClientRect().height })));
+            check(wide.length === 4 && wide.every((c) => c.head === 0 && c.body > 0), `넓은 화면 오늘 카드가 접혀 보입니다. ${JSON.stringify(wide)}`);
+        });
+    } finally {
+        foldPreset = true;
+    }
 
     async function directBack(width) {
         const current = await ensureBrowser();
