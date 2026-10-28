@@ -40,10 +40,11 @@ service cloud.firestore {
     // 숫자 목록은 '45,45,40' 처럼 쉼표로 이은 글자 하나로 받습니다(반복문 없이 정규식 한 번으로 10개까지 검사).
     function csvOk(v, full) { return v is string && v.size() <= 40 && v.matches(full); }
     function subjOk(m, k) { return !(k in m) || (str(m[k], 0, 20) && safeText(m[k])); }
-    // 9·10교시 과목: 'mon-p9=방과후|tue-p10=보충' 처럼 글자 하나(20칸까지, 값은 20자 이하, '|'·'=' 없음, 민감 낱말 없음).
+    // 9·10교시 과목: 'mon-p9=방과후|tue-p10=보충' 처럼 글자 하나(20칸까지, 값은 20자 이하, 민감 낱말 없음, 전체 1000자 이하).
+    // 값 안의 '%'·'|'·'=' 는 %25·%7C·%3D 로 이스케이프합니다(이스케이프 하나가 한 글자).
     function extraOk(e) {
-      return e is string && e.size() <= 600
-        && e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=[^|=]{0,20}){0,19})?$')
+      return e is string && e.size() <= 1000
+        && e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}){0,19})?$')
         && safeText(e);
     }
     function hmOrEmpty(v) { return v is string && (v == '' || hm(v)); }

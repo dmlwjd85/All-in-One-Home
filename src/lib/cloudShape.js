@@ -346,11 +346,17 @@ function flatExtra(extra = {}) {
     return out;
 }
 
+/* 과목명 안의 '%'·'|'·'=' 는 %25·%7C·%3D 로 바꿔 둡니다(구분 글자와 섞이지 않게). 옛 글자(이스케이프 없음)도 그대로 읽힙니다. */
+const ESC = { '%': '%25', '|': '%7C', '=': '%3D' };
+export function escapeExtra(v) { return String(v).replace(/[%|=]/g, (c) => ESC[c]); }
+export function unescapeExtra(v) { return String(v).replace(/%(25|7C|3D)/gi, (m) => ({ '25': '%', '7C': '|', '3D': '=' })[m.slice(1).toUpperCase()]); }
+export const EXTRA_MAX = 1000;
+
 function cleanExtra(extra = {}) {
     const out = {};
     const nested = {};
     /* 클라우드 모양 'mon-p9=방과후|tue-p10=보충' 도 읽습니다. */
-    if (typeof extra === 'string') extra = Object.fromEntries(extra.split('|').map((item) => item.split('=')).filter((kv) => kv.length === 2));
+    if (typeof extra === 'string') extra = Object.fromEntries(extra.split('|').map((item) => item.split('=')).filter((kv) => kv.length === 2).map(([k, v]) => [k, unescapeExtra(v)]));
     for (const [key, value] of Object.entries(extra && typeof extra === 'object' ? extra : {})) {
         const m = /^(mon|tue|wed|thu|fri)-([ps](?:9|10))$/.exec(key);
         if (m) (nested[m[1]] ||= {})[m[2]] = value;
@@ -426,7 +432,12 @@ function cleanPeriodPart(local = {}) {
 
 function cloudPeriodLocal(local) {
     const part = cleanPeriodPart(local);
-    const extra = Object.entries(flatExtra(local.extra)).map(([k, v]) => `${k}=${v}`).join('|');
+    /* 규칙의 크기 한도(EXTRA_MAX)를 넘는 칸은 뒤에서부터 올리지 않습니다(이스케이프가 아주 많을 때만). */
+    let extra = '';
+    for (const item of Object.entries(flatExtra(local.extra)).map(([k, v]) => `${k}=${escapeExtra(v)}`)) {
+        const next = extra ? `${extra}|${item}` : item;
+        if (next.length <= EXTRA_MAX) extra = next;
+    }
     return { ...part, lengths: toCsv(part.lengths), locks: toCsv(part.locks), cellLocks: part.cellLocks.join(','), extra };
 }
 
