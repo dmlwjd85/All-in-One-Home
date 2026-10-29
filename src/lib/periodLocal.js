@@ -79,10 +79,15 @@ export function patchPeriodLocal(patch, { fromCloud = false } = {}) {
     if (!fromCloud) {
         const now = Date.now();
         const legacy = Number(prev.syncAt) || 0;
-        const ats = { period: prev.syncAts?.period ?? legacy, extra: prev.syncAts?.extra ?? legacy };
+        const period = prev.syncAts?.period ?? legacy;
+        /* work: 출퇴근 시각 칸. 예전 값(칸 시각 없음)은 시각이 있으면 교시 칸 시각, 없으면 0(한 번도 안 정함). */
+        const work = prev.syncAts?.work ?? ((prev.workStart || prev.workEnd) ? period : 0);
+        const ats = { period, extra: prev.syncAts?.extra ?? legacy, work };
         const keys = Object.keys(patch || {}).filter((key) => key !== 'syncAt' && key !== 'syncAts' && key !== 'leave');
+        const isWork = (key) => key === 'workStart' || key === 'workEnd';
         if (keys.includes('extra')) ats.extra = now;
-        if (keys.some((key) => key !== 'extra')) ats.period = now;
+        if (keys.some(isWork)) ats.work = now;
+        if (keys.some((key) => key !== 'extra' && !isWork(key))) ats.period = now;
         next.syncAts = ats;
         next.syncAt = now;
     }

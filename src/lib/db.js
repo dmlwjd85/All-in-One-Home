@@ -8,7 +8,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, printDigest, pullUserData, pushUserData, rowMark, syncAvailable, unchangedSincePush } from './cloud.js';
-import { localSettingAts, PERIOD_KEYS, toCloudRow } from './cloudShape.js';
+import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
@@ -545,7 +545,7 @@ function absorbSettings(draft, settings) {
     if (!settings) return;
     const local = readPeriodLocal();
     const mine = localSettingAts(draft.profile, local);
-    const theirs = settings.ats || { period: settings.at, extra: settings.at, periodStarts: settings.at, ttEdited: settings.at, academic: settings.at };
+    const theirs = settings.ats || { period: settings.at, extra: settings.at, periodStarts: settings.at, ttEdited: settings.at, academic: settings.at, work: legacyWorkAt(undefined, settings.at, settings.periodLocal || {}) };
     const newer = (part) => (Number(theirs[part]) || 0) > mine[part];
     const profileAts = { periodStarts: mine.periodStarts, ttEdited: mine.ttEdited, academic: mine.academic };
     if (newer('ttEdited')) { draft.profile.ttEdited = [...(settings.ttEdited || [])].sort(); profileAts.ttEdited = theirs.ttEdited; }
@@ -554,10 +554,12 @@ function absorbSettings(draft, settings) {
     draft.profile.settingsAts = profileAts;
     draft.profile.settingsAt = Math.max(profileAts.periodStarts, profileAts.ttEdited, profileAts.academic);
     const patch = {};
-    const syncAts = { period: mine.period, extra: mine.extra };
+    const syncAts = { period: mine.period, extra: mine.extra, work: mine.work };
     if (newer('period')) { for (const key of PERIOD_KEYS) if (settings.periodLocal && key in settings.periodLocal) patch[key] = settings.periodLocal[key]; syncAts.period = theirs.period; }
+    /* 출퇴근 시각은 따로: 다른 기기가 더 늦게 정하거나 비운 값을 받습니다(빈 값도 비운 시각이 더 늦으면 받음). */
+    if (newer('work')) { for (const key of WORK_KEYS) patch[key] = settings.periodLocal?.[key] || ''; syncAts.work = theirs.work; }
     if (newer('extra')) { patch.extra = settings.periodLocal?.extra || {}; syncAts.extra = theirs.extra; }
-    if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra) }, { fromCloud: true });
+    if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra, syncAts.work) }, { fromCloud: true });
 }
 
 /* 다른 기기에서 지운 줄(출결·기록·일정·할 일·메모·공지): 이 기기에서 올린 뒤 고치지 않았고(해시 같음) 클라우드에 문서가 없으면 지웁니다.

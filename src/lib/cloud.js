@@ -1,5 +1,5 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
 import { readPeriodLocal } from './periodLocal.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -165,11 +165,16 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                 /* 통째로 덮지 않습니다: 클라우드 문서를 읽어 칸마다 더 늦게 고친 쪽을 남긴 뒤 씁니다.
                    다른 기기가 먼저 고친 칸은 그대로 두고, 다음 받기에서 이 기기로 들어옵니다. */
                 const ref = doc(ready.db, 'users', uid, 'settings', 'device');
-                await firestore.runTransaction(ready.db, async (tx) => {
+                const write = (legacy) => firestore.runTransaction(ready.db, async (tx) => {
                     const snap = await tx.get(ref);
                     const merged = mergeSettings(settings.body, snap.exists() ? fromCloudSettings(snap.data()) : null);
-                    tx.set(ref, await stamp(firestore, merged, settings.stamps));
+                    tx.set(ref, await stamp(firestore, legacy ? legacySettingsBody(merged) : merged, settings.stamps));
                 });
+                /* 출퇴근 칸 시각(ats.work)을 모르는 예전 규칙이면 거절됩니다. 그때는 예전 모양으로 한 번 더 올립니다. */
+                try { await write(false); } catch (error) {
+                    if (!String(error?.code || '').includes('permission-denied')) throw error;
+                    await write(true);
+                }
                 nextHashes['settings/device'] = mark;
             } catch (error) {
                 if (retryable(error)) pending += 1;

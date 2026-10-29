@@ -390,8 +390,23 @@ function cleanExtra(extra = {}) {
 }
 
 /** 설정 칸(무리)마다 고친 시각. 한 기기가 학사일정을, 다른 기기가 9교시를 고쳐도 둘 다 남도록 칸 단위로 합칩니다. */
-export const SETTING_PARTS = ['period', 'extra', 'periodStarts', 'ttEdited', 'academic'];
-const PERIOD_KEYS = ['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd'];
+export const SETTING_PARTS = ['period', 'extra', 'periodStarts', 'ttEdited', 'academic', 'work'];
+/* 출퇴근 시각은 교시 설정과 따로 'work' 칸 시각을 씁니다(PR #53). 다른 기기가 교시 수를 고쳐도 출퇴근 시각은 그대로이고,
+   설정에서 비운 것도 비운 시각과 함께 올라가 다른 기기에서도 비워집니다. */
+const PERIOD_KEYS = ['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks'];
+const WORK_KEYS = ['workStart', 'workEnd'];
+
+/** 출근·퇴근 시각 중 하나라도 있으면 true. */
+export function hasWorkTimes(p = {}) {
+    return Boolean(p.workStart || p.workEnd);
+}
+
+/** work 칸 시각이 없는 예전 값: 시각이 있으면 교시 칸 시각을 그대로 쓰고(예전엔 같이 고쳤음), 비어 있으면 한 번도 정하지 않은 것으로 봐서 0입니다.
+    그래서 시각이 없는 예전 기기는 다른 기기의 시각을 받고, 시각이 있는 예전 값은 그 시각을 지킵니다. */
+export function legacyWorkAt(work, periodAt, times) {
+    if (work !== undefined && work !== null) return atNum(work);
+    return hasWorkTimes(times) ? atNum(periodAt) : 0;
+}
 const ACADEMIC_YEAR = /^20(2[4-9]|3[0-5])$/;
 const AT_MAX = 4102444800000;
 const atNum = (v) => (Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= AT_MAX ? Number(v) : 0);
@@ -407,6 +422,7 @@ export function localSettingAts(profile = {}, local = {}) {
         periodStarts: atNum(p.periodStarts ?? legacy),
         ttEdited: atNum(p.ttEdited ?? legacy),
         academic: atNum(p.academic ?? legacy),
+        work: legacyWorkAt(l.work, l.period ?? legacyLocal, local),
     };
 }
 
@@ -476,7 +492,8 @@ export function fromCloudSettings(data = {}) {
     const local = data.periodLocal && typeof data.periodLocal === 'object' ? data.periodLocal : {};
     const ats = {};
     /* 칸별 시각이 없는 예전 문서는 문서 시각을 모든 칸에 씁니다. */
-    for (const part of SETTING_PARTS) ats[part] = data.ats && typeof data.ats === 'object' ? atNum(data.ats[part]) : at;
+    for (const part of SETTING_PARTS) if (part !== 'work') ats[part] = data.ats && typeof data.ats === 'object' ? atNum(data.ats[part]) : at;
+    ats.work = legacyWorkAt(data.ats && typeof data.ats === 'object' ? data.ats.work : undefined, ats.period, local);
     return {
         at,
         ats,
@@ -496,6 +513,7 @@ export function mergeSettings(mine, theirs) {
         if (!((theirs.ats?.[part] || 0) > (mine.ats?.[part] || 0))) continue;
         out.ats[part] = theirs.ats[part];
         if (part === 'period') for (const key of PERIOD_KEYS) out.periodLocal[key] = theirs.periodLocal[key];
+        else if (part === 'work') for (const key of WORK_KEYS) out.periodLocal[key] = theirs.periodLocal[key] || '';
         else if (part === 'extra') out.periodLocal.extra = theirs.periodLocal.extra;
         else out[part] = theirs[part];
     }
@@ -504,4 +522,11 @@ export function mergeSettings(mine, theirs) {
     return out;
 }
 
-export { PERIOD_KEYS };
+/** 규칙을 아직 올리지 않은 Firestore가 work 칸을 거절할 때 쓰는 예전 모양(5칸). 출퇴근 시각은 교시 칸과 같이 갑니다. */
+export function legacySettingsBody(body) {
+    const { work = 0, ...ats } = body.ats || {};
+    ats.period = Math.max(ats.period || 0, work || 0);
+    return { ...body, ats, at: Math.max(...Object.values(ats)) };
+}
+
+export { PERIOD_KEYS, WORK_KEYS };

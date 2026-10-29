@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { serverIds, newerThanDelete, guardedDelete, keepCloudDoc, printDigest, stamp as stampBody } from '../src/lib/cloud.js';
 import { setAuth, useAuthForTest, forgetQueuedCloudForTest, rememberPulledHashes, absorbCloudForTest, stableHashes, clippedCopy, pruneDeletedElsewhere, reloadCloudForgetForTest, queuedCloudKeys, setAttendance, cycleAttendance, cloudRejectedMessage, snapshot, subscribeStorageIssue, tellRejectedForTest, useVaultsForTest, update, useSignOutForTest, useCloudForTest, flushCloud } from '../src/lib/db.js';
 import { fingerprint } from '../src/lib/cloud.js';
-import { fromCloudRow, fromCloudSettings, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
+import { fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { patchPeriodLocal, readPeriodLocal } from '../src/lib/periodLocal.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { MENU, menuSelected } from '../src/ui/menu.js';
@@ -96,6 +96,80 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(legacy.ats.academic === 5 && legacy.ats.period === 5, '칸 시각이 없는 예전 설정 문서를 읽지 못합니다.');
 }
 
+/* 5b) 퇴근 타이머: 출퇴근 시각은 교시 설정과 따로 칸 시각(work)을 둡니다(PR #53, QA I1·I2·I3).
+   - 시각이 없는 기기가 교시 수를 고쳐 올려도 클라우드 시각을 지우지 않습니다.
+   - 시각이 없는 기기도 클라우드 시각을 받습니다(I2).
+   - 일부러 비운 것은 비운 시각과 함께 올라가, 다른 기기의 교시 변경으로 되살아나지 않습니다(I1, qa-ab 7→8단계).
+   - 칸 시각이 없는 예전 값: 출근이나 퇴근 하나만 있어도 '정한 값'으로 지킵니다(I3). */
+{
+    const base = 1781000000000;
+    const prof = { profile: { settingsAts: { periodStarts: base, ttEdited: base, academic: base }, academic: {} } };
+    const dev = (local) => toCloudSettings(prof, { extra: {}, ...local }).body;
+    const up = (mine, cloud) => fromCloudSettings(mergeSettings(mine, cloud));
+    const times = (s) => `${s.periodLocal.workStart}~${s.periodLocal.workEnd}`;
+    /* 1~2단계: A가 시각을 정해 올리고, 시각을 정한 적 없는 예전 기기 B(work 칸 시각 없음)가 교시 수를 나중에 고쳐 올립니다. */
+    let cloud = up(dev({ count: 6, workStart: '08:30', workEnd: '16:40', syncAts: { period: base + 10, extra: base, work: base + 10 } }), null);
+    const bOld = dev({ count: 7, workStart: '', workEnd: '', syncAts: { period: base + 20, extra: base } });
+    check(bOld.ats.work === 0, `시각을 정한 적 없는 예전 기기의 출퇴근 칸 시각이 0이 아닙니다: ${bOld.ats.work}`);
+    cloud = up(bOld, cloud);
+    check(cloud.periodLocal.count === 7, 'B가 나중에 고친 교시 수가 남지 않았습니다.');
+    check(times(cloud) === '08:30~16:40', `출퇴근 시각이 없는 기기가 올리면서 클라우드 시각을 지웠습니다: ${times(cloud)}`);
+    /* I2: 시각이 없는 기기 B가 받으면 클라우드 시각을 받습니다(교시 칸이 B 쪽이 더 새도). */
+    patchPeriodLocal({ count: 7, workStart: '', workEnd: '', syncAts: { period: Date.now() + 60000, extra: base } }, { fromCloud: true });
+    await absorbCloudForTest({ settings: cloud });
+    check(readPeriodLocal().workStart === '08:30' && readPeriodLocal().workEnd === '16:40', `시각이 없는 기기가 클라우드 출퇴근 시각을 받지 못했습니다(I2): ${readPeriodLocal().workStart}~${readPeriodLocal().workEnd}`);
+    /* 6~8단계(I1): A·B 모두 09:00~17:00 → A가 일부러 비우고 올림 → B(예전 시각을 가진 채)가 교시 수 6으로 고쳐 올림 → A가 받음. */
+    const t6 = base + 100, t7 = base + 200, t8 = base + 300;
+    cloud = up(dev({ count: 7, workStart: '09:00', workEnd: '17:00', syncAts: { period: base + 20, extra: base, work: t6 } }), cloud);
+    const aClear = dev({ count: 7, workStart: '', workEnd: '', syncAts: { period: base + 20, extra: base, work: t7 } });
+    cloud = up(aClear, cloud);
+    check(times(cloud) === '~' && cloud.ats.work === t7, `일부러 비운 출퇴근 시각이 클라우드에 올라가지 않았습니다: ${times(cloud)} / ${cloud.ats.work}`);
+    cloud = up(dev({ count: 6, workStart: '09:00', workEnd: '17:00', syncAts: { period: t8, extra: base, work: t6 } }), cloud);
+    check(cloud.periodLocal.count === 6, '다른 기기의 교시 수 변경이 남지 않았습니다.');
+    check(times(cloud) === '~', `다른 기기의 교시 변경 때문에 비운 출퇴근 시각이 클라우드에서 되살아났습니다(I1): ${times(cloud)}`);
+    /* A 기기로 받기: 비운 기기는 비운 그대로(교시 수만 받음). */
+    patchPeriodLocal({ workStart: '09:00', workEnd: '17:00' });
+    patchPeriodLocal({ workStart: '', workEnd: '' });
+    const revived = fromCloudSettings(dev({ count: 6, workStart: '09:00', workEnd: '17:00', syncAts: { period: Date.now() + 70000, extra: base, work: Date.now() - 60000 } }));
+    await absorbCloudForTest({ settings: revived });
+    check(readPeriodLocal().count === 6, '더 새 교시 수를 받지 않았습니다.');
+    check(!readPeriodLocal().workStart && !readPeriodLocal().workEnd, `받기에서 비운 출퇴근 시각이 되살아났습니다(I1): ${readPeriodLocal().workStart}~${readPeriodLocal().workEnd}`);
+    /* 비운 것이 다른 기기로 전파: 더 늦게 비운 클라우드 값을 받으면 이 기기도 비웁니다. */
+    patchPeriodLocal({ workStart: '08:20', workEnd: '16:30' });
+    await absorbCloudForTest({ settings: fromCloudSettings(dev({ count: 6, workStart: '', workEnd: '', syncAts: { period: base, extra: base, work: Date.now() + 80000 } })) });
+    check(!readPeriodLocal().workStart && !readPeriodLocal().workEnd, `다른 기기에서 더 늦게 비운 출퇴근 시각이 이 기기에 오지 않았습니다: ${readPeriodLocal().workStart}~${readPeriodLocal().workEnd}`);
+    /* 다른 기기가 새 시각으로 바꾼 것은 받습니다. */
+    await absorbCloudForTest({ settings: fromCloudSettings(dev({ count: 6, workStart: '09:10', workEnd: '17:10', syncAts: { period: base, extra: base, work: Date.now() + 90000 } })) });
+    check(readPeriodLocal().workStart === '09:10' && readPeriodLocal().workEnd === '17:10', '다른 기기가 바꾼 출퇴근 시각을 받지 않았습니다.');
+    /* 이 기기에서 시각을 고치면 출퇴근 칸 시각만 새로 적고, 교시 칸 시각은 그대로입니다. */
+    const beforeAts = readPeriodLocal().syncAts;
+    patchPeriodLocal({ workStart: '', workEnd: '' });
+    const afterAts = readPeriodLocal().syncAts;
+    check(afterAts.work !== beforeAts.work && afterAts.work <= Date.now() && afterAts.period === beforeAts.period, `출퇴근 시각을 비울 때 칸 시각이 맞지 않습니다: ${JSON.stringify(beforeAts)} → ${JSON.stringify(afterAts)}`);
+    /* 칸 시각을 정해 둔 상태에서 고치기: 시각만 고치면 교시 칸 시각은 그대로, 교시만 고치면 출퇴근 칸 시각은 그대로(예전 기기도 시각이 있으면 교시 칸 시각을 이어받음). */
+    patchPeriodLocal({ workStart: '08:30', workEnd: '', syncAts: { period: base, extra: base } }, { fromCloud: true });
+    patchPeriodLocal({ count: 5 });
+    check(readPeriodLocal().syncAts.work === base, `예전 기기에서 교시만 고쳤는데 출퇴근 칸 시각이 바뀌었습니다: ${JSON.stringify(readPeriodLocal().syncAts)}`);
+    patchPeriodLocal({ syncAts: { period: base, extra: base, work: base } }, { fromCloud: true });
+    patchPeriodLocal({ workEnd: '16:40' });
+    check(readPeriodLocal().syncAts.period === base && readPeriodLocal().syncAts.work > base, `출퇴근 시각만 고쳤는데 교시 칸 시각이 바뀌었습니다: ${JSON.stringify(readPeriodLocal().syncAts)}`);
+    /* I3: 칸 시각이 없는 예전 값에서 출근만(또는 퇴근만) 있어도 정한 값으로 봅니다. */
+    const legacyDoc = (ws, we) => ({ ...dev({ count: 6, workStart: ws, workEnd: we, syncAts: { period: base + 50, extra: base } }), ats: { period: base + 50, extra: base, periodStarts: base, ttEdited: base, academic: base } });
+    for (const [ws, we] of [['08:30', ''], ['', '16:40']]) {
+        const old = fromCloudSettings(legacyDoc(ws, we));
+        check(old.ats.work === base + 50, `출퇴근 칸 시각이 없는 예전 문서에서 ${ws || '퇴근'}만 있는 값을 정한 값으로 보지 않았습니다: ${old.ats.work}`);
+        const kept = up(bOld, old);
+        check(kept.periodLocal.workStart === ws && kept.periodLocal.workEnd === we, `시각이 없는 기기가 예전 문서의 한쪽 시각(${ws}~${we})을 지웠습니다: ${times(kept)}`);
+        const local = dev({ count: 6, workStart: ws, workEnd: we, syncAts: { period: base + 60, extra: base } });
+        check(local.ats.work === base + 60, `칸 시각이 없는 예전 기기에서 한쪽 시각만 있는 값을 정한 값으로 보지 않았습니다: ${local.ats.work}`);
+    }
+    const emptyOld = fromCloudSettings(legacyDoc('', ''));
+    check(emptyOld.ats.work === 0, `예전 문서의 빈 출퇴근 시각이 정한 값으로 읽혔습니다: ${emptyOld.ats.work}`);
+    /* 규칙을 아직 올리지 않았을 때 쓰는 예전 모양: 5칸만, 출퇴근 칸 시각은 교시 칸 시각에 합칩니다. */
+    const legacy = legacySettingsBody(aClear);
+    check(!('work' in legacy.ats) && Object.keys(legacy.ats).length === 5 && legacy.ats.period === t7 && legacy.at === t7, `예전 규칙용 설정 모양이 틀립니다: ${JSON.stringify(legacy.ats)}`);
+}
+
 /* 6) 날짜별 시간표의 9·10교시도 오가고, 민감 낱말은 빠집니다. */
 {
     const shaped = toCloudRow('timetable', { id: '2026-10-28', p1: '국어', p9: '방과후', s10: '보충', p10: '보건 상담' });
@@ -108,7 +182,7 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
 {
     const cloudSrc = readFileSync('src/lib/cloud.js', 'utf8');
     check(/if \(set\.exists\(\)\) out\.settings = fromCloudSettings\(set\.data\(\)\);/.test(cloudSrc), '받기에서 settings/device 를 읽어 넣지 않습니다.');
-    check(/runTransaction[\s\S]{0,400}mergeSettings/.test(cloudSrc), '설정 올리기가 클라우드 값과 칸 단위로 합치지 않고 통째로 덮습니다.');
+    check(/runTransaction[\s\S]{0,400}mergeSettings/.test(cloudSrc) && /permission-denied[\s\S]{0,80}write\(true\)/.test(cloudSrc), '설정 올리기가 클라우드 값과 칸 단위로 합치지 않고 통째로 덮습니다.');
 }
 
 /* 8) 회의록: 여러 줄 본문·제목·참석자 왕복, #38 옛 회의록('meet-…', 제목 없음) 그대로 읽기, 임시 저장. */

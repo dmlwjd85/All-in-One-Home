@@ -109,6 +109,12 @@ async function settingsSuite(env) {
     const { ats: _ats, ...noAts } = body;
     await deny('칸 시각 없는 설정', () => setDoc(ref(phone), noAts));
     await deny('칸 시각이 글자', () => setDoc(ref(phone), { ...body, ats: { ...body.ats, academic: 'x' } }));
+    /* 출퇴근 칸 시각(work): 새 앱은 올리고 예전 앱은 빼고 올립니다. 둘 다 받고, 글자·음수는 거절합니다. */
+    const { work: _work, ...oldAts } = body.ats;
+    await allow('출퇴근 칸 시각이 없는 예전 설정', () => setDoc(ref(phone), { ...body, ats: oldAts }));
+    await allow('출퇴근 칸 시각이 있는 설정', () => setDoc(ref(phone), { ...body, ats: { ...oldAts, work: 1767225600000 } }));
+    await deny('출퇴근 칸 시각이 글자', () => setDoc(ref(phone), { ...body, ats: { ...body.ats, work: 'x' } }));
+    await deny('출퇴근 칸 시각이 음수', () => setDoc(ref(phone), { ...body, ats: { ...body.ats, work: -1 } }));
     await deny('교시 설정 모르는 칸', () => setDoc(ref(phone), pl({ memo: '가' })));
     await deny('교시 수 글자', () => setDoc(ref(phone), pl({ count: 'zzz' })));
     await deny('교시 수 11', () => setDoc(ref(phone), pl({ count: 11 })));
@@ -191,6 +197,8 @@ const RULE_MUTANTS = [
     ['R_updatedAt', "&& (!('updatedAt' in v) || v.updatedAt is timestamp);", ';'],
     ['ttEdited 크기 빼기', "joinedOk(v.ttEdited, 400,", 'joinedOk(v.ttEdited, 100000,'],
     ['칸 시각 검사 빼기', "&& setAtsOk(v.ats)", ''],
+    ['출퇴근 칸 시각 검사 빼기', "&& (!('work' in a) || atOk(a.work));", ';'],
+    ['출퇴근 칸 시각 받지 않기', "'academic', 'work'])", "'academic'])"],
     ['academic 크기 빼기', "a is map && a.size() <= 4", 'a is map'],
     ['academic 값 검사 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk(a[y]);", "y.matches('^20(2[4-9]|3[0-5])$');"],
     ['academic 연도 이름 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk", 'acadYearOk'],
