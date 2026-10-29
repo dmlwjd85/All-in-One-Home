@@ -54,10 +54,53 @@ export function cloudReady() {
 
 let bundle = null;
 
+/** 공용 컴퓨터 모드인지. db.js가 같은 키(ssug-gyomu-shared)에 적어 둡니다(이 파일은 db.js를 불러오지 않습니다). */
+export function sharedPcOn() {
+    try {
+        return localStorage.getItem('ssug-gyomu-shared') === '1';
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 로그인을 어디에 둘지 정합니다. 공용 컴퓨터면 이 탭에만(browserSessionPersistence) 두어 탭을 닫으면 로그아웃되고,
+ * 아니면 파이어베이스 기본값(browserLocalPersistence, 브라우저에 계속 남음)입니다.
+ * 바꾸지 못해도 30분 잠금과 로그아웃은 그대로 작동합니다.
+ */
+let appliedMode = null;
+async function applyPersistence(auth, shared) {
+    if (!auth) return false;
+    const mode = shared ? 'session' : 'local';
+    if (appliedMode?.auth === auth && appliedMode.mode === mode) return true;
+    try {
+        const { browserLocalPersistence, browserSessionPersistence, setPersistence } = await import('firebase/auth');
+        await setPersistence(auth, shared ? browserSessionPersistence : browserLocalPersistence);
+        appliedMode = { auth, mode };
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** 설정에서 공용 컴퓨터 모드를 켜고 끌 때 부릅니다. 이미 로그인해 있으면 지금 로그인도 옮깁니다. */
+export async function setLoginPersistence(shared) {
+    if (!bundle) return false;
+    return applyPersistence(bundle.auth, shared);
+}
+
+/** 지금 정해진 로그인 보관 방식('session' | 'local' | null). 검사용. */
+export function loginPersistence() {
+    return appliedMode?.mode || null;
+}
+
 export async function loadFirebase({ memoryOnly = false } = {}) {
     const config = newFirebaseConfig();
     if (!config) return null;
-    if (bundle && bundle.memoryOnly === memoryOnly) return bundle;
+    if (bundle && bundle.memoryOnly === memoryOnly) {
+        if (memoryOnly || sharedPcOn()) await applyPersistence(bundle.auth, true);
+        return bundle;
+    }
     const [{ initializeApp, getApps }, { getAuth }, firestore] = await Promise.all([
         import('firebase/app'),
         import('firebase/auth'),
@@ -79,11 +122,12 @@ export async function loadFirebase({ memoryOnly = false } = {}) {
         db = firestore.getFirestore(app);
     }
     bundle = { app, auth: getAuth(app), db, memoryOnly };
+    if (memoryOnly || sharedPcOn()) await applyPersistence(bundle.auth, true);
     return bundle;
 }
 
 export async function signInGoogle() {
-    const ready = await loadFirebase();
+    const ready = await loadFirebase({ memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() });
     if (!ready) {
         const error = new Error('설정 없음');
         error.code = 'no-config';
@@ -115,7 +159,7 @@ export async function signInGoogle() {
 }
 
 export async function finishRedirectSignIn() {
-    const ready = await loadFirebase();
+    const ready = await loadFirebase({ memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() });
     if (!ready) return null;
     const { getRedirectResult } = await import('firebase/auth');
     try {

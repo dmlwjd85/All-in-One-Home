@@ -35,6 +35,8 @@ import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
 import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
+import { SyncChip } from './ui/SyncChip.jsx';
+import { syncAuthKnown } from './lib/syncStatus.js';
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -117,7 +119,12 @@ export default function App() {
             setData(snapshot());
             stop = subscribe(setData);
             stopGcal = startGcalBridge();
-            unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            try {
+                unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            } finally {
+                /* 로그인 확인이 오지 않아도(연결 실패 등) 동기화 칩이 빈 자리로 계속 남지 않게 잠시 뒤 확정합니다. */
+                setTimeout(syncAuthKnown, 5000);
+            }
         });
         return () => {
             alive = false;
@@ -644,11 +651,13 @@ export default function App() {
                                 <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
                                 <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em className={todayRest.off ? 'day-rest-mark' : undefined}>{clock.weekday}요일</em></h1>
                                 <p className="muted">{headingSub}</p>
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
                             </div>
                         ) : (
                             <div className="date-block">
                                 <h1 className="title-font">{heading}</h1>
                                 <p className="muted">{headingSub}</p>
+                                <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
                             </div>
                         )}
                         <div className="top-tools">
