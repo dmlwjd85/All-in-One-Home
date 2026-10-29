@@ -96,6 +96,29 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(legacy.ats.academic === 5 && legacy.ats.period === 5, '칸 시각이 없는 예전 설정 문서를 읽지 못합니다.');
 }
 
+/* 5b) 퇴근 타이머: 출퇴근 시각이 없는 기기가 교시 수 같은 다른 설정을 나중에 고쳐도, 다른 기기에서 정한 출퇴근 시각을 지우지 않습니다(퇴근 타이머가 사라짐). */
+{
+    const base = 1781000000000;
+    const prof = { profile: { settingsAts: { periodStarts: base, ttEdited: base, academic: base }, academic: {} } };
+    const a = toCloudSettings(prof, { count: 6, workStart: '08:30', workEnd: '16:40', extra: {}, syncAts: { period: base + 10, extra: base } }).body;
+    const b = toCloudSettings(prof, { count: 7, workStart: '', workEnd: '', extra: {}, syncAts: { period: base + 20, extra: base } }).body;
+    const cloud = fromCloudSettings(mergeSettings(b, fromCloudSettings(a)));
+    check(cloud.periodLocal.count === 7, 'B가 나중에 고친 교시 수가 남지 않았습니다.');
+    check(cloud.periodLocal.workStart === '08:30' && cloud.periodLocal.workEnd === '16:40', `출퇴근 시각이 없는 기기가 올리면서 클라우드의 출퇴근 시각을 지웠습니다: ${cloud.periodLocal.workStart}~${cloud.periodLocal.workEnd}`);
+    const back = fromCloudSettings(mergeSettings(a, fromCloudSettings(b)));
+    check(back.periodLocal.count === 7 && back.periodLocal.workStart === '08:30' && back.periodLocal.workEnd === '16:40', `클라우드의 더 새 빈 출퇴근 시각이 이 기기 시각을 지웠습니다: ${back.periodLocal.workStart}~${back.periodLocal.workEnd}`);
+    /* 이 기기로 받을 때도: 출퇴근 시각이 빈 더 새 설정이 와도 이 기기 출퇴근 시각을 지우지 않고 교시 수만 받습니다. */
+    patchPeriodLocal({ workStart: '08:20', workEnd: '16:30' });
+    const late = fromCloudSettings(b);
+    await absorbCloudForTest({ settings: { ...late, ats: { ...late.ats, period: Date.now() + 5000 } } });
+    check(readPeriodLocal().count === 7, '더 새 교시 수를 받지 않았습니다.');
+    check(readPeriodLocal().workStart === '08:20' && readPeriodLocal().workEnd === '16:30', `빈 출퇴근 시각을 받아 이 기기 퇴근 타이머가 사라졌습니다: ${readPeriodLocal().workStart}~${readPeriodLocal().workEnd}`);
+    /* 다른 기기가 새 시각으로 바꾼 것은 그대로 받습니다. */
+    const c = fromCloudSettings(toCloudSettings(prof, { count: 7, workStart: '09:00', workEnd: '17:00', extra: {}, syncAts: { period: Date.now() + 9000, extra: base } }).body);
+    await absorbCloudForTest({ settings: c });
+    check(readPeriodLocal().workStart === '09:00' && readPeriodLocal().workEnd === '17:00', '다른 기기가 바꾼 출퇴근 시각을 받지 않았습니다.');
+}
+
 /* 6) 날짜별 시간표의 9·10교시도 오가고, 민감 낱말은 빠집니다. */
 {
     const shaped = toCloudRow('timetable', { id: '2026-10-28', p1: '국어', p9: '방과후', s10: '보충', p10: '보건 상담' });

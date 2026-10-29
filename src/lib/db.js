@@ -8,7 +8,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, printDigest, pullUserData, pushUserData, rowMark, syncAvailable, unchangedSincePush } from './cloud.js';
-import { localSettingAts, PERIOD_KEYS, toCloudRow } from './cloudShape.js';
+import { keepWorkTimes, localSettingAts, PERIOD_KEYS, toCloudRow } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
@@ -555,7 +555,11 @@ function absorbSettings(draft, settings) {
     draft.profile.settingsAt = Math.max(profileAts.periodStarts, profileAts.ttEdited, profileAts.academic);
     const patch = {};
     const syncAts = { period: mine.period, extra: mine.extra };
-    if (newer('period')) { for (const key of PERIOD_KEYS) if (settings.periodLocal && key in settings.periodLocal) patch[key] = settings.periodLocal[key]; syncAts.period = theirs.period; }
+    if (newer('period')) {
+        const kept = settings.periodLocal ? keepWorkTimes(settings.periodLocal, local) : null;
+        for (const key of PERIOD_KEYS) if (kept && key in kept) patch[key] = kept[key];
+        syncAts.period = theirs.period;
+    }
     if (newer('extra')) { patch.extra = settings.periodLocal?.extra || {}; syncAts.extra = theirs.extra; }
     if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra) }, { fromCloud: true });
 }

@@ -487,6 +487,15 @@ export function fromCloudSettings(data = {}) {
     };
 }
 
+/** 출퇴근 시각: 시각이 하나도 없는 기기가 교시 수 같은 다른 칸을 나중에 고쳐 올려도, 다른 기기에서 정한 출퇴근 시각을 빈 값으로 지우지 않습니다.
+    (출퇴근 시각은 교시 설정과 같은 칸 시각을 씁니다. 빈 값이 이기면 퇴근 타이머가 모든 기기에서 사라졌습니다.)
+    그래서 설정에서 출퇴근 시각을 비우는 것은 그 기기에만 적용됩니다. */
+export function keepWorkTimes(incoming = {}, current = {}) {
+    if (incoming.workStart || incoming.workEnd) return incoming;
+    if (!current.workStart && !current.workEnd) return incoming;
+    return { ...incoming, workStart: current.workStart || '', workEnd: current.workEnd || '' };
+}
+
 /** 이 기기 설정(mine)과 클라우드 설정(theirs)을 칸마다 더 늦게 고친 쪽으로 합칩니다. 같은 시각이면 이 기기 쪽. */
 export function mergeSettings(mine, theirs) {
     if (!theirs) return mine;
@@ -495,10 +504,15 @@ export function mergeSettings(mine, theirs) {
     for (const part of SETTING_PARTS) {
         if (!((theirs.ats?.[part] || 0) > (mine.ats?.[part] || 0))) continue;
         out.ats[part] = theirs.ats[part];
-        if (part === 'period') for (const key of PERIOD_KEYS) out.periodLocal[key] = theirs.periodLocal[key];
+        if (part === 'period') {
+            const kept = keepWorkTimes(theirs.periodLocal, mine.periodLocal);
+            for (const key of PERIOD_KEYS) out.periodLocal[key] = kept[key];
+        }
         else if (part === 'extra') out.periodLocal.extra = theirs.periodLocal.extra;
         else out[part] = theirs[part];
     }
+    /* 이 기기 쪽이 이겨도, 이 기기에 출퇴근 시각이 없으면 클라우드에 있던 시각을 남깁니다. */
+    out.periodLocal = keepWorkTimes(out.periodLocal, theirs.periodLocal);
     out.at = Math.max(...SETTING_PARTS.map((part) => out.ats[part] || 0));
     out.periodLocal = cloudPeriodLocal(out.periodLocal);
     return out;
