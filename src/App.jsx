@@ -72,7 +72,10 @@ export default function App() {
         window.addEventListener('pagehide', leave);
         window.addEventListener('focus', again);
         window.addEventListener('online', again);
+        /* 화면을 켜 둔 채 다른 기기에서 고쳐도 5분마다 받아 옵니다. */
+        const tick = window.setInterval(() => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); }, 5 * 60 * 1000);
         return () => {
+            window.clearInterval(tick);
             document.removeEventListener('visibilitychange', again);
             document.removeEventListener('visibilitychange', leave);
             window.removeEventListener('pagehide', leave);

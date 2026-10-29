@@ -100,6 +100,11 @@ function toAttendance(row) {
     return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
+/* 병합 쓰기라, 이 기기에서 비운 칸은 지우라고 알려야 클라우드의 예전 값이 남지 않습니다(PR #52 검수 3번). */
+function emptied(body, keys) {
+    return keys.filter((key) => !(key in body));
+}
+
 function toRecord(row) {
     const id = cloudDocId(row.id);
     const kind = RECORD_TO[row.kind];
@@ -112,7 +117,7 @@ function toRecord(row) {
     if (typeof row.neis === 'boolean') body.neis = row.neis;
     if (row.follow) body.follow = row.follow;
     if (row.minutes >= 0 && row.minutes <= 600) body.minutes = Number(row.minutes);
-    return { id, body, stamps: stamps(['updatedAt']) };
+    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['sid', 'tags', 'follow']) };
 }
 
 function toEvent(row) {
@@ -129,7 +134,7 @@ function toEvent(row) {
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.endTime || '')) body.endTime = row.endTime;
     if (row.memo) body.memo = String(row.memo).slice(0, 300);
-    return { id, body, stamps: stamps(['updatedAt']) };
+    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['end', 'time', 'endTime', 'memo']) };
 }
 
 /** 규칙이 끝 시각을 아직 모르면 그 칸을 빼고 메모에 끝 시각을 붙입니다. */
@@ -154,7 +159,7 @@ function toTodo(row) {
     if (row.got != null) body.got = Number(row.got);
     if (row.of != null) body.of = Number(row.of);
     if (row.order != null) body.order = Number(row.order);
-    return { id, body, stamps: row.done ? stamps(['updatedAt', 'doneAt']) : stamps(['updatedAt']) };
+    return { id, body, stamps: row.done ? stamps(['updatedAt', 'doneAt']) : stamps(['updatedAt']), clear: emptied(body, ['due']) };
 }
 
 function toNote(row) {
@@ -168,7 +173,7 @@ function toNote(row) {
     if (row.date) body.date = row.date;
     if (Array.isArray(row.tags) && row.tags.length) body.tags = row.tags.slice(0, 10);
     if (typeof row.pinned === 'boolean') body.pinned = row.pinned;
-    return { id, body, stamps: stamps(['updatedAt']) };
+    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['title', 'attendees', 'date', 'tags']) };
 }
 
 function toNotice(row) {

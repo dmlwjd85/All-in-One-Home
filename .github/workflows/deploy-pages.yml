@@ -61,9 +61,11 @@ jobs:
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules
           npm run check:attendcloud
+          npm run check:cloudpull
           npm run build
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          CHROME_PATH=/usr/bin/google-chrome npm run check:attendsave
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./

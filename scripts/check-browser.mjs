@@ -3407,6 +3407,40 @@ try {
             await fourth.close({ runBeforeUnload: false });
         });
     }
+    /* 넓은 화면도 모바일처럼: 쨈 버튼을 누르면 쨈이 튀며 팝업이 열리고, ✕·바깥 누르기·Esc로 닫힙니다. 4개 폭·라이트/다크에서 겹침도 봅니다. */
+    for (const mode of ['light', 'dark']) {
+        for (const width of [360, 390, 900, 1920]) {
+            await withDemo(width, mode, async (page) => {
+                const sel = width >= 900 ? '.desk-fab' : '.tabbar .fab';
+                const look = () => page.evaluate((sel) => {
+                    const bar = document.querySelector('.quick-bar');
+                    const r = bar.getBoundingClientRect();
+                    const inner = [...bar.querySelectorAll('button, textarea, input')].filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.getBoundingClientRect());
+                    const fab = document.querySelector(sel).getBoundingClientRect();
+                    const hit = (a, b) => a.x < b.right - 1 && b.x < a.right - 1 && a.y < b.bottom - 1 && b.y < a.bottom - 1;
+                    const pairs = inner.some((a, i) => inner.some((b, j) => j > i && hit(a, b)));
+                    return { open: bar.classList.contains('is-open'), pop: document.querySelector(sel).classList.contains('is-popping'), inView: r.x >= 0 && r.right <= innerWidth + 1 && r.y >= 0, overlap: pairs || inner.some((a) => hit(a, fab)) };
+                }, sel);
+                for (const how of ['close', 'outside', 'esc']) {
+                    await page.click(sel);
+                    await delay(150);
+                    const opened = await look();
+                    check(opened.open && opened.pop && opened.inView && !opened.overlap, `${width} ${mode} 쨈 버튼이 팝업을 열지 않거나(튐 포함) 겹칩니다: ${JSON.stringify(opened)}`);
+                    if (how === 'close') await page.screenshot({ path: resolve(shots, `jam-popup-${width}-${mode}.png`) });
+                    await delay(450);
+                    if (how === 'close') await page.click('.quick-close');
+                    if (how === 'outside') await page.mouse.click(width - 6, 6);
+                    if (how === 'esc') await page.keyboard.press('Escape');
+                    await delay(250);
+                    check(!(await look()).open, `${width} ${mode} 쨈 팝업이 ${how}로 닫히지 않습니다.`);
+                }
+                if (width === 900) {
+                    const squeezed = await page.evaluate(() => [...document.querySelectorAll('.home-grid > *')].filter((el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().width < 240).map((el) => el.className));
+                    check(!squeezed.length, `900 홈 카드가 너무 좁게 눌립니다: ${squeezed.join(', ')}`);
+                }
+            });
+        }
+    }
 } catch (error) {
     failures.push(error?.message || String(error));
 }

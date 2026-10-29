@@ -15,7 +15,7 @@ import { disconnectGcal, forgetGcalLocal, settleGcalQueue } from '../lib/gcalLiv
 import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
-import { setAuth } from '../lib/db.js';
+import { lastSyncAt, pullFromCloudNow, setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
 import { AcademicSettings } from './AcademicSettings.jsx';
@@ -370,6 +370,7 @@ export function Settings() {
                     }
                 }}>구글 로그인</Btn>}
                 {data.auth?.uid && <p>{data.auth.name ? `${data.auth.name} 선생님으로 연결됐어요.` : '구글 계정으로 연결됐어요.'}</p>}
+                {data.auth?.uid && <CloudPull showToast={showToast} />}
                 {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
                 <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
@@ -513,6 +514,45 @@ export function Legacy() {
             {current && Object.entries(current.raw || {}).map(([key, value]) => (
                 <p key={key}><strong>{key}</strong> {typeof value === 'string' ? value : JSON.stringify(value)}</p>
             ))}
+        </div>
+    );
+}
+
+const PULL_FAIL = {
+    login: '로그인한 뒤에 받을 수 있어요.',
+    push: '이 기기에서 아직 못 올린 변경이 있어 멈췄어요. 인터넷을 확인하고 다시 눌러 주세요. 이 기기 자료는 그대로예요.',
+    pull: '클라우드에서 받지 못했어요. 이 기기 자료는 그대로예요.',
+    backup: '보관할 공간이 없어 멈췄어요. 이 기기 자료는 그대로예요.',
+    save: '이 기기에 저장하지 못했어요. 공간을 비운 뒤 다시 해 주세요.',
+};
+
+function syncLabel(at) {
+    if (!at) return '아직 받아 온 적 없어요';
+    const d = new Date(at);
+    const parts = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    return `마지막 동기화 ${parts}`;
+}
+
+/** 설정 › 로그인: 클라우드 최신 상태로 이 기기를 맞춥니다. 안 올린 변경은 먼저 올리고, 지금 자료는 보관해 둡니다. */
+function CloudPull({ showToast }) {
+    const [busy, setBusy] = useState(false);
+    const at = lastSyncAt();
+    return (
+        <div className="cloud-pull" data-screen="cloud-pull">
+            <Btn className="choice-tile" data-cloud-pull disabled={busy} aria-busy={busy} onClick={async () => {
+                if (busy) return;
+                if (!window.confirm('클라우드에 있는 최신 자료로 이 기기를 맞출까요?\n아직 안 올린 변경은 먼저 올리고, 지금 이 기기 자료는 따로 보관해 둬요.')) return;
+                setBusy(true);
+                try {
+                    const result = await pullFromCloudNow();
+                    showToast(result.ok ? (result.dropped ? `클라우드 최신 상태로 맞췄어요. 다른 기기에서 지운 ${result.dropped}개는 뺐고, 이전 자료는 보관해 뒀어요.` : '클라우드 최신 상태로 맞췄어요.') : PULL_FAIL[result.reason] || PULL_FAIL.pull);
+                } finally {
+                    setBusy(false);
+                }
+            }}>
+                <span>{busy ? '받는 중…' : '클라우드에서 다시 받기'}</span>
+            </Btn>
+            <p className="muted" data-last-sync>{syncLabel(at)}</p>
         </div>
     );
 }

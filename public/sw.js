@@ -5,7 +5,7 @@
    cache:'no-cache'로 받아서, 브라우저가 10분짜리 사본을 새 파일인 것처럼 쓰지 않게 합니다.
    목록 주소에도 캐시 이름을 붙입니다. 예전 등록은 importScripts 만 HTTP 캐시를 보므로,
    같은 주소의 옛 목록을 읽으면 없는 파일로 설치가 실패합니다. */
-const CACHE = 'ssug-gyomu-shell-v39';
+const CACHE = 'ssug-gyomu-shell-v41';
 const SCOPE_URL = new URL('./', self.location);
 
 importScripts(`./precache-manifest.js?v=${CACHE}`);
@@ -58,6 +58,18 @@ function staleAssetUrls(requests, precache, scopeHref) {
     }
     return drop;
 }
+/* 바뀐 직후 아직 옛 판으로 열린 페이지가 옛 assets·목록 파일을 새 캐시에 넣지 않게 합니다(PR #52 2차 검수 3번).
+   목록에 없는 /assets/ 파일과 precache-manifest.js 만 빼고, 소리·아이콘 같은 다른 파일은 그대로 저장합니다. */
+function shouldStoreRuntime(requestUrl, precache, scopeHref) {
+    let pathname = '';
+    try {
+        pathname = new URL(requestUrl).pathname;
+    } catch {
+        return false;
+    }
+    if (pathname.endsWith('/precache-manifest.js')) return false;
+    return staleAssetUrls([requestUrl], precache, scopeHref).length === 0;
+}
 /* stale-assets-end */
 
 self.addEventListener('install', (event) => {
@@ -97,7 +109,7 @@ self.addEventListener('fetch', (event) => {
             const response = isPageRequest(request)
                 ? await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin', redirect: 'follow' })
                 : await fetch(request);
-            if (response && response.ok && response.type === 'basic') {
+            if (response && response.ok && response.type === 'basic' && shouldStoreRuntime(request.url, PRECACHE, self.location.href)) {
                 const stored = response.redirected
                     ? await storeResponse(response.clone())
                     : response.clone();

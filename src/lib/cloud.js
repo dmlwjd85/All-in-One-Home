@@ -80,6 +80,14 @@ export async function stamp(firestore, body, names, previous) {
     return next;
 }
 
+/** 올리기와 같은 방식으로 이 줄의 해시를 셉니다(받아 온 줄을 '올린 것과 같다'고 적어 둘 때 씁니다). */
+export function rowMark(cloudName, row) {
+    const shaped = row ? toCloudRow(cloudName, row) : null;
+    if (!shaped?.id) return null;
+    const body = cloudName === 'events' ? prepareEventWrite(shaped.body).body : shaped.body;
+    return { key: `${cloudName}/${shaped.id}`, mark: fingerprint(body, shaped.clear || []) };
+}
+
 /** 이 기기 줄이 마지막으로 올린 모양 그대로인지(=이 기기에서 그 뒤로 안 고쳤는지). 그럴 때만 다른 기기 값으로 바꿉니다. */
 export function unchangedSincePush(hashes, cloudName, row) {
     const shaped = toCloudRow(cloudName, row);
@@ -205,6 +213,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         settings: null,
         /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
         ids: {},
+        /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
+        ats: { attendance: {} },
     };
     try {
         const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
@@ -218,8 +228,10 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         const ids = serverIds(snap);
         if (ids) out.ids[cloudName] = ids;
         snap.forEach((item) => {
-            const row = fromCloudRow(cloudName, item.id, item.data());
+            const data = item.data();
+            const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
+            if (cloudName === 'attendance' && typeof data?.updatedAt?.toMillis === 'function') out.ats.attendance[item.id] = data.updatedAt.toMillis();
         });
     }
     const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));
@@ -256,7 +268,14 @@ export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } 
         if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
         return false;
     }
-    return newerThanDelete(data, notAfter);
+    if (!newerThanDelete(data, notAfter)) return false;
+    /* 지운 뒤에 고친 시각이 찍혔어도 내용이 지운 줄 그대로면(진행 중이던 올리기가 한 번 더 쓴 것) 지웁니다(PR #52 2차 검수 2번). */
+    if (expect) {
+        const row = fromCloudRow(name, String(id), data);
+        const mark = row ? rowMark(name, row) : null;
+        if (mark && String(expect).split(',').filter(Boolean).includes(printDigest(mark.mark))) return false;
+    }
+    return true;
 }
 
 /** 서버에서 문서를 읽어 지워도 될 때만 지웁니다. get·del을 바꿔 넣어 검사합니다. */
