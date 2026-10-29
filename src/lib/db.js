@@ -295,14 +295,27 @@ export function flushCloud() {
     return run;
 }
 
+/* 올리기 중에 바뀌지 않은 칸만 올리기 결과로 바꿉니다. 그 사이 지운 해시는 되살리지 않습니다. */
+export function mergePushedHashes(sent, now, pushed) {
+    const out = { ...now };
+    for (const key of new Set([...Object.keys(sent), ...Object.keys(pushed)])) {
+        if (now[key] !== sent[key]) continue;
+        if (key in pushed) out[key] = pushed[key];
+        else delete out[key];
+    }
+    return out;
+}
+
 async function flushCloudOnce() {
     if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
+    /* 올리기에는 지금 해시의 사본을 넘깁니다. 올리는 동안 이 기기에서 지우거나 받아서 바뀐 해시는 끝난 뒤 덮지 않습니다(PR #52 2차 검수 2번). */
+    const sent = { ...cloudHashes };
     const result = await cloudApi.push(state.auth.uid, state, {
         memoryOnly: memoryOnly || state.profile.sharedPc,
-        hashes: cloudHashes,
+        hashes: { ...sent },
     });
     if (result?.hashes) {
-        cloudHashes = result.hashes;
+        cloudHashes = mergePushedHashes(sent, cloudHashes, result.hashes);
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
     if (Array.isArray(result?.rejected)) tellRejected(result.rejected);
@@ -416,7 +429,9 @@ function queueCloudForget(bucket, id, row = null) {
     const expect = typeof cloudHashes?.[key] === 'string' ? printDigest(cloudHashes[key]) : null;
     /* 오프라인에서 고친 뒤 지우면(결석/질병 → 기타 → 출석) 서버에는 아직 안 올라간 '기타'가 나중에 도착합니다. 지운 줄의 요약도 같이 받아 둡니다. */
     const shaped = row && bucket === 'attendance' ? toCloudRow(bucket, row) : null;
-    const mine = shaped?.id ? printDigest(fingerprint(shaped.body, shaped.clear || [])) : null;
+    /* 출결 밖의 줄은 올리기와 같은 해시(rowMark)의 요약을 남깁니다. 진행 중이던 올리기가 같은 내용을 한 번 더 써도 지울 수 있게 합니다. */
+    const marked = row && bucket !== 'attendance' ? rowMark(bucket, row) : null;
+    const mine = shaped?.id ? printDigest(fingerprint(shaped.body, shaped.clear || [])) : (marked ? printDigest(marked.mark) : null);
     const also = mine && mine !== expect ? mine : null;
     if (uid) {
         cloudForget.set(forgetEntryKey(uid, key), { uid, key, at: Date.now(), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
@@ -615,6 +630,15 @@ export function stableHashes(seen, now) {
         if (seen[key] === value) out[key] = value;
     }
     return out;
+}
+
+function pruneOnly(draft, remote, seen) {
+    const guard = stableHashes(seen, cloudHashes);
+    const before = new Set(Object.keys(guard));
+    pruneDeletedElsewhere(draft, remote, guard);
+    for (const key of before) if (!(key in guard)) delete cloudHashes[key];
+    if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
+    return draft;
 }
 
 function absorbCloud(draft, remote, seen = null) {
@@ -1648,7 +1672,12 @@ async function connectCloud(uid) {
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
     const hasRemote = remote.settings || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
-    if (!hasRemote) return;
+    if (!hasRemote) {
+        /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
+        await update((draft) => pruneOnly(draft, remote, seen));
+        if (pushedAll(pushed)) markSynced(uid);
+        return;
+    }
     await update((draft) => absorbCloud(draft, remote, seen));
     /* 올리기가 다 끝나야 '동기화됨'입니다. 못 올린 게 있으면 시각을 바꾸지 않습니다(PR #52 검수 4번). */
     if (pushedAll(pushed)) markSynced(uid);

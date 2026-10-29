@@ -4,9 +4,10 @@
  * 올리기는 실제 pushUserData처럼 줄마다 해시가 같으면 건너뛰고, 비운 칸은 deleteField로 지웁니다.
  */
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, getDocFromServer, setDoc, Timestamp } from 'firebase/firestore';
-import { guardedDelete, rowMark, serverIds } from '../src/lib/cloud.js';
+import { guardedDelete, keepCloudDoc, printDigest, rowMark, serverIds } from '../src/lib/cloud.js';
 import { fromCloudRow, toCloudRow } from '../src/lib/cloudShape.js';
 
 const failures = [];
@@ -20,10 +21,14 @@ let offline = false;
 let rejectKeys = new Set();
 let pulls = 0;
 let dropIdsOnce = false;
+let slowPush = 0;
+let bareProfile = false;
 const cloud = {
     available: () => true,
     async push(uid, state, { hashes = {} } = {}) {
         if (offline) return { ok: false, pending: 1, hashes, rejected: [] };
+        /* 실제 pushUserData처럼 Firebase를 불러온 뒤에야 해시를 읽습니다(그 사이 이 기기에서 지울 수 있음). */
+        if (slowPush) await new Promise((r) => setTimeout(r, slowPush));
         const next = { ...hashes };
         const rejected = [];
         for (const name of NAMES) {
@@ -42,7 +47,7 @@ const cloud = {
     },
     async pull(uid) {
         pulls += 1;
-        const out = { profile: { className: '검사반' }, ids: {}, ats: { attendance: {} } };
+        const out = { profile: bareProfile ? {} : { className: '검사반' }, ids: {}, ats: { attendance: {} } };
         for (const name of NAMES) {
             const snap = await getDocs(collection(fsFor(uid), 'users', uid, name));
             out[name] = snap.docs.map((d) => fromCloudRow(name, d.id, d.data())).filter(Boolean);
@@ -173,6 +178,71 @@ await db.pullFromCloudNow();
 await other('notes', 'n2', { text: '회의 본문', source: 'app' });
 await db.pullFromCloudNow();
 check(row('notes', 'n2') && !row('notes', 'n2').title, `다른 기기에서 비운 회의록 제목이 남았습니다(다시 받기): ${JSON.stringify(row('notes', 'n2'))}`);
+
+/* 9) 올리는 중에 연달아 지우기: 진행 중이던 올리기가 지운 일정을 다시 써서 되살리면 안 됩니다(2차 검수 2번). */
+await db.saveTextItem('todos', { id: 't9', title: '연달아 지울 일', done: false });
+await db.saveTextItem('events', { id: 'e9', title: '연달아 지울 일정', date: '2026-10-31' });
+await db.saveTextItem('notes', { id: 'n9', text: '연달아 지울 메모' });
+await db.flushCloud();
+check(await cloudDoc('events', 'e9'), '검사 준비: e9가 올라가지 않았습니다');
+slowPush = 30;
+await db.removeItem('todos', 't9');
+await db.removeItem('events', 'e9');
+await db.removeItem('notes', 'n9');
+await db.flushCloud();
+slowPush = 0;
+await db.flushCloud();
+check(!(await cloudDoc('events', 'e9')) && !(await cloudDoc('todos', 't9')) && !(await cloudDoc('notes', 'n9')), `연달아 지운 줄이 클라우드에 남았습니다: e9=${JSON.stringify(await cloudDoc('events', 'e9'))}`);
+await db.pullFromCloudNow();
+check(!row('events', 'e9'), '연달아 지운 일정이 되살아났습니다');
+/* 지운 줄의 해시가 되살아나면, 같은 내용으로 되살린(되돌리기) 일정이 '이미 올림'으로 보여 안 올라갑니다. */
+await db.saveTextItem('events', { id: 'e9', title: '연달아 지울 일정', date: '2026-10-31' });
+await db.flushCloud();
+check(await cloudDoc('events', 'e9'), '지운 뒤 같은 내용으로 되살린 일정이 클라우드에 올라가지 않았습니다(올리는 중 지운 해시가 되살아남)');
+await db.removeItem('events', 'e9');
+await db.flushCloud();
+/* 올리기 결과는 올리는 동안 이 기기에서 지운 해시를 되살리지 않습니다. */
+const merged = db.mergePushedHashes({ 'events/a': 'x', 'todos/b': 'y' }, { 'todos/b': 'y' }, { 'events/a': 'x', 'todos/b': 'y2', 'notes/c': 'z' });
+check(!('events/a' in merged) && merged['todos/b'] === 'y2' && merged['notes/c'] === 'z', `올리기 결과가 지운 해시를 되살렸습니다: ${JSON.stringify(merged)}`);
+/* 지운 뒤 시각이 찍혔어도 내용이 지운 줄 그대로면 지우고, 내용이 다르면(다른 기기가 고침) 남깁니다. */
+const ev = { id: 'e10', title: '같은 일정', date: '2026-10-31', kind: '학급' };
+const same = printDigest(rowMark('events', ev).mark);
+const later = { ...toCloudRow('events', ev).body, updatedAt: { toMillis: () => 2000 } };
+check(keepCloudDoc('events', 'e10', later, { notAfter: 1000, expect: same }) === false, '지운 줄과 같은 내용인데 남겼습니다');
+check(keepCloudDoc('events', 'e10', { ...later, title: '다른 기기가 고침' }, { notAfter: 1000, expect: same }) === true, '지운 뒤 다른 기기가 고친 일정을 지웠습니다');
+check(keepCloudDoc('events', 'e10', later, { notAfter: 1000 }) === true, '요약 없이 늦은 문서를 지웠습니다');
+
+/* 10) 다른 기기에서 마지막 줄까지 지워 클라우드가 비어도, 자동 받기가 올린 그대로인 줄을 지웁니다(2차 검수 1번). */
+await db.flushCloud();
+bareProfile = true;
+rejectKeys = new Set(['todos/t6', 'todos/t7']);
+await db.saveTextItem('todos', { ...row('todos', 't6'), title: '빈 클라우드 거절 v3' });
+await db.saveTextItem('todos', { ...row('todos', 't7'), title: '빈 클라우드 거절 v4' });
+const keptRejected = [title('t6'), title('t7')];
+await db.saveTextItem('events', { id: 'e11', title: '마지막 일정', date: '2026-11-02' });
+await db.flushCloud();
+await env.clearFirestore();
+await db.refreshFromCloud({ force: true });
+rejectKeys = new Set();
+check(!row('events', 'e11') && db.snapshot().events.length === 0, `클라우드가 비었는데 다른 기기에서 지운 일정이 남았습니다: ${JSON.stringify(db.snapshot().events)}`);
+check(title('t6') === keptRejected[0] && title('t7') === keptRejected[1], `클라우드가 비었을 때 거절된(안 올라간) 줄까지 지웠습니다: ${JSON.stringify(keptRejected)} → ${title('t6')},${title('t7')}`);
+
+/* 11) 서비스 워커: 옛 판 페이지가 요청한 옛 assets와 목록 파일은 새 캐시에 넣지 않습니다(2차 검수 3번). */
+{
+    const sw = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
+    const start = sw.indexOf('function assetSuffix');
+    const end = sw.indexOf('/* stale-assets-end */');
+    const box = { URL };
+    vm.runInNewContext(`${sw.slice(start, end)}\nthis.shouldStoreRuntime = shouldStoreRuntime;`, box);
+    const scope = 'https://teacher.github.io/All-in-One-Home/sw.js';
+    const base = 'https://teacher.github.io/All-in-One-Home/';
+    const list = ['./', './index.html', './assets/index-NEW.js', './assets/index-NEW.css'];
+    const store = (path) => box.shouldStoreRuntime(base + path, list, scope);
+    check(sw.includes('shouldStoreRuntime(request.url, PRECACHE'), '서비스 워커가 저장 전에 shouldStoreRuntime을 보지 않습니다');
+    check(!store('assets/index-OLD.js') && !store('assets/index-OLD.css'), '옛 판 assets를 새 캐시에 넣습니다');
+    check(!store('precache-manifest.js?v=ssug-gyomu-shell-v40'), '목록 파일을 런타임 캐시에 넣습니다');
+    check(store('assets/index-NEW.js') && store('index.html') && store('sounds/ding.mp3') && store('icon-jjaem.svg'), '목록의 파일이나 소리·아이콘을 저장하지 않습니다');
+}
 
 await env.cleanup();
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }

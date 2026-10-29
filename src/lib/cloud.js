@@ -268,7 +268,14 @@ export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } 
         if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
         return false;
     }
-    return newerThanDelete(data, notAfter);
+    if (!newerThanDelete(data, notAfter)) return false;
+    /* 지운 뒤에 고친 시각이 찍혔어도 내용이 지운 줄 그대로면(진행 중이던 올리기가 한 번 더 쓴 것) 지웁니다(PR #52 2차 검수 2번). */
+    if (expect) {
+        const row = fromCloudRow(name, String(id), data);
+        const mark = row ? rowMark(name, row) : null;
+        if (mark && String(expect).split(',').filter(Boolean).includes(printDigest(mark.mark))) return false;
+    }
+    return true;
 }
 
 /** 서버에서 문서를 읽어 지워도 될 때만 지웁니다. get·del을 바꿔 넣어 검사합니다. */
