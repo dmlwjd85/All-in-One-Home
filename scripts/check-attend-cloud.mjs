@@ -37,7 +37,7 @@ const cloud = {
     },
     async pull(uid) {
         const snap = await getDocs(collection(fsFor(uid), 'users', uid, 'attendance'));
-        return { profile: { className: '검사반' }, attendance: snap.docs.map((d) => fromCloudRow('attendance', d.id, d.data())).filter(Boolean), ids: { attendance: serverIds(snap) } };
+        return { profile: { className: '검사반' }, attendance: snap.docs.map((d) => fromCloudRow('attendance', d.id, d.data())).filter(Boolean), ids: { attendance: serverIds(snap) }, ats: { attendance: Object.fromEntries(snap.docs.map((d) => [d.id, d.data().updatedAt?.toMillis?.() || 0])) } };
     },
 };
 const cloudNote = async (uid, sid) => {
@@ -118,6 +118,38 @@ for (const login of [true, false]) {
     await app.db.applyAttendDraft();
     check(!app.db.snapshot().attendance.some((r) => r.sid === 's5'), '다른 계정의 출결 임시본을 되살렸습니다.');
     app.close();
+}
+
+/* 계정을 바꾸면 이 기기에 남은 출결 임시본을 지웁니다. */
+{
+    await env.clearFirestore();
+    const app = await openApp(null, true);
+    app.db.writeAttendDraft({ date: DATE, sid: 's6', status: '지각', note: 'u1 임시본', paper: false, period: 0 });
+    check(globalThis.localStorage.getItem('ssug-gyomu-attend-draft'), '검사 준비: 임시본이 저장되지 않았습니다.');
+    await app.db.setAuth({ uid: 'u2' });
+    check(!globalThis.localStorage.getItem('ssug-gyomu-attend-draft'), '계정을 바꿨는데 이전 계정의 출결 임시본이 남았습니다.');
+    app.close();
+}
+
+/* 기기에 남은 임시본보다 다른 기기가 더 나중에 고친 출결이 이깁니다(임시본은 보관함에 남김). */
+{
+    await env.clearFirestore();
+    let app = await openApp(null, true);
+    await app.db.setAttendance(DATE, 's7', '지각');
+    await app.db.flushCloudNow();
+    closed = true;
+    app.db.writeAttendDraft({ date: DATE, sid: 's7', status: '지각', note: '남은 임시본', paper: false, period: 0 });
+    const saved = app.close();
+    await new Promise((r) => setTimeout(r, 30));
+    const theirs = toCloudRow('attendance', { ...saved.main.find(([k]) => k === 'state')[1].attendance.find((r) => r.id === `${DATE}_s7`), status: '결석', reason: '질병', note: '다른 기기 나중 수정' });
+    await setDoc(doc(fsFor('u1'), 'users', 'u1', 'attendance', theirs.id), { ...theirs.body, updatedAt: Timestamp.now() });
+    app = await openApp(saved, true);
+    const row = app.db.snapshot().attendance.find((r) => r.id === `${DATE}_s7`);
+    check(row?.note === '다른 기기 나중 수정', `기기에 남은 임시본이 다른 기기의 나중 수정을 덮었습니다: ${JSON.stringify(row)}`);
+    await app.db.flushCloud();
+    check((await cloudNote('u1', 's7')) === 'absent/다른 기기 나중 수정', `클라우드의 나중 수정이 임시본으로 덮였습니다: ${await cloudNote('u1', 's7')}`);
+    const kept = JSON.stringify(app.close().main);
+    check(kept.includes('남은 임시본'), '밀려난 출결 임시본을 보관하지 않았습니다.');
 }
 
 await env.cleanup();

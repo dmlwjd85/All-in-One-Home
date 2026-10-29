@@ -213,6 +213,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         settings: null,
         /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
         ids: {},
+        /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
+        ats: { attendance: {} },
     };
     try {
         const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
@@ -226,8 +228,10 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         const ids = serverIds(snap);
         if (ids) out.ids[cloudName] = ids;
         snap.forEach((item) => {
-            const row = fromCloudRow(cloudName, item.id, item.data());
+            const data = item.data();
+            const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
+            if (cloudName === 'attendance' && typeof data?.updatedAt?.toMillis === 'function') out.ats.attendance[item.id] = data.updatedAt.toMillis();
         });
     }
     const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));

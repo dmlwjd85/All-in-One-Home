@@ -277,9 +277,9 @@ export function tellRejectedForTest(keys) {
 }
 
 /* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
-let cloudApi = { push: pushUserData, pull: pullUserData, available: syncAvailable };
+let cloudApi = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, available: syncAvailable };
 export function useCloudForTest(api = null) {
-    cloudApi = api ? { push: pushUserData, pull: pullUserData, available: () => true, ...api } : { push: pushUserData, pull: pullUserData, available: syncAvailable };
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, available: () => true, ...api } : { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, available: syncAvailable };
 }
 let signOutHook = null;
 export function useSignOutForTest(fn = null) { signOutHook = fn; }
@@ -306,7 +306,7 @@ async function flushCloudOnce() {
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
     if (Array.isArray(result?.rejected)) tellRejected(result.rejected);
-    await forgetQueuedCloud();
+    await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
     return result;
 }
 
@@ -503,6 +503,14 @@ export function clippedCopy(mine, theirs) {
     return a.length > 2000 && b.length === 2000 && a.startsWith(b);
 }
 
+/* 받아 온 값으로 바꿉니다. 클라우드에 없는 칸(다른 기기에서 비운 칸)은 이 기기에서도 비웁니다. */
+const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'] };
+export function takeRemote(cloudName, row, theirs) {
+    const next = { ...row, ...theirs };
+    for (const key of OPTIONAL_FROM_CLOUD[cloudName] || []) if (!(key in theirs)) delete next[key];
+    return next;
+}
+
 function refreshShared(local = [], remote = [], cloudName, hashes) {
     const byId = new Map((remote || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
     return local.map((row) => {
@@ -511,9 +519,9 @@ function refreshShared(local = [], remote = [], cloudName, hashes) {
         if (cloudName === 'notes' && clippedCopy(row.text, other.text)) {
             /* 옛 판(v30)은 본문을 2000자로 잘라 다시 올립니다. 잘린 사본이면 이 기기 본문을 지키고 다시 올립니다. */
             if (hashes) delete hashes[`${cloudName}/${row.id}`];
-            return { ...row, ...other, text: row.text };
+            return { ...takeRemote(cloudName, row, other), text: row.text };
         }
-        return { ...row, ...other };
+        return takeRemote(cloudName, row, other);
     });
 }
 
@@ -537,9 +545,9 @@ function absorbSettings(draft, settings) {
     if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra) }, { fromCloud: true });
 }
 
-/* 다른 기기에서 지운 출결: 이 기기에서 올린 뒤 고치지 않았고(해시 같음) 클라우드에 문서가 없으면 지웁니다.
+/* 다른 기기에서 지운 줄(출결·기록·일정·할 일·메모·공지): 이 기기에서 올린 뒤 고치지 않았고(해시 같음) 클라우드에 문서가 없으면 지웁니다.
    해시가 없는 줄(처음 받기, 아직 안 올린 줄)이나 올린 뒤 고친 줄은 그대로 둡니다. */
-const PRUNE_BUCKETS = [['attendance', 'attendance']];
+const PRUNE_BUCKETS = CLOUD_BUCKETS.map((name) => [name, name]);
 
 export function pruneDeletedElsewhere(draft, remote, hashes) {
     for (const [localName, cloudName] of PRUNE_BUCKETS) {
@@ -1057,6 +1065,12 @@ export async function promoteInbox(id) {
     return result;
 }
 
+/* 지운 줄의 클라우드 문서 id(공지는 날짜)로 삭제 대기열에 넣습니다. */
+function forgetRow(bucket, row) {
+    const shaped = row ? toCloudRow(bucket, row) : null;
+    queueCloudForget(bucket, shaped?.id || row?.id, row);
+}
+
 /* 출석으로 되돌린 줄은 클라우드 문서도 지웁니다. 안 지우면 다음 받기에서 예전 결석·지각이 되살아납니다. */
 function forgetAttendance(row) {
     const shaped = row ? toCloudRow('attendance', row) : null;
@@ -1071,7 +1085,7 @@ export const ATTEND_DRAFT_KEY = 'ssug-gyomu-attend-draft';
 export function writeAttendDraft({ date, sid, status, note = '', paper = false, period = 0 }) {
     if (!date || !sid || !status || status === '출석') return false;
     try {
-        globalThis.localStorage?.setItem(ATTEND_DRAFT_KEY, JSON.stringify({ u: draftOwner(), date, sid, status, note: String(note).slice(0, 2000), paper: Boolean(paper), period: Number(period) || 0 }));
+        globalThis.localStorage?.setItem(ATTEND_DRAFT_KEY, JSON.stringify({ u: draftOwner(), at: Date.now(), date, sid, status, note: String(note).slice(0, 2000), paper: Boolean(paper), period: Number(period) || 0 }));
         return true;
     } catch { return false; }
 }
@@ -1096,7 +1110,37 @@ export async function applyAttendDraft() {
     const row = state.attendance.find((r) => r.id === `${d.date}_${d.sid}`);
     if (row && row.status === d.status && (row.note || '') === d.note && Boolean(row.paper) === d.paper) return false;
     await setAttendance(d.date, d.sid, d.status, { note: d.note, paper: d.paper, ...(d.period ? { period: d.period } : {}) });
+    /* 계정 자료면 올리기 전에 클라우드와 견줍니다: 다른 기기가 이 임시본보다 나중에 고쳤으면 그 값을 따릅니다. */
+    if (d.u && Number(d.at) > 0) draftWatch = { uid: d.u, id: `${d.date}_${d.sid}`, at: Number(d.at), draft: d };
     return true;
+}
+
+let draftWatch = null;
+/*
+ * 되살린 임시 출결(앱을 닫을 때 남긴 것)이 다른 기기에서 더 나중에 고친 출결을 덮지 않게 합니다(PR #51 검수 3번).
+ * 클라우드 문서의 서버 시각(updatedAt)이 임시본을 남긴 기기 시각보다 늦으면 클라우드 값을 따르고, 임시본은 'attendDraftReplaced'에 남깁니다.
+ */
+async function checkDraftAgainstCloud(uid) {
+    const watch = draftWatch;
+    if (!watch || watch.uid !== uid) return;
+    draftWatch = null;
+    let remote = null;
+    try { remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc }); } catch { remote = null; }
+    const cloudAt = Number(remote?.ats?.attendance?.[watch.id]) || 0;
+    const theirs = (remote?.attendance || []).find((row) => row?.id === watch.id);
+    if (!theirs || cloudAt <= watch.at) return;
+    const mine = state.attendance.find((row) => row.id === watch.id);
+    const d = watch.draft;
+    /* 그 사이 이 기기에서 또 고쳤으면(임시본과 다르면) 그대로 둡니다. */
+    if (!mine || mine.status !== d.status || (mine.note || '') !== d.note || Boolean(mine.paper) !== d.paper) return;
+    if (!memoryOnly) await mainVault.set('attendDraftReplaced', { at: Date.now(), uid, draft: d }).catch(() => {});
+    const mark = rowMark('attendance', theirs);
+    await update((draft) => {
+        const index = draft.attendance.findIndex((row) => row.id === watch.id);
+        if (index >= 0) draft.attendance[index] = { ...draft.attendance[index], ...theirs };
+        if (mark) cloudHashes[mark.key] = mark.mark;
+        return draft;
+    });
 }
 
 export async function setAttendance(date, sid, status, extra = {}) {
@@ -1205,6 +1249,8 @@ export async function saveTextItem(bucket, row, { from } = {}) {
 
 export async function removeItem(bucket, id) {
     return update((draft) => {
+        /* 지운 줄은 클라우드 문서도 지웁니다. 안 지우면 다음 받기에서 이 기기와 다른 기기 모두 되살아납니다(PR #52 검수 1번). */
+        for (const item of draft[bucket] || []) if (item.id === id) forgetRow(bucket, item);
         draft[bucket] = (draft[bucket] || []).filter((item) => item.id !== id);
         if (draft.local[bucket]) draft.local[bucket] = draft.local[bucket].filter((item) => item.id !== id);
         return draft;
@@ -1516,6 +1562,7 @@ const accountKey = (uid) => `account:${uid}`;
  */
 async function switchAccountLocal(from, to) {
     clearAttendDraft();
+    draftWatch = null;
     const empty = emptyState();
     const pack = {
         data: Object.fromEntries(ACCOUNT_PARTS.map((part) => [part, structuredClone(state[part] ?? empty[part])])),
@@ -1595,23 +1642,38 @@ async function leaveAfterFailedSwitch() {
 }
 
 async function connectCloud(uid) {
-    await flushCloud();
+    await checkDraftAgainstCloud(uid);
+    const pushed = await flushCloud().catch(() => null);
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return;
-    const hasRemote = remote.settings || remote.profile?.className || (remote.students || []).length || (remote.records || []).length || (remote.inbox || []).length || (remote.todos || []).length || (remote.events || []).length;
+    const hasRemote = remote.settings || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) return;
     await update((draft) => absorbCloud(draft, remote, seen));
-    markSynced();
+    /* 올리기가 다 끝나야 '동기화됨'입니다. 못 올린 게 있으면 시각을 바꾸지 않습니다(PR #52 검수 4번). */
+    if (pushedAll(pushed)) markSynced(uid);
+}
+
+function pushedAll(result) {
+    return Boolean(result) && !result.skipped && !result.pending && result.ok !== false && !(result.rejected || []).length;
 }
 
 const LAST_SYNC_KEY = 'ssug-gyomu-last-sync';
 /** 마지막으로 클라우드에서 받아 온 시각(ms). 없으면 0. */
-export function lastSyncAt() {
-    try { return Number(localStorage.getItem(LAST_SYNC_KEY)) || 0; } catch { return 0; }
+/* 계정마다 따로 적습니다(다른 계정의 시각이 보이지 않게). */
+export function lastSyncAt(uid = state.auth?.uid) {
+    if (!uid) return 0;
+    try { return Number(JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || '{}')?.[uid]) || 0; } catch { return 0; }
 }
-function markSynced() {
-    try { localStorage.setItem(LAST_SYNC_KEY, String(Date.now())); } catch { /* 공간이 없으면 표시만 못 합니다. */ }
+function markSynced(uid) {
+    if (!uid) return;
+    try {
+        let all = {};
+        try { all = JSON.parse(localStorage.getItem(LAST_SYNC_KEY) || '{}') || {}; } catch { all = {}; }
+        if (typeof all !== 'object' || Array.isArray(all)) all = {};
+        all[uid] = Date.now();
+        localStorage.setItem(LAST_SYNC_KEY, JSON.stringify(all));
+    } catch { /* 공간이 없으면 표시만 못 합니다. */ }
     emit();
 }
 
@@ -1654,8 +1716,14 @@ export async function pullFromCloudNow() {
             const next = [];
             for (const row of draft[localName] || []) {
                 const theirs = row?.id ? byId.get(String(row.id)) : null;
-                if (theirs) { next.push({ ...row, ...theirs }); byId.delete(String(row.id)); continue; }
                 const mark = rowMark(cloudName, row);
+                if (theirs) {
+                    byId.delete(String(row.id));
+                    /* 올린 그대로인 줄만 클라우드 값으로 바꿉니다. 거절된 줄·올릴 수 없는 줄·그 사이 고친 줄은 이 기기 값을 지킵니다. */
+                    const synced = mark && !rejected.has(mark.key) && cloudHashes[mark.key] === mark.mark;
+                    next.push(synced ? takeRemote(cloudName, row, theirs) : row);
+                    continue;
+                }
                 /* 클라우드 목록이 서버에서 온 게 아니거나(캐시), 올릴 수 없는 줄·거절된 줄·한 번도 클라우드에 닿지 않은 줄은 지우지 않습니다. */
                 if (!Array.isArray(ids) || !mark || rejected.has(mark.key) || !cloudHashes[mark.key]) { next.push(row); continue; }
                 dropped += 1;
@@ -1674,7 +1742,7 @@ export async function pullFromCloudNow() {
     });
     if (failed?.storageFailed) return { ok: false, reason: 'save' };
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
-    markSynced();
+    markSynced(uid);
     return { ok: true, dropped };
 }
 
