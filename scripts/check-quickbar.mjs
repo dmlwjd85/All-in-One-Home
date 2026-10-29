@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { queuedCloudKeys, replaceRoster, saveQuick, snapshot, undo, useVaultsForTest } from '../src/lib/db.js';
+import { queuedCloudKeys, replaceRoster, saveQuick, snapshot, undo, useAuthForTest, useVaultsForTest } from '../src/lib/db.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { quickDate, quickDateLabel, textFromField } from '../src/ui/quickText.js';
 import { nameCandidates, quickSaveDate, studentNoFor, suggestKind } from '../src/ui/quickMatch.js';
@@ -96,6 +96,8 @@ check(!JSON.stringify(localStore.dump() || {}).includes('학폭'), '되돌린 �
 // QA 2차 4번: 되돌린 뒤에도 민감한 행 id가 클라우드 삭제 대기열에 오르면 안 됩니다(이 기기에만 있던 글이므로).
 check(secretRow?.id && !queuedCloudKeys().some((key) => key === `records/${secretRow.id}` || key.endsWith(`/${secretRow.id}`)), `되돌린 민감한 관찰이 클라우드 삭제 대기열에 올랐습니다: ${JSON.stringify(queuedCloudKeys())}`);
 
+// 클라우드 삭제 대기열은 계정별이므로 로그인한 상태로 봅니다.
+useAuthForTest('quickbar-test');
 const note = await saveQuick({ text: '운동회 안내', kind: '메모', date: '2026-10-26' });
 const noteId = snapshot().notes.find((row) => row.text === '운동회 안내')?.id;
 check(note.ok && noteId && JSON.stringify(mainStore.dump() || {}).includes('운동회 안내'), '메모가 기기 저장소에 없습니다.');

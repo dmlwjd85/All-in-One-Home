@@ -65,11 +65,17 @@ export default function App() {
     // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다. 1분에 한 번까지만.
     useEffect(() => {
         const again = () => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); };
+        /* 앱을 닫거나 숨기면 남은 변경을 바로 올립니다. 휴대폰은 숨긴 뒤 곧 멈추므로 기다리지 않습니다. */
+        const leave = () => { if (document.visibilityState === 'hidden') flushCloud().catch(() => {}); };
         document.addEventListener('visibilitychange', again);
+        document.addEventListener('visibilitychange', leave);
+        window.addEventListener('pagehide', leave);
         window.addEventListener('focus', again);
         window.addEventListener('online', again);
         return () => {
             document.removeEventListener('visibilitychange', again);
+            document.removeEventListener('visibilitychange', leave);
+            window.removeEventListener('pagehide', leave);
             window.removeEventListener('focus', again);
             window.removeEventListener('online', again);
         };

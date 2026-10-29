@@ -88,11 +88,16 @@ function toAttendance(row) {
     if (!sid || !status || !/^\d{4}-\d{2}-\d{2}$/.test(row.date || '')) return null;
     const id = `${row.date}_${sid}`;
     const body = { date: row.date, sid, status };
+    /* 병합 쓰기라, 비운 칸은 지우라고 알려야 클라우드의 예전 사유·교시·메모가 남지 않습니다. */
+    const clear = [];
     if (REASON_TO[row.reason]) body.reason = REASON_TO[row.reason];
+    else clear.push('reason');
     if (row.period >= 1 && row.period <= 8) body.period = Number(row.period);
+    else clear.push('period');
     if (typeof row.paper === 'boolean') body.paper = row.paper;
     if (row.note) body.note = String(row.note).slice(0, 100);
-    return { id, body, stamps: stamps(['updatedAt']) };
+    else clear.push('note');
+    return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
 function toRecord(row) {

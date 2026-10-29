@@ -50,12 +50,23 @@ export function prepareEventWrite(body) {
     return { body, retryWithoutEndTime: Boolean(body?.endTime) };
 }
 
+/** 내용을 남기지 않는 짧은 요약(FNV-1a). 지울 대기열에는 이 값만 둡니다. */
+export function printDigest(text) {
+    let h = 0x811c9dc5;
+    const str = String(text);
+    for (let i = 0; i < str.length; i += 1) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return `f${h.toString(36)}${str.length.toString(36)}`;
+}
+
 export function fingerprint(body, clear = []) {
     return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
 
-async function stamp(firestore, body, names, previous) {
-    const { Timestamp } = firestore;
+export async function stamp(firestore, body, names, previous) {
+    const { Timestamp, serverTimestamp } = firestore;
     const next = { ...body };
     names.forEach((name) => {
         if (name === 'migratedAt' && previous) {
@@ -63,7 +74,8 @@ async function stamp(firestore, body, names, previous) {
             next.migratedAt = Number.isNaN(date.getTime()) ? Timestamp.now() : Timestamp.fromDate(date);
             return;
         }
-        next[name] = Timestamp.now();
+        /* 고친 시각은 기기 시계가 아니라 서버 시각으로 찍습니다(늦은 삭제 비교가 기기 시계에 흔들리지 않게). */
+        next[name] = serverTimestamp();
     });
     return next;
 }
@@ -191,6 +203,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         inbox: [],
         timetable: {},
         settings: null,
+        /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
+        ids: {},
     };
     try {
         const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
@@ -200,6 +214,9 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));
+        /* 캐시에서 온 결과로는 지우기를 하지 않습니다. 서버에서 받은 목록만 ids에 둡니다. */
+        const ids = serverIds(snap);
+        if (ids) out.ids[cloudName] = ids;
         snap.forEach((item) => {
             const row = fromCloudRow(cloudName, item.id, item.data());
             if (row) out[localName].push(row);
@@ -213,14 +230,56 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     return out;
 }
 
-export async function deleteUserDoc(uid, name, id, { memoryOnly = false } = {}) {
+/** 서버에서 받은 결과일 때만 문서 id 목록을 돌려줍니다(캐시면 null). */
+export function serverIds(snap) {
+    if (snap?.metadata?.fromCache !== false) return null;
+    const ids = [];
+    snap.forEach((item) => ids.push(String(item.id)));
+    return ids;
+}
+
+/** 클라우드 문서가 지운 시각보다 나중에 고쳐졌는지 봅니다. */
+export function newerThanDelete(data, notAfter) {
+    const at = data?.updatedAt;
+    const ms = typeof at?.toMillis === 'function' ? at.toMillis() : null;
+    return ms != null && Number.isFinite(notAfter) && ms > notAfter;
+}
+
+/** 지운 뒤 다른 기기가 고쳤는지 봅니다. 출결은 마지막으로 알던 내용(expect)과 다르면 고친 것으로 봅니다. */
+export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } = {}) {
+    if (!data) return false;
+    if (expect && name === 'attendance') {
+        const row = fromCloudRow(name, String(id), data);
+        const shaped = row ? toCloudRow(name, row) : null;
+        /* expect는 '요약' 하나 또는 쉼표로 이은 여럿(마지막으로 올린 값, 오프라인에서 고친 뒤 지운 값) */
+        const allowed = String(expect).split(',').filter(Boolean);
+        if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
+        return false;
+    }
+    return newerThanDelete(data, notAfter);
+}
+
+/** 서버에서 문서를 읽어 지워도 될 때만 지웁니다. get·del을 바꿔 넣어 검사합니다. */
+export async function guardedDelete({ get, del }, name, id, opts = {}) {
+    if (Number.isFinite(opts.notAfter) || opts.expect) {
+        const data = await get();
+        if (keepCloudDoc(name, id, data, opts)) return { ok: true, kept: true };
+    }
+    await del();
+    return { ok: true };
+}
+
+export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfter = null, expect = null } = {}) {
     if (!uid || !name || !id || !syncAvailable()) return { skipped: true };
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
-        const { doc, deleteDoc } = await import('firebase/firestore');
-        await deleteDoc(doc(ready.db, 'users', uid, name, String(id)));
-        return { ok: true };
+        const { doc, deleteDoc, getDocFromServer } = await import('firebase/firestore');
+        const ref = doc(ready.db, 'users', uid, name, String(id));
+        return await guardedDelete({
+            get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },
+            del: () => deleteDoc(ref),
+        }, name, id, { notAfter, expect });
     } catch {
         return { ok: false };
     }

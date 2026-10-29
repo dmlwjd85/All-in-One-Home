@@ -1,7 +1,7 @@
 /** 에뮬레이터에서 건강·보건이 든 글이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, setDoc } from 'firebase/firestore';
 import { eventBodyWithoutEndTime, fromCloudRow, fromCloudSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
@@ -390,6 +390,25 @@ try {
         } finally {
             await oldEnv.cleanup();
         }
+    }
+    /* 출결 고치기: 병합 쓰기에서 비운 사유·메모가 클라우드에 남아 다음 받기에서 되돌아오지 않아야 합니다. */
+    {
+        const put = async (row) => {
+            const shaped = toCloudRow('attendance', row);
+            const body = { ...shaped.body };
+            (shaped.clear || []).forEach((key) => { body[key] = deleteField(); });
+            await setDoc(doc(db, `users/teacher-a/attendance/${shaped.id}`), body, { merge: true });
+            return shaped.id;
+        };
+        const row = { id: '2026-10-27_att1', date: '2026-10-27', sid: 'att1', status: '결석', reason: '질병', note: '병원 진료', period: 3, paper: true, source: 'app' };
+        const aid = await put(row);
+        await put({ ...row, status: '지각', reason: '', note: '', period: '' });
+        const back = fromCloudRow('attendance', aid, (await getDoc(doc(db, `users/teacher-a/attendance/${aid}`))).data() || {});
+        if (back.status !== '지각' || back.reason !== '' || back.note !== '' || back.period !== '') {
+            failures.push(`고친 출결의 비운 칸이 클라우드에 남았습니다: ${JSON.stringify(back)}`);
+        }
+        await deleteDoc(doc(db, `users/teacher-a/attendance/${aid}`));
+        if ((await getDoc(doc(db, `users/teacher-a/attendance/${aid}`))).exists()) failures.push('출석으로 되돌린 출결 문서를 지우지 못했습니다.');
     }
 } finally {
     await testEnv.cleanup();
