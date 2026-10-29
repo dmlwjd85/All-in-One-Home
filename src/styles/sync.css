@@ -115,3 +115,19 @@
 }
 .lock-note { font-size: 13px; margin: 6px 0 0; }
 .start-sub { font-size: 13px; margin: 6px 2px 0; }
+
+
+/* 칩 자리: 도구 단추 줄 아래 오른쪽에 띄웁니다. 제목(날짜) 높이를 늘리지 않고, 날짜 글과는 가로로 겹치지 않습니다.
+   위 56px: 단추(44px)와 누르는 자리(위아래 10px)가 겹치지 않게. 칩이 있는 머리줄은 최소 80px로 잡아 아래 내용과도 떨어뜨립니다. */
+.topbar.has-sync { position: relative; min-height: 80px; }
+.topbar.has-sync > .sync-slot {
+    position: absolute;
+    top: 56px;
+    right: 0;
+    height: 24px;
+    max-width: 50%;
+    display: flex;
+    justify-content: flex-end;
+}
+.topbar.has-sync > .sync-slot .sync-chip { margin-top: 0; }
+.topbar.has-sync > .sync-slot .sync-pop { left: auto; right: 0; }

@@ -62,7 +62,7 @@ const now = Date.parse('2026-10-30T09:00:00+09:00');
     check(/primary-btn block" data-start="google"/.test(start), '구글 로그인이 주 버튼이 아닙니다.');
     check(start.includes('aria-pressed={shared}'), '공용 컴퓨터 토글에 aria-pressed가 없습니다.');
     const app = readFileSync('src/App.jsx', 'utf8');
-    check((app.match(/<SyncChip /g) || []).length === 2, '제목 아래 동기화 칩이 두 곳(오늘/다른 화면)에 없습니다.');
+    check((app.match(/<SyncChip /g) || []).length === 1 && /has-sync/.test(app), '머리줄에 동기화 칩이 한 곳에 있지 않습니다.');
     const db = readFileSync('src/lib/db.js', 'utf8');
     check(/async function flushCloudTracked[\s\S]*?syncBegin\(\)[\s\S]*?syncEnd/.test(db) && /flushChain\.then\(flushCloudTracked, flushCloudTracked\)/.test(db) && /async function connectCloud\(uid\)[\s\S]*?syncBegin\(\)/.test(db), 'db.js 동기화가 칩에 알리지 않습니다.');
     const css = readFileSync('src/styles/sync.css', 'utf8');
