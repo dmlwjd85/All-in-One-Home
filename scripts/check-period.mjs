@@ -308,11 +308,16 @@ check(/useState\(local\.workStart \|\| '08:40'\)/.test(setupSrc) && /useState\(l
 check(/const problem = workTimeProblem\(workStart, workEnd\);\s*if \(problem\) \{ showToast\?\.\(problem\); return; \}\s*patchPeriodLocal\(\{ workStart, workEnd \}\);/.test(setupSrc) && (setupSrc.match(/patchPeriodLocal\(/g) || []).length === 1, '안내 카드가 검사 전에 저장하거나 다른 곳에 저장합니다.');
 check(/hideWorkCard\(\)/.test(setupSrc) && />다음에</.test(setupSrc) && /className="primary-btn"/.test(setupSrc) && /<Btn className="chip"/.test(setupSrc), "안내 카드에 '다음에'·저장 버튼이 앱 버튼 모양이 아닙니다.");
 check(/출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요\./.test(setupSrc), '안내 카드 문구가 없습니다.');
-check(/const setup = !todayRest\.off && !\(local\.workStart && local\.workEnd\) && !workCardOff\(\) \?/.test(homeSrc), '안내 카드가 쉬는 날이나 다음에 뒤에도 보입니다.');
+check(/const setup = !timer && !todayRest\.off && !\(local\.workStart && local\.workEnd\) && !workCardOff\(\) \?/.test(homeSrc), '안내 카드가 쉬는 날이나 다음에 뒤에도, 또는 조퇴 타이머와 함께 보입니다.');
 check(/timer \|\| setup \? 'home-grid has-leave'/.test(homeSrc) && homeSrc.indexOf('{setup}') > homeSrc.indexOf('{timer}') && homeSrc.indexOf('{setup}') < homeSrc.indexOf('home-quick'), '안내 카드가 타이머 자리에 없습니다.');
 check(/\.work-setup-form \.primary-btn \{ flex: 0 0 auto;/.test(css), '넓은 화면에서 저장 버튼이 길게 늘어납니다.');
+check((setupSrc.slice(0, setupSrc.indexOf('</form>')).match(/type="time" step="60"/g) || []).length === 2, '안내 카드 출근·퇴근 칸에 step="60"이 없습니다.');
+check(/const \[open, setOpen\] = useState\(false\);/.test(setupSrc) && /className="work-setup-strip" aria-expanded=\{open\}/.test(setupSrc) && /\.work-setup\[data-open="0"\] \.work-setup-body \{ display: none; \}/.test(css), '안내 카드가 폰에서 한 줄 띠로 접히지 않습니다.');
+check(homeSrc.indexOf('{lead && timeCard}') > homeSrc.indexOf('home-hero') && homeSrc.indexOf('{lead && timeCard}') < homeSrc.indexOf('{timer}') && homeSrc.indexOf('{!lead && timeCard}') > homeSrc.indexOf('home-quick'), '타이머·안내 띠가 있을 때 시간표가 그 위로 올라오지 않습니다.');
 const demoMod = await import('../src/lib/demo.js');
 check(demoMod.DEMO_WORK?.workStart === '08:40' && demoMod.DEMO_WORK?.workEnd === '16:40', '데모에 출퇴근 시각이 없습니다.');
+const demoSrc = read('src/lib/demo.js');
+check(/\/\*\* 목업과 같은 6학년 3반\. 날짜는 오늘을 기준으로 잡습니다\. \*\/\nexport function buildDemo/.test(demoSrc) && demoSrc.indexOf('export const DEMO_WORK') < demoSrc.indexOf('/** 목업과 같은 6학년 3반'), 'buildDemo 설명 주석이 DEMO_WORK에 붙어 있습니다.');
 check(/const local = data\.profile\.demo && !saved\.workStart && !saved\.workEnd \? \{ \.\.\.saved, \.\.\.DEMO_WORK \} : saved;/.test(homeSrc) && !/patchPeriodLocal/.test(homeSrc), '데모 출퇴근 시각이 이 기기 설정에 저장되거나 데모가 아닌 때도 쓰입니다.');
 const editForm = scheduleSrc.slice(scheduleSrc.indexOf('className="solid-card tt-edit"'));
 const subjectAt = editForm.indexOf('<input className="field" name="subject"');

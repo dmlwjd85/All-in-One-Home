@@ -47,10 +47,10 @@ export function consentBefore(today, trip) {
     return due;
 }
 
-/** 목업과 같은 6학년 3반. 날짜는 오늘을 기준으로 잡습니다. */
 /** 데모 홈에서 퇴근 타이머가 보이도록 쓰는 출퇴근 시각입니다. 이 기기 설정(localStorage)이나 서버에는 쓰지 않습니다. */
 export const DEMO_WORK = { workStart: '08:40', workEnd: '16:40' };
 
+/** 목업과 같은 6학년 3반. 날짜는 오늘을 기준으로 잡습니다. */
 export function buildDemo(clock) {
     const today = clock.ymd;
     const tomorrow = addDaysYmd(today, 1);

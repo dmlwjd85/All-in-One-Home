@@ -1198,6 +1198,15 @@ button.glass[aria-pressed="true"]:active {
 .minutes-save { min-width: 140px; }
 .minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
+/* 홈 출퇴근 안내 띠: 폰에서는 한 줄(띠 단추 + 다음에)로 접혀 있다가 누르면 펼칩니다. 900px 이상은 늘 펼쳐 둡니다. */
+.work-setup-strip { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; text-align: left; }
+.work-setup-sum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; }
+.work-setup-title { display: none; }
+@media (max-width: 899px) { .work-setup[data-open="0"] .work-setup-body { display: none; } }
+@media (min-width: 900px) {
+    .work-setup-strip { display: none; }
+    .work-setup-title { display: inline; }
+}
 /* 홈 출퇴근 안내 카드: 360px에서는 시각 두 칸 아래로 저장이 내려가고, 넓은 화면에서도 버튼이 길게 늘어나지 않습니다. */
 .work-setup-text { margin: 8px 0 10px; font-weight: 700; line-height: 22px; word-break: keep-all; }
 .work-setup-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }

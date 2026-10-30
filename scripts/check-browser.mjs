@@ -2488,13 +2488,13 @@ try {
                     const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                     const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
-                    /* 데모에도 퇴근 타이머가 생겨 폰 첫 화면에서는 시간표가 아래로 내려갑니다. 그때는 타이머가 보이고 팁에 가리지 않는지 봅니다. */
+                    /* 데모에도 퇴근 타이머가 있습니다. 평일 홈에서도 6교시는 늘 첫 화면에 보여야 하고, 타이머도 첫 화면에 보이며 팁에 가리지 않아야 합니다. */
                     const leave = document.querySelector('.home-leave')?.getBoundingClientRect();
                     return {
                         visible,
                         hasLeave: Boolean(leave),
                         coversLeave: hits(tipBox, leave),
-                        leaveOnScreen: Boolean(leave && leave.top < viewBottom && leave.bottom > 0),
+                        leaveOnScreen: Boolean(leave && leave.top < (tab && tab.height > 0 ? tab.top : viewBottom) && leave.bottom > 0),
                         /* 지금 교시(⏰ N교시까지 …)는 타이머가 있어도 첫 화면에 다 보여야 하고, 탭·타이머에 가리면 안 됩니다. */
                         nowShown: Boolean(kicker && kicker.top >= 0 && kicker.bottom <= viewBottom && !hits(kicker, tab) && !hits(kicker, leave)),
                         cellUnderTab: cells.some((cell) => hits(cell, tab)),
@@ -2522,9 +2522,8 @@ try {
                         layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
-                        && (layout.hasLeave
-                            ? layout.leaveOnScreen && !layout.coversLeave && layout.nowShown && !layout.sixthUnderTab && !layout.cellUnderTab
-                            : layout.sixthOnScreen && !layout.sixthUnderTab),
+                        && layout.sixthOnScreen && !layout.sixthUnderTab
+                        && (!layout.hasLeave || (layout.leaveOnScreen && !layout.coversLeave && layout.nowShown && !layout.cellUnderTab)),
                         `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
                     );
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
@@ -3193,6 +3192,45 @@ try {
     for (const [width, mode] of [[360, 'light'], [390, 'dark'], [1280, 'light']]) {
         await withPage(width, async (page) => {
             const off = await freshHome(page, mode);
+            /* 폰: 안내는 한 줄 띠로 접혀 있고, 시간표(6교시까지)가 띠 위 첫 화면에 보입니다. 띠를 눌러야 문구와 시각 칸이 펼쳐집니다. */
+            const strip = await page.evaluate(() => {
+                const el = document.querySelector('.work-setup');
+                if (!el) return null;
+                const head = el.querySelector('.work-setup-strip');
+                const headBox = head?.getBoundingClientRect();
+                const sum = el.querySelector('.work-setup-sum');
+                const body = el.querySelector('.work-setup-body')?.getBoundingClientRect();
+                const time = document.querySelector('.home-time')?.getBoundingClientRect();
+                const sixth = [...document.querySelectorAll('.period-row button')][5]?.getBoundingClientRect();
+                const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                const viewBottom = tab && tab.height > 0 ? tab.top : window.innerHeight;
+                return {
+                    height: Math.round(el.getBoundingClientRect().height),
+                    top: Math.round(el.getBoundingClientRect().top),
+                    headShown: Boolean(headBox && headBox.height > 0),
+                    expanded: head?.getAttribute('aria-expanded'),
+                    sumLines: sum && sum.getBoundingClientRect().height > 0 ? Math.round(sum.getBoundingClientRect().height / parseFloat(getComputedStyle(sum).lineHeight || '20') || 1) : 0,
+                    bodyShown: Boolean(body && body.height > 0),
+                    timeTop: Math.round(time?.top ?? -1),
+                    sixthBottom: Math.round(sixth?.bottom ?? -1),
+                    viewBottom: Math.round(viewBottom),
+                    steps: [...el.querySelectorAll('input[type="time"]')].map((input) => input.getAttribute('step')),
+                };
+            });
+            if (!off && strip) {
+                check(strip.steps.length === 2 && strip.steps.every((step) => step === '60'), `${width} 안내 카드 출근·퇴근 칸에 step="60"이 없습니다: ${JSON.stringify(strip.steps)}`);
+                if (width < 900) {
+                    check(strip.headShown && strip.expanded === 'false' && !strip.bodyShown && strip.height <= 80 && strip.sumLines <= 1, `${width} 안내 카드가 한 줄 띠로 접혀 있지 않습니다: ${JSON.stringify(strip)}`);
+                    check(strip.timeTop >= 0 && strip.timeTop < strip.top && strip.sixthBottom > 0 && strip.sixthBottom <= strip.viewBottom, `${width} 첫 화면에 시간표 6교시가 다 보이지 않습니다: ${JSON.stringify(strip)}`);
+                    await page.screenshot({ path: resolve(shots, `home-work-strip-${width}-${mode}.png`) });
+                    await page.click('.work-setup .work-setup-strip');
+                    await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 3000 }).catch(() => {});
+                    const opened = await page.evaluate(() => ({ expanded: document.querySelector('.work-setup-strip')?.getAttribute('aria-expanded'), body: Math.round(document.querySelector('.work-setup-body')?.getBoundingClientRect().height || 0) }));
+                    check(opened.expanded === 'true' && opened.body > 0, `${width} 안내 띠를 눌러도 펼쳐지지 않습니다: ${JSON.stringify(opened)}`);
+                } else {
+                    check(!strip.headShown && strip.bodyShown, `${width} 넓은 화면 안내 카드가 접혀 있습니다: ${JSON.stringify(strip)}`);
+                }
+            }
             const card = await page.evaluate(() => {
                 const el = document.querySelector('.work-setup');
                 if (!el) return null;
@@ -3255,6 +3293,18 @@ try {
         await delay(300);
         const reloaded = await page.evaluate(() => Boolean(document.querySelector('.work-setup')));
         check(!gone.card && gone.key === '1' && gone.local === null && !/has-leave/.test(gone.grid) && !reloaded, `'다음에'를 눌러도 카드가 남거나 다시 열면 또 보입니다: ${JSON.stringify(gone)} / 다시 열기 ${reloaded}`);
+    });
+
+    /* 조퇴만 정해 두고 출퇴근 시각이 없으면 타이머만 뜨고 안내 카드는 함께 뜨지 않습니다. */
+    await withPage(360, async (page) => {
+        const off = await freshHome(page, 'light');
+        if (off) return;
+        await page.evaluate((ymd) => localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ [ymd]: '15:00' })), todayYmd);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('.home-hero'));
+        await delay(300);
+        const both = await page.evaluate(() => ({ timer: document.querySelector('.home-leave[data-leave]')?.innerText.replace(/\s+/g, ' ') || '', card: Boolean(document.querySelector('.work-setup')), count: document.querySelectorAll('.home-leave').length }));
+        check(both.timer.includes('15:00') && !both.card && both.count === 1, `조퇴만 정했을 때 타이머와 안내 카드가 함께 뜹니다: ${JSON.stringify(both)}`);
     });
 
     /* 데모(?demo=1)에는 출퇴근 08:40·16:40이 있어 평일 08:42에 타이머가 보입니다. 이 기기 설정에는 쓰지 않습니다. */
