@@ -97,6 +97,8 @@ export function Settings() {
     const [gcalWipe, setGcalWipe] = useState('keep');
     const gcal = useGcal();
     const [includeLocal, setIncludeLocal] = useState(false);
+    /* 공용 컴퓨터 모드를 켜기 전 확인창. 기본은 학급 자료를 남깁니다. */
+    const [sharedAsk, setSharedAsk] = useState(false);
     const [publicInfo, setPublicInfo] = useState(null);
     const [importMode, setImportMode] = useState('merge');
     const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
@@ -340,7 +342,18 @@ export function Settings() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>
                 <p>교실 컴퓨터라면 켜 두세요. 30분 동안 가만히 있으면 화면을 잠그고, 클라우드가 연결되면 창을 닫을 때 임시 저장만 남깁니다.</p>
-                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} aria-pressed={data.profile.sharedPc} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
+                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} aria-pressed={data.profile.sharedPc} data-shared="toggle" onClick={() => { if (data.profile.sharedPc) patchProfile({ sharedPc: false }); else setSharedAsk(true); }}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
+                {sharedAsk && !data.profile.sharedPc ? (
+                    <div className="glass" role="alertdialog" aria-label="공용 컴퓨터 모드 켜기" data-shared="ask" style={{ padding: 12, marginTop: 8 }}>
+                        <p style={{ marginTop: 0 }}>공용 컴퓨터 모드를 켭니다. 이 컴퓨터에 있는 학급 자료는 그대로 남겨 둘까요?</p>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <Btn className="primary-btn" data-shared="keep" onClick={async () => { setSharedAsk(false); await patchProfile({ sharedPc: true }); }}>자료 남기고 켜기</Btn>
+                            <Btn className="chip" data-shared="wipe" onClick={async () => { setSharedAsk(false); await patchProfile({ sharedPc: true }, { wipe: true }); }}>이 컴퓨터 자료 지우고 켜기</Btn>
+                            <Btn className="chip" data-shared="cancel" onClick={() => setSharedAsk(false)}>취소</Btn>
+                        </div>
+                        <p className="muted" style={{ marginBottom: 0 }}>지우기를 고르면 이 컴퓨터의 학급 자료가 지워지고, 클라우드에 올린 자료만 남아요.</p>
+                    </div>
+                ) : null}
                 <h3>백업</h3>
                 <p className="muted">파일은 이 기기 밖으로 나가지 않아요. 민감한 기록을 넣을지는 직접 고릅니다.</p>
                 <Btn className={includeLocal ? 'chip on' : 'chip'} onClick={() => setIncludeLocal((value) => !value)}>이 기기 전용 기록도 넣기</Btn>

@@ -537,6 +537,9 @@ if (!failures.length) {
         await lockPage.evaluate(() => {
             [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'))?.click();
         });
+        /* 켜기 전에 확인창이 뜨고, 기본(자료 남기기)을 고릅니다. */
+        await lockPage.waitForSelector('[data-shared="keep"]');
+        await lockPage.click('[data-shared="keep"]');
         await lockPage.waitForFunction(() => document.body.innerText.includes('공용 컴퓨터 모드 켜짐'));
         await new Promise((resolveWait) => setTimeout(resolveWait, 400));
         const client = await lockPage.createCDPSession();

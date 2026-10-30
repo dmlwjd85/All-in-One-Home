@@ -35,6 +35,8 @@ import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
 import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
+import { SyncChip } from './ui/SyncChip.jsx';
+import { syncAuthKnown } from './lib/syncStatus.js';
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -117,7 +119,12 @@ export default function App() {
             setData(snapshot());
             stop = subscribe(setData);
             stopGcal = startGcalBridge();
-            unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            try {
+                unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            } finally {
+                /* 로그인 확인이 오지 않아도(연결 실패 등) 동기화 칩이 빈 자리로 계속 남지 않게 잠시 뒤 확정합니다. */
+                setTimeout(syncAuthKnown, 5000);
+            }
         });
         return () => {
             alive = false;
@@ -635,7 +642,7 @@ export default function App() {
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
-                    <header className="topbar">
+                    <header className={cloudReady() ? 'topbar has-sync' : 'topbar'}>
                         {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
@@ -660,6 +667,8 @@ export default function App() {
                             <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
+                        {/* 동기화 칩: 도구 단추 아래 빈자리에 띄워 제목 높이를 늘리지 않습니다(시간표가 탭에 가리지 않게). */}
+                        <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">

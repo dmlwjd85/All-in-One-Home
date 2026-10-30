@@ -389,7 +389,7 @@ const buildJob = workflow.split('deploy:')[0];
 check(live.includes(`createVault('${GCAL_VAULT}')`), '캘린더 저장 키가 없습니다.');
 check(!live.includes('client_secret') && !ui.includes('client_secret'), '클라이언트 시크릿을 쓰고 있습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')") && !db.includes('ssug-gyomu-gcal'), '기존 저장 키를 건드렸습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v43'"), '서비스 워커가 v43이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v45'"), '서비스 워커가 v45이 아닙니다.');
 check(!ui.includes('<select') && !ui.includes('checkbox'), '연동 방식이 드롭다운이거나 체크박스입니다.');
 check(ui.includes('구글 일정 보기만') && ui.includes('만든 일정도 구글에 넣기') && ui.includes('준비 중'), '연동 버튼 문구가 없습니다.');
 check(ui.includes('한꺼번에 올리기') && ui.includes('앞으로 만든 것만') && ui.includes('GCAL_MODE_HINT'), '올리기 확인이나 방식 안내가 없습니다.');

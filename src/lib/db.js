@@ -1,3 +1,4 @@
+import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
 import { patchPeriodLocal, readPeriodLocal, setExtraPeriod, subscribePeriodLocal } from './periodLocal.js';
@@ -20,6 +21,8 @@ let inboxDropped = new Set();
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
+/* 공용 컴퓨터 모드를 켜면서 학급 자료를 남겨 두기로 했는지('1'). 기본은 남김입니다. 지우기를 고른 경우에만 비웁니다. */
+const SHARED_KEEP_KEY = 'ssug-gyomu-shared-keep';
 
 export function emptyState() {
     return {
@@ -30,6 +33,7 @@ export function emptyState() {
             periodStarts: [...DEFAULT_PERIODS],
             theme: 'system',
             sharedPc: false,
+            sharedKeep: false,
             started: false,
             guest: true,
             migratedAt: null,
@@ -81,6 +85,7 @@ function mirrorTheme(theme) {
     try {
         localStorage.setItem(THEME_KEY, theme || 'system');
         localStorage.setItem(SHARED_KEY, state.profile.sharedPc ? '1' : '0');
+        localStorage.setItem(SHARED_KEEP_KEY, state.profile.sharedPc && state.profile.sharedKeep ? '1' : '0');
         localStorage.setItem(TIP_KEY, JSON.stringify(state.tip));
     } catch {
         /* 저장이 막혀 있어도 화면은 동작합니다. */
@@ -290,7 +295,7 @@ export function useSignOutForTest(fn = null) { signOutHook = fn; }
  */
 let flushChain = Promise.resolve();
 export function flushCloud() {
-    const run = flushChain.then(flushCloudOnce, flushCloudOnce);
+    const run = flushChain.then(flushCloudTracked, flushCloudTracked);
     flushChain = run.then(() => undefined, () => undefined);
     return run;
 }
@@ -306,8 +311,22 @@ export function mergePushedHashes(sent, now, pushed) {
     return out;
 }
 
-async function flushCloudOnce() {
+async function flushCloudTracked() {
     if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
+    /* 동기화 칩: 올리는 동안 '동기화 중', 끝나면 다 올렸는지에 따라 '동기화됨' 또는 '동기화하지 못했어요'. */
+    syncBegin();
+    let result = null;
+    try {
+        result = await flushCloudOnce();
+        return result;
+    } finally {
+        if (!result || result.skipped) syncEnd({ skipped: Boolean(result?.skipped), ok: false });
+        else syncEnd({ ok: pushedAll(result), pending: result.pending });
+        syncQueued(queuedCloudKeys().length);
+    }
+}
+
+async function flushCloudOnce() {
     /* 올리기에는 지금 해시의 사본을 넘깁니다. 올리는 동안 이 기기에서 지우거나 받아서 바뀐 해시는 끝난 뒤 덮지 않습니다(PR #52 2차 검수 2번). */
     const sent = { ...cloudHashes };
     const result = await cloudApi.push(state.auth.uid, state, {
@@ -436,6 +455,7 @@ function queueCloudForget(bucket, id, row = null) {
     if (uid) {
         cloudForget.set(forgetEntryKey(uid, key), { uid, key, at: Date.now(), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
         saveCloudForget();
+        syncQueued(queuedCloudKeys().length);
     }
     if (Object.prototype.hasOwnProperty.call(cloudHashes, key)) {
         delete cloudHashes[key];
@@ -760,7 +780,9 @@ export async function boot(query = '') {
         if (localStorage.getItem(SHARED_KEY) === '1') state.profile.sharedPc = true;
         const savedTheme = localStorage.getItem(THEME_KEY);
         if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') state.profile.theme = savedTheme;
-        if (localStorage.getItem(SHARED_KEY) === '1') {
+        /* 자료를 남기기로 하고 켠 공용 모드는 평소처럼 불러옵니다(로그인만 이 탭에 둡니다). */
+        if (localStorage.getItem(SHARED_KEY) === '1' && localStorage.getItem(SHARED_KEEP_KEY) === '1') state.profile.sharedKeep = true;
+        else if (localStorage.getItem(SHARED_KEY) === '1') {
             memoryOnly = true;
             const theme = state.profile.theme;
             state = emptyState();
@@ -1292,13 +1314,20 @@ export async function saveAcademicYear(year, row) {
     }, { undoable: true });
 }
 
-export async function patchProfile(patch) {
+/**
+ * 설정을 바꿉니다. 공용 컴퓨터 모드를 켜도 학급 자료는 기본으로 남깁니다.
+ * { wipe: true }는 확인창에서 사용자가 '이 컴퓨터 자료 지우기'를 직접 골랐을 때만 넘깁니다.
+ */
+export async function patchProfile(patch, { wipe = false } = {}) {
+    const wipeNow = patch.sharedPc === true && wipe === true;
+    const next = patch.sharedPc === true ? { ...patch, sharedKeep: !wipeNow }
+        : patch.sharedPc === false ? { ...patch, sharedKeep: false } : patch;
     const failed = await update((draft) => {
-        draft.profile = { ...draft.profile, ...patch };
+        draft.profile = { ...draft.profile, ...next };
         return draft;
     });
     if (failed?.storageFailed) return failed;
-    if (patch.sharedPc === true) {
+    if (wipeNow) {
         memoryOnly = true;
         try {
             await mainVault.remove('state');
@@ -1308,11 +1337,22 @@ export async function patchProfile(patch) {
             inboxDropped = new Set();
             await mainVault.remove('cloudHashes');
         } catch {
-            /* 공용 컴퓨터에서는 기록을 남겨 두지 않습니다. */
+            /* 지우기를 고른 경우에만 이 컴퓨터에 기록을 남기지 않습니다. */
         }
     }
     if (patch.sharedPc === false) memoryOnly = false;
+    /* 공용 컴퓨터 모드를 켜면 로그인을 이 탭에만 두고, 끄면 다시 브라우저에 남깁니다(이미 로그인해 있어도). */
+    if (typeof patch.sharedPc === 'boolean') {
+        try {
+            const { setLoginPersistence } = persistenceHook ? { setLoginPersistence: persistenceHook } : await import('../firebase.js');
+            await setLoginPersistence(patch.sharedPc);
+        } catch { /* 로그인 모듈이 없으면(검사) 넘어갑니다. */ }
+    }
 }
+
+let persistenceHook = null;
+/** 검사용: 로그인 보관 방식을 바꾸는 함수를 가짜로 바꿉니다. */
+export function usePersistenceForTest(fn = null) { persistenceHook = fn; }
 
 export async function replaceRoster(text) {
     const parsed = parseRoster(text);
@@ -1668,21 +1708,33 @@ async function leaveAfterFailedSwitch() {
 }
 
 async function connectCloud(uid) {
+    syncBegin();
+    let ok = false;
+    try {
+        ok = await connectCloudBody(uid);
+    } finally {
+        syncEnd({ ok, pending: ok ? 0 : undefined });
+    }
+}
+
+/* 다 올리고 받아 합쳤으면 true. */
+async function connectCloudBody(uid) {
     await checkDraftAgainstCloud(uid);
     const pushed = await flushCloud().catch(() => null);
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
-    if (!remote) return;
+    if (!remote) return false;
     const hasRemote = remote.settings || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
         await update((draft) => pruneOnly(draft, remote, seen));
         if (pushedAll(pushed)) markSynced(uid);
-        return;
+        return pushedAll(pushed);
     }
     await update((draft) => absorbCloud(draft, remote, seen));
     /* 올리기가 다 끝나야 '동기화됨'입니다. 못 올린 게 있으면 시각을 바꾸지 않습니다(PR #52 검수 4번). */
     if (pushedAll(pushed)) markSynced(uid);
+    return pushedAll(pushed);
 }
 
 function pushedAll(result) {
@@ -1818,6 +1870,10 @@ export async function setAuth(auth) {
     state = { ...state, auth: next };
     if (next) state.profile.guest = false;
     if (next?.uid) rememberCloudUid(next.uid);
+    /* 동기화 칩: 로그인 여부를 알았고, 이 계정의 마지막 동기화 시각과 지우기 대기열 수를 알려 줍니다. */
+    syncAuthKnown();
+    if (next?.uid) syncSeen(lastSyncAt(next.uid));
+    syncQueued(queuedCloudKeys().length);
     emit();
     if (!next?.uid) {
         connectTask = null;
