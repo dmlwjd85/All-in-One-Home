@@ -35,7 +35,7 @@ const mark = (name, row) => { const shaped = toCloudRow(name, row); return [`${n
 /* 1) 이 기기에서 올린 뒤 손대지 않은 할 일 → 다른 기기에서 끝냄 표시를 하면 따라갑니다. */
 const pushed = { id: 'todo1', title: '가정통신문 걷기', due: '2026-10-29', done: false, source: 'app' };
 const edited = { id: 'todo2', title: '상담 준비', due: '2026-10-30', done: false, source: 'app' };
-await absorbCloudForTest({ todos: [pushed, edited] }, {});
+await absorbCloudForTest({ todos: [pushed, edited], ats: { todos: { todo1: 1000, todo2: 1000 } } }, {});
 const hashes = Object.fromEntries([mark('todos', pushed), mark('todos', { ...edited, title: '상담 준비(옛)' })]);
 await absorbCloudForTest({
     todos: [{ ...pushed, done: true }, { ...edited, title: '다른 기기 제목' }, { id: 'todo3', title: '새 할 일', done: false, source: 'app' }],
@@ -264,7 +264,7 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(/if \(classifyWriteError\(error\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 쓰기 거절을 모으지 않습니다(error).');
     check(/if \(classifyWriteError\(again\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
     check(/return \{[^}]*\brejected\b[^}]*\};\s*\}\s*$/m.test(cloudSrc), 'pushUserData가 거절 목록을 돌려주지 않습니다.');
-    const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 800);
+    const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 1200);
     check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
     check(/tellStorageIssue\(cloudRejectedMessage\(keys\)\)/.test(dbSrc), '거절 알림이 화면 알림으로 가지 않습니다.');
     check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');

@@ -67,10 +67,23 @@ export function fingerprint(body, clear = []) {
     return clear.length ? `${JSON.stringify(body)}|${clear.join(',')}` : JSON.stringify(body);
 }
 
-export async function stamp(firestore, body, names, previous) {
+export async function stamp(firestore, body, names, previous, at = null) {
     const { Timestamp, serverTimestamp } = firestore;
     const next = { ...body };
     names.forEach((name) => {
+        /* 할 일: updatedAt은 '올린 시각'이 아니라 '마지막으로 고친 시각'(서버 시각으로 보정한 기기 시계)입니다(PR #56 검수 1·2번). */
+        if (name === 'updatedAt' && Number.isFinite(at) && at > 0) {
+            next.updatedAt = Timestamp.fromMillis(at);
+            return;
+        }
+        /* 할 일 hlc: v47이 쓴 표시(updatedAt과 늘 같음). v46은 이 칸을 모르므로 규칙이 v46의 덮어쓰기를 가려냅니다.
+           고친 시각을 모르면(서버 시각을 재지 못함·옛 판 자료) 올린 시각으로 쓰고 u: true(시각 불확실)를 붙입니다. */
+        if (name === 'hlc') {
+            const sure = Number.isFinite(at) && at > 0;
+            next.hlc = sure ? Timestamp.fromMillis(at) : serverTimestamp();
+            next.u = sure ? firestore.deleteField() : true;
+            return;
+        }
         if (name === 'migratedAt' && previous) {
             const date = new Date(previous);
             next.migratedAt = Number.isNaN(date.getTime()) ? Timestamp.now() : Timestamp.fromDate(date);
@@ -117,7 +130,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const rejected = [];
     const write = async (name, id, shaped, migratedAt) => {
         const prepared = name === 'events' ? prepareEventWrite(shaped.body) : { body: shaped.body, retryWithoutEndTime: false };
-        const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt);
+        const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt, shaped.at);
         const clear = shaped.clear || [];
         clear.forEach((key) => { body[key] = deleteField(); });
         const key = `${name}/${id}`;
@@ -131,7 +144,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             if (fallback) {
                 noteEndTimeRejected();
                 try {
-                    const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt);
+                    const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt, shaped.at);
                     await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });
                     nextHashes[key] = fingerprint(fallback, clear);
                     return;
@@ -223,6 +236,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         ids: {},
         /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
         ats: { attendance: {}, todos: {} },
+        /* 고친 시각이 불확실한 할 일(v46이 쓴 것, 시각을 못 잰 기기가 올린 것). 올린 시각일 뿐이라 '나중'을 믿지 않습니다. */
+        soft: { todos: {} },
         /* 모든 목록을 서버에서 받았으면 true. 캐시에서 온 옛 목록이면 칩이 '동기화됨'을 보이지 않습니다. */
         fresh: true,
     };
@@ -243,8 +258,18 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
             const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
             if ((cloudName === 'attendance' || cloudName === 'todos') && typeof data?.updatedAt?.toMillis === 'function') out.ats[cloudName][item.id] = data.updatedAt.toMillis();
+            if (cloudName === 'todos' && softDoc(data)) out.soft.todos[item.id] = true;
         });
     }
+    /* 지운 표시(묘비): 다른 기기가 지운 할 일과 지운 시각. 규칙을 올리기 전에는 읽기가 거절되므로 없는 것으로 봅니다. */
+    out.tombs = { todos: {} };
+    try {
+        const tombs = await getDocs(collection(ready.db, 'users', uid, 'tombs'));
+        tombs.forEach((item) => {
+            const t = tombFromDoc(item.id, item.data());
+            if (t) out.tombs[t.name][t.id] = t.at;
+        });
+    } catch { /* 옛 규칙 */ }
     const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));
     table.forEach((item) => {
         const row = fromCloudRow('timetable', item.id, item.data());
@@ -252,6 +277,91 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     });
     return out;
 }
+
+/* 묘비 문서: users/{uid}/tombs/todos-{id} = { k: 'todos', at: 지운 시각 } */
+/* 묘비는 TOMB_KEEP_MS(30일) 동안 둡니다. 그보다 오래 오프라인이던 기기의 옛 수정만 되살아날 수 있습니다. */
+export const TOMB_KEEP_MS = 30 * 86400000;
+/** 오래된 묘비를 지웁니다. 서버 시각(now)을 잰 기기에서만 부릅니다. 지운 개수. */
+export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEEP_MS, max = 200 } = {}) {
+    if (!uid || !Number.isFinite(now) || !syncAvailable()) return 0;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return 0;
+    const { collection, deleteDoc, doc, getDocsFromServer, limit, orderBy, query, where, Timestamp } = await import('firebase/firestore');
+    try {
+        const old = await timeout(getDocsFromServer(query(collection(ready.db, 'users', uid, 'tombs'), where('at', '<', Timestamp.fromMillis(now - keep)), orderBy('at'), limit(max))), 10000);
+        let n = 0;
+        for (const item of old.docs) { await deleteDoc(doc(ready.db, 'users', uid, 'tombs', item.id)); n += 1; }
+        return n;
+    } catch { return 0; }
+}
+export function tombId(name, id) { return `${name}-${id}`; }
+export function tombFromDoc(docId, data) {
+    const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));
+    const at = typeof data?.at?.toMillis === 'function' ? data.at.toMillis() : NaN;
+    if (!m || data?.k !== m[1] || !Number.isFinite(at)) return null;
+    return { name: m[1], id: m[2], at };
+}
+
+const timeout = (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'deadline-exceeded' })), ms))]);
+
+/**
+ * 서버 시각 - 기기 시계(ms). 계정 문서의 updatedAt에 서버 시각을 찍고 서버에서 다시 읽어 견줍니다.
+ * 기기 시계가 몇 분~몇 시간 어긋나도 할 일의 '마지막 수정' 비교가 흔들리지 않게 합니다(PR #56 검수 2번). 못 재면 null.
+ */
+export async function measureServerClock(uid, { memoryOnly = false, now = () => Date.now(), wait = 5000 } = {}) {
+    if (!uid || !syncAvailable()) return null;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return null;
+    const { doc, setDoc, getDocFromServer, serverTimestamp } = await import('firebase/firestore');
+    const ref = doc(ready.db, 'users', uid);
+    try {
+        const t0 = now();
+        await timeout(setDoc(ref, { updatedAt: serverTimestamp() }, { merge: true }), wait);
+        const t1 = now();
+        const snap = await timeout(getDocFromServer(ref), wait);
+        const ms = snap.data()?.updatedAt?.toMillis?.();
+        /* 쓰기 왕복이 길면(느린 망) 오차가 커서 쓰지 않습니다. */
+        if (!Number.isFinite(ms) || t1 - t0 > wait) return null;
+        return ms - (t0 + t1) / 2;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 올리기 전에 이 기기에서 고친 할 일의 클라우드 상태를 서버에서 바로 봅니다.
+ * { [id]: { row, at } }(문서 있음) 또는 { [id]: { gone: 지운 시각|null } }(문서 없음). 서버에 닿지 못하면 null.
+ */
+export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return null;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return null;
+    const { doc, getDocFromServer } = await import('firebase/firestore');
+    const out = {};
+    try {
+        for (const id of ids) {
+            const snap = await getDocFromServer(doc(ready.db, 'users', uid, 'todos', String(id)));
+            if (snap.exists()) {
+                const data = snap.data();
+                const at = data?.updatedAt?.toMillis?.();
+                out[id] = { row: fromCloudRow('todos', String(id), data), at: Number.isFinite(at) ? at : null, soft: softDoc(data) };
+                continue;
+            }
+            let gone = null;
+            try {
+                const tomb = await getDocFromServer(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)));
+                gone = tomb.exists() ? tombFromDoc(tomb.id, tomb.data())?.at ?? null : null;
+            } catch { /* 옛 규칙: 지운 시각을 모름 */ }
+            out[id] = { gone };
+        }
+    } catch {
+        return null;
+    }
+    return out;
+}
+
+/** 고친 시각이 불확실한 할 일 문서인지: hlc가 없거나(v46·옛 자료) u가 true(시각을 못 잰 기기). */
+export function softDoc(data) { return !data?.hlc || data.u === true; }
 
 /** 서버에서 받은 결과일 때만 문서 id 목록을 돌려줍니다(캐시면 null). */
 export function serverIds(snap) {
@@ -279,6 +389,13 @@ export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } 
         if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
         return false;
     }
+    /* 지운 시각을 모르는 할 일(서버 시각을 못 잰 기기): 마지막으로 알던 내용 그대로일 때만 지웁니다. 다른 기기가 고쳤으면 남깁니다. */
+    if (name === 'todos' && !Number.isFinite(notAfter)) {
+        if (!expect) return false;
+        const row = fromCloudRow(name, String(id), data);
+        const mark = row ? rowMark(name, row) : null;
+        return !(mark && String(expect).split(',').filter(Boolean).includes(printDigest(mark.mark)));
+    }
     if (!newerThanDelete(data, notAfter)) return false;
     /* 지운 뒤에 고친 시각이 찍혔어도 내용이 지운 줄 그대로면(진행 중이던 올리기가 한 번 더 쓴 것) 지웁니다(PR #52 2차 검수 2번). */
     if (expect) {
@@ -295,6 +412,9 @@ export async function guardedDelete({ get, del }, name, id, opts = {}) {
         const data = await get();
         if (keepCloudDoc(name, id, data, opts)) return { ok: true, kept: true };
     }
+    /* 할 일은 지운 시각을 묘비로 남깁니다. 오프라인에서 그보다 먼저 고친 기기가 나중에 올려도 되살아나지 않게 합니다(검수 3번).
+       묘비를 못 쓰면(옛 규칙) 예전처럼 지우기만 합니다. */
+    if (opts.tomb) { try { await opts.tomb(); } catch { /* 옛 규칙 */ } }
     await del();
     return { ok: true };
 }
@@ -304,12 +424,16 @@ export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfte
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
-        const { doc, deleteDoc, getDocFromServer } = await import('firebase/firestore');
+        const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp, serverTimestamp } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
+        /* 지운 시각을 모르면(서버 시각을 못 잰 기기) 서버가 받은 시각으로 묘비를 남깁니다. */
+        const tomb = name === 'todos'
+            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
+            : null;
         return await guardedDelete({
             get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },
             del: () => deleteDoc(ref),
-        }, name, id, { notAfter, expect });
+        }, name, id, { notAfter, expect, tomb });
     } catch {
         return { ok: false };
     }
