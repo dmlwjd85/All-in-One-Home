@@ -90,6 +90,10 @@ const mapVault = () => { const map = new Map(); return { map, get: async (k) => 
     /* 끄면 남김 표시도 지움 */
     await patchProfile({ sharedPc: false });
     check(ls.getItem('ssug-gyomu-shared') === '0' && ls.getItem('ssug-gyomu-shared-keep') === '0' && snapshot().profile.sharedKeep === false, '공용 모드를 꺼도 남김 표시가 남았습니다.');
+    await new Promise((r) => setTimeout(r, 20));
+    check(mv.map.get('state')?.profile?.className === '3반b' && Array.isArray(iv.map.get('items')), '공용 컴퓨터 모드를 끄자 학급 자료가 지워졌습니다.');
+    await boot('');
+    check(snapshot().profile.className === '3반b' && snapshot().profile.sharedPc === false, '공용 모드를 끄고 새로고침하자 학급 자료가 사라졌습니다.');
     /* 확인창에서 지우기를 고른 경우만 지움 */
     await patchProfile({ sharedPc: true }, { wipe: true });
     await new Promise((r) => setTimeout(r, 20));
