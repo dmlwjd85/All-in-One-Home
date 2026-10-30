@@ -2073,7 +2073,8 @@ try {
             await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
 
             /* 라이브 QA 44d5556 2번: 오늘 화면 요약·하루 화면·상세 시트에서도 머리글 대신 배지가 보이고 잘리지 않습니다. */
-            const md = await page.evaluate(() => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}`; });
+            const kst = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+            const md = `${Number(kst.slice(5, 7))}/${Number(kst.slice(8, 10))}`;
             await page.type('[aria-label="할 일"]', `(충돌 사본) 오늘 하루 화면 충돌 사본 확인 ${md}`);
             await page.keyboard.press('Enter');
             await new Promise((r) => setTimeout(r, 300));
@@ -2115,7 +2116,7 @@ try {
             must('상세 시트', await spot('.detail-title [data-conflict-copy="1"]'));
             await page.screenshot({ path: resolve(shots, `conflict-detail-320-${mode}.png`) });
             await page.keyboard.press('Escape');
-            const ymd = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+            const ymd = kst;
             await page.evaluate((y) => { location.hash = `#/day/${y}`; }, ymd);
             await page.waitForSelector('.day-todo-title[data-conflict-copy="1"]', { timeout: 5000 });
             must('하루 화면', await spot('.day-todo-title[data-conflict-copy="1"]'));
