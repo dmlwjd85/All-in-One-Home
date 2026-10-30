@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { clockFrozen, seoulParts } from '../lib/date.js';
 import { leaveProblem, workTimeProblem, workTimer } from '../lib/period.js';
 import { hideWorkCard, leaveFor, patchPeriodLocal, setLeave, subscribePeriodLocal } from '../lib/periodLocal.js';
@@ -115,8 +115,11 @@ export function WorkSetup({ local, showToast, now }) {
     const [workEnd, setWorkEnd] = useState(local.workEnd || '16:40');
     /* 폰 첫 화면에서는 한 줄 띠로 접어 두고, 누르면 펼칩니다(펼침은 기억하지 않습니다). 넓은 화면은 늘 펼친 그대로입니다. */
     const [open, setOpen] = useState(false);
+    const box = useRef(null);
+    /* 펼치면 저장 단추까지 탭바 위로 보이게 살짝 올립니다(scroll-margin-bottom이 탭바 몫). */
+    useEffect(() => { if (open) box.current?.scrollIntoView?.({ block: 'nearest' }); }, [open]);
     return (
-        <section className="glass home-leave work-setup" data-open={open ? '1' : '0'} aria-label="퇴근 타이머 설정">
+        <section ref={box} className="glass home-leave work-setup" data-open={open ? '1' : '0'} aria-label="퇴근 타이머 설정">
             <div className="leave-head">
                 <Btn className="work-setup-strip" aria-expanded={open} aria-controls="work-setup-body" onClick={() => setOpen(!open)}>
                     <span className="leave-kicker">퇴근 타이머</span>
