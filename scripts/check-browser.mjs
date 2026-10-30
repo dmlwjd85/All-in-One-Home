@@ -3327,6 +3327,53 @@ try {
         check(!demo.local || !/workEnd":"\d/.test(demo.local), `데모 출퇴근 시각을 이 기기 설정에 씁니다: ${demo.local}`);
     });
 
+    /* 휴대폰 첫 화면 시간표(이번 수정의 핵심): 데모 타이머 홈과 안내 띠 홈 모두, 오늘 시간표 카드가 타이머·띠 위에 있고
+       카드 제목과 1교시 칸(접혀 있으면 접힌 카드 전체)이 탭바 위 첫 화면에 보여야 합니다. 소리 팁 검사와 따로 봅니다. */
+    const timeFirstScreen = (page) => page.evaluate(() => {
+        const box = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? r : null; };
+        const card = document.querySelector('.home-time');
+        const cardBox = box(card);
+        const title = box(card?.querySelector('.fold-head')) || box(card?.querySelector('.fold-title'));
+        const first = box(card?.querySelector('.period-row button'));
+        const lead = box(document.querySelector('.home-leave'));
+        const tab = box(document.querySelector('.tabbar'));
+        const tabTop = tab ? tab.top : window.innerHeight;
+        const open = card?.dataset.open === '1';
+        return {
+            off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
+            open,
+            lead: lead ? Math.round(lead.top) : -1,
+            cardTop: Math.round(cardBox?.top ?? -1),
+            cardBottom: Math.round(cardBox?.bottom ?? -1),
+            titleBottom: Math.round(title?.bottom ?? -1),
+            firstBottom: Math.round(first?.bottom ?? -1),
+            tabTop: Math.round(tabTop),
+        };
+    });
+    const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
+        && t.titleBottom > 0 && t.titleBottom <= t.tabTop
+        && (t.open ? t.firstBottom > 0 && t.firstBottom <= t.tabTop : t.cardBottom > 0 && t.cardBottom <= t.tabTop);
+    for (const folded of [false, true]) {
+        foldPreset = !folded;
+        try {
+            for (const width of [360, 390]) {
+                const label = `${width} ${folded ? '시간표 접힘' : '시간표 펼침'}`;
+                await withDemo(width, 'light', async (page) => {
+                    await delay(250);
+                    const t = await timeFirstScreen(page);
+                    if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1교시)가 타이머 위로 보이지 않습니다: ${JSON.stringify(t)}`);
+                });
+                await withPage(width, async (page) => {
+                    const off = await freshHome(page, 'light');
+                    const t = await timeFirstScreen(page);
+                    if (!off) check(t.open === !folded && timeOk(t), `${label} 안내 띠 홈 첫 화면에 시간표 카드(제목·1교시)가 띠 위로 보이지 않습니다: ${JSON.stringify(t)}`);
+                });
+            }
+        } finally {
+            foldPreset = true;
+        }
+    }
+
     /* 회의록: Enter는 줄바꿈만, 저장은 저장 버튼으로만, 임시 저장은 새로 고쳐도 남고, 옛 회의록(#38)도 보입니다. */
     const minutesShots = resolve(shots, 'minutes');
     mkdirSync(minutesShots, { recursive: true });
