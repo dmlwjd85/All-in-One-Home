@@ -1,5 +1,6 @@
 import { forwardRef, useId } from 'react';
 import { JJAEM_D, JJAEM_PLACE, JJAEM_STOPS } from './jjaemMark.js';
+import { splitConflict } from '../lib/conflict.js';
 
 export function Btn({ className = '', block = false, ...props }) {
     return <button type="button" className={`tap ${block ? 'block' : ''} ${className}`} {...props} />;
@@ -159,4 +160,16 @@ export function statusBg(status) {
     if (status === '조퇴') return 'var(--st-early-bg)';
     if (status === '결과') return 'var(--st-out-bg)';
     return 'transparent';
+}
+
+/** 할 일 제목. 충돌 사본이면 머리글 대신 '충돌 사본' 배지를 달고, 좁은 화면(320px)에서도 자르지 않고 줄을 바꿉니다. */
+export function TodoTitle({ title, className = '', lead = '' }) {
+    const part = splitConflict(title);
+    if (!part.conflict) return <span className={className}>{lead}{part.title}</span>;
+    return (
+        <span className={`${className} is-conflict`} data-conflict-copy="1">
+            <span className="conflict-badge">충돌 사본</span>
+            <span className="conflict-text">{lead}{part.title}</span>
+        </span>
+    );
 }

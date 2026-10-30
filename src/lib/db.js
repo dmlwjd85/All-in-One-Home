@@ -1,3 +1,4 @@
+import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
@@ -672,7 +673,7 @@ function withRemoteAt(cloudName, row, remote) {
  *  - takeCopy: 클라우드 값을 받고, 이 기기 수정(legacy·stale)은 사본으로 남깁니다.
  *  - dropCopy: 다른 기기가 지웠으면(묘비, 또는 stale에서 사라짐) 지우되, 이 기기 수정은 사본으로 남깁니다.
  */
-export const CONFLICT_PREFIX = '(충돌 사본) ';
+export { CONFLICT_PREFIX };
 function legacyEdit(row) { return !(Number(row?.editAt) > 0) && !Number.isFinite(row?.editD); }
 function sameMark(a, b) { return Boolean(a) && Boolean(b) && printDigest(a) === printDigest(b); }
 /** 이 기기가 마지막으로 받아 온 지 묘비 보관 기간보다 오래됐는지(처음 받는 기기는 아님). */

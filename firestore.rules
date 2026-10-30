@@ -33,6 +33,12 @@ service cloud.firestore {
           // hlc가 있으면 늘 updatedAt과 같아야 합니다(v47이 쓴 것). v46이 v47 문서에 merge로 쓰면 hlc만 남아 달라지므로 거절됩니다.
           !('hlc' in d()) || v47Todo()
         ) && (
+          // v47이 쓴 문서를 바꾸는 쓰기는 늘 새 updatedAt(=hlc)을 함께 씁니다. updatedAt 없이 merge로 다른 칸만 바꾸면
+          // 옛 hlc·updatedAt이 그대로 남아 v47 쓰기처럼 보이므로 거절합니다(PR #57 r3 검수 규칙 허점). 아무것도 안 바뀐 쓰기는 받습니다.
+          resource == null || !('hlc' in resource.data)
+            || d().diff(resource.data).affectedKeys().size() == 0
+            || d().diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+        ) && (
           // 시각이 확실한 문서는 더 이른 시각으로 덮지 않습니다. 불확실한 문서(u)는 v47이 충돌 사본을 남기고 덮습니다.
           !sureDoc() || !v47Todo() || d().hlc >= resource.data.hlc
         ) && (

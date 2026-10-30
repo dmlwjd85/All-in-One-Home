@@ -31,6 +31,13 @@ const browser = await puppeteer.launch({ executablePath: chrome, headless: true,
 try {
     const page = await browser.newPage();
     await page.goto(url); await page.waitForFunction('window.ready');
+    /* 0) R14: 빈 칸이라도 커서가 있으면(막 쓰려는 중) 가려져도 다시 열지 않습니다. 커서를 빼면 엽니다. */
+    await page.focus('textarea');
+    await page.evaluate(() => { window.r14 = 0; window.r14try = window.sw.reloadWhenSafe({ typing: window.typing, reload: () => { window.r14 += 1; } }); window.hide(true); });
+    check(await page.evaluate(() => window.r14) === 0, '빈 칸에 커서가 있는데 가려지자 다시 열었습니다(R14).');
+    await page.evaluate(() => { document.activeElement.blur(); window.hide(false); window.hide(true); window.hide(false); });
+    check(await page.evaluate(() => window.r14) === 1, '커서를 뺀 빈 화면이 가려졌는데 다시 열지 않았습니다.');
+    await page.evaluate(() => sessionStorage.clear());
     /* 1) 메모를 치는 중: 가려져도 다시 열지 않습니다. */
     await page.type('textarea', '쓰던 메모 내용');
     await page.type('input[placeholder="할 일"]', '쓰던 할 일');

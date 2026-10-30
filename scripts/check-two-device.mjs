@@ -304,6 +304,7 @@ check(await put(['users', UID, 'todos', 'o1'], { title: '나중', ...v47(Timesta
 check(!(await put(['users', UID, 'todos', 'o1'], { title: '옛 값', ...v47(Timestamp.fromMillis(Date.now() - HOUR)) })), '규칙: 더 이른 hlc로 덮기를 받아들였습니다.');
 const mergeV46 = (tid, title) => setDoc(doc(admin(), 'users', UID, 'todos', tid), { title, done: false, source: 'app', updatedAt: serverTimestamp() }, { merge: true }).then(() => true, () => false);
 check(!(await mergeV46('o1', 'v46 늦은 업로드')), '규칙: v46(hlc 모름)이 v47 문서를 덮었습니다(S1).');
+check(!(await setDoc(doc(admin(), 'users', UID, 'todos', 'o1'), { title: 'updatedAt 없이 merge', done: true }, { merge: true }).then(() => true, () => false)), '규칙: updatedAt 없이 merge한 쓰기가 v47 문서를 덮었습니다(r3 허점).');
 check((await getDoc(doc(admin(), 'users', UID, 'todos', 'o1'))).data()?.title === '나중', '규칙: 옛 값이 나중 값을 덮었습니다.');
 check(await mergeV46('o2', 'v46만 쓰는 문서'), '규칙: v46 혼자 쓰는 문서(hlc 없음)를 거절했습니다.');
 check(await mergeV46('o2', 'v46 다시 고침'), '규칙: v46이 자기 문서를 다시 고치지 못합니다.');

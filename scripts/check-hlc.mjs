@@ -83,5 +83,30 @@ check(!snapshot().todos.some((r) => r.id === 't3a'), '올리기 전: 더 늦게 
 check(snapshot().todos.some((r) => r.id === 't3b'), '올리기 전: 지운 뒤 고친 할 일을 지웠습니다.');
 useCloudForTest(null);
 
+/* R5·R10·R11(PR #57 r3 검수): 31일 넘게 받아 오지 않은 기기가 올리기 전 견주기를 하면
+   - 클라우드가 바뀐 할 일: 클라우드 값을 받고 내 수정은 사본(takeCopy)
+   - 그 사이 사라진 할 일(묘비도 쓸려 감): 지우되 내 수정은 사본(dropCopy)
+   - 클라우드에 처음 올리는 새 할 일은 그대로 둡니다. 실제 마지막 받은 시각(ssug-gyomu-last-sync)으로 판정합니다. */
+await absorbCloudForTest({ todos: [mk('st1', '오래 오프 수정1', { editAt: T + 100 }), mk('st2', '오래 오프 수정2', { editAt: T + 100 }), mk('st3', '오래 오프 새것', { editAt: T + 100 })] }, {});
+await absorbCloudForTest({ todos: [] }, { 'todos/st1': 'old', 'todos/st2': 'old' });
+store.set('ssug-gyomu-last-sync', JSON.stringify({ 'u-hlc': T - 32 * 86400000 }));
+useCloudForTest({ peek: async () => ({ st1: { row: mk('st1', '다른 기기 수정1'), at: T + 50, soft: false }, st2: { gone: null } }) });
+await reconcileForTest('u-hlc');
+const stRow = (id) => snapshot().todos.find((r) => r.id === id);
+check(stRow('st1')?.title === '다른 기기 수정1', `31일: 서버 값을 받지 않았습니다: ${stRow('st1')?.title}`);
+check(copies().filter((r) => r.title.includes('오래 오프 수정1')).length === 1, `31일 takeCopy: 내 수정 사본이 없습니다(R10/R5): ${copies().map((r) => r.title)}`);
+check(!stRow('st2') && copies().filter((r) => r.title.includes('오래 오프 수정2')).length === 1, `31일 dropCopy: 사라진 할 일을 지우고 사본을 남기지 않았습니다(R11/R5): ${!!stRow('st2')} ${copies().map((r) => r.title)}`);
+check(stRow('st3')?.title === '오래 오프 새것', '31일: 새 할 일이 사라졌습니다.');
+/* 31일이 안 됐으면 사본을 만들지 않고 시각으로 견줍니다(내 수정이 더 늦으면 지킵니다). */
+await absorbCloudForTest({ todos: [mk('st4', '최근 기기 수정', { editAt: T + 100 })] }, null);
+await absorbCloudForTest({ todos: [] }, { 'todos/st4': 'old' });
+store.set('ssug-gyomu-last-sync', JSON.stringify({ 'u-hlc': T - 86400000 }));
+const before4 = copies().length;
+useCloudForTest({ peek: async () => ({ st4: { row: mk('st4', '더 이른 다른 값'), at: T + 50, soft: false } }) });
+await reconcileForTest('u-hlc');
+check(stRow('st4')?.title === '최근 기기 수정' && copies().length === before4, `31일 전: 사본을 만들거나 내 수정이 졌습니다: ${stRow('st4')?.title} ${copies().length - before4}`);
+store.delete('ssug-gyomu-last-sync');
+useCloudForTest(null);
+
 if (failures.length) { console.error(failures.join('\n')); process.exit(1); }
 console.log('check:hlc 통과');
