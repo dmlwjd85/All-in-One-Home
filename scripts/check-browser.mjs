@@ -3379,6 +3379,7 @@ try {
         const lead = box(document.querySelector('.home-leave'));
         const tab = box(document.querySelector('.tabbar'));
         const tabTop = tab ? tab.top : window.innerHeight;
+        const fab = box(document.querySelector('.tabbar .fab'));
         const open = card?.dataset.open === '1';
         return {
             off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
@@ -3392,6 +3393,7 @@ try {
             bigBottom: Math.round(big?.bottom ?? -1),
             keyPaint: key ? getComputedStyle(key).backgroundColor : '',
             tabTop: Math.round(tabTop),
+            coverTop: Math.round(Math.min(tabTop, fab ? fab.top : tabTop)),
         };
     });
     const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
@@ -3407,7 +3409,7 @@ try {
                     await delay(250);
                     const t = await timeFirstScreen(page);
                     if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1~6교시)가 타이머 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
-                    if (!t.off) check(t.bigBottom > 0 && t.bigBottom <= t.tabTop, `${label} 데모 타이머 홈 첫 화면에서 타이머 큰 숫자가 탭바에 걸립니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.bigBottom > 0 && t.bigBottom <= t.coverTop, `${label} 데모 타이머 홈 첫 화면에서 타이머 큰 숫자가 탭바나 가운데 쨈 단추에 걸립니다: ${JSON.stringify(t)}`);
                     if (!t.off) check(t.keyPaint && t.keyPaint !== 'rgba(0, 0, 0, 0)' && t.keyPaint !== 'transparent', `${label} 데모 타이머 첫 화면 키캡 바탕이 칠해지지 않아 숫자 대비가 무너집니다: ${JSON.stringify(t)}`);
                 });
                 await withPage(width, async (page) => {

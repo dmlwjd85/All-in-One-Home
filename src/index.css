@@ -587,8 +587,11 @@ a.chip,
 .leave-small { font-weight: 800; font-size: 15px; }
 .leave-big { font-size: 34px; line-height: 40px; word-break: keep-all; }
 .home-leave.is-done .leave-big { font-size: 28px; line-height: 36px; }
-/* 폰에서는 '퇴근까지'와 큰 숫자를 한 줄에 둬 키캡을 낮춥니다. 시간표를 펼친 첫 화면에서도 큰 숫자가 탭바에 걸리지 않습니다. */
-@media (max-width: 899px) { .leave-key { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; } }
+/* 폰에서는 '퇴근까지'와 큰 숫자를 한 줄에 두고 키캡 위아래를 줄입니다. 시간표를 펼친 첫 화면에서도 큰 숫자가 탭바·가운데 쨈 단추에 걸리지 않습니다. */
+@media (max-width: 899px) {
+    .leave-key { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-top: 6px; padding-top: 10px; padding-bottom: 10px; }
+    .leave-big { line-height: 36px; }
+}
 .leave-bar { height: 12px; border-radius: 999px; background: var(--bg); box-shadow: var(--neo-inset); overflow: hidden; }
 .leave-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
 .leave-ends { display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px; font-weight: 700; }
