@@ -3366,13 +3366,16 @@ try {
     });
 
     /* 휴대폰 첫 화면 시간표(이번 수정의 핵심): 데모 타이머 홈과 안내 띠 홈 모두, 오늘 시간표 카드가 타이머·띠 위에 있고
-       카드 제목과 1교시 칸(접혀 있으면 접힌 카드 전체)이 탭바 위 첫 화면에 보여야 합니다. 소리 팁 검사와 따로 봅니다. */
+       시간표 카드 전체(제목, 펼쳤으면 1~6교시 칸 모두)가 탭바 위 첫 화면에 보여야 합니다. 소리 팁 검사와 따로 봅니다.
+       데모 타이머 홈은 타이머 큰 숫자도 탭바에 걸리지 않고 키캡 바탕이 칠해져 있어야 하고(대비), 안내 띠 홈은 띠를 펼치면 저장 단추가 탭바 위로 보여야 합니다. */
     const timeFirstScreen = (page) => page.evaluate(() => {
         const box = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? r : null; };
         const card = document.querySelector('.home-time');
         const cardBox = box(card);
         const title = box(card?.querySelector('.fold-head')) || box(card?.querySelector('.fold-title'));
-        const first = box(card?.querySelector('.period-row button'));
+        const cells = [...(card?.querySelectorAll('.period-row button') || [])].map(box);
+        const big = box(document.querySelector('.home-leave .leave-big'));
+        const key = document.querySelector('.home-leave .leave-key');
         const lead = box(document.querySelector('.home-leave'));
         const tab = box(document.querySelector('.tabbar'));
         const tabTop = tab ? tab.top : window.innerHeight;
@@ -3384,13 +3387,17 @@ try {
             cardTop: Math.round(cardBox?.top ?? -1),
             cardBottom: Math.round(cardBox?.bottom ?? -1),
             titleBottom: Math.round(title?.bottom ?? -1),
-            firstBottom: Math.round(first?.bottom ?? -1),
+            cells: cells.length,
+            cellsBottom: cells.length && cells.every(Boolean) ? Math.round(Math.max(...cells.map((r) => r.bottom))) : -1,
+            bigBottom: Math.round(big?.bottom ?? -1),
+            keyPaint: key ? getComputedStyle(key).backgroundColor : '',
             tabTop: Math.round(tabTop),
         };
     });
     const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
         && t.titleBottom > 0 && t.titleBottom <= t.tabTop
-        && (t.open ? t.firstBottom > 0 && t.firstBottom <= t.tabTop : t.cardBottom > 0 && t.cardBottom <= t.tabTop);
+        && t.cardBottom > 0 && t.cardBottom <= t.tabTop
+        && (!t.open || (t.cells === 6 && t.cellsBottom > 0 && t.cellsBottom <= t.tabTop));
     for (const folded of [false, true]) {
         foldPreset = !folded;
         try {
@@ -3399,12 +3406,25 @@ try {
                 await withDemo(width, 'light', async (page) => {
                     await delay(250);
                     const t = await timeFirstScreen(page);
-                    if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1교시)가 타이머 위로 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1~6교시)가 타이머 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.bigBottom > 0 && t.bigBottom <= t.tabTop, `${label} 데모 타이머 홈 첫 화면에서 타이머 큰 숫자가 탭바에 걸립니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.keyPaint && t.keyPaint !== 'rgba(0, 0, 0, 0)' && t.keyPaint !== 'transparent', `${label} 데모 타이머 첫 화면 키캡 바탕이 칠해지지 않아 숫자 대비가 무너집니다: ${JSON.stringify(t)}`);
                 });
                 await withPage(width, async (page) => {
                     const off = await freshHome(page, 'light');
                     const t = await timeFirstScreen(page);
-                    if (!off) check(t.open === !folded && timeOk(t), `${label} 안내 띠 홈 첫 화면에 시간표 카드(제목·1교시)가 띠 위로 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!off) check(t.open === !folded && timeOk(t), `${label} 안내 띠 홈 첫 화면에 시간표 카드(제목·1~6교시)가 띠 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!off) {
+                        await page.click('.work-setup .work-setup-strip');
+                        await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 15000 });
+                        await delay(400);
+                        const save = await page.evaluate(() => {
+                            const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
+                            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight) };
+                        });
+                        check(save.height > 0 && save.top >= 0 && save.bottom <= save.tabTop, `${label} 안내 띠를 펼치면 저장 단추가 탭바 위로 보이지 않습니다: ${JSON.stringify(save)}`);
+                    }
                 });
             }
         } finally {
