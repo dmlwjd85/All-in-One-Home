@@ -41,6 +41,7 @@ function precacheFromBuild() {
                 for (const match of css.matchAll(/url\((?:'|")?([^)'"]+)(?:'|")?\)/g)) {
                     const raw = match[1];
                     if (raw.startsWith('data:') || raw.startsWith('#') || raw.includes('%23')) continue;
+                    if (/\.ext\.woff2$/.test(raw)) continue; /* 드문 글자(.ext)는 미리 받지 않고, 화면에 나올 때 받아 런타임 저장합니다. */
                     const joined = new URL(raw, `https://assets.local/${rel.replace(/^\.\//, '')}`).pathname;
                     const relPath = `.${joined}`;
                     const disk = resolve(dist, relPath.replace(/^\.\//, ''));
