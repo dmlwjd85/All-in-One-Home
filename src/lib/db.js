@@ -21,6 +21,8 @@ let inboxDropped = new Set();
 const THEME_KEY = 'ssug-gyomu-theme';
 const TIP_KEY = 'ssug-gyomu-tips';
 const SHARED_KEY = 'ssug-gyomu-shared';
+/* 공용 컴퓨터 모드를 켜면서 학급 자료를 남겨 두기로 했는지('1'). 기본은 남김입니다. 지우기를 고른 경우에만 비웁니다. */
+const SHARED_KEEP_KEY = 'ssug-gyomu-shared-keep';
 
 export function emptyState() {
     return {
@@ -31,6 +33,7 @@ export function emptyState() {
             periodStarts: [...DEFAULT_PERIODS],
             theme: 'system',
             sharedPc: false,
+            sharedKeep: false,
             started: false,
             guest: true,
             migratedAt: null,
@@ -82,6 +85,7 @@ function mirrorTheme(theme) {
     try {
         localStorage.setItem(THEME_KEY, theme || 'system');
         localStorage.setItem(SHARED_KEY, state.profile.sharedPc ? '1' : '0');
+        localStorage.setItem(SHARED_KEEP_KEY, state.profile.sharedPc && state.profile.sharedKeep ? '1' : '0');
         localStorage.setItem(TIP_KEY, JSON.stringify(state.tip));
     } catch {
         /* 저장이 막혀 있어도 화면은 동작합니다. */
@@ -776,7 +780,9 @@ export async function boot(query = '') {
         if (localStorage.getItem(SHARED_KEY) === '1') state.profile.sharedPc = true;
         const savedTheme = localStorage.getItem(THEME_KEY);
         if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') state.profile.theme = savedTheme;
-        if (localStorage.getItem(SHARED_KEY) === '1') {
+        /* 자료를 남기기로 하고 켠 공용 모드는 평소처럼 불러옵니다(로그인만 이 탭에 둡니다). */
+        if (localStorage.getItem(SHARED_KEY) === '1' && localStorage.getItem(SHARED_KEEP_KEY) === '1') state.profile.sharedKeep = true;
+        else if (localStorage.getItem(SHARED_KEY) === '1') {
             memoryOnly = true;
             const theme = state.profile.theme;
             state = emptyState();
@@ -1308,13 +1314,20 @@ export async function saveAcademicYear(year, row) {
     }, { undoable: true });
 }
 
-export async function patchProfile(patch) {
+/**
+ * 설정을 바꿉니다. 공용 컴퓨터 모드를 켜도 학급 자료는 기본으로 남깁니다.
+ * { wipe: true }는 확인창에서 사용자가 '이 컴퓨터 자료 지우기'를 직접 골랐을 때만 넘깁니다.
+ */
+export async function patchProfile(patch, { wipe = false } = {}) {
+    const wipeNow = patch.sharedPc === true && wipe === true;
+    const next = patch.sharedPc === true ? { ...patch, sharedKeep: !wipeNow }
+        : patch.sharedPc === false ? { ...patch, sharedKeep: false } : patch;
     const failed = await update((draft) => {
-        draft.profile = { ...draft.profile, ...patch };
+        draft.profile = { ...draft.profile, ...next };
         return draft;
     });
     if (failed?.storageFailed) return failed;
-    if (patch.sharedPc === true) {
+    if (wipeNow) {
         memoryOnly = true;
         try {
             await mainVault.remove('state');
@@ -1324,7 +1337,7 @@ export async function patchProfile(patch) {
             inboxDropped = new Set();
             await mainVault.remove('cloudHashes');
         } catch {
-            /* 공용 컴퓨터에서는 기록을 남겨 두지 않습니다. */
+            /* 지우기를 고른 경우에만 이 컴퓨터에 기록을 남기지 않습니다. */
         }
     }
     if (patch.sharedPc === false) memoryOnly = false;
@@ -1834,7 +1847,6 @@ export async function refreshFromCloud({ force = false } = {}) {
 }
 
 export async function setAuth(auth) {
-    if (!auth?.uid) syncAuthKnown();
     const next = auth?.uid ? { uid: auth.uid, name: auth.name || '', email: auth.email || '' } : null;
     const from = lastCloudUid;
     /* 다른 계정으로 바뀌면 먼저 로그인 표시를 비워(이전 계정 자료가 새 계정으로 올라가지 않게) 자료를 계정별로 바꿔 둡니다. */

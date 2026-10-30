@@ -64,7 +64,7 @@ export function Start() {
                             <Btn className="primary-btn block" data-start="google" onClick={googleStart}>구글로 로그인하고 시작</Btn>
                             <p className="muted start-sub">한 번만 로그인하면 폰과 컴퓨터에서 같은 기록을 이어서 봐요.</p>
                             <Btn className={shared ? 'chip block on' : 'chip block'} style={{ marginTop: 8 }} data-start="shared" aria-pressed={shared} onClick={toggleShared}>{shared ? '공용 컴퓨터로 쓰는 중' : '여럿이 쓰는 컴퓨터예요'}</Btn>
-                            <p className="muted start-sub">{shared ? '로그인이 이 탭에만 남아요. 탭을 닫으면 로그아웃되고, 학생 기록은 이 컴퓨터에 남지 않아요.' : '학교 공용 PC라면 로그인하기 전에 눌러 주세요.'}</p>
+                            <p className="muted start-sub">{shared ? '로그인이 이 탭에만 남아요. 탭을 닫으면 로그아웃돼요. 학급 자료는 지우지 않아요.' : '학교 공용 PC라면 로그인하기 전에 눌러 주세요.'}</p>
                             <Btn className="chip block" style={{ marginTop: 8 }} data-start="local" onClick={afterChoice}>이 기기에서만 써 볼게요</Btn>
                         </>
                     ) : (

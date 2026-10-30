@@ -53,6 +53,16 @@ export function cloudReady() {
 }
 
 let bundle = null;
+/* 검사용 주입(배포 코드에서는 null). check-syncchip이 가짜 firebase/auth와 설정을 넣어 동작을 확인합니다. */
+let testAuthModule = null;
+let testConfig = null;
+export function useFirebaseForTest({ authModule = null, config = null, bundle: preset } = {}) {
+    testAuthModule = authModule;
+    testConfig = config;
+    if (preset !== undefined) bundle = preset;
+    appliedMode = null;
+}
+const authModule = () => testAuthModule || import('firebase/auth');
 
 /** 공용 컴퓨터 모드인지. db.js가 같은 키(ssug-gyomu-shared)에 적어 둡니다(이 파일은 db.js를 불러오지 않습니다). */
 export function sharedPcOn() {
@@ -74,7 +84,7 @@ async function applyPersistence(auth, shared) {
     const mode = shared ? 'session' : 'local';
     if (appliedMode?.auth === auth && appliedMode.mode === mode) return true;
     try {
-        const { browserLocalPersistence, browserSessionPersistence, setPersistence } = await import('firebase/auth');
+        const { browserLocalPersistence, browserSessionPersistence, setPersistence } = await authModule();
         await setPersistence(auth, shared ? browserSessionPersistence : browserLocalPersistence);
         appliedMode = { auth, mode };
         return true;
@@ -95,7 +105,7 @@ export function loginPersistence() {
 }
 
 export async function loadFirebase({ memoryOnly = false } = {}) {
-    const config = newFirebaseConfig();
+    const config = testConfig || newFirebaseConfig();
     if (!config) return null;
     if (bundle && bundle.memoryOnly === memoryOnly) {
         if (memoryOnly || sharedPcOn()) await applyPersistence(bundle.auth, true);
@@ -126,14 +136,19 @@ export async function loadFirebase({ memoryOnly = false } = {}) {
     return bundle;
 }
 
+/** 로그인할 때 쓸 설정. 이미 띄운 묶음이 있으면 그 방식을 그대로, 없으면 공용 컴퓨터 여부를 따릅니다. */
+export function loginLoadOptions() {
+    return { memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() };
+}
+
 export async function signInGoogle() {
-    const ready = await loadFirebase({ memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() });
+    const ready = await loadFirebase(loginLoadOptions());
     if (!ready) {
         const error = new Error('설정 없음');
         error.code = 'no-config';
         throw error;
     }
-    const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import('firebase/auth');
+    const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await authModule();
     const { pickLoginMode } = await import('./lib/googleLogin.js');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -159,9 +174,9 @@ export async function signInGoogle() {
 }
 
 export async function finishRedirectSignIn() {
-    const ready = await loadFirebase({ memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() });
+    const ready = await loadFirebase(loginLoadOptions());
     if (!ready) return null;
-    const { getRedirectResult } = await import('firebase/auth');
+    const { getRedirectResult } = await authModule();
     try {
         return await getRedirectResult(ready.auth);
     } catch {
