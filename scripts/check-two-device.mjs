@@ -280,6 +280,17 @@ check(!(await put(['users', UID, 'tombs', 'todos-f4'], { k: 'todos', at: Timesta
 check(await put(['users', UID, 'tombs', 'todos-f5'], { k: 'todos', at: serverTimestamp() }), '규칙: serverTimestamp 묘비를 거절했습니다.');
 check(!(await put(['users', UID, 'tombs', `todos-${'L'.repeat(41)}`], { k: 'todos', at: serverTimestamp() })), '규칙: 41자 id 묘비를 받아들였습니다.');
 
+/* 검수 2번(v46·v47 섞임): 더 이른 updatedAt으로 덮기 거절, 묘비 있는 id에 쓰기 거절(v46 되살리기), v47 같은 id 다시 만들기는 통과 */
+check(await put(['users', UID, 'todos', 'o1'], { title: '나중', done: false, updatedAt: Timestamp.fromMillis(Date.now()) }), '규칙: 새 할 일 쓰기를 거절했습니다.');
+check(!(await put(['users', UID, 'todos', 'o1'], { title: '옛 값', done: false, updatedAt: Timestamp.fromMillis(Date.now() - HOUR) })), '규칙: 더 이른 updatedAt으로 덮기를 받아들였습니다.');
+check((await getDoc(doc(admin(), 'users', UID, 'todos', 'o1'))).data()?.title === '나중', '규칙: 옛 값이 나중 값을 덮었습니다.');
+check(await put(['users', UID, 'todos', 'o1'], { title: 'v46 고침', done: false, updatedAt: serverTimestamp() }), '규칙: v46 serverTimestamp 고침을 거절했습니다.');
+check(!(await put(['users', UID, 'todos', longId], { title: 'v46 되살림', done: false, updatedAt: serverTimestamp() })), '규칙: 묘비가 있는 할 일을 v46이 되살렸습니다.');
+check(!(await cloudDoc(longId)), '규칙: 지운 할 일이 클라우드에 다시 생겼습니다.');
+await on('A', async (db) => { await db.saveTextItem('todos', { id: longId, title: '다시 만듦', done: false, source: 'app' }); await db.flushCloud(); });
+check((await cloudDoc(longId))?.title === '다시 만듦', 'v47: 지운 뒤 같은 id로 다시 만든 할 일이 올라가지 않았습니다(묘비 정리 실패).');
+check(!(await getDoc(doc(admin(), 'users', UID, 'tombs', `todos-${longId}`))).exists(), 'v47: 다시 만든 할 일의 옛 묘비가 남았습니다.');
+
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');
 const swept = await on('A', (db, dev) => dev.cloud.sweepTombs(UID, Date.now()));

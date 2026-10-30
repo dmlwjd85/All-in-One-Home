@@ -146,6 +146,14 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     return;
                 }
             }
+            /* 할 일: 묘비가 있어 거절됐고, 이 기기 수정이 지운 시각보다 확실히 늦으면(같은 id 다시 만들기·지운 뒤 고침) 묘비를 지우고 다시 씁니다. */
+            if (name === 'todos' && classifyWriteError(error) === 'rejected' && await clearOlderTomb(ready.db, uid, id, shaped.at)) {
+                try {
+                    await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: true });
+                    nextHashes[key] = mark;
+                    return;
+                } catch (again) { error = again; }
+            }
             if (classifyWriteError(error) === 'rejected') rejected.push(key);
             else pending += 1;
         }
@@ -268,6 +276,19 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
 }
 
 /* 묘비 문서: users/{uid}/tombs/todos-{id} = { k: 'todos', at: 지운 시각 } */
+/** 지운 시각이 at보다 이른 묘비만 지웁니다(at을 모르면 지우지 않음). 지웠으면 true. */
+export async function clearOlderTomb(db, uid, id, at) {
+    if (!Number.isFinite(at) || at <= 0) return false;
+    try {
+        const { deleteDoc, doc, getDocFromServer } = await import('firebase/firestore');
+        const ref = doc(db, 'users', uid, 'tombs', tombId('todos', id));
+        const snap = await getDocFromServer(ref);
+        const gone = snap.exists() ? tombFromDoc(snap.id, snap.data())?.at : null;
+        if (!Number.isFinite(gone) || gone >= at) return false;
+        await deleteDoc(ref);
+        return true;
+    } catch { return false; }
+}
 /* 묘비는 TOMB_KEEP_MS(30일) 동안 둡니다. 그보다 오래 오프라인이던 기기의 옛 수정만 되살아날 수 있습니다. */
 export const TOMB_KEEP_MS = 30 * 86400000;
 /** 오래된 묘비를 지웁니다. 서버 시각(now)을 잰 기기에서만 부릅니다. 지운 개수. */
