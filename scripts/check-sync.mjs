@@ -35,7 +35,7 @@ const mark = (name, row) => { const shaped = toCloudRow(name, row); return [`${n
 /* 1) 이 기기에서 올린 뒤 손대지 않은 할 일 → 다른 기기에서 끝냄 표시를 하면 따라갑니다. */
 const pushed = { id: 'todo1', title: '가정통신문 걷기', due: '2026-10-29', done: false, source: 'app' };
 const edited = { id: 'todo2', title: '상담 준비', due: '2026-10-30', done: false, source: 'app' };
-await absorbCloudForTest({ todos: [pushed, edited] }, {});
+await absorbCloudForTest({ todos: [pushed, edited], ats: { todos: { todo1: 1000, todo2: 1000 } } }, {});
 const hashes = Object.fromEntries([mark('todos', pushed), mark('todos', { ...edited, title: '상담 준비(옛)' })]);
 await absorbCloudForTest({
     todos: [{ ...pushed, done: true }, { ...edited, title: '다른 기기 제목' }, { id: 'todo3', title: '새 할 일', done: false, source: 'app' }],

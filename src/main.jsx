@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { reloadWhenSafe, restoreDrafts, trackTyping } from './lib/swReload.js';
 
 createRoot(document.getElementById('root')).render(
     <React.StrictMode>
@@ -21,12 +22,13 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
             })
             .catch(() => {});
     });
-    /* 새 판이 자리를 잡으면 다시 엽니다. 쓰던 글을 잃지 않게 화면이 가려졌을 때(다른 앱으로 갔을 때)만 다시 엽니다. */
+    /* 새 판이 자리를 잡으면 다시 엽니다. 화면이 가려졌고 쓰던 글이 남아 있지 않을 때만 다시 열고,
+       열기 전 입력란을 초안으로 적어 두었다가 되돌립니다(PR #57 r2 검수 1번). 남은 글이 있으면 다음에 가려질 때 다시 봅니다. */
+    const typing = trackTyping(document);
+    restoreDrafts(document, sessionStorage, location).catch?.(() => {});
     let hadController = Boolean(navigator.serviceWorker.controller);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!hadController) { hadController = true; return; }
-        const reload = () => { if (document.hidden) window.location.reload(); };
-        if (document.hidden) window.location.reload();
-        else document.addEventListener('visibilitychange', reload);
+        reloadWhenSafe({ typing });
     });
 }

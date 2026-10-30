@@ -76,6 +76,14 @@ export async function stamp(firestore, body, names, previous, at = null) {
             next.updatedAt = Timestamp.fromMillis(at);
             return;
         }
+        /* 할 일 hlc: v47이 쓴 표시(updatedAt과 늘 같음). v46은 이 칸을 모르므로 규칙이 v46의 덮어쓰기를 가려냅니다.
+           고친 시각을 모르면(서버 시각을 재지 못함·옛 판 자료) 올린 시각으로 쓰고 u: true(시각 불확실)를 붙입니다. */
+        if (name === 'hlc') {
+            const sure = Number.isFinite(at) && at > 0;
+            next.hlc = sure ? Timestamp.fromMillis(at) : serverTimestamp();
+            next.u = sure ? firestore.deleteField() : true;
+            return;
+        }
         if (name === 'migratedAt' && previous) {
             const date = new Date(previous);
             next.migratedAt = Number.isNaN(date.getTime()) ? Timestamp.now() : Timestamp.fromDate(date);
@@ -145,14 +153,6 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     else pending += 1;
                     return;
                 }
-            }
-            /* 할 일: 묘비가 있어 거절됐고, 이 기기 수정이 지운 시각보다 확실히 늦으면(같은 id 다시 만들기·지운 뒤 고침) 묘비를 지우고 다시 씁니다. */
-            if (name === 'todos' && classifyWriteError(error) === 'rejected' && await clearOlderTomb(ready.db, uid, id, shaped.at)) {
-                try {
-                    await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: true });
-                    nextHashes[key] = mark;
-                    return;
-                } catch (again) { error = again; }
             }
             if (classifyWriteError(error) === 'rejected') rejected.push(key);
             else pending += 1;
@@ -236,6 +236,8 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         ids: {},
         /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
         ats: { attendance: {}, todos: {} },
+        /* 고친 시각이 불확실한 할 일(v46이 쓴 것, 시각을 못 잰 기기가 올린 것). 올린 시각일 뿐이라 '나중'을 믿지 않습니다. */
+        soft: { todos: {} },
         /* 모든 목록을 서버에서 받았으면 true. 캐시에서 온 옛 목록이면 칩이 '동기화됨'을 보이지 않습니다. */
         fresh: true,
     };
@@ -256,6 +258,7 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
             const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
             if ((cloudName === 'attendance' || cloudName === 'todos') && typeof data?.updatedAt?.toMillis === 'function') out.ats[cloudName][item.id] = data.updatedAt.toMillis();
+            if (cloudName === 'todos' && softDoc(data)) out.soft.todos[item.id] = true;
         });
     }
     /* 지운 표시(묘비): 다른 기기가 지운 할 일과 지운 시각. 규칙을 올리기 전에는 읽기가 거절되므로 없는 것으로 봅니다. */
@@ -276,19 +279,6 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
 }
 
 /* 묘비 문서: users/{uid}/tombs/todos-{id} = { k: 'todos', at: 지운 시각 } */
-/** 지운 시각이 at보다 이른 묘비만 지웁니다(at을 모르면 지우지 않음). 지웠으면 true. */
-export async function clearOlderTomb(db, uid, id, at) {
-    if (!Number.isFinite(at) || at <= 0) return false;
-    try {
-        const { deleteDoc, doc, getDocFromServer } = await import('firebase/firestore');
-        const ref = doc(db, 'users', uid, 'tombs', tombId('todos', id));
-        const snap = await getDocFromServer(ref);
-        const gone = snap.exists() ? tombFromDoc(snap.id, snap.data())?.at : null;
-        if (!Number.isFinite(gone) || gone >= at) return false;
-        await deleteDoc(ref);
-        return true;
-    } catch { return false; }
-}
 /* 묘비는 TOMB_KEEP_MS(30일) 동안 둡니다. 그보다 오래 오프라인이던 기기의 옛 수정만 되살아날 수 있습니다. */
 export const TOMB_KEEP_MS = 30 * 86400000;
 /** 오래된 묘비를 지웁니다. 서버 시각(now)을 잰 기기에서만 부릅니다. 지운 개수. */
@@ -354,7 +344,7 @@ export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
             if (snap.exists()) {
                 const data = snap.data();
                 const at = data?.updatedAt?.toMillis?.();
-                out[id] = { row: fromCloudRow('todos', String(id), data), at: Number.isFinite(at) ? at : null };
+                out[id] = { row: fromCloudRow('todos', String(id), data), at: Number.isFinite(at) ? at : null, soft: softDoc(data) };
                 continue;
             }
             let gone = null;
@@ -369,6 +359,9 @@ export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
     }
     return out;
 }
+
+/** 고친 시각이 불확실한 할 일 문서인지: hlc가 없거나(v46·옛 자료) u가 true(시각을 못 잰 기기). */
+export function softDoc(data) { return !data?.hlc || data.u === true; }
 
 /** 서버에서 받은 결과일 때만 문서 id 목록을 돌려줍니다(캐시면 null). */
 export function serverIds(snap) {

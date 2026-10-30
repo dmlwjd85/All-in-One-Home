@@ -8,7 +8,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush } from './cloud.js';
+import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
@@ -662,7 +662,87 @@ function withRemoteAt(cloudName, row, remote) {
     return Number.isFinite(at) && at > 0 ? { ...row, editAt: at } : row;
 }
 
-function refreshShared(local = [], remote = [], cloudName, hashes, ats = null) {
+/*
+ * 할 일 충돌 사본(PR #57 검수 2·3·5번). 누가 나중에 고쳤는지 알 수 없을 때는 어느 쪽도 버리지 않습니다.
+ *  - legacy: 옛 판(v46)에서 고치고 못 올린 할 일(editAt·editD 둘 다 없음). 고친 시각을 모릅니다.
+ *  - soft: 클라우드 쪽 시각이 불확실한 문서(v46이 썼거나 시각을 못 잰 기기가 올림). updatedAt은 올린 시각일 뿐입니다.
+ *  - stale: 이 기기가 묘비 보관 기간(30일)보다 오래 동기화하지 않았습니다. 그 사이 지운 표시가 사라졌을 수 있습니다.
+ * 판단(planTodoConflict):
+ *  - keepCopy: 이 기기 수정(시각 확실)을 지키고, 다른 기기가 바꾼 불확실한 클라우드 값은 사본으로 남깁니다.
+ *  - takeCopy: 클라우드 값을 받고, 이 기기 수정(legacy·stale)은 사본으로 남깁니다.
+ *  - dropCopy: 다른 기기가 지웠으면(묘비, 또는 stale에서 사라짐) 지우되, 이 기기 수정은 사본으로 남깁니다.
+ */
+export const CONFLICT_PREFIX = '(충돌 사본) ';
+function legacyEdit(row) { return !(Number(row?.editAt) > 0) && !Number.isFinite(row?.editD); }
+function sameMark(a, b) { return Boolean(a) && Boolean(b) && printDigest(a) === printDigest(b); }
+/** 이 기기가 마지막으로 받아 온 지 묘비 보관 기간보다 오래됐는지(처음 받는 기기는 아님). */
+export function staleSync(uid = state.auth?.uid) {
+    const last = lastSyncAt(uid);
+    return last > 0 && serverNow() - last > TOMB_KEEP_MS;
+}
+export function planTodoConflict(row, { remote = null, soft = false, gone = null, base = null, stale = false } = {}) {
+    const mine = rowMark('todos', row)?.mark;
+    if (remote) {
+        const theirs = rowMark('todos', remote)?.mark;
+        if (!theirs || sameMark(mine, theirs)) return null;
+        /* 마지막으로 맞춘 뒤 클라우드가 그대로면 이 기기 수정을 올립니다. */
+        if (sameMark(base, theirs)) return null;
+        if (stale || legacyEdit(row)) return 'takeCopy';
+        if (soft && Number(row?.editAt) > 0) return 'keepCopy';
+        return null;
+    }
+    if (legacyEdit(row) && Number.isFinite(gone)) return 'dropCopy';
+    if (stale && base) return 'dropCopy';
+    return null;
+}
+/** 사본: 새 id, 제목 앞에 '(충돌 사본)'. 아직 올리지 않은 새 할 일로 둡니다. */
+export function conflictCopy(row) {
+    const id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const title = String(row?.title || '').startsWith(CONFLICT_PREFIX) ? String(row.title) : `${CONFLICT_PREFIX}${row?.title || ''}`;
+    const { editAt, editD, ...rest } = row || {};
+    const at = editClock();
+    return { ...rest, id, title: title.slice(0, 100), source: 'app', ...(at > 0 ? { editAt: at } : { editAt: 0, editD: deviceNow() }) };
+}
+/** 받아 올 때(pull) 할 일 충돌을 먼저 풉니다. 손댄 id는 이후 합치기에서 건드리지 않게 돌려줍니다. */
+function resolveTodoConflicts(draft, remote, hashes) {
+    const done = new Set();
+    if (!Array.isArray(remote?.todos)) return done;
+    const byId = new Map(remote.todos.filter((r) => r?.id).map((r) => [String(r.id), r]));
+    const ids = Array.isArray(remote?.ids?.todos) ? new Set(remote.ids.todos.map(String)) : null;
+    const stale = staleSync();
+    const next = [];
+    const copies = [];
+    for (const row of draft.todos || []) {
+        const id = row?.id ? String(row.id) : '';
+        if (!id || !toCloudRow('todos', row) || unchangedSincePush(hashes, 'todos', row)) { next.push(row); continue; }
+        const other = byId.get(id) || null;
+        /* 클라우드에 없다는 것은 서버에서 받은 id 목록으로만 판단합니다(캐시 결과로는 지우지 않음). */
+        if (!other && !(ids && !ids.has(id))) { next.push(row); continue; }
+        const key = `todos/${id}`;
+        const plan = planTodoConflict(row, { remote: other, soft: Boolean(remote.soft?.todos?.[id]), gone: remote.tombs?.todos?.[id], base: hashes?.[key], stale });
+        if (!plan) { next.push(row); continue; }
+        done.add(id);
+        if (plan === 'keepCopy') {
+            next.push(row);
+            copies.push(conflictCopy(other));
+            const mark = rowMark('todos', other); if (mark && hashes) hashes[mark.key] = mark.mark;
+        } else if (plan === 'takeCopy') {
+            const at = remote.ats?.todos?.[id];
+            const got = { ...takeRemote('todos', row, other), editAt: Number.isFinite(at) ? at : 0 };
+            delete got.editD;
+            next.push(got);
+            copies.push(conflictCopy(row));
+            const mark = rowMark('todos', got); if (mark && hashes) hashes[mark.key] = mark.mark;
+        } else {
+            copies.push(conflictCopy(row));
+            if (hashes) delete hashes[key];
+        }
+    }
+    draft.todos = copies.length ? [...next, ...copies] : next;
+    return done;
+}
+
+function refreshShared(local = [], remote = [], cloudName, hashes, ats = null, softAts = null) {
     const byId = new Map((remote || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
@@ -670,7 +750,7 @@ function refreshShared(local = [], remote = [], cloudName, hashes, ats = null) {
         const remoteAt = cloudName === 'todos' ? ats?.[String(row.id)] : undefined;
         if (!unchangedSincePush(hashes, cloudName, row)) {
             /* 할 일: 이 기기에서 고친 뒤 아직 못 올렸어도, 다른 기기가 더 늦게 고쳤으면(고친 시각 기준) 그쪽 값이 이깁니다. */
-            if (cloudName === 'todos' && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
+            if (cloudName === 'todos' && !softAts?.[String(row.id)] && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
             return row;
         }
         /* 올린 그대로인 할 일은 클라우드 값과 그 고친 시각을 받습니다(다음 비교의 기준). */
@@ -815,10 +895,12 @@ function absorbCloud(draft, remote, seen = null) {
         if (Array.isArray(remote[bucket])) remote = { ...remote, [bucket]: remote[bucket].filter((row) => !forgetQueuedFor(state.auth?.uid, `${bucket}/${row?.id}`)) };
     }
     const before = new Set(Object.keys(guard));
+    const settled = resolveTodoConflicts(draft, remote, guard);
+    if (settled.size && Array.isArray(remote.todos)) remote = { ...remote, todos: remote.todos.filter((row) => !settled.has(String(row?.id))) };
     pruneDeletedElsewhere(draft, remote, guard);
     for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
         if (localName === 'inbox') continue;
-        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, guard, remote.ats?.[cloudName]);
+        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, guard, remote.ats?.[cloudName], remote.soft?.[cloudName]);
     }
     if (guard !== cloudHashes) {
         for (const key of before) if (!(key in guard)) delete cloudHashes[key];
@@ -1944,6 +2026,8 @@ async function settleUnsureEdits() {
 let heldTodos = new Set();
 /** 검사용: 지금 보류 중인 할 일 id. */
 export function heldTodosForTest() { return [...heldTodos]; }
+/** 검사용: 올리기 전 다른 기기 값 견주기(peek)만 돌립니다. */
+export function reconcileForTest(uid) { return reconcileDirtyTodos(uid); }
 async function reconcileDirtyTodos(uid) {
     heldTodos = new Set();
     if (!cloudApi.peek) return;
@@ -1956,8 +2040,17 @@ async function reconcileDirtyTodos(uid) {
     for (const value of Object.values(seen)) { seeClock(value?.at); seeClock(value?.gone); }
     /* 서버 시각을 못 잰 채 고친 할 일(고친 시각 모름): 마지막으로 맞춘 뒤 다른 기기가 고치거나 지웠으면 누가 늦은지 모르므로
        올리지도 버리지도 않고 보류합니다. 시각을 재면 다시 견줍니다. 다른 기기가 손대지 않았으면 올린 시각으로 올립니다. */
+    const stale = staleSync(uid);
+    const plans = new Map();
     for (const row of dirty) {
-        if (row.editAt > 0) continue;
+        const id = toCloudRow('todos', row).id;
+        const value = seen[id];
+        if (!value) continue;
+        const plan = planTodoConflict(row, { remote: value.row || null, soft: Boolean(value.soft), gone: value.gone, base: cloudHashes[`todos/${id}`], stale });
+        if (plan) plans.set(id, plan);
+    }
+    for (const row of dirty) {
+        if (row.editAt > 0 || !Number.isFinite(row.editD) || plans.has(toCloudRow('todos', row).id)) continue;
         const id = toCloudRow('todos', row).id;
         const value = seen[id];
         if (!value) continue;
@@ -1968,6 +2061,9 @@ async function reconcileDirtyTodos(uid) {
     const verdict = (row) => {
         const value = seen[toCloudRow('todos', row)?.id];
         if (!value || unchangedSincePush(cloudHashes, 'todos', row)) return null;
+        const plan = plans.get(toCloudRow('todos', row)?.id);
+        if (plan) return { plan, value };
+        if (value.row && value.soft) return null;
         if (value.row && remoteIsLater(row, value.at)) return { take: value };
         if (!value.row && remoteIsLater(row, value.gone)) return { drop: true };
         return null;
@@ -1975,17 +2071,23 @@ async function reconcileDirtyTodos(uid) {
     if (!dirty.some(verdict)) return;
     const taken = [];
     const dropped = [];
+    const copies = [];
+    const seenAsBase = [];
     await updateFromCloud((draft) => {
         const next = [];
         for (const row of draft.todos || []) {
             const v = row?.id ? verdict(row) : null;
+            if (v?.plan === 'keepCopy') { next.push(row); copies.push(conflictCopy(v.value.row)); seenAsBase.push(v.value.row); continue; }
+            if (v?.plan === 'takeCopy') { const got = { ...takeRemote('todos', row, v.value.row), editAt: Number.isFinite(v.value.at) ? v.value.at : 0 }; delete got.editD; taken.push(got); next.push(got); copies.push(conflictCopy(row)); continue; }
+            if (v?.plan === 'dropCopy') { dropped.push(String(row.id)); copies.push(conflictCopy(row)); continue; }
             if (v?.drop) { dropped.push(String(row.id)); continue; }
             if (v?.take) { const got = { ...takeRemote('todos', row, v.take.row), editAt: v.take.at }; taken.push(got); next.push(got); continue; }
             next.push(row);
         }
-        draft.todos = next;
+        draft.todos = [...next, ...copies];
         return draft;
     });
+    for (const row of seenAsBase) { const mark = rowMark('todos', row); if (mark) cloudHashes[mark.key] = mark.mark; }
     /* 받은 값은 클라우드와 같으므로 '올린 것'으로 적어 둡니다. 지운 줄의 해시는 지웁니다. */
     for (const row of taken) { const mark = rowMark('todos', row); if (mark) cloudHashes[mark.key] = mark.mark; }
     for (const id of dropped) delete cloudHashes[`todos/${id}`];

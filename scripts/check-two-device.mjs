@@ -263,6 +263,24 @@ check((await cloudDoc('u3r'))?.title === 'B 나중 수정', `S3r(NOCLOCK): 지�
 check(todo(A, 'u3r')?.title === 'B 나중 수정', `S3r(NOCLOCK): A가 B 수정을 받지 못했습니다: ${todo(A, 'u3r')?.title}`);
 check(await measured('A'), 'NOCLOCK_A: 다시 재기에 실패했습니다.');
 
+/* I3(PR #57 r2 검수 3번): 시계를 계속 못 재는 B가 먼저 고쳐 먼저 올리고(올린 시각 = 서버 시각), A가 그보다 앞서 잰 시각으로 고친 값을 나중에 올림.
+   A 수정은 사라지지 않고 이기며, B 값은 충돌 사본으로 두 기기에 남습니다. */
+await on('A', async (db) => { await db.saveTextItem('todos', { id: 'i3', title: '확인 i3', done: false, source: 'app' }); await db.flushCloud(); });
+await sync('B');
+await unsure('B', DAY);
+offline.A = true;
+await edit('A', 'i3', 'A 먼저 고침(잰 시각)');
+await wait(GAP);
+await edit('B', 'i3', 'B 나중 고침(못 잰)');
+await on('B', (db) => db.flushCloud());
+check((await cloudDoc('i3'))?.u === true, `I3: 못 잰 기기가 올린 문서에 불확실 표시가 없습니다: ${JSON.stringify(await cloudDoc('i3'))}`);
+offline.A = false; await sync('A'); await sync('A');
+await sync('B');
+const copiesOf = (dev) => (dev.snapshot().todos || []).filter((r) => String(r.title).startsWith('(충돌 사본) '));
+check((await cloudDoc('i3'))?.title === 'A 먼저 고침(잰 시각)', `I3: 잰 A 수정이 사라졌습니다: ${(await cloudDoc('i3'))?.title}`);
+check(copiesOf(A).filter((r) => r.title.includes('B 나중 고침')).length === 1 && copiesOf(B).filter((r) => r.title.includes('B 나중 고침')).length === 1, `I3: B 값 사본이 두 기기에 하나씩 남지 않았습니다: A ${copiesOf(A).map((r) => r.title)} / B ${copiesOf(B).map((r) => r.title)}`);
+check(await measured('B'), 'I3: 다시 재기에 실패했습니다.');
+
 /* 34자 넘는 id(40자)도 묘비가 남습니다. */
 const longId = 'L'.repeat(40);
 await on('A', async (db) => { await db.saveTextItem('todos', { id: longId, title: '긴 id', done: false, source: 'app' }); await db.flushCloud(); });
@@ -280,16 +298,23 @@ check(!(await put(['users', UID, 'tombs', 'todos-f4'], { k: 'todos', at: Timesta
 check(await put(['users', UID, 'tombs', 'todos-f5'], { k: 'todos', at: serverTimestamp() }), '규칙: serverTimestamp 묘비를 거절했습니다.');
 check(!(await put(['users', UID, 'tombs', `todos-${'L'.repeat(41)}`], { k: 'todos', at: serverTimestamp() })), '규칙: 41자 id 묘비를 받아들였습니다.');
 
-/* 검수 2번(v46·v47 섞임): 더 이른 updatedAt으로 덮기 거절, 묘비 있는 id에 쓰기 거절(v46 되살리기), v47 같은 id 다시 만들기는 통과 */
-check(await put(['users', UID, 'todos', 'o1'], { title: '나중', done: false, updatedAt: Timestamp.fromMillis(Date.now()) }), '규칙: 새 할 일 쓰기를 거절했습니다.');
-check(!(await put(['users', UID, 'todos', 'o1'], { title: '옛 값', done: false, updatedAt: Timestamp.fromMillis(Date.now() - HOUR) })), '규칙: 더 이른 updatedAt으로 덮기를 받아들였습니다.');
+/* 검수 2번(v46·v47 섞임, r3): v47은 hlc(=updatedAt)를 함께 씁니다. v46은 hlc를 모르고 updatedAt을 올린 시각으로 씁니다. */
+const v47 = (at, extra = {}) => ({ done: false, updatedAt: at, hlc: at, ...extra });
+check(await put(['users', UID, 'todos', 'o1'], { title: '나중', ...v47(Timestamp.fromMillis(Date.now())) }), '규칙: v47 새 할 일 쓰기를 거절했습니다.');
+check(!(await put(['users', UID, 'todos', 'o1'], { title: '옛 값', ...v47(Timestamp.fromMillis(Date.now() - HOUR)) })), '규칙: 더 이른 hlc로 덮기를 받아들였습니다.');
+const mergeV46 = (tid, title) => setDoc(doc(admin(), 'users', UID, 'todos', tid), { title, done: false, source: 'app', updatedAt: serverTimestamp() }, { merge: true }).then(() => true, () => false);
+check(!(await mergeV46('o1', 'v46 늦은 업로드')), '규칙: v46(hlc 모름)이 v47 문서를 덮었습니다(S1).');
 check((await getDoc(doc(admin(), 'users', UID, 'todos', 'o1'))).data()?.title === '나중', '규칙: 옛 값이 나중 값을 덮었습니다.');
-check(await put(['users', UID, 'todos', 'o1'], { title: 'v46 고침', done: false, updatedAt: serverTimestamp() }), '규칙: v46 serverTimestamp 고침을 거절했습니다.');
-check(!(await put(['users', UID, 'todos', longId], { title: 'v46 되살림', done: false, updatedAt: serverTimestamp() })), '규칙: 묘비가 있는 할 일을 v46이 되살렸습니다.');
+check(await mergeV46('o2', 'v46만 쓰는 문서'), '규칙: v46 혼자 쓰는 문서(hlc 없음)를 거절했습니다.');
+check(await mergeV46('o2', 'v46 다시 고침'), '규칙: v46이 자기 문서를 다시 고치지 못합니다.');
+check(await put(['users', UID, 'todos', 'o3'], { title: '시각 모름', ...v47(serverTimestamp(), { u: true }) }), '규칙: 시각 불확실(u) 쓰기를 거절했습니다.');
+check(await put(['users', UID, 'todos', 'o3'], { title: '잰 시각 수정', ...v47(Timestamp.fromMillis(Date.now() - HOUR)) }), '규칙: 불확실 문서를 시각이 확실한 v47이 덮지 못합니다.');
+check(!(await put(['users', UID, 'todos', 'o4'], { title: 'hlc≠updatedAt', done: false, updatedAt: Timestamp.fromMillis(Date.now()), hlc: Timestamp.fromMillis(Date.now() - 1000) })), '규칙: hlc와 updatedAt이 다른 쓰기를 받아들였습니다.');
+check(!(await mergeV46(longId, 'v46 되살림')), '규칙: 묘비가 있는 할 일을 v46이 되살렸습니다.');
 check(!(await cloudDoc(longId)), '규칙: 지운 할 일이 클라우드에 다시 생겼습니다.');
+check(!(await put(['users', UID, 'todos', longId], { title: '지우기 전 수정', ...v47(Timestamp.fromMillis(Date.now() - DAY)) })), '규칙: 지운 시각보다 이른 v47 쓰기가 묘비를 넘었습니다.');
 await on('A', async (db) => { await db.saveTextItem('todos', { id: longId, title: '다시 만듦', done: false, source: 'app' }); await db.flushCloud(); });
-check((await cloudDoc(longId))?.title === '다시 만듦', 'v47: 지운 뒤 같은 id로 다시 만든 할 일이 올라가지 않았습니다(묘비 정리 실패).');
-check(!(await getDoc(doc(admin(), 'users', UID, 'tombs', `todos-${longId}`))).exists(), 'v47: 다시 만든 할 일의 옛 묘비가 남았습니다.');
+check((await cloudDoc(longId))?.title === '다시 만듦', 'v47: 지운 뒤 같은 id로 다시 만든 할 일이 올라가지 않았습니다.');
 
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');

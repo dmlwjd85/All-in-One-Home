@@ -161,7 +161,7 @@ function toTodo(row) {
     if (row.order != null) body.order = Number(row.order);
     /* at: 이 기기에서 마지막으로 고친 시각(서버 시각으로 보정한 ms). 클라우드 updatedAt으로 올라가 기기끼리 '마지막 수정'을 견줍니다. 해시에는 안 들어갑니다. */
     const at = Number(row.editAt);
-    return { id, body, stamps: row.done ? stamps(['updatedAt', 'doneAt']) : stamps(['updatedAt']), clear: emptied(body, ['due']), ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
+    return { id, body, stamps: row.done ? stamps(['updatedAt', 'hlc', 'doneAt']) : stamps(['updatedAt', 'hlc']), clear: emptied(body, ['due']), ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
 }
 
 function toNote(row) {
