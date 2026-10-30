@@ -264,7 +264,7 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(/if \(classifyWriteError\(error\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 쓰기 거절을 모으지 않습니다(error).');
     check(/if \(classifyWriteError\(again\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
     check(/return \{[^}]*\brejected\b[^}]*\};\s*\}\s*$/m.test(cloudSrc), 'pushUserData가 거절 목록을 돌려주지 않습니다.');
-    const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 800);
+    const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 1200);
     check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
     check(/tellStorageIssue\(cloudRejectedMessage\(keys\)\)/.test(dbSrc), '거절 알림이 화면 알림으로 가지 않습니다.');
     check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');

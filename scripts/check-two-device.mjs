@@ -34,6 +34,8 @@ globalThis.localStorage = {
 const plain = () => { const map = new Map(); return { get: async (k) => structuredClone(map.get(k)), set: async (k, v) => { map.set(k, structuredClone(v)); }, remove: async (k) => { map.delete(k); } }; };
 
 const offline = { A: false, B: false };
+/* 서버 시각 재기만 실패하는 기기(PR #57 검수 NOCLOCK) */
+const noclock = { A: false, B: false };
 const config = { apiKey: 'demo', projectId: 'demo-ssug-rules', authDomain: 'demo.local' };
 const devices = {};
 for (const [name, dir] of [['A', 'a'], ['B', 'b']]) {
@@ -51,7 +53,8 @@ for (const [name, dir] of [['A', 'a'], ['B', 'b']]) {
         pull: gate(cloud.pullUserData),
         remove: gate(cloud.deleteUserDoc),
         peek: gate(cloud.peekTodos, () => null),
-        clock: gate(cloud.measureServerClock, () => null),
+        clock: async (...a) => (noclock[name] ? null : gate(cloud.measureServerClock, () => null)(...a)),
+        sweep: gate(cloud.sweepTombs, () => 0),
     });
     await db.boot('');
     devices[name] = { db, cloud, fb, fs };
@@ -187,6 +190,101 @@ check(!(await cloudDoc('t7')), `S8: 민감하게 고친 할 일의 클라우드 
 check(A.snapshot().local.todos.some((t) => t.title === '보건실 약 받기'), 'S8: 민감한 할 일이 이 기기에서 사라졌습니다.');
 const raw = (await getDocs(collection(admin(), 'users', UID, 'todos'))).docs.map((d) => d.data());
 check(raw.every((d) => !('editAt' in d) && !String(d.title).includes('보건실')), '클라우드에 editAt 또는 민감한 문구가 있습니다.');
+
+/* ── PR #57 검수 치명 1번: 서버 시각을 못 잰 기기 + 틀린 기기 시계 ──
+   못 잰 동안은 기기 시각을 쓰지 않습니다(고친 시각 0 → serverTimestamp). 다른 기기가 그 사이 손댄 할 일은 보류했다가, 재면 견줍니다. */
+const DAY = 24 * HOUR;
+const unsure = async (dev, skew) => on(dev, (db) => { db.useDeviceClockForTest(() => Date.now() + skew); db.resetClockForTest({ measured: false }); noclock[dev] = true; });
+const measured = async (dev) => { noclock[dev] = false; return on(dev, (db) => db.retryServerClockForTest()); };
+await on('A', async (db) => {
+    for (const id of ['u1', 'u1b', 'u2', 'u3', 'u3r']) await db.saveTextItem('todos', { id, title: `확인 ${id}`, done: false, source: 'app' });
+    await db.flushCloud();
+});
+await sync('B');
+check(B.CLOCK_RETRY_MS === 60000, `측정 실패 시 다시 재는 간격이 1분이 아닙니다: ${B.CLOCK_RETRY_MS}`);
+
+/* NOCLOCK_B + B 시계 +1일 */
+await unsure('B', DAY);
+check(!B.clockMeasured(), 'NOCLOCK: 재지 못했는데 잰 것으로 봅니다.');
+/* S1: 둘 다 오프라인, B 먼저 · A 나중에 고침. B가 나중에 올려도 A 값이 남고, B 수정은 지우지 않고 보류합니다. */
+offline.A = true; offline.B = true;
+await edit('B', 'u1', 'B 먼저(시계 +1일)');
+check(todo(B, 'u1')?.editAt === 0 && Number.isFinite(todo(B, 'u1')?.editD), `NOCLOCK: 재기 전 고친 시각이 기기 시각으로 찍혔습니다: ${todo(B, 'u1')?.editAt}`);
+await wait(GAP);
+await edit('A', 'u1', 'A 나중');
+offline.A = false; await sync('A');
+offline.B = false; await sync('B');
+check((await cloudDoc('u1'))?.title === 'A 나중', `S1(NOCLOCK): 나중에 고친 A 값이 졌습니다: ${(await cloudDoc('u1'))?.title}`);
+check(todo(B, 'u1')?.title === 'B 먼저(시계 +1일)' && B.heldTodosForTest().includes('u1'), `S1(NOCLOCK): B 수정을 보류하지 않았습니다: ${todo(B, 'u1')?.title} / ${B.heldTodosForTest()}`);
+/* S1b: B가 온라인에서 고쳐 바로 올리고(올린 시각), A가 그 뒤에 고침 → A 값이 이기고 B도 A 값을 받습니다. */
+await edit('B', 'u1b', 'B 온라인 수정(시계 +1일)');
+await on('B', (db) => db.flushCloud());
+const u1bAt = (await cloudDoc('u1b'))?.updatedAt?.toMillis?.();
+check(Math.abs(u1bAt - Date.now()) < 60 * 1000, `S1b: 재기 전 올린 시각이 서버 시각이 아닙니다(미래 시각): ${u1bAt - Date.now()}ms`);
+await sync('A');
+await wait(GAP);
+await edit('A', 'u1b', 'A 그 뒤 수정');
+await on('A', (db) => db.flushCloud());
+await sync('B');
+check((await cloudDoc('u1b'))?.title === 'A 그 뒤 수정' && todo(B, 'u1b')?.title === 'A 그 뒤 수정', `S1b(NOCLOCK): 나중 A 수정이 유실됐습니다: 클라우드 ${(await cloudDoc('u1b'))?.title} / B ${todo(B, 'u1b')?.title}`);
+/* S3: B가 오프라인에서 고친 뒤 A가 나중에 지움 → B가 돌아와도 되살리지 않습니다(보류). */
+offline.B = true;
+await edit('B', 'u3', 'B 오프라인 수정(시계 +1일)');
+await wait(GAP);
+await on('A', async (db) => { await db.removeItem('todos', 'u3'); await db.flushCloud(); });
+offline.B = false; await sync('B');
+check(!(await cloudDoc('u3')), 'S3(NOCLOCK): 지운 할 일이 되살아났습니다.');
+/* 재면: 보류한 수정의 시각을 서버 기준으로 바꿔 견줍니다 → u1은 A 값, u3은 지워짐. */
+check(await measured('B'), 'NOCLOCK: 다시 재기에 실패했습니다.');
+check(Math.abs(todo(B, 'u1')?.editAt - Date.now()) < 60 * 1000 || todo(B, 'u1')?.title === 'A 나중', `재기 뒤 고친 시각을 서버 기준으로 바꾸지 않았습니다: ${todo(B, 'u1')?.editAt}`);
+await sync('B'); await sync('A');
+check((await cloudDoc('u1'))?.title === 'A 나중' && todo(B, 'u1')?.title === 'A 나중', `S1(재측정 뒤): 두 기기가 나중 수정으로 맞춰지지 않았습니다: ${todo(B, 'u1')?.title}`);
+check(!(await cloudDoc('u3')) && !todo(B, 'u3'), `S3(재측정 뒤): 지운 할 일이 남았습니다: ${!!todo(B, 'u3')}`);
+
+/* NOCLOCK_A + A 시계 +1시간 */
+await unsure('A', HOUR);
+/* S2: A가 지우고(묘비 = 서버가 받은 시각), B가 그 뒤 오프라인에서 고쳐 올림 → B 수정이 남습니다. */
+await on('A', async (db) => { await db.removeItem('todos', 'u2'); await db.flushCloud(); });
+const tombU2 = (await getDoc(doc(admin(), 'users', UID, 'tombs', 'todos-u2'))).data()?.at?.toMillis?.();
+check(Number.isFinite(tombU2) && Math.abs(tombU2 - Date.now()) < 60 * 1000, `S2: 재기 전 지운 묘비가 서버 시각이 아닙니다: ${tombU2 - Date.now()}`);
+offline.B = true;
+await wait(GAP);
+await edit('B', 'u2', 'B 지운 뒤 수정');
+offline.B = false; await sync('B');
+check((await cloudDoc('u2'))?.title === 'B 지운 뒤 수정', `S2(NOCLOCK): 지운 뒤 다른 기기 수정이 유실됐습니다: ${(await cloudDoc('u2'))?.title}`);
+/* S3r: A가 오프라인에서 지우고 B가 그 뒤 고쳐 올림 → A가 돌아와도 B 수정은 남습니다. */
+offline.A = true;
+await on('A', (db) => db.removeItem('todos', 'u3r'));
+await wait(GAP);
+await edit('B', 'u3r', 'B 나중 수정');
+await on('B', (db) => db.flushCloud());
+offline.A = false; await sync('A'); await sync('A');
+check((await cloudDoc('u3r'))?.title === 'B 나중 수정', `S3r(NOCLOCK): 지운 뒤 고친 할 일이 지워졌습니다: ${(await cloudDoc('u3r'))?.title}`);
+check(todo(A, 'u3r')?.title === 'B 나중 수정', `S3r(NOCLOCK): A가 B 수정을 받지 못했습니다: ${todo(A, 'u3r')?.title}`);
+check(await measured('A'), 'NOCLOCK_A: 다시 재기에 실패했습니다.');
+
+/* 34자 넘는 id(40자)도 묘비가 남습니다. */
+const longId = 'L'.repeat(40);
+await on('A', async (db) => { await db.saveTextItem('todos', { id: longId, title: '긴 id', done: false, source: 'app' }); await db.flushCloud(); });
+check(!!(await cloudDoc(longId)), '40자 id 할 일이 올라가지 않았습니다.');
+await on('A', async (db) => { await db.removeItem('todos', longId); await db.flushCloud(); });
+check(!(await cloudDoc(longId)) && (await getDoc(doc(admin(), 'users', UID, 'tombs', `todos-${longId}`))).exists(), '40자 id 할 일의 묘비가 남지 않았습니다.');
+
+/* 규칙: 시각이 서버보다 5분 넘게 앞서면 거절, v46(serverTimestamp)은 통과 */
+const { Timestamp, serverTimestamp } = await import('firebase/firestore');
+const put = (path, body) => setDoc(doc(admin(), ...path), body).then(() => true, () => false);
+check(!(await put(['users', UID, 'todos', 'f1'], { title: '미래', done: false, updatedAt: Timestamp.fromMillis(Date.now() + DAY) })), '규칙: 하루 앞선 updatedAt을 받아들였습니다.');
+check(await put(['users', UID, 'todos', 'f2'], { title: '조금 앞섬', done: false, updatedAt: Timestamp.fromMillis(Date.now() + 60 * 1000) }), '규칙: 1분 앞선 updatedAt(여유 안)을 거절했습니다.');
+check(await put(['users', UID, 'todos', 'f3'], { title: 'v46', done: false, updatedAt: serverTimestamp() }), '규칙: v46 serverTimestamp 쓰기를 거절했습니다.');
+check(!(await put(['users', UID, 'tombs', 'todos-f4'], { k: 'todos', at: Timestamp.fromMillis(Date.now() + HOUR) })), '규칙: 한 시간 앞선 묘비를 받아들였습니다.');
+check(await put(['users', UID, 'tombs', 'todos-f5'], { k: 'todos', at: serverTimestamp() }), '규칙: serverTimestamp 묘비를 거절했습니다.');
+check(!(await put(['users', UID, 'tombs', `todos-${'L'.repeat(41)}`], { k: 'todos', at: serverTimestamp() })), '규칙: 41자 id 묘비를 받아들였습니다.');
+
+/* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
+check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');
+const swept = await on('A', (db, dev) => dev.cloud.sweepTombs(UID, Date.now()));
+check(swept >= 1 && !(await getDoc(doc(admin(), 'users', UID, 'tombs', 'todos-old1'))).exists(), `묘비 정리: 30일 넘은 묘비를 지우지 않았습니다(${swept})`);
+check((await getDoc(doc(admin(), 'users', UID, 'tombs', 'todos-u3'))).exists(), '묘비 정리: 최근 묘비까지 지웠습니다.');
 
 /* 받은 뒤 이어지는 올리기(올리기 전 확인 reconcileDirtyTodos)가 아니라 pullFromCloudNow 자체가 받는지 보려고, 확인 전까지 올리기·확인을 막아 둡니다. */
 let hold = false;

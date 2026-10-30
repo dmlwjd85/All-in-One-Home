@@ -8,7 +8,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, syncAvailable, unchangedSincePush } from './cloud.js';
+import { CLOUD_COLLECTIONS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
@@ -251,8 +251,17 @@ function saveClock() {
 }
 /** 서버 기준 지금 시각(ms). */
 export function serverNow() { return Math.round(deviceNow() + clock.o); }
-/** 새로 고친(또는 지운) 시각: 서버 기준 지금, 그리고 지금까지 본 어떤 시각보다 늦게. */
+/*
+ * 이번 실행에서 서버 시각을 재는 데 성공했는지(PR #57 검수 치명 1번). 재기 전에는 기기 시계를 믿지 않습니다.
+ *  - 고친 시각은 0(모름)으로 두고 기기 시각은 editD에 따로 적어 둡니다. 0이면 클라우드에는 serverTimestamp(올린 시각)로 올라갑니다.
+ *  - 재는 데 성공하면 editD + 차이로 고친 시각을 다시 찍습니다(그 사이 기기 시계를 바꿨으면 지금보다 늦지 않게 자릅니다).
+ *  - 끝내 못 재면 올린 시각으로 견주되, 다른 기기가 그 사이 고치거나 지운 할 일은 올리지 않고 보류합니다.
+ */
+let clockOk = false;
+export function clockMeasured() { return clockOk; }
+/** 새로 고친(또는 지운) 시각: 서버 기준 지금, 그리고 지금까지 본 어떤 시각보다 늦게. 서버 시각을 재기 전이면 0(모름). */
 export function editClock() {
+    if (!clockOk) return 0;
     const at = Math.max(serverNow(), clock.l + 1);
     clock.l = at;
     saveClock();
@@ -265,28 +274,44 @@ function seeClock(ms) {
     saveClock();
 }
 function setClockOffset(offset) {
-    if (!Number.isFinite(offset) || Math.abs(offset) >= 400 * 86400000) return;
+    if (offset == null || !Number.isFinite(offset) || Math.abs(offset) >= 400 * 86400000) return false;
     clock.o = Math.round(offset);
     clock.k = true;
+    clockOk = true;
     saveClock();
+    return true;
+}
+/** 재기 전에 기기 시각(editD)만 적어 둔 시각을 서버 기준으로 바꿉니다. 지금보다 늦은 값은 지금으로 자릅니다. */
+function settleDeviceTime(d) {
+    if (!clockOk || !Number.isFinite(d) || d <= 0) return 0;
+    const at = Math.min(Math.round(d + clock.o), serverNow());
+    return at > 0 ? at : 0;
 }
 /** 검사용: 기기 시계를 바꿔 끼웁니다(시계가 어긋난 기기 흉내). */
 export function useDeviceClockForTest(fn = null) { deviceNow = fn || (() => Date.now()); }
 export function clockForTest() { return { ...clock }; }
-export function resetClockForTest() { clock = readClock(); }
+export function resetClockForTest({ measured = false } = {}) { clock = readClock(); clockOk = measured; }
 
 let fromCloud = 0;
 export function stampTodoEdits(prev, next, now = null) {
     const at = () => (now == null ? editClock() : now);
+    const mark = (row) => {
+        const t = at();
+        row.editAt = t;
+        if (t > 0) delete row.editD; else row.editD = deviceNow();
+    };
     const before = new Map([...(prev?.todos || []), ...(prev?.local?.todos || [])].filter((row) => row?.id).map((row) => [String(row.id), row]));
-    const strip = (row) => { const { editAt, ...rest } = row; return JSON.stringify(rest); };
+    const strip = (row) => { const { editAt, editD, ...rest } = row; return JSON.stringify(rest); };
     for (const list of [next?.todos || [], next?.local?.todos || []]) {
         for (const row of list) {
             if (!row?.id) continue;
             const old = before.get(String(row.id));
-            if (!old) { if (!Number.isFinite(row.editAt)) row.editAt = at(); continue; }
-            if (strip(old) !== strip(row)) row.editAt = at();
-            else if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
+            if (!old) { if (!Number.isFinite(row.editAt)) mark(row); continue; }
+            if (strip(old) !== strip(row)) mark(row);
+            else {
+                if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
+                if (Number.isFinite(old.editD) && !Number.isFinite(row.editD) && !(row.editAt > 0)) row.editD = old.editD;
+            }
         }
     }
 }
@@ -352,11 +377,11 @@ export function tellRejectedForTest(keys) {
 }
 
 /* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
-const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, available: syncAvailable };
+const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, available: syncAvailable };
 let cloudApi = { ...REAL_CLOUD };
 /* 검사용: 넣은 함수만 바꿉니다. peek·clock을 넣지 않은 가짜 클라우드에서는 그 단계를 건너뜁니다(진짜 클라우드 함수가 불리지 않게). */
 export function useCloudForTest(api = null) {
-    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, available: () => true, ...api } : { ...REAL_CLOUD };
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, available: () => true, ...api } : { ...REAL_CLOUD };
 }
 let signOutHook = null;
 export function useSignOutForTest(fn = null) { signOutHook = fn; }
@@ -403,7 +428,9 @@ async function flushCloudOnce() {
     await reconcileDirtyTodos(state.auth.uid);
     if (!state.auth?.uid) return { skipped: true };
     const sent = { ...cloudHashes };
-    const result = await cloudApi.push(state.auth.uid, state, {
+    const held = heldTodos;
+    const sending = held.size ? { ...state, todos: (state.todos || []).filter((row) => !held.has(toCloudRow('todos', row)?.id)) } : state;
+    const result = await cloudApi.push(state.auth.uid, sending, {
         memoryOnly: memoryOnly || state.profile.sharedPc,
         hashes: { ...sent },
     });
@@ -474,14 +501,14 @@ function readCloudForget() {
             && typeof item.k === 'string' && /^[a-z]+\/[A-Za-z0-9_-]{1,120}$/.test(item.k)
             && Number.isFinite(item.at))
             .slice(-500)
-            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}), ...(typeof item.y === 'string' && /^f[a-z0-9]{1,20}$/.test(item.y) ? { also: item.y } : {}) }]);
+            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(Number.isFinite(item.d) ? { d: item.d } : {}), ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}), ...(typeof item.y === 'string' && /^f[a-z0-9]{1,20}$/.test(item.y) ? { also: item.y } : {}) }]);
     } catch { return []; }
 }
 
 function saveCloudForget() {
     try {
         if (memoryOnly || state?.profile?.sharedPc) return;
-        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(e.expect ? { x: e.expect } : {}), ...(e.also ? { y: e.also } : {}) }));
+        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(Number.isFinite(e.d) ? { d: e.d } : {}), ...(e.expect ? { x: e.expect } : {}), ...(e.also ? { y: e.also } : {}) }));
         if (list.length || lastCloudUid) globalThis.localStorage?.setItem(CLOUD_FORGET_KEY, JSON.stringify({ last: lastCloudUid, items: list }));
         else globalThis.localStorage?.removeItem(CLOUD_FORGET_KEY);
     } catch { /* 저장 공간이 없으면 이번 실행 동안만 기억합니다. */ }
@@ -527,7 +554,9 @@ function queueCloudForget(bucket, id, row = null) {
     const mine = shaped?.id ? printDigest(fingerprint(shaped.body, shaped.clear || [])) : (marked ? printDigest(marked.mark) : null);
     const also = mine && mine !== expect ? mine : null;
     if (uid) {
-        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at: editClock(), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
+        /* 할 일만 '모름(0)'을 씁니다(묘비·보류로 견줌). 다른 줄은 예전(v46)처럼 기기 시각으로 지운 뒤 고친 문서를 지킵니다. */
+        const at = editClock() || (bucket === 'todos' ? 0 : deviceNow());
+        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at, ...(bucket === 'todos' && !clockOk ? { d: deviceNow() } : {}), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
         saveCloudForget();
         syncQueued(queuedCloudKeys().length);
     }
@@ -551,7 +580,7 @@ async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false
             continue;
         }
         /* 클라우드 문서가 지운 시각보다 나중에 고쳐졌으면 지우지 않습니다. */
-        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: entry.at, expect: [entry.expect, entry.also].filter(Boolean).join(',') || null }).catch(() => ({ ok: false }));
+        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: entry.at > 0 ? entry.at : null, expect: [entry.expect, entry.also].filter(Boolean).join(',') || null }).catch(() => ({ ok: false }));
         if (result?.ok) cloudForget.delete(entryKey);
     }
     saveCloudForget();
@@ -1830,6 +1859,7 @@ async function connectCloud(uid) {
 async function connectCloudBody(uid) {
     await checkDraftAgainstCloud(uid);
     await syncServerClock(uid);
+    sweepOldTombs(uid);
     const pushed = await flushCloud().catch(() => null);
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
@@ -1854,8 +1884,53 @@ async function syncServerClock(uid) {
     if (!cloudApi.clock) return;
     try {
         const offset = await cloudApi.clock(uid, { memoryOnly: memoryOnly || state.profile.sharedPc, now: () => deviceNow() });
-        setClockOffset(offset);
-    } catch { /* 다음에 다시 잽니다. */ }
+        if (setClockOffset(offset)) { stopClockRetry(); await settleUnsureEdits(); return true; }
+    } catch { /* 아래에서 다시 잽니다. */ }
+    startClockRetry(uid);
+    return false;
+}
+/* 오래된 묘비 정리: 서버 시각을 잰 기기에서 실행마다 한 번. 실패해도 다음에 다시 합니다. */
+let sweptFor = '';
+function sweepOldTombs(uid) {
+    if (!clockOk || !cloudApi.sweep || sweptFor === uid) return;
+    sweptFor = uid;
+    Promise.resolve(cloudApi.sweep(uid, serverNow(), { memoryOnly: memoryOnly || state.profile.sharedPc })).catch(() => { sweptFor = ''; });
+}
+/* 못 쟀으면 1분마다 다시 잽니다. 재면 보류한 할 일을 올립니다. */
+export const CLOCK_RETRY_MS = 60 * 1000;
+let clockRetry = null;
+function stopClockRetry() { if (clockRetry) { clearInterval(clockRetry); clockRetry = null; } }
+function startClockRetry(uid) {
+    if (clockRetry || clockOk || typeof setInterval !== 'function') return;
+    clockRetry = setInterval(async () => {
+        if (clockOk || state.auth?.uid !== uid) { stopClockRetry(); return; }
+        if (await syncServerClock(uid)) flushCloud().catch(() => {});
+    }, CLOCK_RETRY_MS);
+    clockRetry?.unref?.();
+}
+/** 검사용: 다시 재기를 바로 한 번 돌립니다. */
+export async function retryServerClockForTest() { const uid = state.auth?.uid; return uid ? syncServerClock(uid) : false; }
+/** 재기 전에 고친 할 일과 지운 기록의 시각을 서버 기준으로 바꿉니다. */
+async function settleUnsureEdits() {
+    let forgot = false;
+    for (const entry of cloudForget.values()) {
+        if (entry.at > 0 || !Number.isFinite(entry.d)) continue;
+        const at = settleDeviceTime(entry.d);
+        if (at > 0) { entry.at = at; delete entry.d; forgot = true; }
+    }
+    if (forgot) saveCloudForget();
+    const unsure = (row) => !(row?.editAt > 0) && Number.isFinite(row?.editD);
+    if (![...(state.todos || []), ...(state.local?.todos || [])].some(unsure)) return;
+    await updateFromCloud((draft) => {
+        for (const list of [draft.todos || [], draft.local?.todos || []]) {
+            for (const row of list) {
+                if (!unsure(row)) continue;
+                const at = settleDeviceTime(row.editD);
+                if (at > 0) { row.editAt = at; delete row.editD; }
+            }
+        }
+        return draft;
+    });
 }
 
 /*
@@ -1866,7 +1941,11 @@ async function syncServerClock(uid) {
  *  - 그 밖(이 기기가 더 늦음, 시각을 모름, 한쪽에만 있음)은 이 기기 값을 지키고 올립니다.
  * 서버에 닿지 못하면 아무것도 바꾸지 않습니다(올리기도 실패해 다음에 다시 봅니다).
  */
+let heldTodos = new Set();
+/** 검사용: 지금 보류 중인 할 일 id. */
+export function heldTodosForTest() { return [...heldTodos]; }
 async function reconcileDirtyTodos(uid) {
+    heldTodos = new Set();
     if (!cloudApi.peek) return;
     const dirty = (state.todos || []).filter((row) => row?.id && toCloudRow('todos', row) && !unchangedSincePush(cloudHashes, 'todos', row));
     if (!dirty.length) return;
@@ -1875,6 +1954,17 @@ async function reconcileDirtyTodos(uid) {
     try { seen = await cloudApi.peek(uid, ids, { memoryOnly: memoryOnly || state.profile.sharedPc }); } catch { seen = null; }
     if (!seen || state.auth?.uid !== uid) return;
     for (const value of Object.values(seen)) { seeClock(value?.at); seeClock(value?.gone); }
+    /* 서버 시각을 못 잰 채 고친 할 일(고친 시각 모름): 마지막으로 맞춘 뒤 다른 기기가 고치거나 지웠으면 누가 늦은지 모르므로
+       올리지도 버리지도 않고 보류합니다. 시각을 재면 다시 견줍니다. 다른 기기가 손대지 않았으면 올린 시각으로 올립니다. */
+    for (const row of dirty) {
+        if (row.editAt > 0) continue;
+        const id = toCloudRow('todos', row).id;
+        const value = seen[id];
+        if (!value) continue;
+        const base = cloudHashes[`todos/${id}`];
+        const theirs = value.row ? rowMark('todos', value.row)?.mark : null;
+        if (value.row ? !(base && theirs && printDigest(theirs) === printDigest(base)) : Number.isFinite(value.gone)) heldTodos.add(id);
+    }
     const verdict = (row) => {
         const value = seen[toCloudRow('todos', row)?.id];
         if (!value || unchangedSincePush(cloudHashes, 'todos', row)) return null;

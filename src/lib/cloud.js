@@ -268,6 +268,21 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
 }
 
 /* 묘비 문서: users/{uid}/tombs/todos-{id} = { k: 'todos', at: 지운 시각 } */
+/* 묘비는 TOMB_KEEP_MS(30일) 동안 둡니다. 그보다 오래 오프라인이던 기기의 옛 수정만 되살아날 수 있습니다. */
+export const TOMB_KEEP_MS = 30 * 86400000;
+/** 오래된 묘비를 지웁니다. 서버 시각(now)을 잰 기기에서만 부릅니다. 지운 개수. */
+export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEEP_MS, max = 200 } = {}) {
+    if (!uid || !Number.isFinite(now) || !syncAvailable()) return 0;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return 0;
+    const { collection, deleteDoc, doc, getDocsFromServer, limit, orderBy, query, where, Timestamp } = await import('firebase/firestore');
+    try {
+        const old = await timeout(getDocsFromServer(query(collection(ready.db, 'users', uid, 'tombs'), where('at', '<', Timestamp.fromMillis(now - keep)), orderBy('at'), limit(max))), 10000);
+        let n = 0;
+        for (const item of old.docs) { await deleteDoc(doc(ready.db, 'users', uid, 'tombs', item.id)); n += 1; }
+        return n;
+    } catch { return 0; }
+}
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {
     const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));
@@ -360,6 +375,13 @@ export function keepCloudDoc(name, id, data, { notAfter = null, expect = null } 
         if (!shaped || !allowed.includes(printDigest(fingerprint(shaped.body, shaped.clear || [])))) return true;
         return false;
     }
+    /* 지운 시각을 모르는 할 일(서버 시각을 못 잰 기기): 마지막으로 알던 내용 그대로일 때만 지웁니다. 다른 기기가 고쳤으면 남깁니다. */
+    if (name === 'todos' && !Number.isFinite(notAfter)) {
+        if (!expect) return false;
+        const row = fromCloudRow(name, String(id), data);
+        const mark = row ? rowMark(name, row) : null;
+        return !(mark && String(expect).split(',').filter(Boolean).includes(printDigest(mark.mark)));
+    }
     if (!newerThanDelete(data, notAfter)) return false;
     /* 지운 뒤에 고친 시각이 찍혔어도 내용이 지운 줄 그대로면(진행 중이던 올리기가 한 번 더 쓴 것) 지웁니다(PR #52 2차 검수 2번). */
     if (expect) {
@@ -388,10 +410,11 @@ export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfte
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
-        const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp } = await import('firebase/firestore');
+        const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp, serverTimestamp } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
-        const tomb = name === 'todos' && Number.isFinite(notAfter) && notAfter > 0
-            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: Timestamp.fromMillis(notAfter) }), 5000)
+        /* 지운 시각을 모르면(서버 시각을 못 잰 기기) 서버가 받은 시각으로 묘비를 남깁니다. */
+        const tomb = name === 'todos'
+            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
             : null;
         return await guardedDelete({
             get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },

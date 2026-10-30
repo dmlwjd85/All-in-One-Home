@@ -18,6 +18,9 @@ service cloud.firestore {
         && int(v[8:10]) <= mdays(int(v[0:4]), int(v[5:7]));
     }
     function hm(v) { return v is string && v.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'); }
+    // 시각이 서버가 받은 때보다 5분 넘게 앞서면 거절합니다(시계가 틀린 기기의 미래 시각이 이후 수정을 이기지 않게, PR #57 검수).
+    // v46은 serverTimestamp(= request.time)를 써서 그대로 통과합니다.
+    function notAhead(v) { return v is timestamp && v <= request.time + duration.value(5, 'm'); }
     function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,40}$'); }
     // 민감 낱말 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 같아야 합니다.
     function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식).*'); }
@@ -177,7 +180,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && key.matches('^todos-[A-Za-z0-9_-]{1,40}$')
           && d().keys().hasAll(['k', 'at']) && d().keys().hasOnly(['k', 'at'])
-          && d().k == 'todos' && d().at is timestamp;
+          && d().k == 'todos' && notAhead(d().at);
       }
 
       // 할 일 (걷기 진행: got / of)
@@ -190,7 +193,8 @@ service cloud.firestore {
           && (!('due' in d()) || ymd(d().due))
           && optInt('got', 0, 50) && optInt('of', 0, 50) && optInt('order', 0, 100000)
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
-          && optTs('createdAt') && optTs('updatedAt') && optTs('doneAt');
+          && optTs('createdAt') && optTs('updatedAt') && optTs('doneAt')
+          && (!('updatedAt' in d()) || notAhead(d().updatedAt));
       }
 
       // 정리함: 저장 때 빼 둔 할 일·일정. 민감 글은 앱이 올리지 않고 규칙에서도 한 번 더 막습니다.

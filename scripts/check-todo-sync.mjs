@@ -69,6 +69,8 @@ const makeCloud = (dev) => ({
         for (const d of snap.docs) out.ats.todos[d.id] = d.data().updatedAt?.toMillis?.() || 0;
         return out;
     },
+    /* 이 검사의 두 기기는 같은 시계(에뮬레이터와 같은 기기)이므로 서버 시각 차이는 0으로 잽니다. */
+    clock: async () => (fault[dev] ? null : 0),
     /* 진짜 peekTodos처럼 서버에서 바로 봅니다(올리기 전 확인). */
     async peek(uid, ids) {
         if (fault[dev]) return null;
