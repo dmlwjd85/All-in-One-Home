@@ -3477,6 +3477,9 @@ try {
                         await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
                         await page.evaluate(() => document.fonts.ready);
                         const key = await page.$('.leave-key');
+                        /* 키캡 토큰이 빠지면 바탕이 비쳐 어두운 화면에서도 키캡 모양이 사라집니다. 바탕색과 그라데이션이 칠해졌는지 봅니다. */
+                        const paint = await key.evaluate((el) => ({ color: getComputedStyle(el).backgroundColor, image: getComputedStyle(el).backgroundImage }));
+                        check(paint.color !== 'rgba(0, 0, 0, 0)' && paint.color !== 'transparent' && paint.image.includes('linear-gradient'), `${theme} ${mode} ${state} 타이머 키캡 바탕이 칠해지지 않습니다: ${JSON.stringify(paint)}`);
                         const texts = await key.evaluate((el) => {
                             const r = el.getBoundingClientRect();
                             return [...el.querySelectorAll('.leave-small, .leave-big')].map((t) => {
