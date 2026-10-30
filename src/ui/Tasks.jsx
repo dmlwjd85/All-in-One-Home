@@ -4,7 +4,7 @@ import { readTodoLine } from '../lib/parse.js';
 import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
 import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
-import { Btn, IconTrash, SpreadHint } from './bits.jsx';
+import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 import { LockNote } from './SyncChip.jsx';
@@ -88,7 +88,7 @@ export function Tasks() {
                                     if (isClipped(title)) setDetail(row);
                                     else toggleTodo(row.id);
                                 }}>
-                                    <span className="todo-title">{row.localOnly ? '🔒 ' : ''}{row.title}</span>
+                                    <TodoTitle className="todo-title" lead={row.localOnly ? '🔒 ' : ''} title={row.title} />
                                 </Btn>
                                 {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
                                 <Btn className="icon-btn" aria-label="할 일 지우기" onClick={async () => {

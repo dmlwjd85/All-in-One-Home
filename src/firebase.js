@@ -48,14 +48,14 @@ export function loginHint(error) {
     return '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.';
 }
 
-export function cloudReady() {
-    return Boolean(newFirebaseConfig());
-}
-
 let bundle = null;
 /* 검사용 주입(배포 코드에서는 null). check-syncchip이 가짜 firebase/auth와 설정을 넣어 동작을 확인합니다. */
 let testAuthModule = null;
 let testConfig = null;
+
+export function cloudReady() {
+    return Boolean(testConfig || newFirebaseConfig());
+}
 export function useFirebaseForTest({ authModule = null, config = null, bundle: preset } = {}) {
     testAuthModule = authModule;
     testConfig = config;

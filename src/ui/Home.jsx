@@ -6,7 +6,7 @@ import { joined, joinedRecords, toggleTodo } from '../lib/db.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
-import { Btn, Motto, Symbol, studentName } from './bits.jsx';
+import { Btn, Motto, Symbol, TodoTitle, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
 import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount } from '../lib/periodLocal.js';
@@ -165,7 +165,7 @@ export function Home() {
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
                         <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
-                            <span className="home-line-text">{row.done ? '☑' : '☐'} {row.title}</span>
+                            <TodoTitle className="home-line-text" lead={`${row.done ? '☑' : '☐'} `} title={row.title} />
                             {row.of ? <span className="muted num" style={{ flex: 'none' }}>{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`} style={{ flex: 'none' }}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
                         </Btn>
                     ))}
