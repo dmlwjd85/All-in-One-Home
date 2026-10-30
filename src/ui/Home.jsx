@@ -64,9 +64,10 @@ export function Home() {
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
     const timer = !todayRest.off && (local.workEnd || leave) ? <WorkTimer ymd={clock.ymd} local={local} leave={leave} showToast={showToast} now={clock} /> : null;
-    /* 출퇴근 시각이 없으면 타이머 자리에 한 줄 안내 띠를 둡니다. 타이머가 이미 뜬 날(조퇴만 정한 날), 쉬는 날, '다음에'를 누른 뒤에는 숨깁니다. */
-    const setup = !timer && !todayRest.off && !(local.workStart && local.workEnd) && !workCardOff() ? <WorkSetup local={local} showToast={showToast} now={clock} /> : null;
-    const wantFast = Boolean(timer) && wantsFast(workTimer(clock.sec, { workStart: local.workStart, workEnd: local.workEnd, leave }));
+    const timerNow = workTimer(clock.sec, { workStart: local.workStart, workEnd: local.workEnd, leave });
+    /* 출퇴근 시각이 없으면 타이머 자리에 한 줄 안내 띠를 둡니다. 타이머가 실제로 보이는 날(출근만 정하고 조퇴한 날), 쉬는 날, '다음에'를 누른 뒤에는 숨깁니다. */
+    const setup = !(timer && timerNow.show) && !todayRest.off && !(local.workStart && local.workEnd) && !workCardOff() ? <WorkSetup local={local} showToast={showToast} now={clock} /> : null;
+    const wantFast = Boolean(timer) && wantsFast(timerNow);
     useEffect(() => { if (wantFast !== fast) setFast(wantFast); }, [wantFast, fast]);
     /* 빈 교시는 빼고, 잠긴 교시는 잠김으로 보여 줍니다. 과목이 하나도 없으면 교시 칸만 보여 줍니다. */
     const slots = labels.map((label, index) => ({ index, label, locked: isLocked(local, day, index + 1) }));

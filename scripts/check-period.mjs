@@ -308,7 +308,7 @@ check(/useState\(local\.workStart \|\| '08:40'\)/.test(setupSrc) && /useState\(l
 check(/const problem = workTimeProblem\(workStart, workEnd\);\s*if \(problem\) \{ showToast\?\.\(problem\); return; \}\s*patchPeriodLocal\(\{ workStart, workEnd \}\);/.test(setupSrc) && (setupSrc.match(/patchPeriodLocal\(/g) || []).length === 1, '안내 카드가 검사 전에 저장하거나 다른 곳에 저장합니다.');
 check(/hideWorkCard\(\)/.test(setupSrc) && />다음에</.test(setupSrc) && /className="primary-btn"/.test(setupSrc) && /<Btn className="chip"/.test(setupSrc), "안내 카드에 '다음에'·저장 버튼이 앱 버튼 모양이 아닙니다.");
 check(/출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요\./.test(setupSrc), '안내 카드 문구가 없습니다.');
-check(/const setup = !timer && !todayRest\.off && !\(local\.workStart && local\.workEnd\) && !workCardOff\(\) \?/.test(homeSrc), '안내 카드가 쉬는 날이나 다음에 뒤에도, 또는 조퇴 타이머와 함께 보입니다.');
+check(/const setup = !\(timer && timerNow\.show\) && !todayRest\.off && !\(local\.workStart && local\.workEnd\) && !workCardOff\(\) \?/.test(homeSrc), '안내 카드가 쉬는 날이나 다음에 뒤에도, 또는 조퇴 타이머와 함께 보입니다.');
 check(/timer \|\| setup \? 'home-grid has-leave'/.test(homeSrc) && homeSrc.indexOf('{setup}') > homeSrc.indexOf('{timer}') && homeSrc.indexOf('{setup}') < homeSrc.indexOf('home-quick'), '안내 카드가 타이머 자리에 없습니다.');
 check(/\.work-setup-form \.primary-btn \{ flex: 0 0 auto;/.test(css), '넓은 화면에서 저장 버튼이 길게 늘어납니다.');
 check((setupSrc.slice(0, setupSrc.indexOf('</form>')).match(/type="time" step="60"/g) || []).length === 2, '안내 카드 출근·퇴근 칸에 step="60"이 없습니다.');

@@ -3238,7 +3238,7 @@ try {
                 const save = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '저장');
                 const later = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '다음에');
                 const box = el.getBoundingClientRect();
-                const inside = [...el.querySelectorAll('button, input')].every((c) => { const r = c.getBoundingClientRect(); return r.left >= box.left - 0.5 && r.right <= box.right + 0.5; });
+                const inside = [...el.querySelectorAll('button, input')].every((c) => { const r = c.getBoundingClientRect(); return (r.width === 0 && r.height === 0) || r.left >= box.left - 0.5 && r.right <= box.right + 0.5; });
                 const hero = document.querySelector('.home-hero')?.getBoundingClientRect();
                 return {
                     text: text?.innerText.trim() || '',
@@ -3295,17 +3295,23 @@ try {
         check(!gone.card && gone.key === '1' && gone.local === null && !/has-leave/.test(gone.grid) && !reloaded, `'다음에'를 눌러도 카드가 남거나 다시 열면 또 보입니다: ${JSON.stringify(gone)} / 다시 열기 ${reloaded}`);
     });
 
-    /* 조퇴만 정해 두고 출퇴근 시각이 없으면 타이머만 뜨고 안내 카드는 함께 뜨지 않습니다. */
-    await withPage(360, async (page) => {
-        const off = await freshHome(page, 'light');
-        if (off) return;
-        await page.evaluate((ymd) => localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ [ymd]: '15:00' })), todayYmd);
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        await page.waitForFunction(() => document.querySelector('.home-hero'));
-        await delay(300);
-        const both = await page.evaluate(() => ({ timer: document.querySelector('.home-leave[data-leave]')?.innerText.replace(/\s+/g, ' ') || '', card: Boolean(document.querySelector('.work-setup')), count: document.querySelectorAll('.home-leave').length }));
-        check(both.timer.includes('15:00') && !both.card && both.count === 1, `조퇴만 정했을 때 타이머와 안내 카드가 함께 뜹니다: ${JSON.stringify(both)}`);
-    });
+    /* 퇴근 시각 없이 조퇴만 정한 날: 출근 시각이 있으면 조퇴 타이머만 뜨고 안내 띠는 함께 뜨지 않습니다. 출근 시각도 없으면 타이머가 못 뜨니 안내 띠만 남습니다(빈자리 없음). */
+    for (const withStart of [true, false]) {
+        await withPage(360, async (page) => {
+            const off = await freshHome(page, 'light');
+            if (off) return;
+            await page.evaluate((ymd, withStart) => {
+                localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ [ymd]: '15:00' }));
+                if (withStart) localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ ...JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'), workStart: '08:30' }));
+            }, todayYmd, withStart);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.querySelector('.home-hero'));
+            await delay(300);
+            const both = await page.evaluate(() => ({ timer: document.querySelector('.home-leave[data-leave]')?.innerText.replace(/\s+/g, ' ') || '', card: Boolean(document.querySelector('.work-setup')), count: document.querySelectorAll('.home-leave').length }));
+            if (withStart) check(both.timer.includes('15:00') && !both.card && both.count === 1, `출근만 정하고 조퇴한 날 타이머와 안내 카드가 함께 뜨거나 타이머가 없습니다: ${JSON.stringify(both)}`);
+            else check(!both.timer && both.card && both.count === 1, `출퇴근 시각 없이 조퇴만 정한 날 홈에 타이머도 안내 띠도 없습니다: ${JSON.stringify(both)}`);
+        });
+    }
 
     /* 데모(?demo=1)에는 출퇴근 08:40·16:40이 있어 평일 08:42에 타이머가 보입니다. 이 기기 설정에는 쓰지 않습니다. */
     await withDemo(390, 'light', async (page) => {
