@@ -2036,6 +2036,44 @@ try {
         check(typed.includes('독서기록') && typed.includes('12/31') && !typed.includes('12/31까지'), `할 일 직접 입력에서 12/31까지를 읽지 못했습니다. ${typed}`);
     }, 844);
 
+    /* 충돌 사본(PR #57 r3 검수 3번): 320px에서도 제목이 잘리지 않고, K 토큰 배지로 일반 할 일과 구분됩니다(라이트·다크). */
+    for (const mode of ['light', 'dark']) {
+        await withDemo(320, mode, async (page) => {
+            await page.evaluate(() => { location.hash = '#/todo'; });
+            await page.waitForSelector('[aria-label="할 일"]');
+            await page.type('[aria-label="할 일"]', '(충돌 사본) 학부모 상담 일정 다시 확인하고 회신 보내기');
+            await page.keyboard.press('Enter');
+            await page.waitForSelector('[data-conflict-copy="1"]');
+            const seen = await page.evaluate(() => {
+                const el = document.querySelector('.todo-title[data-conflict-copy="1"]');
+                const badge = el?.querySelector('.conflict-badge');
+                const text = el?.querySelector('.conflict-text');
+                const cs = badge ? getComputedStyle(badge) : null;
+                const plain = [...document.querySelectorAll('.todo-title')].find((x) => !x.matches('[data-conflict-copy]'));
+                const box = text?.getBoundingClientRect();
+                const btn = el?.closest('button')?.getBoundingClientRect();
+                return {
+                    badge: badge?.innerText || '',
+                    text: text?.innerText || '',
+                    clipped: text ? text.scrollWidth > text.clientWidth + 1 || getComputedStyle(text).textOverflow === 'ellipsis' : true,
+                    inside: box && btn ? box.right <= btn.right + 1 && box.bottom <= btn.bottom + 1 : false,
+                    btnH: btn?.height || 0,
+                    over: document.documentElement.scrollWidth > window.innerWidth,
+                    shadow: cs?.boxShadow || 'none',
+                    color: cs?.color || '',
+                    plainBadge: Boolean(plain?.querySelector('.conflict-badge')),
+                };
+            });
+            check(seen.badge === '충돌 사본', `${mode} 320: 충돌 사본 배지가 없습니다: ${seen.badge}`);
+            check(seen.text.includes('회신 보내기') && !seen.text.includes('(충돌 사본)'), `${mode} 320: 충돌 사본 제목이 다 보이지 않습니다: ${seen.text}`);
+            check(!seen.clipped && seen.inside && !seen.over, `${mode} 320: 충돌 사본 제목이 잘리거나 넘칩니다: ${JSON.stringify(seen)}`);
+            check(seen.btnH >= 44, `${mode} 320: 충돌 사본 줄 누름 칸이 44px보다 작습니다: ${seen.btnH}`);
+            check(seen.shadow !== 'none' && seen.shadow.includes('inset'), `${mode} 320: 배지가 K 뉴모피즘(오목) 토큰을 쓰지 않습니다: ${seen.shadow}`);
+            check(!seen.plainBadge, `${mode} 320: 일반 할 일에 충돌 사본 배지가 붙었습니다.`);
+            await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
+        });
+    }
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));
@@ -3671,6 +3709,87 @@ try {
                 }
             });
         }
+    }
+    /* 퇴근 타이머 숫자 대비: 키캡(.leave-key) 바탕 위 흰 글자가 모든 키보드 테마 × 밝은·어두운 화면 × 퇴근·조퇴에서 4.5:1을 넘어야 합니다.
+       글자를 지운 키캡 화면을 찍어, 글자 자리의 가장 밝은(대비가 가장 낮은) 점과 글자색을 비교합니다. 바탕이 투명해지면 1.3:1 안팎으로 떨어집니다.
+       평일(2026-10-26 월 15:20)로 따로 고정하므로 날짜와 상관없는 검사라, 브라우저 시계 날짜마다 되풀이하지 않고 기본 날짜에서 한 번만 돌립니다. */
+    if (todayYmd === '2026-10-23') {
+        const lowest = [];
+        for (const theme of ['mx', 'retro', 'slim', 'puff', 'jelly', 'type']) {
+            for (const mode of ['light', 'dark']) {
+                await withPage(360, async (page) => {
+                    await page.evaluateOnNewDocument((theme) => {
+                        const fixed = new Date('2026-10-26T15:20:00+09:00').valueOf();
+                        const Native = Date;
+                        function Weekday(...args) {
+                            if (!new.target) return new Native(fixed).toString();
+                            return args.length ? new Native(...args) : new Native(fixed);
+                        }
+                        Weekday.now = () => fixed;
+                        Weekday.parse = Native.parse;
+                        Weekday.UTC = Native.UTC;
+                        Weekday.prototype = Native.prototype;
+                        window.Date = Weekday;
+                        if (!sessionStorage.getItem('leave-contrast-seeded')) {
+                            sessionStorage.setItem('leave-contrast-seeded', '1');
+                            localStorage.setItem('ssug-gyomu-kb-theme', theme);
+                            localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ workStart: '08:40', workEnd: '16:40' }));
+                        }
+                    }, theme);
+                    await page.goto(`${origin}?demo=1&at=15:20&mode=${mode}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                    for (const state of ['퇴근', '조퇴']) {
+                        if (state === '조퇴') {
+                            await page.evaluate(() => localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ '2026-10-26': '16:00' })));
+                            await page.reload({ waitUntil: 'domcontentloaded' });
+                        }
+                        await page.waitForSelector(`.home-leave[data-leave="${state}"] .leave-key .leave-big`, { timeout: 15000 });
+                        await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
+                        await page.evaluate(() => document.fonts.ready);
+                        const key = await page.$('.leave-key');
+                        /* 키캡 토큰이 빠지면 바탕이 비쳐 어두운 화면에서도 키캡 모양이 사라집니다. 바탕색과 그라데이션이 칠해졌는지 봅니다. */
+                        const paint = await key.evaluate((el) => ({ color: getComputedStyle(el).backgroundColor, image: getComputedStyle(el).backgroundImage }));
+                        check(paint.color !== 'rgba(0, 0, 0, 0)' && paint.color !== 'transparent' && paint.image.includes('linear-gradient'), `${theme} ${mode} ${state} 타이머 키캡 바탕이 칠해지지 않습니다: ${JSON.stringify(paint)}`);
+                        const texts = await key.evaluate((el) => {
+                            const r = el.getBoundingClientRect();
+                            return [...el.querySelectorAll('.leave-small, .leave-big')].map((t) => {
+                                const b = t.getBoundingClientRect();
+                                return { text: t.textContent, color: getComputedStyle(t).color, x: b.left - r.left, y: b.top - r.top, w: b.width, h: b.height };
+                            });
+                        });
+                        const hide = await page.addStyleTag({ content: '.leave-key, .leave-key * { color: transparent !important; text-shadow: none !important; }' });
+                        await delay(80);
+                        const bare = await key.screenshot({ encoding: 'base64' });
+                        await hide.evaluate((el) => el.remove());
+                        const ratios = await page.evaluate(async (b64, texts) => {
+                            const img = new Image();
+                            img.src = `data:image/png;base64,${b64}`;
+                            await img.decode();
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const g = canvas.getContext('2d');
+                            g.drawImage(img, 0, 0);
+                            const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+                            const lum = (r, gr, b) => 0.2126 * lin(r) + 0.7152 * lin(gr) + 0.0722 * lin(b);
+                            return texts.map((t) => {
+                                const [r, gr, b] = t.color.match(/[\d.]+/g).map(Number);
+                                const ink = lum(r, gr, b);
+                                const data = g.getImageData(Math.max(0, Math.round(t.x)), Math.max(0, Math.round(t.y)), Math.max(1, Math.round(t.w)), Math.max(1, Math.round(t.h))).data;
+                                let min = Infinity;
+                                for (let i = 0; i < data.length; i += 4) {
+                                    const bg = lum(data[i], data[i + 1], data[i + 2]);
+                                    min = Math.min(min, (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05));
+                                }
+                                return { text: t.text, ratio: Math.round(min * 100) / 100 };
+                            });
+                        }, bare, texts);
+                        lowest.push(Math.min(...ratios.map((item) => item.ratio)));
+                        check(ratios.length === 2 && ratios.every((item) => item.ratio >= 4.5), `${theme} ${mode} ${state} 타이머 숫자가 키캡 바탕과 4.5:1이 안 됩니다: ${JSON.stringify(ratios)}`);
+                    }
+                });
+            }
+        }
+        console.log(`퇴근 타이머 숫자 대비 최저 ${Math.min(...lowest)}:1 (테마 6 × 밝은·어두운 × 퇴근·조퇴)`);
     }
 } catch (error) {
     failures.push(error?.message || String(error));

@@ -69,6 +69,18 @@ const makeCloud = (dev) => ({
         for (const d of snap.docs) out.ats.todos[d.id] = d.data().updatedAt?.toMillis?.() || 0;
         return out;
     },
+    /* 이 검사의 두 기기는 같은 시계(에뮬레이터와 같은 기기)이므로 서버 시각 차이는 0으로 잽니다. */
+    clock: async () => (fault[dev] ? null : 0),
+    /* 진짜 peekTodos처럼 서버에서 바로 봅니다(올리기 전 확인). */
+    async peek(uid, ids) {
+        if (fault[dev]) return null;
+        const out = {};
+        for (const id of ids) {
+            const s = await getDocFromServer(doc(fsFor(uid), 'users', uid, 'todos', String(id)));
+            out[id] = s.exists() ? { row: fromCloudRow('todos', String(id), s.data()), at: s.data().updatedAt?.toMillis?.() ?? null } : { gone: null };
+        }
+        return out;
+    },
     async remove(uid, name, id, opts = {}) {
         const ref = doc(fsFor(uid), 'users', uid, name, String(id));
         return guardedDelete({ get: async () => { const s = await getDocFromServer(ref); return s.exists() ? s.data() : null; }, del: () => deleteDoc(ref) }, name, id, opts);
@@ -120,7 +132,7 @@ check(chip(A)?.kind === 'synced' && /🔒 표시 1개는 이 기기에만/.test(
 cachedPull.B = true;
 const before = await on('B', (db) => db.lastSyncAt());
 await wait(20);
-const cachedKind = await on('B', async (db) => { await db.refreshFromCloud({ force: true }); return chip(db)?.kind; });
+const cachedKind = await on('B', async (db) => { await db.refreshFromCloud({ force: true }); await wait(300); /* 받은 뒤 이어지는 올리기(올리기 전 확인 포함)가 끝난 뒤의 칩 */ return chip(db)?.kind; });
 check(cachedKind === 'error', `캐시에서 받았는데 칩이 '${cachedKind}'입니다.`);
 check(await on('B', (db) => db.lastSyncAt()) === before, '캐시에서 받았는데 마지막 동기화 시각이 바뀌었습니다.');
 cachedPull.B = false;

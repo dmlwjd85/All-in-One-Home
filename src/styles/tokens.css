@@ -45,6 +45,12 @@
     --seal-rim: rgba(255, 255, 255, .9);
     --seal-wall: rgba(255, 255, 255, .22);
     /* 키보드 테마(kbtheme.css)의 주 버튼 그림자가 씁니다. main 값 그대로입니다. */
+    /* 퇴근 타이머 키캡(.leave-key) 바탕. #38에서 빠져 바탕이 투명해졌던 값을 되살립니다.
+       흰 숫자가 가장 밝은 위쪽에서도 4.5:1을 넘도록 예전 값보다 한 단계 진하게 둡니다. */
+    --keycap-top: #A73D74;
+    --keycap-mid: #8F3466;
+    --keycap-bottom: #7A2B55;
+    --keycap-highlight: rgba(255, 255, 255, .55);
     --keycap-side: #6B2246;
     --keycap-shadow: rgba(46, 42, 43, .24);
     --glow: rgba(167, 61, 116, .28);
@@ -124,6 +130,10 @@
     --seal-seed: #F6E4EA;
     --seal-rim: rgba(255, 255, 255, .55);
     --seal-wall: rgba(255, 255, 255, .14);
+    --keycap-top: #A73D74;
+    --keycap-mid: #8A315F;
+    --keycap-bottom: #74294F;
+    --keycap-highlight: rgba(255, 255, 255, .28);
     --keycap-side: #5C1C3C;
     --keycap-shadow: rgba(0, 0, 0, .5);
     --glow: rgba(0, 0, 0, .4);

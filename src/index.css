@@ -943,6 +943,28 @@ button.glass[aria-pressed="true"]:active {
     padding: 0 10px;
 }
 .todo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* 충돌 사본(PR #57): K 뉴모피즘 토큰으로 오목한 배지를 달아 일반 할 일과 구분하고, 제목은 자르지 않고 줄을 바꿉니다(320px). */
+.is-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; white-space: normal; overflow: visible; text-overflow: clip; min-width: 0; padding: 6px 0; }
+.home-line .home-line-text.is-conflict { white-space: normal; overflow: visible; text-overflow: clip; }
+.todo-line:has(.is-conflict) { flex-wrap: wrap; }
+.todo-line:has(.is-conflict) .todo-main { flex: 1 1 0; }
+.todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 50px; }
+.conflict-text { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
+.conflict-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--primary);
+    box-shadow: var(--neo-inset);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
 .todo-due { flex: none; font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
 
 .day-rest { background: var(--rest-bg); }
