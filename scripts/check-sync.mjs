@@ -261,8 +261,8 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     /* 거절 수집(cloud.js)과 알림 호출(flushCloud)이 빠지면 실패합니다. */
     const cloudSrc = readFileSync(new URL('../src/lib/cloud.js', import.meta.url), 'utf8');
     const dbSrc = readFileSync(new URL('../src/lib/db.js', import.meta.url), 'utf8');
-    check(/if \(denied\(error\)\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 쓰기 거절을 모으지 않습니다(error).');
-    check(/if \(denied\(again\)\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
+    check(/if \(classifyWriteError\(error\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 쓰기 거절을 모으지 않습니다(error).');
+    check(/if \(classifyWriteError\(again\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
     check(/return \{[^}]*\brejected\b[^}]*\};\s*\}\s*$/m.test(cloudSrc), 'pushUserData가 거절 목록을 돌려주지 않습니다.');
     const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 800);
     check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');

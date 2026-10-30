@@ -35,7 +35,8 @@
     "check:academic": "node scripts/check-academic.mjs",
     "check:attendcloud": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-attend-cloud.mjs\"",
     "check:cloudpull": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-cloud-pull.mjs\"",
-    "check:attendsave": "node scripts/check-attend-save.mjs"
+    "check:attendsave": "node scripts/check-attend-save.mjs",
+    "check:todosync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-todo-sync.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",
