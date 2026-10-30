@@ -69,7 +69,7 @@ export function Home() {
 
     /* 접힌 카드에 보일 한 줄 요약 */
     const sumTime = todayRest.off ? '오늘은 수업이 없어요' : (strip.filter((slot) => slot.label).map((slot) => slot.label).join(' · ') || `${local.count}교시`);
-    const sumTodo = todos.length ? `${left}개 남음 · ${todos.find((row) => !row.done)?.title || todos[0].title}` : '오늘 발라 둔 할 일이 없어요';
+    const sumTodo = todos.length ? <TodoTitle className="fold-sum-todo" lead={`${left}개 남음 · `} title={todos.find((row) => !row.done)?.title || todos[0].title} /> : '오늘 발라 둔 할 일이 없어요';
     const sumEvent = events.length || googleWeek.length
         ? `${events[0] ? `${weekdayKo(events[0].date)} ${Number(events[0].date.slice(5, 7))}/${Number(events[0].date.slice(8))} ${events[0].title}` : googleWeek[0].title}${events.length + googleWeek.length > 1 ? ` 외 ${events.length + googleWeek.length - 1}` : ''}`
         : '이번 주 일정은 아직 없어요';

@@ -2071,6 +2071,57 @@ try {
             check(seen.shadow !== 'none' && seen.shadow.includes('inset'), `${mode} 320: 배지가 K 뉴모피즘(오목) 토큰을 쓰지 않습니다: ${seen.shadow}`);
             check(!seen.plainBadge, `${mode} 320: 일반 할 일에 충돌 사본 배지가 붙었습니다.`);
             await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
+
+            /* 라이브 QA 44d5556 2번: 오늘 화면 요약·하루 화면·상세 시트에서도 머리글 대신 배지가 보이고 잘리지 않습니다. */
+            const md = await page.evaluate(() => { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}`; });
+            await page.type('[aria-label="할 일"]', `(충돌 사본) 오늘 하루 화면 충돌 사본 확인 ${md}`);
+            await page.keyboard.press('Enter');
+            await new Promise((r) => setTimeout(r, 300));
+            const spot = (sel) => page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                const badge = el?.querySelector('.conflict-badge');
+                const text = el?.querySelector('.conflict-text');
+                const r = el?.getBoundingClientRect();
+                return {
+                    has: Boolean(el), badge: badge?.innerText || '',
+                    clipped: text ? text.scrollWidth > text.clientWidth + 1 || getComputedStyle(text).textOverflow === 'ellipsis' : true,
+                    offscreen: r ? r.right > window.innerWidth + 1 || r.left < -1 : true,
+                    over: document.documentElement.scrollWidth > window.innerWidth,
+                    raw: [...document.querySelectorAll('main, [role="dialog"], .sheet, body')].some((n) => n.innerText.includes('(충돌 사본)')),
+                };
+            }, sel);
+            const must = (name, v) => {
+                check(v.has && v.badge === '충돌 사본', `${mode} 320 ${name}: 충돌 사본 배지가 없습니다: ${JSON.stringify(v)}`);
+                check(!v.clipped && !v.offscreen && !v.over, `${mode} 320 ${name}: 충돌 사본이 잘리거나 넘칩니다: ${JSON.stringify(v)}`);
+                check(!v.raw, `${mode} 320 ${name}: '(충돌 사본)' 글자가 그대로 보입니다.`);
+            };
+            await page.evaluate(() => { location.hash = '#/'; });
+            await page.waitForSelector('.home-todo');
+            await new Promise((r) => setTimeout(r, 300));
+            const folded = await page.evaluate(() => Boolean(document.querySelector('.home-todo .fold-sum')));
+            if (folded) must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+            else {
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+                await new Promise((r) => setTimeout(r, 300));
+                must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            }
+            await page.screenshot({ path: resolve(shots, `conflict-home-320-${mode}.png`) });
+            const line = await page.$('.home-line [data-conflict-copy="1"]');
+            if (!line) await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            await page.waitForSelector('.home-line [data-conflict-copy="1"]', { timeout: 5000 });
+            await page.evaluate(() => document.querySelector('.home-line [data-conflict-copy="1"]').closest('button').click());
+            await page.waitForSelector('.detail-title');
+            must('상세 시트', await spot('.detail-title [data-conflict-copy="1"]'));
+            await page.screenshot({ path: resolve(shots, `conflict-detail-320-${mode}.png`) });
+            await page.keyboard.press('Escape');
+            const ymd = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+            await page.evaluate((y) => { location.hash = `#/day/${y}`; }, ymd);
+            await page.waitForSelector('.day-todo-title[data-conflict-copy="1"]', { timeout: 5000 });
+            must('하루 화면', await spot('.day-todo-title[data-conflict-copy="1"]'));
+            const dayBtn = await page.evaluate(() => document.querySelector('.day-todo-title[data-conflict-copy="1"]').closest('button').getBoundingClientRect().height);
+            check(dayBtn >= 44, `${mode} 320 하루 화면: 충돌 사본 칸이 44px보다 작습니다: ${dayBtn}`);
+            await page.screenshot({ path: resolve(shots, `conflict-day-320-${mode}.png`) });
         });
     }
 

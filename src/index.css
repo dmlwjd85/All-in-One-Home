@@ -949,6 +949,10 @@ button.glass[aria-pressed="true"]:active {
 .todo-line:has(.is-conflict) { flex-wrap: wrap; }
 .todo-line:has(.is-conflict) .todo-main { flex: 1 1 0; }
 .todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 50px; }
+.fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
+.fold-sum .is-conflict { padding: 2px 0; }
+.detail-title .is-conflict, .day-todo-title.is-conflict { padding: 0; }
+.chip:has(.is-conflict) { flex-wrap: wrap; min-width: 0; }
 .conflict-text { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 .conflict-badge {
     flex: none;
