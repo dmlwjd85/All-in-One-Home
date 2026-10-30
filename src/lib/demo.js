@@ -182,7 +182,10 @@ export function buildDemo(clock) {
             { id: 'demo-neis', title: '국어 수행평가 나이스 입력', done: false, due: friday, source: 'demo' },
             { id: 'demo-done', title: '상담 주간 안내 알림장 올리기', done: true, due: today, source: 'demo' },
         ],
-        notes: [],
+        /* #38 쨈 흐름으로 남긴 옛 회의록 모양(제목·참석자 없음). 회의록 화면에서 그대로 보여야 합니다. */
+        notes: [
+            { id: 'meet-demo-old', text: '학년회의 14:00 현장체험학습 안전 교육 안내', date: addDaysYmd(today, -3), tags: ['회의', '학년회의'], pinned: false, source: 'demo' },
+        ],
         notices: [
             { id: tomorrow, date: tomorrow, text: `실내화 가방 챙기기, ${weekdayKo(trip)}요일 도시락 준비`, source: 'demo', at: `${today}T08:20:00` },
         ],

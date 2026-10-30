@@ -1,3 +1,4 @@
+import { TermFill } from './TermFill.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
@@ -272,6 +273,7 @@ function Timetable({ data, todayKey, weekStart, events }) {
                     <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>시간표 저장</Btn>
                 </form>
             )}
+            <TermFill data={data} events={events} />
         </div>
     );
 }

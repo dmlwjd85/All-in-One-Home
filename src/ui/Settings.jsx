@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KB_VOICES, KEY_VOICES, KEY_VOLUMES, closeKeyVoiceMoved, keySoundEnabled, keyVibeEnabled, keyVoiceId, keyVoiceMoved, keyVolumeId, previewKeyVoice, setKeySound, setKeyVibe, setKeyVoice, setKeyVolume, subscribeKeyPrefs } from './keyfeel.js';
 import { TYPE_SOUND_SHOWN, TYPE_VOICES, previewTypeVoice, setTypeSound, setTypeVoice, typeSoundEnabled, typeVoiceId } from './typesound.js';
+import { jamFeelEnabled, previewJam, setJamFeel } from './pressFeel.js';
+import { tapHandlers } from './tapGuard.js';
 import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
@@ -13,9 +15,11 @@ import { disconnectGcal, forgetGcalLocal, settleGcalQueue } from '../lib/gcalLiv
 import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
-import { setAuth } from '../lib/db.js';
+import { lastSyncAt, pullFromCloudNow, setAuth } from '../lib/db.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
+import { AcademicSettings } from './AcademicSettings.jsx';
+import { DefaultTimetable } from './DefaultTimetable.jsx';
 import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
@@ -55,19 +59,24 @@ function movedChipName(id) {
     return PRESS_TYPE_VOICES.find((voice) => voice.id === id)?.chip || '';
 }
 
-function KeyPick({ pressed, label, ariaLabel, onPick }) {
+/** 소리 칩. 누르는 순간에는 그 소리만 미리 들려 주고, 손을 뗄 때 10px 안에서 멈췄을 때만 고릅니다.
+    설정을 스크롤하다 손가락이 처음 닿은 칩이 바로 바뀌던 문제를 막습니다(tapGuard.js). */
+function KeyPick({ pressed, label, ariaLabel, onPick, onPreview }) {
+    const latest = useRef({ onPick, onPreview });
+    latest.current = { onPick, onPreview };
+    const tap = useMemo(() => tapHandlers({ onDown: () => latest.current.onPreview?.(), onTap: () => latest.current.onPick() }), []);
     return (
         <Btn
             className={pressed ? 'chip on' : 'chip'}
             aria-pressed={pressed}
             aria-label={ariaLabel}
-            data-key-preview="1"
-            onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                onPick();
-            }}
+            data-key-preview={onPreview ? '1' : undefined}
+            data-tap-guard="1"
+            {...tap}
             onKeyDown={(event) => {
                 if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+                event.preventDefault();
+                onPreview?.();
                 onPick();
             }}
         >{label}</Btn>
@@ -88,6 +97,8 @@ export function Settings() {
     const [gcalWipe, setGcalWipe] = useState('keep');
     const gcal = useGcal();
     const [includeLocal, setIncludeLocal] = useState(false);
+    /* 공용 컴퓨터 모드를 켜기 전 확인창. 기본은 학급 자료를 남깁니다. */
+    const [sharedAsk, setSharedAsk] = useState(false);
     const [publicInfo, setPublicInfo] = useState(null);
     const [importMode, setImportMode] = useState('merge');
     const [soundOn, setSoundOn] = useState(() => keySoundEnabled());
@@ -97,6 +108,7 @@ export function Settings() {
     const [movedId, setMovedId] = useState(() => keyVoiceMoved());
     const [typeOn, setTypeOn] = useState(() => typeSoundEnabled());
     const [typeId, setTypeId] = useState(() => typeVoiceId());
+    const [jamOn, setJamOn] = useState(() => jamFeelEnabled());
     useEffect(() => subscribeKeyPrefs(() => {
         setSoundOn(keySoundEnabled());
         setVibeOn(keyVibeEnabled());
@@ -120,6 +132,10 @@ export function Settings() {
             </section>
 
             <TimetableSettings data={data} showToast={showToast} />
+
+            <DefaultTimetable data={data} />
+
+            <AcademicSettings data={data} showToast={showToast} />
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
@@ -196,10 +212,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                     {PRESS_TYPE_VOICES.filter((voice) => !voice.playful).map((voice) => (
@@ -208,10 +222,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={voice.aria}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -223,10 +235,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={`${voice.label} ${voice.hint}`}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -238,10 +248,8 @@ export function Settings() {
                             pressed={voiceId === voice.id}
                             label={voice.chip}
                             ariaLabel={voice.aria}
-                            onPick={() => {
-                                setKeyVoice(voice.id);
-                                previewKeyVoice(voice.id);
-                            }}
+                            onPreview={() => previewKeyVoice(voice.id)}
+                            onPick={() => setKeyVoice(voice.id)}
                         />
                     ))}
                 </div>
@@ -261,6 +269,17 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">꺼 두어도 여기서는 미리 들어 볼 수 있어요. 몽글·청축처럼 누를 때와 뗄 때 소리가 따로 있으면 두 번, 뽁·띵처럼 한 번 나는 소리는 누를 때만 들려요. 되는 기기에서는 살짝 떨리기도 해요. 처음에는 몽글, 작게로 두었어요.</p>
+                <p className="muted" style={{ margin: '14px 0 0' }}>하단 쨈</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn className={jamOn ? 'chip on' : 'chip'} aria-pressed={jamOn} onClick={() => {
+                        const next = !jamOn;
+                        setJamFeel(next);
+                        setJamOn(next);
+                        if (next) previewJam();
+                    }}>{jamOn ? '쨈 손맛 켜짐' : '쨈 손맛 꺼짐'}</Btn>
+                    <Btn className="chip" data-key-preview="press" onClick={() => previewJam()}>뽁톡 들어 보기</Btn>
+                </div>
+                <p className="muted">기본은 꺼져 있어요. 켜 두면 하단 쨈이 살짝 눌렸다가 통 튀면서 뽁, 톡 소리가 나요. 진동은 안드로이드 크롬처럼 되는 기기에서만 12밀리초로 울려요. 아이폰 Safari는 웹에서 진동을 주지 않고, 무음이면 소리도 나지 않아요. 소리를 끄면 진동도 같이 꺼져요.</p>
                 {TYPE_SOUND_SHOWN && (<>
                 <p className="muted" style={{ margin: '14px 0 0' }}>글자를 적을 때</p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -278,10 +297,10 @@ export function Settings() {
                             pressed={typeId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPreview={() => previewTypeVoice(voice.id)}
                             onPick={() => {
                                 setTypeVoice(voice.id);
                                 setTypeId(voice.id);
-                                previewTypeVoice(voice.id);
                             }}
                         />
                     ))}
@@ -294,10 +313,10 @@ export function Settings() {
                             pressed={typeId === voice.id}
                             label={voice.label}
                             ariaLabel={`${voice.label} ${voice.hint}`}
+                            onPreview={() => previewTypeVoice(voice.id)}
                             onPick={() => {
                                 setTypeVoice(voice.id);
                                 setTypeId(voice.id);
-                                previewTypeVoice(voice.id);
                             }}
                         />
                     ))}
@@ -311,11 +330,30 @@ export function Settings() {
                 <HotkeyForm onShowList={openHotkeyHelp} />
             </section>
 
+            <section className="glass" style={{ padding: 14 }} data-screen="quick-help">
+                <h2 className="title-font" style={{ marginTop: 0 }}>홈 화면에서 바로 적기</h2>
+                <p>안드로이드에서는 홈 화면의 쨈 아이콘을 길게 누르면 빠른 입력이 나옵니다.</p>
+                <p>아이폰은 아이콘을 길게 눌러도 빠른 입력이 나오지 않아요. 단축어 앱에서 새 단축어를 만들고, 동작은 URL 열기를 고르세요. 주소는 아래를 붙여 넣습니다. 공유에서 홈 화면에 추가하면 아이콘이 생깁니다. 잠금 화면, 제어 센터, 뒷면 탭에도 같은 단축어를 넣을 수 있어요.</p>
+                <p className="muted" style={{ wordBreak: 'break-all' }}>{typeof location === 'undefined' ? '' : `${location.origin}${location.pathname}?quick=1`}</p>
+                <p>이 주소는 Safari로 열립니다. 홈 화면에 넣어 둔 쨈 교무수첩 안의 기록과는 따로일 수 있어요. 그 앱에서 적으려면 아이콘을 연 다음 하단 쨈을 누르세요.</p>
+            </section>
+
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>
                 <p>교실 컴퓨터라면 켜 두세요. 30분 동안 가만히 있으면 화면을 잠그고, 클라우드가 연결되면 창을 닫을 때 임시 저장만 남깁니다.</p>
-                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} aria-pressed={data.profile.sharedPc} onClick={() => patchProfile({ sharedPc: !data.profile.sharedPc })}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
+                <Btn className={data.profile.sharedPc ? 'chip on' : 'chip'} aria-pressed={data.profile.sharedPc} data-shared="toggle" onClick={() => { if (data.profile.sharedPc) patchProfile({ sharedPc: false }); else setSharedAsk(true); }}>{data.profile.sharedPc ? '공용 컴퓨터 모드 켜짐' : '공용 컴퓨터 모드 꺼짐'}</Btn>
+                {sharedAsk && !data.profile.sharedPc ? (
+                    <div className="glass" role="alertdialog" aria-label="공용 컴퓨터 모드 켜기" data-shared="ask" style={{ padding: 12, marginTop: 8 }}>
+                        <p style={{ marginTop: 0 }}>공용 컴퓨터 모드를 켭니다. 이 컴퓨터에 있는 학급 자료는 그대로 남겨 둘까요?</p>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <Btn className="primary-btn" data-shared="keep" onClick={async () => { setSharedAsk(false); await patchProfile({ sharedPc: true }); }}>자료 남기고 켜기</Btn>
+                            <Btn className="chip" data-shared="wipe" onClick={async () => { setSharedAsk(false); await patchProfile({ sharedPc: true }, { wipe: true }); }}>이 컴퓨터 자료 지우고 켜기</Btn>
+                            <Btn className="chip" data-shared="cancel" onClick={() => setSharedAsk(false)}>취소</Btn>
+                        </div>
+                        <p className="muted" style={{ marginBottom: 0 }}>지우기를 고르면 이 컴퓨터의 학급 자료가 지워지고, 클라우드에 올린 자료만 남아요.</p>
+                    </div>
+                ) : null}
                 <h3>백업</h3>
                 <p className="muted">파일은 이 기기 밖으로 나가지 않아요. 민감한 기록을 넣을지는 직접 고릅니다.</p>
                 <Btn className={includeLocal ? 'chip on' : 'chip'} onClick={() => setIncludeLocal((value) => !value)}>이 기기 전용 기록도 넣기</Btn>
@@ -345,6 +383,7 @@ export function Settings() {
                     }
                 }}>구글 로그인</Btn>}
                 {data.auth?.uid && <p>{data.auth.name ? `${data.auth.name} 선생님으로 연결됐어요.` : '구글 계정으로 연결됐어요.'}</p>}
+                {data.auth?.uid && <CloudPull showToast={showToast} />}
                 {data.auth?.uid && <Btn className="chip" onClick={() => signOutFirebase().then(() => showToast('로그아웃했어요. 이 기기 기록은 남아 있어요.'))}>로그아웃</Btn>}
                 <Btn className="chip" onClick={() => loadDemo().then((saved) => { if (!saved?.storageFailed) showToast('예시 학급을 불러왔어요. 설정에서 지울 수 있어요.'); })}>예시 학급 불러오기</Btn>
                 <p>기록을 모두 지우려면 아래 칸에 삭제 라고 적어 주세요. 예전 교무수첩 원본 키는 건드리지 않아요.</p>
@@ -488,6 +527,45 @@ export function Legacy() {
             {current && Object.entries(current.raw || {}).map(([key, value]) => (
                 <p key={key}><strong>{key}</strong> {typeof value === 'string' ? value : JSON.stringify(value)}</p>
             ))}
+        </div>
+    );
+}
+
+const PULL_FAIL = {
+    login: '로그인한 뒤에 받을 수 있어요.',
+    push: '이 기기에서 아직 못 올린 변경이 있어 멈췄어요. 인터넷을 확인하고 다시 눌러 주세요. 이 기기 자료는 그대로예요.',
+    pull: '클라우드에서 받지 못했어요. 이 기기 자료는 그대로예요.',
+    backup: '보관할 공간이 없어 멈췄어요. 이 기기 자료는 그대로예요.',
+    save: '이 기기에 저장하지 못했어요. 공간을 비운 뒤 다시 해 주세요.',
+};
+
+function syncLabel(at) {
+    if (!at) return '아직 받아 온 적 없어요';
+    const d = new Date(at);
+    const parts = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    return `마지막 동기화 ${parts}`;
+}
+
+/** 설정 › 로그인: 클라우드 최신 상태로 이 기기를 맞춥니다. 안 올린 변경은 먼저 올리고, 지금 자료는 보관해 둡니다. */
+function CloudPull({ showToast }) {
+    const [busy, setBusy] = useState(false);
+    const at = lastSyncAt();
+    return (
+        <div className="cloud-pull" data-screen="cloud-pull">
+            <Btn className="choice-tile" data-cloud-pull disabled={busy} aria-busy={busy} onClick={async () => {
+                if (busy) return;
+                if (!window.confirm('클라우드에 있는 최신 자료로 이 기기를 맞출까요?\n아직 안 올린 변경은 먼저 올리고, 지금 이 기기 자료는 따로 보관해 둬요.')) return;
+                setBusy(true);
+                try {
+                    const result = await pullFromCloudNow();
+                    showToast(result.ok ? (result.dropped ? `클라우드 최신 상태로 맞췄어요. 다른 기기에서 지운 ${result.dropped}개는 뺐고, 이전 자료는 보관해 뒀어요.` : '클라우드 최신 상태로 맞췄어요.') : PULL_FAIL[result.reason] || PULL_FAIL.pull);
+                } finally {
+                    setBusy(false);
+                }
+            }}>
+                <span>{busy ? '받는 중…' : '클라우드에서 다시 받기'}</span>
+            </Btn>
+            <p className="muted" data-last-sync>{syncLabel(at)}</p>
         </div>
     );
 }

@@ -1,6 +1,7 @@
 /** 평일·휴일 구분. 토·일, 법정 공휴일, 학사일정 휴업(일정 종류 휴일·휴업·방학). */
 import { fromYmd, isValidYmd } from './date.js';
 import { holidayCaption } from './holidays.js';
+import { academicOffEvents } from './academic.js';
 
 export function isWeekendYmd(ymd) {
     if (!isValidYmd(ymd)) return false;
@@ -38,7 +39,7 @@ export function iraParticle(word) {
 export function restInfo(ymd, events) {
     const weekend = isWeekendYmd(ymd);
     const holiday = holidayCaption(ymd);
-    const school = schoolOffEvent(ymd, events);
+    const school = schoolOffEvent(ymd, [...(events || []), ...academicOffEvents()]);
     const publicOff = Boolean(holiday?.isHoliday);
     const off = weekend || publicOff || Boolean(school);
     if (!off) return { off: false, label: '', title: '', weekend: false };

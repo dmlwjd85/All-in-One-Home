@@ -190,15 +190,15 @@ check(!bag.has(local.PERIOD_LOCAL_KEY) && !bag.has(local.LEAVE_KEY), '공용 PC 
 check(local.readPeriodLocal().workEnd === '17:00' && local.leaveFor('2026-10-27') === '15:00', '공용 PC 에서 메모리 값을 읽지 못합니다.');
 bag.clear();
 
-/* 9·10교시는 서버로 보내지 않습니다. */
+/* 요일 시간표의 9·10교시는 이 기기 설정(extra)에 두고 설정 문서로 오갑니다. 날짜별 행의 9·10교시는 행과 함께 오갑니다(PR #47 I-2). */
 await db.boot('');
 await db.setTimetable('mon', 9, '보충');
 await db.setTimetable('mon', 2, '수학');
 const snap = db.snapshot();
 check(!('p9' in (snap.timetable.mon || {})) && snap.timetable.mon?.p2 === '수학', '9교시가 계정 시간표에 들어갑니다.');
 check(local.readPeriodLocal().extra.mon?.p9 === '보충' && local.tableRow(snap.timetable, 'mon').p9 === '보충', '9교시를 이 기기에 저장하지 못했습니다.');
-const cloud = toCloudRow('timetable', { id: 'mon', p2: '수학', p9: '보충', p10: '자습' });
-check(cloud && !JSON.stringify(cloud).includes('보충') && !JSON.stringify(cloud).includes('자습'), '9·10교시가 서버 모양에 들어갑니다.');
+const cloud = toCloudRow('timetable', { id: '2026-10-26', p2: '수학', p9: '보충', p10: '보건 상담' });
+check(cloud && cloud.body.p9 === '보충' && !JSON.stringify(cloud).includes('보건'), '날짜별 9·10교시가 서버 모양에 바르게 들어가지 않습니다.');
 
 /* 10교시를 1교시로 읽지 않습니다. 한 자리 교시는 그대로입니다. */
 const starts10 = ten;

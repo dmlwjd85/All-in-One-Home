@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus, workTimer } from '../lib/period.js';
-import { joined, joinedRecords } from '../lib/db.js';
+import { joined, joinedRecords, toggleTodo } from '../lib/db.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn, Motto, Symbol, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
-import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, tableRow, withUsedCount, workCardOff } from '../lib/periodLocal.js';
+import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount, workCardOff } from '../lib/periodLocal.js';
 import { DEMO_WORK } from '../lib/demo.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { WorkSetup, WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
+import { DetailSheet } from './DetailSheet.jsx';
+import { tableForDateWithLocal } from '../lib/semester.js';
+import { recentSummary } from '../lib/foldSummary.js';
+import { FoldCard } from './Fold.jsx';
 
 export function Home() {
     const { data, go, showToast } = useUi();
@@ -25,7 +29,7 @@ export function Home() {
     /* 데모에서는 출퇴근 시각을 채워 타이머를 보여 줍니다. 이 기기 설정에는 쓰지 않습니다. */
     const local = data.profile.demo && !saved.workStart && !saved.workEnd ? { ...saved, ...DEMO_WORK } : saved;
     const leave = useLeave(clock.ymd);
-    const table = tableRow(data.timetable, day, local);
+    const table = tableForDateWithLocal(data, clock.ymd, local);
     const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
     const period = periodStatus(clock.hm, allStarts(data.profile.periodStarts, local), labels, {
         last: lastPeriod(table, local, day),
@@ -35,6 +39,7 @@ export function Home() {
         workEnd: leave || local.workEnd,
         endLabel: leave ? '조퇴' : '퇴근',
     });
+    const [detail, setDetail] = useState(null);
     const marks = data.attendance.filter((row) => row.date === clock.ymd);
     const checked = data.profile.checkedDates.includes(clock.ymd);
     const count = data.profile.classSize || data.students.length;
@@ -66,6 +71,14 @@ export function Home() {
     /* 빈 교시는 빼고, 잠긴 교시는 잠김으로 보여 줍니다. 과목이 하나도 없으면 교시 칸만 보여 줍니다. */
     const slots = labels.map((label, index) => ({ index, label, locked: isLocked(local, day, index + 1) }));
     const strip = slots.some((slot) => slot.label) ? slots.filter((slot) => slot.label) : slots;
+
+    /* 접힌 카드에 보일 한 줄 요약 */
+    const sumTime = todayRest.off ? '오늘은 수업이 없어요' : (strip.filter((slot) => slot.label).map((slot) => slot.label).join(' · ') || `${local.count}교시`);
+    const sumTodo = todos.length ? `${left}개 남음 · ${todos.find((row) => !row.done)?.title || todos[0].title}` : '오늘 발라 둔 할 일이 없어요';
+    const sumEvent = events.length || googleWeek.length
+        ? `${events[0] ? `${weekdayKo(events[0].date)} ${Number(events[0].date.slice(5, 7))}/${Number(events[0].date.slice(8))} ${events[0].title}` : googleWeek[0].title}${events.length + googleWeek.length > 1 ? ` 외 ${events.length + googleWeek.length - 1}` : ''}`
+        : '이번 주 일정은 아직 없어요';
+    const sumRecent = recentSummary(feed[0]);
 
     return (
         <div className={timer || setup ? 'home-grid has-leave' : 'home-grid'}>
@@ -119,11 +132,11 @@ export function Home() {
                     <Motto />
                 </div>
                 <h3 className="home-quick-title" style={{ margin: '0 0 6px', fontSize: 16 }}>생각나면 발라 두기</h3>
-                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 회의록처럼 가끔 쓰는 일은 더보기에 있어요.</p>
+                <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 메시지·회의록은 쨈 버튼을 누른 뒤 붙여넣기로 넣어요.</p>
             </section>
 
-            <section className="glass home-time" style={{ padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <FoldCard id="time" className="home-time" title="오늘 시간표" summary={sumTime} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>}>
+                <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
                     <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
                 </div>
@@ -148,19 +161,19 @@ export function Home() {
                         })}
                     </div>
                 )}
-            </section>
+            </FoldCard>
 
-            <section className="glass home-todo" style={{ padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <FoldCard id="todo" className="home-todo" title={`오늘 할 일${todos.length ? ` ${todos.length}` : ``}`} summary={sumTodo} action={<Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>}>
+                <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>오늘 할 일</h3>
                     <Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
-                        <div key={row.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                            <span>{row.done ? '☑' : '☐'} {row.title}</span>
-                            {row.of ? <span className="muted num">{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
-                        </div>
+                        <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
+                            <span className="home-line-text">{row.done ? '☑' : '☐'} {row.title}</span>
+                            {row.of ? <span className="muted num" style={{ flex: 'none' }}>{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`} style={{ flex: 'none' }}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
+                        </Btn>
                     ))}
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
                     {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 발라 둔 할 일이 없어요.</p>}
@@ -168,19 +181,19 @@ export function Home() {
                         <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>정리함 {(data.inbox || []).length}개</Btn>
                     )}
                 </div>
-            </section>
+            </FoldCard>
 
-            <section className="glass home-event" style={{ padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <FoldCard id="event" className="home-event" title="이번 주 학급 일정" summary={sumEvent} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주</Btn>}>
+                <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: 16 }}>이번 주 학급 일정</h3>
                     <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주</Btn>
                 </div>
                 <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
                     {events.slice(0, 3).map((row) => (
-                        <div key={row.id}>
-                            <strong>{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
-                            {row.memo && <p className="muted" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
-                        </div>
+                        <Btn key={row.id} className="home-event-line" data-home-event="1" aria-label={`일정 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'event', id: row.id })}>
+                            <strong className="clip2">{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
+                            {row.memo && <p className="muted clip2" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
+                        </Btn>
                     ))}
                     {googleWeek.map((row) => (
                         <div key={row.id} className="gcal-line">
@@ -190,10 +203,10 @@ export function Home() {
                     ))}
                     {!events.length && !googleWeek.length && <p className="muted" style={{ margin: 0 }}>이번 주 일정은 아직 없어요.</p>}
                 </div>
-            </section>
+            </FoldCard>
 
-            <section className="glass home-recent" style={{ padding: 14 }}>
-                <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 발라 둔 것</h3>
+            <FoldCard id="recent" className="home-recent" title="최근에 발라 둔 것" summary={sumRecent}>
+                <h3 className="fold-hide" style={{ margin: '0 0 8px', fontSize: 16 }}>최근에 발라 둔 것</h3>
                 <div style={{ display: 'grid', gap: 10 }}>
                     {feed.map((row) => (
                         <div key={row.id} style={{ display: 'flex', gap: 10 }}>
@@ -211,7 +224,7 @@ export function Home() {
                         </div>
                     )}
                 </div>
-            </section>
+            </FoldCard>
             {attendStudent && (
                 <ReasonSheet
                     student={attendStudent}
@@ -220,6 +233,11 @@ export function Home() {
                     onClose={() => setAttendStudent(null)}
                 />
             )}
+            {detail && (() => {
+                const row = (detail.kind === 'todo' ? todos : events).find((item) => item.id === detail.id);
+                if (!row) return null;
+                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? () => toggleTodo(row.id) : null} />;
+            })()}
         </div>
     );
 }

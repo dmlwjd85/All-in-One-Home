@@ -36,6 +36,7 @@ import {
 import { MAIN_TYPE_GAIN, MAIN_TYPE_PITCH, MAIN_TYPE_VOICE_IDS, renderMainTypeVoice } from './fixtures/typesound-main-483e43c.mjs';
 import { mainNoteTypeInput, resetMainTypeInput } from './fixtures/typeinput-main-483e43c.mjs';
 import { TYPE_GAIN, TYPE_SOUND_SHOWN, TYPE_VOICE_MS, TYPE_VOICES, mixTypeBurst, noteTypeInput, noteTypeKey, playTypeSound, previewTypeVoice, renderTypeStroke, renderTypeVoice, resetTypeGraphForTest, scheduleTypeBurst, setTypeSound, setTypeVoice, typeVoiceId } from '../src/ui/typesound.js';
+import { JAM_KEY, PRESS_HOLD, PRESS_VIBE_MS, jamFeelEnabled, mixJamBurst, renderJamStroke, setJamFeel } from '../src/ui/pressFeel.js';
 
 const failures = [];
 function sameSamples(a, b) {
@@ -876,8 +877,37 @@ playKey('down');
 check(liveSources.length === ppokFrom + 4, '받아쓰기 중에 누를 때 소리가 납니다.');
 setKeyMuted(false);
 
+const jamStore = memory();
+check(!jamFeelEnabled(jamStore), '쨈 손맛 기본이 켜져 있습니다.');
+check(setJamFeel(true, jamStore) && jamFeelEnabled(jamStore), '쨈 손맛 켜기가 저장되지 않습니다.');
+check(setJamFeel(false, jamStore) === false && !jamFeelEnabled(jamStore), '쨈 손맛 끄기가 저장되지 않습니다.');
+check(JAM_KEY === 'ssug-gyomu-press-feel', '쨈 손맛 저장 키가 바뀌었습니다.');
+check(PRESS_VIBE_MS >= 10 && PRESS_VIBE_MS <= 20, '진동 길이가 10–20ms가 아닙니다.');
+check(PRESS_HOLD.x === 1.1 && PRESS_HOLD.y === 0.86, '눌림 크기가 완성본과 다릅니다.');
+const foilCss = readFileSync(`${new URL('..', import.meta.url).pathname}/src/ui/foilCup.css`, 'utf8');
+check(foilCss.includes('scale(1.1, .86)') && foilCss.includes('cubic-bezier(.28, 1.9, .42, .9)'), '되튐 곡선이 없습니다.');
+check(foilCss.includes('transform: none'), '움직임 줄이기에서 눌림을 끄지 않습니다.');
+for (const part of ['pop', 'tok']) {
+    const stroke = renderJamStroke(part, rate);
+    check(Math.abs(stroke.samples[0]) < 1e-6 && Math.abs(stroke.samples.at(-1)) < 1e-6, `${part} 시작·끝이 0이 아닙니다.`);
+    const peak = peakOf(stroke.samples);
+    check(peak > 0.85 && peak < 0.95, `${part} 크기가 맞지 않습니다.`);
+    for (const sampleRate of [44100, 48000]) {
+        const burst = mixJamBurst({ part, count: 20, gapMs: 20, fadeMs: 12, sampleRate });
+        console.log(`쨈 ${part} 연타 20회 @${sampleRate} peak ${burst.peak.toFixed(4)} jump ${burst.maxJump.toFixed(4)} clip ${burst.clipped}`);
+        check(burst.peak <= 1 && burst.peak > 0, `${part} 연타 피크가 1을 넘거나 0입니다.`);
+        check(burst.clipped === 0, `${part} 연타가 잘립니다. ${burst.clipped}`);
+        check(burst.maxJump < 0.08, `${part} 연타 점프가 큽니다. ${burst.maxJump}`);
+    }
+}
+const popTok = Math.abs(correlation(renderJamStroke('pop', rate).samples, renderJamStroke('tok', rate).samples));
+check(popTok < 0.8, `뽁과 톡이 너무 같습니다. ${popTok.toFixed(2)}`);
+
 const root = new URL('..', import.meta.url).pathname;
 const feel = readFileSync(`${root}/src/ui/keyfeel.js`, 'utf8');
+/* QA 1차 9번: audioSession은 소리 판을 처음 만들 때 한 번, 아무도 정하지 않은('auto') 때만 'ambient'로 바꿉니다. */
+const sessionSets = feel.match(/audioSession\.type = /g) || [];
+check(sessionSets.length === 1 && /if \(!ctx\) \{[\s\S]{0,600}audioSession\.type === 'auto'\) navigator\.audioSession\.type = 'ambient'/.test(feel), 'audioSession을 누를 때마다 바꾸거나 다른 쪽이 정한 값을 덮습니다.');
 /** 연타 측정(mixTypeBurst)의 예전 소리 음높이도 실제 재생처럼 main의 ±3%(0.97~1.03)여야 합니다. */
 const typeSource = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
 const burstPitch = typeSource.slice(typeSource.indexOf('export function mixTypeBurst')).match(/const pitch = legacy \? ([^:]+) :/);
@@ -893,11 +923,14 @@ const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 check(feel.includes("const SOUND_KEY = 'ssug-gyomu-key-sound'"), '소리 켜기 키가 바뀌었습니다.');
 check(feel.includes("const VIBE_KEY = 'ssug-gyomu-key-vibrate'"), '진동 키가 바뀌었습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')"), '내부 저장 키가 바뀌었습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v26'"), '서비스 워커가 v26이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v48'"), '서비스 워커가 v48이 아닙니다.');
 check(sw.includes('function staleAssetUrls') && sw.includes('/* stale-assets-end */'), '옛 assets 정리가 빠졌습니다.');
 check(speech.includes('setKeyMuted(listening)'), '받아쓰기 중에 소리를 끄지 않습니다.');
 check(!settings.includes('<select') && settings.includes('누를 때 소리 종류') && settings.includes('role="group"'), '소리 고르기가 칩이 아닙니다.');
 check(settings.includes('KEY_VOICES.map') && settings.includes('KEY_VOLUMES.map') && settings.includes('data-key-preview'), '설정이 소리 칩을 그리지 않습니다.');
+check(settings.includes('쨈 손맛 켜짐') && settings.includes('쨈 손맛 꺼짐') && settings.includes('aria-pressed={jamOn}'), '쨈 손맛 켜기가 없습니다.');
+const typeSrc = readFileSync(`${root}/src/ui/typesound.js`, 'utf8');
+check(typeSrc.includes("const SOUND_KEY = 'ssug-gyomu-type-sound'") && typeSrc.includes("const VOICE_KEY = 'ssug-gyomu-type-voice'"), '글자 소리 저장 키가 바뀌었습니다.');
 check(settings.includes('꺼 두어도 여기서는 미리 들어 볼 수 있어요'), '꺼 둔 미리듣기 안내가 없습니다.');
 for (const label of ['몽글', '몽돌', '적축', '갈축', '청축', '끌기', '작게', '보통', '크게']) {
     check(feel.includes(`'${label}'`) || settings.includes(label), `소리 이름 ${label} 이 없습니다.`);

@@ -5,6 +5,7 @@ export const MENU = [
     ['학생 기록', '#/students'],
     ['일정·시간표', '#/schedule'],
     ['할 일·메모', '#/todo'],
+    ['회의록', '#/minutes'],
     ['알림장', '#/notice'],
     ['나이스 모아 보기', '#/students/neis'],
     ['설정', '#/settings'],
@@ -27,6 +28,7 @@ export function menuSelected(routeName, href) {
     if (href === '#/schedule') return routeName === 'schedule' || routeName === 'day';
     if (href === '#/todo') return routeName === 'todo';
     if (href === '#/notice') return routeName === 'notice';
+    if (href === '#/minutes') return routeName === 'minutes';
     if (href === '#/settings') return routeName === 'settings' || routeName === 'legacy' || routeName === 'roster';
     return false;
 }
