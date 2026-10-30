@@ -1,4 +1,4 @@
-/** 이 기기에만 두는 시간표 설정입니다. 서버(Firestore)로 보내지 않습니다.
+/** 시간표 설정입니다. 로그인하면 users/{uid}/settings/device 로 다른 기기와 같이 씁니다(오늘 조퇴 시각은 빼고).
     9·10교시 과목, 교시 수, 수업 길이, 잠금, 출퇴근 시각, 오늘 조퇴 시각을 담습니다.
     공용 PC 모드에서는 메모리에만 둡니다. */
 import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
@@ -71,8 +71,26 @@ export function readPeriodLocal() {
     };
 }
 
-export function patchPeriodLocal(patch) {
-    const next = { ...readPeriodLocal(), ...patch };
+export function patchPeriodLocal(patch, { fromCloud = false } = {}) {
+    /* syncAt·syncAts: 다른 기기와 비교할 고친 시각. extra(9·10교시 과목)와 나머지(교시 수·길이 등)를 따로 적어
+       두 기기가 서로 다른 칸을 고쳐도 칸 단위로 합칩니다. 클라우드에서 받은 값은 받은 시각을 그대로 둡니다. */
+    const prev = readPeriodLocal();
+    const next = { ...prev, ...patch };
+    if (!fromCloud) {
+        const now = Date.now();
+        const legacy = Number(prev.syncAt) || 0;
+        const period = prev.syncAts?.period ?? legacy;
+        /* work: 출퇴근 시각 칸. 예전 값(칸 시각 없음)은 시각이 있으면 교시 칸 시각, 없으면 0(한 번도 안 정함). */
+        const work = prev.syncAts?.work ?? ((prev.workStart || prev.workEnd) ? period : 0);
+        const ats = { period, extra: prev.syncAts?.extra ?? legacy, work };
+        const keys = Object.keys(patch || {}).filter((key) => key !== 'syncAt' && key !== 'syncAts' && key !== 'leave');
+        const isWork = (key) => key === 'workStart' || key === 'workEnd';
+        if (keys.includes('extra')) ats.extra = now;
+        if (keys.some(isWork)) ats.work = now;
+        if (keys.some((key) => key !== 'extra' && !isWork(key))) ats.period = now;
+        next.syncAts = ats;
+        next.syncAt = now;
+    }
     writeJson(PERIOD_LOCAL_KEY, next);
     return next;
 }

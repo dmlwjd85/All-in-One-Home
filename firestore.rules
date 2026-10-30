@@ -21,6 +21,74 @@ service cloud.firestore {
     function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,40}$'); }
     // 민감 낱말 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 같아야 합니다.
     function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식).*'); }
+    // ── 기기 설정(settings/device) 검사 ──
+    // 글자 목록: 모두 글자이고(join 이 아니면 거절) 각 칸이 형식에 맞고 개수가 max 이하
+    // full: 쉼표로 이은 전체에 맞출 정규식(글자 그대로 적어 계산을 줄입니다).
+    // w: 한 칸 글자 수(날짜 10, 시각 5). 이은 길이가 n*(w+1)-1 이면 한 칸에 쉼표로 여러 값을 숨기지 못합니다.
+    function joinedOk(l, max, full, w) {
+      return l is list && l.size() <= max && (l.size() == 0 || joinedStrOk(l.join(','), l.size(), full, w));
+    }
+    function joinedStrOk(j, n, full, w) { return j.size() == n * (w + 1) - 1 && j.matches(full); }
+    // 칸 잠금은 'mon-3,tue-10' 처럼 쉼표로 이은 글자 하나(50칸까지).
+    function cellLocksOk(v) { return v is string && v.size() <= 350 && v.matches('^(((mon|tue|wed|thu|fri)-([1-9]|10))(,((mon|tue|wed|thu|fri)-([1-9]|10))){0,49})?$'); }
+    function atOk(v) { return v is int && v >= 0; }
+    // work(출퇴근 시각 칸 시각)는 PR #53에서 더했습니다. 예전 앱은 이 칸 없이 올리므로 없어도 받습니다.
+    function setAtsOk(a) {
+      return a is map && a.keys().hasAll(['period', 'extra', 'periodStarts', 'ttEdited', 'academic'])
+        && a.keys().hasOnly(['period', 'extra', 'periodStarts', 'ttEdited', 'academic', 'work'])
+        && atOk(a.period) && atOk(a.extra) && atOk(a.periodStarts) && atOk(a.ttEdited) && atOk(a.academic)
+        && (!('work' in a) || atOk(a.work));
+    }
+    // 숫자 목록은 '45,45,40' 처럼 쉼표로 이은 글자 하나로 받습니다(반복문 없이 정규식 한 번으로 10개까지 검사).
+    function csvOk(v, full) { return v is string && v.size() <= 40 && v.matches(full); }
+    function subjOk(m, k) { return !(k in m) || (str(m[k], 0, 20) && safeText(m[k])); }
+    // 9·10교시 과목: 'mon-p9=방과후|tue-p10=보충' 처럼 글자 하나(20칸까지, 값은 20자 이하, 민감 낱말 없음, 전체 1000자 이하).
+    // 값 안의 '%'·'|'·'=' 는 %25·%7C·%3D 로 이스케이프합니다(이스케이프 하나가 한 글자).
+    function extraOk(e) {
+      return e is string && e.size() <= 1000
+        && e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}){0,19})?$')
+        && safeText(e);
+    }
+    function hmOrEmpty(v) { return v is string && (v == '' || hm(v)); }
+    function periodLocalOk(p) {
+      return p is map
+        && p.keys().hasAll(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])
+        && p.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])
+        && p.level in ['초', '중', '고']
+        && p.count is int && p.count >= 1 && p.count <= 10
+        && csvOk(p.lengths, '^(([0-9]|[1-9][0-9]|1[01][0-9]|120)(,([0-9]|[1-9][0-9]|1[01][0-9]|120)){0,9})?$')
+        && csvOk(p.locks, '^(([1-9]|10)(,([1-9]|10)){0,9})?$')
+        && joinedOk(p.extraStarts, 2, '^(([01][0-9]|2[0-3]):[0-5][0-9])(,(([01][0-9]|2[0-3]):[0-5][0-9]))*$', 5)
+        && cellLocksOk(p.cellLocks)
+        && hmOrEmpty(p.workStart) && hmOrEmpty(p.workEnd)
+        && extraOk(p.extra);
+    }
+    // 학기 날짜 네 칸은 '|'로 이어 정규식 한 번에 봅니다(없는 칸은 빈 글자).
+    function acadYearOk(r) {
+      return r is map
+        && r.keys().hasOnly(['firstStart', 'firstEnd', 'secondStart', 'secondEnd', 'offDays'])
+        && [r.get('firstStart', ''), r.get('firstEnd', ''), r.get('secondStart', ''), r.get('secondEnd', '')].join('|').matches('^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?$')
+        && joinedOk(r.get('offDays', []), 40, '^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))(,(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])))*$', 10);
+    }
+    // 학년도는 4개까지라 앞에서부터 네 칸만 봅니다(반복문 대신).
+    function acadAt(a, i) { return a.size() <= i || acadKeyOk(a, a.keys()[i]); }
+    function acadKeyOk(a, y) { return y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk(a[y]); }
+    function academicOk(a) {
+      return a is map && a.size() <= 4
+        && acadAt(a, 0) && acadAt(a, 1) && acadAt(a, 2) && acadAt(a, 3);
+    }
+    // 앱은 늘 모든 칸을 함께 올립니다. 칸을 모두 요구하면 'in' 검사가 줄어 규칙 계산 한도(1000) 안에 듭니다.
+    function settingsOk(v) {
+      return v.keys().hasAll(['at', 'ats', 'periodLocal', 'periodStarts', 'ttEdited', 'academic'])
+        && v.keys().hasOnly(['at', 'ats', 'periodLocal', 'periodStarts', 'ttEdited', 'academic', 'updatedAt'])
+        && v.at is int && v.at > 0 && v.at <= 4102444800000
+        && setAtsOk(v.ats)
+        && periodLocalOk(v.periodLocal)
+        && joinedOk(v.periodStarts, 8, '^(([01][0-9]|2[0-3]):[0-5][0-9])(,(([01][0-9]|2[0-3]):[0-5][0-9]))*$', 5)
+        && joinedOk(v.ttEdited, 400, '^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))(,(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])))*$', 10)
+        && academicOk(v.academic)
+        && (!('updatedAt' in v) || v.updatedAt is timestamp);
+    }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {
       return t is list && t.size() <= 10
@@ -136,13 +204,15 @@ service cloud.firestore {
           && optTs('updatedAt');
       }
 
-      // 메모
+      // 메모·회의록(회의록은 '회의' 태그, 제목·참석자는 회의록만 씁니다. 본문은 회의록에 맞게 20000자까지)
       match /notes/{nid} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(nid)
           && d().keys().hasAll(['text'])
-          && d().keys().hasOnly(['text', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt'])
-          && str(d().text, 1, 2000) && safeText(d().text)
+          && d().keys().hasOnly(['text', 'title', 'attendees', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt'])
+          && str(d().text, 1, 20000) && safeText(d().text)
+          && optStr('title', 60) && (!('title' in d()) || safeText(d().title))
+          && optStr('attendees', 200) && (!('attendees' in d()) || safeText(d().attendees))
           && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsOk(d().tags))
           && optBool('pinned')
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
@@ -160,12 +230,21 @@ service cloud.firestore {
       }
 
       // 시간표: 문서 id = 요일 mon~fri (기본표) 또는 날짜(그날만 바뀐 표)
+      // 기기끼리 같이 쓰는 설정 한 문서(교시 길이·9·10교시·출퇴근·시작 시각·학사일정·그날 고친 날 표시).
+      // 기기끼리 같이 쓰는 설정 한 문서. 칸마다 고친 시각(ats)을 두고 칸 단위로 합칩니다.
+      // 안쪽 값도 다른 컬렉션처럼 형식·길이·민감 낱말을 서버에서 다시 막습니다.
+      match /settings/{key} {
+        allow read, delete: if isOwner(uid) && key == 'device';
+        allow create, update: if isOwner(uid) && key == 'device' && settingsOk(request.resource.data);
+      }
       match /timetable/{key} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && (key in ['mon', 'tue', 'wed', 'thu', 'fri'] || ymd(key))
           && d().keys().hasOnly(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8',
-                                 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 'updatedAt'])
+                                 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8',
+                                 'p9', 'p10', 's9', 's10', 'updatedAt'])
+          && subjOk(d(), 'p9') && subjOk(d(), 'p10') && subjOk(d(), 's9') && subjOk(d(), 's10')
           && optStr('p1', 20) && optStr('p2', 20) && optStr('p3', 20) && optStr('p4', 20)
           && optStr('p5', 20) && optStr('p6', 20) && optStr('p7', 20) && optStr('p8', 20)
           && optStr('s1', 20) && optStr('s2', 20) && optStr('s3', 20) && optStr('s4', 20)

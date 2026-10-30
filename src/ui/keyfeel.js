@@ -590,6 +590,13 @@ function sharedContext() {
         pairCache.clear();
     }
     if (!ctx) {
+        /* QA 1차 9번: 일부러 'ambient'로 둡니다. 이 앱의 소리는 모두 누름 효과음(자판·쨈 컵)이라
+           iPhone 무음 스위치를 따르고, 다른 앱의 음악을 끊지 않아야 합니다(가계부 feel.js와 같음).
+           범위: 소리 판을 처음 만들 때 한 번만, 아직 아무도 정하지 않은('auto') 때만 바꿉니다.
+           누를 때마다 되돌리지 않으므로 받아쓰기(마이크) 같은 다른 쪽이 정한 값을 덮지 않습니다. */
+        try {
+            if (navigator.audioSession && navigator.audioSession.type === 'auto') navigator.audioSession.type = 'ambient';
+        } catch { /* 지원하지 않는 브라우저는 그대로 둡니다. */ }
         try { ctx = new AudioCtx({ latencyHint: 'interactive' }); }
         catch { ctx = new AudioCtx(); }
     }

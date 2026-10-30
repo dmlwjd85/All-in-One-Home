@@ -63,12 +63,13 @@ function StopIcon() {
     );
 }
 
-export function PlusSheet({ onClose, onPick }) {
+export function PlusSheet({ onClose, onPick, startMore = false }) {
     const { data, clock, showToast } = useUi();
     const [phase, setPhase] = useState('write');
     const [text, setText] = useState('');
     const [selectedNo, setSelectedNo] = useState(0);
-    const [more, setMore] = useState(false);
+    const [more, setMore] = useState(startMore);
+    const moreGrid = useRef(null);
     const [items, setItems] = useState([]);
     const [savedRecord, setSavedRecord] = useState(false);
     const [savedNote, setSavedNote] = useState('');
@@ -78,7 +79,11 @@ export function PlusSheet({ onClose, onPick }) {
     const periods = allStarts(data.profile.periodStarts);
     const keptCount = items.filter((item) => item.include !== false).length;
 
-    useEffect(() => { box.current?.focus(); }, []);
+    /* 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기를 펼친 채 그 칸을 보여 줍니다(키보드가 칸을 가리지 않게 입력칸은 비워 둠). */
+    useEffect(() => {
+        if (startMore) moreGrid.current?.scrollIntoView?.({ block: 'nearest' });
+        else box.current?.focus();
+    }, []);
     useEffect(() => {
         if (phase !== 'done') return undefined;
         const timer = window.setTimeout(onClose, 1200);
@@ -281,7 +286,7 @@ export function PlusSheet({ onClose, onPick }) {
                         </div>
                         <Btn className="chip block" style={{ marginTop: 8 }} aria-expanded={more} onClick={() => setMore((value) => !value)}>{more ? '⋯ 접기' : '⋯ 더보기'}</Btn>
                         {more && (
-                            <div className="choice-grid" role="group" aria-label="더 보기" style={{ marginTop: 8 }}>
+                            <div ref={moreGrid} className="choice-grid" role="group" aria-label="더 보기" style={{ marginTop: 8 }}>
                                 {MORE_ACTIONS.map((item) => (
                                     <Btn key={item.id} className="choice-tile" onClick={() => onPick(item)}>
                                         {item.emoji ? <span aria-hidden="true">{item.emoji}</span> : null}

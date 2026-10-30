@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { boot, flushCloud, joined, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
@@ -10,11 +10,18 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
+import { SealCup } from './ui/SealCup.jsx';
+import { playFoilPop } from './ui/sealBurst.js';
+import { bloomQuickBar, guardCupBurst, playCupGhost, resetQuickLayer } from './ui/cupBurst.js';
+import { QuickBar } from './ui/QuickBar.jsx';
+import { quickDate } from './ui/quickText.js';
 import { applyStoredFont } from './ui/fontpick.js';
 import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVoice, playKey, pressTarget, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
+import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { Minutes } from './ui/Minutes.jsx';
 import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
@@ -28,6 +35,8 @@ import { Notice, Tasks } from './ui/Tasks.jsx';
 import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
 import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
+import { SyncChip } from './ui/SyncChip.jsx';
+import { syncAuthKnown } from './lib/syncStatus.js';
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -35,6 +44,13 @@ export default function App() {
     const [clock, setClock] = useState(() => seoulParts());
     const [toast, setToast] = useState(null);
     const [plus, setPlus] = useState(false);
+    const [quickOpen, setQuickOpen] = useState(false);
+    const [quickInvite, setQuickInvite] = useState(false);
+    const quickInput = useRef(null);
+    const quickOpenRef = useRef(false);
+    const quickPushed = useRef(false);
+    const quickOpenedAt = useRef(-Infinity);
+    const pendingQuick = useRef(false);
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
@@ -48,6 +64,28 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); }, []);
+    // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다. 1분에 한 번까지만.
+    useEffect(() => {
+        const again = () => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); };
+        /* 앱을 닫거나 숨기면 남은 변경을 바로 올립니다. 휴대폰은 숨긴 뒤 곧 멈추므로 기다리지 않습니다. */
+        const leave = () => { if (document.visibilityState === 'hidden') flushCloud().catch(() => {}); };
+        document.addEventListener('visibilitychange', again);
+        document.addEventListener('visibilitychange', leave);
+        window.addEventListener('pagehide', leave);
+        window.addEventListener('focus', again);
+        window.addEventListener('online', again);
+        /* 화면을 켜 둔 채 다른 기기에서 고쳐도 5분마다 받아 옵니다. */
+        const tick = window.setInterval(() => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); }, 5 * 60 * 1000);
+        return () => {
+            window.clearInterval(tick);
+            document.removeEventListener('visibilitychange', again);
+            document.removeEventListener('visibilitychange', leave);
+            window.removeEventListener('pagehide', leave);
+            window.removeEventListener('focus', again);
+            window.removeEventListener('online', again);
+        };
+    }, []);
+    useEffect(() => guardCupBurst(), []);
 
     /* 키보드 테마는 이 기기에 둔 값만 봅니다. 테마 소리를 골라 두었으면 쉬는 틈에 파일을 받아 첫 누름부터 들리게 합니다. */
     useEffect(() => {
@@ -81,7 +119,12 @@ export default function App() {
             setData(snapshot());
             stop = subscribe(setData);
             stopGcal = startGcalBridge();
-            unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            try {
+                unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});
+            } finally {
+                /* 로그인 확인이 오지 않아도(연결 실패 등) 동기화 칩이 빈 자리로 계속 남지 않게 잠시 뒤 확정합니다. */
+                setTimeout(syncAuthKnown, 5000);
+            }
         });
         return () => {
             alive = false;
@@ -94,7 +137,15 @@ export default function App() {
     useEffect(() => {
         const timer = setInterval(() => setClock(seoulParts()), 30000);
         const onHash = () => setHash(location.hash || '#/today');
-        const onPop = () => setHash(location.hash || '#/today');
+        const onPop = () => {
+            setHash(location.hash || '#/today');
+            /* 뒤로 가기: 열린 쨈 팝업만 닫습니다(열 때 넣어 둔 기록 한 칸이 빠진 것). */
+            if (quickOpenRef.current && history.state?.quickJam !== 1) {
+                quickInput.current?.blur();
+                setQuickOpen(false);
+                setQuickInvite(false);
+            }
+        };
         const onLine = () => {
             setOnline(navigator.onLine);
             if (navigator.onLine) {
@@ -147,6 +198,28 @@ export default function App() {
     }, [route.openQuick, route.notice, data?.profile.started]);
 
     useEffect(() => {
+        if (route.openQuickBar) pendingQuick.current = true;
+    }, [route.openQuickBar]);
+
+    useEffect(() => {
+        if (!data?.profile.started || locked) return;
+        const fromQuery = new URLSearchParams(location.search).get('quick') === '1';
+        if (!pendingQuick.current && !fromQuery) return;
+        pendingQuick.current = false;
+        setQuickInvite(true);
+        setQuickOpen(true);
+        quickInput.current?.blur();
+        if (!fromQuery) return;
+        try {
+            const url = new URL(location.href);
+            url.searchParams.delete('quick');
+            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {
+            /* 주소를 못 고쳐도 입력칸은 열려 있습니다. */
+        }
+    }, [route.openQuickBar, locked, data?.profile.started, hash]);
+
+    useEffect(() => {
         if (!data) return;
         const theme = data.profile.theme;
         const next = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -178,8 +251,33 @@ export default function App() {
         };
     }, [data?.profile.sharedPc, locked]);
 
+    /* 쨈 팝업: 열면 뒤로 가기 기록을 한 칸 넣고, 어떤 길로 닫든(✕·바탕·뒤로·쨈 다시·Esc·저장) 화면을 처음 그대로 돌려 둡니다. */
+    useEffect(() => {
+        quickOpenRef.current = quickOpen;
+        if (quickOpen) {
+            quickOpenedAt.current = performance.now();
+            if (history.state?.quickJam !== 1) {
+                try { history.pushState({ ...(history.state || {}), quickJam: 1 }, '', location.href); quickPushed.current = true; } catch { /* 기록을 못 넣어도 ✕로 닫힙니다. */ }
+            }
+            return;
+        }
+        resetQuickLayer();
+        if (!quickPushed.current) {
+            /* 새로 고침 뒤 남은 옛 팝업 기록은 뒤로 가지 않고 표시만 지웁니다. */
+            if (history.state?.quickJam === 1) {
+                try { const { quickJam, ...rest } = history.state; history.replaceState(rest, '', location.href); } catch { /* 그대로 둡니다. */ }
+            }
+            return;
+        }
+        quickPushed.current = false;
+        if (history.state?.quickJam === 1) {
+            try { history.back(); } catch { /* 이미 빠졌습니다. */ }
+        }
+    }, [quickOpen]);
+
     const go = useCallback((hash, options) => {
         const next = hash || '#/today';
+        if (quickOpenRef.current) { quickInput.current?.blur(); setQuickOpen(false); setQuickInvite(false); }
         setHash(next);
         if (location.hash === next) return;
         if (options?.replace || options?.state) {
@@ -208,6 +306,8 @@ export default function App() {
                 ? '#/settings'
                 : route.name === 'student'
                     ? '#/students'
+                    : route.name === 'minutes' && route.params.mode !== 'list'
+                        ? (route.params.mode === 'edit' && route.params.id ? `#/minutes/${route.params.id}` : '#/minutes')
                     : route.name === 'legacy'
                         ? (route.params.page ? '#/settings/legacy' : '#/settings')
                         : '#/today';
@@ -219,7 +319,7 @@ export default function App() {
             location.replace(parent);
         }
         setHash(parent);
-    }, [route.name, route.params.date, route.params.page]);
+    }, [route.name, route.params.date, route.params.page, route.params.mode, route.params.id]);
 
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
@@ -252,7 +352,7 @@ export default function App() {
         }
         if (id === 'minutes') {
             closeLayers();
-            setFlow({ id: 'minutes' });
+            go('#/minutes/new');
             return;
         }
         if (id.startsWith('quick:')) {
@@ -279,6 +379,9 @@ export default function App() {
         const onKey = (event) => {
             if (locked) return;
             if (event.key === 'Escape') {
+                quickInput.current?.blur();
+                setQuickOpen(false);
+                setQuickInvite(false);
                 setPlus(false);
                 setFlow(null);
                 setMsg(false);
@@ -336,9 +439,12 @@ export default function App() {
             if (event.button !== 0) return;
             const el = hit(event.target);
             if (!el || el.hasAttribute('data-key-preview')) return;
+            if (jamFeelEnabled() && el.closest('.fab, .desk-fab')) return;
             playKey('down');
         };
-        const onPointerUp = () => {
+        const onPointerUp = (event) => {
+            const target = event.target;
+            if (jamFeelEnabled() && target instanceof Element && target.closest('.fab, .desk-fab')) return;
             playKey('up');
         };
         const keyTarget = (event) => {
@@ -351,10 +457,12 @@ export default function App() {
         };
         const onKeyDown = (event) => {
             if (event.repeat || !keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('down');
         };
         const onKeyUp = (event) => {
             if (!keyTarget(event)) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
             playKey('up');
         };
         document.addEventListener('pointerdown', onPointerDown, true);
@@ -419,6 +527,31 @@ export default function App() {
         );
     }
 
+    function openQuickBar(event) {
+        /* 열려 있으면 쨈 버튼이 닫기입니다. 막 연 뒤 0.4초 안의 두 번째 탭(연타)은 무시합니다. */
+        if (quickOpenRef.current) {
+            if (performance.now() - quickOpenedAt.current > 400) closeQuickBar();
+            return;
+        }
+        const bar = document.querySelector('.quick-bar');
+        if (bar) {
+            bar.classList.add('is-open');
+            bar.setAttribute('aria-hidden', 'false');
+        }
+        quickInput.current?.focus();
+        setQuickInvite(false);
+        setQuickOpen(true);
+        playFoilPop(event?.currentTarget);
+        bloomQuickBar(event?.currentTarget);
+        playCupGhost(event?.currentTarget);
+    }
+
+    function closeQuickBar() {
+        quickInput.current?.blur();
+        setQuickOpen(false);
+        setQuickInvite(false);
+    }
+
     const ui = {
         data,
         clock,
@@ -426,7 +559,7 @@ export default function App() {
         showToast,
         openQuick: (kind, extra = {}) => setFlow({ id: 'quick', kind: kind || '관찰', ...extra }),
         openFlow: (next) => setFlow(next),
-        openPlus: () => setPlus(true),
+        openPlus: (opts) => setPlus(opts?.more ? 'more' : true),
         go,
         openHotkeyHelp: () => setHelp(true),
         route,
@@ -463,6 +596,7 @@ export default function App() {
     if (route.name === 'roster') screen = <RosterSettings />;
     if (route.name === 'day') screen = <Day key={route.params.date} />;
     if (route.name === 'legacy') screen = <Legacy />;
+    if (route.name === 'minutes') screen = <Minutes />;
 
     const titles = {
         today: [clock.label, `${data.profile.className || '학급을 아직 안 적었어요'} · ${clock.clock}`],
@@ -473,6 +607,7 @@ export default function App() {
         schedule: ['일정·시간표', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],
+        minutes: ['회의록', '여러 줄로 적고 저장 버튼으로 남겨요'],
         settings: ['설정', '학급, 소리, 단축키, 계정'],
         roster: ['명단', '번호에 이름을 적어 주세요'],
         day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],
@@ -507,7 +642,7 @@ export default function App() {
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
-                    <header className="topbar">
+                    <header className={cloudReady() ? 'topbar has-sync' : 'topbar'}>
                         {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
@@ -532,6 +667,8 @@ export default function App() {
                             <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
+                        {/* 동기화 칩: 도구 단추 아래 빈자리에 띄워 제목 높이를 늘리지 않습니다(시간표가 탭에 가리지 않게). */}
+                        <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} localOnly={['records', 'events', 'todos', 'notes', 'notices'].reduce((sum, name) => sum + (data.local?.[name]?.length || 0), 0)} />
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">
@@ -563,7 +700,7 @@ export default function App() {
                 <nav className="tabbar" aria-label="주요 메뉴">
                     {tabs.map(([label, href, icon]) => (
                         label === '더' ? (
-                            <Btn key={label} className="fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
+                            <Btn key={label} className="fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                         ) : (
                             <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
                                 <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
@@ -574,9 +711,11 @@ export default function App() {
                         )
                     ))}
                 </nav>
-                <Btn className="desk-fab" aria-label="할 일 고르기" onClick={() => setPlus(true)}><span className="fab-name">쨈</span></Btn>
+                <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
+                <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
                 {plus && (
                     <PlusSheet
+                        startMore={plus === 'more'}
                         onClose={() => setPlus(false)}
                         onPick={(action) => {
                             setPlus(false);
@@ -590,7 +729,7 @@ export default function App() {
                                 return;
                             }
                             if (action.id === 'minutes') {
-                                setFlow({ id: 'minutes' });
+                                go('#/minutes/new');
                                 return;
                             }
                             if (action.kind) setFlow({ id: 'quick', kind: action.kind });

@@ -23,10 +23,20 @@
     "check:kbtheme": "node scripts/check-kbtheme.mjs",
     "check:brand": "node scripts/check-brand.mjs",
     "check:icons": "node scripts/check-icons.mjs",
+    "check:seal": "node scripts/check-seal.mjs",
+    "check:quickbar": "node scripts/check-quickbar.mjs",
     "check:gcal": "node scripts/check-gcal.mjs",
     "check:period": "node scripts/check-period.mjs",
+    "check:five": "node scripts/check-five.mjs",
     "check:rules": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-rules.mjs\"",
-    "check:browser": "node scripts/check-browser.mjs"
+    "check:browser": "node scripts/check-browser.mjs",
+    "check:sync": "node scripts/check-sync.mjs",
+    "check:syncchip": "node scripts/check-syncchip.mjs",
+    "check:academic": "node scripts/check-academic.mjs",
+    "check:attendcloud": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-attend-cloud.mjs\"",
+    "check:cloudpull": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-cloud-pull.mjs\"",
+    "check:attendsave": "node scripts/check-attend-save.mjs",
+    "check:todosync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-todo-sync.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",

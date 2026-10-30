@@ -2,18 +2,21 @@ import { useState } from 'react';
 import { eventClock } from '../lib/date.js';
 import { removeItem, saveTextItem } from '../lib/db.js';
 import { Btn } from './bits.jsx';
+import { DetailSheet } from './DetailSheet.jsx';
 
 export function EventLine({ row, showToast }) {
     const [open, setOpen] = useState(false);
+    const [detail, setDetail] = useState(false);
     const [title, setTitle] = useState(row.title || '');
     const clock = eventClock(row);
     return (
         <div style={{ marginBottom: 8 }}>
-            <p className={row.google ? 'gcal-line' : undefined} style={{ margin: '0 0 8px' }}>
+            <Btn className={row.google ? 'gcal-line event-line-text' : 'event-line-text'} data-event-detail="1" aria-label={`일정 자세히: ${row.title || '일정'}`} onClick={() => setDetail(true)}>
                 {row.google ? <span className="gcal-badge">구글</span> : (row.localOnly ? '🔒 ' : '')}
                 {clock ? `${clock} ` : ''}{row.title}{row.memo ? ` · ${row.memo}` : ''}
                 {row.google ? <span className="muted"> · 보기만</span> : null}
-            </p>
+            </Btn>
+            {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} />}
             {!row.google && !open && (
                 <Btn className="chip" aria-label={`${row.title || '일정'} 고치기`} onClick={() => { setTitle(row.title || ''); setOpen(true); }}>고치기</Btn>
             )}
