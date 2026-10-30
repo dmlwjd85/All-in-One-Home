@@ -3,7 +3,7 @@
  * db.js가 올리기·받아오기를 시작하고 끝낼 때 알려 주고, 칩은 구독해서 글만 바꿉니다.
  */
 
-let status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, authKnown: false };
+let status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false };
 const listeners = new Set();
 
 function emit() {
@@ -26,12 +26,15 @@ export function syncBegin() {
 }
 
 /** ok면 마지막 동기화 시각을 바꿉니다. pending은 다시 올려야 할 개수입니다. */
-export function syncEnd({ ok = false, pending = 0, skipped = false, at = Date.now() } = {}) {
+/* pull: 받기까지 한 동기화(로그인·다시 맞추기). 받기에 실패했거나 캐시의 옛 목록이었으면, 뒤이은 올리기가 성공해도
+   '동기화됨'으로 보이지 않게 따로 기억합니다(10/31 제보: 칩은 동기화됨인데 PC에 할 일이 1개). */
+export function syncEnd({ ok = false, pending = 0, skipped = false, pull = false, at = Date.now() } = {}) {
     status.busy = Math.max(0, status.busy - 1);
     if (!skipped) {
         status.pending = Math.max(0, Number(pending) || 0);
-        status.failed = !ok;
-        if (ok) status.lastOkAt = at;
+        if (pull) status.pullFailed = !ok;
+        status.failed = !ok || status.pullFailed;
+        if (ok && !status.pullFailed) status.lastOkAt = at;
     }
     emit();
 }
@@ -59,7 +62,7 @@ export function syncSeen(at) {
 
 /** 검사용: 처음 상태로 돌립니다. */
 export function resetSyncStatusForTest() {
-    status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, authKnown: false };
+    status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false };
     emit();
 }
 
@@ -82,7 +85,7 @@ export function agoLabel(at, now = Date.now()) {
  * 오프라인일 때 자세한 말은 원래 있던 배너가 하고, 칩은 '연결 기다리는 중'만 짧게 보여 줍니다(같은 말 두 번 하지 않게).
  * guest: 처음 화면에서 '이 기기에서만 써 볼게요'를 고른 사람.
  */
-export function chipState({ cloudReady = false, signedIn = false, online = true, guest = false, status: s = status, now = Date.now() } = {}) {
+export function chipState({ cloudReady = false, signedIn = false, online = true, guest = false, localOnly = 0, status: s = status, now = Date.now() } = {}) {
     if (!cloudReady) return null;
     if (!online) {
         return {
@@ -124,9 +127,12 @@ export function chipState({ cloudReady = false, signedIn = false, online = true,
         };
     }
     const ago = agoLabel(s.lastOkAt, now);
+    const base = !ago ? '다른 기기와 기록이 같아요.' : ago === '방금' ? '방금 다른 기기와 맞췄어요.' : `${ago}에 다른 기기와 맞췄어요.`;
+    /* 민감한 낱말이 있어 이 기기에만 둔(🔒) 줄은 다른 기기에 안 보입니다. '동기화됨'만 보이면 다 맞춘 줄로 오해합니다(10/31 제보). */
+    const lock = Number(localOnly) > 0 ? ` 🔒 표시 ${Number(localOnly)}개는 이 기기에만 있어서 다른 기기에는 안 보여요.` : '';
     return {
         kind: 'synced',
         label: '동기화됨',
-        hint: !ago ? '다른 기기와 기록이 같아요.' : ago === '방금' ? '방금 다른 기기와 맞췄어요.' : `${ago}에 다른 기기와 맞췄어요.`,
+        hint: base + lock,
     };
 }

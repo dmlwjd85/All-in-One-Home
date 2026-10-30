@@ -668,7 +668,7 @@ export default function App() {
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
                         {/* 동기화 칩: 도구 단추 아래 빈자리에 띄워 제목 높이를 늘리지 않습니다(시간표가 탭에 가리지 않게). */}
-                        <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} />
+                        <SyncChip cloudReady={cloudReady()} signedIn={Boolean(data.auth?.uid)} online={online} guest={Boolean(data.profile.guest)} localOnly={['records', 'events', 'todos', 'notes', 'notices'].reduce((sum, name) => sum + (data.local?.[name]?.length || 0), 0)} />
                     </header>
                     {tip && !tipFolded && (
                         <div className="tip-bubble" role="status">

@@ -10,7 +10,7 @@ import { Btn } from './bits.jsx';
  * - 누르면 무슨 뜻인지 설명이 펼쳐집니다(폰에서는 마우스를 올릴 수 없으니까).
  * - 실패했을 때는 설명 안에 '다시 맞추기' 버튼이 있습니다.
  */
-export function SyncChip({ cloudReady, signedIn, online, guest = false }) {
+export function SyncChip({ cloudReady, signedIn, online, guest = false, localOnly = 0 }) {
     const status = useSyncExternalStore(subscribeSync, syncStatus, syncStatus);
     const [now, setNow] = useState(() => Date.now());
     const box = useRef(null);
@@ -26,7 +26,7 @@ export function SyncChip({ cloudReady, signedIn, online, guest = false }) {
         document.addEventListener('pointerdown', close);
         return () => document.removeEventListener('pointerdown', close);
     }, []);
-    const chip = chipState({ cloudReady, signedIn, online, guest, status, now });
+    const chip = chipState({ cloudReady, signedIn, online, guest, localOnly, status, now });
     if (!chip) return null;
     if (chip.kind === 'wait') {
         return <div className="sync-slot" aria-hidden="true"><span className="sync-chip is-wait" /></div>;
