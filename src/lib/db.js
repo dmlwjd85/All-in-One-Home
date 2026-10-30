@@ -226,11 +226,36 @@ function bumpSettingAts(next, previous = {}) {
 /* 이 기기 시간표 설정(교시 길이·9·10교시 등)이 바뀌면 다른 기기와 같이 쓰도록 올립니다. */
 subscribePeriodLocal(() => { flushCloud().catch(() => {}); });
 
+/*
+ * 할 일마다 이 기기에서 마지막으로 고친 시각(editAt, ms)을 적습니다. 클라우드로는 올리지 않고(해시에도 안 들어감),
+ * 양쪽에서 같은 할 일을 고쳤을 때 클라우드 updatedAt과 견주어 더 늦게 고친 쪽을 남기는 데만 씁니다.
+ * 클라우드에서 받아 합칠 때(fromCloud)는 받은 시각을 그대로 두므로 여기서 새로 찍지 않습니다.
+ */
+let fromCloud = 0;
+export function stampTodoEdits(prev, next, now = Date.now()) {
+    const before = new Map([...(prev?.todos || []), ...(prev?.local?.todos || [])].filter((row) => row?.id).map((row) => [String(row.id), row]));
+    const strip = (row) => { const { editAt, ...rest } = row; return JSON.stringify(rest); };
+    for (const list of [next?.todos || [], next?.local?.todos || []]) {
+        for (const row of list) {
+            if (!row?.id) continue;
+            const old = before.get(String(row.id));
+            if (!old) { if (!Number.isFinite(row.editAt)) row.editAt = now; continue; }
+            if (strip(old) !== strip(row)) row.editAt = now;
+            else if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
+        }
+    }
+}
+function updateFromCloud(recipe) {
+    fromCloud += 1;
+    try { return update(recipe); } finally { fromCloud -= 1; }
+}
+
 export async function update(recipe, { undoable = false } = {}) {
     const previous = structuredClone(state);
     if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
     if (next !== previous && next?.profile) bumpSettingAts(next.profile, previous.profile);
+    if (!fromCloud && next !== previous) stampTodoEdits(previous, next);
     state = next;
     mirrorTheme(state.profile.theme);
     emit();
@@ -249,7 +274,7 @@ export async function update(recipe, { undoable = false } = {}) {
 /** 검사용: 다른 기기에서 받은 자료를 합치는 길을 클라우드 없이 돌립니다. */
 export async function absorbCloudForTest(remote, hashes, seen = null) {
     if (hashes) cloudHashes = hashes;
-    return update((draft) => absorbCloud(draft, remote, seen));
+    return updateFromCloud((draft) => absorbCloud(draft, remote, seen));
 }
 
 /** 검사에서 두 저장소의 성공·실패를 넣습니다. 저장 키 이름은 바꾸지 않습니다. */
@@ -546,11 +571,30 @@ export function takeRemote(cloudName, row, theirs) {
     return next;
 }
 
-function refreshShared(local = [], remote = [], cloudName, hashes) {
+/** 클라우드 쪽이 이 기기보다 늦게 고쳐졌는지. 어느 한쪽 시각을 모르면(옛 자료) 이 기기 값을 지킵니다. */
+export function remoteIsLater(row, remoteAt) {
+    const mine = Number(row?.editAt);
+    return Number.isFinite(remoteAt) && remoteAt > 0 && Number.isFinite(mine) && mine > 0 && remoteAt > mine;
+}
+
+/** 받아 온 할 일에는 클라우드의 고친 시각을 editAt으로 붙여 둡니다(다음 비교의 기준). */
+function withRemoteAt(cloudName, row, remote) {
+    if (cloudName !== 'todos' || !row?.id) return row;
+    const at = remote?.ats?.todos?.[String(row.id)];
+    return Number.isFinite(at) && at > 0 ? { ...row, editAt: at } : row;
+}
+
+function refreshShared(local = [], remote = [], cloudName, hashes, ats = null) {
     const byId = new Map((remote || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
-        if (!other || !unchangedSincePush(hashes, cloudName, row)) return row;
+        if (!other) return row;
+        if (!unchangedSincePush(hashes, cloudName, row)) {
+            /* 할 일: 이 기기에서 고친 뒤 아직 못 올렸어도, 다른 기기가 더 늦게 고쳤으면 그쪽 값이 이깁니다. */
+            if (cloudName === 'todos' && remoteIsLater(row, ats?.[String(row.id)])) return { ...takeRemote(cloudName, row, other), editAt: ats[String(row.id)] };
+            return row;
+        }
+        if (cloudName === 'todos' && Number.isFinite(ats?.[String(row.id)])) return { ...takeRemote(cloudName, row, other), editAt: ats[String(row.id)] };
         if (cloudName === 'notes' && clippedCopy(row.text, other.text)) {
             /* 옛 판(v30)은 본문을 2000자로 잘라 다시 올립니다. 잘린 사본이면 이 기기 본문을 지키고 다시 올립니다. */
             if (hashes) delete hashes[`${cloudName}/${row.id}`];
@@ -685,7 +729,7 @@ function absorbCloud(draft, remote, seen = null) {
     pruneDeletedElsewhere(draft, remote, guard);
     for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
         if (localName === 'inbox') continue;
-        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, guard);
+        draft[localName] = refreshShared(draft[localName] || [], remote[localName], cloudName, guard, remote.ats?.[cloudName]);
     }
     if (guard !== cloudHashes) {
         for (const key of before) if (!(key in guard)) delete cloudHashes[key];
@@ -696,7 +740,7 @@ function absorbCloud(draft, remote, seen = null) {
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     draft.records = unionById(draft.records, remote.records);
     draft.events = unionById(draft.events, remote.events);
-    draft.todos = unionById(draft.todos, remote.todos);
+    draft.todos = unionById(draft.todos, (remote.todos || []).map((row) => withRemoteAt('todos', row, remote)));
     draft.notes = unionById(draft.notes, remote.notes);
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
@@ -1713,13 +1757,14 @@ async function connectCloud(uid) {
     try {
         ok = await connectCloudBody(uid);
     } finally {
-        syncEnd({ ok, pending: ok ? 0 : undefined });
+        syncEnd({ ok, pull: true, pending: ok ? 0 : undefined });
     }
 }
 
 /* 다 올리고 받아 합쳤으면 true. */
 async function connectCloudBody(uid) {
     await checkDraftAgainstCloud(uid);
+    await settleTodoEdits(uid);
     const pushed = await flushCloud().catch(() => null);
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
@@ -1727,14 +1772,39 @@ async function connectCloudBody(uid) {
     const hasRemote = remote.settings || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
-        await update((draft) => pruneOnly(draft, remote, seen));
-        if (pushedAll(pushed)) markSynced(uid);
-        return pushedAll(pushed);
+        await updateFromCloud((draft) => pruneOnly(draft, remote, seen));
+        const ok = pushedAll(pushed) && remote.fresh !== false;
+        if (ok) markSynced(uid);
+        return ok;
     }
-    await update((draft) => absorbCloud(draft, remote, seen));
-    /* 올리기가 다 끝나야 '동기화됨'입니다. 못 올린 게 있으면 시각을 바꾸지 않습니다(PR #52 검수 4번). */
-    if (pushedAll(pushed)) markSynced(uid);
-    return pushedAll(pushed);
+    await updateFromCloud((draft) => absorbCloud(draft, remote, seen));
+    /* 올리기가 다 끝나고 서버에서 받아 왔어야 '동기화됨'입니다. 못 올린 게 있거나 캐시에서 온 옛 목록이면 시각을 바꾸지 않습니다(PR #52 검수 4번, 10/31 제보). */
+    const ok = pushedAll(pushed) && remote.fresh !== false;
+    if (ok) markSynced(uid);
+    return ok;
+}
+
+/*
+ * 할 일은 항목마다 더 늦게 고친 쪽이 이깁니다. 올리기 전에, 이 기기에서 고친 뒤 아직 못 올린 할 일이 있으면
+ * 클라우드 시각(updatedAt)을 먼저 보고 다른 기기가 더 늦게 고친 항목은 그쪽 값을 받습니다. 그래야 옛 수정이 새 수정을 덮지 않습니다.
+ * 한쪽에만 있는 항목·지운 항목은 여기서 건드리지 않습니다(합치기·지운 시각 비교는 받기와 지우기 대기열에서).
+ */
+async function settleTodoEdits(uid) {
+    const dirty = (state.todos || []).filter((row) => row?.id && toCloudRow('todos', row) && !unchangedSincePush(cloudHashes, 'todos', row));
+    if (!dirty.length) return;
+    let remote = null;
+    try { remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc }); } catch { return; }
+    const ats = remote?.ats?.todos || {};
+    const byId = new Map((remote?.todos || []).filter((row) => row?.id).map((row) => [String(row.id), row]));
+    if (!dirty.some((row) => byId.has(String(row.id)) && remoteIsLater(row, ats[String(row.id)]))) return;
+    await updateFromCloud((draft) => {
+        draft.todos = (draft.todos || []).map((row) => {
+            const other = row?.id ? byId.get(String(row.id)) : null;
+            if (!other || unchangedSincePush(cloudHashes, 'todos', row) || !remoteIsLater(row, ats[String(row.id)])) return row;
+            return { ...takeRemote('todos', row, other), editAt: ats[String(row.id)] };
+        });
+        return draft;
+    });
 }
 
 function pushedAll(result) {
@@ -1791,7 +1861,7 @@ export async function pullFromCloudNow() {
         }
     }
     let dropped = 0;
-    const failed = await update((draft) => {
+    const failed = await updateFromCloud((draft) => {
         for (const [localName, cloudName] of CLOUD_COLLECTIONS) {
             const remoteRows = localName === 'inbox' ? withoutDropped(remote.inbox) : (remote[localName] || []).filter((row) => !forgetQueuedFor(uid, `${cloudName}/${row?.id}`));
             const ids = remote.ids?.[cloudName];
@@ -1804,7 +1874,9 @@ export async function pullFromCloudNow() {
                     byId.delete(String(row.id));
                     /* 올린 그대로인 줄만 클라우드 값으로 바꿉니다. 거절된 줄·올릴 수 없는 줄·그 사이 고친 줄은 이 기기 값을 지킵니다. */
                     const synced = mark && !rejected.has(mark.key) && cloudHashes[mark.key] === mark.mark;
-                    next.push(synced ? takeRemote(cloudName, row, theirs) : row);
+                    /* 할 일은 양쪽에서 고쳤으면 더 늦게 고친 쪽이 이깁니다(클라우드 updatedAt ↔ 이 기기 editAt). */
+                    const later = !synced && cloudName === 'todos' && mark && !rejected.has(mark.key) && remoteIsLater(row, remote.ats?.todos?.[String(row.id)]);
+                    next.push(synced || later ? withRemoteAt(cloudName, takeRemote(cloudName, row, theirs), remote) : row);
                     continue;
                 }
                 /* 클라우드 목록이 서버에서 온 게 아니거나(캐시), 올릴 수 없는 줄·거절된 줄·한 번도 클라우드에 닿지 않은 줄은 지우지 않습니다. */
@@ -1812,7 +1884,7 @@ export async function pullFromCloudNow() {
                 dropped += 1;
                 delete cloudHashes[mark.key];
             }
-            next.push(...byId.values());
+            next.push(...[...byId.values()].map((row) => withRemoteAt(cloudName, row, remote)));
             draft[localName] = next;
         }
         for (const [day, value] of Object.entries(remote.timetable || {})) draft.timetable[day] = value;

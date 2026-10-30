@@ -6,6 +6,7 @@ import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
+import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
 import { isMinutes } from '../lib/minutes.js';
 
@@ -69,6 +70,7 @@ export function Tasks() {
                     <SpreadHint center />
                 </div>
             )}
+            {todos.some((row) => row.localOnly) && <LockNote style={{ marginTop: 16, marginBottom: 0 }} />}
             {groups.map(([label, rows]) => (
                 <section key={label} style={{ marginTop: 16 }}>
                     <h3 style={{ marginBottom: 8 }}>{label}</h3>

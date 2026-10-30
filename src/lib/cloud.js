@@ -15,15 +15,17 @@ const COLLECTIONS = [
     ['inbox', 'inbox'],
 ];
 
-const RETRYABLE = ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'aborted', 'auth/network-request-failed'];
-
-function retryable(error) {
-    const code = String(error?.code || '');
-    return RETRYABLE.some((item) => code.includes(item));
-}
-
 function denied(error) {
     return String(error?.code || '').includes('permission-denied');
+}
+
+/*
+ * 올리기 실패를 나눕니다. 규칙 거절은 'rejected'(이 기기에 남기고 알림), 나머지는 모두 'pending'(다음에 다시 올림)입니다.
+ * 예전에는 거절도 재시도 오류도 아닌 실패(로그인 만료·internal·unknown 등)를 아무 데도 세지 않아,
+ * 올리지 못했는데도 칩이 '동기화됨'으로 보였습니다(10/31 할 일 7개·1개 제보).
+ */
+export function classifyWriteError(error) {
+    return denied(error) ? 'rejected' : 'pending';
 }
 
 /** 이번 실행에서 끝 시각 칸이 거절됐는지. 앱을 다시 열면 한 번 더 시도합니다. */
@@ -134,13 +136,13 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     nextHashes[key] = fingerprint(fallback, clear);
                     return;
                 } catch (again) {
-                    if (denied(again)) rejected.push(key);
-                    if (retryable(again)) pending += 1;
+                    if (classifyWriteError(again) === 'rejected') rejected.push(key);
+                    else pending += 1;
                     return;
                 }
             }
-            if (denied(error)) rejected.push(key);
-            if (retryable(error)) pending += 1;
+            if (classifyWriteError(error) === 'rejected') rejected.push(key);
+            else pending += 1;
         }
     };
 
@@ -152,7 +154,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             await setDoc(doc(ready.db, 'users', uid), profileBody, { merge: true });
             nextHashes.profile = profileMark;
         } catch (error) {
-            if (retryable(error)) pending += 1;
+            if (classifyWriteError(error) === 'pending') pending += 1;
         }
     }
 
@@ -177,7 +179,8 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                 }
                 nextHashes['settings/device'] = mark;
             } catch (error) {
-                if (retryable(error)) pending += 1;
+                /* 설정 문서를 모르는 옛 규칙의 거절은 다른 기록을 막지 않습니다. 그 밖의 실패는 다시 올립니다. */
+                if (classifyWriteError(error) === 'pending') pending += 1;
             }
         }
     }
@@ -219,7 +222,9 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
         ids: {},
         /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
-        ats: { attendance: {} },
+        ats: { attendance: {}, todos: {} },
+        /* 모든 목록을 서버에서 받았으면 true. 캐시에서 온 옛 목록이면 칩이 '동기화됨'을 보이지 않습니다. */
+        fresh: true,
     };
     try {
         const set = await getDoc(doc(ready.db, 'users', uid, 'settings', 'device'));
@@ -232,11 +237,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         /* 캐시에서 온 결과로는 지우기를 하지 않습니다. 서버에서 받은 목록만 ids에 둡니다. */
         const ids = serverIds(snap);
         if (ids) out.ids[cloudName] = ids;
+        else out.fresh = false;
         snap.forEach((item) => {
             const data = item.data();
             const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
-            if (cloudName === 'attendance' && typeof data?.updatedAt?.toMillis === 'function') out.ats.attendance[item.id] = data.updatedAt.toMillis();
+            if ((cloudName === 'attendance' || cloudName === 'todos') && typeof data?.updatedAt?.toMillis === 'function') out.ats[cloudName][item.id] = data.updatedAt.toMillis();
         });
     }
     const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));
