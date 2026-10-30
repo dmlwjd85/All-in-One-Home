@@ -2036,6 +2036,44 @@ try {
         check(typed.includes('독서기록') && typed.includes('12/31') && !typed.includes('12/31까지'), `할 일 직접 입력에서 12/31까지를 읽지 못했습니다. ${typed}`);
     }, 844);
 
+    /* 충돌 사본(PR #57 r3 검수 3번): 320px에서도 제목이 잘리지 않고, K 토큰 배지로 일반 할 일과 구분됩니다(라이트·다크). */
+    for (const mode of ['light', 'dark']) {
+        await withDemo(320, mode, async (page) => {
+            await page.evaluate(() => { location.hash = '#/todo'; });
+            await page.waitForSelector('[aria-label="할 일"]');
+            await page.type('[aria-label="할 일"]', '(충돌 사본) 학부모 상담 일정 다시 확인하고 회신 보내기');
+            await page.keyboard.press('Enter');
+            await page.waitForSelector('[data-conflict-copy="1"]');
+            const seen = await page.evaluate(() => {
+                const el = document.querySelector('.todo-title[data-conflict-copy="1"]');
+                const badge = el?.querySelector('.conflict-badge');
+                const text = el?.querySelector('.conflict-text');
+                const cs = badge ? getComputedStyle(badge) : null;
+                const plain = [...document.querySelectorAll('.todo-title')].find((x) => !x.matches('[data-conflict-copy]'));
+                const box = text?.getBoundingClientRect();
+                const btn = el?.closest('button')?.getBoundingClientRect();
+                return {
+                    badge: badge?.innerText || '',
+                    text: text?.innerText || '',
+                    clipped: text ? text.scrollWidth > text.clientWidth + 1 || getComputedStyle(text).textOverflow === 'ellipsis' : true,
+                    inside: box && btn ? box.right <= btn.right + 1 && box.bottom <= btn.bottom + 1 : false,
+                    btnH: btn?.height || 0,
+                    over: document.documentElement.scrollWidth > window.innerWidth,
+                    shadow: cs?.boxShadow || 'none',
+                    color: cs?.color || '',
+                    plainBadge: Boolean(plain?.querySelector('.conflict-badge')),
+                };
+            });
+            check(seen.badge === '충돌 사본', `${mode} 320: 충돌 사본 배지가 없습니다: ${seen.badge}`);
+            check(seen.text.includes('회신 보내기') && !seen.text.includes('(충돌 사본)'), `${mode} 320: 충돌 사본 제목이 다 보이지 않습니다: ${seen.text}`);
+            check(!seen.clipped && seen.inside && !seen.over, `${mode} 320: 충돌 사본 제목이 잘리거나 넘칩니다: ${JSON.stringify(seen)}`);
+            check(seen.btnH >= 44, `${mode} 320: 충돌 사본 줄 누름 칸이 44px보다 작습니다: ${seen.btnH}`);
+            check(seen.shadow !== 'none' && seen.shadow.includes('inset'), `${mode} 320: 배지가 K 뉴모피즘(오목) 토큰을 쓰지 않습니다: ${seen.shadow}`);
+            check(!seen.plainBadge, `${mode} 320: 일반 할 일에 충돌 사본 배지가 붙었습니다.`);
+            await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
+        });
+    }
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));
