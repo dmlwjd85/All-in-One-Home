@@ -2071,7 +2071,92 @@ try {
             check(seen.shadow !== 'none' && seen.shadow.includes('inset'), `${mode} 320: 배지가 K 뉴모피즘(오목) 토큰을 쓰지 않습니다: ${seen.shadow}`);
             check(!seen.plainBadge, `${mode} 320: 일반 할 일에 충돌 사본 배지가 붙었습니다.`);
             await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
+
+            /* 라이브 QA 44d5556 2번: 오늘 화면 요약·하루 화면·상세 시트에서도 머리글 대신 배지가 보이고 잘리지 않습니다. */
+            const kst = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+            const md = `${Number(kst.slice(5, 7))}/${Number(kst.slice(8, 10))}`;
+            await page.type('[aria-label="할 일"]', `(충돌 사본) 오늘 하루 화면 충돌 사본 확인 ${md}`);
+            await page.keyboard.press('Enter');
+            await new Promise((r) => setTimeout(r, 300));
+            const spot = (sel) => page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                const badge = el?.querySelector('.conflict-badge');
+                const text = el?.querySelector('.conflict-text');
+                const r = el?.getBoundingClientRect();
+                return {
+                    has: Boolean(el), badge: badge?.innerText || '',
+                    clipped: text ? text.scrollWidth > text.clientWidth + 1 || getComputedStyle(text).textOverflow === 'ellipsis' : true,
+                    offscreen: r ? r.right > window.innerWidth + 1 || r.left < -1 : true,
+                    over: document.documentElement.scrollWidth > window.innerWidth,
+                    raw: [...document.querySelectorAll('main, [role="dialog"], .sheet, body')].some((n) => n.innerText.includes('(충돌 사본)')),
+                };
+            }, sel);
+            const must = (name, v) => {
+                check(v.has && v.badge === '충돌 사본', `${mode} 320 ${name}: 충돌 사본 배지가 없습니다: ${JSON.stringify(v)}`);
+                check(!v.clipped && !v.offscreen && !v.over, `${mode} 320 ${name}: 충돌 사본이 잘리거나 넘칩니다: ${JSON.stringify(v)}`);
+                check(!v.raw, `${mode} 320 ${name}: '(충돌 사본)' 글자가 그대로 보입니다.`);
+            };
+            await page.evaluate(() => { location.hash = '#/'; });
+            await page.waitForSelector('.home-todo');
+            await new Promise((r) => setTimeout(r, 300));
+            const folded = await page.evaluate(() => Boolean(document.querySelector('.home-todo .fold-sum')));
+            if (folded) must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+            else {
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+                await new Promise((r) => setTimeout(r, 300));
+                must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            }
+            await page.screenshot({ path: resolve(shots, `conflict-home-320-${mode}.png`) });
+            const line = await page.$('.home-line [data-conflict-copy="1"]');
+            if (!line) await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            await page.waitForSelector('.home-line [data-conflict-copy="1"]', { timeout: 5000 });
+            await page.evaluate(() => document.querySelector('.home-line [data-conflict-copy="1"]').closest('button').click());
+            await page.waitForSelector('.detail-title');
+            must('상세 시트', await spot('.detail-title [data-conflict-copy="1"]'));
+            await page.screenshot({ path: resolve(shots, `conflict-detail-320-${mode}.png`) });
+            await page.keyboard.press('Escape');
+            const ymd = kst;
+            await page.evaluate((y) => { location.hash = `#/day/${y}`; }, ymd);
+            await page.waitForSelector('.day-todo-title[data-conflict-copy="1"]', { timeout: 5000 });
+            must('하루 화면', await spot('.day-todo-title[data-conflict-copy="1"]'));
+            const dayBtn = await page.evaluate(() => document.querySelector('.day-todo-title[data-conflict-copy="1"]').closest('button').getBoundingClientRect().height);
+            check(dayBtn >= 44, `${mode} 320 하루 화면: 충돌 사본 칸이 44px보다 작습니다: ${dayBtn}`);
+            await page.screenshot({ path: resolve(shots, `conflict-day-320-${mode}.png`) });
         });
+    }
+
+    /* PR #59 검수 1번: 뒤로 버튼이 있는 화면에서 상단 바 제목이 한 글자씩 세로로 눌리지 않습니다(5가지 폭 × 라이트·다크). */
+    for (const width of [320, 360, 390, 900, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const ymd = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+                for (const [name, hash, want] of [['하루', `#/day/${ymd}`, '그날의 일지'], ['예전 수첩', '#/settings/legacy', '예전 수첩']]) {
+                    await page.evaluate((h) => { location.hash = h; }, hash);
+                    await page.waitForFunction((w) => document.querySelector('.topbar h1')?.innerText.includes(w), { timeout: 8000 }, want);
+                    await new Promise((r) => setTimeout(r, 150));
+                    const bar = await page.evaluate(() => {
+                        const h1 = document.querySelector('.topbar h1');
+                        const sub = document.querySelector('.topbar .date-block p');
+                        const r = h1.getBoundingClientRect();
+                        const lh = parseFloat(getComputedStyle(h1).lineHeight) || 28;
+                        const btns = [...document.querySelectorAll('.topbar button')].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect());
+                        const hit = (a, b) => a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+                        return {
+                            w: Math.round(r.width), lines: Math.round(r.height / lh),
+                            subLines: sub ? Math.round(sub.getBoundingClientRect().height / (parseFloat(getComputedStyle(sub).lineHeight) || 18)) : 0,
+                            small: btns.filter((b) => b.width < 43.5 || b.height < 43.5).length,
+                            overlap: btns.some((b) => hit(b, r) || (sub && hit(b, sub.getBoundingClientRect()))),
+                            over: document.documentElement.scrollWidth > window.innerWidth,
+                        };
+                    });
+                    check(bar.lines <= 1 && bar.w >= 100, `${mode} ${width} ${name}: 상단 바 제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(bar.subLines <= 2, `${mode} ${width} ${name}: 상단 바 부제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(!bar.overlap && !bar.over && !bar.small, `${mode} ${width} ${name}: 상단 바 버튼이 겹치거나 작습니다: ${JSON.stringify(bar)}`);
+                    if (width <= 390) await page.screenshot({ path: resolve(shots, `topbar-${name === '하루' ? 'day' : 'legacy'}-${width}-${mode}.png`) });
+                }
+            });
+        }
     }
 
     await withPage(390, async (page) => {

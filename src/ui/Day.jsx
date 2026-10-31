@@ -6,7 +6,7 @@ import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
 import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
-import { Btn } from './bits.jsx';
+import { Btn, TodoTitle } from './bits.jsx';
 import { EventLine } from './EventLine.jsx';
 import { isLocked, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
@@ -64,7 +64,7 @@ export function Day() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>할 일</h2>
                 {todos.map((row) => (
                     <div key={row.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '아직'} {row.title}</Btn>
+                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={() => toggleTodo(row.id)}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
                         <Btn className="chip" onClick={() => removeItem('todos', row.id).then(() => showToast('할 일을 지웠어요.'))}>지우기</Btn>
                     </div>
                 ))}

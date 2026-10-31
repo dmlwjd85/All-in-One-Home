@@ -6,6 +6,7 @@ import { joined, joinedRecords, toggleTodo } from '../lib/db.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
+import { splitConflict } from '../lib/conflict.js';
 import { Btn, Motto, Symbol, TodoTitle, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
@@ -69,7 +70,7 @@ export function Home() {
 
     /* 접힌 카드에 보일 한 줄 요약 */
     const sumTime = todayRest.off ? '오늘은 수업이 없어요' : (strip.filter((slot) => slot.label).map((slot) => slot.label).join(' · ') || `${local.count}교시`);
-    const sumTodo = todos.length ? `${left}개 남음 · ${todos.find((row) => !row.done)?.title || todos[0].title}` : '오늘 발라 둔 할 일이 없어요';
+    const sumTodo = todos.length ? <TodoTitle className="fold-sum-todo" lead={`${left}개 남음 · `} title={todos.find((row) => !row.done)?.title || todos[0].title} /> : '오늘 발라 둔 할 일이 없어요';
     const sumEvent = events.length || googleWeek.length
         ? `${events[0] ? `${weekdayKo(events[0].date)} ${Number(events[0].date.slice(5, 7))}/${Number(events[0].date.slice(8))} ${events[0].title}` : googleWeek[0].title}${events.length + googleWeek.length > 1 ? ` 외 ${events.length + googleWeek.length - 1}` : ''}`
         : '이번 주 일정은 아직 없어요';
@@ -164,7 +165,7 @@ export function Home() {
                 </div>
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
-                        <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
+                        <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${splitConflict(row.title).conflict ? `충돌 사본, ${splitConflict(row.title).title}` : row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
                             <TodoTitle className="home-line-text" lead={`${row.done ? '☑' : '☐'} `} title={row.title} />
                             {row.of ? <span className="muted num" style={{ flex: 'none' }}>{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`} style={{ flex: 'none' }}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
                         </Btn>
