@@ -2395,6 +2395,12 @@ try {
             };
         });
     };
+    /* 폰에서는 맨 위 퇴근 줄이 늘 떠 있어요. 사진을 찍느라 화면이 움직인 뒤에도 닫기 단추를 줄이 아니라 단추 자체로 누르도록 가운데로 옮겨 누릅니다. */
+    const clickMovedClose = async (page) => {
+        await page.evaluate(() => document.querySelector('[aria-label="옮긴 소리 안내 닫기"]')?.scrollIntoView({ block: 'center' }));
+        await delay(100);
+        await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+    };
     const soundSection = async (page) => page.$('[aria-label="누를 때 소리 종류"]').then((el) => el.evaluateHandle((node) => node.closest('section')));
     for (const mode of ['light', 'dark']) {
         for (const width of [390, 1280]) {
@@ -2404,7 +2410,7 @@ try {
                 check(opened.text.includes('‘적축·매끈’') && opened.text.includes('이제 버튼이나 탭을 누르면 이 소리가 나요') && !opened.text.includes('꺼져'), `${width} ${mode} 옮김 안내 말이 켜짐에 맞지 않습니다. ${opened.text}`);
                 check(opened.closeSize && opened.closeSize[0] >= 44 && opened.closeSize[1] >= 44 && !opened.overflow && !opened.overlap, `${width} ${mode} 옮김 안내 닫기 단추가 작거나 겹칩니다. ${JSON.stringify(opened)}`);
                 await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, `settings-moved-${width}-${mode}.png`) });
-                await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+                await clickMovedClose(page);
                 await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
                 const closedKey = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-voice-moved'));
                 await page.reload({ waitUntil: 'domcontentloaded' });
@@ -2454,7 +2460,7 @@ try {
             await withDemo(width, 'light', async (page) => {
                 await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'red' });
                 if (state === 'closed') {
-                    await page.click('[aria-label="옮긴 소리 안내 닫기"]');
+                    await clickMovedClose(page);
                     await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
                 }
                 const pads = {};
