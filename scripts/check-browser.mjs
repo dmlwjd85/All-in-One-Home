@@ -2131,7 +2131,8 @@ try {
     mkdirSync(soundShotDir, { recursive: true });
     for (const width of [360, 390, 1920]) {
         await withDemo(width, 'light', async (page) => {
-            await page.setViewport({ width, height: width === 1920 ? 1080 : 844, deviceScaleFactor: 1 });
+            /* 폰에서는 맨 위 퇴근 줄(44px) 아래 끝부터가 내용 자리예요. 줄 아래로 844px 높이를 그대로 두고 잽니다. */
+            await page.setViewport({ width, height: width === 1920 ? 1080 : 844 + 44, deviceScaleFactor: 1 });
             await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
             await page.evaluate(() => { location.hash = '#/settings'; });
             await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
@@ -2395,12 +2396,6 @@ try {
             };
         });
     };
-    /* 폰에서는 맨 위 퇴근 줄이 늘 떠 있어요. 사진을 찍느라 화면이 움직인 뒤에도 닫기 단추를 줄이 아니라 단추 자체로 누르도록 가운데로 옮겨 누릅니다. */
-    const clickMovedClose = async (page) => {
-        await page.evaluate(() => document.querySelector('[aria-label="옮긴 소리 안내 닫기"]')?.scrollIntoView({ block: 'center' }));
-        await delay(100);
-        await page.click('[aria-label="옮긴 소리 안내 닫기"]');
-    };
     const soundSection = async (page) => page.$('[aria-label="누를 때 소리 종류"]').then((el) => el.evaluateHandle((node) => node.closest('section')));
     for (const mode of ['light', 'dark']) {
         for (const width of [390, 1280]) {
@@ -2409,8 +2404,22 @@ try {
                 check(opened.shown && opened.id === 'red' && opened.voice === 'red' && opened.moved === 'red', `${width} ${mode} 글자 소리를 옮긴 기기에 옮김 안내가 없습니다. ${JSON.stringify(opened)}`);
                 check(opened.text.includes('‘적축·매끈’') && opened.text.includes('이제 버튼이나 탭을 누르면 이 소리가 나요') && !opened.text.includes('꺼져'), `${width} ${mode} 옮김 안내 말이 켜짐에 맞지 않습니다. ${opened.text}`);
                 check(opened.closeSize && opened.closeSize[0] >= 44 && opened.closeSize[1] >= 44 && !opened.overflow && !opened.overlap, `${width} ${mode} 옮김 안내 닫기 단추가 작거나 겹칩니다. ${JSON.stringify(opened)}`);
+                /* 닫기 단추를 맨 위로 끌어올려도 폰 맨 위 퇴근 줄 밑에 숨지 않고, 그 자리를 누르면 단추가 눌려야 합니다. */
+                const lifted = await page.evaluate(async () => {
+                    const close = document.querySelector('[aria-label="옮긴 소리 안내 닫기"]');
+                    close.scrollIntoView({ block: 'start' });
+                    await new Promise((r) => setTimeout(r, 120));
+                    const r = close.getBoundingClientRect();
+                    const bar = document.querySelector('.fuse-bar')?.getBoundingClientRect().bottom ?? 0;
+                    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(6, r.height / 2));
+                    const out = { top: Math.round(r.top), bar: Math.round(bar), own: Boolean(hit && close.contains(hit)) };
+                    document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' });
+                    await new Promise((r2) => setTimeout(r2, 120));
+                    return out;
+                });
+                check(lifted.top >= lifted.bar - 0.5 && lifted.own, `${width} ${mode} 맨 위로 끌어올린 닫기 단추가 맨 위 줄 밑에 숨습니다: ${JSON.stringify(lifted)}`);
                 await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, `settings-moved-${width}-${mode}.png`) });
-                await clickMovedClose(page);
+                await page.click('[aria-label="옮긴 소리 안내 닫기"]');
                 await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
                 const closedKey = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-voice-moved'));
                 await page.reload({ waitUntil: 'domcontentloaded' });
@@ -2460,7 +2469,7 @@ try {
             await withDemo(width, 'light', async (page) => {
                 await openSoundSettings(page, { 'ssug-gyomu-type-sound': '1', 'ssug-gyomu-type-voice': 'red' });
                 if (state === 'closed') {
-                    await clickMovedClose(page);
+                    await page.click('[aria-label="옮긴 소리 안내 닫기"]');
                     await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
                 }
                 const pads = {};
@@ -3907,6 +3916,22 @@ try {
             });
             check(paused.flag === '1' && paused.running === 0 && paused.back === '', `360 탭이 가려져도 불꽃이 멈추지 않습니다: ${JSON.stringify(paused)}`);
             await audit(page, '맨 위 퇴근 줄 360');
+            /* 홈의 칸을 맨 위로 끌어올려도 줄 밑에 숨지 않고, 그 자리를 누르면 줄이 아니라 칸이 눌립니다. */
+            const lifted = await page.evaluate(async () => {
+                const max = document.scrollingElement.scrollHeight - innerHeight;
+                const el = [...document.querySelectorAll('.main section, .main .card')].find((n) => { const y = n.getBoundingClientRect().top + scrollY; return y > 120 && y < max - 20; });
+                if (!el) return { none: true };
+                el.scrollIntoView({ block: 'start' });
+                await new Promise((r) => setTimeout(r, 150));
+                const r = el.getBoundingClientRect();
+                const bar = document.querySelector('.fuse-bar').getBoundingClientRect().bottom;
+                const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 4);
+                const out = { top: Math.round(r.top), bar: Math.round(bar), under: Boolean(hit?.closest('.fuse')) };
+                document.scrollingElement.scrollTop = 0;
+                await new Promise((r2) => setTimeout(r2, 100));
+                return out;
+            });
+            check(!lifted.none && lifted.top >= lifted.bar - 0.5 && lifted.top < 120 && !lifted.under, `360 위로 끌어올린 칸이 맨 위 줄 밑에 숨습니다: ${JSON.stringify(lifted)}`);
 
             /* ⑤ 자세히 보기: 키보드(Enter)로 열고 Esc로 닫으며 포커스가 줄로 돌아옵니다. */
             await page.focus('.fuse-bar');

@@ -29,6 +29,8 @@
 @media (max-width: 640px) {
     /* 줄 높이만큼 화면 전체를 아래로 내려, 머리글·시간표가 줄 밑에 가려지지 않게 합니다. */
     .app-frame:has(> .fuse) { padding-top: calc(var(--fuse-h) + var(--fuse-top)); }
+    /* 칸을 맨 위로 끌어올리거나(scrollIntoView·앵커) 키보드로 포커스가 옮겨 가도, 줄의 누름 자리(44px)+안전영역 밑에 숨지 않게 그만큼 비워 둡니다. */
+    html:has(.app-frame > .fuse) { scroll-padding-top: calc(var(--fuse-h) + 10px + env(safe-area-inset-top, 0px)); }
     /* 홈의 큰 타이머 키캡은 맨 위 줄이 대신합니다. 넓은 화면에서는 그대로 보입니다. */
     .app-frame:has(> .fuse) .home-leave[data-leave] { display: none; }
 }
