@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
-import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage, toggleTodo } from '../lib/db.js';
 import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
@@ -151,6 +151,12 @@ function NoteBox() {
     );
 }
 
+// 알림장 저장이 막혔을 때 띄울 안내. 공용 안내("원래대로 돌려 두었어요")는 입력칸 글까지 되돌린 것처럼 읽혀서, 알림장 화면에서는 무엇을 못 했고 무엇이 그대로인지 말해 줍니다.
+function noticeFailMessage(result, what, kept) {
+    const full = result?.message === storageIssueMessage({ name: 'QuotaExceededError' });
+    return `${full ? '저장 공간이 가득 차서 ' : ''}알림장을 ${what} 못했어요. ${kept}`;
+}
+
 // 열려 있는 알림장 화면의 날짜·입력칸 글·DB 글과 되돌린 글을 보여 줄 함수. 화면을 떠나면 비웁니다.
 const liveNotice = { current: null };
 
@@ -201,14 +207,14 @@ export function Notice() {
             if (!current?.text?.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
             // 그 날 글이 여러 줄(클라우드 옛 글 + 이 기기 민감 글)이어도 함께 비우고 함께 되돌립니다.
             const cleared = await clearNoticeDay(date);
-            if (cleared?.storageFailed) return;
+            if (cleared?.storageFailed) { showToast(noticeFailMessage(cleared, '비우지', '저장해 둔 글은 그대로 있어요.')); return; }
             showToast('이 날 알림장을 비웠어요.', false, {
                 label: '되돌리기',
                 onClick: async () => {
                     const live = liveNotice.current;
                     const typing = Boolean(live && live.date === date && live.text.trim() && live.text !== live.synced);
                     const result = await restoreNoticeDay(cleared.before);
-                    if (result?.storageFailed) return;
+                    if (result?.storageFailed) { showToast(noticeFailMessage(result, '되돌리지', typing ? '쓰던 글은 그대로 있어요.' : '지금은 비어 있어요.')); return; }
                     if (typing) live.showRestored(pickNotice(cleared.before, date)?.text || '');
                     showToast(typing ? '알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.' : '알림장을 되돌렸어요.');
                 },
@@ -216,7 +222,7 @@ export function Notice() {
             return;
         }
         const result = await saveNotice(date, next);
-        if (result?.storageFailed) return;
+        if (result?.storageFailed) { showToast(noticeFailMessage(result, '저장하지', '쓰던 글은 그대로 있어요.')); return; }
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }
 

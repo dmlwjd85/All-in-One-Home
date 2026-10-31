@@ -3767,6 +3767,8 @@ try {
         const failVaults = await noticeVaults(page);
         check(!failToast.includes('되돌렸어요') && failToast.includes('저장 공간'), `저장에 실패했는데 되돌렸다는 안내가 뜨거나 저장 공간 안내가 없습니다: ${JSON.stringify(failToast)}`);
         check(failVaults.cloud.some((row) => row.date === noticeDay && row.text === ''), `저장에 실패했는데 비운 알림장이 바뀌었습니다: ${JSON.stringify(failVaults)}`);
+        // 알림장 화면에서는 공용 안내("원래대로 돌려 두었어요") 대신 무엇을 못 했는지 알려 줍니다.
+        check(failToast.includes('알림장을 되돌리지 못했어요.') && !failToast.includes('원래대로'), `되돌리기에 실패했는데 알림장 안내가 아닙니다: ${JSON.stringify(failToast)}`);
         await page.screenshot({ path: resolve(shots, 'notice_undo_fail_360_light.png') });
         // 저장에 실패하면 입력칸에 쓰던 글을 그대로 두고 저장 공간 안내만 띄웁니다(DB는 원래 글 그대로).
         await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
@@ -3783,6 +3785,8 @@ try {
         const saveFailVaults = await noticeVaults(page);
         check(saveFailBox === '단소 챙기기', `저장에 실패했는데 입력칸에 쓰던 글이 사라졌습니다: ${JSON.stringify(saveFailBox)}`);
         check(saveFailToast.includes('저장 공간') && !saveFailToast.includes('저장했어요'), `저장에 실패했는데 저장 공간 안내가 없거나 저장했다는 안내가 뜹니다: ${JSON.stringify(saveFailToast)}`);
+        // 입력칸 글은 그대로이므로 "원래대로 돌려 두었어요"가 아니라 쓰던 글이 그대로 있다고 알려 줍니다.
+        check(saveFailToast.includes('알림장을 저장하지 못했어요. 쓰던 글은 그대로 있어요.') && !saveFailToast.includes('원래대로'), `저장에 실패했는데 쓰던 글이 그대로 있다는 안내가 없습니다: ${JSON.stringify(saveFailToast)}`);
         check(saveFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `저장에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(saveFailVaults)}`);
         await page.screenshot({ path: resolve(shots, 'notice_save_fail_typed_360_light.png') });
         await noticeSave(page, '단소 챙기기', null);
@@ -3802,6 +3806,7 @@ try {
         await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
         const clearFailVaults = await noticeVaults(page);
         check(clearFailToast.includes('저장 공간') && !clearFailToast.includes('비웠어요'), `비우기에 실패했는데 비웠다는 안내가 저장 공간 안내를 덮었습니다: ${JSON.stringify(clearFailToast)}`);
+        check(clearFailToast.includes('알림장을 비우지 못했어요. 저장해 둔 글은 그대로 있어요.') && !clearFailToast.includes('원래대로'), `비우기에 실패했는데 비우지 못했다는 알림장 안내가 없습니다: ${JSON.stringify(clearFailToast)}`);
         check(clearFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `비우기에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(clearFailVaults)}`);
 
         // N10: 쓰던 글을 남긴 채 되돌리면 입력칸 위에 되돌린 글을 보여 주고, 불러오기로 입력칸에 채울 수 있습니다.
@@ -3820,6 +3825,22 @@ try {
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'));
         const afterSave = await noticeRestoredView(page);
         check(!afterSave.shown, `쓰던 글을 저장했는데 되돌린 글 안내가 남았습니다: ${JSON.stringify(afterSave)}`);
+        // 되돌린 뒤 DB 글이 바뀌면(다시 비움) 예전 되돌린 글 칸은 사라집니다. 남아 있으면 '불러오기'가 칸에 보이는 글과 다른 글(빈 글)을 채워요.
+        await noticeRestoredSetup(page, 'light');
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await noticeType(page, '실내화 주머니 챙기기');
+        await delay(200);
+        const afterDbChange = await noticeRestoredView(page);
+        check(!afterDbChange.shown && await noticeBox(page) === '실내화 주머니 챙기기', `되돌린 뒤 DB 글이 바뀌었는데 예전 되돌린 글 칸이 남았습니다: ${JSON.stringify(afterDbChange)}`);
+        // 다른 날로 가도(그 날 DB 글이 다름) 앞 날에 되돌린 글 칸이 따라오지 않습니다.
+        await noticeRestoredSetup(page, 'light');
+        await page.click('button[aria-label="다음 날"]');
+        await delay(300);
+        await noticeType(page, '체육복 챙기기');
+        await delay(200);
+        const otherDayPanel = await noticeRestoredView(page);
+        check(!otherDayPanel.shown, `다른 날로 갔는데 앞 날에 되돌린 글 칸이 보입니다: ${JSON.stringify(otherDayPanel)}`);
 
         // 공백만 쓴 칸은 빈칸과 같게 봅니다: 되돌리면 되돌린 글로 채우고, 쓰던 글 안내·되돌린 글 표시는 없습니다.
         await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
