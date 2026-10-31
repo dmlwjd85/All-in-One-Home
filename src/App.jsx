@@ -36,6 +36,7 @@ import { Legacy, RosterSettings, Settings } from './ui/Settings.jsx';
 import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
 import { SyncChip } from './ui/SyncChip.jsx';
+import { FuseBar } from './ui/FuseBar.jsx';
 import { syncAuthKnown } from './lib/syncStatus.js';
 
 export default function App() {
@@ -622,6 +623,7 @@ export default function App() {
     return (
         <Ui.Provider value={ui}>
             <div className="app-bg app-frame" data-ready="1">
+                <FuseBar />
                 <aside className="side">
                     <div className="side-brand">
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px 0' }}>

@@ -2488,6 +2488,20 @@ try {
                 check(opened.shown && opened.id === 'red' && opened.voice === 'red' && opened.moved === 'red', `${width} ${mode} 글자 소리를 옮긴 기기에 옮김 안내가 없습니다. ${JSON.stringify(opened)}`);
                 check(opened.text.includes('‘적축·매끈’') && opened.text.includes('이제 버튼이나 탭을 누르면 이 소리가 나요') && !opened.text.includes('꺼져'), `${width} ${mode} 옮김 안내 말이 켜짐에 맞지 않습니다. ${opened.text}`);
                 check(opened.closeSize && opened.closeSize[0] >= 44 && opened.closeSize[1] >= 44 && !opened.overflow && !opened.overlap, `${width} ${mode} 옮김 안내 닫기 단추가 작거나 겹칩니다. ${JSON.stringify(opened)}`);
+                /* 닫기 단추를 맨 위로 끌어올려도 폰 맨 위 퇴근 줄 밑에 숨지 않고, 그 자리를 누르면 단추가 눌려야 합니다. */
+                const lifted = await page.evaluate(async () => {
+                    const close = document.querySelector('[aria-label="옮긴 소리 안내 닫기"]');
+                    close.scrollIntoView({ block: 'start' });
+                    await new Promise((r) => setTimeout(r, 120));
+                    const r = close.getBoundingClientRect();
+                    const bar = document.querySelector('.fuse-bar')?.getBoundingClientRect().bottom ?? 0;
+                    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(6, r.height / 2));
+                    const out = { top: Math.round(r.top), bar: Math.round(bar), own: Boolean(hit && close.contains(hit)) };
+                    document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' });
+                    await new Promise((r2) => setTimeout(r2, 120));
+                    return out;
+                });
+                check(lifted.top >= lifted.bar - 0.5 && lifted.own, `${width} ${mode} 맨 위로 끌어올린 닫기 단추가 맨 위 줄 밑에 숨습니다: ${JSON.stringify(lifted)}`);
                 await (await soundSection(page)).screenshot({ path: resolve(soundShotDir, `settings-moved-${width}-${mode}.png`) });
                 await page.click('[aria-label="옮긴 소리 안내 닫기"]');
                 await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
@@ -2612,7 +2626,9 @@ try {
                     const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
                     /* 데모에도 퇴근 타이머가 있습니다. 평일 홈에서도 6교시는 늘 첫 화면에 보여야 하고, 타이머도 첫 화면에 보이며 팁에 가리지 않아야 합니다. */
-                    const leave = document.querySelector('.home-leave')?.getBoundingClientRect();
+                    /* 640px 이하에서 타이머는 맨 위 줄(.fuse-face)이 대신합니다. 키캡 카드가 숨으면 맨 위 줄을 타이머로 봅니다. */
+                    const leaveCard = document.querySelector('.home-leave');
+                    const leave = (leaveCard?.getClientRects().length ? leaveCard : document.querySelector('.fuse-face') || leaveCard)?.getBoundingClientRect();
                     return {
                         visible,
                         hasLeave: Boolean(leave),
@@ -3459,9 +3475,11 @@ try {
         const cardBox = box(card);
         const title = box(card?.querySelector('.fold-head')) || box(card?.querySelector('.fold-title'));
         const cells = [...(card?.querySelectorAll('.period-row button') || [])].map(box);
-        const big = box(document.querySelector('.home-leave .leave-big'));
-        const key = document.querySelector('.home-leave .leave-key');
-        const lead = box(document.querySelector('.home-leave'));
+        /* 640px 이하에서는 키캡 대신 맨 위 줄(.fuse-face)이 타이머입니다. 줄은 맨 위에 고정되니 시간표 카드 위에 있고 카드와 겹치지 않아야 합니다. */
+        const strip = box(document.querySelector('.fuse-face'));
+        const big = box(document.querySelector('.home-leave .leave-big')) || box(document.querySelector('.fuse-face .fuse-v'));
+        const key = box(document.querySelector('.home-leave .leave-key')) ? document.querySelector('.home-leave .leave-key') : document.querySelector('.fuse-face');
+        const lead = box(document.querySelector('.home-leave')) || strip;
         const tab = box(document.querySelector('.tabbar'));
         const tabTop = tab ? tab.top : window.innerHeight;
         const fab = box(document.querySelector('.tabbar .fab'));
@@ -3470,6 +3488,7 @@ try {
             off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
             open,
             lead: lead ? Math.round(lead.top) : -1,
+            strip: strip ? Math.round(strip.bottom) : -1,
             cardTop: Math.round(cardBox?.top ?? -1),
             cardBottom: Math.round(cardBox?.bottom ?? -1),
             titleBottom: Math.round(title?.bottom ?? -1),
@@ -3481,7 +3500,7 @@ try {
             coverTop: Math.round(Math.min(tabTop, fab ? fab.top : tabTop)),
         };
     });
-    const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
+    const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && (t.strip >= 0 ? t.strip <= t.cardTop : t.cardTop < t.lead)
         && t.titleBottom > 0 && t.titleBottom <= t.tabTop
         && t.cardBottom > 0 && t.cardBottom <= t.tabTop
         && (!t.open || (t.cells === 6 && t.cellsBottom > 0 && t.cellsBottom <= t.tabTop));
@@ -3508,9 +3527,19 @@ try {
                         const save = await page.evaluate(() => {
                             const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
                             const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
-                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight) };
+                            /* 쨈 단추(가운데 볼록 단추)와 겹치는지, 단추 가운데·네 귀퉁이·네 변에서 맨 위가 저장 단추인지도 봅니다. */
+                            const btn = document.querySelector('.work-setup .primary-btn');
+                            const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
+                            const fabHit = Boolean(r && fab && fab.width > 0 && r.left < fab.right && r.right > fab.left && r.top < fab.bottom && r.bottom > fab.top);
+                            /* 둥근 귀퉁이 바깥은 원래 단추가 아니므로, 귀퉁이 점은 둥근 정도만큼 안쪽에서 봅니다. */
+                            const k = r ? parseFloat(getComputedStyle(btn).borderTopLeftRadius || '0') * 0.3 + 3 : 0;
+                            const cx = r ? (r.left + r.right) / 2 : 0, cy = r ? (r.top + r.bottom) / 2 : 0;
+                            const pts = r ? [[cx, cy], [r.left + k, r.top + k], [r.right - k, r.top + k], [r.left + k, r.bottom - k], [r.right - k, r.bottom - k], [r.left + 3, cy], [r.right - 3, cy], [cx, r.top + 3], [cx, r.bottom - 3]] : [];
+                            const hidden = pts.filter(([x, y]) => { const el = document.elementFromPoint(x, y); return !el || !(el === btn || btn.contains(el)); }).length;
+                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), left: Math.round(r?.left ?? -1), right: Math.round(r?.right ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight), fab: fab ? [Math.round(fab.left), Math.round(fab.top), Math.round(fab.right), Math.round(fab.bottom)] : null, fabHit, hidden };
                         });
                         check(save.height > 0 && save.top >= 0 && save.bottom <= save.tabTop, `${label} 안내 띠를 펼치면 저장 단추가 탭바 위로 보이지 않습니다: ${JSON.stringify(save)}`);
+                        check(save.height > 0 && !save.fabHit && save.hidden === 0, `${label} 안내 띠를 펼치면 저장 단추가 쨈 단추와 겹치거나 다른 것에 가립니다: ${JSON.stringify(save)}`);
                     }
                 });
             }
@@ -4504,14 +4533,15 @@ try {
             });
         }
     }
-    /* 퇴근 타이머 숫자 대비: 키캡(.leave-key) 바탕 위 흰 글자가 모든 키보드 테마 × 밝은·어두운 화면 × 퇴근·조퇴에서 4.5:1을 넘어야 합니다.
+    /* 퇴근 타이머 숫자 대비(641px 이상): 키캡(.leave-key) 바탕 위 흰 글자가 모든 키보드 테마 × 밝은·어두운 화면 × 퇴근·조퇴에서 4.5:1을 넘어야 합니다.
        글자를 지운 키캡 화면을 찍어, 글자 자리의 가장 밝은(대비가 가장 낮은) 점과 글자색을 비교합니다. 바탕이 투명해지면 1.3:1 안팎으로 떨어집니다.
        평일(2026-10-26 월 15:20)로 따로 고정하므로 날짜와 상관없는 검사라, 브라우저 시계 날짜마다 되풀이하지 않고 기본 날짜에서 한 번만 돌립니다. */
     if (todayYmd === '2026-10-23') {
         const lowest = [];
         for (const theme of ['mx', 'retro', 'slim', 'puff', 'jelly', 'type']) {
             for (const mode of ['light', 'dark']) {
-                await withPage(360, async (page) => {
+                /* 640px 이하에서는 키캡 대신 맨 위 줄(FuseBar)이 보이므로, 키캡은 그보다 넓은 720에서 봅니다. 맨 위 줄 대비는 아래에서 따로 봅니다. */
+                await withPage(720, async (page) => {
                     await page.evaluateOnNewDocument((theme) => {
                         const fixed = new Date('2026-10-26T15:20:00+09:00').valueOf();
                         const Native = Date;
@@ -4584,6 +4614,392 @@ try {
             }
         }
         console.log(`퇴근 타이머 숫자 대비 최저 ${Math.min(...lowest)}:1 (테마 6 × 밝은·어두운 × 퇴근·조퇴)`);
+    }
+    /* 폰 맨 위 '실 심지' 퇴근 줄(FuseBar). 평일 2026-10-26(월)로 따로 고정하므로 기본 날짜에서 한 번만 돌립니다.
+       ① 줄이 보이고 남은 실 길이가 남은 시간 비율과 맞는지 ② 조퇴 날은 '조퇴까지' ③ 끝나면 초록 캡슐 ④ 움직임 줄이기면 움직임이 꺼지는지
+       ⑤ 자세히 보기가 단추·Esc·포커스로 열고 닫히는지 ⑥ 1280에서는 옛 타이머 그대로인지 ⑦ 줄이 시간표·탭바·쨈 단추를 가리지 않는지
+       ⑧ 6 테마 × 밝은·어두운 × 퇴근·조퇴·10분 안쪽·끝남·움직임 줄이기에서 글자 대비가 5:1을 넘는지 봅니다. */
+    if (todayYmd === '2026-10-23') {
+        const fuseDay = async (page, { theme = 'mx', leave = null, reduce = false } = {}) => {
+            if (reduce) await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+            await page.evaluateOnNewDocument((theme, leave) => {
+                const fixed = new Date('2026-10-26T15:20:00+09:00').valueOf();
+                const Native = Date;
+                function Weekday(...args) {
+                    if (!new.target) return new Native(fixed).toString();
+                    return args.length ? new Native(...args) : new Native(fixed);
+                }
+                Weekday.now = () => fixed;
+                Weekday.parse = Native.parse;
+                Weekday.UTC = Native.UTC;
+                Weekday.prototype = Native.prototype;
+                window.Date = Weekday;
+                localStorage.setItem('ssug-gyomu-kb-theme', theme);
+                localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ workStart: '08:40', workEnd: '16:40' }));
+                if (leave) localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ '2026-10-26': leave }));
+                else localStorage.removeItem('ssug-gyomu-leave-early');
+            }, theme, leave);
+        };
+        const fuseGo = async (page, at, mode = 'light') => {
+            await page.goto(`${origin}?demo=1&at=${at}&mode=${mode}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.waitForSelector('.fuse-bar', { timeout: 15000 });
+            await page.evaluate(() => document.fonts.ready);
+            await delay(200);
+        };
+        const fuseRead = (page) => page.evaluate(() => {
+            const box = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height } : null; };
+            const bar = document.querySelector('.fuse-bar');
+            const track = document.querySelector('.fuse-track');
+            const live = document.querySelector('.fuse-bar .fuse-live');
+            const card = document.querySelector('.home-leave[data-leave]');
+            return {
+                bar: box(bar),
+                face: box(document.querySelector('.fuse-face')),
+                state: document.querySelector('.fuse')?.dataset.state || '',
+                label: bar?.dataset.fuse || '',
+                frac: Number(bar?.dataset.frac),
+                aria: bar?.getAttribute('aria-label') || '',
+                expanded: bar?.getAttribute('aria-expanded'),
+                text: document.querySelector('.fuse-text')?.innerText.replace(/\s+/g, ' ').trim() || '',
+                bomb: document.querySelector('.fuse-bar .fuse-bomb')?.textContent.trim() || '',
+                bombBg: getComputedStyle(document.querySelector('.fuse-bar .fuse-bomb') || document.body).backgroundColor,
+                liveRatio: track && live ? live.getBoundingClientRect().width / track.getBoundingClientRect().width : 0,
+                hasLive: Boolean(live),
+                cardShown: Boolean(box(card)),
+                padTop: parseFloat(getComputedStyle(document.querySelector('.app-frame')).paddingTop),
+                anims: document.querySelector('.fuse')?.getAnimations({ subtree: true }).length ?? -1,
+                sparkOpacity: Math.min(...[...document.querySelectorAll('.fuse-bar .fuse-spark')].map((el) => Number(getComputedStyle(el).opacity))),
+            };
+        });
+
+        /* ① 평소: 15:20, 퇴근 16:40 → 남은 80분 / 480분. 실 길이 비율 = 1/6. */
+        await withPage(360, async (page) => {
+            await fuseDay(page);
+            await fuseGo(page, '15:20');
+            const f = await fuseRead(page);
+            check(f.bar && f.face && Math.round(f.face.top) === 0 && Math.round(f.face.height) === 34 && f.bar.height >= 43.5, `360 맨 위 퇴근 줄이 없거나 34px 줄·44px 누름 크기가 아닙니다: ${JSON.stringify(f)}`);
+            check(f.label === '퇴근' && f.text === '퇴근까지 1시간 20분' && f.bomb === '16:40' && !f.cardShown && f.padTop >= 34, `360 맨 위 줄 글자·캡슐·옛 키캡 숨김이 다릅니다: ${JSON.stringify(f)}`);
+            check(Math.abs(f.frac - 80 / 480) < 0.002 && Math.abs(f.liveRatio - 80 / 480) < 0.03, `360 남은 실 길이가 남은 시간 비율(0.167)과 다릅니다: ${JSON.stringify(f)}`);
+            check(f.aria.includes('퇴근까지 1시간 20분 남았어요') && f.aria.includes('16:40') && f.expanded === 'false', `360 맨 위 줄 읽는 이름이 다릅니다: ${f.aria}`);
+            check(f.anims >= 8, `360 불꽃이 움직이지 않습니다: 움직임 ${f.anims}개`);
+            /* 탭이 가려지면 불꽃을 멈춥니다. */
+            const paused = await page.evaluate(async () => {
+                Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+                document.dispatchEvent(new Event('visibilitychange'));
+                await new Promise((r) => setTimeout(r, 120));
+                const anims = document.querySelector('.fuse').getAnimations({ subtree: true });
+                const out = { flag: document.querySelector('.fuse').dataset.paused, running: anims.filter((a) => a.playState === 'running').length };
+                Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+                document.dispatchEvent(new Event('visibilitychange'));
+                await new Promise((r) => setTimeout(r, 120));
+                out.back = document.querySelector('.fuse').dataset.paused || '';
+                return out;
+            });
+            check(paused.flag === '1' && paused.running === 0 && paused.back === '', `360 탭이 가려져도 불꽃이 멈추지 않습니다: ${JSON.stringify(paused)}`);
+            await audit(page, '맨 위 퇴근 줄 360');
+            /* 홈의 칸을 맨 위로 끌어올려도 줄 밑에 숨지 않고, 그 자리를 누르면 줄이 아니라 칸이 눌립니다. */
+            const lifted = await page.evaluate(async () => {
+                const max = document.scrollingElement.scrollHeight - innerHeight;
+                const el = [...document.querySelectorAll('.main section, .main .card')].find((n) => { const y = n.getBoundingClientRect().top + scrollY; return y > 120 && y < max - 20; });
+                if (!el) return { none: true };
+                el.scrollIntoView({ block: 'start' });
+                await new Promise((r) => setTimeout(r, 150));
+                const r = el.getBoundingClientRect();
+                const bar = document.querySelector('.fuse-bar').getBoundingClientRect().bottom;
+                const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 4);
+                const out = { top: Math.round(r.top), bar: Math.round(bar), under: Boolean(hit?.closest('.fuse')) };
+                document.scrollingElement.scrollTop = 0;
+                await new Promise((r2) => setTimeout(r2, 100));
+                return out;
+            });
+            check(!lifted.none && lifted.top >= lifted.bar - 0.5 && lifted.top < 120 && !lifted.under, `360 위로 끌어올린 칸이 맨 위 줄 밑에 숨습니다: ${JSON.stringify(lifted)}`);
+
+            /* ⑤ 자세히 보기: 키보드(Enter)로 열고 Esc로 닫으며 포커스가 줄로 돌아옵니다. */
+            await page.focus('.fuse-bar');
+            await page.keyboard.press('Enter');
+            await page.waitForSelector('.fuse-panel', { timeout: 5000 });
+            await delay(300);
+            const opened = await page.evaluate(() => {
+                const panel = document.querySelector('.fuse-panel');
+                const r = panel.getBoundingClientRect();
+                const tab = document.querySelector('.tabbar').getBoundingClientRect();
+                const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
+                const bar = document.querySelector('.fuse-bar');
+                return {
+                    expanded: bar.getAttribute('aria-expanded'),
+                    controls: bar.getAttribute('aria-controls') === panel.id,
+                    focusIn: panel.contains(document.activeElement),
+                    text: panel.innerText.replace(/\s+/g, ' '),
+                    live: panel.querySelector('[role="timer"]')?.getAttribute('aria-live'),
+                    bottom: r.bottom, tabTop: tab.top, fabTop: fab ? fab.top : tab.top,
+                    buttons: [...panel.querySelectorAll('button')].map((b) => ({ t: b.innerText.trim(), tap: b.classList.contains('tap') })),
+                };
+            });
+            check(opened.expanded === 'true' && opened.controls && opened.focusIn && opened.live === 'off', `360 자세히 보기가 키보드로 열리지 않거나 포커스가 들어가지 않습니다: ${JSON.stringify(opened)}`);
+            check(['오늘 퇴근 16:40', '1시간 20분 남았어요', '출근 08:40', '진행률', '83%', '출근부터', '6시간 40분', '지금은'].every((t) => opened.text.includes(t)), `360 자세히 보기 내용이 빠졌습니다: ${opened.text}`);
+            check(opened.buttons.some((b) => b.t === '오늘 조퇴' && b.tap) && opened.buttons.some((b) => b.t === '접기' && b.tap), `360 자세히 보기 단추가 앱 단추(소리 나는 단추)가 아닙니다: ${JSON.stringify(opened.buttons)}`);
+            check(opened.bottom <= opened.fabTop && opened.bottom <= opened.tabTop, `360 자세히 보기가 탭바나 쨈 단추를 덮습니다: ${JSON.stringify(opened)}`);
+            await audit(page, '맨 위 줄 자세히 보기 360');
+            await page.keyboard.press('Escape');
+            await delay(250);
+            const closed = await page.evaluate(() => ({ panel: Boolean(document.querySelector('.fuse-panel')), expanded: document.querySelector('.fuse-bar').getAttribute('aria-expanded'), focus: document.activeElement?.classList.contains('fuse-bar') }));
+            check(!closed.panel && closed.expanded === 'false' && closed.focus, `360 Esc로 자세히 보기가 닫히지 않거나 포커스가 줄로 돌아오지 않습니다: ${JSON.stringify(closed)}`);
+            await page.click('.fuse-bar');
+            await page.waitForSelector('.fuse-panel', { timeout: 5000 });
+            await page.evaluate(() => [...document.querySelectorAll('.fuse-panel button')].find((b) => b.innerText.trim() === '접기')?.click());
+            await delay(250);
+            check(!(await page.$('.fuse-panel')), '360 접기를 눌러도 자세히 보기가 닫히지 않습니다.');
+        });
+
+        /* ② 조퇴 날 16:00: '조퇴까지 40분', 남은 비율 40/440. ③ 끝난 뒤(16:50): 초록 캡슐과 '퇴근 시간이 지났어요'. 10분 안쪽(16:35)은 초 단위지만 읽는 이름은 분 단위입니다. */
+        await withPage(390, async (page) => {
+            await fuseDay(page, { leave: '16:00' });
+            await fuseGo(page, '15:20');
+            const f = await fuseRead(page);
+            check(f.label === '조퇴' && f.text === '조퇴까지 40분' && f.bomb === '16:00' && Math.abs(f.frac - 40 / 440) < 0.002 && Math.abs(f.liveRatio - 40 / 440) < 0.03 && f.aria.includes('조퇴까지 40분 남았어요'), `390 조퇴 날 맨 위 줄이 다릅니다: ${JSON.stringify(f)}`);
+        });
+        await withPage(390, async (page) => {
+            await fuseDay(page);
+            await fuseGo(page, '16:35');
+            const soon = await fuseRead(page);
+            check(soon.state === 'soon' && soon.text === '퇴근까지 5분 00초' && soon.aria.includes('약 5분') && !/초/.test(soon.aria), `390 10분 안쪽 줄이 다르거나 읽는 이름이 초마다 바뀝니다: ${JSON.stringify(soon)}`);
+            await fuseGo(page, '16:50');
+            const done = await fuseRead(page);
+            check(done.state === 'done' && done.text.includes('퇴근 시간이 지났어요') && done.frac === 0 && !done.hasLive && done.bombBg !== soon.bombBg && /수고/.test(done.aria), `390 끝난 줄(초록 캡슐·펑)이 다릅니다: ${JSON.stringify(done)}`);
+        });
+
+        /* ④ 움직임 줄이기: 움직임이 하나도 없고 불꽃은 멈춘 그림으로 보입니다. */
+        await withPage(360, async (page) => {
+            await fuseDay(page, { reduce: true });
+            await fuseGo(page, '15:20');
+            const f = await fuseRead(page);
+            check(f.anims === 0 && f.sparkOpacity > 0.5 && f.text === '퇴근까지 1시간 20분', `360 움직임 줄이기에서도 불꽃이 움직이거나 그림이 사라집니다: ${JSON.stringify(f)}`);
+        });
+
+        /* ⑥ 1280: 맨 위 줄은 없고 옛 키캡 타이머가 그대로입니다. */
+        await withPage(1280, async (page) => {
+            await fuseDay(page);
+            await fuseGo(page, '15:20').catch(() => {});
+            await page.waitForSelector('.home-leave[data-leave="퇴근"] .leave-key', { timeout: 15000 });
+            const wide = await page.evaluate(() => ({ fuse: Boolean(document.querySelector('.fuse')), key: Math.round(document.querySelector('.leave-key').getBoundingClientRect().height), text: document.querySelector('.home-leave[data-leave]').innerText.replace(/\s+/g, ' '), pad: getComputedStyle(document.querySelector('.app-frame')).paddingTop }));
+            check(!wide.fuse && wide.key > 40 && wide.text.includes('1시간 20분') && wide.pad === '0px', `1280에서 옛 타이머가 바뀌었거나 맨 위 줄이 보입니다: ${JSON.stringify(wide)}`);
+        });
+
+        /* ⑦ 08:42(실이 거의 다 남음, 불씨가 글자 가장 가까이): 불꽃·불씨가 어느 순간에도 글자·캡슐에 닿지 않고, 줄이 시간표·탭바·쨈 단추·머리글을 가리지 않습니다. */
+        for (const width of [360, 390]) {
+            await withPage(width, async (page) => {
+                await fuseDay(page);
+                await fuseGo(page, '08:42');
+                const lay = await page.evaluate(async () => {
+                    const rect = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? r : null; };
+                    const hits = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+                    const textBoxes = [...document.querySelectorAll('.fuse-k, .fuse-v, .fuse-bar .fuse-bomb')].map(rect);
+                    const fx = [...document.querySelectorAll('.fuse-bar .fuse-spark, .fuse-bar .fuse-ember')];
+                    const anims = document.querySelector('.fuse').getAnimations({ subtree: true });
+                    anims.forEach((a) => a.pause());
+                    let touch = 0;
+                    for (const step of [0, 0.15, 0.3, 0.5, 0.7, 0.85, 0.99]) {
+                        for (const a of anims) {
+                            const timing = a.effect.getComputedTiming();
+                            a.currentTime = (timing.delay || 0) + timing.duration * step;
+                        }
+                        for (const el of fx) if (Number(getComputedStyle(el).opacity) > 0.05 && textBoxes.some((t) => hits(rect(el), t))) touch += 1;
+                    }
+                    anims.forEach((a) => a.play());
+                    const face = rect(document.querySelector('.fuse-face'));
+                    const main = document.querySelector('.main');
+                    const first = rect(main?.firstElementChild);
+                    const tab = rect(document.querySelector('.tabbar'));
+                    const fab = rect(document.querySelector('.tabbar .fab'));
+                    const time = rect(document.querySelector('.home-time'));
+                    const date = rect(document.querySelector('.date-block'));
+                    const icons = [...document.querySelectorAll('.home-hero button, .main header button')].map(rect).filter(Boolean);
+                    return {
+                        touch, fx: fx.length,
+                        face: face && { top: face.top, bottom: face.bottom },
+                        first: first && first.top, time: time && time.top,
+                        covers: hits(face, tab) || hits(face, fab) || hits(face, time) || hits(face, date) || hits(face, first) || icons.some((r) => hits(face, r)),
+                    };
+                });
+                check(lay.fx >= 9 && lay.touch === 0, `${width} 불꽃이 글자·캡슐에 닿습니다: ${JSON.stringify(lay)}`);
+                check(lay.face && !lay.covers && lay.first >= lay.face.bottom, `${width} 맨 위 줄이 머리글·시간표·탭바·쨈 단추를 가립니다: ${JSON.stringify(lay)}`);
+            });
+        }
+
+        /* ⑨ 좁은 화면 280px과 글자 200%(360을 180 CSS px로): 어느 상태에서도 시각 캡슐·▾가 화면 안에 다 보이고, 글이 캡슐과 겹치지 않습니다. 280에서는 가로로도 넘치지 않습니다(180의 홈 아이콘 줄 넘침은 main에도 있는 것이라 여기서 보지 않습니다).
+           글이 줄어 '…'가 되어도 남은 시간 글자는 바탕과 5:1을 넘어야 합니다(보이는 자리만 잽니다). */
+        let fuseNarrowLow = Infinity;
+        const narrowStates = [['퇴근', '15:20', null], ['조퇴', '15:20', '16:00'], ['10분 안쪽', '16:35', null], ['끝남', '16:50', null]];
+        for (const width of [280, 180]) {
+            for (const mode of ['light', 'dark']) {
+                await withPage(width, async (page) => {
+                    await fuseDay(page, { theme: 'retro' });
+                    for (const [state, at, leave] of narrowStates) {
+                        await page.evaluateOnNewDocument((leave) => {
+                            if (leave) localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ '2026-10-26': leave }));
+                            else localStorage.removeItem('ssug-gyomu-leave-early');
+                        }, leave);
+                        await fuseGo(page, at, mode);
+                        await page.evaluate(() => Promise.all(document.querySelector('.fuse').getAnimations({ subtree: true })
+                            .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+                            .map((a) => a.finished.catch(() => null))));
+                        const fit = await page.evaluate(() => {
+                            const r = (el) => el?.getBoundingClientRect();
+                            const bomb = document.querySelector('.fuse-bar .fuse-bomb');
+                            const b = r(bomb);
+                            const chev = r(document.querySelector('.fuse-chev'));
+                            const text = r(document.querySelector('.fuse-text'));
+                            const v = r(document.querySelector('.fuse-face .fuse-v'));
+                            return {
+                                w: innerWidth, doc: document.documentElement.scrollWidth,
+                                bomb: b && [Math.round(b.left), Math.round(b.right)], bombText: bomb?.textContent.trim(),
+                                bombClip: bomb ? bomb.scrollWidth - bomb.clientWidth : 99,
+                                chev: chev && Math.round(chev.right), text: text && Math.round(text.right), v: v && Math.round(v.width),
+                            };
+                        });
+                        check(fit.bomb && fit.bomb[0] >= 0 && fit.bomb[1] <= fit.w && fit.bombClip <= 1 && /^\d{2}:\d{2}$/.test(fit.bombText) && fit.chev <= fit.w && fit.text <= fit.bomb[0] && fit.v >= 10 && (width < 280 || fit.doc <= fit.w),
+                            `${width} ${mode} ${state} 맨 위 줄 시각 캡슐이 잘리거나 글과 겹칩니다: ${JSON.stringify(fit)}`);
+                        if (state === '끝남') continue;
+                        const face = await page.$('.fuse-face');
+                        const spot = await face.evaluate((el) => {
+                            const f = el.getBoundingClientRect();
+                            const t = el.querySelector('.fuse-v');
+                            const e = t.getBoundingClientRect();
+                            return { color: getComputedStyle(t).color, x: e.left - f.left, y: e.top - f.top, w: e.width, h: e.height };
+                        });
+                        const hide = await page.addStyleTag({ content: '.fuse-face, .fuse-face * { color: transparent !important; text-shadow: none !important; }' });
+                        await delay(80);
+                        const bare = await face.screenshot({ encoding: 'base64' });
+                        await hide.evaluate((el) => el.remove());
+                        const ratio = await page.evaluate(async (b64, t) => {
+                            const img = new Image();
+                            img.src = `data:image/png;base64,${b64}`;
+                            await img.decode();
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const g = canvas.getContext('2d');
+                            g.drawImage(img, 0, 0);
+                            const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+                            const lum = (r, gr, b) => 0.2126 * lin(r) + 0.7152 * lin(gr) + 0.0722 * lin(b);
+                            const scale = img.width / Math.max(1, document.querySelector('.fuse-face').getBoundingClientRect().width);
+                            const [r, gr, b, a = 1] = t.color.match(/[\d.]+/g).map(Number);
+                            const data = g.getImageData(Math.max(0, Math.round(t.x * scale)), Math.max(0, Math.round(t.y * scale)), Math.max(1, Math.round(t.w * scale)), Math.max(1, Math.round(t.h * scale))).data;
+                            let min = Infinity;
+                            for (let i = 0; i < data.length; i += 4) {
+                                const bg = lum(data[i], data[i + 1], data[i + 2]);
+                                const ink = lum(r * a + data[i] * (1 - a), gr * a + data[i + 1] * (1 - a), b * a + data[i + 2] * (1 - a));
+                                min = Math.min(min, (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05));
+                            }
+                            return Math.round(min * 100) / 100;
+                        }, bare, spot);
+                        fuseNarrowLow = Math.min(fuseNarrowLow, ratio);
+                        check(ratio >= 5, `${width} ${mode} ${state} 좁은 화면에서 남은 시간 글자가 바탕과 5:1이 안 됩니다: ${ratio}`);
+                    }
+                });
+            }
+        }
+        console.log(`맨 위 퇴근 줄 좁은 화면(280·180, 레트로) 남은 시간 글자 대비 최저 ${fuseNarrowLow}:1`);
+
+        /* ⑩ 줄 아래 투명한 10px: 홈을 내린 뒤 그 자리(y 36~43)를 누르면 줄이 아니라 아래 내용이 눌리고, 보이는 줄(34px)을 누르면 자세히 보기가 열립니다. */
+        await withPage(360, async (page) => {
+            await fuseDay(page);
+            await fuseGo(page, '15:20');
+            const strip = await page.evaluate(async () => {
+                window.scrollTo(0, 300);
+                await new Promise((r) => setTimeout(r, 150));
+                const out = [];
+                for (const y of [36, 40, 43]) for (const x of [40, 180, 320]) out.push(Boolean(document.elementFromPoint(x, y)?.closest('.fuse')));
+                return { under: out.filter(Boolean).length, faceHit: Boolean(document.elementFromPoint(180, 17)?.closest('.fuse-bar')), sy: Math.round(scrollY) };
+            });
+            check(strip.sy > 100 && strip.under === 0 && strip.faceHit, `360 줄 아래 투명한 자리가 내용 위 누름을 가로챕니다: ${JSON.stringify(strip)}`);
+            await page.mouse.click(180, 40);
+            await delay(250);
+            const opened = await page.evaluate(() => Boolean(document.querySelector('.fuse-panel')));
+            check(!opened, '360 줄 아래 투명한 자리(y 40)를 누르면 자세히 보기가 열립니다.');
+            await page.mouse.click(180, 17);
+            await page.waitForSelector('.fuse-panel', { timeout: 5000 }).catch(() => null);
+            check(Boolean(await page.$('.fuse-panel')), '360 보이는 줄(y 17)을 눌러도 자세히 보기가 열리지 않습니다.');
+        });
+
+        /* ⑧ 대비: 글자를 지운 줄을 찍고, 글자 자리 모든 점에 대해 (글자색 알파 × 조상 불투명도)로 섞은 색과 바탕을 비교합니다. */
+        const fuseLow = {};
+        const fuseByMode = {};
+        const states = [['퇴근', '15:20', null, false], ['조퇴', '15:20', '16:00', false], ['10분 안쪽', '16:35', null, false], ['끝남', '16:50', null, false], ['움직임 줄이기', '16:35', null, true]];
+        for (const theme of ['mx', 'retro', 'slim', 'puff', 'jelly', 'type']) {
+            for (const mode of ['light', 'dark']) {
+                for (const reduce of [false, true]) {
+                    const mine = states.filter((s) => s[3] === reduce);
+                    await withPage(360, async (page) => {
+                        await fuseDay(page, { theme, reduce });
+                        for (const [state, at, leave] of mine) {
+                            await page.evaluateOnNewDocument((leave) => {
+                                if (leave) localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ '2026-10-26': leave }));
+                                else localStorage.removeItem('ssug-gyomu-leave-early');
+                            }, leave);
+                            await fuseGo(page, at, mode);
+                            await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
+                            await delay(150);
+                            /* 끝남의 '펑'처럼 한 번만 도는 움직임은 끝난 뒤 멈춘 모습으로 잽니다(커지는 도중의 캡슐 가장자리를 바탕으로 잡지 않게). */
+                            await page.evaluate(() => Promise.all(document.querySelector('.fuse').getAnimations({ subtree: true })
+                                .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+                                .map((a) => a.finished.catch(() => null))));
+                            const face = await page.$('.fuse-face');
+                            const texts = await face.evaluate((el) => {
+                                const r = el.getBoundingClientRect();
+                                const out = [];
+                                for (const t of el.querySelectorAll('.fuse-k, .fuse-v, .fuse-bomb')) {
+                                    const node = [...t.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+                                    if (!node) continue;
+                                    const range = document.createRange();
+                                    range.selectNodeContents(node);
+                                    const b = range.getBoundingClientRect();
+                                    let opacity = 1;
+                                    for (let p = t; p && p !== document.documentElement; p = p.parentElement) opacity *= Number(getComputedStyle(p).opacity);
+                                    out.push({ text: node.textContent, color: getComputedStyle(t).color, opacity, x: b.left - r.left, y: b.top - r.top, w: b.width, h: b.height });
+                                }
+                                return out;
+                            });
+                            const hide = await page.addStyleTag({ content: '.fuse-face, .fuse-face * { color: transparent !important; text-shadow: none !important; }' });
+                            await delay(80);
+                            const bare = await face.screenshot({ encoding: 'base64' });
+                            await hide.evaluate((el) => el.remove());
+                            const ratios = await page.evaluate(async (b64, texts) => {
+                                const img = new Image();
+                                img.src = `data:image/png;base64,${b64}`;
+                                await img.decode();
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                const g = canvas.getContext('2d');
+                                g.drawImage(img, 0, 0);
+                                const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+                                const lum = (r, gr, b) => 0.2126 * lin(r) + 0.7152 * lin(gr) + 0.0722 * lin(b);
+                                const scale = img.width / Math.max(1, document.querySelector('.fuse-face').getBoundingClientRect().width);
+                                return texts.map((t) => {
+                                    const [r, gr, b, a = 1] = t.color.match(/[\d.]+/g).map(Number);
+                                    const alpha = a * t.opacity;
+                                    const data = g.getImageData(Math.max(0, Math.round(t.x * scale)), Math.max(0, Math.round(t.y * scale)), Math.max(1, Math.round(t.w * scale)), Math.max(1, Math.round(t.h * scale))).data;
+                                    let min = Infinity;
+                                    for (let i = 0; i < data.length; i += 4) {
+                                        const bg = lum(data[i], data[i + 1], data[i + 2]);
+                                        const ink = lum(r * alpha + data[i] * (1 - alpha), gr * alpha + data[i + 1] * (1 - alpha), b * alpha + data[i + 2] * (1 - alpha));
+                                        min = Math.min(min, (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05));
+                                    }
+                                    return { text: t.text, ratio: Math.round(min * 100) / 100 };
+                                });
+                            }, bare, texts);
+                            const low = Math.min(...ratios.map((item) => item.ratio));
+                            fuseLow[state] = Math.min(fuseLow[state] ?? Infinity, low);
+                            fuseByMode[`${mode === 'light' ? '밝은' : '어두운'} ${state}`] = Math.min(fuseByMode[`${mode === 'light' ? '밝은' : '어두운'} ${state}`] ?? Infinity, low);
+                            check(ratios.length === 3 && ratios.every((item) => item.ratio >= 5), `${theme} ${mode} ${state} 맨 위 줄 글자가 바탕과 5:1이 안 됩니다: ${JSON.stringify(ratios)}`);
+                        }
+                    });
+                }
+            }
+        }
+        console.log(`맨 위 퇴근 줄 글자 대비 최저(테마 6 × 밝은·어두운): ${Object.entries(fuseLow).map(([k, v]) => `${k} ${v}:1`).join(' / ')}`);
+        console.log(`맨 위 퇴근 줄 글자 대비 최저(밝은·어두운 따로, 테마 6 중 최저): ${Object.entries(fuseByMode).map(([k, v]) => `${k} ${v}:1`).join(' / ')}`);
     }
     /* 밝은 화면 글자 대비: 360 휴대폰 밝은 화면의 주요 화면에서 모든 글자가 4.5:1(24px 이상·18.66px 이상 굵은 글자는 3:1)을 넘어야 합니다.
        scripts/fixtures/contrast-probe.js 가 글자색 alpha·opacity·바탕 그라데이션을 실제로 섞은 색으로 잽니다. 입력칸 안내 글(placeholder)도 봅니다.
