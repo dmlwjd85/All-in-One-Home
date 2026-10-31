@@ -42,6 +42,14 @@ service cloud.firestore {
           // 시각이 확실한 문서는 더 이른 시각으로 덮지 않습니다. 불확실한 문서(u)는 v47이 충돌 사본을 남기고 덮습니다.
           !sureDoc() || !v47Todo() || d().hlc >= resource.data.hlc
         ) && (
+          // hlc 없는 문서(v46 이전)도 updatedAt이 있으면 더 이른 updatedAt으로 덮지 않습니다(라이브 QA 44d5556 규칙 시험).
+          // 불확실한 문서(u)는 위와 같이 v47이 충돌 사본을 남기고 덮을 수 있습니다.
+          // updatedAt이 없는 쓰기는 일부러 허용합니다: v46은 updatedAt을 안 쓰거나 serverTimestamp로만 쓰므로, 막으면 v46 기기의 저장이 끊깁니다(docs/sync-rules.md).
+          resource == null || ('hlc' in resource.data)
+            || !('updatedAt' in d()) || !('updatedAt' in resource.data)
+            || resource.data.get('u', false) == true
+            || d().updatedAt >= resource.data.updatedAt
+        ) && (
           // 묘비가 있으면 그보다 늦게 고친 v47 쓰기만 받습니다(v46의 되살리기 거절). 거절된 v46 자료는 새 판에서 충돌 사본으로 올라갑니다.
           !exists(todoTomb(tid)) || (v47Todo() && d().hlc > get(todoTomb(tid)).data.at)
         );
