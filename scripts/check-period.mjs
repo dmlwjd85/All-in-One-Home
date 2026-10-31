@@ -18,7 +18,7 @@ globalThis.localStorage = {
     removeItem: (key) => bag.delete(key),
 };
 
-const { DEFAULT_PERIODS, eulReul, leaveProblem, periodStatus, wantsFast, workTimer } = await import('../src/lib/period.js');
+const { DEFAULT_PERIODS, eulReul, hourMinute, leaveProblem, periodStatus, wantsFast, workTimeProblem, workTimer } = await import('../src/lib/period.js');
 const local = await import('../src/lib/periodLocal.js');
 const { detectWhen, parseSchoolMessages } = await import('../src/lib/msgParse.js');
 const { toCloudRow } = await import('../src/lib/cloudShape.js');
@@ -103,7 +103,7 @@ check(workTimer(at('14:41'), { ...work, leave: '14:40' }).text === '조퇴 시�
 
 /* 잠긴 교시는 빈 시간일 뿐 점심이 아닙니다. 점심은 4교시가 끝난 뒤부터입니다. */
 const lock3 = periodStatus('10:20', DEFAULT_PERIODS, six, { ...opts, skip: [3] });
-check(lock3.phase !== 'lunch' && lock3.text === '4교시 과학까지 60분', `3교시를 잠근 10:20이 점심으로 나옵니다: ${lock3.text}`);
+check(lock3.phase !== 'lunch' && lock3.text === '4교시 과학까지 1시간', `3교시를 잠근 10:20이 점심으로 나옵니다: ${lock3.text}`);
 const friCell = periodStatus('09:40', DEFAULT_PERIODS, six, { ...opts, skip: [2] });
 check(friCell.phase !== 'lunch' && friCell.text === '3교시 사회까지 50분', `금 2교시 칸을 잠근 09:40이 점심으로 나옵니다: ${friCell.text}`);
 const lock4 = periodStatus('11:30', DEFAULT_PERIODS, six, { ...opts, skip: [4] });
@@ -274,7 +274,56 @@ check(/\.tt-settings \{ max-width: 640px;/.test(css), '시간표 설정이 넓�
 check(/\.tt-row strong \{ white-space: nowrap;/.test(css), "좁은 화면에서 '10교시'가 줄바꿈됩니다.");
 check(/\.tt-row \{ display: grid; grid-template-columns: 3em minmax\(0, 1fr\) 70px 84px;/.test(css) && /\.tt-row \{ grid-template-columns: 3em minmax\(0, 1fr\) 62px 72px; gap: 4px; \}/.test(css), '교시 설정 첫 열·잠금 열 폭이 줄마다 달라 줄이 어긋납니다.');
 
-const allText = ['src/lib/period.js', 'src/lib/periodLocal.js', 'src/ui/WorkTimer.jsx', 'src/ui/TimetableSettings.jsx'].map(read).join('\n');
+/* 후속 PR: G8 남은 시간 'N시간 M분', G7 '110교시', G9 편집 폼 순서, 홈 출퇴근 안내 카드, 데모 출퇴근 시각 */
+check(hourMinute(59) === '59분' && hourMinute(60) === '1시간' && hourMinute(61) === '1시간 1분' && hourMinute(120) === '2시간' && hourMinute(121) === '2시간 1분', `남은 시간 표기가 틀립니다: ${[59, 60, 61, 120, 121].map(hourMinute).join(', ')}`);
+const g8at = (hm) => periodStatus(hm, DEFAULT_PERIODS, six, { ...opts, skip: [2, 3] }).text;
+check(g8at('10:21') === '4교시 과학까지 59분' && g8at('10:20') === '4교시 과학까지 1시간' && g8at('10:19') === '4교시 과학까지 1시간 1분', `60분 경계 안내가 틀립니다: ${['10:21', '10:20', '10:19'].map(g8at).join(' / ')}`);
+check(!/\d{3}분|[6-9]\d분/.test(['09:41', '10:00', '10:19'].map(g8at).join(' ')), `60분을 넘는 시간이 분으로만 나옵니다: ${['09:41', '10:00', '10:19'].map(g8at).join(' / ')}`);
+check(workTimer(at('14:40'), work).left === '2시간' && workTimer(at('14:39'), work).left === '2시간 1분', `타이머의 2시간 경계가 틀립니다: ${workTimer(at('14:40'), work).left} / ${workTimer(at('14:39'), work).left}`);
+for (const line of ['내일 110교시 보충수업', '내일 210교시 보충수업']) {
+    const got = parseSchoolMessages(line, { now: msgNow }).items;
+    check(got.length === 1 && !/^\d\s/.test(got[0].title) && got[0].title !== '1 보충수업' && got[0].title !== '2 보충수업', `세 자리 교시의 앞자리가 일정 이름에 남습니다(${line}): ${JSON.stringify(got.map((row) => row.title))}`);
+}
+check(workTimeProblem('08:40', '16:40') === '' && workTimeProblem('16:40', '08:40') === '퇴근 시각은 출근 시각보다 늦어야 해요.' && workTimeProblem('08:40', '08:40') === '퇴근 시각은 출근 시각보다 늦어야 해요.', '안내 카드가 출근보다 이른 퇴근을 받습니다.');
+check(workTimeProblem('', '16:40') === '출근 시각도 함께 골라 주세요. 타이머는 출근부터 퇴근까지 보여요.' && workTimeProblem('8:4', '16:40') === '시각은 08:30처럼 골라 주세요.' && workTimeProblem('08:40', '') === '출근·퇴근 시각을 모두 골라 주세요.', '안내 카드 검사가 설정 화면과 다릅니다.');
+check(/showToast\('시각은 08:30처럼 골라 주세요\.'\)/.test(settingsSrc) && /showToast\('퇴근 시각은 출근 시각보다 늦어야 해요\.'\)/.test(settingsSrc), '설정 화면 검사 문구가 바뀌어 안내 카드와 달라졌습니다.');
+bag.clear();
+local.clearPeriodLocal();
+check(!local.workCardOff(), '처음부터 안내 카드가 접혀 있습니다.');
+let cardPing = 0;
+const offCard = local.subscribePeriodLocal(() => { cardPing += 1; });
+local.hideWorkCard();
+offCard();
+check(local.workCardOff() && bag.get(local.WORK_CARD_KEY) === '1' && local.WORK_CARD_KEY === 'ssug-gyomu-work-card-off' && cardPing === 1, "'다음에'를 기억하지 못하거나 화면에 알리지 않습니다.");
+check(!bag.has(local.PERIOD_LOCAL_KEY) && !bag.has(local.LEAVE_KEY), "'다음에'가 기존 키를 건드립니다.");
+local.clearPeriodLocal();
+check(!local.workCardOff(), "자료를 지워도 '다음에'가 남습니다.");
+bag.set('ssug-gyomu-shared', '1');
+local.hideWorkCard();
+check(local.workCardOff() && !bag.has(local.WORK_CARD_KEY), "공용 PC에서 '다음에'를 이 기기에 남깁니다.");
+bag.clear();
+local.clearPeriodLocal();
+const setupSrc = timerSrc.slice(timerSrc.indexOf('export function WorkSetup'));
+check(/useState\(local\.workStart \|\| '08:40'\)/.test(setupSrc) && /useState\(local\.workEnd \|\| '16:40'\)/.test(setupSrc), '안내 카드에 08:40·16:40이 미리 들어 있지 않습니다.');
+check(/const problem = workTimeProblem\(workStart, workEnd\);\s*if \(problem\) \{ showToast\?\.\(problem\); return; \}\s*patchPeriodLocal\(\{ workStart, workEnd \}\);/.test(setupSrc) && (setupSrc.match(/patchPeriodLocal\(/g) || []).length === 1, '안내 카드가 검사 전에 저장하거나 다른 곳에 저장합니다.');
+check(/hideWorkCard\(\)/.test(setupSrc) && />다음에</.test(setupSrc) && /className="primary-btn"/.test(setupSrc) && /<Btn className="chip"/.test(setupSrc), "안내 카드에 '다음에'·저장 버튼이 앱 버튼 모양이 아닙니다.");
+check(/출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요\./.test(setupSrc), '안내 카드 문구가 없습니다.');
+check(/const setup = !\(timer && timerNow\.show\) && !todayRest\.off && !\(local\.workStart && local\.workEnd\) && !workCardOff\(\) \?/.test(homeSrc), '안내 카드가 쉬는 날이나 다음에 뒤에도, 또는 조퇴 타이머와 함께 보입니다.');
+check(/timer \|\| setup \? 'home-grid has-leave'/.test(homeSrc) && homeSrc.indexOf('{setup}') > homeSrc.indexOf('{timer}') && homeSrc.indexOf('{setup}') < homeSrc.indexOf('home-quick'), '안내 카드가 타이머 자리에 없습니다.');
+check(/\.work-setup-form \.primary-btn \{ flex: 0 0 auto;/.test(css), '넓은 화면에서 저장 버튼이 길게 늘어납니다.');
+check((setupSrc.slice(0, setupSrc.indexOf('</form>')).match(/type="time" step="60"/g) || []).length === 2, '안내 카드 출근·퇴근 칸에 step="60"이 없습니다.');
+check(/const \[open, setOpen\] = useState\(false\);/.test(setupSrc) && /className="work-setup-strip" aria-expanded=\{open\}/.test(setupSrc) && /\.work-setup\[data-open="0"\] \.work-setup-body \{ display: none; \}/.test(css), '안내 카드가 폰에서 한 줄 띠로 접히지 않습니다.');
+check(homeSrc.indexOf('{lead && timeCard}') > homeSrc.indexOf('home-hero') && homeSrc.indexOf('{lead && timeCard}') < homeSrc.indexOf('{timer}') && homeSrc.indexOf('{!lead && timeCard}') > homeSrc.indexOf('home-quick'), '타이머·안내 띠가 있을 때 시간표가 그 위로 올라오지 않습니다.');
+const demoMod = await import('../src/lib/demo.js');
+check(demoMod.DEMO_WORK?.workStart === '08:40' && demoMod.DEMO_WORK?.workEnd === '16:40', '데모에 출퇴근 시각이 없습니다.');
+const demoSrc = read('src/lib/demo.js');
+check(/\/\*\* 목업과 같은 6학년 3반\. 날짜는 오늘을 기준으로 잡습니다\. \*\/\nexport function buildDemo/.test(demoSrc) && demoSrc.indexOf('export const DEMO_WORK') < demoSrc.indexOf('/** 목업과 같은 6학년 3반'), 'buildDemo 설명 주석이 DEMO_WORK에 붙어 있습니다.');
+check(/const local = data\.profile\.demo && !saved\.workStart && !saved\.workEnd \? \{ \.\.\.saved, \.\.\.DEMO_WORK \} : saved;/.test(homeSrc) && !/patchPeriodLocal/.test(homeSrc), '데모 출퇴근 시각이 이 기기 설정에 저장되거나 데모가 아닌 때도 쓰입니다.');
+const editForm = scheduleSrc.slice(scheduleSrc.indexOf('className="solid-card tt-edit"'));
+const subjectAt = editForm.indexOf('<input className="field" name="subject"');
+check(subjectAt > 0 && subjectAt < editForm.indexOf('칸 잠그기') && subjectAt < editForm.indexOf('onClick={closeEdit}>닫기<') && subjectAt < editForm.indexOf('전담 아님'), '칸 편집 폼에서 과목 칸보다 잠그기·닫기가 먼저 나옵니다.');
+
+const allText = ['src/lib/period.js', 'src/lib/periodLocal.js', 'src/ui/WorkTimer.jsx', 'src/ui/TimetableSettings.jsx', 'src/ui/Home.jsx', 'src/lib/demo.js'].map(read).join('\n');
 check(!/쓱|잼|JAM|콕/.test(allText), '금지 표기가 들어 있습니다.');
 
 if (failures.length) {

@@ -10,9 +10,10 @@ import { splitConflict } from '../lib/conflict.js';
 import { Btn, Motto, Symbol, TodoTitle, studentName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
-import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount } from '../lib/periodLocal.js';
+import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount, workCardOff } from '../lib/periodLocal.js';
+import { DEMO_WORK } from '../lib/demo.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
-import { WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
+import { WorkSetup, WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
@@ -25,7 +26,9 @@ export function Home() {
     const [fast, setFast] = useState(false);
     const clock = useWorkClock(fast);
     const day = dayKeyFromYmd(clock.ymd);
-    const local = withUsedCount(data.timetable, usePeriodLocal());
+    const saved = withUsedCount(data.timetable, usePeriodLocal());
+    /* 데모에서는 출퇴근 시각을 채워 타이머를 보여 줍니다. 이 기기 설정에는 쓰지 않습니다. */
+    const local = data.profile.demo && !saved.workStart && !saved.workEnd ? { ...saved, ...DEMO_WORK } : saved;
     const leave = useLeave(clock.ymd);
     const table = tableForDateWithLocal(data, clock.ymd, local);
     const labels = Array.from({ length: local.count }, (_, index) => table[`p${index + 1}`] || '');
@@ -62,7 +65,10 @@ export function Home() {
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
     const timer = !todayRest.off && (local.workEnd || leave) ? <WorkTimer ymd={clock.ymd} local={local} leave={leave} showToast={showToast} now={clock} /> : null;
-    const wantFast = Boolean(timer) && wantsFast(workTimer(clock.sec, { workStart: local.workStart, workEnd: local.workEnd, leave }));
+    const timerNow = workTimer(clock.sec, { workStart: local.workStart, workEnd: local.workEnd, leave });
+    /* 출퇴근 시각이 없으면 타이머 자리에 한 줄 안내 띠를 둡니다. 타이머가 실제로 보이는 날(출근만 정하고 조퇴한 날), 쉬는 날, '다음에'를 누른 뒤에는 숨깁니다. */
+    const setup = !(timer && timerNow.show) && !todayRest.off && !(local.workStart && local.workEnd) && !workCardOff() ? <WorkSetup local={local} showToast={showToast} now={clock} /> : null;
+    const wantFast = Boolean(timer) && wantsFast(timerNow);
     useEffect(() => { if (wantFast !== fast) setFast(wantFast); }, [wantFast, fast]);
     /* 빈 교시는 빼고, 잠긴 교시는 잠김으로 보여 줍니다. 과목이 하나도 없으면 교시 칸만 보여 줍니다. */
     const slots = labels.map((label, index) => ({ index, label, locked: isLocked(local, day, index + 1) }));
@@ -76,8 +82,39 @@ export function Home() {
         : '이번 주 일정은 아직 없어요';
     const sumRecent = recentSummary(feed[0]);
 
+    /* 오늘 시간표 카드. 타이머·안내 띠가 있으면 폰에서 그 위로 올립니다. */
+    const timeCard = (
+        <FoldCard id="time" className="home-time" title="오늘 시간표" summary={sumTime} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>}>
+            <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
+                <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
+            </div>
+            {todayRest.off ? (
+                <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
+                    <strong className="day-rest-mark">휴일</strong>
+                    <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : '시간표는 오늘 없어요.'}</span>
+                </div>
+            ) : (
+                <div className="period-row" style={{ marginTop: 10, gridTemplateColumns: `repeat(${strip.length > 6 ? Math.ceil(strip.length / 2) : strip.length}, minmax(0, 1fr))` }}>
+                    {strip.map(({ index, label, locked }) => {
+                        const on = period.index === index;
+                        const specialist = table[`s${index + 1}`];
+                        return (
+                            <Btn key={index} className={on ? 'block neo-in' : 'block neo'} aria-label={locked ? `${index + 1}교시 ${label} 잠김`.replace(/\s+/g, ' ') : undefined} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 500, fontSize: 13 }}>
+                                <span style={{ display: 'grid' }}>
+                                    <span style={{ color: on ? 'var(--accent)' : (locked ? 'var(--ink-sub)' : 'var(--ink)') }}>{locked ? `🔒 ${label || '잠김'}` : (label || `${index + 1}교시`)}</span>
+                                    {(label || locked) && <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{locked ? ' 잠김' : (specialist ? ` ${specialist}` : '')}</span>}
+                                </span>
+                            </Btn>
+                        );
+                    })}
+                </div>
+            )}
+        </FoldCard>
+    );
+    const lead = Boolean(timer || setup);
     return (
-        <div className={timer ? 'home-grid has-leave' : 'home-grid'}>
+        <div className={timer || setup ? 'home-grid has-leave' : 'home-grid'}>
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
@@ -118,7 +155,10 @@ export function Home() {
                     </>
                 )}
             </section>
+            {/* 폰 첫 화면: 타이머나 안내 띠가 있으면 시간표를 그 위로 올려 6교시까지 보이게 합니다. 넓은 화면은 칸 자리가 정해져 있어 그대로입니다. */}
+            {lead && timeCard}
             {timer}
+            {setup}
 
             <section className="glass home-quick" style={{ padding: 14 }}>
                 <div className="home-brand">
@@ -130,33 +170,7 @@ export function Home() {
                 <p className="muted" style={{ margin: 0 }}>생각난 한 줄을 가운데 쨈 버튼에 발라 두면 일정, 할 일, 학생 기록으로 나눠 드려요. 메시지·회의록은 쨈 버튼을 누른 뒤 붙여넣기로 넣어요.</p>
             </section>
 
-            <FoldCard id="time" className="home-time" title="오늘 시간표" summary={sumTime} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>}>
-                <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                    <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
-                </div>
-                {todayRest.off ? (
-                    <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
-                        <strong className="day-rest-mark">휴일</strong>
-                        <span>{todayRest.label === '휴일' ? '오늘은 수업이 없어요.' : '시간표는 오늘 없어요.'}</span>
-                    </div>
-                ) : (
-                    <div className="period-row" style={{ marginTop: 10, gridTemplateColumns: `repeat(${strip.length > 6 ? Math.ceil(strip.length / 2) : strip.length}, minmax(0, 1fr))` }}>
-                        {strip.map(({ index, label, locked }) => {
-                            const on = period.index === index;
-                            const specialist = table[`s${index + 1}`];
-                            return (
-                                <Btn key={index} className={on ? 'block neo-in' : 'block neo'} aria-label={locked ? `${index + 1}교시 ${label} 잠김`.replace(/\s+/g, ' ') : undefined} onClick={() => go('#/schedule')} style={{ minHeight: 64, fontWeight: 500, fontSize: 13 }}>
-                                    <span style={{ display: 'grid' }}>
-                                        <span style={{ color: on ? 'var(--accent)' : (locked ? 'var(--ink-sub)' : 'var(--ink)') }}>{locked ? `🔒 ${label || '잠김'}` : (label || `${index + 1}교시`)}</span>
-                                        {(label || locked) && <span style={{ fontWeight: 500, fontSize: 11, color: 'var(--ink-sub)' }}>{index + 1}교시{locked ? ' 잠김' : (specialist ? ` ${specialist}` : '')}</span>}
-                                    </span>
-                                </Btn>
-                            );
-                        })}
-                    </div>
-                )}
-            </FoldCard>
+            {!lead && timeCard}
 
             <FoldCard id="todo" className="home-todo" title={`오늘 할 일${todos.length ? ` ${todos.length}` : ``}`} summary={sumTodo} action={<Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>}>
                 <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

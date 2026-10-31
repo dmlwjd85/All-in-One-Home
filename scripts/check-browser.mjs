@@ -2611,8 +2611,16 @@ try {
                     const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                     const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
+                    /* 데모에도 퇴근 타이머가 있습니다. 평일 홈에서도 6교시는 늘 첫 화면에 보여야 하고, 타이머도 첫 화면에 보이며 팁에 가리지 않아야 합니다. */
+                    const leave = document.querySelector('.home-leave')?.getBoundingClientRect();
                     return {
                         visible,
+                        hasLeave: Boolean(leave),
+                        coversLeave: hits(tipBox, leave),
+                        leaveOnScreen: Boolean(leave && leave.top < (tab && tab.height > 0 ? tab.top : viewBottom) && leave.bottom > 0),
+                        /* 지금 교시(⏰ N교시까지 …)는 타이머가 있어도 첫 화면에 다 보여야 하고, 탭·타이머에 가리면 안 됩니다. */
+                        nowShown: Boolean(kicker && kicker.top >= 0 && kicker.bottom <= viewBottom && !hits(kicker, tab) && !hits(kicker, leave)),
+                        cellUnderTab: cells.some((cell) => hits(cell, tab)),
                         text: tip?.innerText || '',
                         toast,
                         coversQuick: hits(tipBox, quick),
@@ -2637,7 +2645,8 @@ try {
                         layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
-                        && layout.sixthOnScreen && !layout.sixthUnderTab,
+                        && layout.sixthOnScreen && !layout.sixthUnderTab
+                        && (!layout.hasLeave || (layout.leaveOnScreen && !layout.coversLeave && layout.nowShown && !layout.cellUnderTab)),
                         `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
                     );
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
@@ -3166,6 +3175,17 @@ try {
                     return { top: Math.round(form.top), bottom: Math.round(form.bottom), limit: Math.round(bottom), focus: document.activeElement?.getAttribute('name') || '' };
                 });
                 check(box.top >= 0 && box.bottom <= box.limit && box.focus === 'subject', `${width} ${count}교시 ${period}교시 편집 폼이 화면 밖이거나 과목 칸에 포커스가 없습니다: ${JSON.stringify(box)}`);
+                /* G9: 탭·읽기 순서는 과목 칸이 먼저이고, 잠그기·닫기는 그 뒤입니다. */
+                const order = await page.evaluate(() => [...document.querySelectorAll('form.tt-edit input, form.tt-edit button')].map((el) => el.getAttribute('name') || el.innerText.trim()));
+                await page.keyboard.press('Tab');
+                const next = await page.evaluate(() => document.activeElement?.innerText?.trim() || document.activeElement?.getAttribute('name') || '');
+                await page.keyboard.down('Shift');
+                await page.keyboard.press('Tab');
+                await page.keyboard.up('Shift');
+                const backTo = await page.evaluate(() => document.activeElement?.getAttribute('name') || '');
+                const closeAt = order.indexOf('닫기');
+                const lockAt = order.findIndex((item) => /잠그기|잠금 풀기/.test(item));
+                check(order[0] === 'subject' && closeAt > 0 && (lockAt === -1 || lockAt > 0) && /^전담/.test(next) && backTo === 'subject', `${width} ${period}교시 편집 폼의 탭 순서가 과목 칸부터가 아닙니다: ${JSON.stringify(order)} / Tab→${next} / Shift+Tab→${backTo}`);
                 if (period === count) await page.screenshot({ path: resolve(shots, `timetable-edit-${width}.png`) });
                 if (how === 'Escape') await page.keyboard.press('Escape');
                 else await page.evaluate(() => [...document.querySelectorAll('form.tt-edit button')].find((el) => el.innerText.trim() === '닫기')?.click());
@@ -3264,6 +3284,239 @@ try {
                 check(asked.includes('수업 길이') && level === '초', `저장하지 않은 길이가 있는데 학교급을 묻지 않고 바꿉니다: ${asked} / ${level}`);
             }
         }, width >= 900 ? 900 : 800);
+    }
+    /* 홈 출퇴근 안내 카드: 시각이 없으면 타이머 자리에 보이고, 저장하면 타이머로 바뀌며, 잘못된 시각은 받지 않고, '다음에'는 기억합니다. 쉬는 날에는 숨깁니다. */
+    async function freshHome(page, mode) {
+        await page.goto(`${origin}?mode=${mode}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '나중에 할게요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '나중에 할게요')?.click());
+        await page.waitForFunction(() => document.querySelector('.home-hero'));
+        await delay(300);
+        return page.evaluate(() => (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'));
+    }
+    async function setTime(page, label, value) {
+        await page.evaluate((label, value) => {
+            const input = document.querySelector(`.work-setup input[aria-label="${label}"]`);
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }, label, value);
+    }
+    async function toastAfterSave(page) {
+        /* 토스트 DOM을 지우면 React가 떨어진 노드를 고치므로, 문구가 바뀔 때까지 기다립니다. */
+        const toastText = () => page.evaluate(() => [...document.querySelectorAll('.toast')].map((el) => el.innerText.trim()).join(' '));
+        const before = await toastText();
+        await page.evaluate(() => [...document.querySelectorAll('.work-setup button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForFunction((prev) => [...document.querySelectorAll('.toast')].map((el) => el.innerText.trim()).join(' ') !== prev, { timeout: 3000 }, before).catch(() => {});
+        return toastText();
+    }
+    const savedWork = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'));
+    for (const [width, mode] of [[360, 'light'], [390, 'dark'], [1280, 'light']]) {
+        await withPage(width, async (page) => {
+            const off = await freshHome(page, mode);
+            /* 폰: 안내는 한 줄 띠로 접혀 있고, 시간표(6교시까지)가 띠 위 첫 화면에 보입니다. 띠를 눌러야 문구와 시각 칸이 펼쳐집니다. */
+            const strip = await page.evaluate(() => {
+                const el = document.querySelector('.work-setup');
+                if (!el) return null;
+                const head = el.querySelector('.work-setup-strip');
+                const headBox = head?.getBoundingClientRect();
+                const sum = el.querySelector('.work-setup-sum');
+                const body = el.querySelector('.work-setup-body')?.getBoundingClientRect();
+                const time = document.querySelector('.home-time')?.getBoundingClientRect();
+                const sixth = [...document.querySelectorAll('.period-row button')][5]?.getBoundingClientRect();
+                const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                const viewBottom = tab && tab.height > 0 ? tab.top : window.innerHeight;
+                return {
+                    height: Math.round(el.getBoundingClientRect().height),
+                    top: Math.round(el.getBoundingClientRect().top),
+                    headShown: Boolean(headBox && headBox.height > 0),
+                    expanded: head?.getAttribute('aria-expanded'),
+                    sumLines: sum && sum.getBoundingClientRect().height > 0 ? Math.round(sum.getBoundingClientRect().height / parseFloat(getComputedStyle(sum).lineHeight || '20') || 1) : 0,
+                    bodyShown: Boolean(body && body.height > 0),
+                    timeTop: Math.round(time?.top ?? -1),
+                    sixthBottom: Math.round(sixth?.bottom ?? -1),
+                    viewBottom: Math.round(viewBottom),
+                    steps: [...el.querySelectorAll('input[type="time"]')].map((input) => input.getAttribute('step')),
+                };
+            });
+            if (!off && strip) {
+                check(strip.steps.length === 2 && strip.steps.every((step) => step === '60'), `${width} 안내 카드 출근·퇴근 칸에 step="60"이 없습니다: ${JSON.stringify(strip.steps)}`);
+                if (width < 900) {
+                    check(strip.headShown && strip.expanded === 'false' && !strip.bodyShown && strip.height <= 80 && strip.sumLines <= 1, `${width} 안내 카드가 한 줄 띠로 접혀 있지 않습니다: ${JSON.stringify(strip)}`);
+                    check(strip.timeTop >= 0 && strip.timeTop < strip.top && strip.sixthBottom > 0 && strip.sixthBottom <= strip.viewBottom, `${width} 첫 화면에 시간표 6교시가 다 보이지 않습니다: ${JSON.stringify(strip)}`);
+                    await page.screenshot({ path: resolve(shots, `home-work-strip-${width}-${mode}.png`) });
+                    await page.click('.work-setup .work-setup-strip');
+                    await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 3000 }).catch(() => {});
+                    const opened = await page.evaluate(() => ({ expanded: document.querySelector('.work-setup-strip')?.getAttribute('aria-expanded'), body: Math.round(document.querySelector('.work-setup-body')?.getBoundingClientRect().height || 0) }));
+                    check(opened.expanded === 'true' && opened.body > 0, `${width} 안내 띠를 눌러도 펼쳐지지 않습니다: ${JSON.stringify(opened)}`);
+                } else {
+                    check(!strip.headShown && strip.bodyShown, `${width} 넓은 화면 안내 카드가 접혀 있습니다: ${JSON.stringify(strip)}`);
+                }
+            }
+            const card = await page.evaluate(() => {
+                const el = document.querySelector('.work-setup');
+                if (!el) return null;
+                const text = el.querySelector('.work-setup-text');
+                const save = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '저장');
+                const later = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '다음에');
+                const box = el.getBoundingClientRect();
+                const inside = [...el.querySelectorAll('button, input')].every((c) => { const r = c.getBoundingClientRect(); return (r.width === 0 && r.height === 0) || r.left >= box.left - 0.5 && r.right <= box.right + 0.5; });
+                const hero = document.querySelector('.home-hero')?.getBoundingClientRect();
+                return {
+                    text: text?.innerText.trim() || '',
+                    lines: text ? Math.round(text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight)) : 0,
+                    start: el.querySelector('input[aria-label="출근 시각"]')?.value,
+                    end: el.querySelector('input[aria-label="퇴근 시각"]')?.value,
+                    saveTap: Boolean(save?.classList.contains('tap') && save.classList.contains('primary-btn') && save.type === 'button'),
+                    laterTap: Boolean(later?.classList.contains('tap') && later.classList.contains('chip')),
+                    saveWidth: Math.round(save?.getBoundingClientRect().width || 0),
+                    cardWidth: Math.round(box.width),
+                    inside,
+                    besideHero: hero ? Math.round(box.top) === Math.round(hero.top) && box.left > hero.right : false,
+                    grid: document.querySelector('.home-grid')?.className || '',
+                };
+            });
+            if (off) {
+                check(!card, `${width} 쉬는 날 홈에 출퇴근 안내 카드가 보입니다.`);
+                return;
+            }
+            check(Boolean(card), `${width} 출퇴근 시각이 없는데 홈에 안내 카드가 없습니다.`);
+            if (!card) return;
+            check(card.text === '출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요.' && card.lines >= 1 && card.lines <= 2, `${width} 안내 카드 문구가 두 줄을 넘거나 다릅니다: ${JSON.stringify(card)}`);
+            check(card.start === '08:40' && card.end === '16:40' && !('workEnd' in await savedWork(page)), `${width} 안내 카드에 08:40·16:40이 미리 없거나 저장 전에 써 버립니다: ${JSON.stringify(card)}`);
+            check(card.saveTap && card.laterTap && card.inside && card.saveWidth < 160 && card.saveWidth < card.cardWidth / 2, `${width} 안내 카드 버튼이 앱 버튼이 아니거나 카드 밖·길게 늘어납니다: ${JSON.stringify(card)}`);
+            check(/has-leave/.test(card.grid) && (width < 900 || card.besideHero), `${width} 안내 카드가 타이머 자리에 없습니다: ${JSON.stringify(card)}`);
+            await audit(page, `출퇴근 안내 카드 ${width}`);
+            await page.screenshot({ path: resolve(shots, `home-work-setup-${width}-${mode}.png`) });
+            await setTime(page, '퇴근 시각', '08:00');
+            const early = await toastAfterSave(page);
+            check(early.includes('퇴근 시각은 출근 시각보다 늦어야 해요.') && Boolean(await page.$('.work-setup')) && !('workEnd' in await savedWork(page)), `${width} 출근보다 이른 퇴근을 받습니다: ${early}`);
+            await setTime(page, '퇴근 시각', '');
+            const empty = await toastAfterSave(page);
+            check(empty.includes('출근·퇴근 시각을 모두 골라 주세요.') && !('workEnd' in await savedWork(page)), `${width} 빈 퇴근 시각을 받습니다: ${empty}`);
+            await setTime(page, '출근 시각', '08:30');
+            await setTime(page, '퇴근 시각', '16:40');
+            const ok = await toastAfterSave(page);
+            await page.waitForSelector('.home-leave[data-leave="퇴근"]', { timeout: 5000 }).catch(() => {});
+            const after = await page.evaluate(() => ({ card: Boolean(document.querySelector('.work-setup')), timer: document.querySelector('.home-leave[data-leave="퇴근"]')?.innerText.replace(/\s+/g, ' ') || '' }));
+            const stored = await savedWork(page);
+            check(ok.includes('퇴근 16:40까지') && !after.card && after.timer.includes('7시간 58분') && stored.workStart === '08:30' && stored.workEnd === '16:40' && stored.level === '초' && stored.count === 6, `${width} 저장한 뒤 타이머로 바뀌지 않습니다: ${ok} / ${JSON.stringify(after)} / ${JSON.stringify(stored)}`);
+            await audit(page, `저장 뒤 타이머 ${width}`);
+        });
+    }
+    await withPage(360, async (page) => {
+        const off = await freshHome(page, 'light');
+        if (off) return;
+        await page.evaluate(() => [...document.querySelectorAll('.work-setup button')].find((el) => el.innerText.trim() === '다음에')?.click());
+        await delay(250);
+        const gone = await page.evaluate(() => ({ card: Boolean(document.querySelector('.work-setup')), key: localStorage.getItem('ssug-gyomu-work-card-off'), local: localStorage.getItem('ssug-gyomu-period-local'), grid: document.querySelector('.home-grid')?.className || '' }));
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('.home-hero'));
+        await delay(300);
+        const reloaded = await page.evaluate(() => Boolean(document.querySelector('.work-setup')));
+        check(!gone.card && gone.key === '1' && gone.local === null && !/has-leave/.test(gone.grid) && !reloaded, `'다음에'를 눌러도 카드가 남거나 다시 열면 또 보입니다: ${JSON.stringify(gone)} / 다시 열기 ${reloaded}`);
+    });
+
+    /* 퇴근 시각 없이 조퇴만 정한 날: 출근 시각이 있으면 조퇴 타이머만 뜨고 안내 띠는 함께 뜨지 않습니다. 출근 시각도 없으면 타이머가 못 뜨니 안내 띠만 남습니다(빈자리 없음). */
+    for (const withStart of [true, false]) {
+        await withPage(360, async (page) => {
+            const off = await freshHome(page, 'light');
+            if (off) return;
+            await page.evaluate((ymd, withStart) => {
+                localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ [ymd]: '15:00' }));
+                if (withStart) localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ ...JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'), workStart: '08:30' }));
+            }, todayYmd, withStart);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.querySelector('.home-hero'));
+            await delay(300);
+            const both = await page.evaluate(() => ({ timer: document.querySelector('.home-leave[data-leave]')?.innerText.replace(/\s+/g, ' ') || '', card: Boolean(document.querySelector('.work-setup')), count: document.querySelectorAll('.home-leave').length }));
+            if (withStart) check(both.timer.includes('15:00') && !both.card && both.count === 1, `출근만 정하고 조퇴한 날 타이머와 안내 카드가 함께 뜨거나 타이머가 없습니다: ${JSON.stringify(both)}`);
+            else check(!both.timer && both.card && both.count === 1, `출퇴근 시각 없이 조퇴만 정한 날 홈에 타이머도 안내 띠도 없습니다: ${JSON.stringify(both)}`);
+        });
+    }
+
+    /* 데모(?demo=1)에는 출퇴근 08:40·16:40이 있어 평일 08:42에 타이머가 보입니다. 이 기기 설정에는 쓰지 않습니다. */
+    await withDemo(390, 'light', async (page) => {
+        await delay(250);
+        const demo = await page.evaluate(() => ({
+            off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
+            timer: document.querySelector('.home-leave[data-leave="퇴근"]')?.innerText.replace(/\s+/g, ' ') || '',
+            card: Boolean(document.querySelector('.work-setup')),
+            local: localStorage.getItem('ssug-gyomu-period-local'),
+        }));
+        if (demo.off) check(!demo.timer && !demo.card, `쉬는 날 데모 홈에 타이머나 안내 카드가 보입니다: ${JSON.stringify(demo)}`);
+        else check(demo.timer.includes('7시간 58분') && demo.timer.includes('출근 08:40') && !demo.card, `데모 홈에 퇴근 타이머가 없습니다: ${JSON.stringify(demo)}`);
+        check(!demo.local || !/workEnd":"\d/.test(demo.local), `데모 출퇴근 시각을 이 기기 설정에 씁니다: ${demo.local}`);
+    });
+
+    /* 휴대폰 첫 화면 시간표(이번 수정의 핵심): 데모 타이머 홈과 안내 띠 홈 모두, 오늘 시간표 카드가 타이머·띠 위에 있고
+       시간표 카드 전체(제목, 펼쳤으면 1~6교시 칸 모두)가 탭바 위 첫 화면에 보여야 합니다. 소리 팁 검사와 따로 봅니다.
+       데모 타이머 홈은 타이머 큰 숫자도 탭바에 걸리지 않고 키캡 바탕이 칠해져 있어야 하고(대비), 안내 띠 홈은 띠를 펼치면 저장 단추가 탭바 위로 보여야 합니다. */
+    const timeFirstScreen = (page) => page.evaluate(() => {
+        const box = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? r : null; };
+        const card = document.querySelector('.home-time');
+        const cardBox = box(card);
+        const title = box(card?.querySelector('.fold-head')) || box(card?.querySelector('.fold-title'));
+        const cells = [...(card?.querySelectorAll('.period-row button') || [])].map(box);
+        const big = box(document.querySelector('.home-leave .leave-big'));
+        const key = document.querySelector('.home-leave .leave-key');
+        const lead = box(document.querySelector('.home-leave'));
+        const tab = box(document.querySelector('.tabbar'));
+        const tabTop = tab ? tab.top : window.innerHeight;
+        const fab = box(document.querySelector('.tabbar .fab'));
+        const open = card?.dataset.open === '1';
+        return {
+            off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
+            open,
+            lead: lead ? Math.round(lead.top) : -1,
+            cardTop: Math.round(cardBox?.top ?? -1),
+            cardBottom: Math.round(cardBox?.bottom ?? -1),
+            titleBottom: Math.round(title?.bottom ?? -1),
+            cells: cells.length,
+            cellsBottom: cells.length && cells.every(Boolean) ? Math.round(Math.max(...cells.map((r) => r.bottom))) : -1,
+            bigBottom: Math.round(big?.bottom ?? -1),
+            keyPaint: key ? getComputedStyle(key).backgroundColor : '',
+            tabTop: Math.round(tabTop),
+            coverTop: Math.round(Math.min(tabTop, fab ? fab.top : tabTop)),
+        };
+    });
+    const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
+        && t.titleBottom > 0 && t.titleBottom <= t.tabTop
+        && t.cardBottom > 0 && t.cardBottom <= t.tabTop
+        && (!t.open || (t.cells === 6 && t.cellsBottom > 0 && t.cellsBottom <= t.tabTop));
+    for (const folded of [false, true]) {
+        foldPreset = !folded;
+        try {
+            for (const width of [360, 390]) {
+                const label = `${width} ${folded ? '시간표 접힘' : '시간표 펼침'}`;
+                await withDemo(width, 'light', async (page) => {
+                    await delay(250);
+                    const t = await timeFirstScreen(page);
+                    if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1~6교시)가 타이머 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.bigBottom > 0 && t.bigBottom <= t.coverTop, `${label} 데모 타이머 홈 첫 화면에서 타이머 큰 숫자가 탭바나 가운데 쨈 단추에 걸립니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.keyPaint && t.keyPaint !== 'rgba(0, 0, 0, 0)' && t.keyPaint !== 'transparent', `${label} 데모 타이머 첫 화면 키캡 바탕이 칠해지지 않아 숫자 대비가 무너집니다: ${JSON.stringify(t)}`);
+                });
+                await withPage(width, async (page) => {
+                    const off = await freshHome(page, 'light');
+                    const t = await timeFirstScreen(page);
+                    if (!off) check(t.open === !folded && timeOk(t), `${label} 안내 띠 홈 첫 화면에 시간표 카드(제목·1~6교시)가 띠 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!off) {
+                        await page.click('.work-setup .work-setup-strip');
+                        await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 15000 });
+                        await delay(400);
+                        const save = await page.evaluate(() => {
+                            const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
+                            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight) };
+                        });
+                        check(save.height > 0 && save.top >= 0 && save.bottom <= save.tabTop, `${label} 안내 띠를 펼치면 저장 단추가 탭바 위로 보이지 않습니다: ${JSON.stringify(save)}`);
+                    }
+                });
+            }
+        } finally {
+            foldPreset = true;
+        }
     }
 
     // 알림장 부제와 지난 알림장 안내: 빈 상태, 저장 직후, 다른 날, 민감한 글, 되돌리기, 빈 칸 저장, 좁은 폭, 다크를 지킵니다.

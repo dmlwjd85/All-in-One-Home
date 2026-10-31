@@ -591,9 +591,14 @@ a.chip,
 .leave-small { font-weight: 800; font-size: 15px; }
 .leave-big { font-size: 34px; line-height: 40px; word-break: keep-all; }
 .home-leave.is-done .leave-big { font-size: 28px; line-height: 36px; }
+/* 폰에서는 '퇴근까지'와 큰 숫자를 한 줄에 두고 키캡 위아래를 줄입니다. 시간표를 펼친 첫 화면에서도 큰 숫자가 탭바·가운데 쨈 단추에 걸리지 않습니다. */
+@media (max-width: 899px) {
+    .leave-key { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-top: 6px; padding-top: 10px; padding-bottom: 10px; }
+    .leave-big { line-height: 36px; }
+}
 .leave-bar { height: 12px; border-radius: 999px; background: var(--bg); box-shadow: var(--neo-inset); overflow: hidden; }
 .leave-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
-.leave-ends { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; font-weight: 700; }
+.leave-ends { display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px; font-weight: 700; }
 .leave-form { display: grid; gap: 8px; margin-top: 12px; }
 .leave-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .leave-row .primary-btn { padding: 0 14px; min-height: 44px; }
@@ -1227,3 +1232,21 @@ button.glass[aria-pressed="true"]:active {
 .minutes-kept { margin: 0; font-size: 13px; }
 .minutes-save { min-width: 140px; }
 .minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* 홈 출퇴근 안내 띠: 폰에서는 한 줄(띠 단추 + 다음에)로 접혀 있다가 누르면 펼칩니다. 900px 이상은 늘 펼쳐 둡니다. */
+.work-setup-strip { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; text-align: left; }
+.work-setup-sum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; }
+.work-setup-title { display: none; }
+@media (max-width: 899px) {
+    .work-setup[data-open="0"] .work-setup-body { display: none; }
+    .work-setup { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 900px) {
+    .work-setup-strip { display: none; }
+    .work-setup-title { display: inline; }
+}
+/* 홈 출퇴근 안내 카드: 360px에서는 시각 두 칸 아래로 저장이 내려가고, 넓은 화면에서도 버튼이 길게 늘어나지 않습니다. */
+.work-setup-text { margin: 8px 0 10px; font-weight: 700; line-height: 22px; word-break: keep-all; }
+.work-setup-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.work-setup-form label { flex: 1 1 116px; min-width: 0; display: grid; gap: 4px; }
+.work-setup-form .primary-btn { flex: 0 0 auto; padding: 0 18px; min-height: 44px; }
