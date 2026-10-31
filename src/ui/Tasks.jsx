@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
-import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage, toggleTodo } from '../lib/db.js';
+import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -150,17 +151,78 @@ function NoteBox() {
     );
 }
 
+// 알림장 저장이 막혔을 때 띄울 안내. 공용 안내("원래대로 돌려 두었어요")는 입력칸 글까지 되돌린 것처럼 읽혀서, 알림장 화면에서는 무엇을 못 했고 무엇이 그대로인지 말해 줍니다.
+function noticeFailMessage(result, what, kept) {
+    const full = result?.message === storageIssueMessage({ name: 'QuotaExceededError' });
+    return `${full ? '저장 공간이 가득 차서 ' : ''}알림장을 ${what} 못했어요. ${kept}`;
+}
+
+// 열려 있는 알림장 화면의 날짜·입력칸 글·DB 글과 되돌린 글을 보여 줄 함수. 화면을 떠나면 비웁니다.
+const liveNotice = { current: null };
+
 export function Notice() {
     const { data, clock, route, showToast, go } = useUi();
     const date = route.params.date || addDaysYmd(clock.ymd, 1);
     const notices = joined(data, 'notices');
-    const current = notices.find((row) => row.date === date);
-    const [text, setText] = useState(current?.text || '');
+    // 그 날 행이 둘(비운 클라우드 행 + 이 기기 민감 행)이면 글이 있는 행을 먼저 보여 줍니다. 저장 위치 고르기와 같은 함수예요.
+    const current = pickNotice(notices, date);
+    const dbText = current?.text || '';
+    const [text, setText] = useState(dbText);
+    const [synced, setSynced] = useState(dbText);
+    const [saving, setSaving] = useState(false);
+    // 쓰던 글을 남긴 채 되돌렸을 때 입력칸 위에 보여 줄 되돌린 글
+    const [restored, setRestored] = useState('');
+    const busy = useRef(false);
+    const others = notices.filter((row) => row.date !== date && String(row.text || '').trim());
     const events = joined(data, 'events').filter((row) => row.date === date);
 
+    useEffect(() => {
+        // 되돌리기 안내가 지금 입력칸에 쓰던 글이 있는지 알 수 있게, 열려 있는 알림장 화면의 상태를 적어 둡니다.
+        liveNotice.current = { date, text, synced, showRestored: setRestored };
+    });
+    useEffect(() => () => { liveNotice.current = null; }, []);
+
+    useEffect(() => {
+        // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로이거나 비어 있을(공백만 포함) 때만 새 글로 채웁니다.
+        // 저장하는 동안에는 입력칸을 그대로 두고, 저장이 끝난 뒤 한 번만 맞춥니다. 저장에 실패해 DB가 원래대로 돌아가도 쓰던 글이 사라지지 않아요.
+        if (saving || dbText === synced) return;
+        setText((prev) => prev === synced || !prev.trim() ? dbText : prev);
+        setSynced(dbText);
+    }, [dbText, saving]);
+
     async function save(next) {
-        const result = await saveTextItem('notices', { id: date, date, text: next, source: 'app', at: new Date().toISOString() }, { from: current ? (current.localOnly ? 'local' : 'cloud') : undefined });
-        if (result?.storageFailed) return;
+        if (busy.current) return;
+        busy.current = true;
+        setSaving(true);
+        try {
+            await saveOnce(next);
+        } finally {
+            busy.current = false;
+            setSaving(false);
+        }
+    }
+
+    async function saveOnce(next) {
+        if (!next.trim()) {
+            if (!current?.text?.trim()) { showToast('적은 내용이 없어서 저장하지 않았어요.'); return; }
+            // 그 날 글이 여러 줄(클라우드 옛 글 + 이 기기 민감 글)이어도 함께 비우고 함께 되돌립니다.
+            const cleared = await clearNoticeDay(date);
+            if (cleared?.storageFailed) { showToast(noticeFailMessage(cleared, '비우지', '저장해 둔 글은 그대로 있어요.')); return; }
+            showToast('이 날 알림장을 비웠어요.', false, {
+                label: '되돌리기',
+                onClick: async () => {
+                    const live = liveNotice.current;
+                    const typing = Boolean(live && live.date === date && live.text.trim() && live.text !== live.synced);
+                    const result = await restoreNoticeDay(cleared.before);
+                    if (result?.storageFailed) { showToast(noticeFailMessage(result, '되돌리지', typing ? '쓰던 글은 그대로 있어요.' : '지금은 비어 있어요.')); return; }
+                    if (typing) live.showRestored(pickNotice(cleared.before, date)?.text || '');
+                    showToast(typing ? '알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.' : '알림장을 되돌렸어요.');
+                },
+            });
+            return;
+        }
+        const result = await saveNotice(date, next);
+        if (result?.storageFailed) { showToast(noticeFailMessage(result, '저장하지', '쓰던 글은 그대로 있어요.')); return; }
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }
 
@@ -171,6 +233,15 @@ export function Notice() {
                 <strong>{date === addDaysYmd(clock.ymd, 1) ? '내일' : date}</strong>
                 <Btn className="icon-btn" aria-label="다음 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, 1)}`); }}>›</Btn>
             </div>
+            {restored && restored === dbText && text.trim() && text !== dbText && (
+                <div className="glass" role="group" aria-label="되돌린 글" style={{ marginTop: 12, padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <span className="muted" style={{ display: 'block', fontSize: 13 }}>되돌린 글이에요. 저장하면 지금 쓰는 글로 바뀌어요.</span>
+                        <span className="restored-note" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontSize: 14, wordBreak: 'break-all' }}>{restored}</span>
+                    </div>
+                    <Btn className="chip" style={{ flexShrink: 0 }} onClick={() => { setText(dbText); setRestored(''); }}>되돌린 글 불러오기</Btn>
+                </div>
+            )}
             <textarea className="field" rows={8} aria-label="알림장" style={{ marginTop: 12 }} value={text} onChange={(event) => setText(event.target.value)} placeholder="내일 알림장을 적어 주세요" />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <Btn className="chip" onClick={() => {
@@ -186,16 +257,16 @@ export function Notice() {
                         showToast('복사하지 못했어요. 글을 선택해 주세요.');
                     }
                 }}>복사</Btn>
-                <Btn className="primary-btn" style={{ flex: 1 }} onClick={() => save(text)}>저장</Btn>
+                <Btn className="primary-btn" style={{ flex: 1 }} disabled={saving} aria-busy={saving} onClick={() => save(text)}>저장</Btn>
             </div>
             <h3>지난 알림장</h3>
-            {notices.filter((row) => row.date !== date).slice(0, 8).map((row) => (
+            {others.slice(0, 8).map((row) => (
                 <Btn key={row.id} block className="glass" style={{ marginBottom: 8, padding: 12, textAlign: 'left' }} onClick={() => go(`#/notice/${row.date}`)}>
                     <strong>{row.date}</strong>
                     <span className="muted" style={{ display: 'block' }}>{row.text}</span>
                 </Btn>
             ))}
-            {!notices.some((row) => row.date !== date) && <p className="muted">아직 지난 알림장이 없어요. 저장하면 여기에 모여요.</p>}
+            {!others.length && <p className="muted">{current?.text?.trim() ? '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.' : '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.'}</p>}
         </div>
     );
 }

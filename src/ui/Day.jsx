@@ -36,7 +36,7 @@ export function Day() {
     const records = joinedRecords(data).filter((row) => row.date === date);
     const follows = joinedRecords(data).filter((row) => row.follow === date && row.date !== date);
     const marks = joined(data, 'attendance').filter((row) => row.date === date && row.status && row.status !== '출석');
-    const notices = joined(data, 'notices').filter((row) => row.date === date);
+    const notices = joined(data, 'notices').filter((row) => row.date === date && String(row.text || '').trim());
     const dayNotes = joined(data, 'notes').filter((row) => row.id === `day-${date}`);
     const dayNote = dayNotes.find((row) => row.localOnly) || dayNotes[0];
     const [memo, setMemo] = useState(dayNote?.text || '');
