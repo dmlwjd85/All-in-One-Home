@@ -33,13 +33,20 @@
     html:has(.app-frame > .fuse) { scroll-padding-top: calc(var(--fuse-h) + 10px + env(safe-area-inset-top, 0px)); }
     /* 홈의 큰 타이머 키캡은 맨 위 줄이 대신합니다. 넓은 화면에서는 그대로 보입니다. */
     .app-frame:has(> .fuse) .home-leave[data-leave] { display: none; }
+    /* 줄 높이만큼 화면이 줄어도 390×844에서 설정의 소리 칩이 탭바 밑에 걸리지 않게, 칩 줄 사이만 조금 좁힙니다. */
+    .app-frame:has(> .fuse) .key-picks { row-gap: 4px; margin-top: 4px; }
+}
+/* 아주 좁은 화면(글자 크게 포함)에서는 끝난 뒤 '수고했어요'를 숨겨 시각 캡슐 자리를 지킵니다. */
+@media (max-width: 340px) {
+    .fuse[data-state="done"] .fuse-k { display: none; }
 }
 
 .fuse { position: fixed; inset: 0 0 auto 0; z-index: 37; pointer-events: none; }
 .fuse > * { pointer-events: auto; }
 
-/* 단추는 44px(누르기 쉬운 크기)이고, 보이는 얼굴은 34px입니다. 아래 10px은 투명한 누름 여유입니다. */
+/* 단추 상자는 44px이지만 누름은 보이는 얼굴(34px, 화면 폭 전체)에서만 받습니다. 아래 투명한 10px은 누름이 아래 내용으로 지나갑니다. */
 .fuse-bar.tap {
+    pointer-events: none;
     /* 단추 안 내용은 기본으로 세로 가운데에 놓이므로, 보이는 34px 줄을 맨 위에 붙입니다. */
     display: flex;
     flex-direction: column;
@@ -70,13 +77,18 @@
     box-shadow: 0 1px 0 rgba(0, 0, 0, .06), 0 4px 10px -6px rgba(0, 0, 0, .28);
     transition: transform .12s ease;
     isolation: isolate;
+    pointer-events: auto;
 }
 .fuse-face::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--kb-key, transparent); }
 .fuse-bar:active .fuse-face { transform: translateY(1px); }
 .fuse-bar:focus-visible { outline: none; }
 .fuse-bar:focus-visible .fuse-face { box-shadow: inset 0 0 0 3px var(--primary); }
 
-.fuse-text { display: flex; align-items: baseline; gap: 5px; flex: none; white-space: nowrap; padding-right: 6px; }
+/* 좁으면 글이 먼저 줄어들고(…), 시각 캡슐은 줄어들지 않아 늘 보입니다. 이름표('퇴근까지')가 남은 시간보다 먼저 줄어듭니다. */
+.fuse-text { display: flex; align-items: baseline; gap: 5px; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; padding-right: 6px; }
+.fuse-k, .fuse-v { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fuse-k { flex: 0 100 auto; }
+.fuse-v { flex: 0 1 auto; }
 .fuse-k { font-size: 13px; font-weight: 500; color: var(--fuse-sub); }
 .fuse-v { font-size: 15px; font-weight: 900; color: var(--ink); letter-spacing: -.01em; }
 .fuse[data-state="soon"] .fuse-v { color: var(--fuse-hot); }

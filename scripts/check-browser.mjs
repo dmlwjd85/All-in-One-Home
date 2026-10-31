@@ -2216,8 +2216,7 @@ try {
     mkdirSync(soundShotDir, { recursive: true });
     for (const width of [360, 390, 1920]) {
         await withDemo(width, 'light', async (page) => {
-            /* 폰에서는 맨 위 퇴근 줄(44px) 아래 끝부터가 내용 자리예요. 줄 아래로 844px 높이를 그대로 두고 잽니다. */
-            await page.setViewport({ width, height: width === 1920 ? 1080 : 844 + 44, deviceScaleFactor: 1 });
+            await page.setViewport({ width, height: width === 1920 ? 1080 : 844, deviceScaleFactor: 1 });
             await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
             await page.evaluate(() => { location.hash = '#/settings'; });
             await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
@@ -4139,6 +4138,102 @@ try {
                 check(lay.face && !lay.covers && lay.first >= lay.face.bottom, `${width} 맨 위 줄이 머리글·시간표·탭바·쨈 단추를 가립니다: ${JSON.stringify(lay)}`);
             });
         }
+
+        /* ⑨ 좁은 화면 280px과 글자 200%(360을 180 CSS px로): 어느 상태에서도 시각 캡슐·▾가 화면 안에 다 보이고, 글이 캡슐과 겹치지 않습니다. 280에서는 가로로도 넘치지 않습니다(180의 홈 아이콘 줄 넘침은 main에도 있는 것이라 여기서 보지 않습니다).
+           글이 줄어 '…'가 되어도 남은 시간 글자는 바탕과 5:1을 넘어야 합니다(보이는 자리만 잽니다). */
+        let fuseNarrowLow = Infinity;
+        const narrowStates = [['퇴근', '15:20', null], ['조퇴', '15:20', '16:00'], ['10분 안쪽', '16:35', null], ['끝남', '16:50', null]];
+        for (const width of [280, 180]) {
+            for (const mode of ['light', 'dark']) {
+                await withPage(width, async (page) => {
+                    await fuseDay(page, { theme: 'retro' });
+                    for (const [state, at, leave] of narrowStates) {
+                        await page.evaluateOnNewDocument((leave) => {
+                            if (leave) localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ '2026-10-26': leave }));
+                            else localStorage.removeItem('ssug-gyomu-leave-early');
+                        }, leave);
+                        await fuseGo(page, at, mode);
+                        await page.evaluate(() => Promise.all(document.querySelector('.fuse').getAnimations({ subtree: true })
+                            .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+                            .map((a) => a.finished.catch(() => null))));
+                        const fit = await page.evaluate(() => {
+                            const r = (el) => el?.getBoundingClientRect();
+                            const bomb = document.querySelector('.fuse-bar .fuse-bomb');
+                            const b = r(bomb);
+                            const chev = r(document.querySelector('.fuse-chev'));
+                            const text = r(document.querySelector('.fuse-text'));
+                            const v = r(document.querySelector('.fuse-face .fuse-v'));
+                            return {
+                                w: innerWidth, doc: document.documentElement.scrollWidth,
+                                bomb: b && [Math.round(b.left), Math.round(b.right)], bombText: bomb?.textContent.trim(),
+                                bombClip: bomb ? bomb.scrollWidth - bomb.clientWidth : 99,
+                                chev: chev && Math.round(chev.right), text: text && Math.round(text.right), v: v && Math.round(v.width),
+                            };
+                        });
+                        check(fit.bomb && fit.bomb[0] >= 0 && fit.bomb[1] <= fit.w && fit.bombClip <= 1 && /^\d{2}:\d{2}$/.test(fit.bombText) && fit.chev <= fit.w && fit.text <= fit.bomb[0] && fit.v >= 10 && (width < 280 || fit.doc <= fit.w),
+                            `${width} ${mode} ${state} 맨 위 줄 시각 캡슐이 잘리거나 글과 겹칩니다: ${JSON.stringify(fit)}`);
+                        if (state === '끝남') continue;
+                        const face = await page.$('.fuse-face');
+                        const spot = await face.evaluate((el) => {
+                            const f = el.getBoundingClientRect();
+                            const t = el.querySelector('.fuse-v');
+                            const e = t.getBoundingClientRect();
+                            return { color: getComputedStyle(t).color, x: e.left - f.left, y: e.top - f.top, w: e.width, h: e.height };
+                        });
+                        const hide = await page.addStyleTag({ content: '.fuse-face, .fuse-face * { color: transparent !important; text-shadow: none !important; }' });
+                        await delay(80);
+                        const bare = await face.screenshot({ encoding: 'base64' });
+                        await hide.evaluate((el) => el.remove());
+                        const ratio = await page.evaluate(async (b64, t) => {
+                            const img = new Image();
+                            img.src = `data:image/png;base64,${b64}`;
+                            await img.decode();
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const g = canvas.getContext('2d');
+                            g.drawImage(img, 0, 0);
+                            const lin = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+                            const lum = (r, gr, b) => 0.2126 * lin(r) + 0.7152 * lin(gr) + 0.0722 * lin(b);
+                            const scale = img.width / Math.max(1, document.querySelector('.fuse-face').getBoundingClientRect().width);
+                            const [r, gr, b, a = 1] = t.color.match(/[\d.]+/g).map(Number);
+                            const data = g.getImageData(Math.max(0, Math.round(t.x * scale)), Math.max(0, Math.round(t.y * scale)), Math.max(1, Math.round(t.w * scale)), Math.max(1, Math.round(t.h * scale))).data;
+                            let min = Infinity;
+                            for (let i = 0; i < data.length; i += 4) {
+                                const bg = lum(data[i], data[i + 1], data[i + 2]);
+                                const ink = lum(r * a + data[i] * (1 - a), gr * a + data[i + 1] * (1 - a), b * a + data[i + 2] * (1 - a));
+                                min = Math.min(min, (Math.max(ink, bg) + 0.05) / (Math.min(ink, bg) + 0.05));
+                            }
+                            return Math.round(min * 100) / 100;
+                        }, bare, spot);
+                        fuseNarrowLow = Math.min(fuseNarrowLow, ratio);
+                        check(ratio >= 5, `${width} ${mode} ${state} 좁은 화면에서 남은 시간 글자가 바탕과 5:1이 안 됩니다: ${ratio}`);
+                    }
+                });
+            }
+        }
+        console.log(`맨 위 퇴근 줄 좁은 화면(280·180, 레트로) 남은 시간 글자 대비 최저 ${fuseNarrowLow}:1`);
+
+        /* ⑩ 줄 아래 투명한 10px: 홈을 내린 뒤 그 자리(y 36~43)를 누르면 줄이 아니라 아래 내용이 눌리고, 보이는 줄(34px)을 누르면 자세히 보기가 열립니다. */
+        await withPage(360, async (page) => {
+            await fuseDay(page);
+            await fuseGo(page, '15:20');
+            const strip = await page.evaluate(async () => {
+                window.scrollTo(0, 300);
+                await new Promise((r) => setTimeout(r, 150));
+                const out = [];
+                for (const y of [36, 40, 43]) for (const x of [40, 180, 320]) out.push(Boolean(document.elementFromPoint(x, y)?.closest('.fuse')));
+                return { under: out.filter(Boolean).length, faceHit: Boolean(document.elementFromPoint(180, 17)?.closest('.fuse-bar')), sy: Math.round(scrollY) };
+            });
+            check(strip.sy > 100 && strip.under === 0 && strip.faceHit, `360 줄 아래 투명한 자리가 내용 위 누름을 가로챕니다: ${JSON.stringify(strip)}`);
+            await page.mouse.click(180, 40);
+            await delay(250);
+            const opened = await page.evaluate(() => Boolean(document.querySelector('.fuse-panel')));
+            check(!opened, '360 줄 아래 투명한 자리(y 40)를 누르면 자세히 보기가 열립니다.');
+            await page.mouse.click(180, 17);
+            await page.waitForSelector('.fuse-panel', { timeout: 5000 }).catch(() => null);
+            check(Boolean(await page.$('.fuse-panel')), '360 보이는 줄(y 17)을 눌러도 자세히 보기가 열리지 않습니다.');
+        });
 
         /* ⑧ 대비: 글자를 지운 줄을 찍고, 글자 자리 모든 점에 대해 (글자색 알파 × 조상 불투명도)로 섞은 색과 바탕을 비교합니다. */
         const fuseLow = {};
