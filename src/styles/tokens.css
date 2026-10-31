@@ -22,6 +22,8 @@
     --line: #C8C3BB;
     --ink: #2E2A2B;
     --ink-sub: #5E5658;
+    /* 입력칸 안내 글·앞뒤 달 날짜처럼 옅은 글자. 바탕 #E8E4DE 위 4.73:1 로 글자 대비 기준(4.5:1)을 넘깁니다. */
+    --ink-hint: #6A6163;
     --primary: #A73D74;
     --on-primary: #FFFFFF;
     --accent: #A73D74;
@@ -111,6 +113,8 @@
     --line: #5A5354;
     --ink: #F6F2EE;
     --ink-sub: #C9C1BF;
+    /* 어두운 화면은 예전 안내 글 색 그대로(바탕 위 5.9:1)입니다. */
+    --ink-hint: #9CA3AF;
     --primary: #A73D74;
     --on-primary: #FFFFFF;
     --accent: #E08B9A;

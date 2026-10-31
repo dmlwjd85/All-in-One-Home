@@ -4585,6 +4585,38 @@ try {
         }
         console.log(`퇴근 타이머 숫자 대비 최저 ${Math.min(...lowest)}:1 (테마 6 × 밝은·어두운 × 퇴근·조퇴)`);
     }
+    /* 밝은 화면 글자 대비: 360 휴대폰 밝은 화면의 주요 화면에서 모든 글자가 4.5:1(24px 이상·18.66px 이상 굵은 글자는 3:1)을 넘어야 합니다.
+       scripts/fixtures/contrast-probe.js 가 글자색 alpha·opacity·바탕 그라데이션을 실제로 섞은 색으로 잽니다. 입력칸 안내 글(placeholder)도 봅니다.
+       MX는 모든 화면, 나머지 키보드 테마는 눌린 키 재질이 바뀌는 출결·설정만 봅니다. 날짜와 상관없어 기본 날짜에서 한 번만 돌립니다. */
+    if (todayYmd === '2026-10-23') {
+        const probeSource = readFileSync(resolve(root, 'scripts/fixtures/contrast-probe.js'), 'utf8');
+        const allScreens = ['#/today', '#/todo', '#/notice', `#/attend/${todayYmd}`, '#/students', '#/students/12', `#/schedule/month/${todayYmd}`, `#/day/${todayYmd}`, '#/minutes/new', '#/settings', '#/settings/roster'];
+        const low = [];
+        let measured = 0;
+        for (const theme of ['mx', 'retro', 'slim', 'puff', 'jelly', 'type']) {
+            await withPage(360, async (page) => {
+                await page.evaluateOnNewDocument((theme) => {
+                    localStorage.setItem('ssug-gyomu-tips', '1');
+                    localStorage.setItem('ssug-gyomu-kb-theme', theme);
+                }, theme);
+                await page.goto(`${origin}?demo=1&at=08:42&mode=light`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.waitForFunction(() => /오늘 우리 반|오늘은 수업이 없어요/.test(document.body.innerText), { timeout: 15000 });
+                await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
+                await page.evaluate(() => document.fonts.ready);
+                await page.evaluate(probeSource);
+                for (const screen of theme === 'mx' ? allScreens : [`#/attend/${todayYmd}`, '#/settings']) {
+                    await page.evaluate((screen) => { location.hash = screen; }, screen);
+                    await delay(400);
+                    const items = await page.evaluate(() => window.__contrastProbe());
+                    measured += items.length;
+                    for (const item of items.filter((row) => !row.pass)) low.push(`${theme} ${screen} ${item.kind} "${item.text}" ${item.ink}→${item.text_px} / ${item.bg_px} = ${item.ratio}:1 (기준 ${item.need}, ${item.size}px/${item.weight})`);
+                }
+            });
+        }
+        check(measured > 500, `밝은 화면 글자 대비를 잰 글자가 너무 적습니다: ${measured}`);
+        check(!low.length, `밝은 화면 글자 대비가 모자랍니다(${low.length}곳):\n${[...new Set(low)].slice(0, 20).join('\n')}`);
+        if (!low.length) console.log(`밝은 화면 글자 대비: 글자 ${measured}개 모두 기준을 넘습니다 (360, MX 화면 ${allScreens.length}개 + 다른 테마 출결·설정).`);
+    }
 } catch (error) {
     failures.push(error?.message || String(error));
 }
