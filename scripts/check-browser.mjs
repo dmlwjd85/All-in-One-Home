@@ -4037,6 +4037,10 @@ try {
                             await fuseGo(page, at, mode);
                             await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
                             await delay(150);
+                            /* 끝남의 '펑'처럼 한 번만 도는 움직임은 끝난 뒤 멈춘 모습으로 잽니다(커지는 도중의 캡슐 가장자리를 바탕으로 잡지 않게). */
+                            await page.evaluate(() => Promise.all(document.querySelector('.fuse').getAnimations({ subtree: true })
+                                .filter((a) => Number.isFinite(a.effect?.getComputedTiming().endTime))
+                                .map((a) => a.finished.catch(() => null))));
                             const face = await page.$('.fuse-face');
                             const texts = await face.evaluate((el) => {
                                 const r = el.getBoundingClientRect();
