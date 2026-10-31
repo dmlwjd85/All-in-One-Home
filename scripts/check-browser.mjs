@@ -3528,9 +3528,16 @@ try {
                         const save = await page.evaluate(() => {
                             const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
                             const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
-                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight) };
+                            /* 쨈 단추(가운데 볼록 단추)와 겹치는지, 단추 가운데·네 귀퉁이에서 맨 위가 저장 단추인지도 봅니다. */
+                            const btn = document.querySelector('.work-setup .primary-btn');
+                            const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
+                            const fabHit = Boolean(r && fab && fab.width > 0 && r.left < fab.right && r.right > fab.left && r.top < fab.bottom && r.bottom > fab.top);
+                            const pts = r ? [[(r.left + r.right) / 2, (r.top + r.bottom) / 2], [r.left + 3, r.top + 3], [r.right - 3, r.top + 3], [r.left + 3, r.bottom - 3], [r.right - 3, r.bottom - 3]] : [];
+                            const hidden = pts.filter(([x, y]) => { const el = document.elementFromPoint(x, y); return !el || !(el === btn || btn.contains(el)); }).length;
+                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), left: Math.round(r?.left ?? -1), right: Math.round(r?.right ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight), fab: fab ? [Math.round(fab.left), Math.round(fab.top), Math.round(fab.right), Math.round(fab.bottom)] : null, fabHit, hidden };
                         });
                         check(save.height > 0 && save.top >= 0 && save.bottom <= save.tabTop, `${label} 안내 띠를 펼치면 저장 단추가 탭바 위로 보이지 않습니다: ${JSON.stringify(save)}`);
+                        check(save.height > 0 && !save.fabHit && save.hidden === 0, `${label} 안내 띠를 펼치면 저장 단추가 쨈 단추와 겹치거나 다른 것에 가립니다: ${JSON.stringify(save)}`);
                     }
                 });
             }
