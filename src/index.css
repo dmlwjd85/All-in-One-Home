@@ -116,6 +116,10 @@ a.hero-pill,
     margin-bottom: 14px;
 }
 .top-tools { display: flex; gap: 4px; flex: none; margin-left: auto; }
+/* 뒤로 버튼까지 있는 좁은 화면(PR #59 검수 1번): 제목이 한 글자씩 세로로 눌리지 않게 버튼 줄 아래로 내립니다. */
+@media (max-width: 440px) {
+    .topbar.has-back .date-block { order: 3; flex: 1 1 100%; }
+}
 .icon-btn.is-on { box-shadow: var(--neo-inset); color: var(--accent); }
 .date-block { min-width: 0; flex: 1; }
 .date-block .kicker {
@@ -954,6 +958,10 @@ button.glass[aria-pressed="true"]:active {
 .todo-line:has(.is-conflict) { flex-wrap: wrap; }
 .todo-line:has(.is-conflict) .todo-main { flex: 1 1 0; }
 .todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 50px; }
+.fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
+.fold-sum .is-conflict { padding: 2px 0; }
+.detail-title .is-conflict, .day-todo-title.is-conflict { padding: 0; }
+.chip:has(.is-conflict) { flex-wrap: wrap; min-width: 0; }
 .conflict-text { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 .conflict-badge {
     flex: none;
