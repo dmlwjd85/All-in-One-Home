@@ -82,30 +82,35 @@ export function WorkTimer({ ymd, local, leave, showToast, now }) {
             {percent != null && (
                 <div className="leave-ends muted"><span>출근 {local.workStart}</span><span>{timer.label} {timer.target}</span></div>
             )}
-            {open && (
-                <form className="leave-form" onSubmit={(event) => {
-                    event.preventDefault();
-                    const problem = leaveProblem(draft, now.hm, { workStart: local.workStart, workEnd: local.workEnd });
-                    if (problem) { showToast?.(problem); return; }
-                    setLeave(ymd, draft);
-                    setOpen(false);
-                    showToast?.(`오늘은 ${draft}까지 셀게요. 내일은 원래 퇴근 시각으로 돌아가요.`);
-                }}>
-                    <label className="muted" htmlFor="leave-at">오늘 몇 시에 나가세요? 이 기기에만, 오늘 하루만 적어 둬요.</label>
-                    <div className="leave-row">
-                        <input id="leave-at" className="field" type="time" aria-label="조퇴 시각" value={draft} onChange={(event) => setDraft(event.target.value)} />
-                        <Btn className="primary-btn" onClick={(event) => event.currentTarget.form?.requestSubmit()}>조퇴 정하기</Btn>
-                    </div>
-                    {leave && (
-                        <Btn className="chip" style={{ marginTop: 8 }} onClick={() => {
-                            setLeave(ymd, '');
-                            setOpen(false);
-                            showToast?.('조퇴를 취소했어요. 원래 퇴근 시각까지 셀게요.');
-                        }}>조퇴 취소</Btn>
-                    )}
-                </form>
-            )}
+            {open && <LeaveForm ymd={ymd} local={local} leave={leave} now={now} showToast={showToast} draft={draft} setDraft={setDraft} onDone={() => setOpen(false)} />}
         </section>
+    );
+}
+
+/** 오늘 조퇴 시각 고르기. 홈 타이머 카드와 맨 위 심지 줄의 자세히 보기가 함께 씁니다. 이 기기에만, 오늘 하루만 적어 둡니다. */
+export function LeaveForm({ ymd, local, leave, now, showToast, draft, setDraft, onDone, inputId = 'leave-at' }) {
+    return (
+        <form className="leave-form" onSubmit={(event) => {
+            event.preventDefault();
+            const problem = leaveProblem(draft, now.hm, { workStart: local.workStart, workEnd: local.workEnd });
+            if (problem) { showToast?.(problem); return; }
+            setLeave(ymd, draft);
+            onDone?.();
+            showToast?.(`오늘은 ${draft}까지 셀게요. 내일은 원래 퇴근 시각으로 돌아가요.`);
+        }}>
+            <label className="muted" htmlFor={inputId}>오늘 몇 시에 나가세요? 이 기기에만, 오늘 하루만 적어 둬요.</label>
+            <div className="leave-row">
+                <input id={inputId} className="field" type="time" aria-label="조퇴 시각" value={draft} onChange={(event) => setDraft(event.target.value)} />
+                <Btn className="primary-btn" onClick={(event) => event.currentTarget.form?.requestSubmit()}>조퇴 정하기</Btn>
+            </div>
+            {leave && (
+                <Btn className="chip" style={{ marginTop: 8 }} onClick={() => {
+                    setLeave(ymd, '');
+                    onDone?.();
+                    showToast?.('조퇴를 취소했어요. 원래 퇴근 시각까지 셀게요.');
+                }}>조퇴 취소</Btn>
+            )}
+        </form>
     );
 }
 
