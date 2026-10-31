@@ -112,6 +112,8 @@ html[data-kb] :is(.chip.on, .choice-tile.on, .cal-grid .tap.neo-in, button.solid
     box-shadow: var(--kb-on);
     transform: translateY(var(--kb-travel-on));
 }
+/* 레트로 밝은 화면만: 눌린 키(#E6DECD) 위 강조 글자 #A73D74 가 4.41:1 이라, 같은 자줏빛을 한 단계만 깊혀 4.62:1 로 둡니다. */
+html[data-kb="retro"]:not(.dark) :is(.chip.on, .choice-tile.on, .cal-grid .tap.neo-in, button.solid-card[aria-pressed="true"], button.glass[aria-pressed="true"]) { --accent: #A23B71; --primary: #A23B71; }
 html[data-kb] .cal-grid .tap.cal-picked { box-shadow: var(--kb-on), inset 0 0 0 2px var(--accent); }
 html[data-kb] :is(button.chip, a.chip, label.chip, [role="button"].chip, .icon-btn, .choice-tile, .todo-main, button.solid-card, [role="button"].solid-card, button.glass, .cal-grid .tap):active {
     box-shadow: var(--kb-press);

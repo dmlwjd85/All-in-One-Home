@@ -186,6 +186,7 @@ a.hero-pill,
     line-height: 22px;
     box-shadow: var(--neo-inset);
 }
+input::placeholder, textarea::placeholder { color: var(--ink-hint); opacity: 1; }
 .field:focus {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
@@ -1121,7 +1122,8 @@ button.glass[aria-pressed="true"]:active {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
     background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-size: 14px;
 }
-.acad-day.is-out { opacity: .45; }
+/* 앞뒤 달 날짜. 칸 전체를 .45 로 흐리면 숫자가 2.5:1(어두운 화면 3.9:1)까지 떨어져, 숫자는 안내 글 색(--ink-hint, 4.73:1)으로 옅게 두고 테두리만 흐립니다. */
+.acad-day.is-out { color: var(--ink-hint); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 45%, transparent); }
 .acad-day[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); box-shadow: none; }
 .acad-day.is-offDays { background: var(--accent); color: var(--on-primary); }
 .acad-mark { font-size: 10px; line-height: 1.1; font-weight: 800; white-space: nowrap; }
@@ -1219,3 +1221,14 @@ button.glass[aria-pressed="true"]:active {
 .minutes-kept { margin: 0; font-size: 13px; }
 .minutes-save { min-width: 140px; }
 .minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* 휴대폰(640px 이하)에서 제목만 한 단계 줄여 한 화면에 더 많이 보이게 합니다. 웹(넓은 화면) 크기는 그대로입니다.
+   홈·학생·시트 제목은 JSX 인라인 크기라 !important 로 덮습니다. 쨈 제목 글꼴과 굵기는 그대로 둡니다. */
+@media (max-width: 640px) {
+    .date-block .date-line { font-size: 28px; line-height: 34px; }
+    .date-block h1 { font-size: 20px; line-height: 26px; }
+    .date-block h1 em { font-size: 15px; }
+    h2.title-font.font-display { font-size: 23px !important; line-height: 30px !important; }
+    .sheet h2.title-font:not(.font-display) { font-size: 20px !important; }
+    .detail-title, .minutes-view-title { font-size: 20px; line-height: 28px; }
+}
