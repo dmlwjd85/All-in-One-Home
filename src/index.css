@@ -116,6 +116,10 @@ a.hero-pill,
     margin-bottom: 14px;
 }
 .top-tools { display: flex; gap: 4px; flex: none; margin-left: auto; }
+/* 뒤로 버튼까지 있는 좁은 화면(PR #59 검수 1번): 제목이 한 글자씩 세로로 눌리지 않게 버튼 줄 아래로 내립니다. */
+@media (max-width: 440px) {
+    .topbar.has-back .date-block { order: 3; flex: 1 1 100%; }
+}
 .icon-btn.is-on { box-shadow: var(--neo-inset); color: var(--accent); }
 .date-block { min-width: 0; flex: 1; }
 .date-block .kicker {
@@ -588,9 +592,14 @@ a.chip,
 .leave-small { font-weight: 800; font-size: 15px; }
 .leave-big { font-size: 34px; line-height: 40px; word-break: keep-all; }
 .home-leave.is-done .leave-big { font-size: 28px; line-height: 36px; }
+/* 폰에서는 '퇴근까지'와 큰 숫자를 한 줄에 두고 키캡 위아래를 줄입니다. 시간표를 펼친 첫 화면에서도 큰 숫자가 탭바·가운데 쨈 단추에 걸리지 않습니다. */
+@media (max-width: 899px) {
+    .leave-key { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-top: 6px; padding-top: 10px; padding-bottom: 10px; }
+    .leave-big { line-height: 36px; }
+}
 .leave-bar { height: 12px; border-radius: 999px; background: var(--bg); box-shadow: var(--neo-inset); overflow: hidden; }
 .leave-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
-.leave-ends { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; font-weight: 700; }
+.leave-ends { display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px; font-weight: 700; }
 .leave-form { display: grid; gap: 8px; margin-top: 12px; }
 .leave-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .leave-row .primary-btn { padding: 0 14px; min-height: 44px; }
@@ -950,6 +959,10 @@ button.glass[aria-pressed="true"]:active {
 .todo-line:has(.is-conflict) { flex-wrap: wrap; }
 .todo-line:has(.is-conflict) .todo-main { flex: 1 1 0; }
 .todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 50px; }
+.fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
+.fold-sum .is-conflict { padding: 2px 0; }
+.detail-title .is-conflict, .day-todo-title.is-conflict { padding: 0; }
+.chip:has(.is-conflict) { flex-wrap: wrap; min-width: 0; }
 .conflict-text { min-width: 0; overflow-wrap: anywhere; word-break: keep-all; }
 .conflict-badge {
     flex: none;
@@ -1222,6 +1235,23 @@ button.glass[aria-pressed="true"]:active {
 .minutes-save { min-width: 140px; }
 .minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
+/* 홈 출퇴근 안내 띠: 폰에서는 한 줄(띠 단추 + 다음에)로 접혀 있다가 누르면 펼칩니다. 900px 이상은 늘 펼쳐 둡니다. */
+.work-setup-strip { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; text-align: left; }
+.work-setup-sum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; }
+.work-setup-title { display: none; }
+@media (max-width: 899px) {
+    .work-setup[data-open="0"] .work-setup-body { display: none; }
+    .work-setup { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 900px) {
+    .work-setup-strip { display: none; }
+    .work-setup-title { display: inline; }
+}
+/* 홈 출퇴근 안내 카드: 360px에서는 시각 두 칸 아래로 저장이 내려가고, 넓은 화면에서도 버튼이 길게 늘어나지 않습니다. */
+.work-setup-text { margin: 8px 0 10px; font-weight: 700; line-height: 22px; word-break: keep-all; }
+.work-setup-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.work-setup-form label { flex: 1 1 116px; min-width: 0; display: grid; gap: 4px; }
+.work-setup-form .primary-btn { flex: 0 0 auto; padding: 0 18px; min-height: 44px; }
 /* 휴대폰(640px 이하)에서 제목만 한 단계 줄여 한 화면에 더 많이 보이게 합니다. 웹(넓은 화면) 크기는 그대로입니다.
    홈·학생·시트 제목은 JSX 인라인 크기라 !important 로 덮습니다. 쨈 제목 글꼴과 굵기는 그대로 둡니다. */
 @media (max-width: 640px) {

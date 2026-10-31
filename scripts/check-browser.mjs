@@ -2071,7 +2071,92 @@ try {
             check(seen.shadow !== 'none' && seen.shadow.includes('inset'), `${mode} 320: 배지가 K 뉴모피즘(오목) 토큰을 쓰지 않습니다: ${seen.shadow}`);
             check(!seen.plainBadge, `${mode} 320: 일반 할 일에 충돌 사본 배지가 붙었습니다.`);
             await page.screenshot({ path: resolve(shots, `conflict-copy-320-${mode}.png`) });
+
+            /* 라이브 QA 44d5556 2번: 오늘 화면 요약·하루 화면·상세 시트에서도 머리글 대신 배지가 보이고 잘리지 않습니다. */
+            const kst = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+            const md = `${Number(kst.slice(5, 7))}/${Number(kst.slice(8, 10))}`;
+            await page.type('[aria-label="할 일"]', `(충돌 사본) 오늘 하루 화면 충돌 사본 확인 ${md}`);
+            await page.keyboard.press('Enter');
+            await new Promise((r) => setTimeout(r, 300));
+            const spot = (sel) => page.evaluate((sel) => {
+                const el = document.querySelector(sel);
+                const badge = el?.querySelector('.conflict-badge');
+                const text = el?.querySelector('.conflict-text');
+                const r = el?.getBoundingClientRect();
+                return {
+                    has: Boolean(el), badge: badge?.innerText || '',
+                    clipped: text ? text.scrollWidth > text.clientWidth + 1 || getComputedStyle(text).textOverflow === 'ellipsis' : true,
+                    offscreen: r ? r.right > window.innerWidth + 1 || r.left < -1 : true,
+                    over: document.documentElement.scrollWidth > window.innerWidth,
+                    raw: [...document.querySelectorAll('main, [role="dialog"], .sheet, body')].some((n) => n.innerText.includes('(충돌 사본)')),
+                };
+            }, sel);
+            const must = (name, v) => {
+                check(v.has && v.badge === '충돌 사본', `${mode} 320 ${name}: 충돌 사본 배지가 없습니다: ${JSON.stringify(v)}`);
+                check(!v.clipped && !v.offscreen && !v.over, `${mode} 320 ${name}: 충돌 사본이 잘리거나 넘칩니다: ${JSON.stringify(v)}`);
+                check(!v.raw, `${mode} 320 ${name}: '(충돌 사본)' 글자가 그대로 보입니다.`);
+            };
+            await page.evaluate(() => { location.hash = '#/'; });
+            await page.waitForSelector('.home-todo');
+            await new Promise((r) => setTimeout(r, 300));
+            const folded = await page.evaluate(() => Boolean(document.querySelector('.home-todo .fold-sum')));
+            if (folded) must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+            else {
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+                await new Promise((r) => setTimeout(r, 300));
+                must('오늘 요약', await spot('.home-todo .fold-sum [data-conflict-copy="1"]'));
+                await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            }
+            await page.screenshot({ path: resolve(shots, `conflict-home-320-${mode}.png`) });
+            const line = await page.$('.home-line [data-conflict-copy="1"]');
+            if (!line) await page.evaluate(() => document.querySelector('.home-todo .fold-head')?.click());
+            await page.waitForSelector('.home-line [data-conflict-copy="1"]', { timeout: 5000 });
+            await page.evaluate(() => document.querySelector('.home-line [data-conflict-copy="1"]').closest('button').click());
+            await page.waitForSelector('.detail-title');
+            must('상세 시트', await spot('.detail-title [data-conflict-copy="1"]'));
+            await page.screenshot({ path: resolve(shots, `conflict-detail-320-${mode}.png`) });
+            await page.keyboard.press('Escape');
+            const ymd = kst;
+            await page.evaluate((y) => { location.hash = `#/day/${y}`; }, ymd);
+            await page.waitForSelector('.day-todo-title[data-conflict-copy="1"]', { timeout: 5000 });
+            must('하루 화면', await spot('.day-todo-title[data-conflict-copy="1"]'));
+            const dayBtn = await page.evaluate(() => document.querySelector('.day-todo-title[data-conflict-copy="1"]').closest('button').getBoundingClientRect().height);
+            check(dayBtn >= 44, `${mode} 320 하루 화면: 충돌 사본 칸이 44px보다 작습니다: ${dayBtn}`);
+            await page.screenshot({ path: resolve(shots, `conflict-day-320-${mode}.png`) });
         });
+    }
+
+    /* PR #59 검수 1번: 뒤로 버튼이 있는 화면에서 상단 바 제목이 한 글자씩 세로로 눌리지 않습니다(5가지 폭 × 라이트·다크). */
+    for (const width of [320, 360, 390, 900, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const ymd = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+                for (const [name, hash, want] of [['하루', `#/day/${ymd}`, '그날의 일지'], ['예전 수첩', '#/settings/legacy', '예전 수첩']]) {
+                    await page.evaluate((h) => { location.hash = h; }, hash);
+                    await page.waitForFunction((w) => document.querySelector('.topbar h1')?.innerText.includes(w), { timeout: 8000 }, want);
+                    await new Promise((r) => setTimeout(r, 150));
+                    const bar = await page.evaluate(() => {
+                        const h1 = document.querySelector('.topbar h1');
+                        const sub = document.querySelector('.topbar .date-block p');
+                        const r = h1.getBoundingClientRect();
+                        const lh = parseFloat(getComputedStyle(h1).lineHeight) || 28;
+                        const btns = [...document.querySelectorAll('.topbar button')].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect());
+                        const hit = (a, b) => a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+                        return {
+                            w: Math.round(r.width), lines: Math.round(r.height / lh),
+                            subLines: sub ? Math.round(sub.getBoundingClientRect().height / (parseFloat(getComputedStyle(sub).lineHeight) || 18)) : 0,
+                            small: btns.filter((b) => b.width < 43.5 || b.height < 43.5).length,
+                            overlap: btns.some((b) => hit(b, r) || (sub && hit(b, sub.getBoundingClientRect()))),
+                            over: document.documentElement.scrollWidth > window.innerWidth,
+                        };
+                    });
+                    check(bar.lines <= 1 && bar.w >= 100, `${mode} ${width} ${name}: 상단 바 제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(bar.subLines <= 2, `${mode} ${width} ${name}: 상단 바 부제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(!bar.overlap && !bar.over && !bar.small, `${mode} ${width} ${name}: 상단 바 버튼이 겹치거나 작습니다: ${JSON.stringify(bar)}`);
+                    if (width <= 390) await page.screenshot({ path: resolve(shots, `topbar-${name === '하루' ? 'day' : 'legacy'}-${width}-${mode}.png`) });
+                }
+            });
+        }
     }
 
     await withPage(390, async (page) => {
@@ -2526,8 +2611,16 @@ try {
                     const fab = document.querySelector('.desk-fab')?.getBoundingClientRect();
                     const toast = [...document.querySelectorAll('.toast')].some((el) => el.innerText.includes('소리가 나요'));
                     const viewBottom = window.innerHeight;
+                    /* 데모에도 퇴근 타이머가 있습니다. 평일 홈에서도 6교시는 늘 첫 화면에 보여야 하고, 타이머도 첫 화면에 보이며 팁에 가리지 않아야 합니다. */
+                    const leave = document.querySelector('.home-leave')?.getBoundingClientRect();
                     return {
                         visible,
+                        hasLeave: Boolean(leave),
+                        coversLeave: hits(tipBox, leave),
+                        leaveOnScreen: Boolean(leave && leave.top < (tab && tab.height > 0 ? tab.top : viewBottom) && leave.bottom > 0),
+                        /* 지금 교시(⏰ N교시까지 …)는 타이머가 있어도 첫 화면에 다 보여야 하고, 탭·타이머에 가리면 안 됩니다. */
+                        nowShown: Boolean(kicker && kicker.top >= 0 && kicker.bottom <= viewBottom && !hits(kicker, tab) && !hits(kicker, leave)),
+                        cellUnderTab: cells.some((cell) => hits(cell, tab)),
                         text: tip?.innerText || '',
                         toast,
                         coversQuick: hits(tipBox, quick),
@@ -2552,7 +2645,8 @@ try {
                         layout.visible && layout.text.includes('누를 때 소리가 나요') && !layout.text.includes('콕')
                         && !layout.coversQuick && !layout.coversSixth && !layout.coversHero && !layout.coversTab
                         && !layout.coversBanner && !layout.coversDate && !layout.coversClose
-                        && layout.sixthOnScreen && !layout.sixthUnderTab,
+                        && layout.sixthOnScreen && !layout.sixthUnderTab
+                        && (!layout.hasLeave || (layout.leaveOnScreen && !layout.coversLeave && layout.nowShown && !layout.cellUnderTab)),
                         `${width} ${mode}에서 소리 팁이 다른 내용을 가립니다: ${JSON.stringify(layout)}`,
                     );
                     await page.evaluate(() => [...document.querySelectorAll('.tip-bubble button')].find((el) => el.innerText.trim() === '끄기')?.click());
@@ -3081,6 +3175,17 @@ try {
                     return { top: Math.round(form.top), bottom: Math.round(form.bottom), limit: Math.round(bottom), focus: document.activeElement?.getAttribute('name') || '' };
                 });
                 check(box.top >= 0 && box.bottom <= box.limit && box.focus === 'subject', `${width} ${count}교시 ${period}교시 편집 폼이 화면 밖이거나 과목 칸에 포커스가 없습니다: ${JSON.stringify(box)}`);
+                /* G9: 탭·읽기 순서는 과목 칸이 먼저이고, 잠그기·닫기는 그 뒤입니다. */
+                const order = await page.evaluate(() => [...document.querySelectorAll('form.tt-edit input, form.tt-edit button')].map((el) => el.getAttribute('name') || el.innerText.trim()));
+                await page.keyboard.press('Tab');
+                const next = await page.evaluate(() => document.activeElement?.innerText?.trim() || document.activeElement?.getAttribute('name') || '');
+                await page.keyboard.down('Shift');
+                await page.keyboard.press('Tab');
+                await page.keyboard.up('Shift');
+                const backTo = await page.evaluate(() => document.activeElement?.getAttribute('name') || '');
+                const closeAt = order.indexOf('닫기');
+                const lockAt = order.findIndex((item) => /잠그기|잠금 풀기/.test(item));
+                check(order[0] === 'subject' && closeAt > 0 && (lockAt === -1 || lockAt > 0) && /^전담/.test(next) && backTo === 'subject', `${width} ${period}교시 편집 폼의 탭 순서가 과목 칸부터가 아닙니다: ${JSON.stringify(order)} / Tab→${next} / Shift+Tab→${backTo}`);
                 if (period === count) await page.screenshot({ path: resolve(shots, `timetable-edit-${width}.png`) });
                 if (how === 'Escape') await page.keyboard.press('Escape');
                 else await page.evaluate(() => [...document.querySelectorAll('form.tt-edit button')].find((el) => el.innerText.trim() === '닫기')?.click());
@@ -3178,6 +3283,926 @@ try {
                 const level = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}').level);
                 check(asked.includes('수업 길이') && level === '초', `저장하지 않은 길이가 있는데 학교급을 묻지 않고 바꿉니다: ${asked} / ${level}`);
             }
+        }, width >= 900 ? 900 : 800);
+    }
+    /* 홈 출퇴근 안내 카드: 시각이 없으면 타이머 자리에 보이고, 저장하면 타이머로 바뀌며, 잘못된 시각은 받지 않고, '다음에'는 기억합니다. 쉬는 날에는 숨깁니다. */
+    async function freshHome(page, mode) {
+        await page.goto(`${origin}?mode=${mode}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForFunction(() => document.body.innerText.includes('이 기기에서만 써 볼게요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이 기기에서만 써 볼게요')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '나중에 할게요'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '나중에 할게요')?.click());
+        await page.waitForFunction(() => document.querySelector('.home-hero'));
+        await delay(300);
+        return page.evaluate(() => (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'));
+    }
+    async function setTime(page, label, value) {
+        await page.evaluate((label, value) => {
+            const input = document.querySelector(`.work-setup input[aria-label="${label}"]`);
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }, label, value);
+    }
+    async function toastAfterSave(page) {
+        /* 토스트 DOM을 지우면 React가 떨어진 노드를 고치므로, 문구가 바뀔 때까지 기다립니다. */
+        const toastText = () => page.evaluate(() => [...document.querySelectorAll('.toast')].map((el) => el.innerText.trim()).join(' '));
+        const before = await toastText();
+        await page.evaluate(() => [...document.querySelectorAll('.work-setup button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForFunction((prev) => [...document.querySelectorAll('.toast')].map((el) => el.innerText.trim()).join(' ') !== prev, { timeout: 3000 }, before).catch(() => {});
+        return toastText();
+    }
+    const savedWork = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'));
+    for (const [width, mode] of [[360, 'light'], [390, 'dark'], [1280, 'light']]) {
+        await withPage(width, async (page) => {
+            const off = await freshHome(page, mode);
+            /* 폰: 안내는 한 줄 띠로 접혀 있고, 시간표(6교시까지)가 띠 위 첫 화면에 보입니다. 띠를 눌러야 문구와 시각 칸이 펼쳐집니다. */
+            const strip = await page.evaluate(() => {
+                const el = document.querySelector('.work-setup');
+                if (!el) return null;
+                const head = el.querySelector('.work-setup-strip');
+                const headBox = head?.getBoundingClientRect();
+                const sum = el.querySelector('.work-setup-sum');
+                const body = el.querySelector('.work-setup-body')?.getBoundingClientRect();
+                const time = document.querySelector('.home-time')?.getBoundingClientRect();
+                const sixth = [...document.querySelectorAll('.period-row button')][5]?.getBoundingClientRect();
+                const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                const viewBottom = tab && tab.height > 0 ? tab.top : window.innerHeight;
+                return {
+                    height: Math.round(el.getBoundingClientRect().height),
+                    top: Math.round(el.getBoundingClientRect().top),
+                    headShown: Boolean(headBox && headBox.height > 0),
+                    expanded: head?.getAttribute('aria-expanded'),
+                    sumLines: sum && sum.getBoundingClientRect().height > 0 ? Math.round(sum.getBoundingClientRect().height / parseFloat(getComputedStyle(sum).lineHeight || '20') || 1) : 0,
+                    bodyShown: Boolean(body && body.height > 0),
+                    timeTop: Math.round(time?.top ?? -1),
+                    sixthBottom: Math.round(sixth?.bottom ?? -1),
+                    viewBottom: Math.round(viewBottom),
+                    steps: [...el.querySelectorAll('input[type="time"]')].map((input) => input.getAttribute('step')),
+                };
+            });
+            if (!off && strip) {
+                check(strip.steps.length === 2 && strip.steps.every((step) => step === '60'), `${width} 안내 카드 출근·퇴근 칸에 step="60"이 없습니다: ${JSON.stringify(strip.steps)}`);
+                if (width < 900) {
+                    check(strip.headShown && strip.expanded === 'false' && !strip.bodyShown && strip.height <= 80 && strip.sumLines <= 1, `${width} 안내 카드가 한 줄 띠로 접혀 있지 않습니다: ${JSON.stringify(strip)}`);
+                    check(strip.timeTop >= 0 && strip.timeTop < strip.top && strip.sixthBottom > 0 && strip.sixthBottom <= strip.viewBottom, `${width} 첫 화면에 시간표 6교시가 다 보이지 않습니다: ${JSON.stringify(strip)}`);
+                    await page.screenshot({ path: resolve(shots, `home-work-strip-${width}-${mode}.png`) });
+                    await page.click('.work-setup .work-setup-strip');
+                    await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 3000 }).catch(() => {});
+                    const opened = await page.evaluate(() => ({ expanded: document.querySelector('.work-setup-strip')?.getAttribute('aria-expanded'), body: Math.round(document.querySelector('.work-setup-body')?.getBoundingClientRect().height || 0) }));
+                    check(opened.expanded === 'true' && opened.body > 0, `${width} 안내 띠를 눌러도 펼쳐지지 않습니다: ${JSON.stringify(opened)}`);
+                } else {
+                    check(!strip.headShown && strip.bodyShown, `${width} 넓은 화면 안내 카드가 접혀 있습니다: ${JSON.stringify(strip)}`);
+                }
+            }
+            const card = await page.evaluate(() => {
+                const el = document.querySelector('.work-setup');
+                if (!el) return null;
+                const text = el.querySelector('.work-setup-text');
+                const save = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '저장');
+                const later = [...el.querySelectorAll('button')].find((b) => b.innerText.trim() === '다음에');
+                const box = el.getBoundingClientRect();
+                const inside = [...el.querySelectorAll('button, input')].every((c) => { const r = c.getBoundingClientRect(); return (r.width === 0 && r.height === 0) || r.left >= box.left - 0.5 && r.right <= box.right + 0.5; });
+                const hero = document.querySelector('.home-hero')?.getBoundingClientRect();
+                return {
+                    text: text?.innerText.trim() || '',
+                    lines: text ? Math.round(text.getBoundingClientRect().height / parseFloat(getComputedStyle(text).lineHeight)) : 0,
+                    start: el.querySelector('input[aria-label="출근 시각"]')?.value,
+                    end: el.querySelector('input[aria-label="퇴근 시각"]')?.value,
+                    saveTap: Boolean(save?.classList.contains('tap') && save.classList.contains('primary-btn') && save.type === 'button'),
+                    laterTap: Boolean(later?.classList.contains('tap') && later.classList.contains('chip')),
+                    saveWidth: Math.round(save?.getBoundingClientRect().width || 0),
+                    cardWidth: Math.round(box.width),
+                    inside,
+                    besideHero: hero ? Math.round(box.top) === Math.round(hero.top) && box.left > hero.right : false,
+                    grid: document.querySelector('.home-grid')?.className || '',
+                };
+            });
+            if (off) {
+                check(!card, `${width} 쉬는 날 홈에 출퇴근 안내 카드가 보입니다.`);
+                return;
+            }
+            check(Boolean(card), `${width} 출퇴근 시각이 없는데 홈에 안내 카드가 없습니다.`);
+            if (!card) return;
+            check(card.text === '출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요.' && card.lines >= 1 && card.lines <= 2, `${width} 안내 카드 문구가 두 줄을 넘거나 다릅니다: ${JSON.stringify(card)}`);
+            check(card.start === '08:40' && card.end === '16:40' && !('workEnd' in await savedWork(page)), `${width} 안내 카드에 08:40·16:40이 미리 없거나 저장 전에 써 버립니다: ${JSON.stringify(card)}`);
+            check(card.saveTap && card.laterTap && card.inside && card.saveWidth < 160 && card.saveWidth < card.cardWidth / 2, `${width} 안내 카드 버튼이 앱 버튼이 아니거나 카드 밖·길게 늘어납니다: ${JSON.stringify(card)}`);
+            check(/has-leave/.test(card.grid) && (width < 900 || card.besideHero), `${width} 안내 카드가 타이머 자리에 없습니다: ${JSON.stringify(card)}`);
+            await audit(page, `출퇴근 안내 카드 ${width}`);
+            await page.screenshot({ path: resolve(shots, `home-work-setup-${width}-${mode}.png`) });
+            await setTime(page, '퇴근 시각', '08:00');
+            const early = await toastAfterSave(page);
+            check(early.includes('퇴근 시각은 출근 시각보다 늦어야 해요.') && Boolean(await page.$('.work-setup')) && !('workEnd' in await savedWork(page)), `${width} 출근보다 이른 퇴근을 받습니다: ${early}`);
+            await setTime(page, '퇴근 시각', '');
+            const empty = await toastAfterSave(page);
+            check(empty.includes('출근·퇴근 시각을 모두 골라 주세요.') && !('workEnd' in await savedWork(page)), `${width} 빈 퇴근 시각을 받습니다: ${empty}`);
+            await setTime(page, '출근 시각', '08:30');
+            await setTime(page, '퇴근 시각', '16:40');
+            const ok = await toastAfterSave(page);
+            await page.waitForSelector('.home-leave[data-leave="퇴근"]', { timeout: 5000 }).catch(() => {});
+            const after = await page.evaluate(() => ({ card: Boolean(document.querySelector('.work-setup')), timer: document.querySelector('.home-leave[data-leave="퇴근"]')?.innerText.replace(/\s+/g, ' ') || '' }));
+            const stored = await savedWork(page);
+            check(ok.includes('퇴근 16:40까지') && !after.card && after.timer.includes('7시간 58분') && stored.workStart === '08:30' && stored.workEnd === '16:40' && stored.level === '초' && stored.count === 6, `${width} 저장한 뒤 타이머로 바뀌지 않습니다: ${ok} / ${JSON.stringify(after)} / ${JSON.stringify(stored)}`);
+            await audit(page, `저장 뒤 타이머 ${width}`);
+        });
+    }
+    await withPage(360, async (page) => {
+        const off = await freshHome(page, 'light');
+        if (off) return;
+        await page.evaluate(() => [...document.querySelectorAll('.work-setup button')].find((el) => el.innerText.trim() === '다음에')?.click());
+        await delay(250);
+        const gone = await page.evaluate(() => ({ card: Boolean(document.querySelector('.work-setup')), key: localStorage.getItem('ssug-gyomu-work-card-off'), local: localStorage.getItem('ssug-gyomu-period-local'), grid: document.querySelector('.home-grid')?.className || '' }));
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.querySelector('.home-hero'));
+        await delay(300);
+        const reloaded = await page.evaluate(() => Boolean(document.querySelector('.work-setup')));
+        check(!gone.card && gone.key === '1' && gone.local === null && !/has-leave/.test(gone.grid) && !reloaded, `'다음에'를 눌러도 카드가 남거나 다시 열면 또 보입니다: ${JSON.stringify(gone)} / 다시 열기 ${reloaded}`);
+    });
+
+    /* 퇴근 시각 없이 조퇴만 정한 날: 출근 시각이 있으면 조퇴 타이머만 뜨고 안내 띠는 함께 뜨지 않습니다. 출근 시각도 없으면 타이머가 못 뜨니 안내 띠만 남습니다(빈자리 없음). */
+    for (const withStart of [true, false]) {
+        await withPage(360, async (page) => {
+            const off = await freshHome(page, 'light');
+            if (off) return;
+            await page.evaluate((ymd, withStart) => {
+                localStorage.setItem('ssug-gyomu-leave-early', JSON.stringify({ [ymd]: '15:00' }));
+                if (withStart) localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ ...JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}'), workStart: '08:30' }));
+            }, todayYmd, withStart);
+            await page.reload({ waitUntil: 'domcontentloaded' });
+            await page.waitForFunction(() => document.querySelector('.home-hero'));
+            await delay(300);
+            const both = await page.evaluate(() => ({ timer: document.querySelector('.home-leave[data-leave]')?.innerText.replace(/\s+/g, ' ') || '', card: Boolean(document.querySelector('.work-setup')), count: document.querySelectorAll('.home-leave').length }));
+            if (withStart) check(both.timer.includes('15:00') && !both.card && both.count === 1, `출근만 정하고 조퇴한 날 타이머와 안내 카드가 함께 뜨거나 타이머가 없습니다: ${JSON.stringify(both)}`);
+            else check(!both.timer && both.card && both.count === 1, `출퇴근 시각 없이 조퇴만 정한 날 홈에 타이머도 안내 띠도 없습니다: ${JSON.stringify(both)}`);
+        });
+    }
+
+    /* 데모(?demo=1)에는 출퇴근 08:40·16:40이 있어 평일 08:42에 타이머가 보입니다. 이 기기 설정에는 쓰지 않습니다. */
+    await withDemo(390, 'light', async (page) => {
+        await delay(250);
+        const demo = await page.evaluate(() => ({
+            off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
+            timer: document.querySelector('.home-leave[data-leave="퇴근"]')?.innerText.replace(/\s+/g, ' ') || '',
+            card: Boolean(document.querySelector('.work-setup')),
+            local: localStorage.getItem('ssug-gyomu-period-local'),
+        }));
+        if (demo.off) check(!demo.timer && !demo.card, `쉬는 날 데모 홈에 타이머나 안내 카드가 보입니다: ${JSON.stringify(demo)}`);
+        else check(demo.timer.includes('7시간 58분') && demo.timer.includes('출근 08:40') && !demo.card, `데모 홈에 퇴근 타이머가 없습니다: ${JSON.stringify(demo)}`);
+        check(!demo.local || !/workEnd":"\d/.test(demo.local), `데모 출퇴근 시각을 이 기기 설정에 씁니다: ${demo.local}`);
+    });
+
+    /* 휴대폰 첫 화면 시간표(이번 수정의 핵심): 데모 타이머 홈과 안내 띠 홈 모두, 오늘 시간표 카드가 타이머·띠 위에 있고
+       시간표 카드 전체(제목, 펼쳤으면 1~6교시 칸 모두)가 탭바 위 첫 화면에 보여야 합니다. 소리 팁 검사와 따로 봅니다.
+       데모 타이머 홈은 타이머 큰 숫자도 탭바에 걸리지 않고 키캡 바탕이 칠해져 있어야 하고(대비), 안내 띠 홈은 띠를 펼치면 저장 단추가 탭바 위로 보여야 합니다. */
+    const timeFirstScreen = (page) => page.evaluate(() => {
+        const box = (el) => { const r = el?.getBoundingClientRect(); return r && r.height > 0 ? r : null; };
+        const card = document.querySelector('.home-time');
+        const cardBox = box(card);
+        const title = box(card?.querySelector('.fold-head')) || box(card?.querySelector('.fold-title'));
+        const cells = [...(card?.querySelectorAll('.period-row button') || [])].map(box);
+        const big = box(document.querySelector('.home-leave .leave-big'));
+        const key = document.querySelector('.home-leave .leave-key');
+        const lead = box(document.querySelector('.home-leave'));
+        const tab = box(document.querySelector('.tabbar'));
+        const tabTop = tab ? tab.top : window.innerHeight;
+        const fab = box(document.querySelector('.tabbar .fab'));
+        const open = card?.dataset.open === '1';
+        return {
+            off: (document.querySelector('.home-hero')?.innerText || '').includes('오늘은 수업이 없어요'),
+            open,
+            lead: lead ? Math.round(lead.top) : -1,
+            cardTop: Math.round(cardBox?.top ?? -1),
+            cardBottom: Math.round(cardBox?.bottom ?? -1),
+            titleBottom: Math.round(title?.bottom ?? -1),
+            cells: cells.length,
+            cellsBottom: cells.length && cells.every(Boolean) ? Math.round(Math.max(...cells.map((r) => r.bottom))) : -1,
+            bigBottom: Math.round(big?.bottom ?? -1),
+            keyPaint: key ? getComputedStyle(key).backgroundColor : '',
+            tabTop: Math.round(tabTop),
+            coverTop: Math.round(Math.min(tabTop, fab ? fab.top : tabTop)),
+        };
+    });
+    const timeOk = (t) => t.cardTop >= 0 && t.lead >= 0 && t.cardTop < t.lead
+        && t.titleBottom > 0 && t.titleBottom <= t.tabTop
+        && t.cardBottom > 0 && t.cardBottom <= t.tabTop
+        && (!t.open || (t.cells === 6 && t.cellsBottom > 0 && t.cellsBottom <= t.tabTop));
+    for (const folded of [false, true]) {
+        foldPreset = !folded;
+        try {
+            for (const width of [360, 390]) {
+                const label = `${width} ${folded ? '시간표 접힘' : '시간표 펼침'}`;
+                await withDemo(width, 'light', async (page) => {
+                    await delay(250);
+                    const t = await timeFirstScreen(page);
+                    if (!t.off) check(t.open === !folded && timeOk(t), `${label} 데모 타이머 홈 첫 화면에 시간표 카드(제목·1~6교시)가 타이머 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.bigBottom > 0 && t.bigBottom <= t.coverTop, `${label} 데모 타이머 홈 첫 화면에서 타이머 큰 숫자가 탭바나 가운데 쨈 단추에 걸립니다: ${JSON.stringify(t)}`);
+                    if (!t.off) check(t.keyPaint && t.keyPaint !== 'rgba(0, 0, 0, 0)' && t.keyPaint !== 'transparent', `${label} 데모 타이머 첫 화면 키캡 바탕이 칠해지지 않아 숫자 대비가 무너집니다: ${JSON.stringify(t)}`);
+                });
+                await withPage(width, async (page) => {
+                    const off = await freshHome(page, 'light');
+                    const t = await timeFirstScreen(page);
+                    if (!off) check(t.open === !folded && timeOk(t), `${label} 안내 띠 홈 첫 화면에 시간표 카드(제목·1~6교시)가 띠 위로 다 보이지 않습니다: ${JSON.stringify(t)}`);
+                    if (!off) {
+                        await page.click('.work-setup .work-setup-strip');
+                        await page.waitForFunction(() => document.querySelector('.work-setup')?.dataset.open === '1', { timeout: 15000 });
+                        await delay(400);
+                        const save = await page.evaluate(() => {
+                            const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
+                            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+                            return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight) };
+                        });
+                        check(save.height > 0 && save.top >= 0 && save.bottom <= save.tabTop, `${label} 안내 띠를 펼치면 저장 단추가 탭바 위로 보이지 않습니다: ${JSON.stringify(save)}`);
+                    }
+                });
+            }
+        } finally {
+            foldPreset = true;
+        }
+    }
+
+    // 알림장 부제와 지난 알림장 안내: 빈 상태, 저장 직후, 다른 날, 민감한 글, 되돌리기, 빈 칸 저장, 좁은 폭, 다크를 지킵니다.
+    const noticeEmptyHint = '아직 지난 알림장이 없어요. 저장하면 여기에 모여요.';
+    const noticeSavedHint = '이 날 알림장은 저장해 두었어요. 다른 날 알림장을 저장하면 여기에 모여요.';
+    const noticeBlankToast = '적은 내용이 없어서 저장하지 않았어요.';
+    const noticeDay = addDaysYmd(todayYmd, 1);
+    const noticeOther = addDaysYmd(todayYmd, 2);
+    const noticeVaults = (page) => page.evaluate(async () => {
+        const read = (name) => new Promise((resolveRead, reject) => {
+            const req = indexedDB.open(name);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains('kv')) { resolveRead(null); return; }
+                const get = db.transaction('kv').objectStore('kv').get('state');
+                get.onsuccess = () => resolveRead(get.result || null);
+                get.onerror = () => reject(get.error);
+            };
+        });
+        const main = await read('ssug-gyomu');
+        const local = await read('ssug-gyomu-local');
+        return { cloud: main?.notices || [], local: [...(local?.notices || []), ...(local?.local?.notices || []), ...(main?.local?.notices || [])] };
+    });
+    const noticeVaultsUntil = async (page, test) => {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+            const vaults = await noticeVaults(page);
+            if (test(vaults)) return vaults;
+            await delay(150);
+        }
+        return noticeVaults(page);
+    };
+    const noticeSeed = (page, cloud = [], local = []) => page.evaluate(async (cloudRows, localRows) => {
+        for (const [name, rows] of [['ssug-gyomu', cloudRows], ['ssug-gyomu-local', localRows]]) {
+            const db = await new Promise((resolveDb, reject) => {
+                const req = indexedDB.open(name);
+                req.onsuccess = () => resolveDb(req.result);
+                req.onerror = () => reject(req.error);
+            });
+            if (!db.objectStoreNames.contains('kv')) continue;
+            const store = db.transaction('kv', 'readwrite').objectStore('kv');
+            const state = await new Promise((resolveState, reject) => {
+                const req = store.get('state');
+                req.onsuccess = () => resolveState(req.result || null);
+                req.onerror = () => reject(req.error);
+            });
+            if (!state) continue;
+            state.notices = rows;
+            if (state.local) state.local.notices = [];
+            await new Promise((resolvePut, reject) => {
+                const req = store.put(state, 'state');
+                req.onsuccess = resolvePut;
+                req.onerror = () => reject(req.error);
+            });
+        }
+    }, cloud, local);
+    let noticeLoads = 0;
+    const noticeOpen = async (page, mode, day) => {
+        // 주소가 같으면 해시만 바뀌어 다시 읽지 않으므로, 매번 다른 주소로 새로 엽니다.
+        noticeLoads += 1;
+        await page.goto(`${origin}?mode=${mode}&at=08:42&load=${noticeLoads}#/notice/${day}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForSelector('textarea[aria-label="알림장"]');
+        await delay(300);
+    };
+    const noticeView = (page) => page.evaluate((emptyHint, savedHint) => {
+        const body = document.body.innerText;
+        const title = [...document.querySelectorAll('h3')].find((el) => el.innerText.trim() === '지난 알림장');
+        const list = [];
+        for (let el = title?.nextElementSibling; el; el = el.nextElementSibling) {
+            if (el.tagName === 'BUTTON') list.push(el.innerText.replace(/\s+/g, ' ').trim());
+        }
+        const hint = [...document.querySelectorAll('p')].find((el) => el.innerText.trim() === emptyHint || el.innerText.trim() === savedHint);
+        const root = document.documentElement;
+        return {
+            empty: body.includes(emptyHint),
+            saved: body.includes(savedHint),
+            list,
+            hintOverflow: hint ? hint.scrollWidth > hint.clientWidth + 1 || hint.getBoundingClientRect().right > root.clientWidth + 1 : false,
+            pageOverflow: root.scrollWidth > root.clientWidth + 1,
+            hintColor: hint ? getComputedStyle(hint).color : '',
+            dark: root.classList.contains('dark'),
+        };
+    }, noticeEmptyHint, noticeSavedHint);
+    const noticeSave = async (page, text, expect = noticeSavedHint) => {
+        await page.evaluate((value) => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, value);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }, text);
+        await delay(100);
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
+        if (expect) await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, expect).catch(() => {});
+        await delay(300);
+    };
+
+    const noticeType = (page, value) => page.evaluate(async (next) => {
+        const box = document.querySelector('textarea[aria-label="알림장"]');
+        Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, next);
+        box.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((done) => setTimeout(done, 100));
+    }, value);
+    const noticeUndoClick = (page) => page.evaluate(() => {
+        const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+        button?.click();
+        return Boolean(button);
+    });
+    // 저장된 글을 비운 뒤 새 글을 쓰다가 되돌려, 입력칸 위에 되돌린 글이 보이는 상태를 만듭니다.
+    const noticeRestoredSetup = async (page, mode, saved = '리코더 챙기기') => {
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: saved, source: 'app' }]);
+        await noticeOpen(page, mode, noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeType(page, '단소 챙기기');
+        await noticeUndoClick(page);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === saved));
+        await page.waitForSelector('[role="group"][aria-label="되돌린 글"]', { timeout: 5000 }).catch(() => {});
+        await delay(200);
+    };
+    const noticeRestoredView = (page) => page.evaluate(() => {
+        const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
+        const root = document.documentElement;
+        if (!panel) return { shown: false, pageOverflow: root.scrollWidth > root.clientWidth + 1 };
+        const note = panel.querySelector('.restored-note');
+        const button = [...panel.querySelectorAll('button')].find((el) => el.innerText.trim() === '되돌린 글 불러오기');
+        const line = parseFloat(getComputedStyle(note).lineHeight) || 20;
+        const rect = panel.getBoundingClientRect();
+        const brect = button?.getBoundingClientRect();
+        return {
+            shown: true,
+            note: note.textContent,
+            label: panel.innerText,
+            button: Boolean(button),
+            lines: Math.round(note.clientHeight / line),
+            clamped: note.scrollHeight > note.clientHeight + 1,
+            overflow: rect.right > root.clientWidth + 1 || (brect ? brect.right > root.clientWidth + 1 : true) || root.scrollWidth > root.clientWidth + 1,
+        };
+    });
+
+    await withDemo(390, 'light', async (page) => {
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        const sub = await page.evaluate(() => {
+            const p = document.querySelector('.date-block p');
+            if (!p) return null;
+            return { text: p.innerText.trim(), lines: Math.round(p.getBoundingClientRect().height / parseFloat(getComputedStyle(p).lineHeight)) };
+        });
+        check(sub?.text === '복사해서 붙여 넣어요', `알림장 부제가 바뀌었습니다: ${sub?.text}`);
+        check(sub?.lines === 1, `390에서 알림장 부제가 한 줄이 아닙니다: ${sub?.lines}줄`);
+        let view = await noticeView(page);
+        check(view.empty && !view.saved, `지난 알림장이 없을 때 빈 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 저장하기 전에 적기만 하면 아직 빈 안내입니다.
+        await page.type('textarea[aria-label="알림장"]', '줄넘기 챙기기');
+        await delay(200);
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `알림장을 적기만 하고 저장하지 않았는데 저장했다는 안내가 보입니다: ${JSON.stringify(view)}`);
+
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeSavedHint).catch(() => {});
+        view = await noticeView(page);
+        check(view.saved, '알림장을 저장한 뒤 저장했다는 안내가 보이지 않습니다.');
+        check(!view.empty, '알림장을 저장한 뒤에도 "저장하면 여기에 모여요" 빈 안내가 그대로 보입니다.');
+        check(!view.hintOverflow && !view.pageOverflow, `390에서 알림장 저장 안내가 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+
+        // 되돌리기 뒤에는 빈 안내로 돌아갑니다. 안내는 저장 직후, 토스트는 기기 저장이 끝난 뒤 뜨므로 토스트를 기다립니다.
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '되돌리기'), { timeout: 5000 }).catch(() => {});
+        const undone = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기');
+            button?.click();
+            return Boolean(button);
+        });
+        check(undone, '알림장을 저장한 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeEmptyHint).catch(() => {});
+        view = await noticeView(page);
+        check(view.empty && !view.saved, `알림장을 되돌린 뒤 빈 안내로 돌아가지 않습니다: ${JSON.stringify(view)}`);
+
+        // 빈 칸이나 띄어쓰기만 있으면 저장하지 않고 알려 줍니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        for (const blank of ['', '   \n ']) {
+            await noticeSave(page, blank, noticeBlankToast);
+            view = await noticeView(page);
+            const toast = await page.evaluate(() => document.querySelector('.toast')?.innerText || '');
+            check(toast.includes(noticeBlankToast), `빈 알림장을 저장했을 때 저장하지 않았다는 안내가 없습니다: ${JSON.stringify(toast)}`);
+            check(view.empty && !view.saved, `빈 알림장을 저장한 뒤 저장했다는 안내가 보입니다: ${JSON.stringify(view)}`);
+            const blankUndo = await page.evaluate(() => /되돌\s*리\s*기/.test(document.querySelector('.toast')?.textContent || ''));
+            check(!blankUndo, `저장하지 않았다는 안내에 되돌리기 버튼이 붙어 있습니다: ${JSON.stringify(blank)}`);
+            if (!blank) await page.screenshot({ path: resolve(shots, 'notice_blank_save_390_light.png') });
+        }
+        const blankVaults = await noticeVaults(page);
+        check(![...blankVaults.cloud, ...blankVaults.local].some((row) => row.date === noticeDay), `빈 알림장이 저장되었습니다: ${JSON.stringify(blankVaults)}`);
+
+        // 예전에 저장된 빈 행(빈 글, 띄어쓰기만 있는 글)이 있어도 저장했다고 하지 않고, 빈 칸 저장도 되돌리기 없이 막습니다.
+        for (const old of ['', ' ']) {
+            await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: old, source: 'app' }]);
+            await noticeOpen(page, 'light', noticeDay);
+            view = await noticeView(page);
+            check(view.empty && !view.saved, `이미 있던 빈 알림장 행을 저장된 알림장으로 칩니다: ${JSON.stringify({ old, view })}`);
+            await noticeSave(page, '', noticeBlankToast);
+            const oldToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+            check(oldToast.includes(noticeBlankToast) && !/되돌\s*리\s*기/.test(oldToast), `예전 빈 행에서 빈 칸을 저장했을 때 안내가 다릅니다: ${JSON.stringify({ old, oldToast })}`);
+        }
+
+        // 지난 알림장 목록에는 비어 있거나 띄어쓰기만 있는 예전 행을 카드로 보이지 않습니다. 데이터는 그대로 둡니다.
+        await noticeSeed(page, [
+            { id: noticeOther, date: noticeOther, text: ' ', source: 'app' },
+            { id: addDaysYmd(todayYmd, 3), date: addDaysYmd(todayYmd, 3), text: '', source: 'app' },
+        ]);
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(view.list.length === 0, `지난 알림장 목록에 빈 카드가 보입니다: ${JSON.stringify(view.list)}`);
+        check(view.empty && !view.saved, `빈 예전 행만 있을 때 빈 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        const keptBlank = await noticeVaults(page);
+        check(keptBlank.cloud.length === 2, `빈 예전 행을 숨기면서 데이터까지 지웠습니다: ${JSON.stringify(keptBlank)}`);
+
+        // 저장한 날의 글을 모두 지우고 저장하면 그 날 알림장을 비우고, 되돌리면 예전 글이 그대로 돌아옵니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '줄넘기 챙기기');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        const clearToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(clearToast.includes('이 날 알림장을 비웠어요.') && /되돌\s*리\s*기/.test(clearToast), `알림장을 비웠다는 안내나 되돌리기 버튼이 없습니다: ${JSON.stringify(clearToast)}`);
+        // main처럼 빈 글('')로 저장해 다른 기기에도 비운 상태가 퍼지게 하고, 화면에서만 숨깁니다.
+        const clearedVaults = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        check(clearedVaults.cloud.filter((row) => row.date === noticeDay).length === 1 && clearedVaults.cloud.some((row) => row.date === noticeDay && row.text === ''), `글을 모두 지우고 저장했는데 그 날 알림장이 빈 글로 저장되지 않았습니다: ${JSON.stringify(clearedVaults)}`);
+        check(!clearedVaults.local.some((row) => row.date === noticeDay), `클라우드 쪽 알림장을 비웠는데 이 기기 쪽에 행이 생겼습니다: ${JSON.stringify(clearedVaults)}`);
+        view = await noticeView(page);
+        const clearedBox = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+        check(view.empty && !view.saved && clearedBox === '', `알림장을 비운 뒤에도 저장했다는 안내나 글이 남아 있습니다: ${JSON.stringify({ view, clearedBox })}`);
+        await page.screenshot({ path: resolve(shots, 'notice_cleared_390_light.png') });
+        const clearUndone = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        check(clearUndone, '알림장을 비운 뒤 되돌리기 버튼을 누를 수 없습니다.');
+        await page.waitForFunction((hint) => document.body.innerText.includes(hint), { timeout: 5000 }, noticeSavedHint).catch(() => {});
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('알림장을 되돌렸어요.'), { timeout: 5000 }).catch(() => {});
+        const undoToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(undoToast.includes('알림장을 되돌렸어요.'), `비운 알림장을 되돌렸는데 되돌렸다는 안내가 없습니다: ${JSON.stringify(undoToast)}`);
+        const restored = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
+        check(restored.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'), `비운 알림장을 되돌렸는데 예전 글이 돌아오지 않았습니다: ${JSON.stringify(restored)}`);
+        view = await noticeView(page);
+        const restoredBox = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value || '');
+        check(view.saved && !view.empty && restoredBox === '줄넘기 챙기기', `비운 알림장을 되돌린 뒤 화면이 예전 글로 돌아오지 않았습니다: ${JSON.stringify({ view, restoredBox })}`);
+
+        // 이미 저장된 글이 있는 날을 새로 열어 비우고 바로 되돌려도, 입력칸이 예전 글로 다시 찹니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent))?.click());
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '리코더 챙기기', { timeout: 5000 }).catch(() => {});
+        const seededBack = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+        check(seededBack === '리코더 챙기기', `저장된 날을 새로 열어 비운 뒤 되돌렸는데 입력칸이 예전 글로 돌아오지 않았습니다: ${JSON.stringify(seededBack)}`);
+
+        // 기기에만 둔 민감한 알림장을 비우면 기기에서만 지우고, 클라우드 쪽에는 아무것도 생기지 않으며 다른 날 클라우드 행은 그대로입니다.
+        await noticeSeed(page, [{ id: noticeOther, date: noticeOther, text: '체육복 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '알레르기 약 챙기기', null);
+        await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay));
+        await noticeSave(page, '', null);
+        const localCleared = await noticeVaultsUntil(page, (v) => !v.local.some((row) => row.date === noticeDay));
+        check(!localCleared.local.some((row) => row.date === noticeDay), `기기에만 둔 알림장을 비웠는데 기기에 남아 있습니다: ${JSON.stringify(localCleared)}`);
+        check(!localCleared.cloud.some((row) => row.date === noticeDay || /알레르기/.test(row.text || '')), `기기에만 둔 알림장을 비우다가 클라우드 쪽에 글이 생겼습니다: ${JSON.stringify(localCleared)}`);
+        check(localCleared.cloud.some((row) => row.date === noticeOther && row.text === '체육복 챙기기'), `기기에만 둔 알림장을 비우다가 다른 날 클라우드 알림장까지 지웠습니다: ${JSON.stringify(localCleared)}`);
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent))?.click());
+        const localBack = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay));
+        check(localBack.local.some((row) => row.date === noticeDay && row.text === '알레르기 약 챙기기') && !localBack.cloud.some((row) => /알레르기/.test(row.text || '')), `기기에만 둔 알림장을 되돌린 결과가 다릅니다: ${JSON.stringify(localBack)}`);
+        check(localBack.cloud.some((row) => row.date === noticeOther && row.text === '체육복 챙기기'), `기기에만 둔 알림장을 되돌린 뒤 다른 날 클라우드 알림장이 없습니다: ${JSON.stringify(localBack)}`);
+
+        // 저장 → 비우고 저장 → ‹ → › → 되돌리기: 입력칸이 예전 글로 다시 차고, 그 상태로 저장해도 비워지지 않습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '줄넘기 챙기기');
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await page.click('button[aria-label="이전 날"]');
+        await page.waitForFunction((day) => location.hash === `#/notice/${day}`, { timeout: 5000 }, addDaysYmd(noticeDay, -1)).catch(() => {});
+        await delay(200);
+        await page.click('button[aria-label="다음 날"]');
+        await page.waitForFunction((day) => location.hash === `#/notice/${day}`, { timeout: 5000 }, noticeDay).catch(() => {});
+        await delay(200);
+        const awayBox = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+        check(awayBox === '', `비운 날로 돌아왔는데 입력칸이 비어 있지 않습니다: ${JSON.stringify(awayBox)}`);
+        const awayUndone = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        check(awayUndone, '다른 날로 갔다 온 뒤 비운 알림장을 되돌리는 버튼이 없습니다.');
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '줄넘기 챙기기', { timeout: 5000 }).catch(() => {});
+        const awayBack = await page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+        view = await noticeView(page);
+        check(awayBack === '줄넘기 챙기기' && view.saved, `다른 날로 갔다 온 뒤 되돌렸는데 입력칸이나 안내가 예전 글로 돌아오지 않았습니다: ${JSON.stringify({ awayBack, view })}`);
+        await page.screenshot({ path: resolve(shots, 'notice_away_undo_390_light.png') });
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장')?.click());
+        await delay(400);
+        const awaySaved = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'));
+        check(awaySaved.cloud.some((row) => row.date === noticeDay && row.text === '줄넘기 챙기기'), `되돌린 뒤 그대로 저장했는데 알림장이 비워졌습니다: ${JSON.stringify(awaySaved)}`);
+        const awayToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(awayToast.includes('알림장을 저장했어요.'), `되돌린 뒤 그대로 저장했을 때 저장 안내가 아닙니다: ${JSON.stringify(awayToast)}`);
+
+        // 저장이 도는 동안 저장 버튼을 잠가서, 빠르게 두 번 눌러도 한 번만 저장합니다(되돌리기 한 번이면 저장 전으로 돌아갑니다).
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate(() => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, '실내화 챙기기');
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await delay(100);
+        const lockSeen = await page.evaluate(async () => {
+            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '저장');
+            let locked = false;
+            const watch = new MutationObserver(() => { if (button.disabled) locked = true; });
+            watch.observe(button, { attributes: true, attributeFilter: ['disabled'] });
+            button.click();
+            button.click();
+            await new Promise((done) => setTimeout(done, 1500));
+            watch.disconnect();
+            return { locked, after: button.disabled };
+        });
+        check(lockSeen.locked && !lockSeen.after, `저장하는 동안 저장 버튼이 잠기지 않거나 저장 뒤에도 풀리지 않습니다: ${JSON.stringify(lockSeen)}`);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '실내화 챙기기'));
+        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기')?.click());
+        const lockUndo = await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
+        check(![...lockUndo.cloud, ...lockUndo.local].some((row) => row.date === noticeDay), `저장 버튼을 빠르게 여러 번 눌렀더니 저장이 두 번 돌아 되돌리기 한 번으로 돌아가지 않습니다: ${JSON.stringify(lockUndo)}`);
+
+        // 하루 화면과 오늘 화면에는 빈 알림장 행을 빈 줄이나 빈 카드로 보이지 않습니다. 데이터는 그대로 둡니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app', at: new Date().toISOString() }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate((day) => { location.hash = `#/day/${day}`; }, noticeDay);
+        await page.waitForFunction(() => [...document.querySelectorAll('h2')].some((el) => el.innerText.trim() === '알림장과 메모'), { timeout: 8000 }).catch(() => {});
+        await delay(200);
+        const dayBlank = await page.evaluate(() => {
+            const head = [...document.querySelectorAll('h2')].find((el) => el.innerText.trim() === '알림장과 메모');
+            const section = head?.closest('section');
+            if (!section) return null;
+            const lines = [...section.querySelectorAll(':scope > p')];
+            return { blank: lines.filter((el) => !el.innerText.trim()).length, none: lines.some((el) => el.innerText.trim() === '이 날 알림장은 아직 없어요.') };
+        });
+        check(dayBlank && dayBlank.blank === 0 && dayBlank.none, `하루 화면에 빈 알림장 행이 빈 줄로 보이거나 없다는 안내가 없습니다: ${JSON.stringify(dayBlank)}`);
+        await page.evaluate(() => [...document.querySelectorAll('h2')].find((el) => el.innerText.trim() === '알림장과 메모')?.scrollIntoView({ block: 'center' }));
+        await delay(200);
+        await page.screenshot({ path: resolve(shots, 'notice_day_blank_390_light.png') });
+        await page.evaluate(() => { location.hash = '#/today'; });
+        await delay(800);
+        await page.waitForSelector('.home-recent', { timeout: 8000 }).catch(() => {});
+        const homeBlank = await page.evaluate(() => {
+            const box = document.querySelector('.home-recent');
+            if (!box) return null;
+            return [...box.querySelectorAll('strong')].filter((el) => /알림장$/.test(el.innerText.trim())).map((el) => el.parentElement?.querySelector('p')?.innerText.trim() || '');
+        });
+        check(Array.isArray(homeBlank) && !homeBlank.some((line) => !line), `오늘 화면 최근 기록에 빈 알림장 카드가 보입니다: ${JSON.stringify(homeBlank)}`);
+        const dayKept = await noticeVaults(page);
+        check(dayKept.cloud.some((row) => row.date === noticeDay && row.text === ''), `빈 알림장 행을 화면에서 숨기면서 데이터까지 지웠습니다: ${JSON.stringify(dayKept)}`);
+
+        // 다른 날 알림장이 있으면 두 안내 모두 없이 목록만 보입니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeOther);
+        await noticeSave(page, '체육복 챙기기', null);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.text === '체육복 챙기기'));
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.some((row) => row.includes('체육복 챙기기')), `다른 날 알림장이 있을 때 안내 없이 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+        await noticeSave(page, '줄넘기 챙기기', null);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.length === 1, `이 날과 다른 날을 모두 저장했을 때 안내 없이 다른 날 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 민감한 다른 날만 있으면 이 기기에만 남고, 안내 없이 목록이 보입니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeOther);
+        await noticeSave(page, '보건실 들르기', null);
+        let vaults = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.text === '보건실 들르기'));
+        check(!vaults.cloud.some((row) => String(row.text).includes('보건실')), `민감한 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(vaults.cloud)}`);
+        check(vaults.local.some((row) => row.text === '보건실 들르기'), '민감한 다른 날 알림장이 이 기기에 남지 않았습니다.');
+        await noticeOpen(page, 'light', noticeDay);
+        view = await noticeView(page);
+        check(!view.empty && !view.saved && view.list.some((row) => row.includes('보건실 들르기')), `민감한 다른 날 알림장만 있을 때 안내 없이 목록만 보이지 않습니다: ${JSON.stringify(view)}`);
+
+        // 민감한 이 날 알림장을 저장해도 저장 안내가 나오고, 클라우드 쪽에는 없습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '알레르기 약 챙기기');
+        view = await noticeView(page);
+        check(view.saved && !view.empty, `민감한 이 날 알림장을 저장했는데 저장 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        vaults = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.text === '알레르기 약 챙기기'));
+        check(!vaults.cloud.some((row) => String(row.text).includes('알레르기')), `민감한 이 날 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(vaults.cloud)}`);
+        check(vaults.local.some((row) => row.text === '알레르기 약 챙기기'), '민감한 이 날 알림장이 이 기기에 남지 않았습니다.');
+        await page.screenshot({ path: resolve(shots, 'notice_hint_sensitive_390_light.png') });
+    }, 844);
+
+    // 360 다크: 두 안내가 좁은 폭에서 넘치지 않고, 다크 글자로 보입니다.
+    await withDemo(360, 'dark', async (page) => {
+        await noticeSeed(page);
+        await noticeOpen(page, 'dark', noticeDay);
+        let view = await noticeView(page);
+        check(view.dark, '알림장 다크 화면이 다크로 열리지 않습니다.');
+        check(view.empty && !view.hintOverflow && !view.pageOverflow, `360 다크에서 알림장 빈 안내가 없거나 넘칩니다: ${JSON.stringify(view)}`);
+        await noticeSave(page, '줄넘기 챙기기');
+        view = await noticeView(page);
+        check(view.saved && !view.empty, `360 다크에서 알림장 저장 안내가 보이지 않습니다: ${JSON.stringify(view)}`);
+        check(!view.hintOverflow && !view.pageOverflow, `360에서 알림장 저장 안내가 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+        const rgb = (view.hintColor.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+        const lum = rgb.length === 3 ? rgb.map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0) : 0;
+        check(lum > 0.3, `다크에서 알림장 안내 글자가 어둡습니다: ${view.hintColor}`);
+        await page.screenshot({ path: resolve(shots, 'notice_hint_saved_360_dark.png') });
+        await noticeSave(page, '', noticeEmptyHint);
+        view = await noticeView(page);
+        const darkToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(view.empty && !view.saved && darkToast.includes('이 날 알림장을 비웠어요.'), `360 다크에서 알림장을 비운 화면이 다릅니다: ${JSON.stringify({ view, darkToast })}`);
+        check(!view.pageOverflow, `360에서 알림장을 비운 화면이 옆으로 넘칩니다: ${JSON.stringify(view)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_cleared_360_dark.png') });
+    }, 800);
+
+    // 360 밝은 화면: 비운 날(빈 클라우드 행이 남은 날)에 ＋의 알림장으로 다시 넣는 경우(S5a 일반·S5b 민감)와,
+    // 쓰던 글이 있을 때 되돌리기로 DB 글이 바뀌어도 쓰던 글을 덮어쓰지 않는지(M4) 봅니다.
+    const noticeBox = (page) => page.evaluate(() => document.querySelector('textarea[aria-label="알림장"]')?.value ?? null);
+    const noticeQuick = async (page, day, value) => {
+        await clickPlus(page, '알림장');
+        await page.waitForSelector('[data-screen="flow"] [aria-label="날짜"]', { timeout: 8000 });
+        const pick = (ymd) => page.evaluate((target) => {
+            const button = document.querySelector(`[data-screen="flow"] button[aria-label="${target}"]`);
+            button?.click();
+            return Boolean(button);
+        }, ymd);
+        if (!(await pick(day))) {
+            await page.click('[data-screen="flow"] button[aria-label="다음 달"]');
+            await delay(200);
+            await pick(day);
+        }
+        await page.waitForSelector('[data-screen="flow"] [data-flow-text]', { timeout: 8000 });
+        await page.evaluate((text) => {
+            const box = document.querySelector('[data-screen="flow"] [data-flow-text]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, text);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+        }, value);
+        await delay(100);
+        await page.evaluate(() => [...document.querySelectorAll('[data-screen="flow"] button')].find((el) => el.innerText.trim() === '알림장 남기기')?.click());
+        await page.waitForFunction(() => !document.querySelector('[data-screen="flow"]'), { timeout: 8000 }).catch(() => {});
+        await delay(300);
+    };
+    await withDemo(360, 'light', async (page) => {
+        // S5a: 비운 날에 일반 알림장을 넣으면 글 앞에 빈 줄 없이 새 글만 들어갑니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeQuick(page, noticeDay, '우유 급식 신청서');
+        const quickPlain = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && String(row.text).includes('우유')));
+        const plainRow = quickPlain.cloud.find((row) => row.date === noticeDay);
+        check(plainRow?.text === '우유 급식 신청서', `비운 날에 ＋로 알림장을 넣었더니 글 앞에 빈 줄이 붙거나 글이 다릅니다: ${JSON.stringify(plainRow?.text)}`);
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '우유 급식 신청서', { timeout: 5000 }).catch(() => {});
+        const plainBox = await noticeBox(page);
+        check(plainBox === '우유 급식 신청서', `비운 날에 ＋로 넣은 알림장이 알림장 화면 입력칸에 그대로 보이지 않습니다: ${JSON.stringify(plainBox)}`);
+
+        // S5b: 비운 날에 민감한 알림장을 넣으면 알림장 화면에도 그 글이 보이고, 클라우드 쪽에는 올라가지 않습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeQuick(page, noticeDay, '지호 학폭 관련 보호자 연락');
+        const quickSecret = await noticeVaultsUntil(page, (v) => v.local.some((row) => row.date === noticeDay && String(row.text).includes('학폭')));
+        check(quickSecret.local.some((row) => row.date === noticeDay && row.text === '지호 학폭 관련 보호자 연락'), `비운 날에 ＋로 넣은 민감한 알림장이 이 기기에 그대로 남지 않았습니다: ${JSON.stringify(quickSecret)}`);
+        check(!quickSecret.cloud.some((row) => /학폭/.test(row.text || '')), `민감한 알림장이 클라우드 쪽 저장소에 들어갔습니다: ${JSON.stringify(quickSecret.cloud)}`);
+        await page.waitForFunction(() => document.querySelector('textarea[aria-label="알림장"]')?.value === '지호 학폭 관련 보호자 연락', { timeout: 5000 }).catch(() => {});
+        await noticeOpen(page, 'light', noticeDay);
+        const secretBox = await noticeBox(page);
+        const secretView = await noticeView(page);
+        check(secretBox === '지호 학폭 관련 보호자 연락' && secretView.saved, `비운 날에 넣은 민감한 알림장이 알림장 화면에서 빈칸으로 보입니다: ${JSON.stringify({ secretBox, secretView })}`);
+        await page.screenshot({ path: resolve(shots, 'notice_quick_sensitive_360_light.png') });
+
+        // M4-1: 저장 뒤 새 글을 쓰던 중에 저장을 되돌려도, 쓰던 글은 그대로 남습니다.
+        await noticeSeed(page);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '줄넘기 챙기기');
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => el.innerText.trim() === '되돌리기'), { timeout: 5000 }).catch(() => {});
+        const typingUndo = await page.evaluate(async () => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, '줄넘기와 물통 챙기기');
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise((done) => setTimeout(done, 100));
+            const button = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기');
+            button?.click();
+            return Boolean(button);
+        });
+        check(typingUndo, '알림장을 저장한 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
+        await delay(400);
+        const keptTyping = await noticeBox(page);
+        check(keptTyping === '줄넘기와 물통 챙기기', `쓰던 글이 있는데 저장을 되돌리자 입력칸을 덮어썼습니다: ${JSON.stringify(keptTyping)}`);
+
+        // M4-2: 비운 뒤 새 글을 쓰던 중에 비우기를 되돌려도, 예전 글이 쓰던 글을 덮어쓰지 않고 되돌렸다는 안내가 뜹니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        const typingClearUndo = await page.evaluate(async () => {
+            const box = document.querySelector('textarea[aria-label="알림장"]');
+            Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(box, '단소 챙기기');
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise((done) => setTimeout(done, 100));
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        check(typingClearUndo, '알림장을 비운 뒤 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'));
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('알림장을 되돌렸어요.'), { timeout: 5000 }).catch(() => {});
+        const keptClearTyping = await noticeBox(page);
+        const typingToast = await page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        check(keptClearTyping === '단소 챙기기', `쓰던 글이 있는데 비우기를 되돌리자 예전 글로 입력칸을 덮어썼습니다: ${JSON.stringify(keptClearTyping)}`);
+        check(typingToast.includes('알림장을 되돌렸어요.'), `비운 알림장을 되돌렸는데 되돌렸다는 안내가 없습니다: ${JSON.stringify(typingToast)}`);
+        // N10: 쓰던 글을 그대로 둔 채 되돌렸으면 그 사실을 안내에 함께 알려 줍니다.
+        check(typingToast.includes('알림장을 되돌렸어요. 쓰던 글은 그대로 두었어요.'), `쓰던 글을 남긴 채 되돌렸는데 쓰던 글을 그대로 두었다는 안내가 없습니다: ${JSON.stringify(typingToast)}`);
+        const undoToastBox = await page.evaluate(() => {
+            const toast = document.querySelector('.toast');
+            const root = document.documentElement;
+            if (!toast) return null;
+            const rect = toast.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, width: root.clientWidth, pageOverflow: root.scrollWidth > root.clientWidth + 1 };
+        });
+        check(undoToastBox && undoToastBox.left >= 0 && undoToastBox.right <= undoToastBox.width + 1 && !undoToastBox.pageOverflow, `360에서 되돌렸다는 안내가 옆으로 넘칩니다: ${JSON.stringify(undoToastBox)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_undo_toast_360_light.png') });
+
+        // S6: 한 날에 글이 두 줄(클라우드 옛 글 + 이 기기에만 둔 민감 글)이면 함께 비우고 함께 되돌립니다.
+        const noticeToast = () => page.evaluate(() => document.querySelector('.toast')?.textContent || '');
+        const noticeUndo = () => page.evaluate(() => {
+            const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
+            button?.click();
+            return Boolean(button);
+        });
+        const twoCloud = { id: noticeDay, date: noticeDay, text: '체육복 챙기기', source: 'app' };
+        const twoLocal = { id: noticeDay, date: noticeDay, text: '서연 학폭 신고 건 안내', source: 'app' };
+        await noticeSeed(page, [twoCloud], [twoLocal]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        const twoCleared = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '') && !v.local.some((row) => row.date === noticeDay && String(row.text || '').trim()));
+        check(twoCleared.cloud.some((row) => row.date === noticeDay && row.text === '') && !twoCleared.local.some((row) => row.date === noticeDay && String(row.text || '').trim()), `글이 두 줄인 날을 비웠는데 한 줄이 남았습니다: ${JSON.stringify(twoCleared)}`);
+        check(![...twoCleared.cloud].some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 비우다가 민감한 글이 클라우드 쪽에 들어갔습니다: ${JSON.stringify(twoCleared.cloud)}`);
+        await page.click('button[aria-label="다음 날"]');
+        await delay(300);
+        await page.click('button[aria-label="이전 날"]');
+        await delay(400);
+        const twoAway = await noticeBox(page);
+        check(twoAway === '', `글이 두 줄인 날을 비우고 다른 날에 갔다 왔더니 다른 줄 글이 다시 보입니다: ${JSON.stringify(twoAway)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_two_rows_cleared_360_light.png') });
+        check(await noticeUndo(), '글이 두 줄인 날을 비우고 다른 날에 갔다 온 뒤 되돌리기 버튼이 없습니다.');
+        const twoBack = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '체육복 챙기기') && v.local.some((row) => row.date === noticeDay && row.text === '서연 학폭 신고 건 안내'));
+        check(twoBack.cloud.some((row) => row.date === noticeDay && row.text === '체육복 챙기기') && twoBack.local.some((row) => row.date === noticeDay && row.text === '서연 학폭 신고 건 안내'), `글이 두 줄인 날을 되돌렸는데 두 줄이 모두 돌아오지 않았습니다: ${JSON.stringify(twoBack)}`);
+        check(!twoBack.cloud.some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 되돌리다가 민감한 글이 클라우드 쪽에 들어갔습니다: ${JSON.stringify(twoBack.cloud)}`);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('되돌렸어요'), { timeout: 5000 }).catch(() => {});
+        const plainUndoToast = await noticeToast();
+        check(plainUndoToast.includes('알림장을 되돌렸어요.') && !plainUndoToast.includes('쓰던 글'), `쓰던 글이 없는데 되돌림 안내가 원래 문구가 아닙니다: ${JSON.stringify(plainUndoToast)}`);
+        const twoBackBox = await noticeBox(page);
+        check(twoBackBox === '체육복 챙기기', `글이 두 줄인 날을 되돌린 뒤 입력칸이 예전 글로 돌아오지 않았습니다: ${JSON.stringify(twoBackBox)}`);
+        // 다시 비우고 새로 열어도 빈칸이며, 클라우드 쪽 민감 글은 0건입니다.
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => !v.local.some((row) => row.date === noticeDay && String(row.text || '').trim()) && v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await noticeOpen(page, 'light', noticeDay);
+        const twoReload = await noticeBox(page);
+        const twoReloadVaults = await noticeVaults(page);
+        check(twoReload === '' && !twoReloadVaults.cloud.some((row) => /학폭/.test(row.text || '')), `글이 두 줄인 날을 비우고 새로 열었더니 빈칸이 아니거나 민감한 글이 클라우드 쪽에 있습니다: ${JSON.stringify({ twoReload, twoReloadVaults })}`);
+
+        // 저장 위치 고르기도 화면과 같은 규칙(글 있는 행 먼저)을 씁니다. 비운 클라우드 행 + 이 기기 민감 글인 날에 화면 글을 일반 글로 고쳐 쓰면, 숨은 민감 글이 남지 않습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '', source: 'app' }], [{ id: noticeDay, date: noticeDay, text: '지호 학폭 관련 보호자 연락', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '지호 보호자께 전화 드리기');
+        const rewritten = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '지호 보호자께 전화 드리기') && !v.local.some((row) => row.date === noticeDay));
+        check(rewritten.cloud.some((row) => row.date === noticeDay && row.text === '지호 보호자께 전화 드리기') && !rewritten.local.some((row) => row.date === noticeDay && /학폭/.test(row.text || '')), `화면에 보이는 민감한 알림장을 일반 글로 고쳐 썼는데 숨은 민감 글이 남았습니다: ${JSON.stringify(rewritten)}`);
+        check(!rewritten.cloud.some((row) => /학폭/.test(row.text || '')), `민감한 알림장을 고쳐 쓰다가 클라우드 쪽에 민감한 글이 들어갔습니다: ${JSON.stringify(rewritten.cloud)}`);
+
+        // 저장에 실패하면 되돌렸다는 안내를 띄우지 않고 저장 공간 안내만 보여 주며, 비운 상태 그대로 둡니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        check(await noticeUndo(), '저장 실패를 볼 때 비우기 토스트에 되돌리기 버튼이 없습니다.');
+        await delay(900);
+        const failToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const failVaults = await noticeVaults(page);
+        check(!failToast.includes('되돌렸어요') && failToast.includes('저장 공간'), `저장에 실패했는데 되돌렸다는 안내가 뜨거나 저장 공간 안내가 없습니다: ${JSON.stringify(failToast)}`);
+        check(failVaults.cloud.some((row) => row.date === noticeDay && row.text === ''), `저장에 실패했는데 비운 알림장이 바뀌었습니다: ${JSON.stringify(failVaults)}`);
+        // 알림장 화면에서는 공용 안내("원래대로 돌려 두었어요") 대신 무엇을 못 했는지 알려 줍니다.
+        check(failToast.includes('알림장을 되돌리지 못했어요.') && !failToast.includes('원래대로'), `되돌리기에 실패했는데 알림장 안내가 아닙니다: ${JSON.stringify(failToast)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_undo_fail_360_light.png') });
+        // 저장에 실패하면 입력칸에 쓰던 글을 그대로 두고 저장 공간 안내만 띄웁니다(DB는 원래 글 그대로).
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        await noticeSave(page, '단소 챙기기', null);
+        await delay(900);
+        const saveFailBox = await noticeBox(page);
+        const saveFailToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const saveFailVaults = await noticeVaults(page);
+        check(saveFailBox === '단소 챙기기', `저장에 실패했는데 입력칸에 쓰던 글이 사라졌습니다: ${JSON.stringify(saveFailBox)}`);
+        check(saveFailToast.includes('저장 공간') && !saveFailToast.includes('저장했어요'), `저장에 실패했는데 저장 공간 안내가 없거나 저장했다는 안내가 뜹니다: ${JSON.stringify(saveFailToast)}`);
+        // 입력칸 글은 그대로이므로 "원래대로 돌려 두었어요"가 아니라 쓰던 글이 그대로 있다고 알려 줍니다.
+        check(saveFailToast.includes('알림장을 저장하지 못했어요. 쓰던 글은 그대로 있어요.') && !saveFailToast.includes('원래대로'), `저장에 실패했는데 쓰던 글이 그대로 있다는 안내가 없습니다: ${JSON.stringify(saveFailToast)}`);
+        check(saveFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `저장에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(saveFailVaults)}`);
+        await page.screenshot({ path: resolve(shots, 'notice_save_fail_typed_360_light.png') });
+        await noticeSave(page, '단소 챙기기', null);
+        const saveRetry = await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'));
+        check(saveRetry.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'), `저장 공간이 돌아온 뒤 다시 저장했는데 저장되지 않았습니다: ${JSON.stringify(saveRetry)}`);
+
+        // 비우기에 실패하면 "비웠어요" 토스트가 저장 공간 안내를 덮지 않고, 저장된 글도 그대로입니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await page.evaluate(() => {
+            window.__qaPut = IDBObjectStore.prototype.put;
+            IDBObjectStore.prototype.put = function quotaFull() { throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); };
+        });
+        await noticeSave(page, '', null);
+        await delay(900);
+        const clearFailToast = await noticeToast();
+        await page.evaluate(() => { IDBObjectStore.prototype.put = window.__qaPut; });
+        const clearFailVaults = await noticeVaults(page);
+        check(clearFailToast.includes('저장 공간') && !clearFailToast.includes('비웠어요'), `비우기에 실패했는데 비웠다는 안내가 저장 공간 안내를 덮었습니다: ${JSON.stringify(clearFailToast)}`);
+        check(clearFailToast.includes('알림장을 비우지 못했어요. 저장해 둔 글은 그대로 있어요.') && !clearFailToast.includes('원래대로'), `비우기에 실패했는데 비우지 못했다는 알림장 안내가 없습니다: ${JSON.stringify(clearFailToast)}`);
+        check(clearFailVaults.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'), `비우기에 실패했는데 저장된 알림장이 바뀌었습니다: ${JSON.stringify(clearFailVaults)}`);
+
+        // N10: 쓰던 글을 남긴 채 되돌리면 입력칸 위에 되돌린 글을 보여 주고, 불러오기로 입력칸에 채울 수 있습니다.
+        await noticeRestoredSetup(page, 'light');
+        const restoredPanel = await noticeRestoredView(page);
+        check(restoredPanel.shown && restoredPanel.note === '리코더 챙기기' && restoredPanel.label.includes('저장하면 지금 쓰는 글로 바뀌어요') && restoredPanel.button, `쓰던 글을 남긴 채 되돌렸는데 되돌린 글이 입력칸 위에 보이지 않습니다: ${JSON.stringify(restoredPanel)}`);
+        check(await noticeBox(page) === '단소 챙기기', '되돌린 글을 보여 주면서 쓰던 글을 바꿨습니다.');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '되돌린 글 불러오기')?.click());
+        await delay(300);
+        const loadedBox = await noticeBox(page);
+        const afterLoad = await noticeRestoredView(page);
+        check(loadedBox === '리코더 챙기기' && !afterLoad.shown, `되돌린 글 불러오기를 눌렀는데 입력칸에 되돌린 글이 채워지지 않았거나 안내가 남았습니다: ${JSON.stringify({ loadedBox, afterLoad })}`);
+        // 쓰던 글을 그대로 저장하면 되돌린 글 안내는 사라집니다.
+        await noticeRestoredSetup(page, 'light');
+        await noticeSave(page, '단소 챙기기', null);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '단소 챙기기'));
+        const afterSave = await noticeRestoredView(page);
+        check(!afterSave.shown, `쓰던 글을 저장했는데 되돌린 글 안내가 남았습니다: ${JSON.stringify(afterSave)}`);
+        // 되돌린 뒤 DB 글이 바뀌면(다시 비움) 예전 되돌린 글 칸은 사라집니다. 남아 있으면 '불러오기'가 칸에 보이는 글과 다른 글(빈 글)을 채워요.
+        await noticeRestoredSetup(page, 'light');
+        await noticeSave(page, '', noticeEmptyHint);
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === ''));
+        await noticeType(page, '실내화 주머니 챙기기');
+        await delay(200);
+        const afterDbChange = await noticeRestoredView(page);
+        check(!afterDbChange.shown && await noticeBox(page) === '실내화 주머니 챙기기', `되돌린 뒤 DB 글이 바뀌었는데 예전 되돌린 글 칸이 남았습니다: ${JSON.stringify(afterDbChange)}`);
+        // 다른 날로 가도(그 날 DB 글이 다름) 앞 날에 되돌린 글 칸이 따라오지 않습니다.
+        await noticeRestoredSetup(page, 'light');
+        await page.click('button[aria-label="다음 날"]');
+        await delay(300);
+        await noticeType(page, '체육복 챙기기');
+        await delay(200);
+        const otherDayPanel = await noticeRestoredView(page);
+        check(!otherDayPanel.shown, `다른 날로 갔는데 앞 날에 되돌린 글 칸이 보입니다: ${JSON.stringify(otherDayPanel)}`);
+
+        // 공백만 쓴 칸은 빈칸과 같게 봅니다: 되돌리면 되돌린 글로 채우고, 쓰던 글 안내·되돌린 글 표시는 없습니다.
+        await noticeSeed(page, [{ id: noticeDay, date: noticeDay, text: '리코더 챙기기', source: 'app' }]);
+        await noticeOpen(page, 'light', noticeDay);
+        await noticeSave(page, '', noticeEmptyHint);
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('이 날 알림장을 비웠어요.'), { timeout: 5000 }).catch(() => {});
+        await noticeType(page, '   ');
+        check(await noticeUndoClick(page), '공백을 쓴 뒤 비우기 토스트에 되돌리기 버튼이 없습니다.');
+        await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '리코더 챙기기'));
+        await page.waitForFunction(() => (document.querySelector('.toast')?.textContent || '').includes('되돌렸어요'), { timeout: 5000 }).catch(() => {});
+        await delay(200);
+        const spaceBox = await noticeBox(page);
+        const spaceToast = await noticeToast();
+        const spacePanel = await noticeRestoredView(page);
+        check(spaceBox === '리코더 챙기기' && spaceToast.includes('알림장을 되돌렸어요.') && !spaceToast.includes('쓰던 글') && !spacePanel.shown, `공백만 쓴 칸에서 되돌렸는데 빈칸과 다르게 다룹니다: ${JSON.stringify({ spaceBox, spaceToast, spacePanel })}`);
+    }, 800);
+
+    // 되돌린 글 표시: 360·390·1280, 밝은·어두운 화면에서 넘치지 않고 두 줄 안에 보이는지 찍어 둡니다.
+    for (const [width, mode] of [[360, 'light'], [360, 'dark'], [390, 'light'], [390, 'dark'], [1280, 'light'], [1280, 'dark']]) {
+        await withDemo(width, mode, async (page) => {
+            await noticeRestoredSetup(page, mode, '리코더 챙기기, 실내화 주머니, 우유 급식 신청서, 체험 학습 동의서를 꼭 챙겨 오세요. 내일은 체육 수업이 있어요.');
+            const view = await noticeRestoredView(page);
+            check(view.shown && view.button && !view.overflow && view.lines <= 2 && (width >= 900 || view.clamped), `${width} ${mode}에서 되돌린 글 표시가 넘치거나 두 줄을 넘깁니다: ${JSON.stringify(view)}`);
+            await page.screenshot({ path: resolve(shots, `notice_restored_${width}_${mode}.png`) });
         }, width >= 900 ? 900 : 800);
     }
 

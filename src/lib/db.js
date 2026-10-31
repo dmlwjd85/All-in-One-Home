@@ -1165,7 +1165,7 @@ export async function saveQuick(input, now = new Date()) {
             message = '일정에 넣었어요.';
         } else if (kind === '알림장') {
             const prev = (local ? draft.local.notices : draft.notices).find((item) => item.date === date);
-            const row = { ...base, id: date, date, text: prev ? `${prev.text}\n${text}` : text };
+            const row = { ...base, id: date, date, text: String(prev?.text || '').trim() ? `${prev.text}\n${text}` : text };
             put(local ? draft.local.notices : draft.notices, row);
             message = '알림장에 넣었어요.';
         } else {
