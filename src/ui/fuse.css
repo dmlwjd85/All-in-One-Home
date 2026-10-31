@@ -93,8 +93,9 @@
 .fuse-tip { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .fuse-char { position: absolute; left: -2px; top: -3px; width: 10px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #3A2C2C, transparent); opacity: .7; }
 .fuse-ember {
-    position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%;
-    background: radial-gradient(circle, #FFF6D8 0 22%, #FFC24A 40%, #F0663C 64%, rgba(240, 102, 60, 0) 72%);
+    position: absolute; left: -6px; top: -6px; width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle, #FFF8E2 0 20%, #FFC24A 38%, #F0663C 60%, rgba(240, 102, 60, 0) 72%);
+    box-shadow: 0 0 6px 2px rgba(255, 150, 60, .45), 0 0 14px 4px rgba(240, 102, 60, .18);
     animation: fuse-flicker .9s steps(5) infinite;
 }
 @keyframes fuse-flicker {
@@ -103,17 +104,19 @@
     60% { transform: scale(.85); opacity: 1; }
 }
 .fuse-spark {
-    position: absolute; left: 0; top: -1px; width: 5px; height: 2px; border-radius: 2px;
-    background: linear-gradient(90deg, #FFE7A0, #FF9A3C);
+    position: absolute; left: 0; top: -.8px; width: 7px; height: 1.6px; border-radius: 2px;
+    background: linear-gradient(90deg, #FFE08A, #F07A30);
     transform-origin: 0 50%;
     opacity: 0;
     animation: fuse-spark var(--t) ease-out var(--w) infinite;
 }
-.fuse-spark:nth-child(even) { background: linear-gradient(90deg, #FFF3C8, #F0663C); }
+.fuse-spark:nth-child(even) { background: linear-gradient(90deg, #FFF0B8, #E8562C); }
+/* 막 튈 때 가장 길고 밝게, 날아가며 짧아지고 꺼집니다(시안 A의 튀는 불똥). */
 @keyframes fuse-spark {
-    0% { transform: rotate(var(--a)) translateX(1px) scaleX(.4); opacity: 0; }
-    15% { opacity: 1; }
-    100% { transform: rotate(var(--a)) translateX(var(--d)) scaleX(.15); opacity: 0; }
+    0% { transform: rotate(var(--a)) translateX(2px) scaleX(.6); opacity: 0; }
+    12% { transform: rotate(var(--a)) translateX(calc(var(--d) * .3)) scaleX(1); opacity: 1; }
+    60% { opacity: .9; }
+    100% { transform: rotate(var(--a)) translateX(var(--d)) scaleX(.35); opacity: 0; }
 }
 .fuse[data-state="soon"] .fuse-wave { animation-duration: 1.2s; }
 .fuse[data-state="soon"] .fuse-spark { animation-duration: calc(var(--t) * .7); }
@@ -167,14 +170,15 @@
 .fuse-p-visual { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
 .fuse-p-track { position: relative; flex: 1 1 auto; height: 56px; }
 .fuse-p-track .fuse-cord { height: 56px; }
-.fuse-p-track .fuse-ember { left: -8px; top: -8px; width: 16px; height: 16px; }
+.fuse-p-track .fuse-ember { left: -9px; top: -9px; width: 18px; height: 18px; }
 .fuse-p-track .fuse-spark { width: 8px; height: 3px; }
 .fuse-p-track .fuse-spark { --d2: calc(var(--d) * 1.8); }
 .fuse-p-track .fuse-spark { animation-name: fuse-spark-big; }
 @keyframes fuse-spark-big {
-    0% { transform: rotate(var(--a)) translateX(2px) scaleX(.4); opacity: 0; }
-    15% { opacity: 1; }
-    100% { transform: rotate(var(--a)) translateX(var(--d2)) scaleX(.15); opacity: 0; }
+    0% { transform: rotate(var(--a)) translateX(3px) scaleX(.6); opacity: 0; }
+    12% { transform: rotate(var(--a)) translateX(calc(var(--d2) * .3)) scaleX(1); opacity: 1; }
+    60% { opacity: .9; }
+    100% { transform: rotate(var(--a)) translateX(var(--d2)) scaleX(.35); opacity: 0; }
 }
 .fuse-bomb.is-big { height: 30px; padding: 0 12px; border-radius: 15px; font-size: 15px; }
 .fuse-p-ends { display: flex; justify-content: space-between; gap: 6px; font-size: 14px; font-weight: 700; color: var(--fuse-sub); }
