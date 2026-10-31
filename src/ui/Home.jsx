@@ -59,7 +59,7 @@ export function Home() {
     }).slice(0, 2);
     const feed = [
         ...joinedRecords(data).map((row) => ({ id: row.id, at: row.at || row.date, title: `${data.students.find((item) => item.id === row.sid)?.no || ''} ${studentName(data.students, row.sid)} · ${row.kind}`.trim(), text: row.text, emoji: '👀' })),
-        ...joined(data, 'notices').map((row) => ({ id: row.id, at: row.at || row.date, title: row.date === addDaysYmd(clock.ymd, 1) ? '내일 알림장' : '알림장', text: row.text, emoji: '📢' })),
+        ...joined(data, 'notices').filter((row) => String(row.text || '').trim()).map((row) => ({ id: row.id, at: row.at || row.date, title: row.date === addDaysYmd(clock.ymd, 1) ? '내일 알림장' : '알림장', text: row.text, emoji: '📢' })),
     ].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 2);
     const birthdays = data.students.filter((row) => row.birthday && row.birthday === clock.ymd.slice(5));
     const follows = joinedRecords(data).filter((row) => row.follow === clock.ymd);
