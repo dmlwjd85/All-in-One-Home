@@ -3528,11 +3528,14 @@ try {
                         const save = await page.evaluate(() => {
                             const r = document.querySelector('.work-setup .primary-btn')?.getBoundingClientRect();
                             const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
-                            /* 쨈 단추(가운데 볼록 단추)와 겹치는지, 단추 가운데·네 귀퉁이에서 맨 위가 저장 단추인지도 봅니다. */
+                            /* 쨈 단추(가운데 볼록 단추)와 겹치는지, 단추 가운데·네 귀퉁이·네 변에서 맨 위가 저장 단추인지도 봅니다. */
                             const btn = document.querySelector('.work-setup .primary-btn');
                             const fab = document.querySelector('.tabbar .fab')?.getBoundingClientRect();
                             const fabHit = Boolean(r && fab && fab.width > 0 && r.left < fab.right && r.right > fab.left && r.top < fab.bottom && r.bottom > fab.top);
-                            const pts = r ? [[(r.left + r.right) / 2, (r.top + r.bottom) / 2], [r.left + 3, r.top + 3], [r.right - 3, r.top + 3], [r.left + 3, r.bottom - 3], [r.right - 3, r.bottom - 3]] : [];
+                            /* 둥근 귀퉁이 바깥은 원래 단추가 아니므로, 귀퉁이 점은 둥근 정도만큼 안쪽에서 봅니다. */
+                            const k = r ? parseFloat(getComputedStyle(btn).borderTopLeftRadius || '0') * 0.3 + 3 : 0;
+                            const cx = r ? (r.left + r.right) / 2 : 0, cy = r ? (r.top + r.bottom) / 2 : 0;
+                            const pts = r ? [[cx, cy], [r.left + k, r.top + k], [r.right - k, r.top + k], [r.left + k, r.bottom - k], [r.right - k, r.bottom - k], [r.left + 3, cy], [r.right - 3, cy], [cx, r.top + 3], [cx, r.bottom - 3]] : [];
                             const hidden = pts.filter(([x, y]) => { const el = document.elementFromPoint(x, y); return !el || !(el === btn || btn.contains(el)); }).length;
                             return { top: Math.round(r?.top ?? -1), bottom: Math.round(r?.bottom ?? -1), left: Math.round(r?.left ?? -1), right: Math.round(r?.right ?? -1), height: Math.round(r?.height ?? 0), tabTop: Math.round(tab && tab.height > 0 ? tab.top : innerHeight), fab: fab ? [Math.round(fab.left), Math.round(fab.top), Math.round(fab.right), Math.round(fab.bottom)] : null, fabHit, hidden };
                         });
@@ -4139,6 +4142,7 @@ try {
 
         /* ⑧ 대비: 글자를 지운 줄을 찍고, 글자 자리 모든 점에 대해 (글자색 알파 × 조상 불투명도)로 섞은 색과 바탕을 비교합니다. */
         const fuseLow = {};
+        const fuseByMode = {};
         const states = [['퇴근', '15:20', null, false], ['조퇴', '15:20', '16:00', false], ['10분 안쪽', '16:35', null, false], ['끝남', '16:50', null, false], ['움직임 줄이기', '16:35', null, true]];
         for (const theme of ['mx', 'retro', 'slim', 'puff', 'jelly', 'type']) {
             for (const mode of ['light', 'dark']) {
@@ -4205,6 +4209,7 @@ try {
                             }, bare, texts);
                             const low = Math.min(...ratios.map((item) => item.ratio));
                             fuseLow[state] = Math.min(fuseLow[state] ?? Infinity, low);
+                            fuseByMode[`${mode === 'light' ? '밝은' : '어두운'} ${state}`] = Math.min(fuseByMode[`${mode === 'light' ? '밝은' : '어두운'} ${state}`] ?? Infinity, low);
                             check(ratios.length === 3 && ratios.every((item) => item.ratio >= 5), `${theme} ${mode} ${state} 맨 위 줄 글자가 바탕과 5:1이 안 됩니다: ${JSON.stringify(ratios)}`);
                         }
                     });
@@ -4212,6 +4217,7 @@ try {
             }
         }
         console.log(`맨 위 퇴근 줄 글자 대비 최저(테마 6 × 밝은·어두운): ${Object.entries(fuseLow).map(([k, v]) => `${k} ${v}:1`).join(' / ')}`);
+        console.log(`맨 위 퇴근 줄 글자 대비 최저(밝은·어두운 따로, 테마 6 중 최저): ${Object.entries(fuseByMode).map(([k, v]) => `${k} ${v}:1`).join(' / ')}`);
     }
 } catch (error) {
     failures.push(error?.message || String(error));
