@@ -116,6 +116,10 @@ a.hero-pill,
     margin-bottom: 14px;
 }
 .top-tools { display: flex; gap: 4px; flex: none; margin-left: auto; }
+/* 뒤로 버튼까지 있는 좁은 화면(PR #59 검수 1번): 제목이 한 글자씩 세로로 눌리지 않게 버튼 줄 아래로 내립니다. */
+@media (max-width: 440px) {
+    .topbar.has-back .date-block { order: 3; flex: 1 1 100%; }
+}
 .icon-btn.is-on { box-shadow: var(--neo-inset); color: var(--accent); }
 .date-block { min-width: 0; flex: 1; }
 .date-block .kicker {

@@ -295,6 +295,8 @@ check(!(await put(['users', UID, 'todos', 'f1'], { title: '미래', done: false,
 check(await put(['users', UID, 'todos', 'f2'], { title: '조금 앞섬', done: false, updatedAt: Timestamp.fromMillis(Date.now() + 60 * 1000) }), '규칙: 1분 앞선 updatedAt(여유 안)을 거절했습니다.');
 check(!(await put(['users', UID, 'todos', 'f2'], { title: '더 이른 덮기', done: false, updatedAt: Timestamp.fromMillis(Date.now() - 60 * 1000) })), '규칙: hlc 없는 문서를 더 이른 updatedAt으로 덮었습니다(라이브 QA 44d5556).');
 check(await put(['users', UID, 'todos', 'f2'], { title: '나중 덮기', done: false, updatedAt: Timestamp.fromMillis(Date.now() + 2 * 60 * 1000) }), '규칙: hlc 없는 문서를 더 늦은 updatedAt으로 고치지 못합니다.');
+check(await put(['users', UID, 'todos', 'f6'], { title: '시각 모름(hlc 없음)', done: false, updatedAt: Timestamp.fromMillis(Date.now()), u: true }), '규칙: hlc 없는 불확실(u) 문서 쓰기를 거절했습니다.');
+check(await put(['users', UID, 'todos', 'f6'], { title: '잰 시각 수정', done: false, updatedAt: Timestamp.fromMillis(Date.now() - HOUR) }), '규칙: hlc 없는 불확실(u) 문서를 더 이른 updatedAt으로 고치지 못합니다(u 우회, 검수 R19).');
 check(await put(['users', UID, 'todos', 'f2'], { title: 'updatedAt 없는 v46형', done: false }), '규칙: updatedAt 없는 v46형 쓰기를 거절했습니다.');
 check(await put(['users', UID, 'todos', 'f3'], { title: 'v46', done: false, updatedAt: serverTimestamp() }), '규칙: v46 serverTimestamp 쓰기를 거절했습니다.');
 check(!(await put(['users', UID, 'tombs', 'todos-f4'], { k: 'todos', at: Timestamp.fromMillis(Date.now() + HOUR) })), '규칙: 한 시간 앞선 묘비를 받아들였습니다.');

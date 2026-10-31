@@ -44,6 +44,7 @@ service cloud.firestore {
         ) && (
           // hlc 없는 문서(v46 이전)도 updatedAt이 있으면 더 이른 updatedAt으로 덮지 않습니다(라이브 QA 44d5556 규칙 시험).
           // 불확실한 문서(u)는 위와 같이 v47이 충돌 사본을 남기고 덮을 수 있습니다.
+          // updatedAt이 없는 쓰기는 일부러 허용합니다: v46은 updatedAt을 안 쓰거나 serverTimestamp로만 쓰므로, 막으면 v46 기기의 저장이 끊깁니다(docs/sync-rules.md).
           resource == null || ('hlc' in resource.data)
             || !('updatedAt' in d()) || !('updatedAt' in resource.data)
             || resource.data.get('u', false) == true

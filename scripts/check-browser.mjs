@@ -2126,6 +2126,39 @@ try {
         });
     }
 
+    /* PR #59 검수 1번: 뒤로 버튼이 있는 화면에서 상단 바 제목이 한 글자씩 세로로 눌리지 않습니다(5가지 폭 × 라이트·다크). */
+    for (const width of [320, 360, 390, 900, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const ymd = await page.evaluate(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date()));
+                for (const [name, hash, want] of [['하루', `#/day/${ymd}`, '그날의 일지'], ['예전 수첩', '#/settings/legacy', '예전 수첩']]) {
+                    await page.evaluate((h) => { location.hash = h; }, hash);
+                    await page.waitForFunction((w) => document.querySelector('.topbar h1')?.innerText.includes(w), { timeout: 8000 }, want);
+                    await new Promise((r) => setTimeout(r, 150));
+                    const bar = await page.evaluate(() => {
+                        const h1 = document.querySelector('.topbar h1');
+                        const sub = document.querySelector('.topbar .date-block p');
+                        const r = h1.getBoundingClientRect();
+                        const lh = parseFloat(getComputedStyle(h1).lineHeight) || 28;
+                        const btns = [...document.querySelectorAll('.topbar button')].filter((b) => b.offsetParent).map((b) => b.getBoundingClientRect());
+                        const hit = (a, b) => a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+                        return {
+                            w: Math.round(r.width), lines: Math.round(r.height / lh),
+                            subLines: sub ? Math.round(sub.getBoundingClientRect().height / (parseFloat(getComputedStyle(sub).lineHeight) || 18)) : 0,
+                            small: btns.filter((b) => b.width < 43.5 || b.height < 43.5).length,
+                            overlap: btns.some((b) => hit(b, r) || (sub && hit(b, sub.getBoundingClientRect()))),
+                            over: document.documentElement.scrollWidth > window.innerWidth,
+                        };
+                    });
+                    check(bar.lines <= 1 && bar.w >= 100, `${mode} ${width} ${name}: 상단 바 제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(bar.subLines <= 2, `${mode} ${width} ${name}: 상단 바 부제목이 눌렸습니다: ${JSON.stringify(bar)}`);
+                    check(!bar.overlap && !bar.over && !bar.small, `${mode} ${width} ${name}: 상단 바 버튼이 겹치거나 작습니다: ${JSON.stringify(bar)}`);
+                    if (width <= 390) await page.screenshot({ path: resolve(shots, `topbar-${name === '하루' ? 'day' : 'legacy'}-${width}-${mode}.png`) });
+                }
+            });
+        }
+    }
+
     await withPage(390, async (page) => {
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('homenote_v2_classRoster', JSON.stringify([{ id: '1', name: '김하늘' }]));
