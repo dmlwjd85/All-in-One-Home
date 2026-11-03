@@ -40,7 +40,7 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
         return { index: -1, phase: 'off', minutes: 0, text: `${endLabel} 시간이 지났어요.` };
     }
     if (workStart != null && now < workStart) {
-        return { index: -1, phase: 'early', minutes: workStart - now, text: '출근 전이에요.' };
+        return { index: -1, phase: 'early', minutes: workStart - now, text: `출근까지 ${hourMinute(workStart - now)}` };
     }
     if (!list.length) {
         return { index: -1, phase: 'after', minutes: 0, text: '시간표를 아직 정하지 않았어요.' };

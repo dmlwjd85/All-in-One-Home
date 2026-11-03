@@ -48,7 +48,15 @@ check(sixth.text === '6교시 음악 중이에요', `6교시 문구가 틀립니
 const gone = periodStatus('16:41', DEFAULT_PERIODS, six, opts);
 check(gone.text === '퇴근 시간이 지났어요.', `퇴근 뒤 문구가 틀립니다: ${gone.text}`);
 const early = periodStatus('08:10', DEFAULT_PERIODS, six, opts);
-check(early.text === '출근 전이에요.', `출근 전 문구가 틀립니다: ${early.text}`);
+check(early.text === '출근까지 20분' && early.minutes === 20, `출근 전 문구가 틀립니다: ${early.text}`);
+/* 출근까지 남은 시간(PR #60): 분까지만, 초는 없습니다. 지난 출근·빈 출근 시각은 남은 시간을 띄우지 않습니다. */
+check(periodStatus('06:05', DEFAULT_PERIODS, six, opts).text === '출근까지 2시간 25분', `출근까지 시간 문구가 틀립니다: ${periodStatus('06:05', DEFAULT_PERIODS, six, opts).text}`);
+check(!/초/.test(periodStatus('08:29', DEFAULT_PERIODS, six, opts).text) && periodStatus('08:29', DEFAULT_PERIODS, six, opts).text === '출근까지 1분', '출근 1분 전 문구가 틀립니다.');
+check(!periodStatus('08:30', DEFAULT_PERIODS, six, opts).text.includes('출근까지'), '출근 시각이 됐는데도 출근까지 남은 시간을 보여 줍니다.');
+for (const empty of ['', null, undefined, '25:00', '8:4']) {
+    const row = periodStatus('07:00', DEFAULT_PERIODS, six, { ...opts, workStart: empty });
+    check(row.phase !== 'early' && !row.text.includes('출근까지') && !/NaN|undefined/.test(row.text), `빈·잘못된 출근 시각(${empty})에서 남은 시간이 나옵니다: ${row.text}`);
+}
 const noWork = periodStatus('15:30', DEFAULT_PERIODS, six, { last: 6 });
 check(noWork.text === '방과후 시간이에요.', `퇴근 시각이 없을 때 방과후가 아닙니다: ${noWork.text}`);
 const night = periodStatus('20:00', DEFAULT_PERIODS, six, { last: 6 });
