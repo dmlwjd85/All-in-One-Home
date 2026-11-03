@@ -322,6 +322,26 @@ check(!(await put(['users', UID, 'todos', longId], { title: '지우기 전 수�
 await on('A', async (db) => { await db.saveTextItem('todos', { id: longId, title: '다시 만듦', done: false, source: 'app' }); await db.flushCloud(); });
 check((await cloudDoc(longId))?.title === '다시 만듦', 'v47: 지운 뒤 같은 id로 다시 만든 할 일이 올라가지 않았습니다.');
 
+/* PR #60: 할 일 알림 시각(time). 규칙은 'HH:MM'만 받고, 저장한 할 일 고치기(제목·마감·시각)가 다른 기기로 그대로 갑니다. */
+check(await put(['users', UID, 'todos', 'tm1'], { title: '시각 있음', ...v47(Timestamp.fromMillis(Date.now()), { due: '2026-11-04', time: '09:30' }) }), '규칙: 할 일 time(09:30)을 거절했습니다.');
+for (const bad of ['9:30', '24:00', '09:60', '', 930]) {
+    check(!(await put(['users', UID, 'todos', 'tm2'], { title: '틀린 시각', ...v47(Timestamp.fromMillis(Date.now()), { time: bad }) })), `규칙: 틀린 할 일 time(${JSON.stringify(bad)})을 받아들였습니다.`);
+}
+offline.A = false; offline.B = false;
+await on('A', async (db) => { await db.saveTextItem('todos', { id: 'ed1', title: '고칠 할 일', done: false, source: 'app' }); await db.flushCloud(); });
+await sync('B');
+await on('B', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'ed1'), title: '고친 제목', due: '2026-11-05', time: '14:30' }, { from: 'cloud' }); await db.flushCloud(); });
+const ed1 = await cloudDoc('ed1');
+check(ed1?.title === '고친 제목' && ed1?.due === '2026-11-05' && ed1?.time === '14:30', `고친 할 일이 클라우드에 그대로 올라가지 않았습니다: ${JSON.stringify(ed1)}`);
+check(ed1?.hlc && ed1?.updatedAt && ed1.hlc.toMillis() === ed1.updatedAt.toMillis(), '고친 할 일의 hlc·updatedAt이 맞지 않습니다.');
+await sync('A');
+check(todo(A, 'ed1')?.title === '고친 제목' && todo(A, 'ed1')?.due === '2026-11-05' && todo(A, 'ed1')?.time === '14:30', `다른 기기가 고친 제목·마감·시각을 받지 못했습니다: ${JSON.stringify(todo(A, 'ed1'))}`);
+await wait(GAP);
+await on('A', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'ed1'), time: '' }, { from: 'cloud' }); await db.flushCloud(); });
+check(!('time' in ((await cloudDoc('ed1')) || {})), '지운 알림 시각이 클라우드에 남았습니다.');
+await sync('B');
+check(!todo(B, 'ed1')?.time && todo(B, 'ed1')?.title === '고친 제목', `시각을 지운 것이 다른 기기에 가지 않았습니다: ${JSON.stringify(todo(B, 'ed1'))}`);
+
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');
 const swept = await on('A', (db, dev) => dev.cloud.sweepTombs(UID, Date.now()));

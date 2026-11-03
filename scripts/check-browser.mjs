@@ -292,9 +292,9 @@ async function shutdown(code) {
 }
 
 const watchdog = setTimeout(() => {
-    console.error('브라우저 검사가 6분을 넘겨 멈춰서 끝냅니다.');
+    console.error('브라우저 검사가 제한 시간을 넘겨 멈춰서 끝냅니다.');
     shutdown(1);
-}, 6 * 60 * 1000);
+}, (Number(process.env.CHECK_BROWSER_LIMIT_MIN) || 8) * 60 * 1000);
 
 let browser = null;
 
@@ -2155,6 +2155,79 @@ try {
                     check(!bar.overlap && !bar.over && !bar.small, `${mode} ${width} ${name}: 상단 바 버튼이 겹치거나 작습니다: ${JSON.stringify(bar)}`);
                     if (width <= 390) await page.screenshot({ path: resolve(shots, `topbar-${name === '하루' ? 'day' : 'legacy'}-${width}-${mode}.png`) });
                 }
+            });
+        }
+    }
+
+    /* PR #60: 홈 안내 문구·할 일 바로 가기·일정 보기, 할 일 고치기(칩만), 할 일 알림, 쨈 팝업 '회의록 작성'(5가지 폭 × 라이트·다크). */
+    for (const width of [320, 360, 390, 900, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const tag = `PR60 ${mode} ${width}`;
+                const home = await page.evaluate(() => ({
+                    text: document.body.innerText,
+                    tip: document.querySelector('.home-tip')?.innerText.trim() || '',
+                    link: (() => { const r = document.querySelector('[data-todo-link]')?.getBoundingClientRect(); return r ? { w: r.width, h: r.height } : null; })(),
+                }));
+                check(home.text.includes('일정 보기') && !home.text.includes('한 주 보기'), `${tag}: 오늘 시간표 옆이 '일정 보기'가 아닙니다.`);
+                check(!home.text.includes('출결부터 볼까요?\n') && home.tip.length >= 8, `${tag}: 홈 안내 문구가 없습니다: ${home.tip}`);
+                check(home.link && home.link.h >= 44 && home.link.w >= 44, `${tag}: '할 일 N개 남음'을 누를 수 없거나 44px 미만입니다: ${JSON.stringify(home.link)}`);
+                await controlBoxes(page, '.home-hero button', `${tag} 홈 첫 카드`);
+                const tipBox = await page.evaluate(() => {
+                    const a = document.querySelector('.home-tip-row .home-tip')?.getBoundingClientRect();
+                    const b = document.querySelector('.home-tip-row [data-todo-link]')?.getBoundingClientRect();
+                    return a && b ? (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) : null;
+                });
+                check(tipBox === false, `${tag}: 홈 안내 문구와 할 일 버튼이 겹칩니다.`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-home-${width}-${mode}.png`) });
+                await page.evaluate(() => document.querySelector('[data-todo-link]')?.click());
+                await page.waitForFunction(() => location.hash === '#/todo', { timeout: 5000 }).catch(() => {});
+                check(await page.evaluate(() => location.hash === '#/todo'), `${tag}: '할 일 N개 남음'이 할 일 화면을 열지 않습니다.`);
+
+                /* 8. 저장한 할 일 고치기: 제목·마감·시각, 칩만(드롭다운·스크롤 피커 없음). */
+                await page.waitForSelector('[data-todo-edit]');
+                await controlBoxes(page, '.todo-line button', `${tag} 할 일 줄`);
+                await audit(page, `${tag} 할 일`);
+                const oldId = await page.evaluate(() => { const b = document.querySelector('[data-todo-edit]'); b.click(); return b.closest('.todo-line')?.querySelector('.todo-title')?.innerText || ''; });
+                await page.waitForSelector('[data-screen="todo-edit"]');
+                check(!(await page.$('[data-screen="todo-edit"] select')) && !(await page.$('[data-screen="todo-edit"] input[type="date"], [data-screen="todo-edit"] input[type="time"]')), `${tag}: 할 일 고치기에 드롭다운·피커가 있습니다.`);
+                await controlBoxes(page, '[data-screen="todo-edit"] button', `${tag} 할 일 고치기`);
+                const sheetOver = await page.evaluate(() => { const el = document.querySelector('[data-screen="todo-edit"]'); return el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > window.innerWidth + 1; });
+                check(!sheetOver, `${tag}: 할 일 고치기 창이 화면 밖으로 넘칩니다.`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-todo-edit-${width}-${mode}.png`) });
+                await page.$eval('#todo-edit-title', (el) => { el.select(); });
+                await page.keyboard.press('Backspace');
+                await page.type('#todo-edit-title', '알림 확인할 일');
+                await page.evaluate(() => [...document.querySelectorAll('[data-screen="todo-edit"] button')].find((el) => el.innerText.trim() === '오늘')?.click());
+                await page.evaluate(() => [...document.querySelectorAll('[data-screen="todo-edit"] button')].find((el) => el.innerText.trim() === '08:30')?.click());
+                await page.waitForFunction(() => document.querySelector('[data-role="todo-time"]')?.innerText.includes('08:30'));
+                await page.evaluate(() => document.querySelector('[data-role="todo-edit-save"]')?.click());
+                await page.waitForFunction(() => !document.querySelector('[data-screen="todo-edit"]'), { timeout: 5000 });
+                const after = await page.evaluate(() => document.body.innerText);
+                check(after.includes('알림 확인할 일') && after.includes('08:30'), `${tag}: 고친 제목·시각이 할 일 목록에 없습니다(원래 ${oldId}).`);
+
+                /* 5. 알림: 데모 시계 08:42 ≥ 08:30 → 팝업·소리. 확인 뒤 새로 고쳐도 다시 울리지 않습니다. */
+                await page.waitForSelector('[data-screen="todo-alarm"]', { timeout: 8000 }).catch(() => {});
+                const ring = await page.evaluate(() => ({ open: Boolean(document.querySelector('[data-screen="todo-alarm"]')), text: document.querySelector('[data-screen="todo-alarm"]')?.innerText || '', played: window.__todoAlarmPlayed || 0 }));
+                check(ring.open && ring.text.includes('알림 확인할 일') && ring.text.includes('08:30'), `${tag}: 시각이 된 할 일 알림 팝업이 뜨지 않습니다: ${JSON.stringify(ring)}`);
+                check(ring.played >= 1, `${tag}: 알림음을 울리지 않았습니다.`);
+                if (ring.open) {
+                    await controlBoxes(page, '[data-screen="todo-alarm"] button', `${tag} 알림 팝업`);
+                    if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-alarm-${width}-${mode}.png`) });
+                    await page.evaluate(() => document.querySelector('[data-role="todo-alarm-close"]')?.click());
+                    await page.waitForFunction(() => !document.querySelector('[data-screen="todo-alarm"]'), { timeout: 5000 });
+                }
+
+                /* 6. 쨈 팝업의 '회의록 작성': 글자가 잘리지 않고 44px, 누르면 회의록 쓰기. */
+                await page.evaluate(() => [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')].find((el) => el.getBoundingClientRect().width > 0)?.click());
+                await page.waitForSelector('.quick-bar.is-open .quick-chip-meet');
+                await controlBoxes(page, '.quick-bar.is-open .quick-chip', `${tag} 쨈 분류 칩`);
+                const meet = await page.evaluate(() => { const el = document.querySelector('.quick-bar.is-open .quick-chip-meet'); const r = el.getBoundingClientRect(); return { text: el.innerText.trim(), clip: el.scrollWidth > el.clientWidth + 1, right: r.right, vw: window.innerWidth }; });
+                check(meet.text === '회의록 작성' && !meet.clip && meet.right <= meet.vw, `${tag}: 쨈 팝업 '회의록 작성'이 잘리거나 없습니다: ${JSON.stringify(meet)}`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-quick-${width}-${mode}.png`) });
+                await page.evaluate(() => document.querySelector('.quick-bar.is-open .quick-chip-meet')?.click());
+                await page.waitForSelector('[data-screen="minutes-editor"]', { timeout: 5000 }).catch(() => {});
+                check(await page.evaluate(() => location.hash === '#/minutes/new'), `${tag}: '회의록 작성'이 회의록 쓰기를 열지 않습니다.`);
             });
         }
     }
@@ -4570,6 +4643,9 @@ try {
                         await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
                         await page.evaluate(() => document.fonts.ready);
                         const key = await page.$('.leave-key');
+                        // 홈 첫 카드에 안내 줄(PR #60)이 생겨 키캡이 아래 탭 바에 걸릴 수 있어, 화면 가운데로 올려 바탕만 잽니다.
+                        await key.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+                        await delay(120);
                         /* 키캡 토큰이 빠지면 바탕이 비쳐 어두운 화면에서도 키캡 모양이 사라집니다. 바탕색과 그라데이션이 칠해졌는지 봅니다. */
                         const paint = await key.evaluate((el) => ({ color: getComputedStyle(el).backgroundColor, image: getComputedStyle(el).backgroundImage }));
                         check(paint.color !== 'rgba(0, 0, 0, 0)' && paint.color !== 'transparent' && paint.image.includes('linear-gradient'), `${theme} ${mode} ${state} 타이머 키캡 바탕이 칠해지지 않습니다: ${JSON.stringify(paint)}`);
