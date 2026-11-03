@@ -24,6 +24,30 @@ export function dueAlarms(todos = [], ymd = '', hm = '', fired = {}) {
         && !fired[alarmKey(row)]);
 }
 
+/** 시각이 몇 분 지났는지(같은 날). */
+function lateMinutes(time, hm) {
+    const m = (v) => Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5));
+    return m(hm) - m(time);
+}
+
+/** 이보다 늦게 알아챈 알림은 소리 없이 '놓친 알림'으로만 보여 줍니다. */
+export const RING_WINDOW_MIN = 15;
+
+/**
+ * 울릴 것과 놓친 것을 나눕니다(PR #62 검수 6번).
+ * 앱을 막 열었을 때(first) 이미 1분 넘게 지난 알림, 또는 15분 넘게 지난 알림은 한꺼번에 울리지 않고 놓친 알림으로 둡니다.
+ */
+export function splitAlarms(rows = [], hm = '', { first = false } = {}) {
+    const ring = [];
+    const missed = [];
+    for (const row of rows) {
+        const late = lateMinutes(row.time, hm);
+        if (late <= (first ? 1 : RING_WINDOW_MIN)) ring.push(row);
+        else missed.push(row);
+    }
+    return { ring, missed };
+}
+
 export function readFired(store = globalThis.localStorage) {
     try {
         const v = JSON.parse(store?.getItem(FIRED_KEY) || '{}');

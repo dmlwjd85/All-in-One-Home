@@ -1,3 +1,4 @@
+import { heldTodoTime } from './todoTimeHold.js';
 import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
@@ -647,6 +648,8 @@ const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'], todos: ['time'] };
 export function takeRemote(cloudName, row, theirs) {
     const next = { ...row, ...theirs };
     for (const key of OPTIONAL_FROM_CLOUD[cloudName] || []) if (!(key in theirs)) delete next[key];
+    // 예전 규칙이 시각을 거절해 시각 없이 올린 할 일: 내용이 그대로면 이 기기 시각을 지킵니다(PR #62 검수 1번).
+    if (cloudName === 'todos' && row?.time) { const kept = heldTodoTime(row.id, theirs); if (kept) next.time = kept; }
     return next;
 }
 

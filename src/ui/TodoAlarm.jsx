@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { joined, toggleTodo } from '../lib/db.js';
 import { seoulParts } from '../lib/date.js';
-import { dueAlarms, markFired, readFired } from '../lib/todoAlarm.js';
+import { dueAlarms, markFired, readFired, splitAlarms } from '../lib/todoAlarm.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 
@@ -43,7 +43,7 @@ function notify(rows) {
 
 /**
  * 할 일 알림(PR #60). 앱이 열려 있는 동안 20초마다 확인해 마감 날짜·시각이 된 할 일을 팝업·소리·브라우저 알림으로 알립니다.
- * 앱이 닫혀 있을 때는 울리지 않습니다(docs/todo-alarm.md). 다시 열면 오늘 지난 알림을 한 번에 보여 줍니다.
+ * 앱이 닫혀 있을 때는 울리지 않습니다(docs/todo-alarm.md). 다시 열면 오늘 지난 알림은 소리 없이 '놓친 알림'으로만 보여 줍니다.
  */
 export function TodoAlarm() {
     const { data, go } = useUi();
@@ -55,14 +55,19 @@ export function TodoAlarm() {
     const checkRef = useRef(() => {});
     const todoSig = todosRef.current.map((row) => `${row.id}|${row.due || ''}|${row.time || ''}|${row.done ? 1 : 0}`).join(',');
     useEffect(() => {
+        let first = true;
         const check = () => {
             const clock = seoulParts(new Date());
             const due = dueAlarms(todosRef.current, clock.ymd, clock.hm, readFired());
+            const wasFirst = first;
+            if (todosRef.current.length) first = false;
             if (!due.length) return;
             markFired(due, clock.ymd);
-            setRinging((prev) => [...prev, ...due.filter((row) => !prev.some((item) => item.id === row.id))]);
-            playAlarm();
-            notify(due);
+            const { ring, missed } = splitAlarms(due, clock.hm, { first: wasFirst });
+            const tagged = [...ring.map((row) => ({ ...row, missed: false })), ...missed.map((row) => ({ ...row, missed: true }))];
+            setRinging((prev) => [...prev, ...tagged.filter((row) => !prev.some((item) => item.id === row.id))]);
+            // 앱을 열자마자 지난 알림이 한꺼번에 울리지 않게, 소리·브라우저 알림은 제때 알아챈 것만 냅니다.
+            if (ring.length) { playAlarm(); notify(ring); }
         };
         checkRef.current = check;
         check();
@@ -76,17 +81,18 @@ export function TodoAlarm() {
 
     if (!ringing.length) return null;
     const close = () => setRinging([]);
-    const live = ringing.map((row) => todosRef.current.find((item) => item.id === row.id) || row);
+    const live = ringing.map((row) => ({ ...(todosRef.current.find((item) => item.id === row.id) || row), missed: row.missed }));
+    const allMissed = live.every((row) => row.missed);
     return (
         <div className="sheet-back todo-alarm-back" onClick={close}>
-            <div className="sheet todo-alarm" role="alertdialog" aria-modal="true" aria-label="할 일 알림" data-screen="todo-alarm" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet todo-alarm" role="alertdialog" aria-modal="true" aria-label="할 일 알림" data-screen="todo-alarm" data-missed={allMissed ? "1" : "0"} onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                <h2 className="title-font" style={{ margin: '0 0 10px' }}>⏰ 할 일 시간이에요</h2>
+                <h2 className="title-font" style={{ margin: '0 0 10px' }}>{allMissed ? '놓친 할 일 알림이 있어요' : '⏰ 할 일 시간이에요'}</h2>
                 <ul className="todo-alarm-list">
                     {live.map((row) => (
                         <li key={row.id} className="todo-alarm-item">
                             <span className="num todo-alarm-time">{row.time}</span>
-                            <span className="todo-alarm-title">{row.title}</span>
+                            <span className="todo-alarm-title">{row.title}{row.missed ? <span className="muted"> · 놓침</span> : null}</span>
                             <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>
                     ))}

@@ -2,6 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { HOME_TIPS, allHomeTips, pickHomeTip } from '../src/lib/homeTips.js';
 import { alarmKey, dueAlarms, dueChoices, markFired, readFired, shiftTime } from '../src/lib/todoAlarm.js';
+import { splitAlarms } from '../src/lib/todoAlarm.js';
+import { heldTodoTime, holdTodoTime, releaseTodoTime } from '../src/lib/todoTimeHold.js';
+import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
 import { fromCloudRow, toCloudRow, todoBodyWithoutTime } from '../src/lib/cloudShape.js';
 
 const failures = [];
@@ -65,6 +68,51 @@ check(!('time' in fromCloudRow('todos', 'todo-1', { title: '회수', done: false
 const rules = readFileSync('firestore.rules', 'utf8');
 check(/'due', 'time', 'got'/.test(rules) && rules.includes("(!('time' in d()) || hm(d().time))"), '규칙에 할 일 time 칸이 없습니다.');
 check(readFileSync('src/ui/QuickBar.jsx', 'utf8').includes('>회의록 작성</Btn>'), "쨈 팝업에 '회의록 작성'이 없습니다.");
+
+/* PR #62 검수: 살아남은 뮤턴트와 경미한 문제. */
+const mem2 = new Map();
+globalThis.localStorage = { getItem: (k) => (mem2.has(k) ? mem2.get(k) : null), setItem: (k, v) => mem2.set(k, String(v)), removeItem: (k) => mem2.delete(k) };
+// A5: 지난 날짜(어제) 할 일은 오늘 알림에 들지 않습니다. 내일 할 일도 마찬가지입니다.
+check(dueAlarms([{ id: 'y1', title: '어제 일', due: '2026-11-03', time: '09:00', done: false }], '2026-11-04', '10:00', {}).length === 0, 'A5: 지난 날짜 할 일이 오늘 알림으로 울립니다.');
+check(dueAlarms([{ id: 'y2', title: '내일 일', due: '2026-11-05', time: '09:00', done: false }], '2026-11-04', '10:00', {}).length === 0, '내일 할 일이 오늘 울립니다.');
+check(dueAlarms([{ id: 'y3', title: '오늘 일', due: '2026-11-04', time: '10:00', done: false }], '2026-11-04', '10:00', {}).length === 1, '시각이 된 오늘 할 일이 울리지 않습니다.');
+// 6: 앱을 막 열었을 때 이미 지난 알림은 놓친 알림으로만(소리 없음), 열려 있는 동안 15분 안쪽은 울림.
+const late = [{ id: 'l1', time: '08:00' }, { id: 'l2', time: '09:59' }];
+const onOpen = splitAlarms(late, '10:00', { first: true });
+check(onOpen.ring.map((r) => r.id).join() === 'l2' && onOpen.missed.map((r) => r.id).join() === 'l1', `앱을 열 때 지난 알림을 한꺼번에 울립니다: ${JSON.stringify(onOpen)}`);
+const live = splitAlarms([{ id: 'm1', time: '09:50' }, { id: 'm2', time: '09:30' }], '10:00');
+check(live.ring.map((r) => r.id).join() === 'm1' && live.missed.map((r) => r.id).join() === 'm2', `열려 있을 때 울림·놓침 구분이 틀립니다: ${JSON.stringify(live)}`);
+// 5: 자정·새벽처럼 출근이 먼 때는 남은 시간을 세지 않습니다.
+for (const hm of ['00:00', '03:10', '05:29']) {
+    const t = periodStatus(hm, DEFAULT_PERIODS, 6, { workStart: '08:30', workEnd: '16:30' }).text;
+    check(!t.includes('출근까지'), `${hm}에 '출근까지'를 셉니다: ${t}`);
+}
+check(periodStatus('05:30', DEFAULT_PERIODS, 6, { workStart: '08:30', workEnd: '16:30' }).text === '출근까지 3시간', '출근 3시간 전 문구가 틀립니다.');
+// 3·4: 없는 기능(내일로 옮기기)·실제와 다른 단추 글자를 팁에 쓰지 않습니다.
+check(!tips.some((t) => /옮겨|몇 개 남음|확인만|연필/.test(t)), `실제와 다른 팁이 있습니다: ${tips.filter((t) => /옮겨|몇 개 남음|확인만|연필/.test(t)).join(' / ')}`);
+const src = ['Home.jsx', 'QuickBar.jsx', 'Tasks.jsx', 'Attend.jsx'].map((f) => readFileSync(new URL(`../src/ui/${f}`, import.meta.url), 'utf8')).join('\n');
+for (const tip of tips) for (const [, label] of tip.matchAll(/‘([^’]+)’/g)) {
+    const real = label.replace('N개', '{left}개');
+    check(label === '내일' || src.includes(real), `팁의 단추 글자 '${label}'가 화면에 없습니다.`);
+}
+// 1: 예전 규칙이 시각을 거절해 시각 없이 올린 할 일은, 내용이 같으면 받을 때 이 기기 시각을 지킵니다.
+const { takeRemote } = await import('../src/lib/db.js');
+const mine = { id: 'h1', title: '시각 지킬 일', due: '2026-11-04', time: '10:15', done: false };
+holdTodoTime('h1', mine);
+const sameCloud = fromCloudRow('todos', 'h1', { title: '시각 지킬 일', due: '2026-11-04', done: false });
+check(heldTodoTime('h1', sameCloud) === '10:15' && takeRemote('todos', mine, sameCloud).time === '10:15', '예전 규칙에서 시각 없이 올린 할 일을 받을 때 이 기기 시각이 지워집니다.');
+const otherEdit = fromCloudRow('todos', 'h1', { title: '다른 기기가 고침', due: '2026-11-04', done: false });
+check(!takeRemote('todos', mine, otherEdit).time, '다른 기기가 고친 내용을 받을 때 지킨 시각이 잘못 남습니다.');
+releaseTodoTime('h1');
+// C2: 다른 기기가 시각을 지웠으면(시각 지킴 기록 없음) 이 기기 시각도 지웁니다.
+check(!('time' in takeRemote('todos', mine, sameCloud)), 'C2: 다른 기기에서 지운 시각이 이 기기에 남습니다.');
+check(takeRemote('todos', mine, { ...sameCloud, time: '11:00' }).time === '11:00', '받은 시각으로 바꾸지 않습니다.');
+// R1: todos 블록 안에서 time을 'HH:MM'(hm)로 검사해야 합니다. 일정 블록의 같은 줄로는 통과하지 않습니다.
+const todoBlock = rules.slice(rules.indexOf('match /todos/{tid}'), rules.indexOf('match /inbox/{iid}'));
+check(todoBlock.includes("(!('time' in d()) || hm(d().time))") && /'due', 'time', 'got'/.test(todoBlock) && /function hm\(v\) \{ return v is string && v\.matches\('\^\(\[01\]\[0-9\]\|2\[0-3\]\):\[0-5\]\[0-9\]\$'\); \}/.test(rules), 'R1: 할 일 규칙이 time을 HH:MM으로 검사하지 않습니다.');
+// C1: 할 일 쓰기가 거절되면 시각만 빼고 다시 올리는 길이 cloud.js에 있어야 합니다.
+const cloudSrc = readFileSync(new URL('../src/lib/cloud.js', import.meta.url), 'utf8');
+check(/name === 'todos' && denied\(error\) \? todoBodyWithoutTime/.test(cloudSrc) && cloudSrc.includes('holdTodoTime(id, shaped.body)'), 'C1: 할 일 시각 거절 때 시각 없이 다시 올리는 길이 없습니다.');
 
 if (failures.length) {
     for (const f of failures) console.error(`실패: ${f}`);

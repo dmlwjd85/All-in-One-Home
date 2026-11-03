@@ -1684,6 +1684,8 @@ try {
             check(shut.every((c) => c.h >= 44 && c.w >= 44), `접는 카드 머리가 44px보다 작습니다. ${JSON.stringify(shut)}`);
             await controlBoxes(page, '.home-grid button, .home-grid a', '390 접힌 오늘 화면');
             await audit(page, '390 접힌 오늘 화면');
+            /* 날짜에 따라 위 카드 높이가 달라 할 일 머리가 화면 아래 가운데 쨈 단추 밑에 깔릴 수 있습니다(12-31). 사람처럼 보이게 올린 뒤 누릅니다. */
+            await page.evaluate(() => document.querySelector('[data-fold="todo"] .fold-head').scrollIntoView({ block: "center" }));
             await page.click('[data-fold="todo"] .fold-head');
             await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1');
             const opened = await page.evaluate(() => ({ body: document.querySelector('[data-fold="todo"] .fold-body').getBoundingClientRect().height, line: Boolean(document.querySelector('[data-fold="todo"] [data-home-todo]')), others: [...document.querySelectorAll('[data-fold]')].filter((el) => el.dataset.open === '1').length }));

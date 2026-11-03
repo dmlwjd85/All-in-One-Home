@@ -342,6 +342,38 @@ check(!('time' in ((await cloudDoc('ed1')) || {})), '지운 알림 시각이 클
 await sync('B');
 check(!todo(B, 'ed1')?.time && todo(B, 'ed1')?.title === '고친 제목', `시각을 지운 것이 다른 기기에 가지 않았습니다: ${JSON.stringify(todo(B, 'ed1'))}`);
 
+/* PR #62 검수 1번: 앱이 규칙보다 먼저 배포된 경우(예전 규칙은 할 일 time을 거절). 시각은 이 기기에 남고, 나머지는 올라가며, 받아도 시각이 지워지지 않습니다. */
+const newRules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+const oldRules = newRules.replace("'due', 'time', 'got'", "'due', 'got'").replace(/\n[^\n]*알림 시각\(PR #60\)[^\n]*/, '').replace(/(match \/todos\/\{tid\}[\s\S]*?)\n\s*&& \(!\('time' in d\(\)\) \|\| hm\(d\(\)\.time\)\)/, '$1');
+check(oldRules !== newRules && !oldRules.slice(oldRules.indexOf('match /todos/{tid}'), oldRules.indexOf('match /inbox/{iid}')).includes("'time'"), '예전 규칙을 만들지 못했습니다.');
+const putRules = async (content) => {
+    const res = await fetch(`http://${host}:${port}/emulator/v1/projects/demo-ssug-rules:securityRules`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules: { files: [{ name: 'firestore.rules', content }] } }) });
+    check(res.ok, `에뮬레이터 규칙을 바꾸지 못했습니다: ${res.status}`);
+    await wait(300);
+};
+await putRules(oldRules);
+check(!(await put(['users', UID, 'todos', 'or0'], { title: '예전 규칙', ...v47(Timestamp.fromMillis(Date.now()), { time: '09:30' }) })), '예전 규칙이 할 일 time을 받아들였습니다(검사 준비 틀림).');
+await on('A', async (db) => { await db.saveTextItem('todos', { id: 'or1', title: '예전 규칙 시각', done: false, source: 'app', due: '2026-11-05', time: '10:15' }); await db.flushCloud(); });
+const or1 = await cloudDoc('or1');
+check(or1?.title === '예전 규칙 시각' && or1?.due === '2026-11-05' && !('time' in (or1 || {})), `예전 규칙에서 시각만 빼고 올리지 않았습니다: ${JSON.stringify(or1)}`);
+check(todo(A, 'or1')?.time === '10:15', `예전 규칙에 거절된 뒤 이 기기 시각이 지워졌습니다: ${JSON.stringify(todo(A, 'or1'))}`);
+await sync('A');
+await sync('A');
+check(todo(A, 'or1')?.time === '10:15', `예전 규칙에서 받은 뒤 이 기기 시각이 지워졌습니다: ${JSON.stringify(todo(A, 'or1'))}`);
+await wait(GAP);
+await on('A', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'or1'), title: '예전 규칙 시각 고침' }, { from: 'cloud' }); await db.flushCloud(); });
+await sync('A');
+check(todo(A, 'or1')?.time === '10:15' && todo(A, 'or1')?.title === '예전 규칙 시각 고침' && (await cloudDoc('or1'))?.title === '예전 규칙 시각 고침', `예전 규칙에서 고친 뒤 시각·제목이 맞지 않습니다: ${JSON.stringify(todo(A, 'or1'))}`);
+await sync('B');
+check(todo(B, 'or1')?.title === '예전 규칙 시각 고침' && !todo(B, 'or1')?.time, `다른 기기가 시각 없는 할 일을 받지 못했습니다: ${JSON.stringify(todo(B, 'or1'))}`);
+/* 새 규칙을 배포하면 다음 올리기에서 시각도 올라갑니다. */
+await putRules(newRules);
+await wait(GAP);
+await on('A', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'or1'), title: '새 규칙 배포 뒤' }, { from: 'cloud' }); await db.flushCloud(); });
+check((await cloudDoc('or1'))?.time === '10:15', `새 규칙 배포 뒤 시각이 올라가지 않았습니다: ${JSON.stringify(await cloudDoc('or1'))}`);
+await sync('B');
+check(todo(B, 'or1')?.time === '10:15', '새 규칙 배포 뒤 다른 기기가 시각을 받지 못했습니다.');
+
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');
 const swept = await on('A', (db, dev) => dev.cloud.sweepTombs(UID, Date.now()));

@@ -1,6 +1,9 @@
 /** 교시 시작 시각. 8:42에 1교시가 9:00이면 18분 전입니다. */
 export const DEFAULT_PERIODS = ['09:00', '09:40', '10:30', '11:20', '13:10', '14:00', '14:50', '15:40'];
 
+/** 출근이 이보다 멀면(자정·새벽) 남은 시간을 세지 않고 '출근 전이에요.'만 보여 줍니다(PR #62 검수 5번). */
+export const EARLY_COUNT_MIN = 180;
+
 export function minutesOf(hm) {
     const [h, m] = String(hm || '00:00').split(':').map(Number);
     if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
@@ -40,7 +43,7 @@ export function periodStatus(hm, starts = DEFAULT_PERIODS, labels = [], opts = {
         return { index: -1, phase: 'off', minutes: 0, text: `${endLabel} 시간이 지났어요.` };
     }
     if (workStart != null && now < workStart) {
-        return { index: -1, phase: 'early', minutes: workStart - now, text: `출근까지 ${hourMinute(workStart - now)}` };
+        return { index: -1, phase: 'early', minutes: workStart - now, text: workStart - now <= EARLY_COUNT_MIN ? `출근까지 ${hourMinute(workStart - now)}` : '출근 전이에요.' };
     }
     if (!list.length) {
         return { index: -1, phase: 'after', minutes: 0, text: '시간표를 아직 정하지 않았어요.' };
