@@ -418,6 +418,21 @@ try {
         await deleteDoc(doc(db, `users/teacher-a/attendance/${aid}`));
         if ((await getDoc(doc(db, `users/teacher-a/attendance/${aid}`))).exists()) failures.push('출석으로 되돌린 출결 문서를 지우지 못했습니다.');
     }
+    /* 할 일 알림 시각(PR #60·#62): 'HH:MM'만 받고 잘못된 값은 거릅니다. 새 문서라 hlc 없이도 받습니다. */
+    {
+        const todoDoc = (n) => doc(db, `users/teacher-a/todos/time-${n}`);
+        const body = (time) => ({ title: '알림 시각 검사', done: false, due: '2026-11-04', source: 'app', time });
+        let n = 0;
+        for (const bad of ['9:30', '24:00', '09:60', '', '09:30:00', 930, null, ' 09:30']) {
+            n += 1;
+            await expectDeny(`할 일 time ${JSON.stringify(bad)}`, () => setDoc(todoDoc(n), body(bad)));
+        }
+        for (const ok of ['00:00', '09:30', '23:59']) {
+            n += 1;
+            await expectAllow(`할 일 time ${ok}`, () => setDoc(todoDoc(n), body(ok)));
+        }
+        await expectAllow('time 없는 할 일', () => setDoc(todoDoc('none'), { title: '시각 없는 할 일', done: false, source: 'app' }));
+    }
 } finally {
     await testEnv.cleanup();
 }

@@ -366,13 +366,28 @@ await sync('A');
 check(todo(A, 'or1')?.time === '10:15' && todo(A, 'or1')?.title === '예전 규칙 시각 고침' && (await cloudDoc('or1'))?.title === '예전 규칙 시각 고침', `예전 규칙에서 고친 뒤 시각·제목이 맞지 않습니다: ${JSON.stringify(todo(A, 'or1'))}`);
 await sync('B');
 check(todo(B, 'or1')?.title === '예전 규칙 시각 고침' && !todo(B, 'or1')?.time, `다른 기기가 시각 없는 할 일을 받지 못했습니다: ${JSON.stringify(todo(B, 'or1'))}`);
-/* 새 규칙을 배포하면 다음 올리기에서 시각도 올라갑니다. */
-await putRules(newRules);
+/* 지킨 시각이 있는 동안 다른 기기가 끝냄으로 바꾸면(더 늦게 고침) 그쪽이 이기고 지킴 기록을 버립니다. */
+const holdOf = (dev) => { cur = dev; return JSON.parse(globalThis.localStorage.getItem('ssug-gyomu-todo-time-hold') || '{}'); };
+await on('A', async (db) => { await db.saveTextItem('todos', { id: 'or2', title: '예전 규칙 끝낼 일', done: false, source: 'app', due: '2026-11-05', time: '11:20' }); await db.flushCloud(); });
+check(holdOf('A').or2?.time === '11:20', `예전 규칙에서 시각 지킴 기록이 남지 않았습니다: ${JSON.stringify(holdOf('A'))}`);
+await sync('B');
 await wait(GAP);
-await on('A', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'or1'), title: '새 규칙 배포 뒤' }, { from: 'cloud' }); await db.flushCloud(); });
-check((await cloudDoc('or1'))?.time === '10:15', `새 규칙 배포 뒤 시각이 올라가지 않았습니다: ${JSON.stringify(await cloudDoc('or1'))}`);
+await on('B', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'or2'), done: true }, { from: 'cloud' }); await db.flushCloud(); });
+await wait(GAP);
+await sync('A');
+check(todo(A, 'or2')?.done === true && !todo(A, 'or2')?.time && !('or2' in holdOf('A')), `다른 기기가 끝낸 할 일의 지킴 기록이 남았습니다: ${JSON.stringify({ row: todo(A, 'or2'), hold: holdOf('A') })}`);
+/* 새 규칙을 배포하면 A가 아무것도 고치지 않아도 다음 올리기에서 지킨 시각을 저절로 올리고, 성공하면 지킴 기록을 지웁니다. */
+check('or1' in holdOf('A'), `새 규칙 배포 전 지킴 기록이 없습니다: ${JSON.stringify(holdOf('A'))}`);
+await putRules(newRules);
+const holdA = await import(new URL('.twodev/a/src/lib/todoTimeHold.js', root));
+holdA.useHoldRetryForTest(0);
+await wait(GAP);
+await on('A', (db) => db.flushCloud());
+check((await cloudDoc('or1'))?.time === '10:15', `새 규칙 배포 뒤 지킨 시각을 저절로 올리지 않았습니다: ${JSON.stringify(await cloudDoc('or1'))}`);
+check(!('or1' in holdOf('A')), `시각을 올린 뒤에도 지킴 기록이 남았습니다(H2): ${JSON.stringify(holdOf('A'))}`);
 await sync('B');
 check(todo(B, 'or1')?.time === '10:15', '새 규칙 배포 뒤 다른 기기가 시각을 받지 못했습니다.');
+holdA.useHoldRetryForTest();
 
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');

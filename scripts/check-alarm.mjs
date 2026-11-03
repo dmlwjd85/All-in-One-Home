@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { HOME_TIPS, allHomeTips, pickHomeTip } from '../src/lib/homeTips.js';
 import { alarmKey, dueAlarms, dueChoices, markFired, readFired, shiftTime } from '../src/lib/todoAlarm.js';
 import { splitAlarms } from '../src/lib/todoAlarm.js';
-import { heldTodoTime, holdTodoTime, releaseTodoTime } from '../src/lib/todoTimeHold.js';
+import { heldTimesToRetry, heldTodoIds, heldTodoTime, holdTodoTime, releaseTodoTime, settleHoldWithRemote, useHoldRetryForTest } from '../src/lib/todoTimeHold.js';
 import { periodStatus, DEFAULT_PERIODS } from '../src/lib/period.js';
 import { fromCloudRow, toCloudRow, todoBodyWithoutTime } from '../src/lib/cloudShape.js';
 
@@ -95,6 +95,18 @@ for (const tip of tips) for (const [, label] of tip.matchAll(/‘([^’]+)’/g)
     const real = label.replace('N개', '{left}개');
     check(label === '내일' || src.includes(real), `팁의 단추 글자 '${label}'가 화면에 없습니다.`);
 }
+// r2 3번: 따옴표 밖에 적은 단추 이름도 봅니다. 화면의 진짜 단추 이름은 늘 ‘’로 감싸고, 그 밖에 '…를 눌러'·'…만 눌러'는 일반 이름(쨈 버튼 등)만 씁니다.
+const realButtons = ['출결 하기', '출결 고치기', '오늘 출결 마쳤어요', '일정 보기', '회의록 작성', '메시지·회의록 붙여넣기', '저장'];
+const genericTap = new Set(['쨈 버튼', '마이크 버튼', '네모 칸', '칩', '✎', '단추']);
+for (const tip of tips) {
+    const bare = tip.replace(/‘[^’]*’/g, '‘’');
+    for (const name of realButtons) check(!bare.includes(name), `팁이 단추 이름 '${name}'를 따옴표 없이(또는 실제와 다르게) 씁니다: ${tip}`);
+    for (const [, what] of bare.matchAll(/([^\s‘’]+(?: [^\s‘’]+)?)(?:을|를|만) (?:눌러|누르)/g)) {
+        const plain = what.replace(/^(?:[가-힣]+ )?(?=쨈|마이크|네모|할 일|✎)/, '');
+        check(what.endsWith('‘’') || genericTap.has(plain) || [...genericTap].some((g) => what.endsWith(g)), `팁의 '${what}' 누르기가 실제 단추 이름과 맞는지 알 수 없습니다: ${tip}`);
+    }
+}
+check(tips.some((t) => t.includes('‘오늘 출결 마쳤어요’')), '모두 출석인 날 팁이 실제 단추 이름 ‘오늘 출결 마쳤어요’를 쓰지 않습니다.');
 // 1: 예전 규칙이 시각을 거절해 시각 없이 올린 할 일은, 내용이 같으면 받을 때 이 기기 시각을 지킵니다.
 const { takeRemote } = await import('../src/lib/db.js');
 const mine = { id: 'h1', title: '시각 지킬 일', due: '2026-11-04', time: '10:15', done: false };
@@ -110,6 +122,20 @@ check(takeRemote('todos', mine, { ...sameCloud, time: '11:00' }).time === '11:00
 // R1: todos 블록 안에서 time을 'HH:MM'(hm)로 검사해야 합니다. 일정 블록의 같은 줄로는 통과하지 않습니다.
 const todoBlock = rules.slice(rules.indexOf('match /todos/{tid}'), rules.indexOf('match /inbox/{iid}'));
 check(todoBlock.includes("(!('time' in d()) || hm(d().time))") && /'due', 'time', 'got'/.test(todoBlock) && /function hm\(v\) \{ return v is string && v\.matches\('\^\(\[01\]\[0-9\]\|2\[0-3\]\):\[0-5\]\[0-9\]\$'\); \}/.test(rules), 'R1: 할 일 규칙이 time을 HH:MM으로 검사하지 않습니다.');
+// r2 1번: 지킨 시각은 다시 올릴 목록에 들고(앱 켠 뒤 첫 번, 그 뒤 10분마다), 내용이 바뀌거나 다른 기기가 이기면 버립니다.
+useHoldRetryForTest();
+holdTodoTime('r1', { id: 'r1', title: '다시 올릴 일', due: '2026-11-04', time: '09:10', done: false });
+holdTodoTime('r2', { id: 'r2', title: '내가 고칠 일', due: '2026-11-04', time: '09:20', done: false });
+holdTodoTime('r3', { id: 'r3', title: '다른 기기가 끝낼 일', due: '2026-11-04', time: '09:30', done: false });
+const nowTodos = [{ id: 'r1', title: '다시 올릴 일', due: '2026-11-04', time: '09:10', done: false }, { id: 'r2', title: '내가 고친 일', due: '2026-11-04', time: '09:20', done: false }, { id: 'r3', title: '다른 기기가 끝낼 일', due: '2026-11-04', time: '09:30', done: false }];
+const first = heldTimesToRetry(nowTodos, 1000);
+check(first.join() === 'r1,r3' && !heldTodoIds().includes('r2'), `지킨 시각 다시 올리기 목록이 틀립니다: ${first} / ${heldTodoIds()}`);
+check(heldTimesToRetry(nowTodos, 2000).length === 0 && heldTimesToRetry(nowTodos, 1000 + 10 * 60 * 1000).join() === 'r1,r3', '지킨 시각을 너무 자주(또는 다시 안) 올립니다.');
+settleHoldWithRemote('r3', { title: '다른 기기가 끝낼 일', due: '2026-11-04', done: true });
+settleHoldWithRemote('r1', { title: '다시 올릴 일', due: '2026-11-04', done: false });
+check(heldTodoIds().join() === 'r1', `다른 기기가 끝낸 할 일의 지킴 기록이 남거나, 같은 내용인데 버립니다: ${heldTodoIds()}`);
+settleHoldWithRemote('r1', { title: '다시 올릴 일', due: '2026-11-04', done: false, time: '12:30' });
+check(heldTodoIds().length === 0, '다른 기기가 시각을 넣었는데 지킴 기록이 남았습니다.');
 // C1: 할 일 쓰기가 거절되면 시각만 빼고 다시 올리는 길이 cloud.js에 있어야 합니다.
 const cloudSrc = readFileSync(new URL('../src/lib/cloud.js', import.meta.url), 'utf8');
 check(/name === 'todos' && denied\(error\) \? todoBodyWithoutTime/.test(cloudSrc) && cloudSrc.includes('holdTodoTime(id, shaped.body)'), 'C1: 할 일 시각 거절 때 시각 없이 다시 올리는 길이 없습니다.');

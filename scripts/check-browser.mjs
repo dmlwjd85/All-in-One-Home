@@ -1684,9 +1684,24 @@ try {
             check(shut.every((c) => c.h >= 44 && c.w >= 44), `접는 카드 머리가 44px보다 작습니다. ${JSON.stringify(shut)}`);
             await controlBoxes(page, '.home-grid button, .home-grid a', '390 접힌 오늘 화면');
             await audit(page, '390 접힌 오늘 화면');
-            /* 날짜에 따라 위 카드 높이가 달라 할 일 머리가 화면 아래 가운데 쨈 단추 밑에 깔릴 수 있습니다(12-31). 사람처럼 보이게 올린 뒤 누릅니다. */
-            await page.evaluate(() => document.querySelector('[data-fold="todo"] .fold-head').scrollIntoView({ block: "center" }));
-            await page.click('[data-fold="todo"] .fold-head');
+            /* 날짜에 따라(12-31 등) 할 일 머리가 첫 화면 맨 아래, 쨈 단추 자리에 올 수 있습니다.
+               1) 키보드 초점을 옮기면 앱이(scroll-padding-bottom) 머리를 탭 줄·쨈 단추 위로 올려야 합니다.
+               2) 사람처럼 화면을 밀어 올린 뒤, 실제 좌표(머리 가운데)를 눌러 머리가 눌려야 합니다. 요소 가운데로 맞추는 스크롤은 쓰지 않습니다. */
+            const covered = () => page.evaluate(() => {
+                const head = document.querySelector('[data-fold="todo"] .fold-head');
+                const r = head.getBoundingClientRect();
+                const pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 12, r.top + r.height / 2], [r.right - 12, r.top + r.height / 2]];
+                return { y: Math.round(r.top), bottom: Math.round(r.bottom), vh: innerHeight, hit: pts.map(([x, y]) => head.contains(document.elementFromPoint(x, y))) };
+            });
+            await page.evaluate(() => { scrollTo(0, 0); document.querySelector('[data-fold="todo"] .fold-head').focus(); });
+            const focused = await covered();
+            check(focused.hit.every(Boolean), `초점을 옮긴 할 일 카드 머리가 탭 줄·쨈 단추에 가려집니다. ${JSON.stringify(focused)}`);
+            await page.evaluate(() => { document.activeElement?.blur(); scrollTo(0, 0); });
+            for (let i = 0; i < 12 && !(await covered()).hit.every(Boolean); i += 1) await page.mouse.wheel({ deltaY: 120 });
+            const real = await covered();
+            check(real.hit.every(Boolean), `화면을 밀어 올려도 할 일 카드 머리를 누를 수 없습니다. ${JSON.stringify(real)}`);
+            const box = await (await page.$('[data-fold="todo"] .fold-head')).boundingBox();
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
             await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1');
             const opened = await page.evaluate(() => ({ body: document.querySelector('[data-fold="todo"] .fold-body').getBoundingClientRect().height, line: Boolean(document.querySelector('[data-fold="todo"] [data-home-todo]')), others: [...document.querySelectorAll('[data-fold]')].filter((el) => el.dataset.open === '1').length }));
             check(opened.body > 0 && opened.line && opened.others === 1, `할 일 카드를 눌러도 펼쳐지지 않거나 다른 카드까지 펼쳐집니다. ${JSON.stringify(opened)}`);
@@ -4589,9 +4604,19 @@ try {
                     return { open: bar.classList.contains('is-open'), pop: document.querySelector(sel).classList.contains('is-popping'), inView: r.x >= 0 && r.right <= innerWidth + 1 && r.y >= 0, overlap: pairs || inner.some((a) => hit(a, fab)) };
                 }, sel);
                 for (const how of ['close', 'outside', 'esc']) {
+                    /* r2 4번: 튐(is-popping)은 잠깐 붙는 class라 150ms 고정 대기로는 놓칠 수 있습니다. 누르기 전에 관찰자를 달아 한 번이라도 붙었는지 기록하고, 열림은 최대 2초 기다립니다. */
+                    await page.evaluate((sel) => {
+                        const fab = document.querySelector(sel);
+                        window.__jamPopped = false;
+                        window.__jamObs?.disconnect();
+                        window.__jamObs = new MutationObserver(() => { if (fab.classList.contains('is-popping')) window.__jamPopped = true; });
+                        window.__jamObs.observe(fab, { attributes: true, attributeFilter: ['class'] });
+                    }, sel);
                     await page.click(sel);
+                    await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open') && window.__jamPopped, { timeout: 2000 }).catch(() => {});
                     await delay(150);
-                    const opened = await look();
+                    const opened = { ...(await look()) };
+                    opened.pop = opened.pop || (await page.evaluate(() => window.__jamPopped));
                     check(opened.open && opened.pop && opened.inView && !opened.overlap, `${width} ${mode} 쨈 버튼이 팝업을 열지 않거나(튐 포함) 겹칩니다: ${JSON.stringify(opened)}`);
                     if (how === 'close') await page.screenshot({ path: resolve(shots, `jam-popup-${width}-${mode}.png`) });
                     await delay(450);
