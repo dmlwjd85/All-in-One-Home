@@ -15,9 +15,11 @@ import { DEMO_WORK } from '../lib/demo.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { WorkSetup, WorkTimer, useLeave, useWorkClock, wantsFast } from './WorkTimer.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
+import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
+import { pickHomeTip } from '../lib/homeTips.js';
 
 export function Home() {
     const { data, go, showToast } = useUi();
@@ -41,11 +43,16 @@ export function Home() {
         endLabel: leave ? '조퇴' : '퇴근',
     });
     const [detail, setDetail] = useState(null);
+    const [editTodo, setEditTodo] = useState(null);
     const marks = data.attendance.filter((row) => row.date === clock.ymd);
     const checked = data.profile.checkedDates.includes(clock.ymd);
     const count = data.profile.classSize || data.students.length;
     const todos = joined(data, 'todos');
     const left = todos.filter((row) => !row.done).length;
+    /* 홈 안내 한 줄(PR #60): 날짜마다 돌고, 출결 전·할 일·시간대·요일에 맞춰 고릅니다. */
+    const weekday = new Date(`${clock.ymd}T00:00:00Z`).getUTCDay();
+    const tip = pickHomeTip({ ymd: clock.ymd, hm: clock.hm, checked, left, weekday });
+    const restTip = pickHomeTip({ ymd: clock.ymd, hm: clock.hm, checked, left, weekday, off: true });
     const weekStart = startOfWeekMon(clock.ymd);
     const weekEnd = addDaysYmd(weekStart, 6);
     const gcal = useGcal();
@@ -84,10 +91,10 @@ export function Home() {
 
     /* 오늘 시간표 카드. 타이머·안내 띠가 있으면 폰에서 그 위로 올립니다. */
     const timeCard = (
-        <FoldCard id="time" className="home-time" title="오늘 시간표" summary={sumTime} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>}>
+        <FoldCard id="time" className="home-time" title="오늘 시간표" summary={sumTime} action={<Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>일정 보기</Btn>}>
             <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: 16 }}>오늘 시간표</h3>
-                <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>한 주 보기</Btn>
+                <Btn onClick={() => go(`#/schedule/week/${clock.ymd}`)} style={{ color: 'var(--accent)', fontWeight: 800 }}>일정 보기</Btn>
             </div>
             {todayRest.off ? (
                 <div className="day-rest rest-banner" style={{ marginTop: 10 }}>
@@ -124,8 +131,9 @@ export function Home() {
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
                         <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{todayRest.label === '휴일' ? '시간표와 출결 대신 쉽니다. 필요하면 출결 보기를 누르세요.' : `${todayRest.label}${iraParticle(todayRest.label)} 수업과 출결 대신 쉽니다.`}</p>
+                        <p className="home-tip" data-home-tip={restTip.group}>{restTip.text}</p>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, fontWeight: 700 }}>
-                            <span>할 일 {left}개 남음</span>
+                            <Btn className="hero-pill home-todo-link" data-todo-link="1" aria-label={`할 일 ${left}개 남음, 할 일 목록 열기`} onClick={() => go('#/todo')}>할 일 {left}개 남음 ›</Btn>
                         </div>
                     </>
                 ) : (
@@ -148,9 +156,9 @@ export function Home() {
                             {!marks.length && checked && <span className="hero-pill">오늘은 모두 출석이에요</span>}
                         </div>
                         {birthdays.length > 0 && <p style={{ marginBottom: 0 }}>🎂 {birthdays.map((row) => row.name).join(', ')} 생일이에요</p>}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 14, fontWeight: 700 }}>
-                            <span>{checked ? '출결 확인 끝났어요' : '출결부터 볼까요?'}</span>
-                            <span>할 일 {left}개 남음</span>
+                        <div className="home-tip-row">
+                            <span className="home-tip" data-home-tip={tip.group}>{tip.text}</span>
+                            <Btn className="hero-pill home-todo-link" data-todo-link="1" aria-label={`할 일 ${left}개 남음, 할 일 목록 열기`} onClick={() => go('#/todo')}>할 일 {left}개 남음 ›</Btn>
                         </div>
                     </>
                 )}
@@ -245,8 +253,9 @@ export function Home() {
             {detail && (() => {
                 const row = (detail.kind === 'todo' ? todos : events).find((item) => item.id === detail.id);
                 if (!row) return null;
-                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? () => toggleTodo(row.id) : null} />;
+                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? () => toggleTodo(row.id) : null} onEdit={detail.kind === 'todo' ? () => { setEditTodo(row); setDetail(null); } : null} />;
             })()}
+            {editTodo && <TodoEditSheet row={todos.find((item) => item.id === editTodo.id) || editTodo} onClose={() => setEditTodo(null)} />}
         </div>
     );
 }

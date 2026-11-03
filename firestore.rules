@@ -221,9 +221,11 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(tid)
           && d().keys().hasAll(['title', 'done'])
-          && d().keys().hasOnly(['title', 'done', 'due', 'got', 'of', 'order', 'source', 'createdAt', 'updatedAt', 'doneAt', 'hlc', 'u'])
+          && d().keys().hasOnly(['title', 'done', 'due', 'time', 'got', 'of', 'order', 'source', 'createdAt', 'updatedAt', 'doneAt', 'hlc', 'u'])
           && str(d().title, 1, 100) && safeText(d().title) && d().done is bool
           && (!('due' in d()) || ymd(d().due))
+          // 알림 시각(PR #60): 'HH:MM'만 받습니다.
+          && (!('time' in d()) || hm(d().time))
           && optInt('got', 0, 50) && optInt('of', 0, 50) && optInt('order', 0, 100000)
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
           && optTs('createdAt') && optTs('updatedAt') && optTs('doneAt') && optTs('hlc')

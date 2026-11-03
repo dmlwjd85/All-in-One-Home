@@ -1,5 +1,5 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
 import { readPeriodLocal } from './periodLocal.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -140,9 +140,10 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
             nextHashes[key] = mark;
         } catch (error) {
-            const fallback = prepared.retryWithoutEndTime && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null;
+            const timeless = name === 'todos' && denied(error) ? todoBodyWithoutTime(shaped.body) : null;
+            const fallback = timeless || (prepared.retryWithoutEndTime && denied(error) ? eventBodyWithoutEndTime(shaped.body) : null);
             if (fallback) {
-                noteEndTimeRejected();
+                if (!timeless) noteEndTimeRejected();
                 try {
                     const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt, shaped.at);
                     await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });

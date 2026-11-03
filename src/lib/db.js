@@ -643,7 +643,7 @@ export function clippedCopy(mine, theirs) {
 }
 
 /* 받아 온 값으로 바꿉니다. 클라우드에 없는 칸(다른 기기에서 비운 칸)은 이 기기에서도 비웁니다. */
-const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'] };
+const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'], todos: ['time'] };
 export function takeRemote(cloudName, row, theirs) {
     const next = { ...row, ...theirs };
     for (const key of OPTIONAL_FROM_CLOUD[cloudName] || []) if (!(key in theirs)) delete next[key];
