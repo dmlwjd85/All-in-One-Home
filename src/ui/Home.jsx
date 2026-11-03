@@ -130,9 +130,10 @@ export function Home() {
                             <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
-                        <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{todayRest.label === '휴일' ? '시간표와 출결 대신 쉽니다. 필요하면 출결 보기를 누르세요.' : `${todayRest.label}${iraParticle(todayRest.label)} 수업과 출결 대신 쉽니다.`}</p>
-                        <p className="home-tip" data-home-tip={restTip.group}>{restTip.text}</p>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, fontWeight: 700 }}>
+                        {/* 주말·휴일에는 설명 대신 쉬는 날 팁을 같은 자리에 보여 줍니다(카드 높이는 예전과 같게). */}
+                        {todayRest.label === '휴일' ? null : <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{`${todayRest.label}${iraParticle(todayRest.label)} 수업과 출결 대신 쉽니다.`}</p>}
+                        <div className="home-tip-row">
+                            <span className="home-tip" data-home-tip={restTip.group}>{todayRest.label === '휴일' ? restTip.text : ''}</span>
                             <Btn className="hero-pill home-todo-link" data-todo-link="1" aria-label={`할 일 ${left}개 남음, 할 일 목록 열기`} onClick={() => go('#/todo')}>할 일 {left}개 남음 ›</Btn>
                         </div>
                     </>

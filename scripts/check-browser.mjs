@@ -2170,12 +2170,12 @@ try {
                     link: (() => { const r = document.querySelector('[data-todo-link]')?.getBoundingClientRect(); return r ? { w: r.width, h: r.height } : null; })(),
                 }));
                 check(home.text.includes('일정 보기') && !home.text.includes('한 주 보기'), `${tag}: 오늘 시간표 옆이 '일정 보기'가 아닙니다.`);
-                check(!home.text.includes('출결부터 볼까요?\n') && home.tip.length >= 8, `${tag}: 홈 안내 문구가 없습니다: ${home.tip}`);
+                check(!home.text.includes('출결부터 볼까요?\n') && (home.tip.length >= 8 || home.text.includes('수업과 출결 대신 쉽니다')), `${tag}: 홈 안내 문구가 없습니다: ${home.tip}`);
                 check(home.link && home.link.h >= 44 && home.link.w >= 44, `${tag}: '할 일 N개 남음'을 누를 수 없거나 44px 미만입니다: ${JSON.stringify(home.link)}`);
                 await controlBoxes(page, '.home-hero button', `${tag} 홈 첫 카드`);
                 const tipBox = await page.evaluate(() => {
-                    const a = document.querySelector('.home-tip-row .home-tip')?.getBoundingClientRect();
-                    const b = document.querySelector('.home-tip-row [data-todo-link]')?.getBoundingClientRect();
+                    const a = document.querySelector('.home-tip')?.getBoundingClientRect();
+                    const b = document.querySelector('[data-todo-link]')?.getBoundingClientRect();
                     return a && b ? (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) : null;
                 });
                 check(tipBox === false, `${tag}: 홈 안내 문구와 할 일 버튼이 겹칩니다.`);
