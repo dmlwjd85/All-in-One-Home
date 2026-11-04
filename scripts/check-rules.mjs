@@ -337,6 +337,18 @@ try {
         await expectDeny('잘못된 끝 시각', () => setDoc(doc(deviceA, `users/${uid}/events/bad1`), {
             date: '2026-10-30', title: '워크숍', time: '13:00', endTime: '16:00까지', kind: 'class', source: 'app',
         }));
+        /* PR #62 r4 2번(R4): 일정 시작 시각(time)도 HH:MM만 받습니다. 규칙을 느슨하게 하면 이 검사가 실패합니다. */
+        for (const [i, bad] of ['25:00', '9:05', '09:60', '0930', '09:30 ', '아침', 930, ''].entries()) {
+            await expectDeny(`잘못된 시작 시각 ${JSON.stringify(bad)}`, () => setDoc(doc(deviceA, `users/${uid}/events/badtime${i}`), {
+                date: '2026-10-30', title: '워크숍', time: bad, kind: 'class', source: 'app',
+            }));
+        }
+        await expectDeny('잘못된 끝 시각(24:00)', () => setDoc(doc(deviceA, `users/${uid}/events/badend2`), {
+            date: '2026-10-30', title: '워크숍', time: '13:00', endTime: '24:00', kind: 'class', source: 'app',
+        }));
+        await expectAllow('바른 시작 시각(00:00·23:59)', () => setDoc(doc(deviceA, `users/${uid}/events/goodtime`), {
+            date: '2026-10-30', title: '워크숍', time: '00:00', endTime: '23:59', kind: 'class', source: 'app',
+        }));
         const pulled = [];
         for (const id of [ranged.id, plain.id]) {
             const snap = await getDoc(doc(deviceB, `users/${uid}/events/${id}`));
