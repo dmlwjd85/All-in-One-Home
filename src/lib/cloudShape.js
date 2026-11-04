@@ -82,6 +82,12 @@ function toStudent(row) {
     return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
+/* 일정·회의록·출결도 고친 시각(editAt, 서버 보정 ms)을 updatedAt으로 올려 기기끼리 '나중에 고친 쪽'을 견줍니다. 모르면(0) 예전처럼 올린 시각. */
+function editAtOf(row) {
+    const at = Number(row?.editAt);
+    return Number.isFinite(at) && at > 0 ? { at } : {};
+}
+
 function toAttendance(row) {
     const sid = cloudDocId(row.sid);
     const status = STATUS_TO[row.status];
@@ -97,7 +103,7 @@ function toAttendance(row) {
     if (typeof row.paper === 'boolean') body.paper = row.paper;
     if (row.note) body.note = String(row.note).slice(0, 100);
     else clear.push('note');
-    return { id, body, stamps: stamps(['updatedAt']), clear };
+    return { id, body, stamps: stamps(['updatedAt']), clear, ...editAtOf(row) };
 }
 
 /* 병합 쓰기라, 이 기기에서 비운 칸은 지우라고 알려야 클라우드의 예전 값이 남지 않습니다(PR #52 검수 3번). */
@@ -134,7 +140,7 @@ function toEvent(row) {
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.endTime || '')) body.endTime = row.endTime;
     if (row.memo) body.memo = String(row.memo).slice(0, 300);
-    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['end', 'time', 'endTime', 'memo']) };
+    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['end', 'time', 'endTime', 'memo']), ...editAtOf(row) };
 }
 
 /** 규칙이 끝 시각을 아직 모르면 그 칸을 빼고 메모에 끝 시각을 붙입니다. */
@@ -185,7 +191,7 @@ function toNote(row) {
     if (row.date) body.date = row.date;
     if (Array.isArray(row.tags) && row.tags.length) body.tags = row.tags.slice(0, 10);
     if (typeof row.pinned === 'boolean') body.pinned = row.pinned;
-    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['title', 'attendees', 'date', 'tags']) };
+    return { id, body, stamps: stamps(['updatedAt']), clear: emptied(body, ['title', 'attendees', 'date', 'tags']), ...editAtOf(row) };
 }
 
 function toNotice(row) {
@@ -244,7 +250,7 @@ function toTable(row) {
         }
     }
     if (!Object.keys(body).length) return null;
-    return { id, body, stamps: stamps(['updatedAt']) };
+    return { id, body, stamps: stamps(['updatedAt']), ...editAtOf(row) };
 }
 
 export function fromCloudRow(collection, id, data = {}) {

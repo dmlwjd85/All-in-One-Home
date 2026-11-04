@@ -2642,9 +2642,16 @@ try {
                 /* 닫기 단추를 맨 위로 끌어올려도 폰 맨 위 퇴근 줄 밑에 숨지 않고, 그 자리를 누르면 단추가 눌려야 합니다. */
                 const lifted = await page.evaluate(async () => {
                     const close = document.querySelector('[aria-label="옮긴 소리 안내 닫기"]');
-                    close.scrollIntoView({ block: 'start' });
-                    await new Promise((r) => setTimeout(r, 120));
-                    const r = close.getBoundingClientRect();
+                    /* 느린 CI에서 끌어올림이 늦게 끝나는 일이 있어, 자리가 멈출 때까지(최대 2초) 기다립니다. */
+                    let r = null;
+                    for (let i = 0; i < 20; i += 1) {
+                        close.scrollIntoView({ block: 'start', behavior: 'instant' });
+                        await new Promise((r1) => setTimeout(r1, 100));
+                        const now = close.getBoundingClientRect();
+                        const barNow = document.querySelector('.fuse-bar')?.getBoundingClientRect().bottom ?? 0;
+                        if (r && Math.abs(now.top - r.top) < 1 && now.top < barNow + 200) { r = now; break; }
+                        r = now;
+                    }
                     const bar = document.querySelector('.fuse-bar')?.getBoundingClientRect().bottom ?? 0;
                     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(6, r.height / 2));
                     const out = { top: Math.round(r.top), bar: Math.round(bar), own: Boolean(hit && close.contains(hit)) };

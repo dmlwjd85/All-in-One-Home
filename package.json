@@ -38,6 +38,8 @@
     "check:attendsave": "node scripts/check-attend-save.mjs",
     "check:todosync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-todo-sync.mjs\"",
     "check:leavesync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-leave-sync.mjs\"",
+    "check:lwwsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-sync.mjs\"",
+    "check:lwwprev": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-prevrules.mjs\"",
     "check:twodevice": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-two-device.mjs\"",
     "check:locknote": "node scripts/check-locknote.mjs",
     "check:hlc": "node scripts/check-hlc.mjs",
