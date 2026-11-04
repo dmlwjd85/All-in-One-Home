@@ -366,6 +366,61 @@ export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEE
         return n;
     } catch { return 0; }
 }
+/**
+ * 회의록에서 '등록하지 않기로 정한' 할 일·일정 id 를 묘비로 남겨, 다른 기기에서 같은 회의록을 다시 저장해도
+ * 또 묻거나 만들지 않게 합니다. 이미 있는 묘비 규칙(tombs/todos-{id})을 그대로 씁니다. 실제로 만든 할 일 id 에는 쓰지 않습니다.
+ */
+export async function writeTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return [];
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return [];
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    const done = [];
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) { done.push(id); continue; }
+        try { await timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: serverTimestamp() }), 5000); done.push(id); } catch { /* 대기열에 남겨 다시 씁니다. */ }
+    }
+    /* 쓴 id 목록. 못 쓴 것은 부른 쪽이 대기열에 남깁니다(PR #64 r2 3번). */
+    return done;
+}
+/**
+ * 회의록 등록 후보가 클라우드에 이미 있거나(다른 기기가 등록) 지운 기록(할 일·일정 묘비)이 있는지 서버에서 바로 봅니다.
+ * { [id]: true|false }. 서버에 닿지 못하면 null(모름) — 부른 쪽은 등록을 미룹니다(PR #64 r2 1번).
+ */
+export async function peekMinutes(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return null;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return null;
+    const { doc, getDocFromServer } = await import('firebase/firestore');
+    const out = {};
+    try {
+        for (const id of ids) {
+            const refs = [['todos', String(id)], ['events', String(id)], ['tombs', tombId('todos', id)], ['tombs', tombId('events', id)]];
+            const snaps = await timeout(Promise.all(refs.map(([c, d]) => getDocFromServer(doc(ready.db, 'users', uid, c, d)))), 8000);
+            out[id] = snaps.some((snap) => snap.exists());
+        }
+    } catch {
+        return null;
+    }
+    return out;
+}
+/** 회의록 고친 줄을 되돌렸을 때(PR #64 r3 F1): 이 기기가 정리하며 남긴 할 일·일정 묘비를 지웁니다. 지운(또는 원래 없던) id 목록. */
+export async function clearTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return [];
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return [];
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    const done = [];
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) continue;
+        try {
+            const names = String(id).startsWith('mt-') ? ['todos', 'events'] : ['todos'];
+            await timeout(Promise.all(names.map((n) => deleteDoc(doc(ready.db, 'users', uid, 'tombs', tombId(n, id))))), 5000);
+            done.push(id);
+        } catch { /* 못 지우면 다음 저장에서 다시 */ }
+    }
+    return done;
+}
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {
     const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));
@@ -528,9 +583,12 @@ export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfte
         const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp, serverTimestamp } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
         /* 지운 시각을 모르면(서버 시각을 못 잰 기기) 서버가 받은 시각으로 묘비를 남깁니다. */
+        /* 회의록이 만든 일정(mt-)도 지운 기록을 남겨, 다른 기기가 같은 회의록을 다시 저장해도 되살리지 않게 합니다(PR #64 r2 2번). */
         const tomb = name === 'todos'
             ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
-            : null;
+            : (name === 'events' && String(id).startsWith('mt-')
+                ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('events', id)), { k: 'events', at: serverTimestamp() }), 5000)
+                : null);
         return await guardedDelete({
             get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },
             del: () => deleteDoc(ref),

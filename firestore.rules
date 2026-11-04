@@ -222,11 +222,14 @@ service cloud.firestore {
       }
 
       // 지운 할 일 표시(묘비): 다른 기기가 지운 할 일을 그보다 먼저 고친 기기가 되살리지 않게 지운 시각만 남깁니다.
+      // 회의록이 만든 일정(events-mt-…)도 지운 기록을 남깁니다(PR #64 r2 2번). k 는 열쇠 앞머리와 같아야 합니다.
       match /tombs/{key} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && key.matches('^todos-[A-Za-z0-9_-]{1,40}$')
+        allow create, update: if isOwner(uid)
           && d().keys().hasAll(['k', 'at']) && d().keys().hasOnly(['k', 'at'])
-          && d().k == 'todos' && notAhead(d().at);
+          && ((key.matches('^todos-[A-Za-z0-9_-]{1,40}$') && d().k == 'todos')
+            || (key.matches('^events-mt-[A-Za-z0-9_-]{1,37}$') && d().k == 'events'))
+          && notAhead(d().at);
       }
 
       // 할 일 (걷기 진행: got / of)
