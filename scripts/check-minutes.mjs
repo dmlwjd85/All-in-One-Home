@@ -124,7 +124,7 @@ const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
 if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(detail)) failures.push('일정·할 일 자세히에 원래 회의록 단추가 없습니다.');
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
 const sw = readFileSync('public/sw.js', 'utf8');
-if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v59'")) failures.push('서비스 워커가 v59가 아닙니다.');
+if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v61'")) failures.push('서비스 워커가 v61이 아닙니다.');
 
 /* 변이: 일부러 망가뜨린 코드를 이 검사가 잡는지 봅니다. */
 const LIB = readFileSync('src/lib/minutesExtract.js', 'utf8');
