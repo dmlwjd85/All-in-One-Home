@@ -54,12 +54,13 @@ export function minutesCandidates(text, minutesId, { now = new Date(), periods =
     const auto = [];
     const ask = [];
     let inTodo = false;
+    let inOther = false;
     const seen = new Set();
     for (const rawLine of String(text || '').split('\n')) {
         const line = cleanLine(rawLine);
         if (!line) continue;
-        if (TODO_HEAD.test(line)) { inTodo = true; continue; }
-        if (OTHER_HEAD.test(line)) { inTodo = false; continue; }
+        if (TODO_HEAD.test(line)) { inTodo = true; inOther = false; continue; }
+        if (OTHER_HEAD.test(line)) { inTodo = false; inOther = true; continue; }
         if (line.length < 3) continue;
         let parsed;
         try { parsed = parseSchoolMessages(line, { now, periods }); } catch { continue; }
@@ -67,7 +68,8 @@ export function minutesCandidates(text, minutesId, { now = new Date(), periods =
         items.forEach((item, n) => {
             if (!String(item.title || '').trim()) return;
             const when = Boolean(item.date || item.time || item.period);
-            const cue = inTodo || TODO_CUE.test(line);
+            /* 안건·결정 칸의 줄은 날짜·시간이 있을 때만 잡습니다(논의거리를 할 일로 묻지 않게). */
+            const cue = inTodo || (!inOther && TODO_CUE.test(line));
             if (!when && !cue) return;
             const id = linkedId(minutesId, line, n);
             if (seen.has(id)) return;

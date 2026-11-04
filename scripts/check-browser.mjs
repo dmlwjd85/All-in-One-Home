@@ -4440,13 +4440,16 @@ try {
         check(await page.$('[data-screen="minutes-editor"]') && (await page.evaluate(() => location.hash)) === '#/minutes/new', 'Enter를 누르자 회의록 쓰기 화면을 떠났습니다(저장·분류).');
         /* 날짜: 달력에서 한 번 눌러 고릅니다(드롭다운·스크롤 피커 없음). */
         check(!(await page.$('[data-screen="minutes-editor"] select')), '회의록 화면에 드롭다운(select)이 있습니다.');
+        await page.click('[data-role="minutes-date-btn"]');
+        await page.waitForSelector('[data-screen="minutes-cal"]');
+        check(!(await page.$('[data-screen="minutes-cal"] select, [data-screen="minutes-cal"] input[type="date"]')), '회의록 달력 팝업에 드롭다운이 있습니다.');
         const picked = await page.evaluate(() => {
-            const cells = [...document.querySelectorAll('[data-screen="minutes-editor"] [aria-label="날짜"] button')].filter((el) => !el.disabled && el.innerText.trim() === '20');
+            const cells = [...document.querySelectorAll('[data-screen="minutes-cal"] [aria-label="날짜"] button')].filter((el) => !el.disabled && el.innerText.trim() === '20');
             cells[0]?.click();
             return cells.length;
         });
         check(picked >= 1, '회의록 달력에서 날짜를 누를 수 없습니다.');
-        await page.waitForFunction(() => document.querySelector('[data-role="minutes-date"]')?.innerText.includes('20일'));
+        await page.waitForFunction(() => document.querySelector('[data-role="minutes-date"]')?.getAttribute('aria-label')?.includes('20일') && !document.querySelector('[data-screen="minutes-cal"]'));
         await page.type('#minutes-attendees', '1학년 담임');
         await delay(500);
         const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-minutes-draft') || '{}').new || null);
@@ -4464,7 +4467,7 @@ try {
         const before = await minutesCount(page);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '이어 쓰기')?.click());
         await page.waitForSelector('[data-screen="minutes-editor"]');
-        const restored = await page.evaluate(() => ({ title: document.querySelector('#minutes-title')?.value, text: document.querySelector('#minutes-text')?.value, who: document.querySelector('#minutes-attendees')?.value, date: document.querySelector('[data-role="minutes-date"]')?.innerText }));
+        const restored = await page.evaluate(() => ({ title: document.querySelector('#minutes-title')?.value, text: document.querySelector('#minutes-text')?.value, who: document.querySelector('#minutes-attendees')?.value, date: document.querySelector('[data-role="minutes-date"]')?.getAttribute('aria-label') }));
         check(restored.title === '학년 협의회' && restored.text === typed && restored.who === '1학년 담임' && restored.date.includes('20일'), `새로 고친 뒤 쓰던 회의록이 돌아오지 않습니다: ${JSON.stringify(restored)}`);
 
         /* 저장 버튼으로만 저장 → 보기(여러 줄 그대로) */
@@ -4533,7 +4536,7 @@ try {
             await withDemo(width, mode, async (page) => {
                 await page.evaluate(() => localStorage.removeItem('ssug-gyomu-minutes-draft'));
                 await page.evaluate(() => { location.hash = '#/minutes'; });
-                await page.waitForSelector('[data-screen="minutes-list"] .minutes-item');
+                await page.waitForSelector(width >= 900 ? '[data-screen="minutes-side-list"] .minutes-item' : '[data-screen="minutes-list"] .minutes-item');
                 if (width >= 900) {
                     const menuOn = await page.evaluate(() => [...document.querySelectorAll('.side a, .side button')].some((el) => el.innerText.trim() === '회의록' && (el.getAttribute('aria-current') === 'page' || el.className.includes('on'))));
                     check(menuOn, `${width} ${mode} 넓은 화면 메뉴에 회의록이 없거나 켜지지 않습니다.`);
@@ -4551,7 +4554,12 @@ try {
                 await page.type('#minutes-text', '첫 줄\n둘째 줄\n셋째 줄');
                 await audit(page, `회의록 쓰기 ${width} ${mode}`);
                 await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-kinds button', `회의 종류 칩 ${width} ${mode}`);
-                await controlBoxes(page, '[data-screen="minutes-editor"] [aria-label="날짜"] button', `회의록 달력 ${width} ${mode}`);
+                await page.click('[data-role="minutes-date-btn"]');
+                await page.waitForSelector('[data-screen="minutes-cal"]');
+                await audit(page, `회의록 달력 팝업 ${width} ${mode}`);
+                await controlBoxes(page, '[data-screen="minutes-cal"] [aria-label="날짜"] button', `회의록 달력 ${width} ${mode}`);
+                await page.keyboard.press('Escape');
+                await page.waitForFunction(() => !document.querySelector('[data-screen="minutes-cal"]'));
                 await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-save-row button', `회의록 저장 줄 ${width} ${mode}`);
                 const fields = await page.evaluate(() => ['#minutes-title', '#minutes-attendees', '#minutes-text'].map((sel) => {
                     const r = document.querySelector(sel).getBoundingClientRect();

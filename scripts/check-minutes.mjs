@@ -35,6 +35,8 @@ async function suite(mod, { minutes }) {
     ok(home?.kind === '할 일' && home?.date === '2026-11-05', '내일까지 제출이 할 일(11/5)이 아닙니다.');
     ok(r.ask.length === 1 && r.ask[0].title.includes('보고서') && r.ask[0].low && r.ask[0].kind === '할 일', `흐린 줄이 노란 확인 카드로 가지 않습니다: ${JSON.stringify(r.ask)}`);
     const all = [...r.auto, ...r.ask];
+    const agenda = minutesCandidates('안건\n- 체험학습 장소 정하기\n\n결정\n- 과학관', 'meet-1761600000001', { now });
+    ok(!agenda.auto.length && !agenda.ask.length, `안건 칸의 논의거리를 할 일로 묻습니다: ${JSON.stringify(agenda.ask.map((i) => i.title))}`);
     ok(!all.some((i) => /안전교육|축제|안건/.test(i.title)), '날짜·할 일 신호 없는 논의 줄까지 등록하려 합니다.');
     ok(all.every((i) => /^mt-[A-Za-z0-9_]+-[a-z0-9]{7}$/.test(i.id) && i.id.length <= 40), `등록 id 모양이 규칙(40자, 영숫자)에 맞지 않습니다: ${all.map((i) => i.id)}`);
     ok(all.every((i) => i.memo === '회의록: 학년회의'), '등록 항목에 원래 회의록 표시가 없습니다.');
@@ -109,7 +111,8 @@ const mutants = [
     ['M4 id 가 저장마다 바뀜', "hash(`${line.replace(/\\s+/g, ' ').trim()}#${n}`)", "hash(`${line}#${n}#${Math.random()}`)"],
     ['M5 기억 무시', 'const skip = new Set([...registered, ...remembered]);', 'const skip = new Set([...registered]);'],
     ['M6 회의록 표시 없음', "memo: title ? `회의록: ${title}`.slice(0, 80) : '회의록에서',", "memo: '',"],
-    ['M7 할 일 머리 무시', 'if (TODO_HEAD.test(line)) { inTodo = true; continue; }', 'if (TODO_HEAD.test(line)) { continue; }'],
+    ['M7 할 일 머리 무시', 'if (TODO_HEAD.test(line)) { inTodo = true; inOther = false; continue; }', 'if (TODO_HEAD.test(line)) { inOther = false; continue; }'],
+    ['M11 안건 칸 구분 무시', 'const cue = inTodo || (!inOther && TODO_CUE.test(line));', 'const cue = inTodo || TODO_CUE.test(line);'],
     ['M8 기억이 임시 저장을 덮음', 'const all = JSON.parse(store?.getItem(MINUTES_DRAFT_KEY) || \'{}\') || {};\n        const links', 'const all = {};\n        const links'],
     ['M9 연결 찾기 아무거나', "if (!id.startsWith(MINUTES_LINK_PREFIX)) return null;", ''],
     ['M10 개수 제한 없음', 'if (auto.length + ask.length >= MAX_ITEMS) break;', ''],
