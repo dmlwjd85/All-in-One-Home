@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joined, markMinutesDeclined, minutesKnownElsewhere, removeItem, saveParsed, saveTextItem } from '../lib/db.js';
+import { finishMinutesAsk, joined, registerMinutes, removeItem, saveTextItem } from '../lib/db.js';
 import { allStarts } from '../lib/periodLocal.js';
-import { forgetMinutesLinks, freshCandidates, minutesCandidates, minutesNow, readMinutesLinks, rememberMinutesLinks } from '../lib/minutesExtract.js';
+import { forgetMinutesLinks, setMinutesPending } from '../lib/minutesExtract.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import {
     MINUTES_ATTENDEES_MAX, MINUTES_TAG, MINUTES_TEXT_MAX, MINUTES_TITLE_MAX,
@@ -132,6 +132,7 @@ function MinutesView({ row }) {
         if (failed?.storageFailed) return;
         writeMinutesDraft(row.id, null);
         forgetMinutesLinks(row.id);
+        setMinutesPending(row.id, null);
         showToast('회의록을 지웠어요.', true);
         go('#/minutes');
     }
@@ -251,28 +252,21 @@ function MinutesEditor({ row, wide = false }) {
         }
         writeMinutesDraft(key, null);
         const saidSensitive = result?.sensitive || minutesSensitive(draft);
-        /* 본문에서 일정·할 일을 찾아 등록합니다. 분명한 줄은 바로, 흐린 줄은 노란 카드로 한 번 묻습니다. */
-        const registered = [...joined(data, 'todos'), ...joined(data, 'events')].map((item) => item.id);
-        const found = freshCandidates(
-            minutesCandidates(next.text, next.id, { now: minutesNow(next.date), periods: allStarts(data.profile?.periodStarts), title: next.title }),
-            { registered, remembered: readMinutesLinks(next.id) },
-        );
-        /* 다른 기기에서 이미 등록했거나, 지웠거나(묘비), 빼기로 정한 id 는 다시 만들거나 묻지 않습니다. */
-        const elsewhere = await minutesKnownElsewhere([...found.auto, ...found.ask].map((item) => item.id));
-        if (elsewhere.size) {
-            found.auto = found.auto.filter((item) => !elsewhere.has(item.id));
-            found.ask = found.ask.filter((item) => !elsewhere.has(item.id));
+        /* 본문에서 일정·할 일을 찾아 등록합니다. 분명한 줄은 바로, 흐린 줄은 노란 카드로 한 번 묻습니다.
+           다른 기기에서 지운·정한 항목은 되살리지 않고, 오프라인이면 등록을 미뤘다가 연결되면 확인 뒤 등록합니다(registerMinutes). */
+        const found = await registerMinutes({
+            id: next.id, title: next.title, date: next.date, text: next.text,
+            prev: row ? { text: row.text || '', date: row.date || '' } : null,
+            periods: allStarts(data.profile?.periodStarts),
+        });
+        if (found?.storageFailed) {
+            saving.current = false;
+            return;
         }
         let note = saidSensitive ? '민감할 수 있는 낱말이 있어 이 기기에만 남겼어요.' : '회의록을 저장했어요.';
-        if (found.auto.length) {
-            const put = await saveParsed(found.auto);
-            if (put?.storageFailed) {
-                saving.current = false;
-                return;
-            }
-            rememberMinutesLinks(next.id, found.auto.map((item) => item.id));
-            if (put?.count) note = `${note} 일정·할 일 ${put.count}개를 바로 등록했어요.`;
-        }
+        if (found.count) note = `${note} 일정·할 일 ${found.count}개를 바로 등록했어요.`;
+        if (found.deferred) note = `${note} 연결이 안 돼 일정·할 일 ${found.deferred}개는 연결되면 확인하고 등록할게요.`;
+        if (found.tidied) note = `${note} 고친 줄의 옛 항목 ${found.tidied}개를 정리했어요.`;
         if (found.ask.length) {
             showToast(note, true);
             setAsking({ id: next.id, items: found.ask });
@@ -297,15 +291,11 @@ function MinutesEditor({ row, wide = false }) {
     async function finishAsk(registerAll) {
         if (!asking) return;
         const chosen = registerAll ? asking.items.filter((item) => item.include !== false && ['일정', '할 일'].includes(item.kind)) : [];
-        if (chosen.length) {
-            const put = await saveParsed(chosen);
-            if (put?.storageFailed) return;
-            showToast(put?.ok ? put.message : (put?.message || '등록하지 못했어요.'), Boolean(put?.ok));
-        } else showToast('확인 카드는 등록하지 않았어요.');
-        /* 뺀 카드도 기억해 두어 같은 회의록을 다시 저장할 때 또 묻지 않습니다. */
-        rememberMinutesLinks(asking.id, asking.items.map((item) => item.id));
-        const chosenIds = new Set(chosen.map((item) => item.id));
-        markMinutesDeclined(asking.items.map((item) => item.id).filter((id) => !chosenIds.has(id)));
+        /* 고른 카드는 등록하고, 뺀 카드는 기억하고 다른 기기에도 알립니다(오프라인이면 대기열에 두었다가 다시 씀). */
+        const put = await finishMinutesAsk(asking.id, asking.items, chosen);
+        if (put?.storageFailed) return;
+        if (chosen.length) showToast(put?.ok ? put.message : (put?.message || '등록하지 못했어요.'), Boolean(put?.ok));
+        else showToast('확인 카드는 등록하지 않았어요.');
         go(`#/minutes/${asking.id}`, { replace: true });
     }
 

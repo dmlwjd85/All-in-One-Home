@@ -2,7 +2,8 @@
    넘침·겹침·44px, 작성 칸 위치(첫 화면 안), 달력 팝업, Enter 줄바꿈, 저장 → 일정·할 일 등록과 노란 카드, 다시 저장해도 겹치지 않음. */
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, cpSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
@@ -19,6 +20,7 @@ const origin = `http://127.0.0.1:${port}/`;
 const shots = process.env.SHOT_DIR || 'shots-minutes';
 mkdirSync(shots, { recursive: true });
 const failures = [];
+let uiCaught = 0;
 const check = (cond, msg) => { if (!cond) failures.push(msg); };
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,13 +32,66 @@ for (let i = 0; i < 100; i += 1) {
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const timer = setTimeout(() => { console.error('시간 초과'); process.exit(1); }, 8 * 60 * 1000);
 
-async function open(width, mode, hash) {
+async function open(width, mode, hash, base = origin) {
     const page = await browser.newPage();
     await page.setViewport({ width, height: width >= 900 ? (width >= 1920 ? 1080 : 800) : 760, deviceScaleFactor: 1 });
-    await page.goto(`${origin}?demo=1&at=08:42&mode=${mode}${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${base}?demo=1&at=08:42&mode=${mode}${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForSelector('#minutes-text', { timeout: 15000 });
     await delay(300);
     return page;
+}
+
+
+/* 화면 동작 탐침: Enter 줄바꿈(U1), 날짜 단추 → 달력 팝업(U2), 넓은 화면 2단(U4). 실패 목록을 돌려줍니다. */
+async function probe(base) {
+    const bad = [];
+    const p1 = await open(390, 'light', '#/minutes/new', base);
+    await p1.click('#minutes-text');
+    await p1.keyboard.type('할 일');
+    await p1.keyboard.press('Enter');
+    await p1.keyboard.type('- 메모');
+    const v = await p1.$eval('#minutes-text', (el) => el.value);
+    if (v.split('\n').length !== 2) bad.push(`Enter 가 줄바꿈이 아닙니다: ${JSON.stringify(v)}`);
+    await p1.click('[data-role="minutes-date-btn"]');
+    const cal = await p1.waitForSelector('[role="dialog"][data-screen="minutes-cal"] .cal-grid', { timeout: 2000 }).then(() => true, () => false);
+    if (!cal) bad.push('날짜 단추를 눌러도 달력 팝업이 뜨지 않습니다.');
+    await p1.close();
+    const p2 = await open(1280, 'light', '#/minutes/new', base);
+    const split = await p2.evaluate(() => {
+        const a = document.querySelector('#minutes-text')?.getBoundingClientRect();
+        const side = document.querySelector('.minutes-side')?.getBoundingClientRect();
+        return Boolean(a && side && side.width > 0 && side.left >= a.right - 1 && side.top < a.bottom);
+    });
+    if (!split) bad.push('넓은 화면에서 본문과 목록이 2단으로 놓이지 않습니다.');
+    await p2.close();
+    return bad;
+}
+const UI_MUT = [
+    ['U1 Enter 가로채기', '<Area id="minutes-text"', '<Area id="minutes-text" onKeyDown={(event) => { if (event.key === \'Enter\') event.preventDefault(); }}'],
+    ['U2 달력 팝업 없음', 'onClick={() => setPicking(true)}>', 'onClick={() => setPicking(false)}>'],
+    ['U4 2단 없음', '<div className="minutes-split" data-screen="minutes-split">', '<div className="minutes" data-screen="minutes-split">'],
+];
+/* 변이 사본을 저장소 안 임시 폴더에 빌드해 미리보기로 띄웁니다(node_modules 는 위쪽에서 찾음). */
+async function mutantOrigin(k, from, to) {
+    const dir = resolve(`.minutes-ui-mut-${process.pid}`, String(k));
+    for (const f of readdirSync('.')) {
+        if (['node_modules', 'dist', '.git'].includes(f) || f.startsWith('.minutes-') || f.startsWith('shots')) continue;
+        if (['src', 'public', 'index.html', 'package.json'].includes(f) || /config\.(js|mjs|cjs)$/.test(f) || f.startsWith('.env')) cpSync(f, resolve(dir, f), { recursive: true });
+    }
+    const file = resolve(dir, 'src/ui/Minutes.jsx');
+    const src = readFileSync(file, 'utf8');
+    if (!src.includes(from)) return { missing: true };
+    writeFileSync(file, src.replace(from, to));
+    const built = spawnSync(process.execPath, [viteBin, 'build', '--logLevel', 'error'], { cwd: dir, stdio: 'pipe' });
+    if (built.status !== 0) return { error: String(built.stderr).slice(0, 300) };
+    const mport = await freePort();
+    const proc = spawn(process.execPath, [viteBin, 'preview', '--host', '127.0.0.1', '--port', String(mport), '--strictPort'], { cwd: dir, stdio: 'pipe' });
+    const url = `http://127.0.0.1:${mport}/`;
+    for (let i = 0; i < 100; i += 1) {
+        try { if ((await fetch(url)).ok) break; } catch { /* 기다립니다 */ }
+        await delay(150);
+    }
+    return { url, proc };
 }
 
 /* 보이는 단추·칸끼리 겹침, 화면 밖 넘침, 44px 미만. */
@@ -160,7 +215,23 @@ try {
     await wide.waitForSelector('[data-screen="minutes-view"]', { timeout: 5000 }).catch(() => check(false, '넓은 화면 저장 뒤 보기로 가지 않습니다.'));
     await wide.screenshot({ path: `${shots}/minutes-view-1920-light.png` });
     await wide.close();
+
+    /* 화면 변이: 일부러 망가뜨린 화면을 위 탐침이 잡는지 봅니다(소스 맞추기 아님). */
+    const baseProbe = await probe(origin);
+    for (const m of baseProbe) check(false, `탐침(원본): ${m}`);
+    let k = 0;
+    for (const [name, from, to] of UI_MUT) {
+        k += 1;
+        const got = await mutantOrigin(k, from, to);
+        if (got.missing) { check(false, `변이 ${name}: 바꿀 코드를 찾지 못했습니다.`); continue; }
+        if (got.error) { check(false, `변이 ${name}: 빌드 실패 ${got.error}`); continue; }
+        let caught;
+        try { caught = (await probe(got.url)).length > 0; } catch { caught = true; } finally { got.proc.kill(); }
+        check(caught, `변이 ${name} 이(가) 살아남았습니다.`);
+        if (caught) uiCaught += 1;
+    }
 } finally {
+    rmSync(resolve(`.minutes-ui-mut-${process.pid}`), { recursive: true, force: true });
     clearTimeout(timer);
     await browser.close();
     preview.kill();
@@ -169,4 +240,4 @@ if (failures.length) {
     console.error(`회의록 화면 검사 실패 ${failures.length}건:\n- ${failures.join('\n- ')}`);
     process.exit(1);
 }
-console.log('회의록 화면 검사 통과');
+console.log(`회의록 화면 검사 통과 · 화면 변이 ${uiCaught}/3 검출`);

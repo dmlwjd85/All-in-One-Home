@@ -1,5 +1,6 @@
 /* 회의록 → 일정·할 일 자동 등록, 2단 배치, 날짜 팝업 검사. 변이(일부러 망가뜨린 코드)도 잡는지 함께 봅니다. */
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync, cpSync } from 'node:fs';
+import { flowSuite } from './minutes-flow.mjs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -70,6 +71,27 @@ async function suite(mod, { minutes }) {
     ok(minutes.readMinutesDraft('new', store)?.title === '쓰는 중', '등록 기억이 쓰던 회의록 임시 저장을 지웁니다.');
     forgetMinutesLinks('meet-1', store);
     ok(readMinutesLinks('meet-1', store).length === 0 && minutes.readMinutesDraft('new', store), '회의록을 지워도 기억이 남거나 임시 저장까지 지워집니다.');
+    /* r2 6번: 날짜가 줄 끝에 있어도 제목이 '할 일'이 되지 않습니다. */
+    const tail = minutesCandidates('- 내일까지 가정통신문 제출 2026-11-20', 'meet-t', { now });
+    const tailItems = [...tail.auto, ...tail.ask];
+    ok(tailItems.length === 1 && tailItems[0].title === '가정통신문 제출', `줄 끝 날짜 제목이 틀립니다: ${JSON.stringify(tailItems.map((i) => i.title))}`);
+    ok(mod.titleFromLine('2026-11-20 학부모 상담 준비') === '학부모 상담 준비', `titleFromLine: ${mod.titleFromLine('2026-11-20 학부모 상담 준비')}`);
+    /* 고친 줄 정리 도우미 */
+    const pv = { text: '할 일\n- 2030-01-20까지 출결 서류 제출\n- 2030-01-21까지 상담 정리', date: '2030-01-10' };
+    const nx = { text: '할 일\n- 2030-01-22까지 출결 서류 제출\n- 2030-01-21까지 상담 정리', date: '2030-01-10' };
+    const gone = mod.vanishedCandidates(pv, nx, 'meet-v');
+    ok(gone.length === 1 && gone[0].date === '2030-01-20', `사라진 줄 찾기가 틀립니다: ${JSON.stringify(gone.map((i) => i.date))}`);
+    ok(mod.vanishedCandidates(pv, pv, 'meet-v').length === 0, '본문이 같은데 사라진 줄이 있다고 합니다.');
+    const row = { id: gone[0]?.id, title: gone[0]?.title, due: gone[0]?.date, done: false };
+    ok(mod.untouchedSince(gone[0], row, 'todos'), '손대지 않은 항목을 고친 것으로 봅니다.');
+    ok(!mod.untouchedSince(gone[0], { ...row, title: '바꾼 제목' }, 'todos') && !mod.untouchedSince(gone[0], { ...row, done: true }, 'todos') && !mod.untouchedSince(gone[0], { ...row, due: '2030-02-01' }, 'todos'), '사용자가 고친 항목을 손대지 않은 것으로 봅니다.');
+    /* 미룬 등록·묘비 대기열 */
+    const ps = memStore();
+    mod.setMinutesPending('meet-p', [{ id: 'mt-a' }], ps);
+    mod.queueMinutesTombs(['mt-b', 'mt-c', 'mt-b'], ps);
+    ok(mod.readMinutesPending(ps)['meet-p']?.length === 1 && mod.readMinutesTombQueue(ps).join() === 'mt-b,mt-c', '미룬 등록·묘비 대기열을 기억하지 못합니다.');
+    mod.dropMinutesTombs(['mt-b'], ps); mod.setMinutesPending('meet-p', null, ps);
+    ok(mod.readMinutesTombQueue(ps).join() === 'mt-c' && !mod.readMinutesPending(ps)['meet-p'], '대기열에서 빼지 못합니다.');
     store.setItem('ssug-gyomu-minutes-draft', '{깨짐');
     ok(readMinutesLinks('meet-1', store).length === 0, '깨진 저장에서 멈춥니다.');
     return bad;
@@ -85,14 +107,9 @@ function uiChecks(ui, css) {
     ok(/role="dialog"[^>]*aria-label="회의 날짜 고르기"/.test(ui) && /<DateGrid value=\{date\}[^\n]*setPicking\(false\)/.test(ui), '날짜를 바꿀 때 달력 팝업이 뜨지 않습니다.');
     const top = ui.indexOf('className="minutes-top"');
     ok(top > 0 && top < ui.indexOf('<Area id="minutes-text"') && ui.indexOf('<Area id="minutes-text"') < ui.indexOf('className="minutes-extra"'), '본문 칸이 위쪽(제목·날짜 바로 아래)에 있지 않습니다.');
-    ok(/minutesCandidates\(/.test(ui) && /saveParsed\(found\.auto\)/.test(ui), '저장할 때 일정·할 일을 등록하지 않습니다.');
-    ok(/CaptureCard/.test(ui) && /setAsking\(\{ id: next\.id, items: found\.ask \}\)/.test(ui), '흐린 줄을 노란 카드로 묻지 않습니다.');
-    ok(/rememberMinutesLinks\(asking\.id, asking\.items\.map/.test(ui), '뺀 카드를 기억하지 않아 다시 저장하면 또 묻습니다.');
+    ok(/registerMinutes\(\{/.test(ui) && /finishMinutesAsk\(asking\.id/.test(ui) && /CaptureCard/.test(ui), '회의록 화면이 저장 흐름(registerMinutes·finishMinutesAsk)을 쓰지 않습니다.');
     ok(/className="minutes-split"/.test(ui) && /grid-template-columns: minmax\(0, 1fr\) minmax\(260px, 340px\)/.test(css), '넓은 화면 2단 배치가 없습니다.');
     ok(/\.minutes-date-btn \{ min-height: 44px/.test(css), '날짜 단추가 44px 보다 작습니다.');
-    ok(/minutesCandidates\(next\.text, next\.id, \{ now: minutesNow\(next\.date\)/.test(ui), '상대 날짜를 회의록 날짜 기준으로 세지 않습니다.');
-    ok(/await minutesKnownElsewhere\(/.test(ui) && /found\.auto = found\.auto\.filter\(\(item\) => !elsewhere\.has/.test(ui) && /found\.ask = found\.ask\.filter\(\(item\) => !elsewhere\.has/.test(ui), '다른 기기에서 지운·정한 항목을 다시 만들거나 묻습니다.');
-    ok(/markMinutesDeclined\(asking\.items\.map\(\(item\) => item\.id\)\.filter\(\(id\) => !chosenIds\.has\(id\)\)\)/.test(ui), '노란 카드에서 뺀 결정을 다른 기기에 알리지 않습니다.');
     return bad;
 }
 
@@ -106,19 +123,6 @@ const detail = readFileSync('src/ui/DetailSheet.jsx', 'utf8');
 const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
 if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(detail)) failures.push('일정·할 일 자세히에 원래 회의록 단추가 없습니다.');
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
-const db = readFileSync('src/lib/db.js', 'utf8');
-const cloud = readFileSync('src/lib/cloud.js', 'utf8');
-const dbChecks = (dbText, cloudText) => {
-    const out = [];
-    if (!/out\[id\] && \(out\[id\]\.row \|\| out\[id\]\.gone != null\)/.test(dbText)) out.push('클라우드에 있거나 지운 기록이 있는 id 를 가려내지 않습니다.');
-    if (!/tomb: writeTombs/.test(dbText) || !/tombs', tombId\('todos', id\)\), \{ k: 'todos', at: serverTimestamp\(\) \}/.test(cloudText)) out.push('뺀 결정을 묘비로 남기지 않습니다.');
-    return out;
-};
-failures.push(...dbChecks(db, cloud));
-for (const [name, from, to] of [['D1 지운 기록 무시', '(out[id].row || out[id].gone != null)', '(out[id].row)'], ['D2 묘비 안 씀', 'tomb: writeTombs,', 'tomb: null,']]) {
-    if (!db.includes(from)) failures.push(`변이 ${name}: 바꿀 코드를 찾지 못했습니다.`);
-    else if (!dbChecks(db.replace(from, to), cloud).length) failures.push(`변이 ${name} 이(가) 살아남았습니다.`);
-}
 const sw = readFileSync('public/sw.js', 'utf8');
 if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v59'")) failures.push('서비스 워커가 v59가 아닙니다.');
 
@@ -152,21 +156,36 @@ for (const [name, from, to] of mutants) {
     try { caught = (await suite(await import(pathToFileURL(file).href), { minutes })).length > 0; } catch { caught = true; }
     if (!caught) { missed += 1; failures.push(`변이 ${name} 이(가) 살아남았습니다.`); }
 }
-const UI_MUT = [
-    ['U1 Enter 가로채기', '<Area id="minutes-text"', '<Area id="minutes-text" onKeyDown={() => {}}'],
-    ['U2 달력 팝업 없이 칸에 펼침', 'aria-label="회의 날짜 고르기"', 'aria-label="날짜"'],
-    ['U3 저장 때 등록 안 함', 'await saveParsed(found.auto)', 'await Promise.resolve(found.auto)'],
-    ['U4 2단 없음', 'className="minutes-split"', 'className="minutes"'],
-    ['U5 오늘 기준 상대 날짜', 'now: minutesNow(next.date)', 'now: new Date()'],
-    ['U6 다른 기기 묘비 무시', 'found.auto = found.auto.filter((item) => !elsewhere.has(item.id));', ''],
-    ['U7 뺀 결정 안 남김', 'markMinutesDeclined(asking.items.map((item) => item.id).filter((id) => !chosenIds.has(id)));', ''],
+/* 저장 흐름 변이: src 전체를 저장소 안 임시 폴더에 복사해 고친 뒤 db.js 를 실제로 돌립니다(소스 맞추기 아님). */
+const flowBase = await flowSuite(pathToFileURL(join(root, 'src/lib/db.js')).href);
+failures.push(...flowBase.map((m) => `저장 흐름: ${m}`));
+const FLOW_MUT = [
+    ['U3 저장 때 등록 안 함', 'db.js', 'const put = await saveParsed(found.auto);', 'const put = { count: 0 };'],
+    ['U5 오늘 기준 상대 날짜', 'db.js', 'minutesCandidates(text, id, { ...opts, now: minutesNow(date) })', 'minutesCandidates(text, id, { ...opts, now: new Date() })'],
+    ['U6 다른 기기 묘비 무시', 'db.js', 'found.auto = found.auto.filter((item) => !check.known.has(item.id));', ''],
+    ['U7 뺀 결정 안 남김', 'db.js', 'markMinutesDeclined(items.map((item) => item.id).filter((id) => !chosenIds.has(id)))', 'Promise.resolve(0)'],
+    ['P1 확인 실패를 빈 집합으로', 'db.js', "if (!out || typeof out !== 'object') return { known: new Set(), sure: false };", "if (!out || typeof out !== 'object') return { known: new Set(), sure: true };"],
+    ['Q1 뺀 결정 대기열 없음', 'db.js', '    queueMinutesTombs(ids);\n    return flushMinutesTombs();', '    return Promise.resolve(cloudApi.tomb(state.auth.uid, ids)).then((d) => d.length).catch(() => 0);'],
+    ['T1 고친 항목도 지움', 'db.js', 'if (!hit || !untouchedSince(item, hit.row, hit.bucket)) continue;', 'if (!hit) continue;'],
+    ['T2 고친 줄 정리 안 함', 'db.js', 'const tidied = await tidyEditedMinutes(id, prev, { text, date }, opts);', 'const tidied = 0;'],
+    ['S1 미룬 등록 다시 안 함', 'db.js', "        const check = await minutesCloudCheck(fresh.map((item) => item.id));\n        if (!check.sure) continue;", '        continue;'],
 ];
-for (const [name, from, to] of UI_MUT) {
-    if (!ui.includes(from)) { failures.push(`변이 ${name}: 바꿀 코드를 찾지 못했습니다.`); continue; }
-    if (!uiChecks(ui.replace(from, to), css).length) { missed += 1; failures.push(`변이 ${name} 이(가) 살아남았습니다.`); }
+const mutRoot = join(root, `.minutes-mut-${process.pid}`);
+let k = 0;
+for (const [name, file, from, to] of FLOW_MUT) {
+    k += 1;
+    const src = readFileSync(join(root, 'src/lib', file), 'utf8');
+    if (!src.includes(from)) { failures.push(`변이 ${name}: 바꿀 코드를 찾지 못했습니다(검사를 고쳐 주세요).`); continue; }
+    const dirK = join(mutRoot, String(k));
+    cpSync(join(root, 'src'), join(dirK, 'src'), { recursive: true });
+    writeFileSync(join(dirK, 'src/lib', file), src.replace(from, to));
+    let caught;
+    try { caught = (await flowSuite(pathToFileURL(join(dirK, 'src/lib/db.js')).href)).length > 0; } catch { caught = true; }
+    if (!caught) { missed += 1; failures.push(`변이 ${name} 이(가) 살아남았습니다.`); }
 }
+rmSync(mutRoot, { recursive: true, force: true });
 rmSync(dir, { recursive: true, force: true });
-const total = mutants.length + UI_MUT.length + 2;
+const total = mutants.length + FLOW_MUT.length;
 if (failures.length) {
     console.error(`회의록 검사 실패 ${failures.length}건:\n- ${failures.join('\n- ')}`);
     process.exit(1);

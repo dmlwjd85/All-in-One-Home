@@ -14,6 +14,19 @@ const TODO_CUE = /제출|회신|마감|기한|까지|작성|준비|확인|공유
 const TODO_HEAD = /^(?:#+\s*)?(?:할\s*일|해야\s*할\s*일|후속\s*조치|담당|to-?do|todo|액션)\s*[:：]?\s*$/i;
 const OTHER_HEAD = /^(?:#+\s*)?(?:안건|논의|논의\s*내용|결정|결정한\s*것|결정\s*사항|협의\s*내용|참석|기타|메모)\s*[:：]?\s*$/;
 const MAX_ITEMS = 30;
+const GENERIC_TITLE = /^(?:할\s*일|일정)$/;
+/** 줄에서 날짜·시각 낱말을 걷어 제목으로 씁니다. */
+export function titleFromLine(line) {
+    return String(line || '')
+        .replace(/\d{4}[-./]\s*\d{1,2}[-./]\s*\d{1,2}\.?/g, ' ')
+        .replace(/\d{1,2}\s*[/.월]\s*\d{1,2}\s*일?(?:\s*\([월화수목금토일]\))?/g, ' ')
+        .replace(/(?:오늘|내일|모레|글피|다음\s*주|이번\s*주)\s*(?:[월화수목금토일]요일)?/g, ' ')
+        .replace(/\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*교시/g, ' ')
+        .replace(/^\s*까지\s*|\s까지\s/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100);
+}
 
 /** '내일'·'다음 주' 같은 상대 날짜의 기준: 회의록 날짜(서울 오전 9시). 날짜가 없거나 이상하면 지금. */
 export function minutesNow(ymd, fallback = new Date()) {
@@ -72,8 +85,18 @@ export function minutesCandidates(text, minutesId, { now = new Date(), periods =
         let parsed;
         try { parsed = parseSchoolMessages(line, { now, periods }); } catch { continue; }
         const items = parsed?.items || [];
+        /* 한 줄에 '내일까지'와 절대 날짜가 함께 있으면 해석기가 제목 없는 '할 일' 항목을 하나 더 만듭니다.
+           같은 줄에 제목이 있는 항목이 있으면 그 빈 항목은 버리고, 하나뿐이면 줄에서 제목을 되살립니다(PR #64 r2 6번). */
+        const named = items.some((item) => !GENERIC_TITLE.test(String(item.title || '').trim()));
+        const dropped = named && items.some((item) => GENERIC_TITLE.test(String(item.title || '').trim()));
         items.forEach((item, n) => {
             if (!String(item.title || '').trim()) return;
+            if (GENERIC_TITLE.test(String(item.title).trim())) {
+                if (named) return;
+                const back = titleFromLine(line);
+                if (!back) return;
+                item = { ...item, title: back };
+            }
             const when = Boolean(item.date || item.time || item.period);
             /* 안건·결정 칸의 줄은 날짜·시간이 있을 때만 잡습니다(논의거리를 할 일로 묻지 않게). */
             const cue = inTodo || (!inOther && TODO_CUE.test(line));
@@ -102,6 +125,11 @@ export function minutesCandidates(text, minutesId, { now = new Date(), periods =
                 low: Boolean(item.low) || !when,
                 warning: item.warning || (when ? '' : '날짜가 없어요. 맞으면 그대로, 아니면 빼 주세요.'),
             };
+            if (dropped && /같은 문장에서 나눈/.test(draft.warning)) {
+                draft.warning = draft.warning.replace(/\s*같은 문장에서 나눈 내용이라 저장하면 정리함에 들어가요\.?/, '').trim()
+                    || `날짜가 둘이라 ${draft.date || '한쪽'} 날짜로 잡았어요. 맞는지 확인해 주세요.`;
+                draft.low = true;
+            }
             if (draft.low) ask.push(draft);
             else auto.push(draft);
         });
@@ -146,4 +174,107 @@ export function forgetMinutesLinks(minutesId, store = globalThis.localStorage) {
 export function freshCandidates(found, { registered = [], remembered = [] } = {}) {
     const skip = new Set([...registered, ...remembered]);
     return { auto: found.auto.filter((item) => !skip.has(item.id)), ask: found.ask.filter((item) => !skip.has(item.id)) };
+}
+
+/* ── 오프라인 저장·뺀 결정 대기열(PR #64 r2 1·3번) ──
+   클라우드를 확인하지 못하면(오프라인) 바로 등록할 항목을 '미룸'에 두고, 연결되면 다시 확인한 뒤 등록합니다.
+   노란 카드에서 뺀 결정을 클라우드에 못 남기면 '묘비 대기열'에 두고 다시 씁니다. 같은 열쇠(ssug-gyomu-minutes-draft) 안에 둡니다. */
+const PENDING_SLOT = '__pending';
+const TOMBQ_SLOT = '__tombq';
+function readAll(store) {
+    try { const all = JSON.parse(store?.getItem(MINUTES_DRAFT_KEY) || '{}'); return all && typeof all === 'object' ? all : {}; } catch { return null; }
+}
+function writeAll(all, store) {
+    try {
+        if (Object.keys(all).length) store?.setItem(MINUTES_DRAFT_KEY, JSON.stringify(all));
+        else store?.removeItem(MINUTES_DRAFT_KEY);
+        return true;
+    } catch { return false; }
+}
+/** { [회의록 id]: 항목[] } */
+export function readMinutesPending(store = globalThis.localStorage) {
+    const all = readAll(store);
+    const p = all?.[PENDING_SLOT];
+    return p && typeof p === 'object' ? p : {};
+}
+export function setMinutesPending(minutesId, items, store = globalThis.localStorage) {
+    const all = readAll(store);
+    if (!all) return false;
+    const p = all[PENDING_SLOT] && typeof all[PENDING_SLOT] === 'object' ? all[PENDING_SLOT] : {};
+    if (items?.length) p[minutesId] = items.slice(0, MAX_ITEMS);
+    else delete p[minutesId];
+    if (Object.keys(p).length) all[PENDING_SLOT] = p;
+    else delete all[PENDING_SLOT];
+    return writeAll(all, store);
+}
+export function readMinutesTombQueue(store = globalThis.localStorage) {
+    const q = readAll(store)?.[TOMBQ_SLOT];
+    return Array.isArray(q) ? q.filter((id) => typeof id === 'string') : [];
+}
+export function queueMinutesTombs(ids, store = globalThis.localStorage) {
+    if (!ids?.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    all[TOMBQ_SLOT] = [...new Set([...readMinutesTombQueue(store), ...ids])].slice(-500);
+    writeAll(all, store);
+}
+export function dropMinutesTombs(ids, store = globalThis.localStorage) {
+    if (!ids?.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    const gone = new Set(ids);
+    const rest = readMinutesTombQueue(store).filter((id) => !gone.has(id));
+    if (rest.length) all[TOMBQ_SLOT] = rest;
+    else delete all[TOMBQ_SLOT];
+    writeAll(all, store);
+}
+
+/* 지운(또는 다른 기기가 지운 걸 받은) 회의록 항목 id. 클라우드 묘비가 30일 뒤 정리돼도 이 기기는 되살리지 않습니다. */
+const GONE_SLOT = '__gone';
+export function readMinutesGone(store = globalThis.localStorage) {
+    const q = readAll(store)?.[GONE_SLOT];
+    return Array.isArray(q) ? q.filter((id) => typeof id === 'string') : [];
+}
+export function noteMinutesGone(ids, store = globalThis.localStorage) {
+    const list = (ids || []).filter((id) => typeof id === 'string' && id.startsWith(MINUTES_LINK_PREFIX));
+    if (!list.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    all[GONE_SLOT] = [...new Set([...readMinutesGone(store), ...list])].slice(-1000);
+    writeAll(all, store);
+}
+export function unnoteMinutesGone(ids, store = globalThis.localStorage) {
+    if (!ids?.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    const drop = new Set(ids);
+    const rest = readMinutesGone(store).filter((id) => !drop.has(id));
+    if (rest.length) all[GONE_SLOT] = rest;
+    else delete all[GONE_SLOT];
+    writeAll(all, store);
+}
+
+/**
+ * 회의록 줄을 고쳐 다시 저장할 때(PR #64 r2 4번): 예전 본문에서 나왔는데 새 본문에서는 사라진 등록 id.
+ * 고친 줄은 새 id 로 다시 나오므로, 옛 항목은 사용자가 손대지 않았을 때만 정리합니다.
+ */
+export function vanishedCandidates(prev, next, minutesId, opts = {}) {
+    if (!prev || String(prev.text || '') === String(next.text || '')) return [];
+    const old = minutesCandidates(prev.text, minutesId, { ...opts, now: minutesNow(prev.date, opts.now) });
+    const fresh = minutesCandidates(next.text, minutesId, { ...opts, now: minutesNow(next.date, opts.now) });
+    const keep = new Set([...fresh.auto, ...fresh.ask].map((item) => item.id));
+    return [...old.auto, ...old.ask].filter((item) => !keep.has(item.id));
+}
+
+/** 등록된 줄(row)이 회의록이 만든 그대로인가(사용자가 제목·날짜·시각을 고치거나 완료하지 않았나). */
+export function untouchedSince(item, row, bucket) {
+    if (!item || !row) return false;
+    if (bucket === 'todos') {
+        const title = item.time && !String(item.title).includes(item.time) ? `${item.time} ${item.title}`.trim().slice(0, 100) : String(item.title).trim().slice(0, 100);
+        return row.title === title && !row.done && String(row.due || '') === String(item.date || '') && !row.time;
+    }
+    if (row.title !== String(item.title).trim().slice(0, 60)) return false;
+    if (item.date && row.date !== item.date) return false;
+    if (String(row.time || '') !== String(item.time || '')) return false;
+    return true;
 }
