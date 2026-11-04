@@ -174,6 +174,24 @@ check((await cloudSettings())?.t === '15:20' && leaveOf('A') === '15:20', `L8: �
     off();
 }
 
+/* L11: 2일 넘게 오프라인이던 기기. 규칙은 오래된 at을 영구히 거절하므로,
+   오늘 조퇴면 지금 시각으로 다시 찍어 보내고, 오늘이 아니면 보내지 않고 지웁니다. */
+{
+    cur = 'A';
+    const stale = Date.now() - 3 * 24 * HOUR;
+    await on('A', () => { stores.A.set(pl.A.LEAVE_KEY, JSON.stringify({ [TODAY]: '11:10', date: TODAY, at: stale })); });
+    const r = await on('A', (db) => db.flushCloud());
+    check((await cloudSettings())?.t === '11:10', `L11: 오래된 at의 오늘 조퇴가 다시 찍혀 올라가지 않았습니다: ${JSON.stringify(await cloudSettings())} ${JSON.stringify(r)}`);
+    cur = 'A';
+    check(pl.A.leaveState().at > stale + 24 * HOUR, 'L11: 다시 보낸 조퇴의 로컬 at이 새로 찍히지 않았습니다.');
+    const yday = new Date(Date.parse(`${TODAY}T12:00:00Z`) - 24 * HOUR).toISOString().slice(0, 10);
+    await on('A', () => { stores.A.set(pl.A.LEAVE_KEY, JSON.stringify({ [yday]: '10:00', date: yday, at: stale })); });
+    const r2 = await on('A', (db) => db.flushCloud());
+    check((await cloudSettings())?.t === '11:10' && !(r2?.rejected || []).includes('settings/leave'), `L11: 지난날 조퇴를 올리려 했습니다: ${JSON.stringify(await cloudSettings())} ${JSON.stringify(r2)}`);
+    cur = 'A';
+    check(!pl.A.leaveState().date, `L11: 지난날 조퇴가 로컬에서 정리되지 않았습니다: ${JSON.stringify(pl.A.leaveState())}`);
+}
+
 /* 규칙: 모양이 틀린 조퇴 칸은 거절, 맞는 칸은 받습니다. */
 const tryLeave = (leave) => setDoc(doc(admin(), 'users', UID, 'settings', 'leave'), { updatedAt: serverTimestamp(), ...leave }).then(() => true, () => false);
 check(!(await setDoc(doc(admin(), 'users', UID, 'settings', 'other'), { d: TODAY, t: '', at: 1 }).then(() => true, () => false)), '규칙: settings 아래 낯선 문서를 받아들였습니다.');
@@ -215,6 +233,24 @@ check(!(await setDoc(doc(admin(), 'users', UID, 'settings', 'leave'), { d: TODAY
     try { r3 = await cloud.pushUserData(UID, state, { hashes: r1.hashes || {} }); } finally { Date.now = realNow; }
     const b2 = cloud.leaveBackoffForTest();
     check((r3.rejected || []).includes('settings/leave') && b2.wait === b1.wait * 2, `L10: 쉬는 시간이 늘지 않았습니다: ${b1.wait} → ${b2.wait}`);
+    /* 늦추기 상태는 로컬에 남아 새로 고쳐도 이어집니다. */
+    check(JSON.parse(stores.A.get('ssug-gyomu-leave-backoff') || '{}').wait === b2.wait, `L10: 늦추기 상태가 로컬에 남지 않았습니다: ${stores.A.get('ssug-gyomu-leave-backoff')}`);
+    /* L12: 거절이 이어져도 쉬는 시간은 6시간을 넘지 않습니다. */
+    let last = b2;
+    const waits = [];
+    /* 날짜가 넘어가 조퇴가 지워지지 않게 조퇴 시계는 실제 시각에 묶어 둡니다. */
+    const skew = devices.A.db.serverNow() - realNow();
+    pl.A.useLeaveClock(() => realNow() + skew);
+    for (let i = 0; i < 9; i += 1) {
+        const base = Date.now;
+        const shift = last.until - realNow() + 1000;
+        Date.now = () => base() + shift;
+        try { await cloud.pushUserData(UID, state, { hashes: r1.hashes || {} }); } finally { Date.now = base; }
+        last = cloud.leaveBackoffForTest();
+        waits.push(last.wait);
+    }
+    pl.A.useLeaveClock(() => devices.A.db.serverNow());
+    check(waits.every((w) => w <= 6 * HOUR) && waits.at(-1) === 6 * HOUR, `L12: 쉬는 시간 상한(6시간)이 지켜지지 않았습니다: ${waits.map((w) => Math.round(w / 60000)).join(', ')}분`);
     devices.A.fb.useFirebaseForTest({ config, bundle: { app: null, auth: null, db: devices.A.fs, memoryOnly: false } });
     cloud.resetLeaveBackoffForTest();
     offline.A = false;

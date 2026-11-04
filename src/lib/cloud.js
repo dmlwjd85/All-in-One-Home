@@ -1,11 +1,13 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
 import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, cleanLeave, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
-import { leaveNow, leaveState, readPeriodLocal, setLeave } from './periodLocal.js';
+import { clearLeave, leaveNow, leaveState, readLeaveBackoff, readPeriodLocal, setLeave, writeLeaveBackoff } from './periodLocal.js';
 
 /* 조퇴 문서를 규칙이 거절하면(예: 새 규칙 게시 전) 5분부터 두 배씩, 6시간까지 쉬었다가 다시 올립니다. */
-let leaveBackoff = { mark: '', until: 0, wait: 0 };
-export function resetLeaveBackoffForTest() { leaveBackoff = { mark: '', until: 0, wait: 0 }; }
-export function leaveBackoffForTest() { return { ...leaveBackoff }; }
+/* 재시도 늦추기는 로컬에 둬서 새로 고쳐도 이어집니다. */
+const LEAVE_MAX_WAIT = 6 * 3600 * 1000;
+const LEAVE_MAX_AGE = 2 * 24 * 3600 * 1000;
+export function resetLeaveBackoffForTest() { writeLeaveBackoff(null); }
+export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -217,13 +219,24 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     }
 
     /* 오늘 조퇴 시각: settings/leave 한 문서. 클라우드 값을 읽어 더 늦게 고친 쪽만 남깁니다(같으면 그대로). */
-    const rawLeave = leaveState();
+    let rawLeave = leaveState();
+    /* 오랫동안 오프라인이던 기기: 규칙은 2일보다 오래된 at을 영구히 거절합니다.
+       오늘 조퇴면 지금 시각으로 다시 찍어 보내고, 오늘이 아니면 올리지 않고 지웁니다. */
+    if (rawLeave.date) {
+        const today = new Date(leaveNow() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+        if (rawLeave.date !== today) { clearLeave(); rawLeave = leaveState(); }
+        else if (rawLeave.at > 0 && rawLeave.at < leaveNow() - LEAVE_MAX_AGE + 10 * 60 * 1000) {
+            setLeave(rawLeave.date, rawLeave.hm);
+            rawLeave = leaveState();
+        }
+    }
     let leave = cleanLeave(rawLeave);
     /* 예전 모양(at 없음) 로컬 값: 클라우드에 조퇴 문서가 없을 때만 지금 시각으로 올립니다(있으면 클라우드 값이 이깁니다). */
     const legacyLeave = !leave && !rawLeave.at && Boolean(rawLeave.date && rawLeave.hm);
     if (legacyLeave) leave = { d: rawLeave.date, t: rawLeave.hm, at: leaveNow() };
     if (leave) {
         const mark = legacyLeave ? fingerprint({ legacy: rawLeave }) : fingerprint(leave);
+        const leaveBackoff = readLeaveBackoff();
         const resting = leaveBackoff.mark === mark && Date.now() < leaveBackoff.until;
         if (nextHashes['settings/leave'] !== mark && !resting) {
             try {
@@ -238,14 +251,14 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                 });
                 if (legacyLeave && wrote) setLeave(leave.d, leave.t, { at: leave.at, fromCloud: true });
                 nextHashes['settings/leave'] = legacyLeave && wrote ? fingerprint(leave) : mark;
-                leaveBackoff = { mark: '', until: 0, wait: 0 };
+                writeLeaveBackoff(null);
             } catch (error) {
                 const kind = classifyWriteError(error);
                 if (kind === 'rejected') {
                     /* 거절은 실패로 알립니다(조용히 ok 처리하지 않음). */
                     rejected.push('settings/leave');
-                    const wait = leaveBackoff.mark === mark ? Math.min(leaveBackoff.wait * 2, 6 * 3600 * 1000) : 5 * 60 * 1000;
-                    leaveBackoff = { mark, until: Date.now() + wait, wait };
+                    const wait = leaveBackoff.mark === mark ? Math.min(leaveBackoff.wait * 2, LEAVE_MAX_WAIT) : 5 * 60 * 1000;
+                    writeLeaveBackoff({ mark, until: Date.now() + wait, wait });
                 } else pending += 1;
             }
         }

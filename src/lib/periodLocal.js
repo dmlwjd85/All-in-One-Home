@@ -213,6 +213,31 @@ export function setLeave(ymd, hm, { at, fromCloud = false } = {}) {
     writeJson(LEAVE_KEY, next);
 }
 
+/** 오늘이 아닌 날의 조퇴 값을 지웁니다(올리지 않고 정리). */
+export function clearLeave() {
+    removeKey(LEAVE_KEY);
+    listeners.forEach((fn) => fn());
+}
+function removeKey(key) {
+    const store = storage();
+    try { if (store) store.removeItem(key); } catch { /* 저장소 없음 */ }
+    delete memory[key];
+}
+
+/** 조퇴 재시도 늦추기 상태. 새로 고쳐도 이어지도록 로컬에 둡니다. */
+const LEAVE_BACKOFF_KEY = 'ssug-gyomu-leave-backoff';
+export function readLeaveBackoff() {
+    const saved = readJson(LEAVE_BACKOFF_KEY);
+    return saved && typeof saved.mark === 'string' && Number.isFinite(saved.until) && Number.isFinite(saved.wait) ? saved : { mark: '', until: 0, wait: 0 };
+}
+export function writeLeaveBackoff(value) {
+    if (!value?.mark) { removeKey(LEAVE_BACKOFF_KEY); return; }
+    /* 화면을 다시 그릴 일이 아니라 알림(listeners)은 부르지 않습니다. */
+    const raw = JSON.stringify(value);
+    const store = storage();
+    try { if (store) store.setItem(LEAVE_BACKOFF_KEY, raw); else memory[LEAVE_BACKOFF_KEY] = raw; } catch { memory[LEAVE_BACKOFF_KEY] = raw; }
+}
+
 /** 홈 출퇴근 안내 카드를 접었는지. */
 export function workCardOff() {
     const store = storage();
