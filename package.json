@@ -41,7 +41,8 @@
     "check:locknote": "node scripts/check-locknote.mjs",
     "check:hlc": "node scripts/check-hlc.mjs",
     "check:alarm": "node scripts/check-alarm.mjs",
-    "check:swreload": "node scripts/check-swreload.mjs"
+    "check:swreload": "node scripts/check-swreload.mjs",
+    "check:datechip": "node scripts/check-datechip.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

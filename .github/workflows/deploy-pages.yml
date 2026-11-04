@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    timeout-minutes: 75
+    timeout-minutes: 170
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,6 +60,7 @@ jobs:
           npm run check:locknote
           npm run check:hlc
           npm run check:alarm
+          npm run check:datechip
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules

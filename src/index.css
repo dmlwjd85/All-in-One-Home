@@ -1320,3 +1320,35 @@ button.hero-pill.home-todo-link {
 .todo-alarm-time { flex: none; font-weight: 800; color: var(--accent); }
 .todo-alarm-title { flex: 1 1 0; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
 .todo-alarm-item .chip { flex: none; }
+/* 일정 탭 A1 주간 목록 (SW v56) */
+.week-list { padding: 4px 0; border-radius: 18px; overflow: hidden; }
+.week-row { display: flex; align-items: stretch; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); min-width: 0; }
+.week-row:last-child { border-bottom: 0; }
+.week-row.is-today { background: color-mix(in srgb, #C2577A 12%, transparent); }
+.week-row.is-today { box-shadow: inset 4px 0 0 #C2577A; }
+.week-row.is-today .week-day b, .week-row.is-today .week-day small { color: var(--accent); font-weight: 800; }
+.dark .week-row.is-today { background: color-mix(in srgb, #E58BA8 16%, transparent); }
+.dark .week-row.is-today .week-day b, .dark .week-row.is-today .week-day small { color: var(--accent); }
+.week-day { flex: none; width: 60px; min-height: 44px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 6px 4px; background: transparent; box-shadow: none; border-radius: 12px; text-align: left; }
+.week-day b { font-size: 17px; line-height: 1.2; }
+.week-day small { font-size: 12px; color: var(--ink-sub); white-space: nowrap; }
+.week-events { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.week-event { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 2px 6px; background: transparent; box-shadow: none; border-radius: 12px; text-align: left; font-weight: 600; }
+.week-time { flex: none; min-width: 46px; font-weight: 800; color: var(--ink-sub); font-variant-numeric: tabular-nums; }
+.week-title { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.week-empty, .week-rest { display: flex; align-items: center; min-height: 44px; padding: 0 6px; font-size: 14px; }
+.week-fold { align-items: center; min-height: 52px; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.week-fold-mark { margin-left: auto; padding: 0 8px; color: var(--ink-sub); }
+.week-fold .week-day { justify-content: center; }
+.week-fold-text { color: var(--ink-sub); font-size: 14px; padding: 0 6px; }
+.week-help { font-size: 13px; margin: 0 0 76px; }
+.add-event-fab { position: fixed; z-index: 29; right: 16px; bottom: calc(86px + env(safe-area-inset-bottom)); min-height: 52px; min-width: 96px; padding: 0 20px; border-radius: 26px; background: #A73D74; color: #fff; font-weight: 800; font-size: 16px; box-shadow: 4px 6px 14px rgba(194, 87, 122, .35); }
+.dark .add-event-fab { background: #B04A6C; color: #fff; }
+@media (min-width: 900px) { .add-event-fab { bottom: 28px; right: 28px; } }
+.date-chips { margin-top: 10px; display: grid; gap: 8px; }
+.date-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.date-chip { min-height: 44px; }
+.date-chip.is-off { text-decoration: line-through; opacity: .85; }
+.date-chip-note { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.date-chip-warn { margin: 0; padding: 10px 12px; font-weight: 700; border-radius: 14px; }
+.detail-edit { display: grid; gap: 8px; margin-bottom: 8px; }
