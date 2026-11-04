@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joined, removeItem, saveParsed, saveTextItem } from '../lib/db.js';
+import { joined, markMinutesDeclined, minutesKnownElsewhere, removeItem, saveParsed, saveTextItem } from '../lib/db.js';
 import { allStarts } from '../lib/periodLocal.js';
-import { forgetMinutesLinks, freshCandidates, minutesCandidates, readMinutesLinks, rememberMinutesLinks } from '../lib/minutesExtract.js';
+import { forgetMinutesLinks, freshCandidates, minutesCandidates, minutesNow, readMinutesLinks, rememberMinutesLinks } from '../lib/minutesExtract.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import {
     MINUTES_ATTENDEES_MAX, MINUTES_TAG, MINUTES_TEXT_MAX, MINUTES_TITLE_MAX,
@@ -254,9 +254,15 @@ function MinutesEditor({ row, wide = false }) {
         /* 본문에서 일정·할 일을 찾아 등록합니다. 분명한 줄은 바로, 흐린 줄은 노란 카드로 한 번 묻습니다. */
         const registered = [...joined(data, 'todos'), ...joined(data, 'events')].map((item) => item.id);
         const found = freshCandidates(
-            minutesCandidates(next.text, next.id, { now: new Date(), periods: allStarts(data.profile?.periodStarts), title: next.title }),
+            minutesCandidates(next.text, next.id, { now: minutesNow(next.date), periods: allStarts(data.profile?.periodStarts), title: next.title }),
             { registered, remembered: readMinutesLinks(next.id) },
         );
+        /* 다른 기기에서 이미 등록했거나, 지웠거나(묘비), 빼기로 정한 id 는 다시 만들거나 묻지 않습니다. */
+        const elsewhere = await minutesKnownElsewhere([...found.auto, ...found.ask].map((item) => item.id));
+        if (elsewhere.size) {
+            found.auto = found.auto.filter((item) => !elsewhere.has(item.id));
+            found.ask = found.ask.filter((item) => !elsewhere.has(item.id));
+        }
         let note = saidSensitive ? '민감할 수 있는 낱말이 있어 이 기기에만 남겼어요.' : '회의록을 저장했어요.';
         if (found.auto.length) {
             const put = await saveParsed(found.auto);
@@ -298,6 +304,8 @@ function MinutesEditor({ row, wide = false }) {
         } else showToast('확인 카드는 등록하지 않았어요.');
         /* 뺀 카드도 기억해 두어 같은 회의록을 다시 저장할 때 또 묻지 않습니다. */
         rememberMinutesLinks(asking.id, asking.items.map((item) => item.id));
+        const chosenIds = new Set(chosen.map((item) => item.id));
+        markMinutesDeclined(asking.items.map((item) => item.id).filter((id) => !chosenIds.has(id)));
         go(`#/minutes/${asking.id}`, { replace: true });
     }
 

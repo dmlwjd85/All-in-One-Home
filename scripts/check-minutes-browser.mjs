@@ -1,13 +1,20 @@
 /* 회의록 화면을 실제 브라우저로 봅니다: 320·360·390·900·1920px, 라이트·다크.
    넘침·겹침·44px, 작성 칸 위치(첫 화면 안), 달력 팝업, Enter 줄바꿈, 저장 → 일정·할 일 등록과 노란 카드, 다시 저장해도 겹치지 않음. */
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
 
 const viteBin = resolve('node_modules/vite/bin/vite.js');
-const port = 4300 + Math.floor(Math.random() * 400);
+/* 포트: MINUTES_PORT 로 고정하거나, 운영체제가 준 빈 포트를 씁니다(무작위로 고르지 않음). */
+const freePort = () => new Promise((ok, fail) => {
+    const srv = createServer();
+    srv.once('error', fail);
+    srv.listen(0, '127.0.0.1', () => { const { port: p } = srv.address(); srv.close(() => ok(p)); });
+});
+const port = Number(process.env.MINUTES_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
 const shots = process.env.SHOT_DIR || 'shots-minutes';
 mkdirSync(shots, { recursive: true });

@@ -15,6 +15,13 @@ const TODO_HEAD = /^(?:#+\s*)?(?:할\s*일|해야\s*할\s*일|후속\s*조치|�
 const OTHER_HEAD = /^(?:#+\s*)?(?:안건|논의|논의\s*내용|결정|결정한\s*것|결정\s*사항|협의\s*내용|참석|기타|메모)\s*[:：]?\s*$/;
 const MAX_ITEMS = 30;
 
+/** '내일'·'다음 주' 같은 상대 날짜의 기준: 회의록 날짜(서울 오전 9시). 날짜가 없거나 이상하면 지금. */
+export function minutesNow(ymd, fallback = new Date()) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || ''))) return fallback;
+    const at = new Date(`${ymd}T09:00:00+09:00`);
+    return Number.isFinite(at.getTime()) ? at : fallback;
+}
+
 function hash(text) {
     let h = 2166136261;
     for (const ch of String(text)) {

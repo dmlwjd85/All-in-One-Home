@@ -10,7 +10,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
+import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos, writeTombs } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
@@ -382,11 +382,11 @@ export function tellRejectedForTest(keys) {
 }
 
 /* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
-const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, watch: watchTodos, available: syncAvailable };
+const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, watch: watchTodos, tomb: writeTombs, available: syncAvailable };
 let cloudApi = { ...REAL_CLOUD };
 /* 검사용: 넣은 함수만 바꿉니다. peek·clock을 넣지 않은 가짜 클라우드에서는 그 단계를 건너뜁니다(진짜 클라우드 함수가 불리지 않게). */
 export function useCloudForTest(api = null) {
-    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, watch: null, available: () => true, ...api } : { ...REAL_CLOUD };
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, watch: null, tomb: null, available: () => true, ...api } : { ...REAL_CLOUD };
 }
 let signOutHook = null;
 export function useSignOutForTest(fn = null) { signOutHook = fn; }
@@ -1250,6 +1250,24 @@ function blobOf(item) {
  * 고른 항목은 할 일·일정에 넣고, 빼 둔 항목은 정리함(ssug-gyomu-inbox)에 둡니다.
  * 이미 등록된 아이디는 정리함으로 옮기지 않습니다.
  */
+/**
+ * 회의록 후보 id 가운데 클라우드에서 이미 있거나(다른 기기가 등록) 지운 기록(묘비)이 있는 것. 닿지 못하면 빈 집합.
+ */
+export async function minutesKnownElsewhere(ids = []) {
+    const uid = state.auth?.uid;
+    if (!uid || !ids.length || !cloudApi.peek) return new Set();
+    const out = await Promise.resolve(cloudApi.peek(uid, ids, { memoryOnly: memoryOnly || state.profile?.sharedPc })).catch(() => null);
+    if (!out) return new Set();
+    return new Set(ids.filter((id) => out[id] && (out[id].row || out[id].gone != null)));
+}
+
+/** 회의록 노란 카드에서 빼기로 정한 id 를 클라우드 묘비로 남깁니다(다른 기기에서 다시 묻지 않게). */
+export async function markMinutesDeclined(ids = []) {
+    const uid = state.auth?.uid;
+    if (!uid || !ids.length || !cloudApi.tomb) return 0;
+    return Promise.resolve(cloudApi.tomb(uid, ids, { memoryOnly: memoryOnly || state.profile?.sharedPc })).catch(() => 0);
+}
+
 export async function saveParsed(items, now = new Date()) {
     const list = (items || []).filter((item) => item && String(item.title || '').trim());
     const chosen = list.filter((item) => item.include !== false);

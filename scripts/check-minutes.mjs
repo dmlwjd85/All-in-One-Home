@@ -24,7 +24,7 @@ function memStore() {
 async function suite(mod, { minutes }) {
     const bad = [];
     const ok = (cond, msg) => { if (!cond) bad.push(msg); };
-    const { minutesCandidates, freshCandidates, linkedId, minutesOf, minutesKey, readMinutesLinks, rememberMinutesLinks, forgetMinutesLinks } = mod;
+    const { minutesNow, minutesCandidates, freshCandidates, linkedId, minutesOf, minutesKey, readMinutesLinks, rememberMinutesLinks, forgetMinutesLinks } = mod;
     const r = minutesCandidates(BODY, 'meet-1761600000000', { now, title: '학년회의' });
     const autoTitles = r.auto.map((i) => i.title);
     ok(r.auto.length === 3, `바로 등록 수가 3이 아닙니다: ${JSON.stringify(autoTitles)}`);
@@ -35,6 +35,10 @@ async function suite(mod, { minutes }) {
     ok(home?.kind === '할 일' && home?.date === '2026-11-05', '내일까지 제출이 할 일(11/5)이 아닙니다.');
     ok(r.ask.length === 1 && r.ask[0].title.includes('보고서') && r.ask[0].low && r.ask[0].kind === '할 일', `흐린 줄이 노란 확인 카드로 가지 않습니다: ${JSON.stringify(r.ask)}`);
     const all = [...r.auto, ...r.ask];
+    /* 상대 날짜는 회의록 날짜 기준(QA 1번): 11/20 회의의 '내일까지'는 11/21 */
+    const past = minutesCandidates('- 내일까지 가정통신문 제출', 'meet-1761600000002', { now: minutesNow('2026-11-20', now) });
+    ok(past.auto[0]?.date === '2026-11-21', `'내일'을 회의록 날짜가 아니라 오늘 기준으로 셉니다: ${past.auto[0]?.date}`);
+    ok(minutesNow('', now) === now && minutesNow('2026-13-40x', now) === now, '날짜가 없을 때 지금을 기준으로 쓰지 않습니다.');
     const agenda = minutesCandidates('안건\n- 체험학습 장소 정하기\n\n결정\n- 과학관', 'meet-1761600000001', { now });
     ok(!agenda.auto.length && !agenda.ask.length, `안건 칸의 논의거리를 할 일로 묻습니다: ${JSON.stringify(agenda.ask.map((i) => i.title))}`);
     ok(!all.some((i) => /안전교육|축제|안건/.test(i.title)), '날짜·할 일 신호 없는 논의 줄까지 등록하려 합니다.');
@@ -86,6 +90,9 @@ function uiChecks(ui, css) {
     ok(/rememberMinutesLinks\(asking\.id, asking\.items\.map/.test(ui), '뺀 카드를 기억하지 않아 다시 저장하면 또 묻습니다.');
     ok(/className="minutes-split"/.test(ui) && /grid-template-columns: minmax\(0, 1fr\) minmax\(260px, 340px\)/.test(css), '넓은 화면 2단 배치가 없습니다.');
     ok(/\.minutes-date-btn \{ min-height: 44px/.test(css), '날짜 단추가 44px 보다 작습니다.');
+    ok(/minutesCandidates\(next\.text, next\.id, \{ now: minutesNow\(next\.date\)/.test(ui), '상대 날짜를 회의록 날짜 기준으로 세지 않습니다.');
+    ok(/await minutesKnownElsewhere\(/.test(ui) && /found\.auto = found\.auto\.filter\(\(item\) => !elsewhere\.has/.test(ui) && /found\.ask = found\.ask\.filter\(\(item\) => !elsewhere\.has/.test(ui), '다른 기기에서 지운·정한 항목을 다시 만들거나 묻습니다.');
+    ok(/markMinutesDeclined\(asking\.items\.map\(\(item\) => item\.id\)\.filter\(\(id\) => !chosenIds\.has\(id\)\)\)/.test(ui), '노란 카드에서 뺀 결정을 다른 기기에 알리지 않습니다.');
     return bad;
 }
 
@@ -99,6 +106,19 @@ const detail = readFileSync('src/ui/DetailSheet.jsx', 'utf8');
 const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
 if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(detail)) failures.push('일정·할 일 자세히에 원래 회의록 단추가 없습니다.');
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
+const db = readFileSync('src/lib/db.js', 'utf8');
+const cloud = readFileSync('src/lib/cloud.js', 'utf8');
+const dbChecks = (dbText, cloudText) => {
+    const out = [];
+    if (!/out\[id\] && \(out\[id\]\.row \|\| out\[id\]\.gone != null\)/.test(dbText)) out.push('클라우드에 있거나 지운 기록이 있는 id 를 가려내지 않습니다.');
+    if (!/tomb: writeTombs/.test(dbText) || !/tombs', tombId\('todos', id\)\), \{ k: 'todos', at: serverTimestamp\(\) \}/.test(cloudText)) out.push('뺀 결정을 묘비로 남기지 않습니다.');
+    return out;
+};
+failures.push(...dbChecks(db, cloud));
+for (const [name, from, to] of [['D1 지운 기록 무시', '(out[id].row || out[id].gone != null)', '(out[id].row)'], ['D2 묘비 안 씀', 'tomb: writeTombs,', 'tomb: null,']]) {
+    if (!db.includes(from)) failures.push(`변이 ${name}: 바꿀 코드를 찾지 못했습니다.`);
+    else if (!dbChecks(db.replace(from, to), cloud).length) failures.push(`변이 ${name} 이(가) 살아남았습니다.`);
+}
 const sw = readFileSync('public/sw.js', 'utf8');
 if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v59'")) failures.push('서비스 워커가 v59가 아닙니다.');
 
@@ -115,6 +135,7 @@ const mutants = [
     ['M11 안건 칸 구분 무시', 'const cue = inTodo || (!inOther && TODO_CUE.test(line));', 'const cue = inTodo || TODO_CUE.test(line);'],
     ['M8 기억이 임시 저장을 덮음', 'const all = JSON.parse(store?.getItem(MINUTES_DRAFT_KEY) || \'{}\') || {};\n        const links', 'const all = {};\n        const links'],
     ['M9 연결 찾기 아무거나', "if (!id.startsWith(MINUTES_LINK_PREFIX)) return null;", ''],
+    ['M12 회의록 날짜 무시', "if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(ymd || ''))) return fallback;", 'return fallback;'],
     ['M10 개수 제한 없음', 'if (auto.length + ask.length >= MAX_ITEMS) break;', ''],
 ];
 const dir = join(tmpdir(), `minutes-mut-${process.pid}`);
@@ -136,13 +157,16 @@ const UI_MUT = [
     ['U2 달력 팝업 없이 칸에 펼침', 'aria-label="회의 날짜 고르기"', 'aria-label="날짜"'],
     ['U3 저장 때 등록 안 함', 'await saveParsed(found.auto)', 'await Promise.resolve(found.auto)'],
     ['U4 2단 없음', 'className="minutes-split"', 'className="minutes"'],
+    ['U5 오늘 기준 상대 날짜', 'now: minutesNow(next.date)', 'now: new Date()'],
+    ['U6 다른 기기 묘비 무시', 'found.auto = found.auto.filter((item) => !elsewhere.has(item.id));', ''],
+    ['U7 뺀 결정 안 남김', 'markMinutesDeclined(asking.items.map((item) => item.id).filter((id) => !chosenIds.has(id)));', ''],
 ];
 for (const [name, from, to] of UI_MUT) {
     if (!ui.includes(from)) { failures.push(`변이 ${name}: 바꿀 코드를 찾지 못했습니다.`); continue; }
     if (!uiChecks(ui.replace(from, to), css).length) { missed += 1; failures.push(`변이 ${name} 이(가) 살아남았습니다.`); }
 }
 rmSync(dir, { recursive: true, force: true });
-const total = mutants.length + UI_MUT.length;
+const total = mutants.length + UI_MUT.length + 2;
 if (failures.length) {
     console.error(`회의록 검사 실패 ${failures.length}건:\n- ${failures.join('\n- ')}`);
     process.exit(1);

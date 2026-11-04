@@ -366,6 +366,22 @@ export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEE
         return n;
     } catch { return 0; }
 }
+/**
+ * 회의록에서 '등록하지 않기로 정한' 할 일·일정 id 를 묘비로 남겨, 다른 기기에서 같은 회의록을 다시 저장해도
+ * 또 묻거나 만들지 않게 합니다. 이미 있는 묘비 규칙(tombs/todos-{id})을 그대로 씁니다. 실제로 만든 할 일 id 에는 쓰지 않습니다.
+ */
+export async function writeTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return 0;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return 0;
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    let n = 0;
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) continue;
+        try { await timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: serverTimestamp() }), 5000); n += 1; } catch { /* 다음 저장 때 다시 */ }
+    }
+    return n;
+}
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {
     const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));
