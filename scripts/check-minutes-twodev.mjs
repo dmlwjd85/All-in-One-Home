@@ -61,6 +61,7 @@ async function run(tag, mutate, only) {
             watch: () => () => {},
             tomb: gate(cloud.writeTombs, () => []),
             minutesPeek: gate(cloud.peekMinutes, () => null),
+            untomb: gate(cloud.clearTombs, () => []),
         });
         await db.boot('');
         devices[name] = { db, cloud, fs };
@@ -142,6 +143,35 @@ async function run(tag, mutate, only) {
         await save('B', 'meet-1000000000007', T, { prev: null }); await flush('B'); await wait(1200); await sync('A'); await sync('B');
         check(!ids('A', 'events').includes(e) && !ids('B', 'events').includes(e) && !(await cloudIds('events')).includes(e), 'EV 지운 일정이 되살아납니다.');
     }
+    if (want('EVPRE')) {
+        /* EVPRE(r3 F2): B가 받기 전에 A가 일정을 지움 → B는 로컬 기억이 없으니 클라우드 일정 묘비만으로 막아야 합니다. */
+        const T = '- 11/26(목) 5교시 학년 협의회';
+        await save('A', 'meet-1000000000009', T, { prev: null }); await flush('A'); await wait(1200);
+        const e = ids('A', 'events').find((i) => i.includes('1000000000009')) || ids('A', 'events').slice(-1)[0];
+        check(e && !ids('B', 'events').includes(e), 'EVPRE 준비: B가 이미 일정을 받았습니다.');
+        await on('A', (db) => db.removeItem('events', e)); await flush('A'); await wait(1200);
+        const b = await save('B', 'meet-1000000000009', T, { prev: null }); await flush('B'); await wait(1200); await sync('A'); await sync('B');
+        check(b.count === 0 && !ids('B', 'events').includes(e) && !ids('A', 'events').includes(e) && !(await cloudIds('events')).includes(e), `EVPRE B가 받기 전에 지운 일정이 되살아납니다 (count=${b.count})`);
+    }
+    if (want('REV')) {
+        /* REV(r3 F1): 12/10 → 12/11로 고쳤다가 다시 12/10으로 되돌리면 두 기기 모두 할 일이 남아야 합니다. */
+        const v1 = '할 일\n- 12/10까지 학급문고 정리';
+        const v2 = '할 일\n- 12/11까지 학급문고 정리';
+        const list = (dev) => devices[dev].db.snapshot().todos.filter((t) => t.title === '학급문고 정리').map((t) => t.due);
+        await save('A', 'meet-1000000000010', v1, { prev: null }); await flush('A'); await wait(1200); await sync('B');
+        const first = devices.A.db.snapshot().todos.find((t) => t.title === '학급문고 정리')?.id;
+        await save('A', 'meet-1000000000010', v2, { prev: { text: v1, date: '2026-11-20' } }); await flush('A'); await wait(1200); await sync('B');
+        check(first && (await tombIds()).includes(`todos-${first}`), 'REV 준비: 고친 줄 정리 묘비가 없습니다.');
+        const r = await save('A', 'meet-1000000000010', v1, { prev: { text: v2, date: '2026-11-20' } }); await flush('A'); await wait(1200);
+        await sync('B'); await sync('A'); await flush('B'); await wait(600); await sync('A'); await sync('B');
+        check(r.count === 1 && JSON.stringify(list('A')) === '["2026-12-10"]' && JSON.stringify(list('B')) === '["2026-12-10"]' && (await cloudIds()).includes(first),
+            `REV 되돌린 할 일이 사라집니다 count=${r.count} A=${JSON.stringify(list('A'))} B=${JSON.stringify(list('B'))}`);
+        check(!(await tombIds()).includes(`todos-${first}`), 'REV 되돌린 뒤에도 정리 묘비가 남아 있습니다.');
+        /* 되돌린 뒤 사용자가 직접 지우면 다시는 살아나지 않습니다. */
+        await on('A', (db) => db.removeItem('todos', first)); await flush('A'); await wait(1200); await sync('B');
+        const again = await save('B', 'meet-1000000000010', v1, { prev: null });
+        check(again.count === 0 && !ids('B').includes(first), 'REV 사용자가 지운 뒤 다른 기기 저장으로 되살아납니다.');
+    }
     if (want('EDIT')) {
         /* EDIT(r2 4번): 줄을 고쳐 다시 저장 → 중복 없음(다른 기기 저장에서도), 사용자가 고친 항목은 남김 */
         const v1 = '할 일\n- 12/3까지 생활기록부 점검';
@@ -185,6 +215,10 @@ try {
         ['O1', { file: 'db.js', from: "if (!out || typeof out !== 'object') return { known: new Set(), sure: false };", to: "if (!out || typeof out !== 'object') return { known: new Set(), sure: true };" }, ['OFF']],
         ['Q1', { file: 'db.js', from: '    queueMinutesTombs(ids);\n    return flushMinutesTombs();', to: '    return Promise.resolve(cloudApi.tomb(state.auth.uid, ids)).then((d) => d.length).catch(() => 0);' }, ['DECLOFF']],
         ['G1', { file: 'db.js', from: "            if (localName === 'todos' || localName === 'events') noteMinutesGone([String(shaped.id)]);\n", to: '' }, ['D1', 'EXP']],
+        ['E2', { file: 'cloud.js', from: ", ['tombs', tombId('events', id)]];", to: '];' }, ['EVPRE']],
+        ['R1', { file: 'db.js', from: '    for (const item of items) if (mine.has(item.id)) check.known.delete(item.id);', to: '' }, ['REV']],
+        ['R3', { file: 'db.js', from: "unnoteMinutesGone([item.id]);\n        if (!failed?.storageFailed) { n += 1; noteMinutesTidied([item.id]); }", to: "unnoteMinutesGone([item.id]);\n        if (!failed?.storageFailed) n += 1;" }, ['REV']],
+        ['R4', { file: 'db.js', from: '    return ids.filter((id) => !mine.has(id));', to: '    return ids;' }, ['REV']],
         ['T1', { file: 'db.js', from: 'const tidied = await tidyEditedMinutes(id, prev, { text, date }, opts);', to: 'const tidied = 0;' }, ['EDIT']],
     ];
     let caught = 0;

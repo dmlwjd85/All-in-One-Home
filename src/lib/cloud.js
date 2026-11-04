@@ -404,6 +404,23 @@ export async function peekMinutes(uid, ids = [], { memoryOnly = false } = {}) {
     }
     return out;
 }
+/** 회의록 고친 줄을 되돌렸을 때(PR #64 r3 F1): 이 기기가 정리하며 남긴 할 일·일정 묘비를 지웁니다. 지운(또는 원래 없던) id 목록. */
+export async function clearTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return [];
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return [];
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    const done = [];
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) continue;
+        try {
+            const names = String(id).startsWith('mt-') ? ['todos', 'events'] : ['todos'];
+            await timeout(Promise.all(names.map((n) => deleteDoc(doc(ready.db, 'users', uid, 'tombs', tombId(n, id))))), 5000);
+            done.push(id);
+        } catch { /* 못 지우면 다음 저장에서 다시 */ }
+    }
+    return done;
+}
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {
     const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));

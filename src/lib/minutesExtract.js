@@ -243,6 +243,30 @@ export function noteMinutesGone(ids, store = globalThis.localStorage) {
     all[GONE_SLOT] = [...new Set([...readMinutesGone(store), ...list])].slice(-1000);
     writeAll(all, store);
 }
+/* 고친 줄 정리로 이 기기가 지운 회의록 항목 id(PR #64 r3 F1). 줄을 되돌리면 클라우드 묘비를 풀고 다시 등록합니다. */
+const TIDIED_SLOT = '__tidied';
+export function readMinutesTidied(store = globalThis.localStorage) {
+    const q = readAll(store)?.[TIDIED_SLOT];
+    return Array.isArray(q) ? q.filter((id) => typeof id === 'string') : [];
+}
+export function noteMinutesTidied(ids, store = globalThis.localStorage) {
+    const list = (ids || []).filter((id) => typeof id === 'string' && id.startsWith(MINUTES_LINK_PREFIX));
+    if (!list.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    all[TIDIED_SLOT] = [...new Set([...readMinutesTidied(store), ...list])].slice(-300);
+    writeAll(all, store);
+}
+export function unnoteMinutesTidied(ids, store = globalThis.localStorage) {
+    if (!ids?.length) return;
+    const all = readAll(store);
+    if (!all) return;
+    const drop = new Set(ids);
+    const rest = readMinutesTidied(store).filter((id) => !drop.has(id));
+    if (rest.length) all[TIDIED_SLOT] = rest;
+    else delete all[TIDIED_SLOT];
+    writeAll(all, store);
+}
 export function unnoteMinutesGone(ids, store = globalThis.localStorage) {
     if (!ids?.length) return;
     const all = readAll(store);
