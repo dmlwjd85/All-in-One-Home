@@ -14,6 +14,24 @@ export const GCAL_SYNC_ERROR = '구글 캘린더와 맞추지 못했어요. 적�
 export const GCAL_AUTH_ERROR = '캘린더 연결이 만료됐거나 권한이 부족해요. 설정에서 다시 연결해 주세요. 적어 둔 일정은 그대로예요.';
 /** 설정에만 보이는 차분한 안내. 메인 화면에는 띄우지 않습니다. */
 export const GCAL_RECONNECT_HINT = '구글 캘린더 연결을 잠시 새로 고치고 있어요. 계속 이어지지 않으면 아래 ‘다시 연결’을 한 번 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_RECONNECT_HINT_TAP = '아이폰 홈 화면 앱에서는 구글 캘린더 연결을 직접 새로 고쳐야 해요. 아래 ‘다시 연결’을 한 번 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_SOFT_HINT = '구글 캘린더와 잠시 맞추지 못하고 있어요. 인터넷이 이어지면 저절로 다시 맞춰요. 적어 둔 일정은 그대로예요.';
+export const GCAL_DOT_LABEL = '구글 캘린더 다시 연결 필요';
+
+/** 설정 화면에 보일 캘린더 안내를 고릅니다. 한 번 실패는 조용히 넘기고, 이어지면 차분하게 알립니다. */
+export function gcalSettingsNotice(gcal, { canSilent = true } = {}) {
+    if (!gcal?.enabled) return { renew: false, hint: '', soft: '' };
+    if (gcal.needsReconnect) return { renew: true, hint: canSilent ? GCAL_RECONNECT_HINT : GCAL_RECONNECT_HINT_TAP, soft: '' };
+    const fails = Number(gcal.softFails) || 0;
+    if (fails >= 2) return { renew: false, hint: '', soft: GCAL_SOFT_HINT };
+    return { renew: false, hint: '', soft: '' };
+}
+
+/** 설정 단추 점 배지를 보일지. */
+export function gcalNeedsDot(gcal) {
+    return Boolean(gcal?.enabled && gcal?.needsReconnect);
+}
+
 export const GCAL_AUTH_RETRY_BASE_MS = 60 * 1000;
 export const GCAL_AUTH_RETRY_MAX_MS = 30 * 60 * 1000;
 
@@ -64,6 +82,7 @@ export function emptyGcalState() {
         forwardSince: '',
         needsUploadAsk: false,
         needsReconnect: false,
+        softFails: 0,
         lastError: '',
         lastSyncAt: '',
     };

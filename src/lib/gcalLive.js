@@ -46,15 +46,58 @@ let scheduleImpl = (fn, ms) => setTimeout(fn, ms);
 let cancelImpl = (id) => clearTimeout(id);
 let retryFetch = null;
 
+let gisLoader = null;
+let uxOverride = null;
+let retryStore = null;
+export const GCAL_RETRY_KEY = 'ssug-gyomu-gcal-retry';
+
 export function useSilentTokenForTest(fn) { silentImpl = fn; }
+/** 테스트: GIS 스크립트 불러오기를 바꿔 끼웁니다. oauth2 객체(또는 null)를 돌려주면 됩니다. */
+export function useGisLoaderForTest(fn) { gisLoader = fn; }
+export function useTokenUxForTest(ux) { uxOverride = ux; }
+export function useRetryStoreForTest(store) { retryStore = store; retryAttempt = readRetryAttempt(); }
 export function useGcalSchedulerForTest(schedule, cancel, fetchImpl = null) {
     scheduleImpl = schedule;
     retryFetch = fetchImpl;
     cancelImpl = cancel || (() => {});
     retryTimer = null;
     retryAttempt = 0;
+    saveRetryAttempt();
 }
 export function gcalRetryAttemptForTest() { return retryAttempt; }
+export function gcalRetryPendingForTest() { return retryTimer !== null; }
+
+function retryBag() {
+    if (retryStore) return retryStore;
+    try {
+        if (typeof localStorage !== 'undefined') return localStorage;
+    } catch {
+        /* 저장소가 없으면 메모리만 씁니다. */
+    }
+    return null;
+}
+
+function readRetryAttempt() {
+    try {
+        const raw = retryBag()?.getItem(GCAL_RETRY_KEY);
+        const n = Math.floor(Number(JSON.parse(raw || '{}').attempt) || 0);
+        return n > 0 ? Math.min(n, 20) : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function saveRetryAttempt() {
+    try {
+        const bag = retryBag();
+        if (!bag) return;
+        if (retryAttempt > 0) bag.setItem(GCAL_RETRY_KEY, JSON.stringify({ attempt: retryAttempt }));
+        else bag.removeItem(GCAL_RETRY_KEY);
+    } catch {
+        /* 간격을 못 남겨도 이번 실행에서는 메모리에 있습니다. */
+    }
+}
+retryAttempt = readRetryAttempt();
 
 function emit() {
     const snap = gcalSnapshot();
@@ -272,7 +315,11 @@ function currentUid() {
     return snapshot().auth?.uid || '';
 }
 
+let rowsImpl = null;
+export function useUploadRowsForTest(fn) { rowsImpl = fn; }
+
 function pushableNow() {
+    if (typeof rowsImpl === 'function') return rowsImpl().filter(isPushableKokEvent);
     return joined(snapshot(), 'events').filter(isPushableKokEvent);
 }
 
@@ -329,6 +376,7 @@ function takePending() {
 }
 
 function tokenUx() {
+    if (uxOverride) return uxOverride;
     if (typeof window === 'undefined') return 'popup';
     return pickTokenUx({
         ios: isIOS(window.navigator),
@@ -434,17 +482,34 @@ function requestToken(mode, intent) {
 }
 
 /** 이미 허락한 계정이면 창 없이 새 토큰을 받습니다. 못 받으면 null 입니다. */
-function silentToken(mode) {
+/** 창 없이 갱신할 수 있는 환경인지. 아이폰 홈 화면 앱(리다이렉트)은 직접 눌러야 합니다. */
+export function gcalCanSilent() {
+    return tokenUx() !== 'redirect';
+}
+
+async function loadGis() {
+    if (typeof gisLoader === 'function') {
+        try { return (await gisLoader()) || null; } catch { return null; }
+    }
+    if (typeof window === 'undefined') return null;
+    if (!window.google?.accounts?.oauth2) {
+        try { await prepareCalendarScript(); } catch { /* 못 불러오면 아래에서 null */ }
+    }
+    return window.google?.accounts?.oauth2 || null;
+}
+
+async function silentToken(mode) {
+    if (!gcalCanSilent()) return null;
     if (typeof silentImpl === 'function') {
         return Promise.resolve().then(() => silentImpl(mode)).then((raw) => {
             const token = normalizeToken(raw);
             return token && tokenUsable(token, mode) ? token : null;
         }, () => null);
     }
-    if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) return Promise.resolve(null);
-    if (tokenUx() === 'redirect') return Promise.resolve(null);
-    const clientId = googleClientId();
-    if (!clientId) return Promise.resolve(null);
+    const oauth2 = await loadGis();
+    if (!oauth2) return null;
+    const clientId = googleClientId() || (gisLoader ? 'test-client' : '');
+    if (!clientId) return null;
     return new Promise((resolve) => {
         let settled = false;
         const done = (value) => {
@@ -467,7 +532,7 @@ function silentToken(mode) {
             };
             const email = snapshot().auth?.email || '';
             if (email) config.login_hint = email;
-            window.google.accounts.oauth2.initTokenClient(config).requestAccessToken({ prompt: '' });
+            oauth2.initTokenClient(config).requestAccessToken({ prompt: '' });
         } catch {
             done(null);
         }
@@ -478,12 +543,16 @@ function stopAuthRetry() {
     if (retryTimer !== null) cancelImpl(retryTimer);
     retryTimer = null;
     retryAttempt = 0;
+    saveRetryAttempt();
 }
 
 function scheduleAuthRetry() {
     if (retryTimer !== null) return;
+    /* 아이폰 홈 화면 앱은 창 없이 갱신할 수 없으니 타이머를 걸지 않습니다. */
+    if (!gcalCanSilent()) return;
     const delay = authRetryDelay(retryAttempt);
     retryAttempt += 1;
+    saveRetryAttempt();
     retryTimer = scheduleImpl(() => {
         retryTimer = null;
         if (!memory.enabled || !memory.needsReconnect) return undefined;
@@ -501,9 +570,14 @@ async function recoverAuth(mode) {
         if (memory.needsReconnect) await patchGcal({ needsReconnect: false });
         return token;
     }
+    await markReconnect();
+    return null;
+}
+
+async function markReconnect() {
+    clearToken();
     await patchGcal({ needsReconnect: true, lastError: '' });
     scheduleAuthRetry();
-    return null;
 }
 
 export function connectGcal(mode) {
@@ -565,13 +639,19 @@ export async function answerGcalUpload(yes, fetchImpl = quietFetch) {
         return { ok: false, message: GCAL_AUTH_ERROR };
     }
     const rows = pushableNow();
-    const result = await uploadKokEvents({
+    let result = await uploadKokEvents({
         token: token.accessToken,
         rows,
         links: memory.links,
         fetchImpl,
     });
-    if (isAuthStatus(result.status)) await recoverAuth('write');
+    if (isAuthStatus(result.status)) {
+        const fresh = await recoverAuth('write');
+        if (fresh) {
+            result = await uploadKokEvents({ token: fresh.accessToken, rows, links: result.links, fetchImpl });
+            if (isAuthStatus(result.status)) await markReconnect();
+        }
+    }
     await patchGcal({
         links: result.links,
         needsUploadAsk: false,
@@ -609,15 +689,13 @@ async function pullNow(fetchImpl) {
         if (!token) return { ok: false, needsReconnect: true };
         listed = await listOnce(token.accessToken);
         if (!listed.ok && isAuthStatus(listed.status)) {
-            clearToken();
-            await patchGcal({ needsReconnect: true, lastError: '' });
-            scheduleAuthRetry();
+            await markReconnect();
             return { ok: false, needsReconnect: true };
         }
     }
     if (!listed.ok) {
         dropTokenIfRejected(listed.status);
-        await patchGcal({ lastError: listed.message });
+        await patchGcal({ lastError: listed.message, softFails: (Number(memory.softFails) || 0) + 1 });
         return { ok: false, message: listed.message };
     }
     const keepPartial = memory.lastError === GCAL_PARTIAL_ERROR;
@@ -625,11 +703,14 @@ async function pullNow(fetchImpl) {
     await patchGcal({
         external: listed.events,
         needsReconnect: false,
+        softFails: 0,
         lastError: keepPartial ? GCAL_PARTIAL_ERROR : '',
         lastSyncAt: new Date().toISOString(),
     });
     return { ok: true, events: listed.events };
 }
+
+export function syncGcalDiffForTest(diff, fetchImpl) { return syncDiff(diff, fetchImpl); }
 
 async function syncDiff(diff, fetchImpl) {
     await gcalReady();
@@ -637,17 +718,25 @@ async function syncDiff(diff, fetchImpl) {
     if (snapshot().profile.sharedPc) return { skipped: true };
     const token = readToken('write') || await recoverAuth('write');
     if (!token) return { ok: false, needsReconnect: true };
-    const result = await applyKokDiff({
-        token: token.accessToken,
+    const send = (access, links) => applyKokDiff({
+        token: access,
         mode: 'write',
         enabled: true,
-        links: memory.links,
+        links,
         forwardSince: memory.forwardSince,
         diff,
         fetchImpl,
     });
+    let result = await send(token.accessToken, memory.links);
     if (result.skipped) return result;
-    if (isAuthStatus(result.status)) await recoverAuth('write');
+    if (isAuthStatus(result.status)) {
+        const fresh = await recoverAuth('write');
+        if (fresh) {
+            /* 이미 올라간 것은 links 로 건너뛰고, 거절된 요청만 한 번 다시 보냅니다. */
+            result = await send(fresh.accessToken, result.links);
+            if (isAuthStatus(result.status)) await markReconnect();
+        }
+    }
     await patchGcal({
         links: result.links,
         lastError: result.errors.length ? GCAL_PARTIAL_ERROR : '',
