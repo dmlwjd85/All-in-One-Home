@@ -2212,12 +2212,13 @@ let lastRefresh = 0;
  * 예전에는 돌아올 때·온라인·5분마다만 받았고 1분 안에 다시 받지 않아, 열린 기기에 늦게 보였습니다.
  * 몰려 오는 변경은 0.8초 모아서 한 번 받고, 받기 사이는 3초 이상 둡니다. 받으면 알림 예약도 새 시각으로 다시 봅니다.
  */
-let todoWatch = { uid: '', stop: null, timer: 0, last: 0 };
+let todoWatch = { uid: '', stop: null, timer: 0, last: -Infinity };
 const WATCH_GAP_MS = 3000;
+const watchNow = () => (globalThis.performance?.now ? globalThis.performance.now() : Date.now());
 function stopTodoWatch() {
     try { todoWatch.stop?.(); } catch { /* 이미 꺼짐 */ }
     if (todoWatch.timer) clearTimeout(todoWatch.timer);
-    todoWatch = { uid: '', stop: null, timer: 0, last: 0 };
+    todoWatch = { uid: '', stop: null, timer: 0, last: -Infinity };
 }
 export function todoWatchForTest(on) { stopTodoWatch(); return on ? startTodoWatch(state.auth?.uid) : undefined; }
 async function startTodoWatch(uid) {
@@ -2227,9 +2228,10 @@ async function startTodoWatch(uid) {
     const fire = () => {
         todoWatch.timer = 0;
         if (state.auth?.uid !== uid) return;
-        const wait = todoWatch.last + WATCH_GAP_MS - Date.now();
-        if (wait > 0) { todoWatch.timer = setTimeout(fire, wait); return; }
-        todoWatch.last = Date.now();
+        /* 간격은 단조 시계로 잽니다. 기기 시계가 뒤로 가도(Date.now 감소) 감시가 멈추지 않습니다(PR #62 r4 3번). */
+        const wait = todoWatch.last + WATCH_GAP_MS - watchNow();
+        if (wait > 0) { todoWatch.timer = setTimeout(fire, Math.min(wait, WATCH_GAP_MS)); return; }
+        todoWatch.last = watchNow();
         refreshFromCloud({ force: true }).catch(() => {});
     };
     let stop = null;

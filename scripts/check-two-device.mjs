@@ -416,7 +416,13 @@ holdA.useHoldRetryForTest();
 const alarm = await import(new URL('.twodev/a/src/lib/todoAlarm.js', root));
 let prevTime = '10:15';
 watching.A = true;
-await on('A', (db) => db.todoWatchForTest(true));
+/* r4 1번(W1): 강제로 켜지 않고 실제 로그아웃 → 로그인 흐름으로 감시가 켜져야 합니다. 로그아웃해도 이 기기 자료는 그대로입니다. */
+await on('A', (db) => db.setAuth(null));
+check(todo(A, 'or1')?.time === '10:15', `로그아웃 뒤 이 기기 할 일이 바뀌었습니다: ${JSON.stringify(todo(A, 'or1'))}`);
+await on('A', (db) => db.setAuth({ uid: UID }));
+await wait(1500);
+const realNow = Date.now;
+let loopIndex = 0;
 await wait(500);
 for (const [label, next] of [['12:30으로 변경', '12:30'], ['지움', ''], ['09:40으로 변경', '09:40']]) {
     await wait(GAP);
@@ -425,8 +431,15 @@ for (const [label, next] of [['12:30으로 변경', '12:30'], ['지움', ''], ['
     check(next ? c?.time === next : !('time' in (c || {})), `B의 시각 ${label}이 클라우드에 없습니다: ${JSON.stringify(c)}`);
     /* A는 받기(sync)를 부르지 않습니다. 실시간 알림만으로 5초 안에 바뀌어야 합니다. */
     let got = '';
-    const trace = [];
-    for (let i = 0; i < 50; i += 1) { await wait(100); got = todo(A, 'or1')?.time || ''; trace.push(got); }
+    /* r4 3번: 마지막 변경은 기기 시계를 10분 뒤로 돌린 채 기다립니다. 감시 간격을 Date.now로 재면
+       앞서 받은 시각보다 '이전'이 되어 10분 동안 멈춥니다. 단조 시계라 멈추지 않아야 합니다. */
+    if (loopIndex === 2) { const back = 10 * 60 * 1000; Date.now = () => realNow.call(Date) - back; }
+    try {
+        for (let i = 0; i < 50; i += 1) { await wait(100); got = todo(A, 'or1')?.time || ''; }
+        if (got === next) await wait(300);
+        got = todo(A, 'or1')?.time || '';
+    } finally { Date.now = realNow; }
+    loopIndex += 1;
     check(got === next, `다른 기기의 시각 ${label}이 열린 기기에 새로고침 없이 반영되지 않았습니다: ${JSON.stringify(todo(A, 'or1'))}`);
     /* 알림 예약도 새 시각을 따릅니다: 새 시각에는 울리고, 예전 시각에는 울리지 않습니다. */
     const row = todo(A, 'or1');
@@ -437,6 +450,8 @@ for (const [label, next] of [['12:30으로 변경', '12:30'], ['지움', ''], ['
     prevTime = next;
 }
 await on('A', (db) => db.todoWatchForTest(false));
+/* 시계를 제자리로 돌린 뒤 서버 시각 차이를 다시 잽니다(뒤 검사가 10분 어긋난 보정값을 쓰지 않게). */
+await sync('A');
 watching.A = false;
 
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
