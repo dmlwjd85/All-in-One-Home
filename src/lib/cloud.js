@@ -120,6 +120,10 @@ export function syncAvailable() {
     return cloudReady();
 }
 
+/* 검사용: 이 기기가 보낸 할 일·일정 쓰기 수(PR #62 r3 3번: 예전 규칙에서 쓰기가 몰리지 않는지). */
+let writesSent = 0;
+export function cloudWritesForTest() { return writesSent; }
+
 export async function pushUserData(uid, state, { memoryOnly = false, hashes = {} } = {}) {
     if (!uid || !syncAvailable()) return { skipped: true, hashes, pending: 0 };
     const ready = await loadFirebase({ memoryOnly });
@@ -138,6 +142,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         const mark = fingerprint(prepared.body, clear);
         if (nextHashes[key] === mark) return;
         try {
+            writesSent += 1;
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
             nextHashes[key] = mark;
             if (name === 'todos') releaseTodoTime(id);
@@ -148,8 +153,12 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                 if (!timeless) noteEndTimeRejected();
                 try {
                     const retryBody = await stamp(firestore, fallback, shaped.stamps, migratedAt, shaped.at);
+                    writesSent += 1;
                     await setDoc(doc(ready.db, 'users', uid, name, String(id)), retryBody, { merge: true });
-                    nextHashes[key] = fingerprint(fallback, clear);
+                    /* 거절된 본래 내용의 표시를 남깁니다. 시각 없는 표시를 남기면 올리기마다 '바뀜'으로 보여
+                       거절 + 시각 없이 쓰기가 되풀이됩니다(PR #62 r3 3번: 새로 고친 뒤 6초에 82번).
+                       다시 올리기는 heldTimesToRetry가 해시를 비울 때(앱을 켠 뒤 한 번, 그 뒤 10분마다)만 합니다. */
+                    nextHashes[key] = timeless ? mark : fingerprint(fallback, clear);
                     if (timeless) holdTodoTime(id, shaped.body);
                     return;
                 } catch (again) {
@@ -362,6 +371,27 @@ export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
         return null;
     }
     return out;
+}
+
+/**
+ * 다른 기기가 할 일을 고치면 바로 알려 줍니다(PR #62 r3 1번). 첫 목록과 이 기기가 막 쓴 변경(hasPendingWrites)은 건너뜁니다.
+ * 받은 내용으로 직접 합치지 않고, 알림만 보내 평소 받기(refreshFromCloud)로 합칩니다. 끄는 함수를 돌려줍니다.
+ */
+export async function watchTodos(uid, onChange, { memoryOnly = false } = {}) {
+    if (!uid || typeof onChange !== 'function' || !syncAvailable()) return () => {};
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return () => {};
+    const { collection, onSnapshot } = await import('firebase/firestore');
+    let first = true;
+    try {
+        return onSnapshot(collection(ready.db, 'users', uid, 'todos'), (snap) => {
+            if (first) { first = false; return; }
+            if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+            if (snap.docChanges().length) onChange();
+        }, () => { /* 끊기면 평소처럼 돌아올 때·5분마다 받습니다. */ });
+    } catch {
+        return () => {};
+    }
 }
 
 /** 고친 시각이 불확실한 할 일 문서인지: hlc가 없거나(v46·옛 자료) u가 true(시각을 못 잰 기기). */

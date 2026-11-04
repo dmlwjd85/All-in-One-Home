@@ -38,6 +38,7 @@ const offline = { A: false, B: false };
 const noclock = { A: false, B: false };
 const config = { apiKey: 'demo', projectId: 'demo-ssug-rules', authDomain: 'demo.local' };
 const devices = {};
+const watching = { A: false, B: false };
 for (const [name, dir] of [['A', 'a'], ['B', 'b']]) {
     cur = name;
     const fb = await import(new URL(`.twodev/${dir}/src/firebase.js`, root));
@@ -55,6 +56,7 @@ for (const [name, dir] of [['A', 'a'], ['B', 'b']]) {
         peek: gate(cloud.peekTodos, () => null),
         clock: async (...a) => (noclock[name] ? null : gate(cloud.measureServerClock, () => null)(...a)),
         sweep: gate(cloud.sweepTombs, () => 0),
+        watch: (...a) => (watching[name] ? cloud.watchTodos(...a) : () => {}),
     });
     await db.boot('');
     devices[name] = { db, cloud, fb, fs };
@@ -367,6 +369,14 @@ check(todo(A, 'or1')?.time === '10:15' && todo(A, 'or1')?.title === '예전 규�
 await sync('B');
 check(todo(B, 'or1')?.title === '예전 규칙 시각 고침' && !todo(B, 'or1')?.time, `다른 기기가 시각 없는 할 일을 받지 못했습니다: ${JSON.stringify(todo(B, 'or1'))}`);
 /* 지킨 시각이 있는 동안 다른 기기가 끝냄으로 바꾸면(더 늦게 고침) 그쪽이 이기고 지킴 기록을 버립니다. */
+/* r3 3번: 예전 규칙에서 거절된 다시 올리기는 한 번만 하고 기다립니다. 올리기를 여러 번 해도 쓰기가 몰리지 않아야 합니다. */
+{
+    const cloudA = await import(new URL('.twodev/a/src/lib/cloud.js', root));
+    const before = cloudA.cloudWritesForTest();
+    for (let i = 0; i < 6; i += 1) await on('A', async (db) => { await db.flushCloud(); await db.refreshFromCloud({ force: true }); });
+    const sent = cloudA.cloudWritesForTest() - before;
+    check(sent <= 2, `예전 규칙에서 거절된 할 일을 올리기마다 다시 씁니다(${sent}번).`);
+}
 const holdOf = (dev) => { cur = dev; return JSON.parse(globalThis.localStorage.getItem('ssug-gyomu-todo-time-hold') || '{}'); };
 await on('A', async (db) => { await db.saveTextItem('todos', { id: 'or2', title: '예전 규칙 끝낼 일', done: false, source: 'app', due: '2026-11-05', time: '11:20' }); await db.flushCloud(); });
 check(holdOf('A').or2?.time === '11:20', `예전 규칙에서 시각 지킴 기록이 남지 않았습니다: ${JSON.stringify(holdOf('A'))}`);
@@ -376,6 +386,20 @@ await on('B', async (db) => { await db.saveTextItem('todos', { ...todo(db, 'or2'
 await wait(GAP);
 await sync('A');
 check(todo(A, 'or2')?.done === true && !todo(A, 'or2')?.time && !('or2' in holdOf('A')), `다른 기기가 끝낸 할 일의 지킴 기록이 남았습니다: ${JSON.stringify({ row: todo(A, 'or2'), hold: holdOf('A') })}`);
+/* r3 4번(H4): 다른 기기(새 판)가 같은 시각을 넣어 클라우드가 이기면, 받는 즉시 지킴 기록을 버립니다.
+   이 기기 할 일과 지킴 기록이 그대로 같아서 heldTimesToRetry는 버리지 못합니다(settleHoldWithRemote만 버림). */
+await on('A', async (db) => { await db.saveTextItem('todos', { id: 'or3', title: '다른 기기가 시각 넣음', done: false, source: 'app', due: '2026-11-05', time: '13:05' }); await db.flushCloud(); });
+check(holdOf('A').or3?.time === '13:05', `예전 규칙에서 or3 지킴 기록이 남지 않았습니다: ${JSON.stringify(holdOf('A'))}`);
+await wait(GAP);
+await putRules(newRules);
+{
+    const base = await cloudDoc('or3');
+    check(await put(['users', UID, 'todos', 'or3'], { ...base, time: '13:05', ...v47(Timestamp.fromMillis(Date.now())) }), '새 판 기기가 or3 시각을 쓰지 못했습니다(검사 준비 틀림).');
+}
+await putRules(oldRules);
+await wait(GAP);
+await sync('A');
+check(todo(A, 'or3')?.time === '13:05' && !('or3' in holdOf('A')), `다른 기기가 시각을 넣어 이긴 할 일의 지킴 기록이 받은 뒤에도 남았습니다(H4): ${JSON.stringify({ row: todo(A, 'or3'), hold: holdOf('A') })}`);
 /* 새 규칙을 배포하면 A가 아무것도 고치지 않아도 다음 올리기에서 지킨 시각을 저절로 올리고, 성공하면 지킴 기록을 지웁니다. */
 check('or1' in holdOf('A'), `새 규칙 배포 전 지킴 기록이 없습니다: ${JSON.stringify(holdOf('A'))}`);
 await putRules(newRules);
@@ -388,6 +412,32 @@ check(!('or1' in holdOf('A')), `시각을 올린 뒤에도 지킴 기록이 남�
 await sync('B');
 check(todo(B, 'or1')?.time === '10:15', '새 규칙 배포 뒤 다른 기기가 시각을 받지 못했습니다.');
 holdA.useHoldRetryForTest();
+/* r3 1번: 새 규칙에서 다른 기기가 시각만 바꾸거나 지우면, 열려 있는 기기가 새로고침 없이 받습니다. */
+const alarm = await import(new URL('.twodev/a/src/lib/todoAlarm.js', root));
+let prevTime = '10:15';
+watching.A = true;
+await on('A', (db) => db.todoWatchForTest(true));
+await wait(500);
+for (const [label, next] of [['12:30으로 변경', '12:30'], ['지움', ''], ['09:40으로 변경', '09:40']]) {
+    await wait(GAP);
+    await on('B', async (db) => { const row = { ...todo(db, 'or1') }; row.time = next; await db.saveTextItem('todos', row, { from: 'cloud' }); await db.flushCloud(); });
+    const c = await cloudDoc('or1');
+    check(next ? c?.time === next : !('time' in (c || {})), `B의 시각 ${label}이 클라우드에 없습니다: ${JSON.stringify(c)}`);
+    /* A는 받기(sync)를 부르지 않습니다. 실시간 알림만으로 5초 안에 바뀌어야 합니다. */
+    let got = '';
+    const trace = [];
+    for (let i = 0; i < 50; i += 1) { await wait(100); got = todo(A, 'or1')?.time || ''; trace.push(got); }
+    check(got === next, `다른 기기의 시각 ${label}이 열린 기기에 새로고침 없이 반영되지 않았습니다: ${JSON.stringify(todo(A, 'or1'))}`);
+    /* 알림 예약도 새 시각을 따릅니다: 새 시각에는 울리고, 예전 시각에는 울리지 않습니다. */
+    const row = todo(A, 'or1');
+    const before = next ? `${next.slice(0, 3)}${String(Number(next.slice(3)) - 1).padStart(2, '0')}` : '';
+    const firedOld = prevTime ? { [alarm.alarmKey({ ...row, time: prevTime })]: row.due } : {};
+    if (next) check(alarm.dueAlarms([row], row.due, next, firedOld).length === 1 && alarm.dueAlarms([row], row.due, before, {}).length === 0, `시각이 바뀐 뒤 알림 예약이 새 시각(${next})을 따르지 않습니다.`);
+    else check(alarm.dueAlarms([row], row.due, '23:59', {}).length === 0, '시각을 지운 뒤에도 알림이 남았습니다.');
+    prevTime = next;
+}
+await on('A', (db) => db.todoWatchForTest(false));
+watching.A = false;
 
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */
 check(await put(['users', UID, 'tombs', 'todos-old1'], { k: 'todos', at: Timestamp.fromMillis(Date.now() - 40 * DAY) }), '옛 묘비를 쓰지 못했습니다.');

@@ -10,7 +10,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush } from './cloud.js';
+import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
@@ -379,11 +379,11 @@ export function tellRejectedForTest(keys) {
 }
 
 /* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
-const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, available: syncAvailable };
+const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, watch: watchTodos, available: syncAvailable };
 let cloudApi = { ...REAL_CLOUD };
 /* 검사용: 넣은 함수만 바꿉니다. peek·clock을 넣지 않은 가짜 클라우드에서는 그 단계를 건너뜁니다(진짜 클라우드 함수가 불리지 않게). */
 export function useCloudForTest(api = null) {
-    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, available: () => true, ...api } : { ...REAL_CLOUD };
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, watch: null, available: () => true, ...api } : { ...REAL_CLOUD };
 }
 let signOutHook = null;
 export function useSignOutForTest(fn = null) { signOutHook = fn; }
@@ -2207,6 +2207,36 @@ export async function pullFromCloudNow() {
 }
 
 let lastRefresh = 0;
+/*
+ * 다른 기기가 할 일을 고치면(시각만 바꾸거나 지운 것도) 새로고침 없이 받습니다(PR #62 r3 1번).
+ * 예전에는 돌아올 때·온라인·5분마다만 받았고 1분 안에 다시 받지 않아, 열린 기기에 늦게 보였습니다.
+ * 몰려 오는 변경은 0.8초 모아서 한 번 받고, 받기 사이는 3초 이상 둡니다. 받으면 알림 예약도 새 시각으로 다시 봅니다.
+ */
+let todoWatch = { uid: '', stop: null, timer: 0, last: 0 };
+const WATCH_GAP_MS = 3000;
+function stopTodoWatch() {
+    try { todoWatch.stop?.(); } catch { /* 이미 꺼짐 */ }
+    if (todoWatch.timer) clearTimeout(todoWatch.timer);
+    todoWatch = { uid: '', stop: null, timer: 0, last: 0 };
+}
+export function todoWatchForTest(on) { stopTodoWatch(); return on ? startTodoWatch(state.auth?.uid) : undefined; }
+async function startTodoWatch(uid) {
+    if (!cloudApi.watch || state.auth?.uid !== uid || todoWatch.uid === uid) return;
+    stopTodoWatch();
+    todoWatch.uid = uid;
+    const fire = () => {
+        todoWatch.timer = 0;
+        if (state.auth?.uid !== uid) return;
+        const wait = todoWatch.last + WATCH_GAP_MS - Date.now();
+        if (wait > 0) { todoWatch.timer = setTimeout(fire, wait); return; }
+        todoWatch.last = Date.now();
+        refreshFromCloud({ force: true }).catch(() => {});
+    };
+    let stop = null;
+    try { stop = await cloudApi.watch(uid, () => { if (!todoWatch.timer) todoWatch.timer = setTimeout(fire, 800); }, { memoryOnly: state.profile?.sharedPc }); } catch { stop = null; }
+    if (todoWatch.uid !== uid) { try { stop?.(); } catch { /* 꺼짐 */ } return; }
+    todoWatch.stop = stop;
+}
 /** 앱으로 돌아오거나 창을 다시 볼 때 다른 기기에서 고친 것을 받아 옵니다(1분에 한 번까지). */
 export async function refreshFromCloud({ force = false } = {}) {
     const uid = state.auth?.uid;
@@ -2231,6 +2261,7 @@ export async function setAuth(auth) {
     if (switching) {
         state = { ...state, auth: null };
         connectTask = null;
+        stopTodoWatch();
         const moved = await switchAccountLocal(from, next.uid);
         if (!moved) {
             /*
@@ -2254,11 +2285,13 @@ export async function setAuth(auth) {
     emit();
     if (!next?.uid) {
         connectTask = null;
+        stopTodoWatch();
         return;
     }
     if (connectTask?.uid === next.uid) return connectTask.promise;
     const promise = connectCloud(next.uid).catch(() => {});
     connectTask = { uid: next.uid, promise };
+    promise.then(() => startTodoWatch(next.uid));
     return promise;
 }
 

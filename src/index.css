@@ -327,6 +327,8 @@ a.chip,
 
 /* 아래 탭 줄(70px)과 그 위로 28px 솟은 쨈 단추에 초점·스크롤 대상이 깔리지 않게 합니다(PR #62 r2 2번: 12-31 390px 할 일 카드 머리). */
 html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px)); }
+/* 휴대폰: 끝까지 밀면 마지막 카드 머리가 탭 줄(70px)·쨈 단추(36px 솟음) 위로 올라와 손가락으로 누를 수 있습니다. */
+@media (max-width: 899px) { body { padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px)); } }
 .tabbar {
     position: fixed;
     z-index: 30;

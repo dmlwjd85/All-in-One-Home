@@ -1716,6 +1716,35 @@ try {
             const changed = Object.keys({ ...before, ...after }).filter((k) => before[k] !== after[k] && !/theme|sound|notice/.test(k));
             check(!changed.length, `카드를 접고 펴는데 데이터가 바뀝니다. ${changed.join(', ')}`);
         }, 844);
+        /* 손가락으로 쓰는 사람: 360·390, 높이 800에서 끝까지 밀어 올린 뒤 할 일 머리를 실제 좌표로 탭해 펼쳐져야 합니다.
+           마지막 카드 머리까지 탭 줄·쨈 단추 위로 올라올 만큼 아래 여백이 있어야 합니다. */
+        for (const w of [360, 390]) {
+            await withDemo(w, 'light', async (page) => {
+                await page.setViewport({ width: w, height: 800, deviceScaleFactor: 1, hasTouch: true });
+                await page.waitForSelector('[data-fold="todo"] .fold-head');
+                await page.evaluate(() => scrollTo(0, document.scrollingElement.scrollHeight));
+                await page.waitForFunction(() => { const s = document.scrollingElement; return Math.abs(s.scrollTop + innerHeight - s.scrollHeight) < 2; });
+                const heads = await page.evaluate(() => {
+                    const bar = document.querySelector('.tabbar').getBoundingClientRect();
+                    const fab = [...document.querySelectorAll('.fab')].map((e) => e.getBoundingClientRect()).find((r) => r.width > 0);
+                    const top = Math.min(bar.top, fab ? fab.top : bar.top);
+                    return [...document.querySelectorAll('[data-fold] .fold-head')].map((h) => {
+                        const r = h.getBoundingClientRect();
+                        return { fold: h.closest('[data-fold]').dataset.fold, top: Math.round(r.top), bottom: Math.round(r.bottom), cover: Math.round(top),
+                            hit: [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 12, r.top + r.height / 2], [r.right - 12, r.top + r.height / 2]].every(([x, y]) => h.contains(document.elementFromPoint(x, y))) };
+                    });
+                });
+                const last = heads[heads.length - 1];
+                check(last && last.bottom <= last.cover && last.hit, `${w}에서 끝까지 밀어도 마지막 카드 머리가 탭 줄·쨈 단추에 가려집니다. ${JSON.stringify(heads)}`);
+                const todo = heads.find((h) => h.fold === 'todo');
+                check(todo && todo.bottom <= todo.cover && todo.hit, `${w}에서 끝까지 밀어도 할 일 카드 머리를 누를 수 없습니다. ${JSON.stringify(heads)}`);
+                const box = await (await page.$('[data-fold="todo"] .fold-head')).boundingBox();
+                await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+                const ok = await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1', { timeout: 3000 }).then(() => true, () => false);
+                const jam = await page.evaluate(() => Boolean(document.querySelector('.quick-bar.is-open')));
+                check(ok && !jam, `${w}에서 할 일 머리를 손가락으로 탭해도 펼쳐지지 않거나 쨈이 열립니다. ${JSON.stringify({ ok, jam, box })}`);
+            }, 800);
+        }
         await withDemo(1280, 'light', async (page) => {
             const wide = await page.evaluate(() => [...document.querySelectorAll('[data-fold]')].map((el) => ({ head: el.querySelector('.fold-head').getBoundingClientRect().height, body: el.querySelector('.fold-body').getBoundingClientRect().height })));
             check(wide.length === 4 && wide.every((c) => c.head === 0 && c.body > 0), `넓은 화면 오늘 카드가 접혀 보입니다. ${JSON.stringify(wide)}`);
@@ -3737,7 +3766,12 @@ try {
         box.dispatchEvent(new Event('input', { bubbles: true }));
         await new Promise((done) => setTimeout(done, 100));
     }, value);
-    const noticeUndoClick = (page) => page.evaluate(() => {
+    /* 되돌리기 단추가 안내에 뜰 때까지 기다린 뒤 누릅니다(고정 기다림은 느린 기계에서 흔들림, PR #62 r3 5번). */
+    const noticeUndoClick = async (page) => {
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => /되돌\s*리\s*기/.test(el.textContent)), { timeout: 5000 }).catch(() => {});
+        return noticeUndoNow(page);
+    };
+    const noticeUndoNow = (page) => page.evaluate(() => {
         const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
         button?.click();
         return Boolean(button);
@@ -3751,8 +3785,12 @@ try {
         await noticeType(page, '단소 챙기기');
         await noticeUndoClick(page);
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === saved));
-        await page.waitForSelector('[role="group"][aria-label="되돌린 글"]', { timeout: 5000 }).catch(() => {});
-        await delay(200);
+        await page.waitForFunction(() => {
+            const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
+            const note = panel?.querySelector('.restored-note');
+            return note && note.clientHeight > 0 && [...panel.querySelectorAll('button')].some((el) => el.innerText.trim() === '되돌린 글 불러오기');
+        }, { timeout: 8000 }).catch(() => {});
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     };
     const noticeRestoredView = (page) => page.evaluate(() => {
         const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
@@ -3957,13 +3995,14 @@ try {
             watch.observe(button, { attributes: true, attributeFilter: ['disabled'] });
             button.click();
             button.click();
-            await new Promise((done) => setTimeout(done, 1500));
+            /* 저장이 끝나 단추가 풀릴 때까지 기다립니다(최대 8초). */
+            for (let i = 0; i < 80 && (button.disabled || !locked); i += 1) await new Promise((done) => setTimeout(done, 100));
             watch.disconnect();
             return { locked, after: button.disabled };
         });
         check(lockSeen.locked && !lockSeen.after, `저장하는 동안 저장 버튼이 잠기지 않거나 저장 뒤에도 풀리지 않습니다: ${JSON.stringify(lockSeen)}`);
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '실내화 챙기기'));
-        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기')?.click());
+        await noticeUndoClick(page);
         const lockUndo = await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
         check(![...lockUndo.cloud, ...lockUndo.local].some((row) => row.date === noticeDay), `저장 버튼을 빠르게 여러 번 눌렀더니 저장이 두 번 돌아 되돌리기 한 번으로 돌아가지 않습니다: ${JSON.stringify(lockUndo)}`);
 
