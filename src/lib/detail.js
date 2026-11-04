@@ -21,6 +21,8 @@ export function detailRows(kind, row = {}) {
     }
     const memo = String(row.memo || row.text || '').trim();
     if (memo && memo !== row.title) out.push(['메모', memo]);
+    const raw = String(row.raw || '').trim();
+    if (kind === 'event' && raw && raw !== row.title) out.push(['처음 적은 글', raw]);
     return out;
 }
 

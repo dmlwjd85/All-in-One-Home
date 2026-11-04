@@ -1,10 +1,12 @@
 import { TermFill } from './TermFill.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { addDaysYmd, dayKeyFromYmd, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
+import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
 import { restInfo } from '../lib/daymark.js';
 import { joined, setTimetable } from '../lib/db.js';
-import { EventLine } from './EventLine.jsx';
+import { EventLine, WeekEvent } from './EventLine.jsx';
+import { eventEnd, onDay, weekRows } from '../lib/weekRows.js';
+export { weekRows };
 import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
 import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
@@ -17,6 +19,7 @@ import { usePeriodLocal } from './usePeriodLocal.js';
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
 export function Schedule() {
+    const [weekendOpen, setWeekendOpen] = useState(false);
     const { data, clock, route, go, showToast } = useUi();
     const focus = isValidYmd(route.params.date) ? route.params.date : (isValidYmd(route.params.week) ? route.params.week : clock.ymd);
     const mode = route.params.view === '달력' ? '달력' : (route.params.view === '시간표' ? '시간표' : '주');
@@ -62,19 +65,35 @@ export function Schedule() {
                         <Btn className="icon-btn" aria-label="다음 주" onClick={() => go(`#/schedule/week/${addDaysYmd(weekStart, 7)}`)}>›</Btn>
                     </div>
                     <Btn className="chip" onClick={() => go(`#/schedule/week/${clock.ymd}`)}>이번 주</Btn>
-                    {Array.from({ length: 7 }, (_, index) => {
-                        const date = addDaysYmd(weekStart, index);
-                        const rest = restInfo(date, classEvents);
-                        const mine = week.filter((row) => onDay(row, date));
-                        return (
-                            <section key={date} className={rest.off ? 'glass day-rest' : 'glass'} style={{ padding: 12 }}>
-                                <Btn block className="chip" style={{ justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal', marginBottom: 8 }} onClick={() => go(`#/day/${date}`, { state: { appFrom: 'schedule' } })}>{formatKoDate(date, { today: clock.ymd })} 일지</Btn>
-                                {rest.off && <span className="day-rest-mark"> · {rest.label === '휴일' ? '휴일' : `휴일 · ${rest.label}`}</span>}
-                                {mine.map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
-                                {!mine.length && !rest.off && <p className="muted" style={{ marginBottom: 0 }}>일정 없음</p>}
-                            </section>
-                        );
-                    })}
+                    <div className="week-list glass" data-week-list="1">
+                        {weekRows(weekStart, classEvents, week).map((item) => {
+                            const dayRow = (day) => (
+                                <div key={day.date} className={`week-row${day.date === clock.ymd ? ' is-today' : ''}${day.rest.off ? ' day-rest' : ''}`} data-week-day={day.date}>
+                                    <Btn className="week-day" aria-label={`${formatKoDate(day.date, { today: clock.ymd })} 일지 열기`} onClick={() => go(`#/day/${day.date}`, { state: { appFrom: 'schedule' } })}>
+                                        <b>{day.dow}</b>
+                                        <small>{day.short}{day.date === clock.ymd ? ' 오늘' : ''}</small>
+                                    </Btn>
+                                    <div className="week-events">
+                                        {day.rest.off && <span className="day-rest-mark week-rest">{day.rest.label === '휴일' ? '휴일' : `휴일 · ${day.rest.label}`}</span>}
+                                        {day.events.map((row) => <WeekEvent key={row.id} row={row} showToast={showToast} />)}
+                                        {!day.events.length && !day.rest.off && <span className="muted week-empty">일정 없음</span>}
+                                    </div>
+                                </div>
+                            );
+                            if (!item.fold) return dayRow(item);
+                            return (
+                                <div key="weekend" className="week-fold-wrap">
+                                    <Btn className="week-row week-fold" data-week-fold="1" aria-expanded={weekendOpen ? 'true' : 'false'} aria-label={`주말 ${item.label} ${weekendOpen ? '접기' : '펼치기'}`} onClick={() => setWeekendOpen((open) => !open)}>
+                                        <span className="week-day day-rest-mark"><b>주말</b></span>
+                                        <span className="week-fold-text">{item.label} · {item.restLabel || '일정 없음'}</span>
+                                        <span className="week-fold-mark" aria-hidden="true">{weekendOpen ? '▴' : '▾'}</span>
+                                    </Btn>
+                                    {weekendOpen && item.days.map(dayRow)}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <p className="muted week-help">일정을 누르면 자세히 보기가 열리고, 거기서 고칠 수 있어요. 요일을 누르면 그날 일지로 가요. 접힌 주말은 눌러서 펼쳐요.</p>
                     {specialist.slice(0, 3).map((line) => <p key={line} className="muted">{line}</p>)}
                     <AddEvent />
                 </div>
@@ -127,13 +146,7 @@ export function Schedule() {
     );
 }
 
-function eventEnd(row) {
-    return row.end && row.end >= row.date ? row.end : row.date;
-}
 
-function onDay(row, date) {
-    return row.date <= date && date <= eventEnd(row);
-}
 
 function coversDay(row, start, end) {
     return row.date <= end && eventEnd(row) >= start;
@@ -147,8 +160,10 @@ function shift(ym, delta) {
 
 function AddEvent() {
     const { openFlow } = useUi();
-    return <Btn className="primary-btn block" onClick={() => openFlow({ id: 'quick', kind: '일정' })}>일정 더하기</Btn>;
+    return <Btn className="add-event-fab" aria-label="일정 더하기" onClick={() => openFlow({ id: 'quick', kind: '일정' })}>+ 일정</Btn>;
 }
+
+
 
 function Timetable({ data, todayKey, weekStart, events }) {
     const [edit, setEdit] = useState(null);

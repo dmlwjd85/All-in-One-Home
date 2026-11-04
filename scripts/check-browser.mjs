@@ -291,10 +291,11 @@ async function shutdown(code) {
     process.exit(code);
 }
 
+const watchMinutes = Math.max(1, Number(process.env.CHECK_BROWSER_LIMIT_MIN) || Number(process.env.CHECK_BROWSER_MINUTES) || 14);
 const watchdog = setTimeout(() => {
-    console.error('브라우저 검사가 제한 시간을 넘겨 멈춰서 끝냅니다.');
+    console.error(`브라우저 검사가 ${watchMinutes}분을 넘겨 멈춰서 끝냅니다.`);
     shutdown(1);
-}, (Number(process.env.CHECK_BROWSER_LIMIT_MIN) || 8) * 60 * 1000);
+}, watchMinutes * 60 * 1000);
 
 let browser = null;
 
@@ -708,6 +709,37 @@ try {
             await page.evaluate(() => { location.hash = '#/schedule'; });
             await delay(200);
             await audit(page, `일정 ${width}`);
+            if (width === 390) {
+                // 주말 접힘: 일정 없는 주는 한 줄로 접히고, 눌러서 펼치면 토·일 일지로 갈 수 있습니다.
+                await page.evaluate(() => { location.hash = '#/schedule/week/2027-03-08'; });
+                const folded = await page.waitForSelector('[data-week-fold]', { timeout: 8000 }).then(() => true, () => false);
+                check(folded, '주말 접힘: 일정 없는 주말이 한 줄로 접히지 않습니다.');
+                const before = await page.evaluate(() => {
+                    const el = document.querySelector('[data-week-fold]');
+                    const box = el?.getBoundingClientRect();
+                    return { tag: el?.tagName, expanded: el?.getAttribute('aria-expanded'), h: box?.height || 0, sat: Boolean(document.querySelector('[data-week-day="2027-03-13"]')) };
+                });
+                check(before.tag === 'BUTTON' && before.expanded === 'false' && before.h >= 44 && !before.sat, `주말 접힘: 접힌 줄이 44px 이상 단추가 아닙니다. ${JSON.stringify(before)}`);
+                await page.evaluate(() => document.querySelector('[data-week-fold]')?.scrollIntoView({ block: 'center' }));
+                await page.click('[data-week-fold]');
+                await delay(150);
+                const opened = await page.evaluate(() => ({ expanded: document.querySelector('[data-week-fold]')?.getAttribute('aria-expanded'), sat: Boolean(document.querySelector('[data-week-day="2027-03-13"] button.week-day')), sun: Boolean(document.querySelector('[data-week-day="2027-03-14"] button.week-day')) }));
+                check(opened.expanded === 'true' && opened.sat && opened.sun, `주말 접힘: 눌러도 토·일이 펼쳐지지 않습니다. ${JSON.stringify(opened)}`);
+                await audit(page, `일정 주말 펼침 ${width}`);
+                await page.evaluate(() => document.querySelector('[data-week-fold]')?.scrollIntoView({ block: 'center' }));
+                await page.click('[data-week-fold]');
+                await delay(150);
+                const closed = await page.evaluate(() => ({ expanded: document.querySelector('[data-week-fold]')?.getAttribute('aria-expanded'), sat: Boolean(document.querySelector('[data-week-day="2027-03-13"]')) }));
+                check(closed.expanded === 'false' && !closed.sat, '주말 접힘: 다시 눌러도 접히지 않습니다.');
+                await page.evaluate(() => document.querySelector('[data-week-fold]')?.scrollIntoView({ block: 'center' }));
+                await page.click('[data-week-fold]');
+                await page.waitForSelector('[data-week-day="2027-03-13"] button.week-day', { timeout: 5000 }).catch(() => {});
+                await page.evaluate(() => document.querySelector('[data-week-day="2027-03-13"] button.week-day')?.click());
+                const satDay = await page.waitForFunction(() => location.hash.startsWith('#/day/2027-03-13'), { timeout: 5000 }).then(() => true, () => false);
+                check(satDay, '주말 접힘: 펼친 토요일을 눌러도 그날 일지로 가지 않습니다.');
+                await page.evaluate(() => { location.hash = '#/schedule'; });
+                await delay(200);
+            }
             await page.evaluate(() => { location.hash = '#/settings'; });
             await delay(200);
             await audit(page, `설정 ${width}`);
@@ -3107,23 +3139,27 @@ try {
 
         // 일정 줄: 메모에 민감어가 있는 기기 일정은 제목만 고쳐도 기기에 남고, 숨은 클라우드 일정도 남습니다.
         await open('#/day/2026-12-07');
-        const lineShown = await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="현장체험 출발 고치기"]')), { timeout: 8000 }).then(() => true, () => false);
+        const lineShown = await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label^="일정 자세히: 현장체험 출발"]')), { timeout: 8000 }).then(() => true, () => false);
         check(lineShown, '숨은 행 검사: 일정 줄에 기기 전용 일정이 나오지 않습니다.');
-        await page.evaluate(() => document.querySelector('button[aria-label="현장체험 출발 고치기"]')?.click());
-        await page.waitForSelector('input[aria-label="현장체험 출발 고치기"]', { timeout: 5000 }).catch(() => {});
-        await typeInto('input[aria-label="현장체험 출발 고치기"]', '현장체험 출발 9시');
-        await page.evaluate(() => [...(document.querySelector('input[aria-label="현장체험 출발 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.evaluate(() => document.querySelector('button[aria-label^="일정 자세히: 현장체험 출발"]')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '고치기'), { timeout: 5000 }).catch(() => {});
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '고치기')?.click());
+        await page.waitForSelector('input[aria-label="일정 제목 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="일정 제목 고치기"]', '현장체험 출발 9시');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '고친 제목 저장')?.click());
         vaults = await until((v) => [...(v.main?.events || []), ...(v.local?.events || [])].some((row) => row.title === '현장체험 출발 9시'));
         check(rowOf(vaults.local, 'events', 'qa-ev-1')?.title === '현장체험 출발 9시', '숨은 행 검사: 메모에 민감어가 있는 일정이 기기에 남지 않습니다.');
         check(rowOf(vaults.main, 'events', 'qa-ev-1')?.title === '현장체험 안내문', '숨은 행 검사: 일정 줄을 고치자 숨은 클라우드 일정이 지워지거나 바뀌었습니다.');
         check(!(vaults.main?.events || []).some((row) => String(row.memo || '').includes('알레르기')), '숨은 행 검사: 메모에 민감어가 있는 일정이 클라우드 목록에 들어갔습니다.');
 
         // 일정 줄: 클라우드 일정을 민감어로 고치면 클라우드에서 빠집니다.
-        await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label="학부모 공개수업 고치기"]')), { timeout: 8000 }).catch(() => {});
-        await page.evaluate(() => document.querySelector('button[aria-label="학부모 공개수업 고치기"]')?.click());
-        await page.waitForSelector('input[aria-label="학부모 공개수업 고치기"]', { timeout: 5000 }).catch(() => {});
-        await typeInto('input[aria-label="학부모 공개수업 고치기"]', '학부모 공개수업 건강 상담');
-        await page.evaluate(() => [...(document.querySelector('input[aria-label="학부모 공개수업 고치기"]')?.parentElement?.querySelectorAll('button') || [])].find((el) => el.innerText.trim() === '저장')?.click());
+        await page.waitForFunction(() => Boolean(document.querySelector('button[aria-label^="일정 자세히: 학부모 공개수업"]')), { timeout: 8000 }).catch(() => {});
+        await page.evaluate(() => document.querySelector('button[aria-label^="일정 자세히: 학부모 공개수업"]')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '고치기'), { timeout: 5000 }).catch(() => {});
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '고치기')?.click());
+        await page.waitForSelector('input[aria-label="일정 제목 고치기"]', { timeout: 5000 }).catch(() => {});
+        await typeInto('input[aria-label="일정 제목 고치기"]', '학부모 공개수업 건강 상담');
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '고친 제목 저장')?.click());
         vaults = await until((v) => Boolean(rowOf(v.local, 'events', 'qa-ev-2')));
         check(rowOf(vaults.local, 'events', 'qa-ev-2')?.title === '학부모 공개수업 건강 상담', '숨은 행 검사: 민감어로 고친 일정이 기기에 남지 않습니다.');
         check(!rowOf(vaults.main, 'events', 'qa-ev-2'), '숨은 행 검사: 민감어로 고친 일정의 예전 줄이 클라우드에 남았습니다.');

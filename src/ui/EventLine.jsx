@@ -4,10 +4,33 @@ import { removeItem, saveTextItem } from '../lib/db.js';
 import { Btn } from './bits.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 
+/** 일정 고치기·지우기. 자세히 보기 팝업 안에서만 씁니다(줄마다 있던 '고치기' 버튼은 없앴어요). */
+function eventEditor(row, showToast) {
+    if (row.google) return {};
+    return {
+        onSave: async (title) => {
+            const next = String(title || '').trim();
+            if (!next) {
+                showToast('한 줄만 적어도 남길 수 있어요.');
+                return false;
+            }
+            /* 제목만 바꿉니다. 날짜·시각·메모·처음 적은 글(raw)은 그대로 둡니다. */
+            const result = await saveTextItem('events', { ...row, title: next }, { from: row.localOnly ? 'local' : 'cloud' });
+            if (result?.storageFailed) return false;
+            showToast('일정을 고쳤어요.', true);
+            return true;
+        },
+        onDelete: async () => {
+            const failed = await removeItem('events', row.id);
+            if (failed?.storageFailed) return false;
+            showToast('일정을 지웠어요.', true);
+            return true;
+        },
+    };
+}
+
 export function EventLine({ row, showToast }) {
-    const [open, setOpen] = useState(false);
     const [detail, setDetail] = useState(false);
-    const [title, setTitle] = useState(row.title || '');
     const clock = eventClock(row);
     return (
         <div style={{ marginBottom: 8 }}>
@@ -16,29 +39,26 @@ export function EventLine({ row, showToast }) {
                 {clock ? `${clock} ` : ''}{row.title}{row.memo ? ` · ${row.memo}` : ''}
                 {row.google ? <span className="muted"> · 보기만</span> : null}
             </Btn>
-            {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} />}
-            {!row.google && !open && (
-                <Btn className="chip" aria-label={`${row.title || '일정'} 고치기`} onClick={() => { setTitle(row.title || ''); setOpen(true); }}>고치기</Btn>
-            )}
-            {!row.google && open && (
-                <div style={{ display: 'grid', gap: 8 }}>
-                    <input className="field" aria-label={`${row.title || '일정'} 고치기`} value={title} onChange={(event) => setTitle(event.target.value)} />
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <Btn className="chip" onClick={async () => {
-                            const next = title.trim();
-                            if (!next) {
-                                showToast('한 줄만 적어도 남길 수 있어요.');
-                                return;
-                            }
-                            const result = await saveTextItem('events', { ...row, title: next }, { from: row.localOnly ? 'local' : 'cloud' });
-                            if (result?.storageFailed) return;
-                            showToast('일정을 고쳤어요.', true);
-                            setOpen(false);
-                        }}>저장</Btn>
-                        <Btn className="chip" onClick={() => removeItem('events', row.id).then((failed) => { if (!failed?.storageFailed) showToast('일정을 지웠어요.', true); })}>지우기</Btn>
-                    </div>
-                </div>
-            )}
+            {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} {...eventEditor(row, showToast)} />}
         </div>
+    );
+}
+
+/** 주간 목록(A1) 한 줄: 시각 + 제목. 누르면 자세히 보기(고치기 포함)가 열립니다. */
+export function WeekEvent({ row, showToast }) {
+    const [detail, setDetail] = useState(false);
+    const clock = eventClock(row);
+    const start = clock || '';
+    return (
+        <>
+            <Btn className={row.google ? 'week-event gcal-line' : 'week-event'} data-event-detail="1" aria-label={`일정 자세히: ${start ? `${start} ` : ''}${row.title || '일정'}`} onClick={() => setDetail(true)}>
+                <span className="week-time num">{start || '하루'}</span>
+                <span className="week-title">
+                    {row.google ? <span className="gcal-badge">구글</span> : (row.localOnly ? '🔒 ' : '')}
+                    {row.title}
+                </span>
+            </Btn>
+            {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} {...eventEditor(row, showToast)} />}
+        </>
     );
 }

@@ -1171,10 +1171,12 @@ export async function saveQuick(input, now = new Date()) {
                 ...base,
                 id: nid('event'),
                 date,
-                title: (stripTokens(text) || text).slice(0, 60),
+                title: (stripTokens(String(input.title || '').trim() || text) || text).slice(0, 60),
                 kind: eventKind,
                 memo: bits.join(' · ').slice(0, 300),
             };
+            /* 날짜 칩(B1)으로 날짜 낱말을 뺀 제목이면 처음 적은 글을 raw에 둡니다. raw는 이 기기에만 두고 클라우드 칸에는 올리지 않습니다. */
+            if (input.raw && String(input.raw).trim() !== row.title) row.raw = String(input.raw).trim().slice(0, 300);
             if (input.time) row.time = input.time;
             if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
             put(local ? draft.local.events : draft.events, row);
