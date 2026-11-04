@@ -53,7 +53,6 @@ export function Schedule() {
 
     return (
         <div>
-            {gcal.lastError && <p className="gcal-error" role="status">{gcal.lastError}</p>}
             <div style={{ display: 'flex', gap: 8 }}>
                 {['주', '달력', '시간표'].map((item) => <Btn key={item} className={mode === item ? 'chip on' : 'chip'} onClick={() => openMode(item)}>{item}</Btn>)}
             </div>

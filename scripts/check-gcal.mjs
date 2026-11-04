@@ -8,6 +8,11 @@ import {
     GCAL_OFFLINE_ERROR,
     GCAL_PARTIAL_ERROR,
     GCAL_VAULT,
+    GCAL_RECONNECT_HINT,
+    GCAL_AUTH_RETRY_MAX_MS,
+    authRetryDelay,
+    isAuthStatus,
+    mainScreenNotice,
     SCOPE_EVENTS,
     SCOPE_READONLY,
     calendarRedirectUri,
@@ -32,6 +37,7 @@ import {
 } from '../src/lib/gcalCore.js';
 import { applyKokDiff, listExternalEvents, pushKokEvent, uploadKokEvents } from '../src/lib/gcalFlow.js';
 import {
+    answerGcalUpload,
     disconnectGcal,
     gcalReady,
     gcalSnapshot,
@@ -39,6 +45,9 @@ import {
     subscribeGcal,
     switchGcalMode,
     useGcalRevokeForTest,
+    useGcalSchedulerForTest,
+    useSilentTokenForTest,
+    gcalRetryAttemptForTest,
     useGcalVaultForTest,
     useTokenStoreForTest,
 } from '../src/lib/gcalLive.js';
@@ -333,6 +342,8 @@ check(remounted.enabled === false && remounted.mode === 'write' && visibleGoogle
 await switchGcalMode('readonly');
 check(gcalSnapshot().mode === 'readonly' && bootRow.mode === 'write', '모드를 바꾼 뒤에도 부팅 모드가 화면에 남습니다.');
 
+const timers = [];
+useGcalSchedulerForTest((fn, ms) => { timers.push({ fn, ms }); return timers.length; }, () => {});
 const authBag = memoryBag();
 authBag.setItem(GCAL_TOKEN_KEY, JSON.stringify({
     accessToken: 'ya29.expired',
@@ -369,10 +380,72 @@ const deniedFetch = async () => {
 await refreshGcal(deniedFetch);
 await refreshGcal(deniedFetch);
 console.error = consoleError;
-check(hits === 1 && authLogs.length === 0 && gcalSnapshot().lastError === GCAL_AUTH_ERROR && authBag.getItem(GCAL_TOKEN_KEY) === null, '401 뒤에 토큰으로 다시 요청하거나 콘솔에 남습니다.');
+check(hits === 1 && authLogs.length === 0 && gcalSnapshot().needsReconnect === true && gcalSnapshot().lastError === '' && authBag.getItem(GCAL_TOKEN_KEY) === null, '401 뒤에 토큰으로 다시 요청하거나, 경고 문구를 메인에 남기거나, 다시 연결 표시가 없습니다.');
 let afterAuth = null;
 await gcalReady().then(() => { afterAuth = gcalSnapshot(); });
-check(afterAuth.lastError === GCAL_AUTH_ERROR && expiredBoot.lastError === '', '실패 안내가 다른 화면에서 부팅 상태로 사라집니다.');
+check(afterAuth.needsReconnect === true && expiredBoot.needsReconnect !== true, '다시 연결 표시가 다른 화면에서 부팅 상태로 사라집니다.');
+check(timers.length === 1 && timers[0].ms === 60 * 1000, '무음 갱신 실패 뒤 1분 뒤 다시 시도를 잡지 않거나 여러 번 잡습니다.');
+
+/* 무음 갱신: 401 이 나면 창 없이 새 토큰을 받아 같은 목록을 한 번 더 읽습니다. */
+let silentCalls = 0;
+useSilentTokenForTest((mode) => {
+    silentCalls += 1;
+    return { access_token: 'ya29.fresh', expires_in: 3600, scope: mode === 'write' ? SCOPE_EVENTS : SCOPE_READONLY };
+});
+const seen = [];
+const renewFetch = async (url, options = {}) => {
+    const auth = String(options.headers?.Authorization || options.headers?.authorization || '');
+    seen.push(auth);
+    if (auth.includes('ya29.fresh')) return { ok: true, status: 200, json: async () => ({ items: [] }) };
+    return { ok: false, status: 401, json: async () => ({}) };
+};
+useGcalSchedulerForTest((fn, ms) => { timers.push({ fn, ms }); return timers.length; }, () => {}, renewFetch);
+await gcalReady();
+await patchFreshRetry();
+async function patchFreshRetry() {
+    /* 1분 뒤 재시도 타이머가 울린 것처럼 한 번 더 읽습니다. */
+    await refreshGcal(renewFetch);
+}
+check(silentCalls >= 1 && gcalSnapshot().needsReconnect === false && gcalSnapshot().lastError === '' && gcalRetryAttemptForTest() === 0, '무음 갱신에 성공해도 다시 연결 표시가 남거나 재시도 횟수를 안 지웁니다.');
+check(seen.some((h) => h.includes('ya29.fresh')) && JSON.parse(authBag.getItem(GCAL_TOKEN_KEY) || '{}').accessToken === 'ya29.fresh', '새 토큰으로 다시 읽거나 보관하지 않았습니다.');
+
+/* 첫 토큰도 거절되면 무음 갱신 → 성공 → 같은 요청 재시도. */
+authBag.setItem(GCAL_TOKEN_KEY, JSON.stringify({ accessToken: 'ya29.stale', expiresAt: Date.now() + 3600 * 1000, scope: SCOPE_READONLY }));
+useTokenStoreForTest(authBag);
+seen.length = 0;
+silentCalls = 0;
+const ok401 = await refreshGcal(renewFetch);
+check(ok401.ok === true && silentCalls === 1 && seen.length === 2 && seen[0].includes('ya29.stale') && seen[1].includes('ya29.fresh'), '401 뒤 무음 갱신 후 한 번만 다시 읽지 않습니다.');
+
+/* 무음 갱신도 계속 실패하면 1분부터 두 배씩, 30분에서 멈춥니다. */
+useSilentTokenForTest(() => null);
+useGcalSchedulerForTest((fn, ms) => { timers.push({ fn, ms }); return timers.length; }, () => {}, deniedFetch);
+timers.length = 0;
+const delays = [];
+for (let i = 0; i < 8; i += 1) {
+    await refreshGcal(deniedFetch);
+    const last = timers[timers.length - 1];
+    if (last) { delays.push(last.ms); timers.length = 0; await last.fn(); }
+}
+check(delays[0] === 60000 && delays[1] === 120000 && Math.max(...delays) <= GCAL_AUTH_RETRY_MAX_MS && delays.includes(GCAL_AUTH_RETRY_MAX_MS), `실제 재시도 간격이 늘어나지 않거나 상한을 넘습니다: ${delays.join(',')}`);
+check(gcalSnapshot().needsReconnect === true && gcalSnapshot().lastError === '', '갱신 실패가 설정 표시로 남지 않거나 경고 문구로 바뀝니다.');
+check(authRetryDelay(0) === 60000 && authRetryDelay(1) === 120000 && authRetryDelay(5) === GCAL_AUTH_RETRY_MAX_MS && authRetryDelay(99) === GCAL_AUTH_RETRY_MAX_MS, '재시도 간격이 1분·2분…30분 상한이 아닙니다.');
+check(authRetryDelay(4) === 960000 && authRetryDelay(-3) === 60000, '재시도 간격 경계가 어긋났습니다.');
+check(isAuthStatus(401) && isAuthStatus('403') && !isAuthStatus(404) && !isAuthStatus(0), '권한 상태 판정이 어긋났습니다.');
+check(mainScreenNotice() === '' && !GCAL_RECONNECT_HINT.includes('만료') && !GCAL_RECONNECT_HINT.includes('권한') && GCAL_RECONNECT_HINT.includes('다시 연결'), '설정 안내가 불안하게 들리거나 다시 연결 안내가 없습니다.');
+check(gcalRetryAttemptForTest() > 0, '재시도 횟수가 쌓이지 않습니다.');
+/* 쓰기 연동에서 토큰이 없을 때 무음 갱신이 성공하면 재시도 횟수를 바로 지웁니다(목록 읽기와 무관하게). */
+await switchGcalMode('write').catch(() => {});
+useSilentTokenForTest(() => ({ access_token: 'ya29.w', expires_in: 3600, scope: SCOPE_EVENTS }));
+authBag.removeItem(GCAL_TOKEN_KEY);
+useTokenStoreForTest(authBag);
+await answerGcalUpload(false);
+await answerGcalUpload(true, async () => ({ ok: true, status: 200, json: async () => ({ id: 'g' }) }));
+check(gcalRetryAttemptForTest() === 0, '올리기 중 무음 갱신에 성공해도 재시도 횟수가 남습니다.');
+useSilentTokenForTest(() => null);
+await disconnectGcal();
+check(gcalSnapshot().needsReconnect === false && gcalRetryAttemptForTest() === 0, '연동을 끄면 다시 연결 표시와 재시도가 남습니다.');
+useSilentTokenForTest(null);
 
 const root = new URL('..', import.meta.url).pathname;
 const read = (rel) => readFileSync(`${root}/${rel}`, 'utf8');
@@ -389,7 +462,7 @@ const buildJob = workflow.split('deploy:')[0];
 check(live.includes(`createVault('${GCAL_VAULT}')`), '캘린더 저장 키가 없습니다.');
 check(!live.includes('client_secret') && !ui.includes('client_secret'), '클라이언트 시크릿을 쓰고 있습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')") && !db.includes('ssug-gyomu-gcal'), '기존 저장 키를 건드렸습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v58'"), '서비스 워커가 v58이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v62'"), '서비스 워커가 v62가 아닙니다.');
 check(!ui.includes('<select') && !ui.includes('checkbox'), '연동 방식이 드롭다운이거나 체크박스입니다.');
 check(ui.includes('구글 일정 보기만') && ui.includes('만든 일정도 구글에 넣기') && ui.includes('준비 중'), '연동 버튼 문구가 없습니다.');
 check(ui.includes('한꺼번에 올리기') && ui.includes('앞으로 만든 것만') && ui.includes('GCAL_MODE_HINT'), '올리기 확인이나 방식 안내가 없습니다.');
@@ -400,6 +473,10 @@ check(live.includes('sessionStorage') && live.includes('oauth2?.revoke') && live
 check(live.includes('quietFetch') && !live.includes('globalThis.fetch'), '401이 페이지 콘솔에 남는 fetch를 씁니다.');
 check(rules.includes('정리함 제목만 건강') && rules.includes('정리함 안내만 건강'), '정리함 건강 거절 테스트가 빠져 있습니다.');
 check(buildJob.includes('contents: read') && !buildJob.includes('actions: write'), '빌드 잡에 actions: write 가 남아 있습니다.');
+check(!schedule.includes('gcal-error') && !schedule.includes('lastError'), '일정 화면에 캘린더 경고 띠가 남아 있습니다.');
+check(ui.includes('gcal.needsReconnect') && ui.includes('GCAL_RECONNECT_HINT') && ui.includes('primary-btn block'), '설정에 다시 연결 안내·버튼이 없습니다.');
+check(read('src/App.jsx').includes('data-gcal-dot') && read('src/App.jsx').includes('needsReconnect'), '설정 단추에 작은 점 배지가 없습니다.');
+check(!read('src/ui/Home.jsx').includes('lastError'), '오늘 화면에 캘린더 경고가 있습니다.');
 check(workflow.includes('npm run check:gcal'), '배포 워크플로가 캘린더 검사를 돌리지 않습니다.');
 
 if (failures.length) {

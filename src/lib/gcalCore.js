@@ -12,6 +12,27 @@ export const KOK_PRIVATE_KEY = 'kokId';
 
 export const GCAL_SYNC_ERROR = '구글 캘린더와 맞추지 못했어요. 적어 둔 일정은 그대로 두었어요. 잠시 후 설정에서 다시 연결해 주세요.';
 export const GCAL_AUTH_ERROR = '캘린더 연결이 만료됐거나 권한이 부족해요. 설정에서 다시 연결해 주세요. 적어 둔 일정은 그대로예요.';
+/** 설정에만 보이는 차분한 안내. 메인 화면에는 띄우지 않습니다. */
+export const GCAL_RECONNECT_HINT = '구글 캘린더 연결을 잠시 새로 고치고 있어요. 계속 이어지지 않으면 아래 ‘다시 연결’을 한 번 눌러 주세요. 적어 둔 일정은 그대로예요.';
+export const GCAL_AUTH_RETRY_BASE_MS = 60 * 1000;
+export const GCAL_AUTH_RETRY_MAX_MS = 30 * 60 * 1000;
+
+export function isAuthStatus(status) {
+    const code = Number(status);
+    return code === 401 || code === 403;
+}
+
+/** 무음 갱신이 실패하면 1분부터 두 배씩, 최대 30분 간격으로 다시 시도합니다. */
+export function authRetryDelay(attempt) {
+    const n = Math.max(0, Math.floor(Number(attempt) || 0));
+    return Math.min(GCAL_AUTH_RETRY_MAX_MS, GCAL_AUTH_RETRY_BASE_MS * (2 ** Math.min(n, 20)));
+}
+
+/** 메인 화면(오늘·일정)에 보여도 되는 안내만 남깁니다. 지금은 아무것도 띄우지 않습니다. */
+export function mainScreenNotice() {
+    return '';
+}
+
 export const GCAL_OFFLINE_ERROR = '인터넷에 닿지 못해 구글 캘린더와 맞추지 못했어요. 적어 둔 일정은 그대로예요.';
 export const GCAL_DENIED_ERROR = '구글이 캘린더 권한을 거절했어요. 연동은 바꾸지 않았고, 적어 둔 일정은 그대로예요.';
 export const GCAL_SCRIPT_ERROR = '구글 연결 스크립트를 불러오지 못했어요. 인터넷을 확인한 뒤 다시 눌러 주세요. 적어 둔 일정은 그대로예요.';
@@ -42,6 +63,7 @@ export function emptyGcalState() {
         external: [],
         forwardSince: '',
         needsUploadAsk: false,
+        needsReconnect: false,
         lastError: '',
         lastSyncAt: '',
     };

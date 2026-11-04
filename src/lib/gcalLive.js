@@ -5,6 +5,8 @@ import { isIOS, isStandalone } from './googleLogin.js';
 import { seoulYmd } from './date.js';
 import {
     GCAL_AUTH_ERROR,
+    authRetryDelay,
+    isAuthStatus,
     GCAL_SHARED_ERROR,
     GCAL_HASH_KEY,
     GCAL_PARTIAL_ERROR,
@@ -37,6 +39,22 @@ let scriptPromise = null;
 let queue = Promise.resolve();
 let pullLock = null;
 let gisClient = null;
+let silentImpl = null;
+let retryTimer = null;
+let retryAttempt = 0;
+let scheduleImpl = (fn, ms) => setTimeout(fn, ms);
+let cancelImpl = (id) => clearTimeout(id);
+let retryFetch = null;
+
+export function useSilentTokenForTest(fn) { silentImpl = fn; }
+export function useGcalSchedulerForTest(schedule, cancel, fetchImpl = null) {
+    scheduleImpl = schedule;
+    retryFetch = fetchImpl;
+    cancelImpl = cancel || (() => {});
+    retryTimer = null;
+    retryAttempt = 0;
+}
+export function gcalRetryAttemptForTest() { return retryAttempt; }
 
 function emit() {
     const snap = gcalSnapshot();
@@ -332,8 +350,9 @@ async function finishToken(raw, pending) {
         return { ok: false, message: memory.lastError };
     }
     writeToken(token);
+    stopAuthRetry();
     if (intent === 'renew') {
-        await patchGcal({ lastError: '' });
+        await patchGcal({ lastError: '', needsReconnect: false });
         await refreshGcal();
         return { ok: true };
     }
@@ -343,6 +362,7 @@ async function finishToken(raw, pending) {
         enabled: true,
         mode,
         needsUploadAsk: ask,
+        needsReconnect: false,
         lastError: '',
     });
     await refreshGcal();
@@ -413,6 +433,79 @@ function requestToken(mode, intent) {
     });
 }
 
+/** 이미 허락한 계정이면 창 없이 새 토큰을 받습니다. 못 받으면 null 입니다. */
+function silentToken(mode) {
+    if (typeof silentImpl === 'function') {
+        return Promise.resolve().then(() => silentImpl(mode)).then((raw) => {
+            const token = normalizeToken(raw);
+            return token && tokenUsable(token, mode) ? token : null;
+        }, () => null);
+    }
+    if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) return Promise.resolve(null);
+    if (tokenUx() === 'redirect') return Promise.resolve(null);
+    const clientId = googleClientId();
+    if (!clientId) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+        const timer = setTimeout(() => done(null), 10000);
+        try {
+            const config = {
+                client_id: clientId,
+                scope: scopeForMode(mode),
+                include_granted_scopes: false,
+                callback: (response) => {
+                    const token = response?.error ? null : normalizeToken(response);
+                    done(token && tokenUsable(token, mode) ? token : null);
+                },
+                error_callback: () => done(null),
+            };
+            const email = snapshot().auth?.email || '';
+            if (email) config.login_hint = email;
+            window.google.accounts.oauth2.initTokenClient(config).requestAccessToken({ prompt: '' });
+        } catch {
+            done(null);
+        }
+    });
+}
+
+function stopAuthRetry() {
+    if (retryTimer !== null) cancelImpl(retryTimer);
+    retryTimer = null;
+    retryAttempt = 0;
+}
+
+function scheduleAuthRetry() {
+    if (retryTimer !== null) return;
+    const delay = authRetryDelay(retryAttempt);
+    retryAttempt += 1;
+    retryTimer = scheduleImpl(() => {
+        retryTimer = null;
+        if (!memory.enabled || !memory.needsReconnect) return undefined;
+        return refreshGcal(retryFetch || quietFetch);
+    }, delay);
+}
+
+/** 토큰이 없거나 거절되면 조용히 새로 받아 봅니다. 실패하면 설정에만 표시하고 잠시 뒤 다시 해 봅니다. */
+async function recoverAuth(mode) {
+    clearToken();
+    const token = await silentToken(mode);
+    if (token) {
+        writeToken(token);
+        stopAuthRetry();
+        if (memory.needsReconnect) await patchGcal({ needsReconnect: false });
+        return token;
+    }
+    await patchGcal({ needsReconnect: true, lastError: '' });
+    scheduleAuthRetry();
+    return null;
+}
+
 export function connectGcal(mode) {
     const next = mode === 'write' ? 'write' : 'readonly';
     if (!loaded) {
@@ -444,7 +537,8 @@ export function reconnectGcal() {
 export async function disconnectGcal() {
     const access = readAnyToken()?.accessToken || '';
     clearToken();
-    await patchGcal({ enabled: false, needsUploadAsk: false, lastError: '' });
+    stopAuthRetry();
+    await patchGcal({ enabled: false, needsUploadAsk: false, needsReconnect: false, lastError: '' });
     await revokeAccessToken(access);
     return memory;
 }
@@ -465,13 +559,10 @@ export async function answerGcalUpload(yes, fetchImpl = quietFetch) {
         await patchGcal({ needsUploadAsk: false, forwardSince: since, lastError: '' });
         return { ok: true, uploaded: 0 };
     }
-    const token = readToken('write');
+    const token = readToken('write') || await recoverAuth('write');
     if (!token) {
-        await patchGcal({
-            needsUploadAsk: true,
-            lastError: GCAL_AUTH_ERROR,
-        });
-        return { ok: false };
+        await patchGcal({ needsUploadAsk: true });
+        return { ok: false, message: GCAL_AUTH_ERROR };
     }
     const rows = pushableNow();
     const result = await uploadKokEvents({
@@ -480,7 +571,7 @@ export async function answerGcalUpload(yes, fetchImpl = quietFetch) {
         links: memory.links,
         fetchImpl,
     });
-    dropTokenIfRejected(result.status);
+    if (isAuthStatus(result.status)) await recoverAuth('write');
     await patchGcal({
         links: result.links,
         needsUploadAsk: false,
@@ -503,26 +594,37 @@ async function pullNow(fetchImpl) {
     if (snapshot().profile.sharedPc) return { ok: false, skipped: true };
     if (currentUid() && memory.uid && memory.uid !== currentUid()) return { ok: false, skipped: true };
     const mode = memory.mode === 'write' ? 'write' : 'readonly';
-    const token = readToken(mode);
-    if (!token) {
-        await patchGcal({ lastError: GCAL_AUTH_ERROR });
-        return { ok: false };
-    }
+    let token = readToken(mode) || await recoverAuth(mode);
+    if (!token) return { ok: false, needsReconnect: true };
     const windowRange = googleWindow(seoulYmd());
-    const listed = await listExternalEvents({
-        token: token.accessToken,
+    const listOnce = (access) => listExternalEvents({
+        token: access,
         timeMin: windowRange.timeMin,
         timeMax: windowRange.timeMax,
         fetchImpl,
     });
+    let listed = await listOnce(token.accessToken);
+    if (!listed.ok && isAuthStatus(listed.status)) {
+        token = await recoverAuth(mode);
+        if (!token) return { ok: false, needsReconnect: true };
+        listed = await listOnce(token.accessToken);
+        if (!listed.ok && isAuthStatus(listed.status)) {
+            clearToken();
+            await patchGcal({ needsReconnect: true, lastError: '' });
+            scheduleAuthRetry();
+            return { ok: false, needsReconnect: true };
+        }
+    }
     if (!listed.ok) {
         dropTokenIfRejected(listed.status);
         await patchGcal({ lastError: listed.message });
         return { ok: false, message: listed.message };
     }
     const keepPartial = memory.lastError === GCAL_PARTIAL_ERROR;
+    stopAuthRetry();
     await patchGcal({
         external: listed.events,
+        needsReconnect: false,
         lastError: keepPartial ? GCAL_PARTIAL_ERROR : '',
         lastSyncAt: new Date().toISOString(),
     });
@@ -533,11 +635,8 @@ async function syncDiff(diff, fetchImpl) {
     await gcalReady();
     if (!memory.enabled || memory.mode !== 'write') return { skipped: true };
     if (snapshot().profile.sharedPc) return { skipped: true };
-    const token = readToken('write');
-    if (!token) {
-        await patchGcal({ lastError: GCAL_AUTH_ERROR });
-        return { ok: false };
-    }
+    const token = readToken('write') || await recoverAuth('write');
+    if (!token) return { ok: false, needsReconnect: true };
     const result = await applyKokDiff({
         token: token.accessToken,
         mode: 'write',
@@ -548,7 +647,7 @@ async function syncDiff(diff, fetchImpl) {
         fetchImpl,
     });
     if (result.skipped) return result;
-    dropTokenIfRejected(result.status);
+    if (isAuthStatus(result.status)) await recoverAuth('write');
     await patchGcal({
         links: result.links,
         lastError: result.errors.length ? GCAL_PARTIAL_ERROR : '',

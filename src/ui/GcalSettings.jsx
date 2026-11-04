@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GCAL_MODE_HINT, GCAL_SHARED_ERROR, googleClientId } from '../lib/gcalCore.js';
+import { GCAL_MODE_HINT, GCAL_RECONNECT_HINT, GCAL_SHARED_ERROR, googleClientId } from '../lib/gcalCore.js';
 import {
     answerGcalUpload,
     connectGcal,
@@ -70,7 +70,13 @@ export function GcalSettings() {
                     {signedIn && !gcal.enabled && (
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} aria-busy={busy} onClick={() => run(() => connectGcal(mode))}>구글 캘린더 연동 켜기</Btn>
                     )}
-                    {signedIn && gcal.enabled && (
+                    {signedIn && gcal.enabled && gcal.needsReconnect && (
+                        <div className="gcal-renew" role="status" data-gcal-renew="1">
+                            <p style={{ margin: 0 }}>{GCAL_RECONNECT_HINT}</p>
+                            <Btn className="primary-btn block" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>
+                        </div>
+                    )}
+                    {signedIn && gcal.enabled && !gcal.needsReconnect && (
                         <p>{mode === 'write' ? '만든 일정을 구글에도 넣고 있어요.' : '구글 일정을 보는 중이에요.'}</p>
                     )}
                     {signedIn && gcal.enabled && gcal.needsUploadAsk && mode === 'write' && (
@@ -90,7 +96,7 @@ export function GcalSettings() {
                     )}
                     {signedIn && gcal.enabled && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                            <Btn className="chip" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>
+                            {!gcal.needsReconnect && <Btn className="chip" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>}
                             <Btn className="chip" aria-busy={busy} onClick={() => run(async () => {
                                 await disconnectGcal();
                                 showToast('연동을 껐어요. 여기에 적어 둔 일정과 구글에 이미 올라간 일정은 그대로예요.');
@@ -99,7 +105,7 @@ export function GcalSettings() {
                         </div>
                     )}
                     {gcal.lastError && <p className="gcal-error" role="status">{gcal.lastError}</p>}
-                    <p className="muted">아이폰 홈 화면 앱은 이 창이 구글로 갔다가 돌아와요. 연결이 만료되면 다시 연결해 주세요.</p>
+                    <p className="muted">아이폰 홈 화면 앱은 이 창이 구글로 갔다가 돌아와요. 연결이 쉬고 있으면 ‘다시 연결’을 눌러 주세요.</p>
                 </>
             )}
         </section>
