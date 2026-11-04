@@ -292,9 +292,9 @@ async function shutdown(code) {
 }
 
 const watchdog = setTimeout(() => {
-    console.error('브라우저 검사가 6분을 넘겨 멈춰서 끝냅니다.');
+    console.error('브라우저 검사가 제한 시간을 넘겨 멈춰서 끝냅니다.');
     shutdown(1);
-}, 6 * 60 * 1000);
+}, (Number(process.env.CHECK_BROWSER_LIMIT_MIN) || 8) * 60 * 1000);
 
 let browser = null;
 
@@ -1684,7 +1684,24 @@ try {
             check(shut.every((c) => c.h >= 44 && c.w >= 44), `접는 카드 머리가 44px보다 작습니다. ${JSON.stringify(shut)}`);
             await controlBoxes(page, '.home-grid button, .home-grid a', '390 접힌 오늘 화면');
             await audit(page, '390 접힌 오늘 화면');
-            await page.click('[data-fold="todo"] .fold-head');
+            /* 날짜에 따라(12-31 등) 할 일 머리가 첫 화면 맨 아래, 쨈 단추 자리에 올 수 있습니다.
+               1) 키보드 초점을 옮기면 앱이(scroll-padding-bottom) 머리를 탭 줄·쨈 단추 위로 올려야 합니다.
+               2) 사람처럼 화면을 밀어 올린 뒤, 실제 좌표(머리 가운데)를 눌러 머리가 눌려야 합니다. 요소 가운데로 맞추는 스크롤은 쓰지 않습니다. */
+            const covered = () => page.evaluate(() => {
+                const head = document.querySelector('[data-fold="todo"] .fold-head');
+                const r = head.getBoundingClientRect();
+                const pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 12, r.top + r.height / 2], [r.right - 12, r.top + r.height / 2]];
+                return { y: Math.round(r.top), bottom: Math.round(r.bottom), vh: innerHeight, hit: pts.map(([x, y]) => head.contains(document.elementFromPoint(x, y))) };
+            });
+            await page.evaluate(() => { scrollTo(0, 0); document.querySelector('[data-fold="todo"] .fold-head').focus(); });
+            const focused = await covered();
+            check(focused.hit.every(Boolean), `초점을 옮긴 할 일 카드 머리가 탭 줄·쨈 단추에 가려집니다. ${JSON.stringify(focused)}`);
+            await page.evaluate(() => { document.activeElement?.blur(); scrollTo(0, 0); });
+            for (let i = 0; i < 12 && !(await covered()).hit.every(Boolean); i += 1) await page.mouse.wheel({ deltaY: 120 });
+            const real = await covered();
+            check(real.hit.every(Boolean), `화면을 밀어 올려도 할 일 카드 머리를 누를 수 없습니다. ${JSON.stringify(real)}`);
+            const box = await (await page.$('[data-fold="todo"] .fold-head')).boundingBox();
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
             await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1');
             const opened = await page.evaluate(() => ({ body: document.querySelector('[data-fold="todo"] .fold-body').getBoundingClientRect().height, line: Boolean(document.querySelector('[data-fold="todo"] [data-home-todo]')), others: [...document.querySelectorAll('[data-fold]')].filter((el) => el.dataset.open === '1').length }));
             check(opened.body > 0 && opened.line && opened.others === 1, `할 일 카드를 눌러도 펼쳐지지 않거나 다른 카드까지 펼쳐집니다. ${JSON.stringify(opened)}`);
@@ -1699,6 +1716,35 @@ try {
             const changed = Object.keys({ ...before, ...after }).filter((k) => before[k] !== after[k] && !/theme|sound|notice/.test(k));
             check(!changed.length, `카드를 접고 펴는데 데이터가 바뀝니다. ${changed.join(', ')}`);
         }, 844);
+        /* 손가락으로 쓰는 사람: 360·390, 높이 800에서 끝까지 밀어 올린 뒤 할 일 머리를 실제 좌표로 탭해 펼쳐져야 합니다.
+           마지막 카드 머리까지 탭 줄·쨈 단추 위로 올라올 만큼 아래 여백이 있어야 합니다. */
+        for (const w of [360, 390]) {
+            await withDemo(w, 'light', async (page) => {
+                await page.setViewport({ width: w, height: 800, deviceScaleFactor: 1, hasTouch: true });
+                await page.waitForSelector('[data-fold="todo"] .fold-head');
+                await page.evaluate(() => scrollTo(0, document.scrollingElement.scrollHeight));
+                await page.waitForFunction(() => { const s = document.scrollingElement; return Math.abs(s.scrollTop + innerHeight - s.scrollHeight) < 2; });
+                const heads = await page.evaluate(() => {
+                    const bar = document.querySelector('.tabbar').getBoundingClientRect();
+                    const fab = [...document.querySelectorAll('.fab')].map((e) => e.getBoundingClientRect()).find((r) => r.width > 0);
+                    const top = Math.min(bar.top, fab ? fab.top : bar.top);
+                    return [...document.querySelectorAll('[data-fold] .fold-head')].map((h) => {
+                        const r = h.getBoundingClientRect();
+                        return { fold: h.closest('[data-fold]').dataset.fold, top: Math.round(r.top), bottom: Math.round(r.bottom), cover: Math.round(top),
+                            hit: [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 12, r.top + r.height / 2], [r.right - 12, r.top + r.height / 2]].every(([x, y]) => h.contains(document.elementFromPoint(x, y))) };
+                    });
+                });
+                const last = heads[heads.length - 1];
+                check(last && last.bottom <= last.cover && last.hit, `${w}에서 끝까지 밀어도 마지막 카드 머리가 탭 줄·쨈 단추에 가려집니다. ${JSON.stringify(heads)}`);
+                const todo = heads.find((h) => h.fold === 'todo');
+                check(todo && todo.bottom <= todo.cover && todo.hit, `${w}에서 끝까지 밀어도 할 일 카드 머리를 누를 수 없습니다. ${JSON.stringify(heads)}`);
+                const box = await (await page.$('[data-fold="todo"] .fold-head')).boundingBox();
+                await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+                const ok = await page.waitForFunction(() => document.querySelector('[data-fold="todo"]').dataset.open === '1', { timeout: 3000 }).then(() => true, () => false);
+                const jam = await page.evaluate(() => Boolean(document.querySelector('.quick-bar.is-open')));
+                check(ok && !jam, `${w}에서 할 일 머리를 손가락으로 탭해도 펼쳐지지 않거나 쨈이 열립니다. ${JSON.stringify({ ok, jam, box })}`);
+            }, 800);
+        }
         await withDemo(1280, 'light', async (page) => {
             const wide = await page.evaluate(() => [...document.querySelectorAll('[data-fold]')].map((el) => ({ head: el.querySelector('.fold-head').getBoundingClientRect().height, body: el.querySelector('.fold-body').getBoundingClientRect().height })));
             check(wide.length === 4 && wide.every((c) => c.head === 0 && c.body > 0), `넓은 화면 오늘 카드가 접혀 보입니다. ${JSON.stringify(wide)}`);
@@ -2155,6 +2201,79 @@ try {
                     check(!bar.overlap && !bar.over && !bar.small, `${mode} ${width} ${name}: 상단 바 버튼이 겹치거나 작습니다: ${JSON.stringify(bar)}`);
                     if (width <= 390) await page.screenshot({ path: resolve(shots, `topbar-${name === '하루' ? 'day' : 'legacy'}-${width}-${mode}.png`) });
                 }
+            });
+        }
+    }
+
+    /* PR #60: 홈 안내 문구·할 일 바로 가기·일정 보기, 할 일 고치기(칩만), 할 일 알림, 쨈 팝업 '회의록 작성'(5가지 폭 × 라이트·다크). */
+    for (const width of [320, 360, 390, 900, 1920]) {
+        for (const mode of ['light', 'dark']) {
+            await withDemo(width, mode, async (page) => {
+                const tag = `PR60 ${mode} ${width}`;
+                const home = await page.evaluate(() => ({
+                    text: document.body.innerText,
+                    tip: document.querySelector('.home-tip')?.innerText.trim() || '',
+                    link: (() => { const r = document.querySelector('[data-todo-link]')?.getBoundingClientRect(); return r ? { w: r.width, h: r.height } : null; })(),
+                }));
+                check(home.text.includes('일정 보기') && !home.text.includes('한 주 보기'), `${tag}: 오늘 시간표 옆이 '일정 보기'가 아닙니다.`);
+                check(!home.text.includes('출결부터 볼까요?\n') && (home.tip.length >= 8 || home.text.includes('수업과 출결 대신 쉽니다')), `${tag}: 홈 안내 문구가 없습니다: ${home.tip}`);
+                check(home.link && home.link.h >= 44 && home.link.w >= 44, `${tag}: '할 일 N개 남음'을 누를 수 없거나 44px 미만입니다: ${JSON.stringify(home.link)}`);
+                await controlBoxes(page, '.home-hero button', `${tag} 홈 첫 카드`);
+                const tipBox = await page.evaluate(() => {
+                    const a = document.querySelector('.home-tip')?.getBoundingClientRect();
+                    const b = document.querySelector('[data-todo-link]')?.getBoundingClientRect();
+                    return a && b ? (a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1) : null;
+                });
+                check(tipBox === false, `${tag}: 홈 안내 문구와 할 일 버튼이 겹칩니다.`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-home-${width}-${mode}.png`) });
+                await page.evaluate(() => document.querySelector('[data-todo-link]')?.click());
+                await page.waitForFunction(() => location.hash === '#/todo', { timeout: 5000 }).catch(() => {});
+                check(await page.evaluate(() => location.hash === '#/todo'), `${tag}: '할 일 N개 남음'이 할 일 화면을 열지 않습니다.`);
+
+                /* 8. 저장한 할 일 고치기: 제목·마감·시각, 칩만(드롭다운·스크롤 피커 없음). */
+                await page.waitForSelector('[data-todo-edit]');
+                await controlBoxes(page, '.todo-line button', `${tag} 할 일 줄`);
+                await audit(page, `${tag} 할 일`);
+                const oldId = await page.evaluate(() => { const b = document.querySelector('[data-todo-edit]'); b.click(); return b.closest('.todo-line')?.querySelector('.todo-title')?.innerText || ''; });
+                await page.waitForSelector('[data-screen="todo-edit"]');
+                check(!(await page.$('[data-screen="todo-edit"] select')) && !(await page.$('[data-screen="todo-edit"] input[type="date"], [data-screen="todo-edit"] input[type="time"]')), `${tag}: 할 일 고치기에 드롭다운·피커가 있습니다.`);
+                await controlBoxes(page, '[data-screen="todo-edit"] button', `${tag} 할 일 고치기`);
+                const sheetOver = await page.evaluate(() => { const el = document.querySelector('[data-screen="todo-edit"]'); return el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > window.innerWidth + 1; });
+                check(!sheetOver, `${tag}: 할 일 고치기 창이 화면 밖으로 넘칩니다.`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-todo-edit-${width}-${mode}.png`) });
+                await page.$eval('#todo-edit-title', (el) => { el.select(); });
+                await page.keyboard.press('Backspace');
+                await page.type('#todo-edit-title', '알림 확인할 일');
+                await page.evaluate(() => [...document.querySelectorAll('[data-screen="todo-edit"] button')].find((el) => el.innerText.trim() === '오늘')?.click());
+                await page.evaluate(() => [...document.querySelectorAll('[data-screen="todo-edit"] button')].find((el) => el.innerText.trim() === '08:30')?.click());
+                await page.waitForFunction(() => document.querySelector('[data-role="todo-time"]')?.innerText.includes('08:30'));
+                await page.evaluate(() => document.querySelector('[data-role="todo-edit-save"]')?.click());
+                await page.waitForFunction(() => !document.querySelector('[data-screen="todo-edit"]'), { timeout: 5000 });
+                const after = await page.evaluate(() => document.body.innerText);
+                check(after.includes('알림 확인할 일') && after.includes('08:30'), `${tag}: 고친 제목·시각이 할 일 목록에 없습니다(원래 ${oldId}).`);
+
+                /* 5. 알림: 데모 시계 08:42 ≥ 08:30 → 팝업·소리. 확인 뒤 새로 고쳐도 다시 울리지 않습니다. */
+                await page.waitForSelector('[data-screen="todo-alarm"]', { timeout: 8000 }).catch(() => {});
+                const ring = await page.evaluate(() => ({ open: Boolean(document.querySelector('[data-screen="todo-alarm"]')), text: document.querySelector('[data-screen="todo-alarm"]')?.innerText || '', played: window.__todoAlarmPlayed || 0 }));
+                check(ring.open && ring.text.includes('알림 확인할 일') && ring.text.includes('08:30'), `${tag}: 시각이 된 할 일 알림 팝업이 뜨지 않습니다: ${JSON.stringify(ring)}`);
+                check(ring.played >= 1, `${tag}: 알림음을 울리지 않았습니다.`);
+                if (ring.open) {
+                    await controlBoxes(page, '[data-screen="todo-alarm"] button', `${tag} 알림 팝업`);
+                    if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-alarm-${width}-${mode}.png`) });
+                    await page.evaluate(() => document.querySelector('[data-role="todo-alarm-close"]')?.click());
+                    await page.waitForFunction(() => !document.querySelector('[data-screen="todo-alarm"]'), { timeout: 5000 });
+                }
+
+                /* 6. 쨈 팝업의 '회의록 작성': 글자가 잘리지 않고 44px, 누르면 회의록 쓰기. */
+                await page.evaluate(() => [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')].find((el) => el.getBoundingClientRect().width > 0)?.click());
+                await page.waitForSelector('.quick-bar.is-open .quick-chip-meet');
+                await controlBoxes(page, '.quick-bar.is-open .quick-chip', `${tag} 쨈 분류 칩`);
+                const meet = await page.evaluate(() => { const el = document.querySelector('.quick-bar.is-open .quick-chip-meet'); const r = el.getBoundingClientRect(); return { text: el.innerText.trim(), clip: el.scrollWidth > el.clientWidth + 1, right: r.right, vw: window.innerWidth }; });
+                check(meet.text === '회의록 작성' && !meet.clip && meet.right <= meet.vw, `${tag}: 쨈 팝업 '회의록 작성'이 잘리거나 없습니다: ${JSON.stringify(meet)}`);
+                if (width <= 390) await page.screenshot({ path: resolve(shots, `pr60-quick-${width}-${mode}.png`) });
+                await page.evaluate(() => document.querySelector('.quick-bar.is-open .quick-chip-meet')?.click());
+                await page.waitForSelector('[data-screen="minutes-editor"]', { timeout: 5000 }).catch(() => {});
+                check(await page.evaluate(() => location.hash === '#/minutes/new'), `${tag}: '회의록 작성'이 회의록 쓰기를 열지 않습니다.`);
             });
         }
     }
@@ -3647,7 +3766,12 @@ try {
         box.dispatchEvent(new Event('input', { bubbles: true }));
         await new Promise((done) => setTimeout(done, 100));
     }, value);
-    const noticeUndoClick = (page) => page.evaluate(() => {
+    /* 되돌리기 단추가 안내에 뜰 때까지 기다린 뒤 누릅니다(고정 기다림은 느린 기계에서 흔들림, PR #62 r3 5번). */
+    const noticeUndoClick = async (page) => {
+        await page.waitForFunction(() => [...document.querySelectorAll('.toast button')].some((el) => /되돌\s*리\s*기/.test(el.textContent)), { timeout: 5000 }).catch(() => {});
+        return noticeUndoNow(page);
+    };
+    const noticeUndoNow = (page) => page.evaluate(() => {
         const button = [...document.querySelectorAll('.toast button')].find((el) => /되돌\s*리\s*기/.test(el.textContent));
         button?.click();
         return Boolean(button);
@@ -3661,8 +3785,12 @@ try {
         await noticeType(page, '단소 챙기기');
         await noticeUndoClick(page);
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === saved));
-        await page.waitForSelector('[role="group"][aria-label="되돌린 글"]', { timeout: 5000 }).catch(() => {});
-        await delay(200);
+        await page.waitForFunction(() => {
+            const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
+            const note = panel?.querySelector('.restored-note');
+            return note && note.clientHeight > 0 && [...panel.querySelectorAll('button')].some((el) => el.innerText.trim() === '되돌린 글 불러오기');
+        }, { timeout: 8000 }).catch(() => {});
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     };
     const noticeRestoredView = (page) => page.evaluate(() => {
         const panel = document.querySelector('[role="group"][aria-label="되돌린 글"]');
@@ -3867,13 +3995,14 @@ try {
             watch.observe(button, { attributes: true, attributeFilter: ['disabled'] });
             button.click();
             button.click();
-            await new Promise((done) => setTimeout(done, 1500));
+            /* 저장이 끝나 단추가 풀릴 때까지 기다립니다(최대 8초). */
+            for (let i = 0; i < 80 && (button.disabled || !locked); i += 1) await new Promise((done) => setTimeout(done, 100));
             watch.disconnect();
             return { locked, after: button.disabled };
         });
         check(lockSeen.locked && !lockSeen.after, `저장하는 동안 저장 버튼이 잠기지 않거나 저장 뒤에도 풀리지 않습니다: ${JSON.stringify(lockSeen)}`);
         await noticeVaultsUntil(page, (v) => v.cloud.some((row) => row.date === noticeDay && row.text === '실내화 챙기기'));
-        await page.evaluate(() => [...document.querySelectorAll('.toast button')].find((el) => el.innerText.trim() === '되돌리기')?.click());
+        await noticeUndoClick(page);
         const lockUndo = await noticeVaultsUntil(page, (v) => ![...v.cloud, ...v.local].some((row) => row.date === noticeDay));
         check(![...lockUndo.cloud, ...lockUndo.local].some((row) => row.date === noticeDay), `저장 버튼을 빠르게 여러 번 눌렀더니 저장이 두 번 돌아 되돌리기 한 번으로 돌아가지 않습니다: ${JSON.stringify(lockUndo)}`);
 
@@ -4514,9 +4643,19 @@ try {
                     return { open: bar.classList.contains('is-open'), pop: document.querySelector(sel).classList.contains('is-popping'), inView: r.x >= 0 && r.right <= innerWidth + 1 && r.y >= 0, overlap: pairs || inner.some((a) => hit(a, fab)) };
                 }, sel);
                 for (const how of ['close', 'outside', 'esc']) {
+                    /* r2 4번: 튐(is-popping)은 잠깐 붙는 class라 150ms 고정 대기로는 놓칠 수 있습니다. 누르기 전에 관찰자를 달아 한 번이라도 붙었는지 기록하고, 열림은 최대 2초 기다립니다. */
+                    await page.evaluate((sel) => {
+                        const fab = document.querySelector(sel);
+                        window.__jamPopped = false;
+                        window.__jamObs?.disconnect();
+                        window.__jamObs = new MutationObserver(() => { if (fab.classList.contains('is-popping')) window.__jamPopped = true; });
+                        window.__jamObs.observe(fab, { attributes: true, attributeFilter: ['class'] });
+                    }, sel);
                     await page.click(sel);
+                    await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open') && window.__jamPopped, { timeout: 2000 }).catch(() => {});
                     await delay(150);
-                    const opened = await look();
+                    const opened = { ...(await look()) };
+                    opened.pop = opened.pop || (await page.evaluate(() => window.__jamPopped));
                     check(opened.open && opened.pop && opened.inView && !opened.overlap, `${width} ${mode} 쨈 버튼이 팝업을 열지 않거나(튐 포함) 겹칩니다: ${JSON.stringify(opened)}`);
                     if (how === 'close') await page.screenshot({ path: resolve(shots, `jam-popup-${width}-${mode}.png`) });
                     await delay(450);
@@ -4570,6 +4709,9 @@ try {
                         await page.waitForFunction((theme) => (document.documentElement.getAttribute('data-kb') || 'mx') === theme, { timeout: 15000 }, theme);
                         await page.evaluate(() => document.fonts.ready);
                         const key = await page.$('.leave-key');
+                        // 홈 첫 카드에 안내 줄(PR #60)이 생겨 키캡이 아래 탭 바에 걸릴 수 있어, 화면 가운데로 올려 바탕만 잽니다.
+                        await key.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+                        await delay(120);
                         /* 키캡 토큰이 빠지면 바탕이 비쳐 어두운 화면에서도 키캡 모양이 사라집니다. 바탕색과 그라데이션이 칠해졌는지 봅니다. */
                         const paint = await key.evaluate((el) => ({ color: getComputedStyle(el).backgroundColor, image: getComputedStyle(el).backgroundImage }));
                         check(paint.color !== 'rgba(0, 0, 0, 0)' && paint.color !== 'transparent' && paint.image.includes('linear-gradient'), `${theme} ${mode} ${state} 타이머 키캡 바탕이 칠해지지 않습니다: ${JSON.stringify(paint)}`);

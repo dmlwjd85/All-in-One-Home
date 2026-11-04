@@ -150,18 +150,28 @@ export function eventBodyWithoutEndTime(body) {
     return next;
 }
 
+/** 규칙이 할 일 시각 칸을 아직 모르면 그 칸만 빼고 올립니다. 시각은 이 기기에 남아 알림은 그대로 울립니다. */
+export function todoBodyWithoutTime(body) {
+    if (!body || !('time' in body)) return null;
+    const next = { ...body };
+    delete next.time;
+    return next;
+}
+
 function toTodo(row) {
     const id = cloudDocId(row.id);
     const source = sourceOf(row.source);
     if (!id || !source || !String(row.title || '').trim()) return null;
     const body = { title: String(row.title).slice(0, 100), done: Boolean(row.done), source };
     if (row.due) body.due = row.due;
+    /* 알림 시각(PR #60). 있을 때만 올리고, 고치기에서 일부러 지운 줄('')만 클라우드 칸도 지웁니다. 옛 줄의 지문은 그대로라 한꺼번에 다시 올리지 않습니다. */
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
     if (row.got != null) body.got = Number(row.got);
     if (row.of != null) body.of = Number(row.of);
     if (row.order != null) body.order = Number(row.order);
     /* at: 이 기기에서 마지막으로 고친 시각(서버 시각으로 보정한 ms). 클라우드 updatedAt으로 올라가 기기끼리 '마지막 수정'을 견줍니다. 해시에는 안 들어갑니다. */
     const at = Number(row.editAt);
-    return { id, body, stamps: row.done ? stamps(['updatedAt', 'hlc', 'doneAt']) : stamps(['updatedAt', 'hlc']), clear: emptied(body, ['due']), ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
+    return { id, body, stamps: row.done ? stamps(['updatedAt', 'hlc', 'doneAt']) : stamps(['updatedAt', 'hlc']), clear: [...emptied(body, ['due']), ...(row.time === '' ? ['time'] : [])], ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
 }
 
 function toNote(row) {
@@ -297,6 +307,7 @@ export function fromCloudRow(collection, id, data = {}) {
             title: data.title || '',
             done: Boolean(data.done),
             due: data.due || '',
+            ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(data.time || '') ? { time: data.time } : {}),
             got: data.got,
             of: data.of,
             order: data.order,

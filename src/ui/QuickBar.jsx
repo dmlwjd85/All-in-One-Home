@@ -354,10 +354,10 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                 <Btn
                     className="quick-chip quick-chip-meet"
                     data-kind={MEET_CHIP}
-                    aria-label="회의록 쓰기"
+                    aria-label="회의록 작성"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={openMinutes}
-                >{MEET_CHIP}</Btn>
+                >회의록 작성</Btn>
             </div>
         </form>
         </>

@@ -3,7 +3,7 @@ import { detailRows } from '../lib/detail.js';
 import { Btn, TodoTitle } from './bits.jsx';
 
 /** 길어서 잘린 할 일·일정을 눌렀을 때 전체 내용을 보여 주는 팝업. */
-export function DetailSheet({ kind, row, onClose, onToggle }) {
+export function DetailSheet({ kind, row, onClose, onToggle, onEdit }) {
     useEffect(() => {
         const onKey = (event) => { if (event.key === 'Escape') onClose(); };
         window.addEventListener('keydown', onKey);
@@ -27,6 +27,7 @@ export function DetailSheet({ kind, row, onClose, onToggle }) {
                 </dl>
                 <div className="detail-actions">
                     {onToggle ? <Btn className="choice-tile" onClick={() => { onToggle(); onClose(); }}>{row.done ? '다시 남기기' : '끝냄 표시'}</Btn> : null}
+                    {onEdit ? <Btn className="choice-tile" data-role="detail-edit" onClick={onEdit}>고치기</Btn> : null}
                     <Btn className="choice-tile" onClick={onClose}>닫기</Btn>
                 </div>
             </div>

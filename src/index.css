@@ -325,6 +325,10 @@ a.chip,
     line-height: 22px;
 }
 
+/* 아래 탭 줄(70px)과 그 위로 28px 솟은 쨈 단추에 초점·스크롤 대상이 깔리지 않게 합니다(PR #62 r2 2번: 12-31 390px 할 일 카드 머리). */
+html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px)); }
+/* 휴대폰: 끝까지 밀면 마지막 카드 머리가 탭 줄(70px)·쨈 단추(36px 솟음) 위로 올라와 손가락으로 누를 수 있습니다. */
+@media (max-width: 899px) { body { padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px)); } }
 .tabbar {
     position: fixed;
     z-index: 30;
@@ -958,7 +962,14 @@ button.glass[aria-pressed="true"]:active {
 .home-line .home-line-text.is-conflict { white-space: normal; overflow: visible; text-overflow: clip; }
 .todo-line:has(.is-conflict) { flex-wrap: wrap; }
 .todo-line:has(.is-conflict) .todo-main { flex: 1 1 0; }
-.todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 50px; }
+.todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
+.todo-main { min-width: 96px; }
+/* 좁은 화면(PR #60): 고치기 ✎가 늘어 제목이 눌리지 않게 마감 글자는 아랫줄 오른쪽으로 내립니다. */
+@media (max-width: 380px) {
+    .todo-line { flex-wrap: wrap; }
+    .todo-line .todo-main { flex: 1 1 0; }
+    .todo-line .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
+}
 .fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
 .fold-sum .is-conflict { padding: 2px 0; }
 .detail-title .is-conflict, .day-todo-title.is-conflict { padding: 0; }
@@ -1262,3 +1273,50 @@ button.glass[aria-pressed="true"]:active {
     .sheet h2.title-font:not(.font-display) { font-size: 20px !important; }
     .detail-title, .minutes-view-title { font-size: 20px; line-height: 28px; }
 }
+
+/* 홈 안내 한 줄과 할 일 바로 가기(PR #60). 좁은 폰에서는 줄을 바꿔 겹치지 않습니다. */
+.home-tip-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    font-weight: 700;
+}
+.home-tip {
+    flex: 1 1 180px;
+    min-width: 0;
+    margin: 0;
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+}
+button.hero-pill.home-todo-link {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 14px;
+    font-weight: 800;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+/* 쨈 팝업의 '회의록 작성'(PR #60): 글자가 길어 칸을 조금 더 넓게 씁니다. */
+.quick-chip.quick-chip-meet {
+    flex: 1.9 1 0;
+    letter-spacing: -0.02em;
+}
+/* 할 일 고치기(PR #60): 날짜·시각은 칩으로만. */
+.todo-edit-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+.todo-edit-chips .chip { min-height: 44px; min-width: 44px; }
+.todo-edit-picked { margin-left: 6px; color: var(--accent); }
+.todo-edit-sheet .field { width: 100%; min-height: 44px; }
+/* 할 일 알림 팝업(PR #60). */
+.todo-alarm-back { z-index: 60; }
+.sheet.todo-alarm { z-index: 61; }
+.todo-alarm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.todo-alarm-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 14px; box-shadow: var(--neo-inset); }
+.todo-alarm-time { flex: none; font-weight: 800; color: var(--accent); }
+.todo-alarm-title { flex: 1 1 0; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.todo-alarm-item .chip { flex: none; }

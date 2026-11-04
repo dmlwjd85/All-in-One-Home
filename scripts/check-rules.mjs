@@ -337,6 +337,18 @@ try {
         await expectDeny('잘못된 끝 시각', () => setDoc(doc(deviceA, `users/${uid}/events/bad1`), {
             date: '2026-10-30', title: '워크숍', time: '13:00', endTime: '16:00까지', kind: 'class', source: 'app',
         }));
+        /* PR #62 r4 2번(R4): 일정 시작 시각(time)도 HH:MM만 받습니다. 규칙을 느슨하게 하면 이 검사가 실패합니다. */
+        for (const [i, bad] of ['25:00', '9:05', '09:60', '0930', '09:30 ', '아침', 930, ''].entries()) {
+            await expectDeny(`잘못된 시작 시각 ${JSON.stringify(bad)}`, () => setDoc(doc(deviceA, `users/${uid}/events/badtime${i}`), {
+                date: '2026-10-30', title: '워크숍', time: bad, kind: 'class', source: 'app',
+            }));
+        }
+        await expectDeny('잘못된 끝 시각(24:00)', () => setDoc(doc(deviceA, `users/${uid}/events/badend2`), {
+            date: '2026-10-30', title: '워크숍', time: '13:00', endTime: '24:00', kind: 'class', source: 'app',
+        }));
+        await expectAllow('바른 시작 시각(00:00·23:59)', () => setDoc(doc(deviceA, `users/${uid}/events/goodtime`), {
+            date: '2026-10-30', title: '워크숍', time: '00:00', endTime: '23:59', kind: 'class', source: 'app',
+        }));
         const pulled = [];
         for (const id of [ranged.id, plain.id]) {
             const snap = await getDoc(doc(deviceB, `users/${uid}/events/${id}`));
@@ -417,6 +429,21 @@ try {
         }
         await deleteDoc(doc(db, `users/teacher-a/attendance/${aid}`));
         if ((await getDoc(doc(db, `users/teacher-a/attendance/${aid}`))).exists()) failures.push('출석으로 되돌린 출결 문서를 지우지 못했습니다.');
+    }
+    /* 할 일 알림 시각(PR #60·#62): 'HH:MM'만 받고 잘못된 값은 거릅니다. 새 문서라 hlc 없이도 받습니다. */
+    {
+        const todoDoc = (n) => doc(db, `users/teacher-a/todos/time-${n}`);
+        const body = (time) => ({ title: '알림 시각 검사', done: false, due: '2026-11-04', source: 'app', time });
+        let n = 0;
+        for (const bad of ['9:30', '24:00', '09:60', '', '09:30:00', 930, null, ' 09:30']) {
+            n += 1;
+            await expectDeny(`할 일 time ${JSON.stringify(bad)}`, () => setDoc(todoDoc(n), body(bad)));
+        }
+        for (const ok of ['00:00', '09:30', '23:59']) {
+            n += 1;
+            await expectAllow(`할 일 time ${ok}`, () => setDoc(todoDoc(n), body(ok)));
+        }
+        await expectAllow('time 없는 할 일', () => setDoc(todoDoc('none'), { title: '시각 없는 할 일', done: false, source: 'app' }));
     }
 } finally {
     await testEnv.cleanup();

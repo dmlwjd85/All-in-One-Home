@@ -26,6 +26,7 @@ import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
+import { TodoAlarm } from './ui/TodoAlarm.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
 import { MsgSheet } from './ui/MsgSheet.jsx';
 import { Attend } from './ui/Attend.jsx';
@@ -715,6 +716,7 @@ export default function App() {
                 </nav>
                 <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
+                <TodoAlarm />
                 {plus && (
                     <PlusSheet
                         startMore={plus === 'more'}

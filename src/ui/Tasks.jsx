@@ -7,6 +7,7 @@ import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
+import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
 import { isMinutes } from '../lib/minutes.js';
@@ -15,6 +16,7 @@ export function Tasks() {
     const { data, clock, showToast, go } = useUi();
     const [title, setTitle] = useState('');
     const [detail, setDetail] = useState(null);
+    const [editing, setEditing] = useState(null);
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
     const allNotes = joined(data, 'notes');
@@ -90,7 +92,8 @@ export function Tasks() {
                                 }}>
                                     <TodoTitle className="todo-title" lead={row.localOnly ? '🔒 ' : ''} title={row.title} />
                                 </Btn>
-                                {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}</span> : null}
+                                {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}{row.time ? ` ${row.time}` : ''}</span> : null}
+                                <Btn className="icon-btn todo-edit-btn" aria-label="할 일 고치기" data-todo-edit="1" onClick={() => setEditing(row)}><span aria-hidden="true">✎</span></Btn>
                                 <Btn className="icon-btn" aria-label="할 일 지우기" onClick={async () => {
                                     const failed = await removeItem('todos', row.id);
                                     if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
@@ -128,7 +131,8 @@ export function Tasks() {
                 <Btn className="chip" onClick={() => go('#/minutes')}>회의록 열기</Btn>
             </p>
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
-            {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={() => toggleTodo(detail.id)} />}
+            {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={() => toggleTodo(detail.id)} onEdit={() => { setEditing(todos.find((item) => item.id === detail.id) || detail); setDetail(null); }} />}
+            {editing && <TodoEditSheet row={todos.find((item) => item.id === editing.id) || editing} onClose={() => setEditing(null)} />}
         </div>
     );
 }
