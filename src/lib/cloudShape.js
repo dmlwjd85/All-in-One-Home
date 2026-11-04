@@ -362,7 +362,7 @@ export function fromCloudRow(collection, id, data = {}) {
 
 /** 여러 기기(웹·태블릿·휴대폰)가 같이 쓰는 설정 한 문서: users/{uid}/settings/device.
     9·10교시 과목, 교시 수·길이·잠금, 출퇴근 시각, 1~8교시 시작 시각, 그날 고친 날 표시, 학사일정.
-    오늘 조퇴 시각은 그 기기 그날만의 값이라 올리지 않습니다. at 은 마지막으로 고친 시각(ms)이고, 더 늦은 쪽이 이깁니다. */
+    오늘 조퇴 시각은 따로 settings/leave 문서로 올립니다(cleanLeave). at 은 마지막으로 고친 시각(ms)이고, 더 늦은 쪽이 이깁니다. */
 const HM = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 const YMD = /^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
 const SUBJECT_KEY = /^[ps](9|10)$/;
@@ -540,6 +540,15 @@ export function legacySettingsBody(body) {
     const { work = 0, ...ats } = body.ats || {};
     ats.period = Math.max(ats.period || 0, work || 0);
     return { ...body, ats, at: Math.max(...Object.values(ats)) };
+}
+
+/** 오늘 조퇴 시각 문서(settings/leave) 모양 { d, t, at }. 이 기기 값(leaveState: date·hm)도 받습니다. 한 번도 정하지 않았으면 null. */
+export function cleanLeave(leave) {
+    if (!leave || typeof leave !== 'object') return null;
+    const d = leave.d ?? leave.date ?? '';
+    const t = leave.t ?? leave.hm ?? '';
+    const at = atNum(leave.at);
+    return YMD.test(d) && (t === '' || HM.test(t)) && at > 0 ? { d, t, at } : null;
 }
 
 export { PERIOD_KEYS, WORK_KEYS };

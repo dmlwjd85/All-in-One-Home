@@ -1,4 +1,4 @@
-/** 시간표 설정입니다. 로그인하면 users/{uid}/settings/device 로 다른 기기와 같이 씁니다(오늘 조퇴 시각은 빼고).
+/** 시간표 설정입니다. 로그인하면 users/{uid}/settings/device 로 다른 기기와 같이 씁니다(오늘 조퇴 시각도 leave 칸으로 같이 씁니다).
     9·10교시 과목, 교시 수, 수업 길이, 잠금, 출퇴근 시각, 오늘 조퇴 시각을 담습니다.
     공용 PC 모드에서는 메모리에만 둡니다. */
 import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
@@ -182,16 +182,60 @@ export function skipPeriods(row, local, day) {
     return periods.filter((n) => isLocked(local, day, n) || (filled && !row[`p${n}`]));
 }
 
-/** 오늘만 쓰는 조퇴 시각. 날짜가 바뀌면 저절로 원래 퇴근 시각으로 돌아갑니다. */
+/* 조퇴 시각을 고친 시각(ms)을 재는 시계. db.js가 서버 기준 시계(serverNow)로 바꿔 끼웁니다. */
+let leaveClock = () => Date.now();
+export function useLeaveClock(fn) { leaveClock = typeof fn === 'function' ? fn : () => Date.now(); }
+/** 조퇴 고친 시각을 재는 시계(서버 시각으로 보정한 기기 시계). */
+export function leaveNow() { return Math.round(leaveClock()); }
+
+/** 오늘만 쓰는 조퇴 시각. 날짜가 바뀌면 저절로 원래 퇴근 시각으로 돌아갑니다.
+    저장 모양: { [날짜]: '14:30', date: 날짜, at: 고친 시각 }. 취소하면 { date, at } 만 남아 다른 기기에서도 취소됩니다. */
 export function leaveFor(ymd) {
     const saved = readJson(LEAVE_KEY) || {};
     return isHm(saved[ymd]) ? saved[ymd] : '';
 }
 
-export function setLeave(ymd, hm) {
-    const next = {};
+const YMD_RE = /^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+/** 동기화용 조퇴 값 { date, hm, at }. 예전 모양(at 없음)은 at 0으로 봅니다(다른 기기 값이 있으면 그쪽이 이깁니다). */
+export function leaveState() {
+    const saved = readJson(LEAVE_KEY) || {};
+    let date = YMD_RE.test(saved.date || '') ? saved.date : '';
+    if (!date) date = Object.keys(saved).find((key) => YMD_RE.test(key) && isHm(saved[key])) || '';
+    const at = Number.isInteger(saved.at) && saved.at > 0 ? saved.at : 0;
+    return { date, hm: date && isHm(saved[date]) ? saved[date] : '', at };
+}
+
+export function setLeave(ymd, hm, { at, fromCloud = false } = {}) {
+    const prev = leaveState();
+    const stamp = fromCloud ? (Number(at) || 0) : Math.max(Math.round(leaveClock()), prev.at + 1);
+    const next = { date: ymd, at: stamp };
     if (isHm(hm)) next[ymd] = hm;
     writeJson(LEAVE_KEY, next);
+}
+
+/** 오늘이 아닌 날의 조퇴 값을 지웁니다(올리지 않고 정리). */
+export function clearLeave() {
+    removeKey(LEAVE_KEY);
+    listeners.forEach((fn) => fn());
+}
+function removeKey(key) {
+    const store = storage();
+    try { if (store) store.removeItem(key); } catch { /* 저장소 없음 */ }
+    delete memory[key];
+}
+
+/** 조퇴 재시도 늦추기 상태. 새로 고쳐도 이어지도록 로컬에 둡니다. */
+const LEAVE_BACKOFF_KEY = 'ssug-gyomu-leave-backoff';
+export function readLeaveBackoff() {
+    const saved = readJson(LEAVE_BACKOFF_KEY);
+    return saved && typeof saved.mark === 'string' && Number.isFinite(saved.until) && Number.isFinite(saved.wait) ? saved : { mark: '', until: 0, wait: 0 };
+}
+export function writeLeaveBackoff(value) {
+    if (!value?.mark) { removeKey(LEAVE_BACKOFF_KEY); return; }
+    /* 화면을 다시 그릴 일이 아니라 알림(listeners)은 부르지 않습니다. */
+    const raw = JSON.stringify(value);
+    const store = storage();
+    try { if (store) store.setItem(LEAVE_BACKOFF_KEY, raw); else memory[LEAVE_BACKOFF_KEY] = raw; } catch { memory[LEAVE_BACKOFF_KEY] = raw; }
 }
 
 /** 홈 출퇴근 안내 카드를 접었는지. */

@@ -1,6 +1,13 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
-import { readPeriodLocal } from './periodLocal.js';
+import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, cleanLeave, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { clearLeave, leaveNow, leaveState, readLeaveBackoff, readPeriodLocal, setLeave, writeLeaveBackoff } from './periodLocal.js';
+
+/* 조퇴 문서를 규칙이 거절하면(예: 새 규칙 게시 전) 5분부터 두 배씩, 6시간까지 쉬었다가 다시 올립니다. */
+/* 재시도 늦추기는 로컬에 둬서 새로 고쳐도 이어집니다. */
+const LEAVE_MAX_WAIT = 6 * 3600 * 1000;
+const LEAVE_MAX_AGE = 2 * 24 * 3600 * 1000;
+export function resetLeaveBackoffForTest() { writeLeaveBackoff(null); }
+export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -211,6 +218,52 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         }
     }
 
+    /* 오늘 조퇴 시각: settings/leave 한 문서. 클라우드 값을 읽어 더 늦게 고친 쪽만 남깁니다(같으면 그대로). */
+    let rawLeave = leaveState();
+    /* 오랫동안 오프라인이던 기기: 규칙은 2일보다 오래된 at을 영구히 거절합니다.
+       오늘 조퇴면 지금 시각으로 다시 찍어 보내고, 오늘이 아니면 올리지 않고 지웁니다. */
+    if (rawLeave.date) {
+        const today = new Date(leaveNow() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+        if (rawLeave.date !== today) { clearLeave(); rawLeave = leaveState(); }
+        else if (rawLeave.at > 0 && rawLeave.at < leaveNow() - LEAVE_MAX_AGE + 10 * 60 * 1000) {
+            setLeave(rawLeave.date, rawLeave.hm);
+            rawLeave = leaveState();
+        }
+    }
+    let leave = cleanLeave(rawLeave);
+    /* 예전 모양(at 없음) 로컬 값: 클라우드에 조퇴 문서가 없을 때만 지금 시각으로 올립니다(있으면 클라우드 값이 이깁니다). */
+    const legacyLeave = !leave && !rawLeave.at && Boolean(rawLeave.date && rawLeave.hm);
+    if (legacyLeave) leave = { d: rawLeave.date, t: rawLeave.hm, at: leaveNow() };
+    if (leave) {
+        const mark = legacyLeave ? fingerprint({ legacy: rawLeave }) : fingerprint(leave);
+        const leaveBackoff = readLeaveBackoff();
+        const resting = leaveBackoff.mark === mark && Date.now() < leaveBackoff.until;
+        if (nextHashes['settings/leave'] !== mark && !resting) {
+            try {
+                const ref = doc(ready.db, 'users', uid, 'settings', 'leave');
+                let wrote = false;
+                await firestore.runTransaction(ready.db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const theirs = snap.exists() ? cleanLeave(snap.data()) : null;
+                    if (theirs && (legacyLeave || theirs.at >= leave.at)) return;
+                    tx.set(ref, await stamp(firestore, leave, ['updatedAt']));
+                    wrote = true;
+                });
+                if (legacyLeave && wrote) setLeave(leave.d, leave.t, { at: leave.at, fromCloud: true });
+                nextHashes['settings/leave'] = legacyLeave && wrote ? fingerprint(leave) : mark;
+                writeLeaveBackoff(null);
+            } catch (error) {
+                const kind = classifyWriteError(error);
+                if (kind === 'rejected') {
+                    /* 거절은 실패로 알립니다(조용히 ok 처리하지 않음). */
+                    rejected.push('settings/leave');
+                    const wait = leaveBackoff.mark === mark ? Math.min(leaveBackoff.wait * 2, LEAVE_MAX_WAIT) : 5 * 60 * 1000;
+                    writeLeaveBackoff({ mark, until: Date.now() + wait, wait });
+                } else pending += 1;
+            }
+        }
+    }
+
     for (const [localName, cloudName] of COLLECTIONS) {
         for (const row of state[localName] || []) {
             const shaped = toCloudRow(cloudName, row);
@@ -259,6 +312,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         if (set.exists()) out.settings = fromCloudSettings(set.data());
     } catch {
         /* 규칙을 올리기 전에는 읽기가 거절됩니다. 나머지는 그대로 받습니다. */
+    }
+    try {
+        const leaveSnap = await getDoc(doc(ready.db, 'users', uid, 'settings', 'leave'));
+        if (leaveSnap.exists()) out.leave = cleanLeave(leaveSnap.data());
+    } catch {
+        /* 조퇴 문서를 모르는 옛 규칙이면 거절됩니다. */
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));
@@ -381,14 +440,22 @@ export async function watchTodos(uid, onChange, { memoryOnly = false } = {}) {
     if (!uid || typeof onChange !== 'function' || !syncAvailable()) return () => {};
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return () => {};
-    const { collection, onSnapshot } = await import('firebase/firestore');
+    const { collection, doc, onSnapshot } = await import('firebase/firestore');
     let first = true;
     try {
-        return onSnapshot(collection(ready.db, 'users', uid, 'todos'), (snap) => {
+        const offTodos = onSnapshot(collection(ready.db, 'users', uid, 'todos'), (snap) => {
             if (first) { first = false; return; }
             if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
             if (snap.docChanges().length) onChange();
         }, () => { /* 끊기면 평소처럼 돌아올 때·5분마다 받습니다. */ });
+        /* 오늘 조퇴 시각(문서 하나)도 실시간으로 봅니다. */
+        let firstLeave = true;
+        const offLeave = onSnapshot(doc(ready.db, 'users', uid, 'settings', 'leave'), (snap) => {
+            if (firstLeave) { firstLeave = false; return; }
+            if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+            onChange();
+        }, () => {});
+        return () => { offTodos(); offLeave(); };
     } catch {
         return () => {};
     }

@@ -3447,10 +3447,13 @@ try {
                 const len = await page.$('.tt-row input[aria-label="1교시 길이(분)"]');
                 await len.click({ clickCount: 3 });
                 await len.type('35');
+                /* CI가 바쁠 때 입력이 반영되기 전에 눌러 대화상자를 놓치지 않도록 잠깐 기다리고, 대화상자는 2초까지 기다립니다. */
+                await delay(150);
                 let asked = '';
                 page.once('dialog', async (dialog) => { asked = dialog.message(); await dialog.dismiss(); });
                 await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '중학교')?.click());
-                await delay(200);
+                for (let i = 0; i < 20 && !asked; i += 1) await delay(100);
+                await delay(100);
                 const level = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-period-local') || '{}').level);
                 check(asked.includes('수업 길이') && level === '초', `저장하지 않은 길이가 있는데 학교급을 묻지 않고 바꿉니다: ${asked} / ${level}`);
             }
