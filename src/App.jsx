@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
+import { useGcal } from './ui/useGcal.js';
+import { GcalDot } from './ui/GcalSettings.jsx';
+import { gcalNeedsDot } from './lib/gcalCore.js';
 import { seoulParts } from './lib/date.js';
 import { restInfo } from './lib/daymark.js';
 import { resolveHash } from './lib/routes.js';
@@ -56,6 +59,8 @@ export default function App() {
     const [flow, setFlow] = useState(null);
     const [msg, setMsg] = useState(false);
     const [menu, setMenu] = useState(false);
+    const gcalSnap = useGcal();
+    const gcalDot = gcalNeedsDot(gcalSnap);
     const [help, setHelp] = useState(false);
     const [search, setSearch] = useState(false);
     const [locked, setLocked] = useState(false);
@@ -667,7 +672,7 @@ export default function App() {
                                 const next = dark ? 'light' : 'dark';
                                 import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
                             }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
-                            <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label="설정" aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /></Btn>
+                            <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label={gcalDot ? '설정, 구글 캘린더 다시 연결 필요' : '설정'} aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /><GcalDot gcal={gcalSnap} /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>
                         {/* 동기화 칩: 도구 단추 아래 빈자리에 띄워 제목 높이를 늘리지 않습니다(시간표가 탭에 가리지 않게). */}

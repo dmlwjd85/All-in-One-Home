@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { GCAL_MODE_HINT, GCAL_SHARED_ERROR, googleClientId } from '../lib/gcalCore.js';
+import { useEffect, useRef, useState } from 'react';
+import { GCAL_DOT_LABEL, GCAL_MODE_HINT, GCAL_SHARED_ERROR, gcalNeedsDot, gcalSettingsNotice, googleClientId } from '../lib/gcalCore.js';
 import {
     answerGcalUpload,
     connectGcal,
     disconnectGcal,
+    gcalCanSilent,
     gcalReady,
     pauseGcalForSharedPc,
     prepareCalendarScript,
@@ -14,6 +15,12 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn } from './bits.jsx';
 
+/** 설정 단추 위 작은 점. 화면 읽기 도구에도 뜻을 알려 줍니다. */
+export function GcalDot({ gcal }) {
+    if (!gcalNeedsDot(gcal)) return null;
+    return <span className="dot-badge" role="img" aria-label={GCAL_DOT_LABEL} title={GCAL_DOT_LABEL} data-gcal-dot="1" />;
+}
+
 export function GcalSettings() {
     const { data, showToast } = useUi();
     const gcal = useGcal();
@@ -22,6 +29,15 @@ export function GcalSettings() {
     const signedIn = Boolean(data.auth?.uid);
     const shared = Boolean(data.profile.sharedPc);
     const mode = gcal.mode === 'write' ? 'write' : 'readonly';
+    const notice = gcalSettingsNotice(gcal, { canSilent: gcalCanSilent() });
+    const boxRef = useRef(null);
+    const needsDot = gcalNeedsDot(gcal);
+
+    /* 점이 떠 있을 때 설정을 열면 좁은 화면에서도 바로 이 칸으로 내려옵니다. */
+    useEffect(() => {
+        if (!needsDot || !boxRef.current) return;
+        try { boxRef.current.scrollIntoView({ block: 'start', behavior: 'auto' }); } catch { /* 오래된 브라우저 */ }
+    }, [needsDot]);
 
     useEffect(() => {
         if (clientId) prepareCalendarScript().catch(() => {});
@@ -47,7 +63,7 @@ export function GcalSettings() {
     }
 
     return (
-        <section className="glass" style={{ padding: 14 }} aria-label="구글 캘린더">
+        <section ref={boxRef} id="gcal-settings" className="glass" style={{ padding: 14, scrollMarginTop: 72 }} aria-label="구글 캘린더">
             <h2 className="title-font" style={{ marginTop: 0 }}>구글 캘린더</h2>
             {!clientId && <p>구글 캘린더 연동은 준비 중이에요. 연결 값이 오면 여기서 켤 수 있어요.</p>}
             {clientId && shared && <p>{GCAL_SHARED_ERROR}</p>}
@@ -70,7 +86,13 @@ export function GcalSettings() {
                     {signedIn && !gcal.enabled && (
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} aria-busy={busy} onClick={() => run(() => connectGcal(mode))}>구글 캘린더 연동 켜기</Btn>
                     )}
-                    {signedIn && gcal.enabled && (
+                    {signedIn && notice.renew && (
+                        <div className="gcal-renew" role="status" data-gcal-renew="1">
+                            <p style={{ margin: 0 }}>{notice.hint}</p>
+                            <Btn className="primary-btn block" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>
+                        </div>
+                    )}
+                    {signedIn && gcal.enabled && !gcal.needsReconnect && (
                         <p>{mode === 'write' ? '만든 일정을 구글에도 넣고 있어요.' : '구글 일정을 보는 중이에요.'}</p>
                     )}
                     {signedIn && gcal.enabled && gcal.needsUploadAsk && mode === 'write' && (
@@ -90,7 +112,7 @@ export function GcalSettings() {
                     )}
                     {signedIn && gcal.enabled && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                            <Btn className="chip" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>
+                            {!gcal.needsReconnect && <Btn className="chip" aria-busy={busy} onClick={() => run(() => reconnectGcal())}>다시 연결</Btn>}
                             <Btn className="chip" aria-busy={busy} onClick={() => run(async () => {
                                 await disconnectGcal();
                                 showToast('연동을 껐어요. 여기에 적어 둔 일정과 구글에 이미 올라간 일정은 그대로예요.');
@@ -98,8 +120,9 @@ export function GcalSettings() {
                             })}>연동 끄기</Btn>
                         </div>
                     )}
-                    {gcal.lastError && <p className="gcal-error" role="status">{gcal.lastError}</p>}
-                    <p className="muted">아이폰 홈 화면 앱은 이 창이 구글로 갔다가 돌아와요. 연결이 만료되면 다시 연결해 주세요.</p>
+                    {signedIn && notice.soft && <div className="gcal-renew" role="status" data-gcal-soft="1"><p style={{ margin: 0 }}>{notice.soft}</p></div>}
+                    {gcal.lastError && !notice.soft && (Number(gcal.softFails) || 0) === 0 && <p className="gcal-error" role="status">{gcal.lastError}</p>}
+                    <p className="muted">아이폰 홈 화면 앱은 이 창이 구글로 갔다가 돌아와요. 연결이 쉬고 있으면 ‘다시 연결’을 눌러 주세요.</p>
                 </>
             )}
         </section>

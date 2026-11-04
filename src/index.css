@@ -1035,6 +1035,28 @@ button.glass[aria-pressed="true"]:active {
     line-height: 16px;
     vertical-align: 1px;
 }
+.gcal-renew {
+    display: grid;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--st-early-bg);
+    color: var(--ink);
+    line-height: 22px;
+}
+.gcal-renew .primary-btn { min-height: 44px; }
+.top-tools .icon-btn { position: relative; }
+.dot-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--st-early);
+    pointer-events: none;
+}
 .gcal-line { color: var(--st-early); }
 .gcal-error {
     margin: 8px 0 0;

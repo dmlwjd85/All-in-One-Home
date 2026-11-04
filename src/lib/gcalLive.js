@@ -5,6 +5,8 @@ import { isIOS, isStandalone } from './googleLogin.js';
 import { seoulYmd } from './date.js';
 import {
     GCAL_AUTH_ERROR,
+    authRetryDelay,
+    isAuthStatus,
     GCAL_SHARED_ERROR,
     GCAL_HASH_KEY,
     GCAL_PARTIAL_ERROR,
@@ -37,6 +39,65 @@ let scriptPromise = null;
 let queue = Promise.resolve();
 let pullLock = null;
 let gisClient = null;
+let silentImpl = null;
+let retryTimer = null;
+let retryAttempt = 0;
+let scheduleImpl = (fn, ms) => setTimeout(fn, ms);
+let cancelImpl = (id) => clearTimeout(id);
+let retryFetch = null;
+
+let gisLoader = null;
+let uxOverride = null;
+let retryStore = null;
+export const GCAL_RETRY_KEY = 'ssug-gyomu-gcal-retry';
+
+export function useSilentTokenForTest(fn) { silentImpl = fn; }
+/** 테스트: GIS 스크립트 불러오기를 바꿔 끼웁니다. oauth2 객체(또는 null)를 돌려주면 됩니다. */
+export function useGisLoaderForTest(fn) { gisLoader = fn; }
+export function useTokenUxForTest(ux) { uxOverride = ux; }
+export function useRetryStoreForTest(store) { retryStore = store; retryAttempt = readRetryAttempt(); }
+export function useGcalSchedulerForTest(schedule, cancel, fetchImpl = null) {
+    scheduleImpl = schedule;
+    retryFetch = fetchImpl;
+    cancelImpl = cancel || (() => {});
+    retryTimer = null;
+    retryAttempt = 0;
+    saveRetryAttempt();
+}
+export function gcalRetryAttemptForTest() { return retryAttempt; }
+export function gcalRetryPendingForTest() { return retryTimer !== null; }
+
+function retryBag() {
+    if (retryStore) return retryStore;
+    try {
+        if (typeof localStorage !== 'undefined') return localStorage;
+    } catch {
+        /* 저장소가 없으면 메모리만 씁니다. */
+    }
+    return null;
+}
+
+function readRetryAttempt() {
+    try {
+        const raw = retryBag()?.getItem(GCAL_RETRY_KEY);
+        const n = Math.floor(Number(JSON.parse(raw || '{}').attempt) || 0);
+        return n > 0 ? Math.min(n, 20) : 0;
+    } catch {
+        return 0;
+    }
+}
+
+function saveRetryAttempt() {
+    try {
+        const bag = retryBag();
+        if (!bag) return;
+        if (retryAttempt > 0) bag.setItem(GCAL_RETRY_KEY, JSON.stringify({ attempt: retryAttempt }));
+        else bag.removeItem(GCAL_RETRY_KEY);
+    } catch {
+        /* 간격을 못 남겨도 이번 실행에서는 메모리에 있습니다. */
+    }
+}
+retryAttempt = readRetryAttempt();
 
 function emit() {
     const snap = gcalSnapshot();
@@ -254,7 +315,11 @@ function currentUid() {
     return snapshot().auth?.uid || '';
 }
 
+let rowsImpl = null;
+export function useUploadRowsForTest(fn) { rowsImpl = fn; }
+
 function pushableNow() {
+    if (typeof rowsImpl === 'function') return rowsImpl().filter(isPushableKokEvent);
     return joined(snapshot(), 'events').filter(isPushableKokEvent);
 }
 
@@ -311,6 +376,7 @@ function takePending() {
 }
 
 function tokenUx() {
+    if (uxOverride) return uxOverride;
     if (typeof window === 'undefined') return 'popup';
     return pickTokenUx({
         ios: isIOS(window.navigator),
@@ -332,8 +398,9 @@ async function finishToken(raw, pending) {
         return { ok: false, message: memory.lastError };
     }
     writeToken(token);
+    stopAuthRetry();
     if (intent === 'renew') {
-        await patchGcal({ lastError: '' });
+        await patchGcal({ lastError: '', needsReconnect: false });
         await refreshGcal();
         return { ok: true };
     }
@@ -343,6 +410,7 @@ async function finishToken(raw, pending) {
         enabled: true,
         mode,
         needsUploadAsk: ask,
+        needsReconnect: false,
         lastError: '',
     });
     await refreshGcal();
@@ -413,6 +481,105 @@ function requestToken(mode, intent) {
     });
 }
 
+/** 이미 허락한 계정이면 창 없이 새 토큰을 받습니다. 못 받으면 null 입니다. */
+/** 창 없이 갱신할 수 있는 환경인지. 아이폰 홈 화면 앱(리다이렉트)은 직접 눌러야 합니다. */
+export function gcalCanSilent() {
+    return tokenUx() !== 'redirect';
+}
+
+async function loadGis() {
+    if (typeof gisLoader === 'function') {
+        try { return (await gisLoader()) || null; } catch { return null; }
+    }
+    if (typeof window === 'undefined') return null;
+    if (!window.google?.accounts?.oauth2) {
+        try { await prepareCalendarScript(); } catch { /* 못 불러오면 아래에서 null */ }
+    }
+    return window.google?.accounts?.oauth2 || null;
+}
+
+async function silentToken(mode) {
+    if (!gcalCanSilent()) return null;
+    if (typeof silentImpl === 'function') {
+        return Promise.resolve().then(() => silentImpl(mode)).then((raw) => {
+            const token = normalizeToken(raw);
+            return token && tokenUsable(token, mode) ? token : null;
+        }, () => null);
+    }
+    const oauth2 = await loadGis();
+    if (!oauth2) return null;
+    const clientId = googleClientId() || (gisLoader ? 'test-client' : '');
+    if (!clientId) return null;
+    return new Promise((resolve) => {
+        let settled = false;
+        const done = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+        const timer = setTimeout(() => done(null), 10000);
+        try {
+            const config = {
+                client_id: clientId,
+                scope: scopeForMode(mode),
+                include_granted_scopes: false,
+                callback: (response) => {
+                    const token = response?.error ? null : normalizeToken(response);
+                    done(token && tokenUsable(token, mode) ? token : null);
+                },
+                error_callback: () => done(null),
+            };
+            const email = snapshot().auth?.email || '';
+            if (email) config.login_hint = email;
+            oauth2.initTokenClient(config).requestAccessToken({ prompt: '' });
+        } catch {
+            done(null);
+        }
+    });
+}
+
+function stopAuthRetry() {
+    if (retryTimer !== null) cancelImpl(retryTimer);
+    retryTimer = null;
+    retryAttempt = 0;
+    saveRetryAttempt();
+}
+
+function scheduleAuthRetry() {
+    if (retryTimer !== null) return;
+    /* 아이폰 홈 화면 앱은 창 없이 갱신할 수 없으니 타이머를 걸지 않습니다. */
+    if (!gcalCanSilent()) return;
+    const delay = authRetryDelay(retryAttempt);
+    retryAttempt += 1;
+    saveRetryAttempt();
+    retryTimer = scheduleImpl(() => {
+        retryTimer = null;
+        if (!memory.enabled || !memory.needsReconnect) return undefined;
+        return refreshGcal(retryFetch || quietFetch);
+    }, delay);
+}
+
+/** 토큰이 없거나 거절되면 조용히 새로 받아 봅니다. 실패하면 설정에만 표시하고 잠시 뒤 다시 해 봅니다. */
+async function recoverAuth(mode) {
+    clearToken();
+    const token = await silentToken(mode);
+    if (token) {
+        writeToken(token);
+        stopAuthRetry();
+        if (memory.needsReconnect) await patchGcal({ needsReconnect: false });
+        return token;
+    }
+    await markReconnect();
+    return null;
+}
+
+async function markReconnect() {
+    clearToken();
+    await patchGcal({ needsReconnect: true, lastError: '' });
+    scheduleAuthRetry();
+}
+
 export function connectGcal(mode) {
     const next = mode === 'write' ? 'write' : 'readonly';
     if (!loaded) {
@@ -444,7 +611,8 @@ export function reconnectGcal() {
 export async function disconnectGcal() {
     const access = readAnyToken()?.accessToken || '';
     clearToken();
-    await patchGcal({ enabled: false, needsUploadAsk: false, lastError: '' });
+    stopAuthRetry();
+    await patchGcal({ enabled: false, needsUploadAsk: false, needsReconnect: false, lastError: '' });
     await revokeAccessToken(access);
     return memory;
 }
@@ -465,22 +633,25 @@ export async function answerGcalUpload(yes, fetchImpl = quietFetch) {
         await patchGcal({ needsUploadAsk: false, forwardSince: since, lastError: '' });
         return { ok: true, uploaded: 0 };
     }
-    const token = readToken('write');
+    const token = readToken('write') || await recoverAuth('write');
     if (!token) {
-        await patchGcal({
-            needsUploadAsk: true,
-            lastError: GCAL_AUTH_ERROR,
-        });
-        return { ok: false };
+        await patchGcal({ needsUploadAsk: true });
+        return { ok: false, message: GCAL_AUTH_ERROR };
     }
     const rows = pushableNow();
-    const result = await uploadKokEvents({
+    let result = await uploadKokEvents({
         token: token.accessToken,
         rows,
         links: memory.links,
         fetchImpl,
     });
-    dropTokenIfRejected(result.status);
+    if (isAuthStatus(result.status)) {
+        const fresh = await recoverAuth('write');
+        if (fresh) {
+            result = await uploadKokEvents({ token: fresh.accessToken, rows, links: result.links, fetchImpl });
+            if (isAuthStatus(result.status)) await markReconnect();
+        }
+    }
     await patchGcal({
         links: result.links,
         needsUploadAsk: false,
@@ -503,52 +674,69 @@ async function pullNow(fetchImpl) {
     if (snapshot().profile.sharedPc) return { ok: false, skipped: true };
     if (currentUid() && memory.uid && memory.uid !== currentUid()) return { ok: false, skipped: true };
     const mode = memory.mode === 'write' ? 'write' : 'readonly';
-    const token = readToken(mode);
-    if (!token) {
-        await patchGcal({ lastError: GCAL_AUTH_ERROR });
-        return { ok: false };
-    }
+    let token = readToken(mode) || await recoverAuth(mode);
+    if (!token) return { ok: false, needsReconnect: true };
     const windowRange = googleWindow(seoulYmd());
-    const listed = await listExternalEvents({
-        token: token.accessToken,
+    const listOnce = (access) => listExternalEvents({
+        token: access,
         timeMin: windowRange.timeMin,
         timeMax: windowRange.timeMax,
         fetchImpl,
     });
+    let listed = await listOnce(token.accessToken);
+    if (!listed.ok && isAuthStatus(listed.status)) {
+        token = await recoverAuth(mode);
+        if (!token) return { ok: false, needsReconnect: true };
+        listed = await listOnce(token.accessToken);
+        if (!listed.ok && isAuthStatus(listed.status)) {
+            await markReconnect();
+            return { ok: false, needsReconnect: true };
+        }
+    }
     if (!listed.ok) {
         dropTokenIfRejected(listed.status);
-        await patchGcal({ lastError: listed.message });
+        await patchGcal({ lastError: listed.message, softFails: (Number(memory.softFails) || 0) + 1 });
         return { ok: false, message: listed.message };
     }
     const keepPartial = memory.lastError === GCAL_PARTIAL_ERROR;
+    stopAuthRetry();
     await patchGcal({
         external: listed.events,
+        needsReconnect: false,
+        softFails: 0,
         lastError: keepPartial ? GCAL_PARTIAL_ERROR : '',
         lastSyncAt: new Date().toISOString(),
     });
     return { ok: true, events: listed.events };
 }
 
+export function syncGcalDiffForTest(diff, fetchImpl) { return syncDiff(diff, fetchImpl); }
+
 async function syncDiff(diff, fetchImpl) {
     await gcalReady();
     if (!memory.enabled || memory.mode !== 'write') return { skipped: true };
     if (snapshot().profile.sharedPc) return { skipped: true };
-    const token = readToken('write');
-    if (!token) {
-        await patchGcal({ lastError: GCAL_AUTH_ERROR });
-        return { ok: false };
-    }
-    const result = await applyKokDiff({
-        token: token.accessToken,
+    const token = readToken('write') || await recoverAuth('write');
+    if (!token) return { ok: false, needsReconnect: true };
+    const send = (access, links) => applyKokDiff({
+        token: access,
         mode: 'write',
         enabled: true,
-        links: memory.links,
+        links,
         forwardSince: memory.forwardSince,
         diff,
         fetchImpl,
     });
+    let result = await send(token.accessToken, memory.links);
     if (result.skipped) return result;
-    dropTokenIfRejected(result.status);
+    if (isAuthStatus(result.status)) {
+        const fresh = await recoverAuth('write');
+        if (fresh) {
+            /* 이미 올라간 것은 links 로 건너뛰고, 거절된 요청만 한 번 다시 보냅니다. */
+            result = await send(fresh.accessToken, result.links);
+            if (isAuthStatus(result.status)) await markReconnect();
+        }
+    }
     await patchGcal({
         links: result.links,
         lastError: result.errors.length ? GCAL_PARTIAL_ERROR : '',
