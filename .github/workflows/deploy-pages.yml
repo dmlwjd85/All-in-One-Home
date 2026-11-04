@@ -58,6 +58,7 @@ jobs:
           npm run check:five
           npm run check:sync
           npm run check:locknote
+          npm run check:minutes
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
@@ -74,6 +75,7 @@ jobs:
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
           CHROME_PATH=/usr/bin/google-chrome npm run check:attendsave
           CHROME_PATH=/usr/bin/google-chrome npm run check:swreload
+          CHROME_PATH=/usr/bin/google-chrome npm run check:minutesbrowser
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./
