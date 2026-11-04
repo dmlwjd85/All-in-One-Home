@@ -1,6 +1,6 @@
 import { cloudReady, finishRedirectSignIn, loadFirebase } from '../firebase.js';
-import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
-import { readPeriodLocal } from './periodLocal.js';
+import { eventBodyWithoutEndTime, todoBodyWithoutTime, fromCloudProfile, fromCloudRow, fromCloudSettings, legacySettingsBody, mergeSettings, cleanLeave, toCloudProfile, toCloudRow, toCloudSettings } from './cloudShape.js';
+import { leaveState, readPeriodLocal } from './periodLocal.js';
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -211,6 +211,26 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         }
     }
 
+    /* 오늘 조퇴 시각: settings/leave 한 문서. 클라우드 값을 읽어 더 늦게 고친 쪽만 남깁니다(같으면 그대로). */
+    const leave = cleanLeave(leaveState());
+    if (leave) {
+        const mark = fingerprint(leave);
+        if (nextHashes['settings/leave'] !== mark) {
+            try {
+                const ref = doc(ready.db, 'users', uid, 'settings', 'leave');
+                await firestore.runTransaction(ready.db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const theirs = snap.exists() ? cleanLeave(snap.data()) : null;
+                    if (theirs && theirs.at >= leave.at) return;
+                    tx.set(ref, await stamp(firestore, leave, ['updatedAt']));
+                });
+                nextHashes['settings/leave'] = mark;
+            } catch (error) {
+                if (classifyWriteError(error) === 'pending') pending += 1;
+            }
+        }
+    }
+
     for (const [localName, cloudName] of COLLECTIONS) {
         for (const row of state[localName] || []) {
             const shaped = toCloudRow(cloudName, row);
@@ -259,6 +279,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         if (set.exists()) out.settings = fromCloudSettings(set.data());
     } catch {
         /* 규칙을 올리기 전에는 읽기가 거절됩니다. 나머지는 그대로 받습니다. */
+    }
+    try {
+        const leaveSnap = await getDoc(doc(ready.db, 'users', uid, 'settings', 'leave'));
+        if (leaveSnap.exists()) out.leave = cleanLeave(leaveSnap.data());
+    } catch {
+        /* 조퇴 문서를 모르는 옛 규칙이면 거절됩니다. */
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));

@@ -188,7 +188,7 @@ async function settingsSuite(env) {
 
 /* 규칙 돌연변이: 설정 검사를 하나씩 풀어 본 판에서 위 묶음이 실패해야 합니다(검사가 빈말이 아닌지). */
 const RULE_MUTANTS = [
-    ['읽기 열기', "allow read, delete: if isOwner(uid) && key == 'device';", 'allow read, delete: if true;'],
+    ['읽기 열기', "allow read, delete: if isOwner(uid) && key in ['device', 'leave'];", 'allow read, delete: if true;'],
     ['at 검사 빼기', "&& v.at is int && v.at > 0 && v.at <= 4102444800000", ''],
     ['periodLocal 키 제한 빼기', "&& p.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])\n", '\n'],
     ['extra 칸 이름 제한 빼기', "e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}){0,19})?$')", "e.matches('(?s).*')"],

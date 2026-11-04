@@ -87,7 +87,7 @@ export function WorkTimer({ ymd, local, leave, showToast, now }) {
     );
 }
 
-/** 오늘 조퇴 시각 고르기. 홈 타이머 카드와 맨 위 심지 줄의 자세히 보기가 함께 씁니다. 이 기기에만, 오늘 하루만 적어 둡니다. */
+/** 오늘 조퇴 시각 고르기. 홈 타이머 카드와 맨 위 심지 줄의 자세히 보기가 함께 씁니다. 오늘 하루만 적고, 로그인하면 다른 기기와 같이 씁니다. */
 export function LeaveForm({ ymd, local, leave, now, showToast, draft, setDraft, onDone, inputId = 'leave-at' }) {
     return (
         <form className="leave-form" onSubmit={(event) => {

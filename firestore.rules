@@ -125,6 +125,14 @@ service cloud.firestore {
         && academicOk(v.academic)
         && (!('updatedAt' in v) || v.updatedAt is timestamp);
     }
+    // 오늘 조퇴 시각(settings/leave): { d: 날짜, t: 시각 또는 ''(취소), at: 고친 시각(ms) }. 설정 문서와 따로 두어 계산 한도를 아낍니다.
+    function leaveOk(l) {
+      return l.keys().hasAll(['d', 't', 'at']) && l.keys().hasOnly(['d', 't', 'at', 'updatedAt'])
+        && l.d is string && l.t is string
+        && (l.d + '|' + l.t).matches('^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|](([01][0-9]|2[0-3]):[0-5][0-9])?$')
+        && l.at is int && l.at > 0 && l.at <= 4102444800000
+        && (!('updatedAt' in l) || l.updatedAt is timestamp);
+    }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {
       return t is list && t.size() <= 10
@@ -283,8 +291,9 @@ service cloud.firestore {
       // 기기끼리 같이 쓰는 설정 한 문서. 칸마다 고친 시각(ats)을 두고 칸 단위로 합칩니다.
       // 안쪽 값도 다른 컬렉션처럼 형식·길이·민감 낱말을 서버에서 다시 막습니다.
       match /settings/{key} {
-        allow read, delete: if isOwner(uid) && key == 'device';
-        allow create, update: if isOwner(uid) && key == 'device' && settingsOk(request.resource.data);
+        allow read, delete: if isOwner(uid) && key in ['device', 'leave'];
+        allow create, update: if isOwner(uid)
+          && ((key == 'device' && settingsOk(request.resource.data)) || (key == 'leave' && leaveOk(request.resource.data)));
       }
       match /timetable/{key} {
         allow read, delete: if isOwner(uid);
