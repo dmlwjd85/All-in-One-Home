@@ -11,6 +11,9 @@ export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
+/* 항목마다 '나중에 고친 쪽이 이긴다'(고친 시각 updatedAt + 묘비)로 합치는 목록. */
+export const LWW_NAMES = ['todos', 'events', 'notes', 'attendance'];
+
 const COLLECTIONS = [
     ['students', 'students'],
     ['attendance', 'attendance'],
@@ -140,6 +143,18 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
     const nextHashes = { ...hashes };
     let pending = 0;
     const rejected = [];
+    /* 다른 기기가 더 나중에 고쳐 규칙이 거절한 쓰기(이 기기 값이 진 것). 경고하지 않고 다음 받아오기에서 클라우드 값을 받습니다. */
+    const lost = [];
+    const lwwChecked = (name, shaped) => (LWW_NAMES.includes(name) || name === 'timetable') && name !== 'todos' && Number(shaped?.at) > 0;
+    const cloudIsLater = async (name, id, at) => {
+        try {
+            const snap = await firestore.getDoc(doc(ready.db, 'users', uid, name, String(id)));
+            let theirs = snap.exists() && typeof snap.data()?.updatedAt?.toMillis === 'function' ? snap.data().updatedAt.toMillis() : NaN;
+            /* 문서가 없으면 묘비(다른 기기가 지운 시각)와 견줍니다. */
+            if (!snap.exists() && name !== 'timetable') { const t = await firestore.getDoc(doc(ready.db, 'users', uid, 'tombs', tombId(name, id))); theirs = t.exists() ? tombFromDoc(t.id, t.data())?.at ?? NaN : NaN; }
+            return Number.isFinite(theirs) && theirs > Number(at);
+        } catch { return false; /* 읽지 못하면 예전처럼 */ }
+    };
     const write = async (name, id, shaped, migratedAt) => {
         const prepared = name === 'events' ? prepareEventWrite(shaped.body) : { body: shaped.body, retryWithoutEndTime: false };
         const body = await stamp(firestore, prepared.body, shaped.stamps, migratedAt, shaped.at);
@@ -148,6 +163,9 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         const key = `${name}/${id}`;
         const mark = fingerprint(prepared.body, clear);
         if (nextHashes[key] === mark) return;
+        /* 새 규칙(lwwOk)을 게시하기 전에는 서버가 이른 고친 시각의 덮어쓰기를 막지 않습니다. 올리기 전에 클라우드 고친 시각(없으면 묘비)과 견줘
+           다른 기기가 더 나중에 고쳤거나 지웠으면 올리지 않고 받아 옵니다(PR #66 P2). 읽지 못하면 예전처럼 올리고 규칙에 맡깁니다. */
+        if (lwwChecked(name, shaped) && await cloudIsLater(name, id, shaped.at)) { lost.push(key); return; }
         try {
             writesSent += 1;
             await setDoc(doc(ready.db, 'users', uid, name, String(id)), body, { merge: name !== 'legacy' });
@@ -174,6 +192,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     return;
                 }
             }
+            if (denied(error) && lwwChecked(name, shaped) && await cloudIsLater(name, id, shaped.at)) { lost.push(key); return; }
             if (classifyWriteError(error) === 'rejected') rejected.push(key);
             else pending += 1;
         }
@@ -276,7 +295,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         if (!shaped) continue;
         await write('timetable', shaped.id, shaped);
     }
-    return { ok: pending === 0, hashes: nextHashes, pending, rejected };
+    return { ok: pending === 0, hashes: nextHashes, pending, rejected, lost };
 }
 
 export async function pullUserData(uid, { memoryOnly = false } = {}) {
@@ -301,7 +320,7 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         /* 받은 문서 id 전부(읽지 못한 모양 포함). 다른 기기에서 지운 줄을 가려낼 때만 씁니다. */
         ids: {},
         /* 출결 문서의 서버 고친 시각(ms). 남은 임시 출결이 더 나중 값을 덮지 않게 견줄 때 씁니다. */
-        ats: { attendance: {}, todos: {} },
+        ats: { attendance: {}, todos: {}, events: {}, notes: {}, timetable: {} },
         /* 고친 시각이 불확실한 할 일(v46이 쓴 것, 시각을 못 잰 기기가 올린 것). 올린 시각일 뿐이라 '나중'을 믿지 않습니다. */
         soft: { todos: {} },
         /* 모든 목록을 서버에서 받았으면 true. 캐시에서 온 옛 목록이면 칩이 '동기화됨'을 보이지 않습니다. */
@@ -329,12 +348,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
             const data = item.data();
             const row = fromCloudRow(cloudName, item.id, data);
             if (row) out[localName].push(row);
-            if ((cloudName === 'attendance' || cloudName === 'todos') && typeof data?.updatedAt?.toMillis === 'function') out.ats[cloudName][item.id] = data.updatedAt.toMillis();
+            if (LWW_NAMES.includes(cloudName) && typeof data?.updatedAt?.toMillis === 'function') out.ats[cloudName][item.id] = data.updatedAt.toMillis();
             if (cloudName === 'todos' && softDoc(data)) out.soft.todos[item.id] = true;
         });
     }
     /* 지운 표시(묘비): 다른 기기가 지운 할 일과 지운 시각. 규칙을 올리기 전에는 읽기가 거절되므로 없는 것으로 봅니다. */
-    out.tombs = { todos: {} };
+    out.tombs = { todos: {}, events: {}, notes: {}, attendance: {} };
     try {
         const tombs = await getDocs(collection(ready.db, 'users', uid, 'tombs'));
         tombs.forEach((item) => {
@@ -344,8 +363,11 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
     } catch { /* 옛 규칙 */ }
     const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));
     table.forEach((item) => {
-        const row = fromCloudRow('timetable', item.id, item.data());
+        const data = item.data();
+        const row = fromCloudRow('timetable', item.id, data);
         if (row) out.timetable[item.id] = row;
+        /* 요일(날짜)마다 고친 시각. 옛 판은 올린 시각입니다. */
+        if (row && typeof data?.updatedAt?.toMillis === 'function') out.ats.timetable[item.id] = data.updatedAt.toMillis();
     });
     return out;
 }
@@ -368,7 +390,7 @@ export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEE
 }
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {
-    const m = /^(todos)-([A-Za-z0-9_-]{1,40})$/.exec(String(docId || ''));
+    const m = /^(todos|events|notes|attendance)-([A-Za-z0-9_-]{1,60})$/.exec(String(docId || ''));
     const at = typeof data?.at?.toMillis === 'function' ? data.at.toMillis() : NaN;
     if (!m || data?.k !== m[1] || !Number.isFinite(at)) return null;
     return { name: m[1], id: m[2], at };
@@ -436,11 +458,14 @@ export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
  * 다른 기기가 할 일을 고치면 바로 알려 줍니다(PR #62 r3 1번). 첫 목록과 이 기기가 막 쓴 변경(hasPendingWrites)은 건너뜁니다.
  * 받은 내용으로 직접 합치지 않고, 알림만 보내 평소 받기(refreshFromCloud)로 합칩니다. 끄는 함수를 돌려줍니다.
  */
+/** 실시간으로 볼 컬렉션과 고친 시각 칸. */
+export const WATCH_RECENT = [['events', 'updatedAt'], ['attendance', 'updatedAt'], ['notes', 'updatedAt'], ['timetable', 'updatedAt'], ['tombs', 'at']];
+
 export async function watchTodos(uid, onChange, { memoryOnly = false } = {}) {
     if (!uid || typeof onChange !== 'function' || !syncAvailable()) return () => {};
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return () => {};
-    const { collection, doc, onSnapshot } = await import('firebase/firestore');
+    const { collection, doc, onSnapshot, query, where, Timestamp } = await import('firebase/firestore');
     let first = true;
     try {
         const offTodos = onSnapshot(collection(ready.db, 'users', uid, 'todos'), (snap) => {
@@ -455,7 +480,25 @@ export async function watchTodos(uid, onChange, { memoryOnly = false } = {}) {
             if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
             onChange();
         }, () => {});
-        return () => { offTodos(); offLeave(); };
+        /* 일정·출결·회의록·시간표·지운 표시: 감시를 시작한 뒤 고친 문서만 봅니다(updatedAt/at > 시작 10분 전).
+           전체 목록을 다시 읽지 않아 감시를 켜는 비용이 문서 수와 상관없이 거의 없습니다. 알림만 보내고 합치기는 평소 받기로 합니다. */
+        const since = Timestamp.fromMillis(Date.now() - 10 * 60 * 1000);
+        const offs = [offTodos, offLeave];
+        for (const [name, field] of WATCH_RECENT) {
+            let firstRecent = true;
+            offs.push(onSnapshot(query(collection(ready.db, 'users', uid, name), where(field, '>', since)), (snap) => {
+                if (firstRecent) { firstRecent = false; return; }
+                if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+                if (snap.docChanges().some((change) => change.type !== 'removed')) onChange();
+            }, () => {}));
+        }
+        let firstDevice = true;
+        offs.push(onSnapshot(doc(ready.db, 'users', uid, 'settings', 'device'), (snap) => {
+            if (firstDevice) { firstDevice = false; return; }
+            if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+            onChange();
+        }, () => {}));
+        return () => { offs.forEach((off) => { try { off(); } catch { /* 꺼짐 */ } }); };
     } catch {
         return () => {};
     }
@@ -528,8 +571,8 @@ export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfte
         const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp, serverTimestamp } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
         /* 지운 시각을 모르면(서버 시각을 못 잰 기기) 서버가 받은 시각으로 묘비를 남깁니다. */
-        const tomb = name === 'todos'
-            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
+        const tomb = LWW_NAMES.includes(name)
+            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId(name, id)), { k: name, at: Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
             : null;
         return await guardedDelete({
             get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },

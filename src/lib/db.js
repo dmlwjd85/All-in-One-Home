@@ -10,7 +10,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
+import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
@@ -304,20 +304,48 @@ export function stampTodoEdits(prev, next, now = null) {
         row.editAt = t;
         if (t > 0) delete row.editD; else row.editD = deviceNow();
     };
-    const before = new Map([...(prev?.todos || []), ...(prev?.local?.todos || [])].filter((row) => row?.id).map((row) => [String(row.id), row]));
+    /* 할 일·일정·회의록(메모)·출결: 바뀐 줄마다 고친 시각을 찍습니다. 목록마다 따로 견줍니다(같은 id가 다른 목록에 있어도 섞이지 않게). */
     const strip = (row) => { const { editAt, editD, ...rest } = row; return JSON.stringify(rest); };
-    for (const list of [next?.todos || [], next?.local?.todos || []]) {
-        for (const row of list) {
-            if (!row?.id) continue;
-            const old = before.get(String(row.id));
-            if (!old) { if (!Number.isFinite(row.editAt)) mark(row); continue; }
-            if (strip(old) !== strip(row)) mark(row);
-            else {
-                if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
-                if (Number.isFinite(old.editD) && !Number.isFinite(row.editD) && !(row.editAt > 0)) row.editD = old.editD;
+    const groups = [
+        [[...(prev?.todos || []), ...(prev?.local?.todos || [])], [next?.todos || [], next?.local?.todos || []]],
+        [prev?.events || [], [next?.events || []]],
+        [prev?.notes || [], [next?.notes || []]],
+        [prev?.attendance || [], [next?.attendance || []]],
+    ];
+    for (const [olds, lists] of groups) {
+        const before = new Map(olds.filter((row) => row?.id).map((row) => [String(row.id), row]));
+        for (const list of lists) {
+            for (const row of list) {
+                if (!row?.id) continue;
+                const old = before.get(String(row.id));
+                if (!old) { if (!Number.isFinite(row.editAt)) mark(row); continue; }
+                if (strip(old) !== strip(row)) mark(row);
+                else {
+                    if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
+                    if (Number.isFinite(old.editD) && !Number.isFinite(row.editD) && !(row.editAt > 0)) row.editD = old.editD;
+                }
             }
         }
     }
+    /* 시간표: 요일(날짜)마다 고친 시각을 찍습니다. */
+    const oldTable = prev?.timetable || {};
+    for (const [day, value] of Object.entries(next?.timetable || {})) {
+        if (!value || typeof value !== 'object') continue;
+        const old = oldTable[day];
+        /* 요일 기본값을 복사해 만든 날짜(setDayTimetable)는 복사된 editAt이 있어도 새로 고친 것으로 찍습니다. */
+        if (!old || strip(old) !== strip(value)) { mark(value); continue; }
+        if ('editAt' in old) value.editAt = old.editAt; else delete value.editAt;
+        if ('editD' in old) value.editD = old.editD; else delete value.editD;
+    }
+}
+/** 받은 시간표 하루를 이 기기 값 대신 쓸지: 이 기기 고친 시각을 알면 클라우드가 더 늦게 고쳤을 때만, 모르면 예전 규칙(fallback). */
+function takeRemoteDay(mine, remoteAt, fallback) {
+    if (!mine || !Object.keys(mine).filter((k) => k !== 'editAt' && k !== 'editD').length) return true;
+    if (Number(mine.editAt) > 0 && Number.isFinite(remoteAt) && remoteAt > 0) return remoteAt > Number(mine.editAt);
+    return fallback;
+}
+function remoteDay(value, remoteAt) {
+    return Number.isFinite(remoteAt) && remoteAt > 0 ? { ...value, editAt: remoteAt } : { ...value };
 }
 function updateFromCloud(recipe) {
     fromCloud += 1;
@@ -455,6 +483,8 @@ async function flushCloudOnce() {
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
     if (Array.isArray(result?.rejected)) tellRejected(result.rejected);
+    /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
+    if ((result?.lost || []).length) setTimeout(() => { refreshFromCloud({ force: true }).catch(() => {}); }, 0);
     await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
     return result;
 }
@@ -677,8 +707,8 @@ export function remoteIsLater(row, remoteAt) {
 
 /** 받아 온 할 일에는 클라우드의 고친 시각을 editAt으로 붙여 둡니다(다음 비교의 기준). */
 function withRemoteAt(cloudName, row, remote) {
-    if (cloudName !== 'todos' || !row?.id) return row;
-    const at = remote?.ats?.todos?.[String(row.id)];
+    if (!LWW_NAMES.includes(cloudName) || !row?.id) return row;
+    const at = remote?.ats?.[cloudName]?.[String(row.id)];
     return Number.isFinite(at) && at > 0 ? { ...row, editAt: at } : row;
 }
 
@@ -767,14 +797,14 @@ function refreshShared(local = [], remote = [], cloudName, hashes, ats = null, s
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
         if (!other) return row;
-        const remoteAt = cloudName === 'todos' ? ats?.[String(row.id)] : undefined;
+        const remoteAt = LWW_NAMES.includes(cloudName) ? ats?.[String(row.id)] : undefined;
         if (!unchangedSincePush(hashes, cloudName, row)) {
             /* 할 일: 이 기기에서 고친 뒤 아직 못 올렸어도, 다른 기기가 더 늦게 고쳤으면(고친 시각 기준) 그쪽 값이 이깁니다. */
-            if (cloudName === 'todos' && !softAts?.[String(row.id)] && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
+            if (LWW_NAMES.includes(cloudName) && !softAts?.[String(row.id)] && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
             return row;
         }
         /* 올린 그대로인 할 일은 클라우드 값과 그 고친 시각을 받습니다(다음 비교의 기준). */
-        if (cloudName === 'todos' && Number.isFinite(remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
+        if (LWW_NAMES.includes(cloudName) && Number.isFinite(remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
         if (cloudName === 'notes' && clippedCopy(row.text, other.text)) {
             /* 옛 판(v30)은 본문을 2000자로 잘라 다시 올립니다. 잘린 사본이면 이 기기 본문을 지키고 다시 올립니다. */
             if (hashes) delete hashes[`${cloudName}/${row.id}`];
@@ -825,7 +855,7 @@ export function pruneDeletedElsewhere(draft, remote, hashes) {
             if (!shaped?.id || present.has(String(shaped.id))) return true;
             if (!unchangedSincePush(hashes, cloudName, row)) {
                 /* 할 일을 이 기기에서 고쳤어도, 다른 기기가 그보다 나중에 지웠으면(묘비 시각) 지웁니다. 지운 시각을 모르면 지키고 다시 올립니다. */
-                if (cloudName !== 'todos' || !remoteIsLater(row, remote?.tombs?.todos?.[String(shaped.id)])) return true;
+                if (!LWW_NAMES.includes(cloudName) || !remoteIsLater(row, remote?.tombs?.[cloudName]?.[String(shaped.id)])) return true;
             }
             if (hashes) delete hashes[`${cloudName}/${shaped.id}`];
             return false;
@@ -896,8 +926,8 @@ function pruneOnly(draft, remote, seen) {
 }
 
 function seeRemoteClock(remote) {
-    for (const at of Object.values(remote?.ats?.todos || {})) seeClock(at);
-    for (const at of Object.values(remote?.tombs?.todos || {})) seeClock(at);
+    for (const name of LWW_NAMES) for (const at of Object.values(remote?.ats?.[name] || {})) seeClock(at);
+    for (const name of LWW_NAMES) for (const at of Object.values(remote?.tombs?.[name] || {})) seeClock(at);
 }
 
 function absorbCloud(draft, remote, seen = null) {
@@ -931,20 +961,20 @@ function absorbCloud(draft, remote, seen = null) {
         for (const key of before) if (!(key in guard)) delete cloudHashes[key];
     }
     draft.students = unionById(draft.students, remote.students);
-    draft.attendance = unionById(draft.attendance, remote.attendance);
+    draft.attendance = unionById(draft.attendance, (remote.attendance || []).map((row) => withRemoteAt('attendance', row, remote)));
     rememberPulledHashes(draft.attendance, remote.attendance, cloudHashes);
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     draft.records = unionById(draft.records, remote.records);
-    draft.events = unionById(draft.events, remote.events);
+    draft.events = unionById(draft.events, (remote.events || []).map((row) => withRemoteAt('events', row, remote)));
     draft.todos = unionById(draft.todos, (remote.todos || []).map((row) => withRemoteAt('todos', row, remote)));
-    draft.notes = unionById(draft.notes, remote.notes);
+    draft.notes = unionById(draft.notes, (remote.notes || []).map((row) => withRemoteAt('notes', row, remote)));
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
     draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
     for (const [day, value] of Object.entries(remote.timetable || {})) {
         const mine = draft.timetable[day];
-        if (!mine || !Object.keys(mine).length) draft.timetable[day] = value;
-        else if (unchangedSincePush(guard, 'timetable', { id: day, ...mine })) draft.timetable[day] = value;
+        const remoteAt = remote.ats?.timetable?.[day];
+        if (takeRemoteDay(mine, remoteAt, Boolean(mine) && unchangedSincePush(guard, 'timetable', { id: day, ...mine }))) draft.timetable[day] = remoteDay(value, remoteAt);
     }
     rememberAllPulled(draft, remote, cloudHashes);
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
@@ -2191,7 +2221,7 @@ export async function pullFromCloudNow() {
                     /* 올린 그대로인 줄만 클라우드 값으로 바꿉니다. 거절된 줄·올릴 수 없는 줄·그 사이 고친 줄은 이 기기 값을 지킵니다. */
                     const synced = mark && !rejected.has(mark.key) && cloudHashes[mark.key] === mark.mark;
                     /* 할 일은 양쪽에서 고쳤으면 더 늦게 고친 쪽이 이깁니다(클라우드 updatedAt ↔ 이 기기 editAt). */
-                    const later = !synced && cloudName === 'todos' && mark && !rejected.has(mark.key) && remoteIsLater(row, remote.ats?.todos?.[String(row.id)]);
+                    const later = !synced && LWW_NAMES.includes(cloudName) && mark && !rejected.has(mark.key) && remoteIsLater(row, remote.ats?.[cloudName]?.[String(row.id)]);
                     next.push(synced || later ? withRemoteAt(cloudName, takeRemote(cloudName, row, theirs), remote) : row);
                     continue;
                 }
@@ -2203,7 +2233,10 @@ export async function pullFromCloudNow() {
             next.push(...[...byId.values()].map((row) => withRemoteAt(cloudName, row, remote)));
             draft[localName] = next;
         }
-        for (const [day, value] of Object.entries(remote.timetable || {})) draft.timetable[day] = value;
+        for (const [day, value] of Object.entries(remote.timetable || {})) {
+            const remoteAt = remote.ats?.timetable?.[day];
+            if (takeRemoteDay(draft.timetable[day], remoteAt, true)) draft.timetable[day] = remoteDay(value, remoteAt);
+        }
         absorbSettings(draft, remote.settings);
         absorbLeave(remote.leave);
         if (remote.profile?.className) draft.profile.className = remote.profile.className;

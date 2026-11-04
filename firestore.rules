@@ -21,6 +21,20 @@ service cloud.firestore {
     // 시각이 서버가 받은 때보다 5분 넘게 앞서면 거절합니다(시계가 틀린 기기의 미래 시각이 이후 수정을 이기지 않게, PR #57 검수).
     // v46은 serverTimestamp(= request.time)를 써서 그대로 통과합니다.
     function notAhead(v) { return v is timestamp && v <= request.time + duration.value(5, 'm'); }
+    // 일정·회의록·출결(PR 동기화 2): updatedAt은 마지막으로 고친 시각. 미래 시각(5분 넘게)과 클라우드보다 이른 고친 시각의 덮어쓰기를 거절합니다.
+    // 옛 판은 serverTimestamp(= request.time)를 써서 늘 통과합니다.
+    function lwwOk(name, docId) {
+      return (!('updatedAt' in d()) || notAhead(d().updatedAt))
+        && (resource == null || !('updatedAt' in d()) || !('updatedAt' in resource.data) || d().updatedAt >= resource.data.updatedAt)
+        // 새로 만드는 쓰기: 묘비가 있으면 그보다 늦게 고친 것만 받습니다(지운 뒤 먼저 고친 기기의 되살리기 거절).
+        && (resource != null || !exists(lwwTomb(name, docId)) || ('updatedAt' in d() && d().updatedAt > get(lwwTomb(name, docId)).data.at));
+    }
+    // 시간표(요일·날짜 문서): 미래 시각과 클라우드보다 이른 고친 시각의 덮어쓰기를 거절합니다.
+    function ttOk() {
+      return (!('updatedAt' in d()) || notAhead(d().updatedAt))
+        && (resource == null || !('updatedAt' in d()) || !('updatedAt' in resource.data) || d().updatedAt >= resource.data.updatedAt);
+    }
+    function lwwTomb(name, docId) { return /databases/$(database)/documents/users/$(request.auth.uid)/tombs/$(name + '-' + docId); }
     // ── 할 일 고친 시각(PR #57) ──
     // v47은 hlc(= updatedAt, 고친 시각)를 함께 씁니다. v46은 hlc를 모르고 updatedAt을 올린 시각으로 씁니다.
     function v47Todo() { return 'hlc' in d() && 'updatedAt' in d() && d().hlc == d().updatedAt; }
@@ -186,7 +200,7 @@ service cloud.firestore {
           && (!('reason' in d()) || d().reason in ['sick', 'unexcused', 'approved', 'other'])
           && optInt('period', 1, 8) && optBool('paper')
           && optStr('note', 100) && (!('note' in d()) || safeText(d().note))
-          && optTs('updatedAt');
+          && optTs('updatedAt') && lwwOk('attendance', aid);
       }
 
       // 관찰·상담·보호자·칭찬 기록
@@ -218,15 +232,15 @@ service cloud.firestore {
           && (!('kind' in d()) || d().kind in ['class', 'school', 'holiday', 'mine'])
           && optStr('memo', 300) && (!('memo' in d()) || safeText(d().memo))
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
-          && optTs('createdAt') && optTs('updatedAt');
+          && optTs('createdAt') && optTs('updatedAt') && lwwOk('events', eid);
       }
 
       // 지운 할 일 표시(묘비): 다른 기기가 지운 할 일을 그보다 먼저 고친 기기가 되살리지 않게 지운 시각만 남깁니다.
       match /tombs/{key} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && key.matches('^todos-[A-Za-z0-9_-]{1,40}$')
+        allow create, update: if isOwner(uid) && key.matches('^(todos-[A-Za-z0-9_-]{1,40}|(events|notes|attendance)-[A-Za-z0-9_-]{1,60})$')
           && d().keys().hasAll(['k', 'at']) && d().keys().hasOnly(['k', 'at'])
-          && d().k == 'todos' && notAhead(d().at);
+          && d().k in ['todos', 'events', 'notes', 'attendance'] && key.matches('^' + d().k + '-.*') && notAhead(d().at);
       }
 
       // 할 일 (걷기 진행: got / of)
@@ -278,7 +292,7 @@ service cloud.firestore {
           && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsOk(d().tags))
           && optBool('pinned')
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
-          && optTs('createdAt') && optTs('updatedAt');
+          && optTs('createdAt') && optTs('updatedAt') && lwwOk('notes', nid);
       }
 
       // 알림장: 문서 id = 날짜
@@ -312,7 +326,7 @@ service cloud.firestore {
           && optStr('p5', 20) && optStr('p6', 20) && optStr('p7', 20) && optStr('p8', 20)
           && optStr('s1', 20) && optStr('s2', 20) && optStr('s3', 20) && optStr('s4', 20)
           && optStr('s5', 20) && optStr('s6', 20) && optStr('s7', 20) && optStr('s8', 20)
-          && optTs('updatedAt');
+          && optTs('updatedAt') && ttOk();
       }
 
       // 예전 교무수첩에서 새 구조로 못 옮긴 쪽을 글 그대로 보관(읽기 전용 보관함). 민감 쪽은 여기 오지 않음
