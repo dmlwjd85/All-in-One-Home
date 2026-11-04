@@ -3,7 +3,7 @@ import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
-import { patchPeriodLocal, readPeriodLocal, setExtraPeriod, subscribePeriodLocal } from './periodLocal.js';
+import { leaveState, patchPeriodLocal, readPeriodLocal, setExtraPeriod, setLeave, subscribePeriodLocal, useLeaveClock } from './periodLocal.js';
 import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
@@ -253,6 +253,8 @@ function saveClock() {
 }
 /** 서버 기준 지금 시각(ms). */
 export function serverNow() { return Math.round(deviceNow() + clock.o); }
+/* 조퇴 시각도 서버 기준 시계로 고친 시각을 찍습니다(기기 시계가 어긋나도 나중에 고친 쪽이 이기게). */
+useLeaveClock(() => serverNow());
 /*
  * 이번 실행에서 서버 시각을 재는 데 성공했는지(PR #57 검수 치명 1번). 재기 전에는 기기 시계를 믿지 않습니다.
  *  - 고친 시각은 0(모름)으로 두고 기기 시각은 editD에 따로 적어 둡니다. 0이면 클라우드에는 serverTimestamp(올린 시각)로 올라갑니다.
@@ -363,6 +365,7 @@ let toldRejected = '';
 
 export function cloudRejectedMessage(keys = []) {
     const minutes = keys.filter((key) => key.startsWith('notes/meet-')).length;
+    if (keys.length === 1 && keys[0] === 'settings/leave') return '클라우드가 오늘 조퇴 시각을 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.';
     const what = minutes === keys.length ? '회의록' : '기록';
     return `클라우드가 ${what} ${keys.length}개를 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.`;
 }
@@ -803,6 +806,11 @@ function absorbSettings(draft, settings) {
     if (Object.keys(patch).length) patchPeriodLocal({ ...patch, syncAts, syncAt: Math.max(syncAts.period, syncAts.extra, syncAts.work) }, { fromCloud: true });
 }
 
+/** 오늘 조퇴 시각: 다른 기기가 더 늦게 정하거나 취소한 값을 받습니다. */
+function absorbLeave(leave) {
+    if (leave && Number(leave.at) > leaveState().at) setLeave(leave.d, leave.t, { at: Number(leave.at), fromCloud: true });
+}
+
 /* 다른 기기에서 지운 줄(출결·기록·일정·할 일·메모·공지): 이 기기에서 올린 뒤 고치지 않았고(해시 같음) 클라우드에 문서가 없으면 지웁니다.
    해시가 없는 줄(처음 받기, 아직 안 올린 줄)이나 올린 뒤 고친 줄은 그대로 둡니다. */
 const PRUNE_BUCKETS = CLOUD_BUCKETS.map((name) => [name, name]);
@@ -941,6 +949,7 @@ function absorbCloud(draft, remote, seen = null) {
     rememberAllPulled(draft, remote, cloudHashes);
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     absorbSettings(draft, remote.settings);
+    absorbLeave(remote.leave);
     if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
     if (remote.profile?.classSize && !draft.profile.classSize) draft.profile.classSize = remote.profile.classSize;
     if ((remote.students || []).length || remote.profile?.className) {
@@ -1965,7 +1974,7 @@ async function connectCloudBody(uid) {
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return false;
-    const hasRemote = remote.settings || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
+    const hasRemote = remote.settings || remote.leave || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
         await updateFromCloud((draft) => pruneOnly(draft, remote, seen));
@@ -2196,6 +2205,7 @@ export async function pullFromCloudNow() {
         }
         for (const [day, value] of Object.entries(remote.timetable || {})) draft.timetable[day] = value;
         absorbSettings(draft, remote.settings);
+        absorbLeave(remote.leave);
         if (remote.profile?.className) draft.profile.className = remote.profile.className;
         if (remote.profile?.classSize) draft.profile.classSize = remote.profile.classSize;
         rememberAllPulled(draft, remote, cloudHashes);

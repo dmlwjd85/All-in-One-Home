@@ -8,7 +8,7 @@ import { Btn } from './bits.jsx';
 const COUNTS = [5, 6, 7, 8, 9, 10];
 const LEVEL_NAME = { 초: '초등학교', 중: '중학교', 고: '고등학교' };
 
-/** 교시 수·시작 시각·수업 길이·잠금·출퇴근 시각. 로그인하면 settings/device 문서로 다른 기기와 같이 씁니다(오늘 조퇴 시각만 이 기기). */
+/** 교시 수·시작 시각·수업 길이·잠금·출퇴근 시각. 로그인하면 settings/device 문서로 다른 기기와 같이 씁니다(오늘 조퇴 시각도 같이). */
 export function TimetableSettings({ data, showToast }) {
     const local = usePeriodLocal();
     const [starts, setStarts] = useState(() => allStarts(data.profile.periodStarts, local));
