@@ -185,6 +185,8 @@ export function skipPeriods(row, local, day) {
 /* 조퇴 시각을 고친 시각(ms)을 재는 시계. db.js가 서버 기준 시계(serverNow)로 바꿔 끼웁니다. */
 let leaveClock = () => Date.now();
 export function useLeaveClock(fn) { leaveClock = typeof fn === 'function' ? fn : () => Date.now(); }
+/** 조퇴 고친 시각을 재는 시계(서버 시각으로 보정한 기기 시계). */
+export function leaveNow() { return Math.round(leaveClock()); }
 
 /** 오늘만 쓰는 조퇴 시각. 날짜가 바뀌면 저절로 원래 퇴근 시각으로 돌아갑니다.
     저장 모양: { [날짜]: '14:30', date: 날짜, at: 고친 시각 }. 취소하면 { date, at } 만 남아 다른 기기에서도 취소됩니다. */

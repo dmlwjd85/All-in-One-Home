@@ -365,6 +365,7 @@ let toldRejected = '';
 
 export function cloudRejectedMessage(keys = []) {
     const minutes = keys.filter((key) => key.startsWith('notes/meet-')).length;
+    if (keys.length === 1 && keys[0] === 'settings/leave') return '클라우드가 오늘 조퇴 시각을 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.';
     const what = minutes === keys.length ? '회의록' : '기록';
     return `클라우드가 ${what} ${keys.length}개를 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.`;
 }

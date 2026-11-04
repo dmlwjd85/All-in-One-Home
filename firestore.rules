@@ -127,11 +127,16 @@ service cloud.firestore {
     }
     // 오늘 조퇴 시각(settings/leave): { d: 날짜, t: 시각 또는 ''(취소), at: 고친 시각(ms) }. 설정 문서와 따로 두어 계산 한도를 아낍니다.
     function leaveOk(l) {
-      return l.keys().hasAll(['d', 't', 'at']) && l.keys().hasOnly(['d', 't', 'at', 'updatedAt'])
+      return l.keys().hasAll(['d', 't', 'at', 'updatedAt']) && l.keys().hasOnly(['d', 't', 'at', 'updatedAt'])
         && l.d is string && l.t is string
-        && (l.d + '|' + l.t).matches('^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])[|](([01][0-9]|2[0-3]):[0-5][0-9])?$')
-        && l.at is int && l.at > 0 && l.at <= 4102444800000
-        && (!('updatedAt' in l) || l.updatedAt is timestamp);
+        // 없는 날짜(2026-02-31 등) 거절, 윤년 2월 29일만 허용
+        && (l.d.matches('^20[2-9][0-9]-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-8]))$')
+            || l.d.matches('^20([2468][048]|[3579][26])-02-29$'))
+        && l.t.matches('^(([01][0-9]|2[0-3]):[0-5][0-9])?$')
+        // at: 고친 시각(ms). 서버 시각 기준 2일 전 ~ 5분 뒤만 받습니다.
+        && l.at is int && l.at >= request.time.toMillis() - 172800000 && l.at <= request.time.toMillis() + 300000
+        // updatedAt: 서버 시각(serverTimestamp)만
+        && l.updatedAt == request.time;
     }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {

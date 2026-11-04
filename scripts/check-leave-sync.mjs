@@ -3,7 +3,8 @@
  */
 import { cpSync, readFileSync, rmSync } from 'node:fs';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, disableNetwork, enableNetwork, setDoc, terminate } from 'firebase/firestore';
+import { execSync } from 'node:child_process';
+import { collection, doc, getDoc, getDocs, disableNetwork, enableNetwork, serverTimestamp, setDoc, Timestamp, terminate } from 'firebase/firestore';
 
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); };
@@ -128,14 +129,97 @@ check(leaveOf('A') === '11:40', `L6: 더 오래된 클라우드 조퇴 값이 �
 await on('A', (db) => db.absorbCloudForTest({ leave: { d: TODAY, t: '10:20', at: Date.now() + 9 * HOUR } }));
 check(leaveOf('A') === '10:20', `L6: 더 늦은 클라우드 조퇴 값을 받지 않았습니다: '${leaveOf('A')}'`);
 
+/* L7: 기기 시계 자체(Date.now)가 1시간 빠른 PC. 고친 시각은 서버 시각으로 보정한 값이어야 합니다(기기 시계를 그대로 쓰면 규칙이 거절하거나 늘 이깁니다). */
+{
+    const realNow = Date.now;
+    const skew = HOUR;
+    Date.now = () => realNow() + skew;
+    try {
+        await on('B', (db) => db.useDeviceClockForTest(() => Date.now()));
+        await sync('B');
+        await setL('B', '09:50');
+        cur = 'B';
+        const at = pl.B.leaveState().at;
+        check(Math.abs(at - realNow()) < 5 * 60 * 1000, `L7: 조퇴 고친 시각이 서버 시각이 아니라 기기 시계입니다(차이 ${Math.round((at - realNow()) / 60000)}분)`);
+        await on('B', (db) => db.flushCloud());
+    } finally { Date.now = realNow; }
+    check((await cloudSettings())?.t === '09:50', `L7: 시계가 빠른 기기의 조퇴가 올라가지 않았습니다: ${JSON.stringify(await cloudSettings())}`);
+    await on('B', (db) => db.useDeviceClockForTest(() => Date.now() + HOUR));
+}
+
+/* L8: 예전 모양({오늘:'13:00'}, at 없음) 로컬 값. 클라우드에 조퇴 문서가 없으면 첫 동기화에 올리고, 있으면 덮지 않습니다. */
+await env.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'users', UID, 'settings', 'leave')); });
+await on('A', () => { stores.A.set(pl.A.LEAVE_KEY, JSON.stringify({ [TODAY]: '13:00' })); });
+await on('A', (db) => db.flushCloud());
+check((await cloudSettings())?.t === '13:00', `L8: 예전 모양 조퇴 값이 첫 동기화에 올라가지 않았습니다: ${JSON.stringify(await cloudSettings())}`);
+cur = 'A';
+check(pl.A.leaveState().at > 0, 'L8: 올린 뒤 예전 모양 값에 고친 시각이 남지 않았습니다.');
+await wait(GAP);
+await setL('B', '15:20');
+await on('B', (db) => db.flushCloud());
+await on('A', () => { stores.A.set(pl.A.LEAVE_KEY, JSON.stringify({ [TODAY]: '08:00' })); });
+await sync('A');
+check((await cloudSettings())?.t === '15:20' && leaveOf('A') === '15:20', `L8: 예전 모양 값이 더 최근 클라우드 값을 덮었습니다: 클라우드 ${JSON.stringify(await cloudSettings())} / 폰 '${leaveOf('A')}'`);
+
+/* L9: 실시간 감시. 열려 있는 PC가 새로 받지 않아도 폰에서 바꾼 조퇴가 옵니다. */
+{
+    const off = await on('B', (_db, d) => d.cloud.watchTodos(UID, () => on('B', (db) => db.refreshFromCloud({ force: true }))));
+    await wait(300);
+    await wait(GAP);
+    await setL('A', '14:45');
+    await on('A', (db) => db.flushCloud());
+    let ok = false;
+    for (let i = 0; i < 40 && !ok; i += 1) { await wait(100); ok = leaveOf('B') === '14:45'; }
+    check(ok, `L9: 실시간 감시로 조퇴가 오지 않았습니다: PC '${leaveOf('B')}'`);
+    off();
+}
+
 /* 규칙: 모양이 틀린 조퇴 칸은 거절, 맞는 칸은 받습니다. */
-const tryLeave = (leave) => setDoc(doc(admin(), 'users', UID, 'settings', 'leave'), leave).then(() => true, () => false);
+const tryLeave = (leave) => setDoc(doc(admin(), 'users', UID, 'settings', 'leave'), { updatedAt: serverTimestamp(), ...leave }).then(() => true, () => false);
 check(!(await setDoc(doc(admin(), 'users', UID, 'settings', 'other'), { d: TODAY, t: '', at: 1 }).then(() => true, () => false)), '규칙: settings 아래 낯선 문서를 받아들였습니다.');
 check(await tryLeave({ d: TODAY, t: '14:00', at: Date.now() }), '규칙: 맞는 조퇴 칸을 거절했습니다.');
+check(await tryLeave({ d: '2028-02-29', t: '', at: Date.now() }), '규칙: 윤년 2월 29일을 거절했습니다.');
 check(!(await tryLeave({ d: TODAY, t: '25:00', at: Date.now() })), '규칙: 틀린 조퇴 시각(25:00)을 받아들였습니다.');
 check(!(await tryLeave({ d: '어제', t: '14:00', at: Date.now() })), '규칙: 틀린 날짜를 받아들였습니다.');
+for (const bad of ['2026-02-31', '2026-04-31', '2027-02-29', '2026-13-01', '2026-00-10']) check(!(await tryLeave({ d: bad, t: '14:00', at: Date.now() })), `규칙: 없는 날짜(${bad})를 받아들였습니다.`);
 check(!(await tryLeave({ d: TODAY, t: '14:00', at: Date.now(), x: 1 })), '규칙: 조퇴 칸의 낯선 키를 받아들였습니다.');
 check(!(await tryLeave({ d: TODAY, t: '14:00' })), '규칙: 시각(at) 없는 조퇴 칸을 받아들였습니다.');
+for (const [bad, why] of [[String(Date.now()), '문자열'], [0, '0'], [Date.now() + 0.5, '소수'], [Date.now() + HOUR, '1시간 뒤'], [4102444800000, '2100년'], [Date.now() - 3 * 24 * HOUR, '3일 전']]) check(!(await tryLeave({ d: TODAY, t: '14:00', at: bad })), `규칙: 틀린 at(${why})을 받아들였습니다.`);
+check(!(await tryLeave({ d: TODAY, t: '14:00', at: Date.now(), updatedAt: Timestamp.fromMillis(Date.now() - 60000) })), '규칙: 서버 시각이 아닌 updatedAt을 받아들였습니다.');
+check(!(await setDoc(doc(admin(), 'users', UID, 'settings', 'leave'), { d: TODAY, t: '14:00', at: Date.now() }).then(() => true, () => false)), '규칙: updatedAt 없는 조퇴 칸을 받아들였습니다.');
+
+/* L10: 옛 규칙(main, 조퇴 문서 모름)이 게시된 상태. 거절은 조용히 ok가 아니라 rejected로 알리고, 다시 올리기는 점점 늦춥니다. */
+{
+    let oldRules = '';
+    try { oldRules = execSync('git show origin/main:firestore.rules', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch { oldRules = ''; }
+    if (!oldRules.includes("key == 'device' && settingsOk") || oldRules.includes('leaveOk')) oldRules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8').replace("((key == 'device' && settingsOk(request.resource.data)) || (key == 'leave' && leaveOk(request.resource.data)))", "key == 'device' && settingsOk(request.resource.data)");
+    check(!oldRules.includes("key == 'leave'"), 'L10: 옛 규칙을 만들지 못했습니다.');
+    const old = await initializeTestEnvironment({ projectId: 'demo-ssug-oldrules', firestore: { host, port: Number(port), rules: oldRules } });
+    /* 이 기기의 배경 올리기가 끼어들지 않게 막고, 진짜 pushUserData만 직접 부릅니다. */
+    offline.A = true;
+    await wait(300);
+    cur = 'A';
+    const cloud = devices.A.cloud;
+    devices.A.fb.useFirebaseForTest({ config: { ...config, projectId: 'demo-ssug-oldrules' }, bundle: { app: null, auth: null, db: old.authenticatedContext(UID).firestore(), memoryOnly: false } });
+    cloud.resetLeaveBackoffForTest();
+    pl.A.setLeave(TODAY, '13:30');
+    const state = { profile: {}, settings: {}, students: [], attendance: [], records: [], inbox: [], todos: [], events: [], notes: [], notices: [], timetable: {} };
+    const r1 = await cloud.pushUserData(UID, state, { hashes: {} });
+    check((r1.rejected || []).includes('settings/leave'), `L10: 옛 규칙의 조퇴 거절이 조용히 넘어갔습니다: ${JSON.stringify({ ok: r1.ok, pending: r1.pending, rejected: r1.rejected })}`);
+    const b1 = cloud.leaveBackoffForTest();
+    const r2 = await cloud.pushUserData(UID, state, { hashes: r1.hashes || {} });
+    check(!(r2.rejected || []).includes('settings/leave') && b1.wait >= 5 * 60 * 1000, `L10: 거절 직후 곧바로 다시 올렸습니다(쉬는 시간 ${b1.wait}ms)`);
+    const realNow = Date.now;
+    Date.now = () => realNow() + b1.wait + 1000;
+    let r3;
+    try { r3 = await cloud.pushUserData(UID, state, { hashes: r1.hashes || {} }); } finally { Date.now = realNow; }
+    const b2 = cloud.leaveBackoffForTest();
+    check((r3.rejected || []).includes('settings/leave') && b2.wait === b1.wait * 2, `L10: 쉬는 시간이 늘지 않았습니다: ${b1.wait} → ${b2.wait}`);
+    devices.A.fb.useFirebaseForTest({ config, bundle: { app: null, auth: null, db: devices.A.fs, memoryOnly: false } });
+    cloud.resetLeaveBackoffForTest();
+    offline.A = false;
+    await old.cleanup();
+}
 
 await env.cleanup();
 rmSync(new URL('.leavedev/', root), { recursive: true, force: true });
