@@ -497,3 +497,5 @@ html.dark .tabbar.tabbar-jelly {
 @media (max-width: 899px) {
     body .toast { bottom: calc(96px + env(safe-area-inset-bottom) + 14px); }
 }
+/* 어두운 화면에서 가운데 「쨈」 글자가 묻히지 않게 밝은 쨈색으로 씁니다. */
+html.dark .tabbar.tabbar-jelly .tbj-mid .fab-txt { color: #FF9DB0; }
