@@ -5,7 +5,12 @@ function needsCsvFormulaGuard(text) {
     const stripped = String(text).replace(/^[\t\r\n \u00a0]+/, '');
     if (!stripped) return false;
     const ch = stripped[0];
-    if ('=@+＝＠＋'.includes(ch)) return true;
+    if ('=@＝＠'.includes(ch)) return true;
+    if (ch === '+' || ch === '＋') {
+        /* +82·+82-10-…처럼 + 뒤 숫자(전화·국번)는 -5처럼 그대로 둡니다. +=1·+CMD는 가립니다. */
+        if (/^[+＋]\d[\d\- ]*$/.test(stripped)) return false;
+        return true;
+    }
     if (ch === '-' || ch === '－') {
         if (/^[-－]\d+(\.\d+)?$/.test(stripped)) return false;
         if (/^[-－] /.test(stripped)) return false;

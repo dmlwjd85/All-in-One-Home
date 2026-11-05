@@ -1574,6 +1574,31 @@ try {
             && todayDisk.weekend && !todayDisk.weekend.today && !todayDisk.weekend.filled,
             `오늘 칸이 채운 동그라미로 주말·고른 날과 구분되지 않습니다. ${JSON.stringify(todayDisk)}`,
         );
+        const todaySize = await page.evaluate((today) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const el = buttons.find((btn) => Number(btn.querySelector('.num')?.textContent) === today && !String(btn.getAttribute('style') || '').includes('ink-sub'));
+            const num = el?.querySelector('.num');
+            if (!num) return null;
+            const box = num.getBoundingClientRect();
+            const style = getComputedStyle(num);
+            return {
+                w: Math.round(box.width),
+                h: Math.round(box.height),
+                width: style.width,
+                maxWidth: style.maxWidth,
+                minWidth: style.minWidth,
+                height: style.height,
+            };
+        }, todayDay);
+        check(
+            todaySize
+            && todaySize.w === 24
+            && todaySize.h === 24
+            && todaySize.width === '24px'
+            && todaySize.maxWidth === '24px'
+            && todaySize.height === '24px',
+            `오늘 동그라미가 24px 원이 아닙니다. ${JSON.stringify(todaySize)}`,
+        );
         await page.click('[aria-label="다음 달"]');
         const [year, month] = todayYmd.split('-').map(Number);
         const nextDate = new Date(year, month, 1);
@@ -1636,6 +1661,106 @@ try {
         await audit(page, '달력 패널');
     }
     await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
+
+    async function monthLayoutGuard(width) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate((ymd) => { location.hash = `#/schedule/month/${ymd}`; }, todayYmd);
+            await page.waitForSelector('.cal-month .cal-grid .tap');
+            await page.waitForSelector('.cal-today .num');
+            const layout = await page.evaluate(() => {
+                const month = document.querySelector('.cal-month');
+                const grid = document.querySelector('.cal-grid');
+                const tap = document.querySelector('.cal-grid .tap');
+                const todayNum = document.querySelector('.cal-today .num');
+                const cs = (el) => (el ? getComputedStyle(el) : null);
+                const monthCs = cs(month);
+                const gridCs = cs(grid);
+                const tapCs = cs(tap);
+                const numBox = todayNum?.getBoundingClientRect();
+                const numCs = cs(todayNum);
+                return {
+                    monthMax: monthCs?.maxWidth || '',
+                    monthW: month ? Math.round(month.getBoundingClientRect().width) : 0,
+                    gridMax: gridCs?.maxWidth || '',
+                    gridW: grid ? Math.round(grid.getBoundingClientRect().width) : 0,
+                    tapMin: tapCs?.minHeight || '',
+                    tapH: tap ? Math.round(tap.getBoundingClientRect().height) : 0,
+                    todayW: numBox ? Math.round(numBox.width) : 0,
+                    todayH: numBox ? Math.round(numBox.height) : 0,
+                    todayWidth: numCs?.width || '',
+                    todayMaxW: numCs?.maxWidth || '',
+                };
+            });
+            const monthMaxPx = Number.parseFloat(layout.monthMax);
+            const gridMaxPx = Number.parseFloat(layout.gridMax);
+            check(
+                layout.monthMax === '840px' && Number.isFinite(monthMaxPx) && monthMaxPx <= 840 && layout.monthW <= 841,
+                `${width}: 월간 .cal-month max-width 840 상한이 없습니다. ${JSON.stringify(layout)}`,
+            );
+            check(
+                layout.gridMax === '840px' && Number.isFinite(gridMaxPx) && gridMaxPx <= 840 && layout.gridW <= 841,
+                `${width}: 월간 .cal-grid max-width 840 상한이 없습니다. ${JSON.stringify(layout)}`,
+            );
+            if (width >= 1024) {
+                const tapMinPx = Number.parseFloat(layout.tapMin);
+                check(
+                    layout.tapMin === '72px' || (Number.isFinite(tapMinPx) && tapMinPx >= 72) || layout.tapH >= 72,
+                    `${width}: 월간 칸 min-height 72가 없습니다. ${JSON.stringify(layout)}`,
+                );
+            }
+            check(
+                layout.todayW === 24 && layout.todayH === 24 && layout.todayWidth === '24px' && layout.todayMaxW === '24px',
+                `${width}: 오늘 동그라미가 24px가 아닙니다. ${JSON.stringify(layout)}`,
+            );
+
+            let titles = [];
+            for (let step = 0; step < 3; step += 1) {
+                titles = await page.evaluate(() => [...document.querySelectorAll('.cal-event-title')].map((el) => el.textContent.trim()).filter(Boolean));
+                if (titles.some((t) => t !== '·' && t !== '…')) break;
+                await page.click('[aria-label="다음 달"]');
+                await page.waitForSelector('.cal-grid');
+                await delay(120);
+            }
+            check(
+                titles.length > 0 && titles.some((t) => t !== '·' && t !== '…' && /[가-힣A-Za-z0-9]/.test(t)),
+                `${width}: 월간 일정 제목이 ·만 보이거나 없습니다. ${JSON.stringify(titles.slice(0, 8))}`,
+            );
+            const ariaOk = await page.evaluate(() => {
+                const buttons = [...document.querySelectorAll('.cal-grid button')].filter((el) => el.querySelector('.cal-event-title'));
+                if (!buttons.length) return false;
+                return buttons.every((el) => {
+                    const aria = el.getAttribute('aria-label') || '';
+                    const title = [...el.querySelectorAll('.cal-event-title')].map((node) => node.textContent.trim()).find((t) => t && t !== '·' && t !== '…') || '';
+                    return !title || aria.includes(title);
+                });
+            });
+            check(ariaOk, `${width}: 월간 칸 aria-label에 일정 제목이 없습니다.`);
+        }, width >= 900 ? 900 : 844);
+    }
+    await monthLayoutGuard(1024);
+    await monthLayoutGuard(1920);
+
+    async function deleteConfirmGuard() {
+        await withDemo(390, 'light', async (page) => {
+            await page.evaluate(() => { location.hash = '#/students/12'; });
+            await page.waitForFunction(() => document.body.innerText.includes('이하은'));
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '삭제'));
+            let asked = '';
+            page.once('dialog', async (dialog) => {
+                asked = dialog.message();
+                await dialog.dismiss();
+            });
+            const clicked = await page.evaluate(() => {
+                const btn = [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '삭제');
+                if (!btn) return false;
+                btn.click();
+                return true;
+            });
+            for (let i = 0; i < 20 && !asked; i += 1) await delay(100);
+            check(clicked && asked.includes('지울까요'), `학생 기록 삭제 확인이 뜨지 않습니다: clicked=${clicked} asked=${asked}`);
+        }, 844);
+    }
+    await deleteConfirmGuard();
 
     async function darkTodayContrast(width) {
         await withDemo(width, 'dark', async (page) => {

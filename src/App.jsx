@@ -370,10 +370,11 @@ export default function App() {
         const href = {
             today: '#/today',
             attend: `#/attend/${ymd}`,
-            students: '#/students',
             schedule: '#/schedule',
             todo: '#/todo',
+            minutesList: '#/minutes',
             notice: '#/notice',
+            students: '#/students',
             neis: '#/students/neis',
             settings: '#/settings',
         }[id];
