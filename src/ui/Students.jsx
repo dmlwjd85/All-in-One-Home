@@ -6,6 +6,7 @@ import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { seoulYmd } from '../lib/date.js';
 import { csvEscape, htmlEscape } from '../lib/neisExport.js';
+import { DateChip } from './DateChip.jsx';
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -145,9 +146,9 @@ export function Student() {
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {filtered.map((row) => (
                     <article key={row.id} className="solid-card" style={{ padding: 12, background: row.kind === '상담' ? 'var(--k-counsel)' : row.kind === '보호자' ? 'var(--k-parent)' : row.kind === '칭찬' ? 'var(--k-praise)' : 'var(--k-observe)', color: 'var(--ink)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                             <strong>{row.kind} · {(row.tags || []).join(' · ')}</strong>
-                            <span className="num">{row.date === clock.ymd ? clock.hm : row.date.slice(5)}</span>
+                            <DateChip ymd={row.date} today={clock.ymd} />
                         </div>
                         {editingId === row.id ? (
                             <div style={{ marginTop: 8 }}>

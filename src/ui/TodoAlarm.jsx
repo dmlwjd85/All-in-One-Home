@@ -87,12 +87,21 @@ export function TodoAlarm() {
         <div className="sheet-back todo-alarm-back" onClick={close}>
             <div className="sheet todo-alarm" role="alertdialog" aria-modal="true" aria-label="할 일 알림" data-screen="todo-alarm" data-missed={allMissed ? "1" : "0"} onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                <h2 className="title-font" style={{ margin: '0 0 10px' }}>{allMissed ? '놓친 할 일 알림이 있어요' : '⏰ 할 일 시간이에요'}</h2>
+                <div className="todo-alarm-head">
+                    <div className="todo-alarm-bell" aria-hidden="true">⏰</div>
+                    <div>
+                        <h2 className="title-font" style={{ margin: 0, fontSize: 18 }}>{allMissed ? '놓친 할 일 알림이 있어요' : '할 일 알림'}</h2>
+                        <p className="todo-alarm-sub">{allMissed ? '앱을 여는 사이 지난 알림이에요' : '지금 울렸어요'}</p>
+                    </div>
+                </div>
                 <ul className="todo-alarm-list">
                     {live.map((row) => (
                         <li key={row.id} className="todo-alarm-item">
                             <span className="num todo-alarm-time">{row.time}</span>
-                            <span className="todo-alarm-title">{row.title}{row.missed ? <span className="muted"> · 놓침</span> : null}</span>
+                            <span className="todo-alarm-title">
+                                <strong>{row.time ? `${Number(String(row.time).slice(0, 2)) % 12 || 12}시 할 일 알림` : '할 일 알림'}</strong>
+                                <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ' · 지금 울렸어요'}</div>
+                            </span>
                             <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>
                     ))}
