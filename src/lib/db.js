@@ -3,7 +3,7 @@ import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
-import { absorbTabbar, subscribeTabOrder, useTabClock } from '../ui/tabSlots.js';
+import { absorbTabbar, adoptTabAccount, parkTabAccount, subscribeTabOrder, switchTabAccount, useTabClock } from '../ui/tabSlots.js';
 import { leaveState, patchPeriodLocal, readPeriodLocal, setExtraPeriod, setLeave, subscribePeriodLocal, useLeaveClock } from './periodLocal.js';
 import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
@@ -1883,6 +1883,8 @@ const accountKey = (uid) => `account:${uid}`;
 async function switchAccountLocal(from, to) {
     clearAttendDraft();
     draftWatch = null;
+    /* 탭바 배치는 계정 vault와 같이 uid별로 바꿉니다(A 배치가 B로 올라가지 않게). */
+    switchTabAccount(from, to);
     const empty = emptyState();
     const pack = {
         data: Object.fromEntries(ACCOUNT_PARTS.map((part) => [part, structuredClone(state[part] ?? empty[part])])),
@@ -1901,6 +1903,7 @@ async function switchAccountLocal(from, to) {
             saved = await mainVault.get(accountKey(to));
             savedLocal = await localVault.get(accountKey(to));
         } catch (error) {
+            switchTabAccount(to, from);
             tellStorageIssue(storageIssueMessage(error));
             return false;
         }
@@ -1927,6 +1930,8 @@ async function switchAccountLocal(from, to) {
     } catch (error) {
         state = previousState;
         emit();
+        /* 화면 자료 되돌림과 같이 탭바도 다시 바꿉니다. */
+        switchTabAccount(to, from);
         tellStorageIssue(error?.storageFailed ? error.message : storageIssueMessage(error));
         return false;
     }
@@ -2305,10 +2310,14 @@ export async function setAuth(auth) {
     syncQueued(queuedCloudKeys().length);
     emit();
     if (!next?.uid) {
+        /* 로그아웃: 지금 탭바를 이전 uid 몫으로 넣고 화면 키는 비웁니다. */
+        if (from) parkTabAccount(from);
         connectTask = null;
         stopTodoWatch();
         return;
     }
+    /* 같은 계정 재로그인(로그아웃 뒤): 보관해 둔 탭바를 되살립니다. 전환은 switchAccountLocal이 이미 처리. */
+    if (!switching) adoptTabAccount(next.uid);
     if (connectTask?.uid === next.uid) return connectTask.promise;
     const promise = connectCloud(next.uid).catch(() => {});
     connectTask = { uid: next.uid, promise };

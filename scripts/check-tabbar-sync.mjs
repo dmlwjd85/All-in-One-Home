@@ -8,6 +8,12 @@ import { collection, doc, getDoc, getDocs, disableNetwork, enableNetwork, server
 
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); };
+{
+    const workflow = readFileSync(new URL('../.github/workflows/deploy-pages.yml', import.meta.url), 'utf8');
+    const syncAt = workflow.indexOf('npm run check:tabbarsync');
+    const rulesAt = workflow.indexOf('npm run check:rules');
+    check(syncAt > rulesAt && rulesAt >= 0, 'CI에서 check:tabbarsync가 check:rules 근처(에뮬레이터 검사)에 없습니다.');
+}
 const [host, port] = String(process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080').split(':');
 const env = await initializeTestEnvironment({ projectId: 'demo-ssug-rules', firestore: { host, port: Number(port), rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8') } });
 const UID = 'teacher-tabsync';
@@ -126,9 +132,28 @@ check(Object.keys(raw).sort().join() === 'at,order' && Number.isInteger(raw.at),
 /* T5: 망가진 클라우드 값은 받지 않습니다. */
 check(!ts.A.absorbTabbar({ order: ['hack'], at: Date.now() + 9 * HOUR }) && orderOf('A') === O4.join(), 'T5: 망가진 클라우드 배치를 받았습니다.');
 
+/* T6: 같은 기기에서 계정 전환 — A 배치가 B로 새지 않고, 다시 A로 오면 되살아납니다. */
+const UID2 = 'teacher-tabsync-b';
+await wait(GAP);
+await setT('A', O1);
+await on('A', (db) => db.flushCloud());
+const cloudBefore = await cloudTab();
+check(cloudBefore?.order?.join() === O1.join(), `T6: 전환 전 A 클라우드 준비가 안 됐습니다: ${JSON.stringify(cloudBefore)}`);
+await on('A', (db) => db.setAuth({ uid: UID2 }));
+await wait(50);
+cur = 'A';
+const afterSwitch = ts.A.tabState();
+check(afterSwitch.at === 0 && afterSwitch.order.join() === ts.A.DEFAULT_ORDER.join(), `T6: B로 바꾼 뒤 로컬이 비지 않았습니다: ${JSON.stringify(afterSwitch)}`);
+await on('A', (db) => db.flushCloud());
+const cloudAfter = await cloudTab();
+check(cloudAfter?.order?.join() === O1.join() && cloudAfter?.at === cloudBefore.at, `T6: 계정 전환 뒤 A 클라우드가 덮였습니다: ${JSON.stringify(cloudAfter)}`);
+await on('A', (db) => db.setAuth({ uid: UID }));
+await wait(50);
+check(orderOf('A') === O1.join() && ts.A.tabState().at > 0, `T6: A로 돌아왔을 때 배치가 되살아나지 않았습니다: ${orderOf('A')} / ${JSON.stringify(ts.A.tabState())}`);
+
 for (const d of Object.values(devices)) { try { await terminate(d.fs); } catch { /* 이미 닫힘 */ } }
 await env.cleanup();
 rmSync(new URL('.tabsyncdev/', root), { recursive: true, force: true });
 if (failures.length) { console.error(failures.map((f) => `- ${f}`).join('\n')); process.exit(1); }
-console.log('탭바 배치 두 기기 동기화 검사 통과(진짜 cloud.js·규칙, 시계 ±1시간, 나중에 고친 쪽이 이김)');
+console.log('탭바 배치 두 기기 동기화 검사 통과(진짜 cloud.js·규칙, 시계 ±1시간, 나중에 고친 쪽이 이김, 계정 전환 격리)');
 process.exit(0);

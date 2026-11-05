@@ -216,6 +216,8 @@ async function tabbarSuite(env) {
     await deny('시각 0', () => setDoc(ref(me), body({ at: 0 })));
     await deny('글자 시각', () => setDoc(ref(me), body({ at: '1' })));
     await deny('서버 시각 아닌 updatedAt', () => setDoc(ref(me), body({ updatedAt: 1 })));
+    await deny('남의 uid 삭제', () => deleteDoc(ref(other)));
+    await allow('본인 삭제', () => deleteDoc(ref(me)));
     return out;
 }
 

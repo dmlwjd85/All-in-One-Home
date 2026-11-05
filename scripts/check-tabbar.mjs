@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { DEFAULT_ORDER, TAB_KEY, loadTabOrder, moveTab, normalizeOrder, pickTab, saveTabOrder } from '../src/ui/tabSlots.js';
+import { DEFAULT_ORDER, TAB_ACCOUNTS_KEY, TAB_KEY, adoptTabAccount, loadTabOrder, moveTab, normalizeOrder, parkTabAccount, pickTab, saveTabOrder, switchTabAccount, tabState } from '../src/ui/tabSlots.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -21,12 +21,22 @@ check(pickTab(DEFAULT_ORDER, 0, 'schedule').slice(0, 4).join() === 'schedule,tod
 check(moveTab(DEFAULT_ORDER, 0, 1).slice(0, 2).join() === 'todo,today' && moveTab(DEFAULT_ORDER, 0, -1).join() === DEFAULT_ORDER.join(), '칸 옮기기가 다릅니다.');
 {
     const mem = new Map();
-    const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)) };
+    const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
     saveTabOrder(['minutes', 'todo', 'attend', 'schedule', 'students', 'more'], store, 5);
     const raw = JSON.parse(mem.get(TAB_KEY));
     check(TAB_KEY === 'ssug-gyomu-tabbar' && raw.at === 5 && loadTabOrder(store)[0] === 'minutes', '배치 저장 키·모양이 다릅니다.');
     mem.set(TAB_KEY, '{망가진');
     check(loadTabOrder(store).join() === DEFAULT_ORDER.join(), '망가진 저장값에서 기본 배치로 돌아오지 않습니다.');
+    saveTabOrder(['minutes', 'todo', 'attend', 'schedule', 'students', 'more'], store, 9);
+    switchTabAccount('uid-a', 'uid-b', store);
+    check(tabState(store).at === 0 && loadTabOrder(store).join() === DEFAULT_ORDER.join(), '계정 전환 뒤 로컬 탭바가 비지 않았습니다.');
+    const bag = JSON.parse(mem.get(TAB_ACCOUNTS_KEY) || '{}');
+    check(bag['uid-a']?.order?.[0] === 'minutes' && bag['uid-a']?.at === 9, '계정 전환 때 이전 uid 보관이 안 됐습니다.');
+    switchTabAccount('uid-b', 'uid-a', store);
+    check(tabState(store).at === 9 && loadTabOrder(store)[0] === 'minutes', '다시 이전 계정으로 올 때 탭바가 되살아나지 않았습니다.');
+    parkTabAccount('uid-a', store);
+    check(tabState(store).at === 0 && JSON.parse(mem.get(TAB_ACCOUNTS_KEY) || '{}')['uid-a']?.at === 9, '로그아웃 park이 탭바를 지키지 못했습니다.');
+    check(adoptTabAccount('uid-a', store) && tabState(store).at === 9, '재로그인 adopt가 탭바를 되돌리지 못했습니다.');
 }
 
 /* 소스 변이 가드: QA가 놓친 5개(HOLD_MS·44px 미디어·쨈 라벨 겹침·aria-label·Esc) */
@@ -45,8 +55,10 @@ check(moveTab(DEFAULT_ORDER, 0, 1).slice(0, 2).join() === 'todo,today' && moveTa
     check(tabJsx.includes('aria-label="쨈 빠른 입력 열기"'), '가운데 쨈 aria-label이 없습니다.');
     check(/event\.key === 'Escape'\)\s*onClose\(\)/.test(tabJsx) || /if \(event\.key === 'Escape'\) onClose\(\)/.test(tabJsx), '배치 시트 Esc 닫기가 없습니다.');
     const buildAt = workflow.indexOf('npm run build');
-    const tabbarAt = workflow.indexOf('npm run check:tabbar');
+    const tabbarAt = workflow.search(/npm run check:tabbar(?!sync)/);
+    const tabsyncAt = workflow.indexOf('npm run check:tabbarsync');
     check(tabbarAt > buildAt && buildAt >= 0, 'CI에서 check:tabbar가 build 뒤에 없습니다.');
+    check(tabsyncAt > workflow.indexOf('npm run check:rules') && tabsyncAt >= 0, 'CI에서 check:tabbarsync가 에뮬레이터 검사 근처에 없습니다.');
 }
 
 

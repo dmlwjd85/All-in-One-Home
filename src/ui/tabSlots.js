@@ -1,9 +1,12 @@
 /** 하단 탭바(시안 A 말랑젤리) 칸 배치. 가운데 쨈 칸은 고정이고, 왼쪽 3칸·오른쪽 3칸만 바꿉니다.
-    값은 이 기기 키 ssug-gyomu-tabbar 에 { order: [아이디 6개], at: 고친 시각(ms) } 로 둡니다(단축키·글꼴 키와 같은 규칙).
+    지금 쓰는 값은 이 기기 키 ssug-gyomu-tabbar 에 { order: [아이디 6개], at: 고친 시각(ms) } 로 둡니다(단축키·글꼴 키와 같은 규칙).
+    계정마다 따로 두는 보관은 ssug-gyomu-tabbar-accounts 에 { [uid]: { order, at } } 로 둡니다(last-sync·계정 vault와 같은 규칙).
     로그인하면 users/{uid}/settings/tabbar 문서로 다른 기기와 같이 씁니다. at 이 더 늦은 쪽(나중에 고친 쪽)이 이깁니다.
+    계정 전환·로그아웃 때 지금 값을 그 uid 몫으로 넣고 다른 계정 값을 꺼내 써서, A 배치가 B 클라우드로 올라가지 않게 합니다.
     오프라인이거나 로그인하지 않았으면 이 기기에만 둡니다. */
 
 export const TAB_KEY = 'ssug-gyomu-tabbar';
+export const TAB_ACCOUNTS_KEY = 'ssug-gyomu-tabbar-accounts';
 export const TAB_EVENT = 'ssug-gyomu-tabbar-changed';
 export const SIDE_COUNT = 6;
 
@@ -92,6 +95,82 @@ export function absorbTabbar(remote, storage) {
     const theirs = cleanTabbar(remote);
     if (!theirs || theirs.at <= tabState(storage).at) return false;
     saveTabOrder(theirs.order, storage, theirs.at, { fromCloud: true });
+    return true;
+}
+
+function readAccountBag(storage) {
+    try {
+        const raw = (storage || liveStorage())?.getItem?.(TAB_ACCOUNTS_KEY);
+        const bag = raw ? JSON.parse(raw) : {};
+        return bag && typeof bag === 'object' && !Array.isArray(bag) ? bag : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeAccountBag(bag, storage) {
+    try {
+        const store = storage || liveStorage();
+        if (!store) return;
+        if (bag && Object.keys(bag).length) store.setItem?.(TAB_ACCOUNTS_KEY, JSON.stringify(bag));
+        else store.removeItem?.(TAB_ACCOUNTS_KEY);
+    } catch { /* 저장이 막힌 브라우저 */ }
+}
+
+function writeActiveTab(order, at, storage, { notifyCloud = false } = {}) {
+    const clean = normalizeOrder(order);
+    const stamp = Number.isFinite(Number(at)) && Number(at) > 0 ? Math.round(Number(at)) : 0;
+    try {
+        const store = storage || liveStorage();
+        if (!store) return clean;
+        if (stamp > 0) store.setItem?.(TAB_KEY, JSON.stringify({ order: clean, at: stamp }));
+        else store.removeItem?.(TAB_KEY);
+    } catch { /* 저장이 막힌 브라우저에서는 이번 화면에서만 바뀝니다. */ }
+    try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event(TAB_EVENT));
+    } catch { /* 창 없는 시험 */ }
+    if (notifyCloud) for (const fn of listeners) { try { fn(); } catch { /* 듣는 쪽 오류는 저장을 막지 않습니다. */ } }
+    return clean;
+}
+
+/** 계정 전환: 지금 배치를 from uid 몫으로 넣고, to uid 보관분(없으면 기본·at 0)을 꺼내 씁니다. 클라우드 올리기는 부르지 않습니다. */
+export function switchTabAccount(from, to, storage) {
+    const store = storage || liveStorage();
+    const bag = readAccountBag(store);
+    if (from) {
+        const cur = tabState(store);
+        /* 로그아웃 뒤 at 0인 빈 값으로 이미 넣어 둔 좋은 보관분을 덮지 않습니다. */
+        if (cur.at > 0 || !bag[from]) bag[from] = { order: cur.order, at: cur.at };
+    }
+    const mine = to && bag[to] ? bag[to] : null;
+    if (to && bag[to]) delete bag[to];
+    writeAccountBag(bag, store);
+    if (mine && Array.isArray(mine.order)) writeActiveTab(mine.order, mine.at, store);
+    else writeActiveTab(DEFAULT_ORDER, 0, store);
+}
+
+/** 로그아웃: 지금 배치를 uid 몫으로 넣고 화면 키는 비웁니다(다음 로그인·다른 계정에 새지 않게). */
+export function parkTabAccount(uid, storage) {
+    const store = storage || liveStorage();
+    if (uid) {
+        const bag = readAccountBag(store);
+        const cur = tabState(store);
+        if (cur.at > 0 || !bag[uid]) bag[uid] = { order: cur.order, at: cur.at };
+        writeAccountBag(bag, store);
+    }
+    writeActiveTab(DEFAULT_ORDER, 0, store);
+}
+
+/** 같은 계정으로 다시 로그인: 보관분이 있으면 꺼씁니다. 없으면 지금 값(첫 로그인 전 손님 배치)을 그대로 둡니다. */
+export function adoptTabAccount(uid, storage) {
+    if (!uid) return false;
+    const store = storage || liveStorage();
+    const bag = readAccountBag(store);
+    if (!bag[uid]) return false;
+    const mine = bag[uid];
+    delete bag[uid];
+    writeAccountBag(bag, store);
+    writeActiveTab(mine.order || DEFAULT_ORDER, mine.at, store);
     return true;
 }
 
