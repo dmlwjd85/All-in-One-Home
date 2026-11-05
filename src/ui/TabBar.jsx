@@ -27,9 +27,9 @@ function TabIcon({ id }) {
     return <svg className="tbj-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">{ICONS[id]}</svg>;
 }
 
-/** 시안 C 가운데 쨈: 딸기쨈 병(주름 천 뚜껑·유리 반짝임·알갱이 쨈·딸기 라벨). 글자 「쨈」은 아래에 따로 씁니다. */
+/** 시안 C 가운데 쨈: 딸기 쨈 병(주름 천 뚜껑·유리 반짝임·알갱이 쨈·딸기 라벨). 글자 「쨈」은 아래에 따로 씁니다. */
 export function JjaemJar() {
-    /* 선생님 확정(11/6 08:25) 시안 B2: 손그림 스티커 느낌의 딸기쨈 병. 체크무늬 천 뚜껑과 리본, 흘러내리는 잼, 딸기 라벨, 흰 스티커 테두리, 작은 하트. */
+    /* 선생님 확정(11/6 08:25) 시안 B2: 손그림 스티커 느낌의 딸기 쨈 병. 체크무늬 천 뚜껑과 리본, 흘러내리는 쨈, 딸기 라벨, 흰 스티커 테두리, 작은 하트. */
     return (
         <span className="fab-disc jar-disc" aria-hidden="true">
             <span className="cup-squish">
@@ -47,7 +47,7 @@ export function JjaemJar() {
                     <path d="M14 15c5-6 31-6 36 0 2.5 1.8 3 4 1.4 6.4 4.4 4.5 7 10.5 7 17.8C58.4 55 47 67 32 67S5.6 55 5.6 39.2c0-7.3 2.6-13.3 7-17.8-1.6-2.4-1.1-4.6 1.4-6.4z" fill="#fff" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" />
                     {/* 동그란 유리병 */}
                     <path d="M13.4 24.6C10 28.4 8.4 33.4 8.4 39.4 8.4 53.6 18.6 63.6 32 63.6S55.6 53.6 55.6 39.4c0-6-1.6-11-5-14.8z" fill="#FFF8F6" stroke="#3A2A2C" strokeWidth="2" strokeLinejoin="round" />
-                    {/* 잼 */}
+                    {/* 쨈 */}
                     <path d="M11.6 34.2c3.4-1.8 6.2-.6 9.4-1.6 3.6-1.1 6.6.9 10.4-.2 4-1.2 7.4.8 11 0 3.2-.7 6.2-.4 9.4 1.6.6 1.6.9 3.4.9 5.4 0 12.2-8.6 21-20.7 21S11.3 51.8 11.3 39.6c0-2 .1-3.8.3-5.4z" fill="url(#tbj-jar-fill)" />
                     <g fill="#FFC870"><ellipse cx="19" cy="40" rx="1.1" ry=".75" /><ellipse cx="45" cy="41" rx="1.1" ry=".75" /><ellipse cx="22" cy="53" rx="1" ry=".7" /><ellipse cx="43" cy="53" rx="1" ry=".7" /><ellipse cx="16.5" cy="47" rx=".9" ry=".65" /></g>
                     {/* 유리 빛 */}
@@ -59,7 +59,7 @@ export function JjaemJar() {
                     <g fill="#FFE29A"><circle cx="30.6" cy="47.6" r=".45" /><circle cx="33.4" cy="47.8" r=".45" /><circle cx="32" cy="50" r=".45" /></g>
                     {/* 체크무늬 천 뚜껑 (주름진 끝) */}
                     <path data-part="gingham" d="M15 12.4c4.6-5 29.4-5 34 0 1.6 1.7 1.6 3.8.4 5.6 1.4 1.4 3 2.9 3.4 4.6.4 1.6-.9 2.4-2.2 1.9-1.4 1.6-3.2 1.8-4.6.6-1.6 1.6-3.8 1.6-5.2.2-1.8 1.6-4.2 1.6-5.8.1-1.6 1.5-4 1.5-5.6 0-1.6 1.5-4 1.5-5.8-.1-1.4 1.4-3.6 1.4-5.2-.2-1.4 1.2-3.2 1-4.6-.6-1.3.5-2.6-.3-2.2-1.9.4-1.7 2-3.2 3.4-4.6-1.2-1.8-1.2-3.9.4-5.6z" fill="url(#tbj-gingham)" stroke="#3A2A2C" strokeWidth="1.8" strokeLinejoin="round" />
-                    {/* 흘러내리는 잼 두 줄기 */}
+                    {/* 흘러내리는 쨈 두 줄기 */}
                     <path d="M22 25.4c.4 2.6-.2 5 1 6.4 1.2 1.4 3 .4 2.8-1.6-.2-2-.2-3.4.2-4.8z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
                     <path d="M35.6 25.8c.2 3.4-.4 7 .8 8.8 1.2 1.8 3.4.8 3.2-1.4-.2-2.4-.4-5 0-7.4z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
                     <circle cx="37.6" cy="30" r=".55" fill="#fff" opacity=".8" />
