@@ -30,9 +30,9 @@ function kindLabel(id) {
 
 function doneHeading(note, record) {
     const registered = String(note || '').match(/(\d+)개 등록했어요/);
-    const held = String(note || '').match(/(\d+)개는 정리함에/);
-    if (registered && held) return `${registered[1]}개 등록, ${held[1]}개는 정리함에`;
-    if (held && !registered && !record) return '정리함에 뒀어요';
+    const held = String(note || '').match(/(\d+)개는 임시보관함에/);
+    if (registered && held) return `${registered[1]}개 등록, ${held[1]}개는 임시보관함에`;
+    if (held && !registered && !record) return '임시보관함에 뒀어요';
     return '남겼어요';
 }
 

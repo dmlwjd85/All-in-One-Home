@@ -128,7 +128,7 @@ export function HoldToggle({ held, onToggle }) {
     return (
         <div>
             <p className="muted" style={{ margin: '8px 0 0' }}>
-                {held ? '정리함에 둡니다. 할 일 화면에서 다시 등록하거나 지울 수 있어요.' : '이번 저장에 넣어요.'}
+                {held ? '임시보관함에 둡니다. 할 일 화면에서 확정하거나 지울 수 있어요.' : '이번 저장에 넣어요.'}
             </p>
             <Btn className={held ? 'chip block' : 'chip on block'} style={{ marginTop: 8 }} onClick={onToggle}>{held ? '지금 저장' : '나중에 정리'}</Btn>
         </div>

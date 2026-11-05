@@ -1388,8 +1388,8 @@ try {
         check(week.includes('14:00–16:00') && week.includes('학부모 진로 특강'), `끝 시각이 ${label} 주간에 보이지 않습니다.`);
         async function showCalendar(monthTitle = '') {
             await page.evaluate(() => { location.hash = '#/schedule'; });
-            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
             await page.waitForSelector('.cal-grid');
             if (!monthTitle) return;
             for (let back = 0; back < 8; back += 1) {
@@ -1459,8 +1459,8 @@ try {
     async function calendarPanel(page) {
         const todayHash = `#/schedule/month/${todayYmd}`;
         await page.evaluate(() => { location.hash = '#/schedule'; });
-        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         await page.waitForSelector('.cal-grid');
         const todayRing = await page.evaluate(() => {
@@ -1476,7 +1476,7 @@ try {
         const opened = await page.evaluate(() => ({
             panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
             today: document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false,
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
         }));
         check(opened.panel === todayYmd && opened.today && opened.monthOn, `달력을 열면 오늘 패널이 아닙니다. ${JSON.stringify(opened)}`);
         const lenBeforeCells = await page.evaluate(() => history.length);
@@ -1558,8 +1558,8 @@ try {
         await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${picked}`);
         const back = await page.evaluate(() => ({
             panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
             grid: Boolean(document.querySelector('.cal-grid')),
         }));
         check(back.panel === picked && back.monthOn && !back.weekOn && back.grid, `일지에서 돌아오면 달력 보기가 풀립니다. ${JSON.stringify(back)}`);
@@ -1570,25 +1570,25 @@ try {
         await page.evaluate(() => { location.hash = '#/schedule/month'; });
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         const bareMonth = await page.evaluate(() => ({
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
             grid: Boolean(document.querySelector('.cal-grid')),
         }));
         check(bareMonth.monthOn && !bareMonth.weekOn && bareMonth.grid, `날짜 없는 달력이 주 보기로 열립니다. ${JSON.stringify(bareMonth)}`);
         await page.evaluate(() => { location.hash = '#/schedule/month/2026-02-30'; });
         await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, todayHash);
-        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')));
+        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')));
         check(badMonth, '잘못된 달력 날짜가 주 보기로 열립니다.');
         await page.evaluate(() => { location.hash = '#/schedule/table'; });
         await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/table/${todayYmd}`);
         const bareTable = await page.evaluate(() => ({
             tableOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
         }));
         check(bareTable.tableOn && !bareTable.weekOn, `날짜 없는 시간표가 주 보기로 열립니다. ${JSON.stringify(bareTable)}`);
         await page.evaluate(() => { location.hash = '#/schedule/table/2026-13-01'; });
         await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, `#/schedule/table/${todayYmd}`);
-        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')));
+        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')));
         check(badTable, '잘못된 시간표 날짜가 주 보기로 열립니다.');
         await audit(page, '달력 패널');
     }
@@ -1597,8 +1597,8 @@ try {
     async function darkTodayContrast(width) {
         await withDemo(width, 'dark', async (page) => {
             await page.evaluate(() => { location.hash = '#/schedule'; });
-            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
             await page.waitForSelector('.cal-today .num');
             const ratio = await page.evaluate(() => {
                 const style = getComputedStyle(document.querySelector('.cal-today .num'));
@@ -2092,17 +2092,17 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
         await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('정리함에 뒀어요'));
+        await page.waitForFunction(() => document.body.innerText.includes('임시보관함에 뒀어요'));
         await page.evaluate(() => { location.hash = '#/todo'; });
-        await page.waitForFunction(() => document.body.innerText.includes('정리함') && document.body.innerText.includes('과학도서'));
+        await page.waitForFunction(() => document.body.innerText.includes('임시보관함') && document.body.innerText.includes('과학도서'));
         const parked = await page.evaluate(() => {
-            const inbox = document.querySelector('[aria-label="정리함"]');
+            const inbox = document.querySelector('[aria-label="임시보관함"]');
             return {
                 inbox: inbox?.innerText || '',
                 titles: [...document.querySelectorAll('.todo-title')].filter((el) => !inbox?.contains(el)).map((el) => el.innerText),
             };
         });
-        check(parked.inbox.includes('과학도서'), '나중에 정리한 콕 항목이 정리함에 없습니다.');
+        check(parked.inbox.includes('과학도서'), '나중에 정리한 콕 항목이 임시보관함에 없습니다.');
         check(!parked.titles.some((text) => text.includes('과학도서')), '나중에 정리한 콕 항목이 할 일로 등록되었습니다.');
         await page.type('[aria-label="할 일"]', '독서기록 12/31까지');
         await page.keyboard.press('Enter');
@@ -3017,7 +3017,7 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] .msg-card button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
         await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 정리함에'));
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 임시보관함에'));
     }, 844);
     // 숨은 반대쪽 행과 메모 민감어: 알림장·하루 메모·일정 줄을 실제 화면으로 고칩니다.
     await withDemo(390, 'light', async (page) => {

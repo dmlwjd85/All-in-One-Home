@@ -196,7 +196,7 @@ export function Home() {
                     {follows.map((row) => <p key={row.id} style={{ margin: 0 }}>다시 보기 · {studentName(data.students, row.sid) || '상담'}</p>)}
                     {!todos.length && <p className="muted" style={{ margin: 0 }}>오늘 발라 둔 할 일이 없어요.</p>}
                     {(data.inbox || []).length > 0 && (
-                        <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>정리함 {(data.inbox || []).length}개</Btn>
+                        <Btn onClick={() => go('#/todo')} style={{ justifyContent: 'flex-start', minHeight: 44, fontWeight: 800 }}>임시보관함 {(data.inbox || []).length}개</Btn>
                     )}
                 </div>
             </FoldCard>

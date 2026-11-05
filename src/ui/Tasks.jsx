@@ -43,8 +43,8 @@ export function Tasks() {
             }}>
                 <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
             </form>
-            <section aria-label="정리함" style={{ marginTop: 16 }}>
-                <h3 style={{ marginBottom: 8 }}>정리함</h3>
+            <section aria-label="임시보관함" style={{ marginTop: 16 }}>
+                <h3 style={{ marginBottom: 8 }}>임시보관함</h3>
                 {!inbox.length && <p className="muted">빼 둔 항목이 없어요. 메시지에서 나중에 정리를 고르면 여기에 남아요.</p>}
                 {inbox.map((row) => (
                     <article key={row.id} className="todo-block">
@@ -53,17 +53,17 @@ export function Tasks() {
                                 <span className="todo-title">{row.kind} · {row.title}</span>
                             </div>
                             {row.date ? <span className="todo-due num">{dueLabel(row.date, clock.ymd)}</span> : null}
-                            <Btn className="icon-btn" aria-label="정리함에서 지우기" onClick={async () => {
+                            <Btn className="icon-btn" aria-label="임시보관함에서 지우기" onClick={async () => {
                                 const failed = await dropInbox(row.id);
-                                if (!failed?.storageFailed) showToast('정리함에서 지웠어요.', true);
+                                if (!failed?.storageFailed) showToast('임시보관함에서 지웠어요.', true);
                             }}><IconTrash /></Btn>
                         </div>
                         {row.warning ? <p className="muted" style={{ margin: '4px 0' }}>{row.warning}</p> : null}
                         <Btn className="chip" style={{ minHeight: 44 }} onClick={async () => {
                             const result = await promoteInbox(row.id);
                             if (result?.storageFailed) return;
-                            showToast(result.ok ? '다시 등록했어요.' : (result.message || '다시 등록하지 못했어요.'));
-                        }}>다시 등록</Btn>
+                            showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'));
+                        }}>확정하기</Btn>
                     </article>
                 ))}
             </section>

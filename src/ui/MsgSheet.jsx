@@ -194,7 +194,7 @@ export function MsgSheet({ onClose }) {
 
     const count = items.filter((item) => item.include !== false).length;
     const heldCount = items.filter((item) => item.include === false && String(item.title || '').trim() && !item.duplicate).length;
-    const saveLabel = !count && heldCount ? `0개 등록, 정리함 ${heldCount}개` : `${count}개 등록`;
+    const saveLabel = !count && heldCount ? `0개 등록, 임시보관함 ${heldCount}개` : `${count}개 등록`;
 
     return (
         <div className="sheet-back" onClick={onClose}>
