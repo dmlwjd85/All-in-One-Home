@@ -1132,7 +1132,8 @@ function relocate(draft, bucket, row, local, from) {
         draft[bucket] = dropId(draft[bucket], row.id);
     }
     if (!local && from === 'local') draft.local[bucket] = dropId(draft.local[bucket], row.id);
-    put(local ? draft.local[bucket] : draft[bucket], { ...row, source: row.source || 'app' });
+    const { localOnly: _localOnlyFlag, ...stored } = row;
+    put(local ? draft.local[bucket] : draft[bucket], { ...stored, source: stored.source || 'app' });
     return draft;
 }
 

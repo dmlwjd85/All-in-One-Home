@@ -763,35 +763,40 @@ try {
             await page.evaluate(() => { location.hash = '#/settings'; });
             await delay(250);
             await page.waitForSelector('[data-screen="hotkeys"]');
-            const row = await page.evaluate(() => {
-                const el = document.querySelector('[data-screen="hotkeys"] .hotkey-row');
-                if (!el) return { missing: true };
-                const label = el.querySelector(':scope > span');
-                const key = el.querySelector('.hotkey-key');
-                const list = el.closest('.hotkey-list');
-                if (!label || !key || !list) return { missing: true };
-                const a = label.getBoundingClientRect();
-                const b = key.getBoundingClientRect();
-                const listBox = list.getBoundingClientRect();
-                const sameRow = Math.abs(a.top - b.top) < 24;
-                const gap = sameRow ? (b.left - a.right) : Number.POSITIVE_INFINITY;
-                return {
-                    gap: Math.round(gap * 10) / 10,
-                    listW: Math.round(listBox.width),
-                    sameRow,
-                    overflowX: el.scrollWidth > el.clientWidth + 1 || list.scrollWidth > list.clientWidth + 1,
-                };
+            const hotkeyGaps = await page.evaluate(() => {
+                const root = document.querySelector('[data-screen="hotkeys"] .hotkey-lists')
+                    || document.querySelector('[data-screen="hotkeys"]');
+                if (!root) return { missing: true };
+                const labels = [...root.querySelectorAll('.hotkey-row > span')];
+                const keys = [...root.querySelectorAll('.hotkey-key')];
+                const n = Math.min(labels.length, keys.length);
+                if (!n) return { missing: true };
+                const rows = [];
+                for (let i = 0; i < n; i += 1) {
+                    const a = labels[i].getBoundingClientRect();
+                    const b = keys[i].getBoundingClientRect();
+                    if (a.width <= 0 || b.width <= 0) continue;
+                    const sameRow = Math.abs(a.top - b.top) < 28;
+                    const gap = sameRow ? (b.left - a.right) : Number.POSITIVE_INFINITY;
+                    rows.push({ gap: Math.round(gap * 10) / 10, sameRow, keyX: Math.round(b.left) });
+                }
+                const box = (document.querySelector('[data-screen="hotkeys"] .hotkey-lists')
+                    || document.querySelector('[data-screen="hotkeys"] .hotkey-list'))?.getBoundingClientRect();
+                const listW = Math.round(box?.width || 0);
+                return { missing: false, rows, listW };
             });
-            if (row.missing) {
+            if (hotkeyGaps.missing) {
                 check(width < 900, `단축키 목록이 ${width}에서 없습니다.`);
                 return;
             }
-            check(!row.overflowX, `단축키 줄이 ${width}에서 가로로 넘칩니다: ${JSON.stringify(row)}`);
+            check(hotkeyGaps.rows.length > 0, `단축키 줄을 ${width}에서 재지 못했습니다.`);
             if (width >= 1440) {
+                const far = hotkeyGaps.rows.filter((row) => !row.sameRow || row.gap < 0 || row.gap > 40);
                 check(
-                    (row.sameRow && row.gap >= 0 && row.gap <= 16) || row.listW <= 640,
-                    `단축키 이름·키 간격이 ${width}에서 멀습니다: ${JSON.stringify(row)}`,
+                    far.length === 0,
+                    `단축키 이름·키 간격이 ${width}에서 40px를 넘습니다: ${JSON.stringify({ listW: hotkeyGaps.listW, far: far.slice(0, 5), sample: hotkeyGaps.rows.slice(0, 3) })}`,
                 );
+                check(hotkeyGaps.listW <= 640, `단축키 목록 너비가 ${width}에서 640을 넘습니다: ${hotkeyGaps.listW}`);
             }
         }, width >= 900 ? 900 : 844);
     }

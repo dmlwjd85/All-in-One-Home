@@ -263,20 +263,31 @@ a.chip,
 .moved-note .chip {
     flex: 0 0 auto;
 }
-.hotkey-list {
+.hotkey-lists {
     display: grid;
-    gap: 4px;
+    grid-template-columns: max-content 104px;
+    column-gap: 12px;
+    row-gap: 4px;
     max-width: 640px;
-}
-.hotkey-row {
-    display: flex;
-    flex-wrap: wrap;
+    width: max-content;
     align-items: center;
-    gap: 12px;
+    justify-content: start;
 }
-.hotkey-row > span { min-width: 0; flex: 0 1 auto; overflow-wrap: anywhere; line-height: 1.25; }
+.hotkey-group,
+.hotkey-list,
+.hotkey-row { display: contents; }
+.hotkey-group-label {
+    grid-column: 1 / -1;
+    justify-self: start;
+}
+.hotkey-row > span {
+    justify-self: end;
+    text-align: right;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+}
 .hotkey-key {
-    flex: 0 0 auto;
     width: 104px;
     max-width: 100%;
     text-align: center;
@@ -579,6 +590,17 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
 .cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cal-month {
+    width: 100%;
+    max-width: 840px;
+    margin-inline: auto;
+}
+.cal-month-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
 .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -587,6 +609,7 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
     max-width: 840px;
     margin-inline: auto;
 }
+.cal-grid .tap { min-height: 44px; }
 @media (min-width: 1024px) {
     .cal-grid .tap { min-height: 72px; }
     .cal-event-title { font-size: 12px; line-height: 14px; letter-spacing: 0; }
@@ -1121,14 +1144,26 @@ button.glass[aria-pressed="true"]:active {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 10px;
-    line-height: 12px;
+    font-size: 9px;
+    line-height: 11px;
     font-weight: 400;
     text-align: left;
     color: var(--ink);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.04em;
 }
 .cal-event-title.is-google { color: var(--st-early); font-weight: 400; }
+@media (max-width: 389px) {
+    .cal-event-title {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        text-overflow: ellipsis;
+        max-height: 22px;
+        letter-spacing: -0.05em;
+    }
+}
 @media (min-width: 390px) {
     .cal-event-title { font-size: 11px; line-height: 13px; letter-spacing: 0; }
 }

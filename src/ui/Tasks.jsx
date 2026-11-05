@@ -62,7 +62,7 @@ export function Tasks() {
                         <Btn className="chip" style={{ minHeight: 44 }} onClick={async () => {
                             const result = await promoteInbox(row.id);
                             if (result?.storageFailed) return;
-                            showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'));
+                            showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'), Boolean(result.ok));
                         }}>확정하기</Btn>
                     </article>
                 ))}

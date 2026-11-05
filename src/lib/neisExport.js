@@ -1,7 +1,22 @@
 /** 나이스 모아 보기 CSV·인쇄용 이스케이프. */
+
+/** 엑셀 수식으로 읽힐 위험한 접두만 가립니다. -5·「- 글머리」는 그대로 둡니다. */
+function needsCsvFormulaGuard(text) {
+    const stripped = String(text).replace(/^[\t\r\n \u00a0]+/, '');
+    if (!stripped) return false;
+    const ch = stripped[0];
+    if ('=@+＝＠＋'.includes(ch)) return true;
+    if (ch === '-' || ch === '－') {
+        if (/^[-－]\d+(\.\d+)?$/.test(stripped)) return false;
+        if (/^[-－] /.test(stripped)) return false;
+        return true;
+    }
+    return false;
+}
+
 export function csvEscape(value) {
     let text = String(value ?? '');
-    if (/^[=+\-@]/.test(text)) text = `'${text}`;
+    if (needsCsvFormulaGuard(text)) text = `'${text}`;
     if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
     return text;
 }

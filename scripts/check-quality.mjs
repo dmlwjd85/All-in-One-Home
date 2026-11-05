@@ -527,29 +527,55 @@ check(missingTable.params.view === '시간표' && missingTable.params.date === '
 
 /** PR #68: 메뉴 순서·CSV·삭제 확인·월간 제목·단축키 간격을 지키는 검사. */
 check(MENU.map((row) => row[0]).join('|') === '오늘|출결|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
-check(csvEscape('=1+1') === "'=1+1" && csvEscape('+2') === "'+2" && csvEscape('-3') === "'-3" && csvEscape('@A1') === "'@A1", 'CSV 수식 앞 글자에 따옴표를 붙이지 않습니다.');
+check(csvEscape('=1+1') === "'=1+1" && csvEscape('+2') === "'+2" && csvEscape('@A1') === "'@A1", 'CSV 수식 앞 글자에 따옴표를 붙이지 않습니다.');
+check(csvEscape('-5') === '-5' && csvEscape('- 글머리') === '- 글머리', '정상 음수·글머리에도 CSV 따옴표를 붙입니다.');
+check(csvEscape('-=1') === "'-=1" && csvEscape('＝1+1') === "'＝1+1", '위험한 대시·전각 등호를 막지 않습니다.');
+check(csvEscape('\t=1') === "'\t=1" && csvEscape(' =1') === "' =1" && csvEscape('\r=CMD') === "\"'\r=CMD\"", '탭·공백·CR로 가린 수식을 막지 않습니다.');
 check(csvEscape('안녕,세계') === '"안녕,세계"' && csvEscape('a"b') === '"a""b"', 'CSV 쉼표·따옴표 이스케이프가 깨졌습니다.');
 check(htmlEscape('<img src=x onerror=1>') === '&lt;img src=x onerror=1&gt;' && htmlEscape(`a&b"c'd`) === 'a&amp;b&quot;c&#39;d', '인쇄 HTML 이스케이프가 깨졌습니다.');
 const studentsSrc = readFileSync(`${root}/src/ui/Students.jsx`, 'utf8');
 check(studentsSrc.includes("window.confirm('이 기록을 지울까요?')"), '학생 기록 삭제 확인이 없습니다.');
 check(studentsSrc.includes('seoulYmd()') && !studentsSrc.includes("toISOString().slice(0, 10)"), '나이스 파일 이름이 한국 날짜가 아닙니다.');
 check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력</Btn>'), '출력 머리나 단추 문구가 빠졌습니다.');
+check(studentsSrc.includes('htmlEscape(head)') && studentsSrc.includes('htmlEscape(row.date') && studentsSrc.includes('htmlEscape(row.kind') && studentsSrc.includes('htmlEscape((row.tags') && studentsSrc.includes("htmlEscape(row.text"), '출력 HTML에서 htmlEscape 호출이 빠졌습니다.');
+check(studentsSrc.includes('.map(csvEscape)') || studentsSrc.includes('].map(csvEscape)'), 'CSV에서 csvEscape를 쓰지 않습니다.');
+check(studentsSrc.includes("event.key === 'Escape'") && studentsSrc.includes('cancelEdit'), '기록 수정 Esc 취소가 없습니다.');
+check(studentsSrc.includes('event.ctrlKey || event.metaKey') && studentsSrc.includes("event.key === 'Enter'"), '기록 수정 Ctrl+Enter 저장이 없습니다.');
+check(studentsSrc.includes('focusEditButton') && studentsSrc.includes('data-edit-for'), '기록 수정 후 포커스 복귀가 없습니다.');
+check(studentsSrc.includes('>나이스 모아 보기</Btn>') || studentsSrc.includes('나이스 모아 보기</Btn>'), '학생 화면 칩 제목이 나이스 모아 보기가 아닙니다.');
+const appSrc = readFileSync(`${root}/src/App.jsx`, 'utf8');
+check(appSrc.includes("neis: ['나이스 모아 보기'"), '화면 제목이 나이스 모아 보기가 아닙니다.');
+check(!appSrc.includes("neis: ['나이스에 옮길 것'"), '옛 나이스 제목이 App에 남아 있습니다.');
 const scheduleSrc = readFileSync(`${root}/src/ui/Schedule.jsx`, 'utf8');
 check(scheduleSrc.includes("className={row.google ? 'cal-event-title is-google' : 'cal-event-title'}") && scheduleSrc.includes('titleNames'), '월간 칸에 일정 제목이 없습니다.');
+check(scheduleSrc.includes('className="cal-month"') && scheduleSrc.includes('cal-month-head'), '월간 머리·패널 너비 상자가 없습니다.');
+check(!/minHeight:\s*44/.test(scheduleSrc), '월간 칸 인라인 minHeight:44가 데스크톱 72px를 가립니다.');
 const cssSrc = readFileSync(`${root}/src/index.css`, 'utf8');
-const hotkeyListCss = cssSrc.match(/\.hotkey-list\s*\{[^}]+\}/)?.[0] || '';
+const hotkeyListCss = cssSrc.match(/\.hotkey-lists\s*\{[^}]+\}/)?.[0] || cssSrc.match(/\.hotkey-list\s*\{[^}]+\}/)?.[0] || '';
 const hotkeyRowCss = cssSrc.match(/\.hotkey-row\s*\{[^}]+\}/)?.[0] || '';
+const hotkeyKeyCss = cssSrc.match(/\.hotkey-key\s*\{[^}]+\}/)?.[0] || '';
 const hotkeyListMax = Number((hotkeyListCss.match(/max-width:\s*(\d+)px/) || [])[1] || 0);
-const hotkeyRowGap = Number((hotkeyRowCss.match(/(?:^|[^-])gap:\s*(\d+)px/) || hotkeyRowCss.match(/column-gap:\s*(\d+)px/) || [])[1] || 0);
-check(/gap:\s*4px/.test(hotkeyListCss), '단축키 목록 줄 간격이 4px가 아닙니다.');
+const hotkeyGap = Number((hotkeyListCss.match(/column-gap:\s*(\d+)px/) || hotkeyListCss.match(/(?:^|[^-])gap:\s*(\d+)px/) || hotkeyRowCss.match(/column-gap:\s*(\d+)px/) || hotkeyRowCss.match(/(?:^|[^-])gap:\s*(\d+)px/) || [])[1] || 0);
+check(/row-gap:\s*4px/.test(hotkeyListCss) || /gap:\s*4px/.test(hotkeyListCss), '단축키 목록 줄 간격이 4px가 아닙니다.');
 check(hotkeyListMax >= 520 && hotkeyListMax <= 640, `단축키 목록 최대 너비가 ${hotkeyListMax || '없음'}입니다.`);
-check(hotkeyRowGap >= 12 && hotkeyRowGap <= 16, `단축키 이름·키 칸 간격이 ${hotkeyRowGap || '없음'}입니다.`);
-check(!/minmax\(0,\s*1fr\)/.test(hotkeyRowCss), '단축키 줄이 1fr로 이름과 키를 멀리 벌립니다.');
+check(hotkeyGap >= 12 && hotkeyGap <= 16, `단축키 이름·키 칸 간격이 ${hotkeyGap || '없음'}입니다.`);
+check(!/1fr/.test(hotkeyListCss) && !/1fr/.test(hotkeyRowCss), '단축키 줄이 1fr로 이름과 키를 멀리 벌립니다.');
+check(!/margin-left:\s*auto/.test(hotkeyKeyCss) && !/margin-left:\s*auto/.test(hotkeyRowCss), '단축키 키 칸이 margin-left:auto로 밀립니다.');
+check(cssSrc.includes('display: contents') && (cssSrc.includes('.hotkey-lists') || cssSrc.includes('display:contents')), '단축키 키 칸 세로 정렬용 contents 그리드가 없습니다.');
 check(cssSrc.includes('.cal-event-title') && cssSrc.includes('font-weight: 400'), '월간 제목 스타일이 빠졌습니다.');
-check(/cal-today \.num[\s\S]*?max-width:\s*24px/.test(cssSrc) || cssSrc.includes('.cal-grid .tap.cal-today .num'), '월간 오늘 동그라미 너비 제한이 없습니다.');
+const todayIdx = cssSrc.indexOf('.cal-grid .tap.cal-today .num,');
+const todayBlock = todayIdx >= 0 ? cssSrc.slice(todayIdx, todayIdx + 420) : '';
+check(/max-width:\s*24px/.test(todayBlock) && /(?:^|\n)\s*width:\s*24px/m.test(todayBlock) && /height:\s*24px/.test(todayBlock) && /border-radius:\s*999px/.test(todayBlock), '월간 오늘 동그라미가 24px 원으로 고정되지 않았습니다.');
+check(/\.cal-month\s*\{[^}]*max-width:\s*840px/.test(cssSrc) && /\.cal-grid\s*\{[^}]*max-width:\s*840px/.test(cssSrc), '월간 달력 840px 상한이 없습니다.');
+check(/\.cal-grid\s+\.tap\s*\{[^}]*min-height:\s*44px/.test(cssSrc) && /@media\s*\(min-width:\s*1024px\)[\s\S]{0,180}?\.cal-grid\s+\.tap\s*\{[^}]*min-height:\s*72px/.test(cssSrc), '월간 칸 높이가 44/72로 나뉘지 않습니다.');
 const browserSrc = readFileSync(`${root}/scripts/check-browser.mjs`, 'utf8');
 check(browserSrc.includes("querySelector('.cal-event-title')") && !browserSrc.includes("innerText.includes('·')"), '브라우저 검사가 월간 제목 대신 · 점을 찾습니다.');
+check(browserSrc.includes('hotkeyGaps') || browserSrc.includes('이름·키 간격'), '브라우저 단축키 간격 검사가 없습니다.');
 check(seoulYmd(new Date('2026-11-05T00:30:00+09:00')) === '2026-11-05' && seoulYmd(new Date('2026-11-04T15:30:00Z')) === '2026-11-05', '한국 날짜 도우미가 UTC와 어긋납니다.');
+const dbSrc = readFileSync(`${root}/src/lib/db.js`, 'utf8');
+check(dbSrc.includes('localOnly: _localOnlyFlag') || dbSrc.includes('localOnly:') && dbSrc.includes('relocate') && /localOnly:\s*_/.test(dbSrc), '저장 시 localOnly 표시를 걷지 않습니다.');
+const tasksSrc = readFileSync(`${root}/src/ui/Tasks.jsx`, 'utf8');
+check(/showToast\(result\.ok \? '확정했어요\.'[\s\S]*?,\s*Boolean\(result\.ok\)\)/.test(tasksSrc) || tasksSrc.includes("showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'), Boolean(result.ok))"), '임시보관함 확정 토스트에 되돌리기가 없습니다.');
 
 
 const hotStore = {
