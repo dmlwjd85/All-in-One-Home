@@ -350,3 +350,150 @@ html.dark .foil-fab .fab-disc.jar-disc {
         0 6px 0 #0E0C0B,
         0 12px 16px rgba(0, 0, 0, .5);
 }
+
+/* ───────── 시안 C 키캡·클레이(선생님 확정 11/6, 탭바 C 목업) ─────────
+   바: 클레이 알약. 옆 칸: 오목한 홈 안의 키캡. 가운데 쨈: 바 위로 솟은 큰 키캡(쨈색 링·두꺼운 측면).
+   누르면(is-pressed) 가로로 넓어지며 납작하게 70ms, 떼면 0.46초 동안 통 튀어 올랐다 제자리(시그니처). 소리·진동은 pressFeel 그대로. */
+@media (min-width: 341px) {
+    .tabbar.tabbar-jelly {
+        left: 8px;
+        right: 8px;
+        padding: 6px 4px 8px;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) 60px repeat(3, minmax(0, 1fr));
+        justify-items: center;
+        min-height: 70px;
+    }
+}
+.tabbar.tabbar-jelly {
+    border-color: #2C2622;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, .7), transparent 42%),
+        linear-gradient(180deg, #F7F4EF, #D8D0C4);
+    box-shadow:
+        inset 0 2.5px 4px #fff,
+        inset 0 -5px 10px rgba(0, 0, 0, .1),
+        0 7px 0 #9A9084,
+        0 16px 28px rgba(34, 30, 28, .22);
+}
+.tabbar.tabbar-jelly .tab-jelly { width: 100%; }
+@media (min-width: 301px) {
+    /* 키 자리 오목 홈 */
+    .tbj-ico, .tab-jelly.is-on .tbj-ico {
+        width: 38px;
+        height: 34px;
+        border-radius: 11px;
+        background: linear-gradient(180deg, #C8BFB4, #E4DCD2);
+        box-shadow: inset 0 4px 7px rgba(0, 0, 0, .2), inset 0 -1px 0 rgba(255, 255, 255, .4), 0 1px 0 rgba(255, 255, 255, .5);
+    }
+    .tab-jelly.is-on .tbj-ico {
+        background: linear-gradient(180deg, #B07888, #E0B0BC);
+        box-shadow: inset 0 6px 9px rgba(90, 15, 35, .4), inset 0 1px 0 rgba(60, 8, 24, .15), inset 0 -1px 0 rgba(255, 255, 255, .3);
+    }
+    /* 키캡(측면 단 네 겹) */
+    .tbj-sticker {
+        width: 30px;
+        height: 26px;
+        border-radius: 9px 9px 8px 8px;
+        transform: translateY(-3px);
+        transform-origin: 50% 90%;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, .75) 0%, transparent 38%),
+            linear-gradient(180deg, #FFFCFA 0%, #EFEAE4 48%, #D0C6BA 100%);
+        box-shadow:
+            inset 0 2.5px 2px #fff,
+            inset 0 -4px 5px rgba(0, 0, 0, .16),
+            inset 2px 0 2px rgba(255, 255, 255, .4),
+            0 1px 0 #C0B6A8,
+            0 2px 0 #AFA59A,
+            0 3px 0 #9A9084,
+            0 4px 0 #8A8074,
+            0 6px 10px rgba(34, 30, 28, .24);
+    }
+    .tbj-sticker::before { top: 2px; left: 4px; right: 4px; width: auto; height: 9px; border-radius: 6px; background: linear-gradient(180deg, rgba(255, 255, 255, .85), rgba(255, 255, 255, .15) 70%, transparent); box-shadow: none; }
+    .tbj-sticker::after { display: none; }
+    .tab-jelly.is-on .tbj-sticker,
+    .tab-jelly.is-on.is-squish .tbj-sticker {
+        transform: translateY(1px);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, .5) 0%, transparent 32%),
+            linear-gradient(180deg, #FFD0DC, #E84B68 50%, #8F1E38);
+        box-shadow:
+            inset 0 4px 6px rgba(255, 255, 255, .4),
+            inset 0 -4px 6px rgba(0, 0, 0, .32),
+            0 1px 0 #6A1830,
+            0 2px 5px rgba(90, 15, 35, .4);
+    }
+    .tab-jelly.is-on .tbj-svg { filter: brightness(0) invert(1) drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
+    .tab-jelly.is-squish .tbj-sticker {
+        transform: translateY(1px) scale(1.06, .9);
+        box-shadow: inset 0 2px 2px #fff, inset 0 -2px 3px rgba(0, 0, 0, .16), 0 1px 0 #AFA59A, 0 2px 4px rgba(34, 30, 28, .2);
+    }
+    .tbj-svg { width: 17px; height: 17px; }
+    html:not(.dark) .tbj-label { color: #4A433D; }
+    html:not(.dark) .tab-jelly.is-on .tbj-label { color: #8E1E3E; }
+
+    /* 가운데 쨈 키캡 */
+    .tabbar.tabbar-jelly .fab.tbj-mid { margin-top: -42px; gap: 17px; padding: 0 0 1px; min-width: 52px; background: transparent; box-shadow: none; }
+    .foil-fab .fab-disc.jar-disc,
+    html.dark .foil-fab .fab-disc.jar-disc {
+        position: relative;
+        width: 60px;
+        height: 60px;
+        border-radius: 19px;
+        border: 3px solid #2C2622;
+        display: grid;
+        place-items: center;
+        transform-origin: 50% 92%;
+        background:
+            radial-gradient(circle at 50% 28%, rgba(255, 214, 224, .6), transparent 58%),
+            linear-gradient(180deg, rgba(255, 255, 255, .92) 0%, transparent 40%),
+            linear-gradient(180deg, #FFFDF8, #FFF1E6 50%, #F2D9C8);
+        box-shadow:
+            0 0 0 3px #E84B68,
+            inset 0 4px 3px #fff,
+            inset 0 -5px 8px rgba(160, 30, 66, .18),
+            0 3px 0 3px #A01E42,
+            0 6px 0 3px #7E1634,
+            0 12px 0 3px #5E1027,
+            0 20px 28px rgba(160, 30, 66, .4),
+            0 8px 16px rgba(34, 30, 28, .26);
+        transition: transform .46s cubic-bezier(.28, 1.9, .42, .9), box-shadow .46s cubic-bezier(.28, 1.9, .42, .9);
+    }
+    .jar-disc::before { top: 4px; left: 7px; right: 7px; width: auto; height: 18px; border-radius: 11px; background: linear-gradient(180deg, rgba(255, 255, 255, .8), rgba(255, 255, 255, .15) 70%, transparent); }
+    .jar-svg { width: 36px; height: 40px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .22)) drop-shadow(0 4px 5px rgba(160, 30, 66, .2)); }
+    .foil-fab.is-pressed .fab-disc.jar-disc,
+    html.dark .foil-fab.is-pressed .fab-disc.jar-disc {
+        transform: translateY(10px) scale(1.12, .84);
+        transition: transform .07s cubic-bezier(.2, .8, .3, 1), box-shadow .07s cubic-bezier(.2, .8, .3, 1);
+        box-shadow:
+            0 0 0 3px #E84B68,
+            inset 0 6px 10px rgba(120, 20, 45, .32),
+            inset 0 -2px 4px rgba(255, 255, 255, .25),
+            0 1px 0 2px #A01E42,
+            0 2px 0 2px #7E1634,
+            0 4px 8px rgba(160, 30, 66, .28);
+    }
+    .tabbar.tabbar-jelly .tbj-mid .fab-txt { font-size: 11px; color: #A01E42; }
+}
+/* 320~340px: 칸이 좁아 가운데 키캡을 44px로 줄입니다. */
+@media (min-width: 301px) and (max-width: 340px) {
+    .tabbar.tabbar-jelly .fab.tbj-mid { margin-top: -30px; gap: 13px; min-width: 44px; }
+    .foil-fab .fab-disc.jar-disc, html.dark .foil-fab .fab-disc.jar-disc { width: 44px; height: 44px; border-radius: 14px; }
+    .jar-svg { width: 28px; height: 31px; }
+}
+html.dark .tabbar.tabbar-jelly {
+    background: linear-gradient(180deg, #3A3236 0%, #2D272A 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08), 0 6px 0 #0E0C0B, 0 12px 24px rgba(0, 0, 0, .45);
+}
+@media (prefers-reduced-motion: reduce) {
+    .foil-fab .fab-disc.jar-disc, .foil-fab.is-pressed .fab-disc.jar-disc { transition: none; }
+    .foil-fab.is-pressed .fab-disc.jar-disc { transform: translateY(4px); }
+}
+/* C: 가운데 키캡이 바 위로 34px 솟아 있으니, 빠른 입력 팝업은 그만큼 더 위에서 열어 키캡과 겹치지 않게 합니다. */
+@media (max-width: 899px) {
+    body .quick-bar { --quick-bottom: calc(70px + env(safe-area-inset-bottom) + 46px); }
+}
+/* C: 알림(토스트)도 솟은 가운데 키캡 위에 뜨게 올립니다. */
+@media (max-width: 899px) {
+    body .toast { bottom: calc(96px + env(safe-area-inset-bottom) + 14px); }
+}

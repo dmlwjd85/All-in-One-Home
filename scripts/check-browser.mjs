@@ -3357,7 +3357,8 @@ try {
             await withDemo(width, mode, async (page) => {
                 const selector = width >= 900 ? '.desk-fab' : '.tabbar .fab';
                 /* 탭바 시안 A: 휴대폰 가운데는 48px 젤리 접시 + 아래 단단한 6px 두께 그림자. 넓은 화면 키캡은 그대로 60px. */
-                const size = width >= 900 ? 60 : 48;
+                /* 탭바 C(선생님 확정 11/6): 모바일 가운데 쨈도 60px 키캡으로 키웠습니다. */
+                const size = 60;
                 const shadowRe = width >= 900 ? /\b0px 6px 20px -6px\b/ : /\b0px 6px 0px\b/;
                 const cap = await page.evaluate((sel) => {
                     const el = document.querySelector(sel);

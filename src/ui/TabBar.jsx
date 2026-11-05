@@ -27,16 +27,39 @@ function TabIcon({ id }) {
     return <svg className="tbj-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">{ICONS[id]}</svg>;
 }
 
-/** PDF팀 웹용 쨈 병 아이콘(글자 없는 판, gyomu/2027-build/아이콘_웹용)을 그대로 옮겼습니다. 글자 「쨈」은 아래에 따로 씁니다. */
+/** 시안 C 가운데 쨈: 딸기쨈 병(주름 천 뚜껑·유리 반짝임·알갱이 쨈·딸기 라벨). 글자 「쨈」은 아래에 따로 씁니다. */
 export function JjaemJar() {
     return (
         <span className="fab-disc jar-disc" aria-hidden="true">
             <span className="cup-squish">
-                <svg className="jar-svg" viewBox="0 0 120 130" aria-hidden="true">
-                    <rect x="26" y="8" width="68" height="20" rx="7" fill="#FFD45E" stroke="#fff" strokeWidth="3" />
-                    <path d="M30 30h60c6 0 9 5 9 10v12c0 4 4 8 4 14v44c0 9-7 14-15 14H32c-8 0-15-5-15-14V66c0-6 4-10 4-14V40c0-5 3-10 9-10z" fill="#fff" stroke="#E9DED6" strokeWidth="3" />
-                    <path d="M26 30h68v6c0 4-3 6-6 6-3 0-5 2-5 6v6c0 3-2 5-4.5 5S74 57 74 54v-8c0-3-2-4-4-4H52c-2 0-3 2-3 4v3c0 3-2 5-4.5 5S40 52 40 49v-3c0-3-2-4-5-4h-3c-4 0-6-3-6-6z" fill="#E05A72" />
-                    <rect x="30" y="72" width="60" height="34" rx="8" fill="#FFF4CF" />
+                <svg className="jar-svg" viewBox="0 0 64 72" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="tbj-jar-fill" x1="18" y1="22" x2="46" y2="58" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#F27890" /><stop offset=".42" stopColor="#E05A72" /><stop offset="1" stopColor="#B23552" /></linearGradient>
+                        <linearGradient id="tbj-jar-lid" x1="14" y1="4" x2="50" y2="18" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#FFE69A" /><stop offset=".45" stopColor="#FFD45E" /><stop offset="1" stopColor="#E0B038" /></linearGradient>
+                        <linearGradient id="tbj-jar-hi" x1="20" y1="20" x2="30" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#fff" stopOpacity=".9" /><stop offset=".5" stopColor="#fff" stopOpacity=".28" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+                    </defs>
+                    <path d="M17.5 22.2c0-3.4 2.6-5.8 6-5.8h17c3.4 0 6 2.4 6 5.8v3.8c0 2.4 2.4 4 2.4 7v20.8c0 5.4-4 8.7-9.2 8.7H24.3c-5.2 0-9.2-3.3-9.2-8.7V33c0-3 2.4-4.6 2.4-7z" fill="#FFFCFA" stroke="#E9DED6" strokeWidth="2.4" strokeLinejoin="round" />
+                    <path d="M20.4 33h23.2v19.6c0 3.6-2.5 5.8-6 5.8H26.4c-3.5 0-6-2.2-6-5.8z" fill="url(#tbj-jar-fill)" />
+                    {/* 병 입구에서 둥글게 흘러내리는 쨈 */}
+                    <path d="M18.8 24.2h26.4v3.3c0 1.2-.9 1.8-2 1.8-1 0-1.7.7-1.7 1.8v2.2a2 2 0 01-4 0v-2.6c0-1-.7-1.6-1.6-1.6-1 0-1.6.6-1.6 1.5a1.7 1.7 0 01-3.4 0c0-.9-.7-1.5-1.6-1.5-1 0-1.7.7-1.7 1.7v1.6a2 2 0 01-4 0v-1.6c0-1-.7-1.7-1.7-1.7-1.1 0-2-.6-2-1.8z" fill="url(#tbj-jar-fill)" />
+                    <ellipse cx="25" cy="39" rx="1.6" ry="1" fill="#FFE08A" transform="rotate(-20 25 39)" />
+                    <ellipse cx="32.2" cy="42.6" rx="1.45" ry=".9" fill="#FFF1A8" transform="rotate(24 32.2 42.6)" />
+                    <ellipse cx="39.2" cy="38" rx="1.5" ry=".95" fill="#FFE08A" transform="rotate(10 39.2 38)" />
+                    <ellipse cx="28.2" cy="46.5" rx="1.35" ry=".85" fill="#FFD45E" transform="rotate(-30 28.2 46.5)" />
+                    <ellipse cx="37" cy="45.5" rx="1.4" ry=".88" fill="#FFF1A8" transform="rotate(28 37 45.5)" />
+                    <path d="M22 26c1.4 0 2.4.8 2.6 2.2.6 4.2.2 10.2-.6 15.4-.3 1.8-1.4 2.6-2.6 2.2-1.1-.4-1.6-1.5-1.4-3 .6-5.2 1.2-11.2.6-15.2-.2-1.2.4-1.6 1.4-1.6z" fill="url(#tbj-jar-hi)" />
+                    <rect x="13.5" y="5" width="37" height="13.2" rx="5.5" fill="#FFD45E" stroke="#fff" strokeWidth="2.2" />
+                    <rect x="13.5" y="5" width="37" height="13.2" rx="5.5" fill="url(#tbj-jar-lid)" />
+                    <path d="M16.5 15.8c2.4 1 5.2.85 7.8-.15 2.7-1 4.5-1 7.2-.05 2.8 1 5.4.95 8 .1 2.5-.8 5.3-.7 7.7.2" stroke="#B88820" strokeWidth="1.25" strokeLinecap="round" opacity=".65" fill="none" />
+                    <path d="M18.8 9c1.7 2 3.5 2.1 5.2.2M25.6 8.2c1.7 2.3 3.8 2.4 5.6.15M33 8.3c1.7 2.1 3.9 2.2 5.7.2M40.4 9c1.3 1.6 2.8 1.7 4.3.15" stroke="#C99828" strokeWidth="1.3" strokeLinecap="round" opacity=".72" fill="none" />
+                    <path d="M17.8 7.8c5-1.8 11.5-2.2 17.2-1.8 4.6.3 8.8 1.2 12 2.4" stroke="#fff" strokeWidth="1.35" strokeLinecap="round" opacity=".6" fill="none" />
+                    <rect x="18.5" y="49" width="27" height="12.2" rx="3.5" fill="#FFF4CF" stroke="#E9DED6" strokeWidth="1.2" />
+                    <g transform="translate(27.6 50.8) scale(1.05)">
+                        <path d="M4.2 9.4c2.7 0 4.8-2.5 4.8-4.8C9 2.3 7.1.6 4.2.6S-.6 2.3-.6 4.6c0 2.3 2.1 4.8 4.8 4.8z" fill="#E05A72" />
+                        <ellipse cx="2.7" cy="4.1" rx=".55" ry=".4" fill="#FFE08A" />
+                        <ellipse cx="5.5" cy="5.2" rx=".5" ry=".38" fill="#FFF1A8" />
+                        <path d="M1.5 1.2c.75-1 2.15-1 3-.2.75-.85 2.15-.85 2.9.15-1 .35-1.85.3-2.9.05-.95.2-2 .3-3 0z" fill="#6BA86A" />
+                    </g>
                 </svg>
             </span>
         </span>
