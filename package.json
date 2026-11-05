@@ -44,6 +44,7 @@
     "check:alarm": "node scripts/check-alarm.mjs",
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
+    "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs",
     "check:tabbar": "node scripts/check-tabbar.mjs"
   },
   "dependencies": {

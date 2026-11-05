@@ -4,8 +4,15 @@ import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
-import { seoulYmd } from '../lib/date.js';
+import { seoulParts, seoulYmd } from '../lib/date.js';
 import { csvEscape, htmlEscape } from '../lib/neisExport.js';
+import { DateChip } from './DateChip.jsx';
+
+/** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
+function recordHm(row, fallback) {
+    const at = row?.at ? new Date(row.at) : null;
+    return at && !Number.isNaN(at.getTime()) ? seoulParts(at).hm : fallback;
+}
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -145,9 +152,12 @@ export function Student() {
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {filtered.map((row) => (
                     <article key={row.id} className="solid-card" style={{ padding: 12, background: row.kind === '상담' ? 'var(--k-counsel)' : row.kind === '보호자' ? 'var(--k-parent)' : row.kind === '칭찬' ? 'var(--k-praise)' : 'var(--k-observe)', color: 'var(--ink)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                             <strong>{row.kind} · {(row.tags || []).join(' · ')}</strong>
-                            <span className="num">{row.date === clock.ymd ? clock.hm : row.date.slice(5)}</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <DateChip ymd={row.date} today={clock.ymd} />
+                                {row.date === clock.ymd ? <span className="num muted" data-role="record-hm">{recordHm(row, clock.hm)}</span> : null}
+                            </span>
                         </div>
                         {editingId === row.id ? (
                             <div style={{ marginTop: 8 }}>
