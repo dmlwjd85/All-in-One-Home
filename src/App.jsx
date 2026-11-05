@@ -25,7 +25,8 @@ import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { Minutes } from './ui/Minutes.jsx';
-import { MENU, menuSelected, menuTarget, tabSelected } from './ui/menu.js';
+import { MENU, menuSelected, menuTarget } from './ui/menu.js';
+import { TabBar } from './ui/TabBar.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -447,12 +448,12 @@ export default function App() {
             if (event.button !== 0) return;
             const el = hit(event.target);
             if (!el || el.hasAttribute('data-key-preview')) return;
-            if (jamFeelEnabled() && el.closest('.fab, .desk-fab')) return;
+            if (jamFeelEnabled() && el.closest('.fab, .desk-fab, .tab-jelly')) return;
             playKey('down');
         };
         const onPointerUp = (event) => {
             const target = event.target;
-            if (jamFeelEnabled() && target instanceof Element && target.closest('.fab, .desk-fab')) return;
+            if (jamFeelEnabled() && target instanceof Element && target.closest('.fab, .desk-fab, .tab-jelly')) return;
             playKey('up');
         };
         const keyTarget = (event) => {
@@ -465,12 +466,12 @@ export default function App() {
         };
         const onKeyDown = (event) => {
             if (event.repeat || !keyTarget(event)) return;
-            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab, .tab-jelly')) return;
             playKey('down');
         };
         const onKeyUp = (event) => {
             if (!keyTarget(event)) return;
-            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab')) return;
+            if (jamFeelEnabled() && event.target?.closest?.('.fab, .desk-fab, .tab-jelly')) return;
             playKey('up');
         };
         document.addEventListener('pointerdown', onPointerDown, true);
@@ -581,13 +582,6 @@ export default function App() {
         );
     }
 
-    const tabs = [
-        ['오늘', '#/today', '🏠'],
-        ['할 일', '#/todo', '☑'],
-        ['더', '', '+'],
-        ['기록', '#/students', '✎'],
-        ['일정', '#/schedule', '📅'],
-    ];
     const dailyTip = flow || plus || msg ? null : tipForToday(clock.ymd, data.tip);
     const tip = showSoundTip ? { id: 'key-sound', text: '누를 때 소리가 나요', sound: true } : dailyTip;
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
@@ -706,20 +700,7 @@ export default function App() {
                     )}
                     <div data-screen={route.name}>{screen}</div>
                 </div>
-                <nav className="tabbar" aria-label="주요 메뉴">
-                    {tabs.map(([label, href, icon]) => (
-                        label === '더' ? (
-                            <Btn key={label} className="fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
-                        ) : (
-                            <Btn key={label} onClick={() => go(href)} style={{ color: tabSelected(label, route.name) ? 'var(--ink)' : 'var(--ink-sub)', fontWeight: 500, fontSize: 13 }}>
-                                <span style={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
-                                    <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
-                                    {label}
-                                </span>
-                            </Btn>
-                        )
-                    ))}
-                </nav>
+                <TabBar routeName={route.name} ymd={clock.ymd} go={go} menuOpen={menu} onMenu={() => setMenu(true)} onCenter={(event) => openQuickBar(event)} />
                 <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
                 <TodoAlarm />

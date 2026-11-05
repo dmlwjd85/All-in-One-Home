@@ -30,7 +30,8 @@ check(foilCss.includes('.52s') && foilCss.includes('--cup-j1: #9E1630') && foilC
 check(!/rgba\(\s*80\s*,\s*90\s*,\s*200/.test(foilCss) && foilCss.includes('0 6px 20px -6px rgba(138, 35, 64, .30)'), '쨈 접시 그림자가 앱 색이 아닙니다.');
 /* 가계부 #31: 막대 위 컵 복사본·조각(0.38초, 방울 10~16px, 은박 14×9px)과 어두운 화면 조각 테두리 */
 check(foilCss.includes('animation: cup-bit .38s') && foilCss.includes('width: 14px;\n    height: 9px;') && foilCss.includes('html.dark .cup-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }') && foilCss.includes('html.dark .cup-foil { border-color: rgba(255,255,255,.8); }'), '가계부 #31 조각 크기·시간·어두운 화면 테두리가 다릅니다.');
-const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8');
+const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8') + readFileSync(resolve(root, 'src/ui/TabBar.jsx'), 'utf8');
+/* 탭바 시안 A부터 휴대폰 가운데 버튼은 TabBar.jsx 에 있습니다. 컵 검사는 넓은 화면 키캡(.desk-fab)으로 합니다. */
 check((appText.match(/aria-label="쨈 빠른 입력 열기"/g) || []).length === 2 && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않거나, 휴대폰·데스크톱 두 버튼 중 하나의 이름이 바뀌었습니다(QA 2차 M2).');
 /* QA 1차 1번: 휴대폰에는 단축키가 없으므로, 빠른 입력 안에 + 화면으로 가는 단추가 있어야 합니다. */
 const quickText = readFileSync(resolve(root, 'src/ui/QuickBar.jsx'), 'utf8');
@@ -39,7 +40,7 @@ check(quickText.includes('메시지·회의록 붙여넣기') && quickText.inclu
 const chrome = ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => existsSync(path));
 if (!chrome) failures.push('브라우저가 없습니다.');
 
-const port = 4178;
+const port = Number(process.env.SEAL_PORT) || 4178;
 const origin = `http://127.0.0.1:${port}/`;
 let preview;
 if (!failures.length) {
@@ -62,15 +63,15 @@ if (!failures.length) {
     });
     try {
         const page = await browser.newPage();
-        await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+        await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
         await page.evaluateOnNewDocument(() => {
             localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
             localStorage.setItem('ssug-gyomu-theme', 'light');
         });
         await page.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
-        await page.waitForSelector('.tabbar .fab .seal-cup');
+        await page.waitForSelector('.desk-fab .seal-cup');
         const light = await page.evaluate(() => {
-            const cup = document.querySelector('.tabbar .fab .seal-cup');
+            const cup = document.querySelector('.desk-fab .seal-cup');
             const style = getComputedStyle(cup);
             const ids = [...document.querySelectorAll('.seal-cup [id]')].map((el) => el.id);
             return {
@@ -78,16 +79,16 @@ if (!failures.length) {
                 fill: style.getPropertyValue('--seal-fill').trim().toUpperCase(),
                 jam: style.getPropertyValue('--cup-j1').trim().toUpperCase(),
                 plate: style.getPropertyValue('--cup-plate').trim().toUpperCase(),
-                label: document.querySelector('.tabbar .fab').getAttribute('aria-label'),
-                name: document.querySelector('.tabbar .fab .fab-txt')?.textContent || '',
+                label: document.querySelector('.desk-fab').getAttribute('aria-label'),
+                name: document.querySelector('.desk-fab .fab-txt')?.textContent || '',
                 drops: cup.querySelectorAll('.cup-pp').length,
                 dupIds: ids.length !== new Set(ids).size,
                 rawId: ids.some((id) => ['cupd-g', 'cupdjam', 'cupd-foil', 'cupd-dots'].includes(id)),
                 d2: getComputedStyle(cup.querySelector('.cup-d2')).display,
                 lbl1: getComputedStyle(cup.querySelector('.cup-lbl1')).display,
                 lbl2: getComputedStyle(cup.querySelector('.cup-lbl2')).display,
-                txt: document.querySelector('.tabbar .fab .fab-txt').getBoundingClientRect().bottom,
-                bar: document.querySelector('.tabbar').getBoundingClientRect().bottom,
+                txt: document.querySelector('.desk-fab .fab-txt').getBoundingClientRect().bottom,
+                bar: window.innerHeight,
             };
         });
         check(light.flavor === EXPECTED_FLAVOR.light, `밝은 화면 맛이 ${light.flavor} 입니다.`);
@@ -102,9 +103,9 @@ if (!failures.length) {
         check(light.txt <= light.bar + 1, '버튼 이름이 하단 막대 밖으로 나갑니다.');
 
         await page.evaluate(() => document.documentElement.classList.add('dark'));
-        await page.waitForFunction((flavor) => document.querySelector('.tabbar .fab .seal-cup').dataset.flavor === flavor, {}, EXPECTED_FLAVOR.dark);
+        await page.waitForFunction((flavor) => document.querySelector('.desk-fab .seal-cup').dataset.flavor === flavor, {}, EXPECTED_FLAVOR.dark);
         const darkFill = await page.evaluate(() => {
-            const style = getComputedStyle(document.querySelector('.tabbar .fab .seal-cup'));
+            const style = getComputedStyle(document.querySelector('.desk-fab .seal-cup'));
             return {
                 fill: style.getPropertyValue('--seal-fill').trim().toUpperCase(),
                 jam: style.getPropertyValue('--cup-j1').trim().toUpperCase(),
@@ -117,7 +118,7 @@ if (!failures.length) {
 
         await page.evaluate(() => document.documentElement.classList.remove('dark'));
         const burst = await page.evaluate(() => {
-            const button = document.querySelector('.tabbar .fab');
+            const button = document.querySelector('.desk-fab');
             const cup = button.querySelector('.seal-cup');
             button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
             const anims = cup.getAnimations({ subtree: true }).filter((anim) => String(anim.animationName || '').startsWith('cup-'));
@@ -135,7 +136,7 @@ if (!failures.length) {
         check(burst.press === 'down' && burst.squish.includes('1.1') && burst.squish.includes('0.86'), `누르고 있는 동안 눌린 채로 머물지 않습니다. ${JSON.stringify(burst)}`);
 
         const opened = await page.evaluate(() => {
-            const button = document.querySelector('.tabbar .fab');
+            const button = document.querySelector('.desk-fab');
             const cup = button.querySelector('.seal-cup');
             button.click();
             const first = cup.getAnimations({ subtree: true }).filter((anim) => anim.playState === 'running');
@@ -156,7 +157,7 @@ if (!failures.length) {
         check(opened.running && opened.replay && opened.popping && opened.focused && opened.open && !opened.plus, `입력칸이 바로 열리지 않습니다: ${JSON.stringify(opened)}`);
 
         const rapid = await page.evaluate(() => {
-            const button = document.querySelector('.tabbar .fab');
+            const button = document.querySelector('.desk-fab');
             const cup = button.querySelector('.seal-cup');
             const before = cup.getAnimations({ subtree: true }).length;
             for (let i = 0; i < 24; i += 1) button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
@@ -171,9 +172,9 @@ if (!failures.length) {
 
         await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
         await page.reload({ waitUntil: 'networkidle0' });
-        await page.waitForSelector('.tabbar .fab .seal-cup');
+        await page.waitForSelector('.desk-fab .seal-cup');
         const reduced = await page.evaluate(() => {
-            const button = document.querySelector('.tabbar .fab');
+            const button = document.querySelector('.desk-fab');
             const cup = button.querySelector('.seal-cup');
             button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
             const squish = getComputedStyle(cup.querySelector('.cup-squish')).transform;
