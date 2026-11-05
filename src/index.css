@@ -263,15 +263,15 @@ a.chip,
 .moved-note .chip {
     flex: 0 0 auto;
 }
-.hotkey-list { display: grid; gap: 8px; }
+.hotkey-list { display: grid; gap: 4px; }
 .hotkey-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 128px);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(72px, 104px);
+    gap: 4px;
     align-items: center;
 }
-.hotkey-row > span { min-width: 0; overflow-wrap: anywhere; }
-.hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 8px; }
+.hotkey-row > span { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 6px; min-height: 36px; height: 36px; }
 
 .brand-symbol {
     width: 36px;
@@ -1068,11 +1068,27 @@ button.glass[aria-pressed="true"]:active {
 }
 .cal-marks {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 2px;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 1px;
     min-height: 14px;
+    width: 100%;
+    margin-top: 2px;
 }
+.cal-event-title {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 600;
+    text-align: left;
+    color: var(--ink);
+}
+.cal-event-title.is-google { color: var(--st-early); font-weight: 500; }
 .gcal-mark {
     color: var(--st-early);
     font-size: 11px;

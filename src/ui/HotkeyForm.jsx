@@ -50,7 +50,7 @@ export function HotkeyForm({ onShowList }) {
             <p className="muted">글을 적는 중에는 단축키가 쉬어요. 한글을 조합하는 동안도 그렇습니다. Ctrl이나 Command, Alt가 들어간 키는 브라우저가 먼저 써서 받지 않아요. 빼려면 그 칸에서 지우기 키를 누르세요.</p>
             {groups.map((group) => (
                 <div key={group.name}>
-                    <p className="muted" style={{ margin: '12px 0 6px' }}>{group.name}</p>
+                    <p className="muted" style={{ margin: '8px 0 2px' }}>{group.name}</p>
                     <div className="hotkey-list">
                         {group.items.map((action) => (
                             <div className="hotkey-row" key={action.id}>
