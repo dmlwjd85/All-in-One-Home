@@ -1084,7 +1084,7 @@ button.glass[aria-pressed="true"]:active {
     white-space: nowrap;
     font-size: 10px;
     line-height: 12px;
-    font-weight: 500;
+    font-weight: 400;
     text-align: left;
     color: var(--ink);
 }
