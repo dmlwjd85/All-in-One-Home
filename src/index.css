@@ -263,15 +263,28 @@ a.chip,
 .moved-note .chip {
     flex: 0 0 auto;
 }
-.hotkey-list { display: grid; gap: 4px; }
-.hotkey-row {
+.hotkey-list {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(72px, 104px);
     gap: 4px;
-    align-items: center;
+    max-width: 640px;
 }
-.hotkey-row > span { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
-.hotkey-key { width: 100%; text-align: center; font-weight: 800; padding: 0 6px; min-height: 36px; height: 36px; }
+.hotkey-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+.hotkey-row > span { min-width: 0; flex: 0 1 auto; overflow-wrap: anywhere; line-height: 1.25; }
+.hotkey-key {
+    flex: 0 0 auto;
+    width: 104px;
+    max-width: 100%;
+    text-align: center;
+    font-weight: 800;
+    padding: 0 6px;
+    min-height: 36px;
+    height: 36px;
+}
 
 .brand-symbol {
     width: 36px;

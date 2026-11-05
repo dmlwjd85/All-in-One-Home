@@ -537,7 +537,14 @@ check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력<
 const scheduleSrc = readFileSync(`${root}/src/ui/Schedule.jsx`, 'utf8');
 check(scheduleSrc.includes("className={row.google ? 'cal-event-title is-google' : 'cal-event-title'}") && scheduleSrc.includes('titleNames'), '월간 칸에 일정 제목이 없습니다.');
 const cssSrc = readFileSync(`${root}/src/index.css`, 'utf8');
-check(/\.hotkey-list\s*\{\s*display:\s*grid;\s*gap:\s*4px;\s*\}/.test(cssSrc), '단축키 목록 간격이 4px가 아닙니다.');
+const hotkeyListCss = cssSrc.match(/\.hotkey-list\s*\{[^}]+\}/)?.[0] || '';
+const hotkeyRowCss = cssSrc.match(/\.hotkey-row\s*\{[^}]+\}/)?.[0] || '';
+const hotkeyListMax = Number((hotkeyListCss.match(/max-width:\s*(\d+)px/) || [])[1] || 0);
+const hotkeyRowGap = Number((hotkeyRowCss.match(/(?:^|[^-])gap:\s*(\d+)px/) || hotkeyRowCss.match(/column-gap:\s*(\d+)px/) || [])[1] || 0);
+check(/gap:\s*4px/.test(hotkeyListCss), '단축키 목록 줄 간격이 4px가 아닙니다.');
+check(hotkeyListMax >= 520 && hotkeyListMax <= 640, `단축키 목록 최대 너비가 ${hotkeyListMax || '없음'}입니다.`);
+check(hotkeyRowGap >= 12 && hotkeyRowGap <= 16, `단축키 이름·키 칸 간격이 ${hotkeyRowGap || '없음'}입니다.`);
+check(!/minmax\(0,\s*1fr\)/.test(hotkeyRowCss), '단축키 줄이 1fr로 이름과 키를 멀리 벌립니다.');
 check(cssSrc.includes('.cal-event-title') && cssSrc.includes('font-weight: 400'), '월간 제목 스타일이 빠졌습니다.');
 check(/cal-today \.num[\s\S]*?max-width:\s*24px/.test(cssSrc) || cssSrc.includes('.cal-grid .tap.cal-today .num'), '월간 오늘 동그라미 너비 제한이 없습니다.');
 const browserSrc = readFileSync(`${root}/scripts/check-browser.mjs`, 'utf8');

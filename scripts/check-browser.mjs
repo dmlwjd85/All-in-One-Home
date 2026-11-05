@@ -758,6 +758,44 @@ try {
         });
     }
 
+    for (const width of [390, 1440, 1920]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await delay(250);
+            await page.waitForSelector('[data-screen="hotkeys"]');
+            const row = await page.evaluate(() => {
+                const el = document.querySelector('[data-screen="hotkeys"] .hotkey-row');
+                if (!el) return { missing: true };
+                const label = el.querySelector(':scope > span');
+                const key = el.querySelector('.hotkey-key');
+                const list = el.closest('.hotkey-list');
+                if (!label || !key || !list) return { missing: true };
+                const a = label.getBoundingClientRect();
+                const b = key.getBoundingClientRect();
+                const listBox = list.getBoundingClientRect();
+                const sameRow = Math.abs(a.top - b.top) < 24;
+                const gap = sameRow ? (b.left - a.right) : Number.POSITIVE_INFINITY;
+                return {
+                    gap: Math.round(gap * 10) / 10,
+                    listW: Math.round(listBox.width),
+                    sameRow,
+                    overflowX: el.scrollWidth > el.clientWidth + 1 || list.scrollWidth > list.clientWidth + 1,
+                };
+            });
+            if (row.missing) {
+                check(width < 900, `단축키 목록이 ${width}에서 없습니다.`);
+                return;
+            }
+            check(!row.overflowX, `단축키 줄이 ${width}에서 가로로 넘칩니다: ${JSON.stringify(row)}`);
+            if (width >= 1440) {
+                check(
+                    (row.sameRow && row.gap >= 0 && row.gap <= 16) || row.listW <= 640,
+                    `단축키 이름·키 간격이 ${width}에서 멀습니다: ${JSON.stringify(row)}`,
+                );
+            }
+        }, width >= 900 ? 900 : 844);
+    }
+
     for (const width of [360, 390, 1920]) {
         await withDemo(width, 'light', async (page) => {
             await controlBoxes(page, 'button.hero-pill, .home-hero button.hero-action', `홈 칩 ${width}`);
