@@ -642,7 +642,12 @@ check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNo
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 check(!bits.includes('KokMark') && !bits.includes('kok-mark'), '쓰지 않는 하단 버튼 글자 윤곽이 남아 있습니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
-check((appText.match(/<SealCup \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 2, '하단 버튼 글자가 가계부 쨈 컵과 다릅니다.');
+// 탭바 시안 A: 넓은 화면 키캡은 가계부 쨈 컵 그대로, 휴대폰 탭바 가운데는 웹용 쨈 병(글자 없음) + 아래 글자 「쨈」.
+check((appText.match(/<SealCup \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 1, '넓은 화면 버튼 글자가 가계부 쨈 컵과 다릅니다.');
+{
+    const tabText = readFileSync(`${root}/src/ui/TabBar.jsx`, 'utf8');
+    check((tabText.match(/<JjaemJar \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 1, '탭바 가운데가 쨈 병 + 글자 「쨈」이 아닙니다.');
+}
 // QA 2차 2번: 컵 그림 자체가 가계부 a67fca6 cupD.js와 같아야 합니다. 바꿀 수 있는 것은 그라디언트 id 'cupd-jam' → 'cupdjam'(화면 문구 검사 때문) 하나뿐이고, 색은 foilCup.css 변수로만 바꿉니다.
 {
     const cupSrc = readFileSync(`${root}/src/ui/cupD.js`, 'utf8');
@@ -694,7 +699,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v63'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v65'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

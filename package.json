@@ -43,7 +43,8 @@
     "check:hlc": "node scripts/check-hlc.mjs",
     "check:alarm": "node scripts/check-alarm.mjs",
     "check:swreload": "node scripts/check-swreload.mjs",
-    "check:datechip": "node scripts/check-datechip.mjs"
+    "check:datechip": "node scripts/check-datechip.mjs",
+    "check:tabbar": "node scripts/check-tabbar.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",
