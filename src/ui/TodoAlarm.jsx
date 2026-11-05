@@ -4,6 +4,7 @@ import { seoulParts } from '../lib/date.js';
 import { dueAlarms, markFired, readFired, splitAlarms } from '../lib/todoAlarm.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { alarmTimeLabel } from '../lib/jjaemPaste.js';
 
 /* 짧은 알림음 세 번. 파일 없이 WebAudio로 만듭니다. 브라우저가 소리를 막으면 팝업만 뜹니다. */
 let audioCtx = null;
@@ -78,6 +79,14 @@ export function TodoAlarm() {
     }, []);
     // 할 일을 고치거나 새로 받으면 20초를 기다리지 않고 바로 봅니다(이미 지난 시각이면 곧 울림).
     useEffect(() => { checkRef.current(); }, [todoSig]);
+    // Esc로 알림 카드를 닫습니다(확인 버튼과 같음).
+    const open = ringing.length > 0;
+    useEffect(() => {
+        if (!open) return undefined;
+        const onKey = (event) => { if (event.key === 'Escape') setRinging([]); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open]);
 
     if (!ringing.length) return null;
     const close = () => setRinging([]);
@@ -99,8 +108,8 @@ export function TodoAlarm() {
                         <li key={row.id} className="todo-alarm-item">
                             <span className="num todo-alarm-time">{row.time}</span>
                             <span className="todo-alarm-title">
-                                <strong>{row.time ? `${Number(String(row.time).slice(0, 2)) % 12 || 12}시 할 일 알림` : '할 일 알림'}</strong>
-                                <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ' · 지금 울렸어요'}</div>
+                                <strong>{row.time ? `${alarmTimeLabel(row.time)} 할 일 알림` : '할 일 알림'}</strong>
+                                <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ''}</div>
                             </span>
                             <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>

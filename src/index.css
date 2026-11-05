@@ -1492,7 +1492,7 @@ button.hero-pill.home-todo-link {
 .dark .todo-alarm-time { color: #ffd36a; }
 .todo-alarm-title { flex: 1 1 0; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
 .todo-alarm-item .chip { flex: none; }
-.todo-alarm-sub { color: #7a6f68; font-size: 13px; margin: 2px 0 0; font-weight: 500; }
+.todo-alarm-sub { color: #6f645d; font-size: 13px; margin: 2px 0 0; font-weight: 500; }
 .dark .todo-alarm-sub { color: var(--ink-sub); }
 /* 일정 탭 A1 주간 목록 (SW v56) */
 .week-list { padding: 4px 0; border-radius: 18px; overflow: hidden; }

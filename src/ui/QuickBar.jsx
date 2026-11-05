@@ -110,7 +110,9 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         document.querySelectorAll('.seal-cup').forEach((cup) => playSealBurst(cup));
         const used = kind || lastKind.current || '메모';
         lastKind.current = used;
-        const paste = readJjaemPaste(text, { now: new Date(), stripTime: used === '할 일' || used === '일정' });
+        const ahead = used === '할 일' || used === '일정';
+        /* saveQuick과 같은 규칙으로 날짜를 읽습니다. 「3일 동안」처럼 날짜가 아닌 말은 고른 날(dateYmd)을 그대로 씁니다. */
+        const paste = readJjaemPaste(text, { now: new Date(), stripTime: ahead, future: ahead });
         const date = used === '일정'
             ? (paste.date || quickSaveDate(used, text, dateYmd, new Date()))
             : (paste.date || dateYmd);
