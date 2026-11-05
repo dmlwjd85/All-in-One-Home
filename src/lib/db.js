@@ -7,14 +7,14 @@ import { leaveState, patchPeriodLocal, readPeriodLocal, setExtraPeriod, setLeave
 import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
-import { readJjaemPaste } from './jjaemPaste.js';
+import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
-import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
+import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 
@@ -1182,10 +1182,14 @@ export async function saveQuick(input, now = new Date()) {
             message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
         } else if (kind === '할 일') {
             const titleSrc = String(input.title || body).trim();
-            const row = { ...base, id: nid('todo'), title: stripTokens(titleSrc) || titleSrc, done: false, due: input.due != null ? input.due : (paste.date || '') };
+            /* 「밤 12시」는 오늘 00:00(이미 지남)이 아니라 다음 날 00:00(오늘 밤)으로 둡니다. */
+            let due = input.due != null ? input.due : (paste.date || '');
+            if (alarmTime === '00:00') due = addDaysYmd(due || clock.ymd, 1);
+            const row = { ...base, id: nid('todo'), title: stripTokens(titleSrc) || titleSrc, done: false, due };
             if (alarmTime) row.time = alarmTime;
             put(local ? draft.local.todos : draft.todos, row);
-            message = alarmTime ? `할 일에 넣고 ${alarmTime} 알림을 맞춰 두었어요.` : '할 일에 넣었어요.';
+            const timeLabel = alarmTime === '00:00' ? '오늘 밤 12시' : alarmTimeLabel(alarmTime);
+            message = alarmTime ? `할 일에 넣고 ${timeLabel} 알림을 맞춰 두었어요.` : '할 일에 넣었어요.';
         } else if (kind === '일정') {
             const eventKind = ['학급', '학교', '휴일', '내 일정'].includes(input.eventKind) ? input.eventKind : '학급';
             const bits = [];

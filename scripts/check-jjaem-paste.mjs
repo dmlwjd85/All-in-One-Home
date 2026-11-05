@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { jjaemDateChip, readJjaemPaste, findTimeSpans, alarmTimeLabel } from '../src/lib/jjaemPaste.js';
 import { saveQuick, snapshot, useVaultsForTest } from '../src/lib/db.js';
+import { quickSaveDate } from '../src/ui/quickMatch.js';
 
 let bad = 0;
 const check = (ok, msg) => { if (!ok) { bad += 1; console.error(`✗ ${msg}`); } };
@@ -106,12 +107,31 @@ const todo = await saveQuick({ kind: '할 일', text: '내일 3시 수행평가 
 const todos = [...(snapshot().todos || []), ...(snapshot().local?.todos || [])];
 const todoRow = todos.find((row) => String(row.title || '').includes('수행평가'));
 check(todo?.ok && todoRow?.title === '수행평가 채점' && todoRow?.due === '2026-11-06' && todoRow?.time === '15:00', `할 일 알람: ${JSON.stringify(todoRow)}`);
-check(String(todo?.message || '').includes('15:00'), `할 일 안내: ${todo?.message}`);
+check(String(todo?.message || '').includes('오후 3시'), `할 일 안내: ${todo?.message}`);
 
 const ev = await saveQuick({ kind: '일정', text: '모레 4시 공개수업' }, now);
 const events = [...(snapshot().events || []), ...(snapshot().local?.events || [])];
 const evRow = events.find((row) => String(row.title || '').includes('공개수업'));
 check(ev?.ok && evRow?.title === '공개수업' && evRow?.date === '2026-11-07' && evRow?.time === '16:00', `일정 저장: ${JSON.stringify(evRow)}`);
+
+/* QA2 낮음1: 「밤 12시」 할 일은 다음 날 00:00, 안내는 「오늘 밤 12시」. */
+const midnight = await saveQuick({ kind: '할 일', text: '밤 12시 마감' }, now);
+const midTodos = [...(snapshot().todos || []), ...(snapshot().local?.todos || [])];
+const midRow = midTodos.find((row) => String(row.title || '').includes('마감') && row.time === '00:00');
+check(midnight?.ok && midRow?.due === '2026-11-06' && midRow?.time === '00:00', `밤 12시 할 일: ${JSON.stringify(midRow)}`);
+check(String(midnight?.message || '').includes('오늘 밤 12시'), `밤 12시 안내: ${midnight?.message}`);
+
+/* QA2 낮음2: 일정 빠른입력도 「N일 동안/째」는 날짜 아님. 「15일 회의」「11월 15일」은 유지. */
+check(quickSaveDate('일정', '3일 동안 체험학습', '2026-11-05', now) === '2026-11-05', '일정 「3일 동안」을 날짜로 봤어요');
+check(quickSaveDate('일정', '2일째 행사', '2026-11-05', now) === '2026-11-05', '일정 「2일째」를 날짜로 봤어요');
+check(quickSaveDate('일정', '15일 회의', '2026-11-05', now) === '2026-11-15', '일정 「15일 회의」는 날짜예요');
+check(quickSaveDate('일정', '11월 15일 공개수업', '2026-11-05', now) === '2026-11-15', '일정 「11월 15일」은 날짜예요');
+check(quickSaveDate('일정', '내일 운동회', '2026-11-05', now) === '2026-11-06', '일정 「내일」은 날짜예요');
+
+/* QA2 권장: 「N월 N일 동안/째」 변이 + 보조 글 색 */
+check(readJjaemPaste('11월 3일 동안 체험학습', { now, future: true }).date === '', '「11월 3일 동안」을 날짜로 봤어요');
+check(readJjaemPaste('3월 2일째 지각', { now, future: true }).date === '', '「3월 2일째」를 날짜로 봤어요');
+check(readJjaemPaste('11월 15일 협의회', { now, future: true }).date === '2026-11-15', '「11월 15일」은 날짜예요');
 
 const sw = readFileSync('public/sw.js', 'utf8');
 check(sw.includes("const CACHE = 'ssug-gyomu-shell-v64'"), 'SW 판이 v64가 아닙니다');
@@ -119,6 +139,10 @@ const todoUi = readFileSync('src/ui/TodoAlarm.jsx', 'utf8');
 check(todoUi.includes('todo-alarm-bell') && todoUi.includes('todo-alarm-head'), '알림 노란 카드 머리가 없습니다');
 const css = readFileSync('src/index.css', 'utf8');
 check(css.includes('.jjaem-date-chip') && css.includes('#e8f3ff') && css.includes('#fff7e8'), '시안 A 칩·알람 색이 없습니다');
+check(/\.todo-alarm-item\s*\{[^}]*flex-wrap:\s*wrap/.test(css), '알람 항목에 flex-wrap: wrap이 없습니다');
+check(css.includes('todo-alarm-main') && /flex:\s*1\s+1\s+10em/.test(css), '알람 글 덩어리에 flex: 1 1 10em이 없습니다');
+check(/\.todo-alarm-sub\s*\{[^}]*#6f645d/.test(css), '알람 보조 글 색 #6f645d가 없습니다');
+check(todoUi.includes('todo-alarm-main'), '알람 카드에 todo-alarm-main이 없습니다');
 const students = readFileSync('src/ui/Students.jsx', 'utf8');
 check(students.includes('DateChip'), '학생 기록에 날짜 칩이 없습니다');
 check(/<DateChip\s+ymd=\{row\.date\}/.test(students), '학생 기록 줄에 DateChip이 쓰이지 않습니다');

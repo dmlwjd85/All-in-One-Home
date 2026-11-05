@@ -106,11 +106,13 @@ export function TodoAlarm() {
                 <ul className="todo-alarm-list">
                     {live.map((row) => (
                         <li key={row.id} className="todo-alarm-item">
-                            <span className="num todo-alarm-time">{row.time}</span>
-                            <span className="todo-alarm-title">
-                                <strong>{row.time ? `${alarmTimeLabel(row.time)} 할 일 알림` : '할 일 알림'}</strong>
-                                <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ''}</div>
-                            </span>
+                            <div className="todo-alarm-main">
+                                <span className="num todo-alarm-time">{row.time}</span>
+                                <span className="todo-alarm-title">
+                                    <strong>{row.time ? `${alarmTimeLabel(row.time)} 할 일 알림` : '할 일 알림'}</strong>
+                                    <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ''}</div>
+                                </span>
+                            </div>
                             <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>
                     ))}

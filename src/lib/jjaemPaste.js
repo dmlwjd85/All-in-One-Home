@@ -117,11 +117,17 @@ function extraDates(raw, today, future) {
     return out;
 }
 
+/** 「3일 동안」「2일째」「11월 3일 동안」처럼 기간·횟수 꼬리는 날짜가 아닙니다. */
+export function isDurationDayTail(raw, span) {
+    const word = String(raw || '').substr(span.index, span.length);
+    const tail = String(raw || '').slice(span.index + span.length);
+    return /일$/.test(word) && NOT_DATE_TAIL.test(tail);
+}
+
 /** 「3일 동안」「2일째」처럼 날짜가 아닌 「N일」을 걸러 냅니다. */
 function realDate(raw, span) {
+    if (isDurationDayTail(raw, span)) return false;
     const tail = raw.slice(span.index + span.length);
-    const word = raw.substr(span.index, span.length);
-    if (/일$/.test(word) && NOT_DATE_TAIL.test(tail)) return false;
     if (span.bare && !BARE_DAY_OK.test(tail) && !span.weekday) return false;
     return true;
 }

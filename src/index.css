@@ -1486,12 +1486,13 @@ button.hero-pill.home-todo-link {
     flex: none;
 }
 .todo-alarm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.todo-alarm-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 14px; background: color-mix(in srgb, #fff 70%, transparent); box-shadow: inset 0 0 0 1px #f0d9a8; }
+.todo-alarm-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border-radius: 14px; background: color-mix(in srgb, #fff 70%, transparent); box-shadow: inset 0 0 0 1px #f0d9a8; }
 .dark .todo-alarm-item { background: color-mix(in srgb, #000 18%, transparent); }
+.todo-alarm-main { flex: 1 1 10em; min-width: 0; display: flex; align-items: flex-start; gap: 8px; }
 .todo-alarm-time { flex: none; font-weight: 800; color: #6a4a00; }
 .dark .todo-alarm-time { color: #ffd36a; }
-.todo-alarm-title { flex: 1 1 0; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
-.todo-alarm-item .chip { flex: none; }
+.todo-alarm-title { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.todo-alarm-item .chip { flex: none; min-height: 44px; }
 .todo-alarm-sub { color: #6f645d; font-size: 13px; margin: 2px 0 0; font-weight: 500; }
 .dark .todo-alarm-sub { color: var(--ink-sub); }
 /* 일정 탭 A1 주간 목록 (SW v56) */
