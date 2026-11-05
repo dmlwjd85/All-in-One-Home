@@ -29,37 +29,46 @@ function TabIcon({ id }) {
 
 /** 시안 C 가운데 쨈: 딸기쨈 병(주름 천 뚜껑·유리 반짝임·알갱이 쨈·딸기 라벨). 글자 「쨈」은 아래에 따로 씁니다. */
 export function JjaemJar() {
+    /* 선생님 확정(11/6 08:25) 시안 B2: 손그림 스티커 느낌의 딸기쨈 병. 체크무늬 천 뚜껑과 리본, 흘러내리는 잼, 딸기 라벨, 흰 스티커 테두리, 작은 하트. */
     return (
         <span className="fab-disc jar-disc" aria-hidden="true">
             <span className="cup-squish">
                 <svg className="jar-svg" viewBox="0 0 64 72" aria-hidden="true">
                     <defs>
-                        <linearGradient id="tbj-jar-fill" x1="18" y1="22" x2="46" y2="58" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#F27890" /><stop offset=".42" stopColor="#E05A72" /><stop offset="1" stopColor="#B23552" /></linearGradient>
-                        <linearGradient id="tbj-jar-lid" x1="14" y1="4" x2="50" y2="18" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#FFE69A" /><stop offset=".45" stopColor="#FFD45E" /><stop offset="1" stopColor="#E0B038" /></linearGradient>
-                        <linearGradient id="tbj-jar-hi" x1="20" y1="20" x2="30" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#fff" stopOpacity=".9" /><stop offset=".5" stopColor="#fff" stopOpacity=".28" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
+                        <pattern id="tbj-gingham" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)">
+                            <rect width="6" height="6" fill="#FFF6F2" />
+                            <rect width="3" height="6" fill="#F28C9C" opacity=".75" />
+                            <rect width="6" height="3" fill="#F28C9C" opacity=".75" />
+                            <rect width="3" height="3" fill="#D9445E" />
+                        </pattern>
+                        <linearGradient id="tbj-jar-fill" x1="16" y1="28" x2="48" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#E8506A" /><stop offset=".5" stopColor="#C8304C" /><stop offset="1" stopColor="#9E1E38" /></linearGradient>
                     </defs>
-                    <path d="M17.5 22.2c0-3.4 2.6-5.8 6-5.8h17c3.4 0 6 2.4 6 5.8v3.8c0 2.4 2.4 4 2.4 7v20.8c0 5.4-4 8.7-9.2 8.7H24.3c-5.2 0-9.2-3.3-9.2-8.7V33c0-3 2.4-4.6 2.4-7z" fill="#FFFCFA" stroke="#E9DED6" strokeWidth="2.4" strokeLinejoin="round" />
-                    <path d="M20.4 33h23.2v19.6c0 3.6-2.5 5.8-6 5.8H26.4c-3.5 0-6-2.2-6-5.8z" fill="url(#tbj-jar-fill)" />
-                    {/* 병 입구에서 둥글게 흘러내리는 쨈 */}
-                    <path d="M18.8 24.2h26.4v3.3c0 1.2-.9 1.8-2 1.8-1 0-1.7.7-1.7 1.8v2.2a2 2 0 01-4 0v-2.6c0-1-.7-1.6-1.6-1.6-1 0-1.6.6-1.6 1.5a1.7 1.7 0 01-3.4 0c0-.9-.7-1.5-1.6-1.5-1 0-1.7.7-1.7 1.7v1.6a2 2 0 01-4 0v-1.6c0-1-.7-1.7-1.7-1.7-1.1 0-2-.6-2-1.8z" fill="url(#tbj-jar-fill)" />
-                    <ellipse cx="25" cy="39" rx="1.6" ry="1" fill="#FFE08A" transform="rotate(-20 25 39)" />
-                    <ellipse cx="32.2" cy="42.6" rx="1.45" ry=".9" fill="#FFF1A8" transform="rotate(24 32.2 42.6)" />
-                    <ellipse cx="39.2" cy="38" rx="1.5" ry=".95" fill="#FFE08A" transform="rotate(10 39.2 38)" />
-                    <ellipse cx="28.2" cy="46.5" rx="1.35" ry=".85" fill="#FFD45E" transform="rotate(-30 28.2 46.5)" />
-                    <ellipse cx="37" cy="45.5" rx="1.4" ry=".88" fill="#FFF1A8" transform="rotate(28 37 45.5)" />
-                    <path d="M22 26c1.4 0 2.4.8 2.6 2.2.6 4.2.2 10.2-.6 15.4-.3 1.8-1.4 2.6-2.6 2.2-1.1-.4-1.6-1.5-1.4-3 .6-5.2 1.2-11.2.6-15.2-.2-1.2.4-1.6 1.4-1.6z" fill="url(#tbj-jar-hi)" />
-                    <rect x="13.5" y="5" width="37" height="13.2" rx="5.5" fill="#FFD45E" stroke="#fff" strokeWidth="2.2" />
-                    <rect x="13.5" y="5" width="37" height="13.2" rx="5.5" fill="url(#tbj-jar-lid)" />
-                    <path d="M16.5 15.8c2.4 1 5.2.85 7.8-.15 2.7-1 4.5-1 7.2-.05 2.8 1 5.4.95 8 .1 2.5-.8 5.3-.7 7.7.2" stroke="#B88820" strokeWidth="1.25" strokeLinecap="round" opacity=".65" fill="none" />
-                    <path d="M18.8 9c1.7 2 3.5 2.1 5.2.2M25.6 8.2c1.7 2.3 3.8 2.4 5.6.15M33 8.3c1.7 2.1 3.9 2.2 5.7.2M40.4 9c1.3 1.6 2.8 1.7 4.3.15" stroke="#C99828" strokeWidth="1.3" strokeLinecap="round" opacity=".72" fill="none" />
-                    <path d="M17.8 7.8c5-1.8 11.5-2.2 17.2-1.8 4.6.3 8.8 1.2 12 2.4" stroke="#fff" strokeWidth="1.35" strokeLinecap="round" opacity=".6" fill="none" />
-                    <rect x="18.5" y="49" width="27" height="12.2" rx="3.5" fill="#FFF4CF" stroke="#E9DED6" strokeWidth="1.2" />
-                    <g transform="translate(27.6 50.8) scale(1.05)">
-                        <path d="M4.2 9.4c2.7 0 4.8-2.5 4.8-4.8C9 2.3 7.1.6 4.2.6S-.6 2.3-.6 4.6c0 2.3 2.1 4.8 4.8 4.8z" fill="#E05A72" />
-                        <ellipse cx="2.7" cy="4.1" rx=".55" ry=".4" fill="#FFE08A" />
-                        <ellipse cx="5.5" cy="5.2" rx=".5" ry=".38" fill="#FFF1A8" />
-                        <path d="M1.5 1.2c.75-1 2.15-1 3-.2.75-.85 2.15-.85 2.9.15-1 .35-1.85.3-2.9.05-.95.2-2 .3-3 0z" fill="#6BA86A" />
-                    </g>
+                    {/* 흰 스티커 테두리 */}
+                    <path d="M14 15c5-6 31-6 36 0 2.5 1.8 3 4 1.4 6.4 4.4 4.5 7 10.5 7 17.8C58.4 55 47 67 32 67S5.6 55 5.6 39.2c0-7.3 2.6-13.3 7-17.8-1.6-2.4-1.1-4.6 1.4-6.4z" fill="#fff" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" />
+                    {/* 동그란 유리병 */}
+                    <path d="M13.4 24.6C10 28.4 8.4 33.4 8.4 39.4 8.4 53.6 18.6 63.6 32 63.6S55.6 53.6 55.6 39.4c0-6-1.6-11-5-14.8z" fill="#FFF8F6" stroke="#3A2A2C" strokeWidth="2" strokeLinejoin="round" />
+                    {/* 잼 */}
+                    <path d="M11.6 34.2c3.4-1.8 6.2-.6 9.4-1.6 3.6-1.1 6.6.9 10.4-.2 4-1.2 7.4.8 11 0 3.2-.7 6.2-.4 9.4 1.6.6 1.6.9 3.4.9 5.4 0 12.2-8.6 21-20.7 21S11.3 51.8 11.3 39.6c0-2 .1-3.8.3-5.4z" fill="url(#tbj-jar-fill)" />
+                    <g fill="#FFC870"><ellipse cx="19" cy="40" rx="1.1" ry=".75" /><ellipse cx="45" cy="41" rx="1.1" ry=".75" /><ellipse cx="22" cy="53" rx="1" ry=".7" /><ellipse cx="43" cy="53" rx="1" ry=".7" /><ellipse cx="16.5" cy="47" rx=".9" ry=".65" /></g>
+                    {/* 유리 빛 */}
+                    <path d="M14.6 31c-2.4 4.4-2.8 10-1.2 14.6" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".85" fill="none" />
+                    {/* 딸기 라벨 */}
+                    <path d="M20.2 41.4h23.6l1.4 1.6v9.2l-1.4 1.6H20.2l-1.4-1.6V43z" fill="#FFF0D6" stroke="#3A2A2C" strokeWidth="1.3" strokeLinejoin="round" />
+                    <path d="M32 52.6c2.8 0 4.4-2.4 4.4-4.6 0-1.9-1.7-3-4.4-3s-4.4 1.1-4.4 3c0 2.2 1.6 4.6 4.4 4.6z" fill="#E0405C" stroke="#9E1E38" strokeWidth=".6" />
+                    <path d="M29.6 45.2c.8-1.3 1.6-1.3 2.4-.3.8-1 1.6-1 2.4.3-.9.5-1.7.4-2.4.2-.7.2-1.5.3-2.4-.2z" fill="#4E9A52" />
+                    <g fill="#FFE29A"><circle cx="30.6" cy="47.6" r=".45" /><circle cx="33.4" cy="47.8" r=".45" /><circle cx="32" cy="50" r=".45" /></g>
+                    {/* 체크무늬 천 뚜껑 (주름진 끝) */}
+                    <path data-part="gingham" d="M15 12.4c4.6-5 29.4-5 34 0 1.6 1.7 1.6 3.8.4 5.6 1.4 1.4 3 2.9 3.4 4.6.4 1.6-.9 2.4-2.2 1.9-1.4 1.6-3.2 1.8-4.6.6-1.6 1.6-3.8 1.6-5.2.2-1.8 1.6-4.2 1.6-5.8.1-1.6 1.5-4 1.5-5.6 0-1.6 1.5-4 1.5-5.8-.1-1.4 1.4-3.6 1.4-5.2-.2-1.4 1.2-3.2 1-4.6-.6-1.3.5-2.6-.3-2.2-1.9.4-1.7 2-3.2 3.4-4.6-1.2-1.8-1.2-3.9.4-5.6z" fill="url(#tbj-gingham)" stroke="#3A2A2C" strokeWidth="1.8" strokeLinejoin="round" />
+                    {/* 흘러내리는 잼 두 줄기 */}
+                    <path d="M22 25.4c.4 2.6-.2 5 1 6.4 1.2 1.4 3 .4 2.8-1.6-.2-2-.2-3.4.2-4.8z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
+                    <path d="M35.6 25.8c.2 3.4-.4 7 .8 8.8 1.2 1.8 3.4.8 3.2-1.4-.2-2.4-.4-5 0-7.4z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
+                    <circle cx="37.6" cy="30" r=".55" fill="#fff" opacity=".8" />
+                    {/* 끈과 리본 */}
+                    <path d="M13.6 19.2c6 1.8 30.8 1.8 36.8 0" stroke="#D9445E" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                    <path d="M44 19.6c-2.6-2.6-5.6-2-5 .4.6 2 3.2 1.4 5-.4zm0 0c2.4-2.8 5.6-2.4 5.2 0-.4 2.2-3.2 1.8-5.2 0zm0 0l-2 5.4m2-5.4l2.8 5" stroke="#D9445E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="#F7A8B4" />
+                    {/* 작은 하트 */}
+                    <path d="M58.4 11.4c-.6-1.4-2.6-1-2.4.6.2 1.2 2.4 2.6 2.4 2.6s2.2-1.4 2.4-2.6c.2-1.6-1.8-2-2.4-.6z" fill="none" stroke="#E0405C" strokeWidth="1" strokeLinejoin="round" />
+                    <path d="M5 13c-.5-1.1-2.1-.8-1.9.5.1 1 1.9 2.1 1.9 2.1s1.8-1.1 1.9-2.1c.2-1.3-1.4-1.6-1.9-.5z" fill="none" stroke="#E0405C" strokeWidth=".9" strokeLinejoin="round" />
                 </svg>
             </span>
         </span>

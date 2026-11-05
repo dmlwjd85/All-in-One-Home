@@ -460,7 +460,7 @@ html.dark .foil-fab .fab-disc.jar-disc {
         transition: transform .46s cubic-bezier(.28, 1.9, .42, .9), box-shadow .46s cubic-bezier(.28, 1.9, .42, .9);
     }
     .jar-disc::before { top: 4px; left: 7px; right: 7px; width: auto; height: 18px; border-radius: 11px; background: linear-gradient(180deg, rgba(255, 255, 255, .8), rgba(255, 255, 255, .15) 70%, transparent); }
-    .jar-svg { width: 36px; height: 40px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .22)) drop-shadow(0 4px 5px rgba(160, 30, 66, .2)); }
+    .jar-svg { width: 42px; height: 47px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .22)) drop-shadow(0 4px 5px rgba(160, 30, 66, .2)); }
     .foil-fab.is-pressed .fab-disc.jar-disc,
     html.dark .foil-fab.is-pressed .fab-disc.jar-disc {
         transform: translateY(10px) scale(1.12, .84);
@@ -479,7 +479,7 @@ html.dark .foil-fab .fab-disc.jar-disc {
 @media (min-width: 301px) and (max-width: 340px) {
     .tabbar.tabbar-jelly .fab.tbj-mid { margin-top: -30px; gap: 13px; min-width: 44px; }
     .foil-fab .fab-disc.jar-disc, html.dark .foil-fab .fab-disc.jar-disc { width: 44px; height: 44px; border-radius: 14px; }
-    .jar-svg { width: 28px; height: 31px; }
+    .jar-svg { width: 32px; height: 36px; }
 }
 html.dark .tabbar.tabbar-jelly {
     background: linear-gradient(180deg, #3A3236 0%, #2D272A 100%);

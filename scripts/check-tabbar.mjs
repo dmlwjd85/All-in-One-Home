@@ -87,7 +87,7 @@ async function measure(page) {
             sideAria: cells.filter((el) => el !== mid).map((el) => ({ tab: el.getAttribute('data-tab'), aria: el.getAttribute('aria-label') || '', label: el.querySelector('.tbj-label')?.textContent || '' })),
             midTouch: Math.min(midBox.width, midBox.height),
             sideTouch: Math.min(...cells.filter((el) => el !== mid).map((el) => { const r = el.getBoundingClientRect(); return Math.min(r.width, r.height); })),
-            jarSvg: Boolean(mid.querySelector('.jar-svg rect[fill="#FFD45E"]')),
+            jarSvg: Boolean(mid.querySelector('.jar-svg [data-part="gingham"]')),
             navH: Math.round(box.height),
             hScroll: document.documentElement.scrollWidth > window.innerWidth + 1,
         };
