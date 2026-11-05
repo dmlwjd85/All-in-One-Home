@@ -18,7 +18,9 @@ import { boot, clearAll, exportFile, finishSetup, importText, saveQuick, saveTex
 import { keySoundEnabled, keySoundNoticePending, rememberKeySoundNotice } from '../src/ui/keyfeel.js';
 import { acceptTypeInput, isSensitiveControl, isTextControl, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, setTypeSound, shouldTypeSound, typeSoundEnabled, typeVoiceId } from '../src/ui/typesound.js';
 import { assignHotkey, defaultHotkeys, hotkeyFootnote, hotkeyFromEvent, hotkeyPhoneNote, isStoredHotkey, kokHotkeyHint, loadHotkeys, matchHotkey, passesThroughCapture, resetHotkeys, saveHotkeys, shortcutBlocked } from '../src/ui/hotkeys.js';
-import { menuSelected, menuTarget, tabSelected } from '../src/ui/menu.js';
+import { MENU, menuSelected, menuTarget, tabSelected } from '../src/ui/menu.js';
+import { csvEscape, htmlEscape } from '../src/lib/neisExport.js';
+import { seoulYmd } from '../src/lib/date.js';
 import { fromCloudRow, toCloudProfile, toCloudRow } from '../src/lib/cloudShape.js';
 import { captureDrafts } from '../src/ui/capture.js';
 
@@ -522,6 +524,25 @@ const bareTable = resolveHash('#/schedule/table', '2026-10-26');
 check(bareTable.params.view === '시간표' && bareTable.params.date === '2026-10-26' && bareTable.replace === '#/schedule/table/2026-10-26' && !bareTable.notice, '날짜 없는 시간표가 주 보기로 풀립니다.');
 const missingTable = resolveHash('#/schedule/table/2026-13-01', '2026-10-26');
 check(missingTable.params.view === '시간표' && missingTable.params.date === '2026-10-26' && missingTable.replace === '#/schedule/table/2026-10-26' && missingTable.notice.includes('달력에 없어요'), '잘못된 시간표 날짜가 주 보기로 풀립니다.');
+
+/** PR #68: 메뉴 순서·CSV·삭제 확인·월간 제목·단축키 간격을 지키는 검사. */
+check(MENU.map((row) => row[0]).join('|') === '오늘|출결|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
+check(csvEscape('=1+1') === "'=1+1" && csvEscape('+2') === "'+2" && csvEscape('-3') === "'-3" && csvEscape('@A1') === "'@A1", 'CSV 수식 앞 글자에 따옴표를 붙이지 않습니다.');
+check(csvEscape('안녕,세계') === '"안녕,세계"' && csvEscape('a"b') === '"a""b"', 'CSV 쉼표·따옴표 이스케이프가 깨졌습니다.');
+check(htmlEscape('<img src=x onerror=1>') === '&lt;img src=x onerror=1&gt;' && htmlEscape(`a&b"c'd`) === 'a&amp;b&quot;c&#39;d', '인쇄 HTML 이스케이프가 깨졌습니다.');
+const studentsSrc = readFileSync(`${root}/src/ui/Students.jsx`, 'utf8');
+check(studentsSrc.includes("window.confirm('이 기록을 지울까요?')"), '학생 기록 삭제 확인이 없습니다.');
+check(studentsSrc.includes('seoulYmd()') && !studentsSrc.includes("toISOString().slice(0, 10)"), '나이스 파일 이름이 한국 날짜가 아닙니다.');
+check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력</Btn>'), '출력 머리나 단추 문구가 빠졌습니다.');
+const scheduleSrc = readFileSync(`${root}/src/ui/Schedule.jsx`, 'utf8');
+check(scheduleSrc.includes("className={row.google ? 'cal-event-title is-google' : 'cal-event-title'}") && scheduleSrc.includes('titleNames'), '월간 칸에 일정 제목이 없습니다.');
+const cssSrc = readFileSync(`${root}/src/index.css`, 'utf8');
+check(/\.hotkey-list\s*\{\s*display:\s*grid;\s*gap:\s*4px;\s*\}/.test(cssSrc), '단축키 목록 간격이 4px가 아닙니다.');
+check(cssSrc.includes('.cal-event-title') && cssSrc.includes('font-weight: 400'), '월간 제목 스타일이 빠졌습니다.');
+const browserSrc = readFileSync(`${root}/scripts/check-browser.mjs`, 'utf8');
+check(browserSrc.includes("querySelector('.cal-event-title')") && !browserSrc.includes("innerText.includes('·')"), '브라우저 검사가 월간 제목 대신 · 점을 찾습니다.');
+check(seoulYmd(new Date('2026-11-05T00:30:00+09:00')) === '2026-11-05' && seoulYmd(new Date('2026-11-04T15:30:00Z')) === '2026-11-05', '한국 날짜 도우미가 UTC와 어긋납니다.');
+
 
 const hotStore = {
     map: new Map(),

@@ -1408,7 +1408,7 @@ try {
             for (let hop = 0; hop < 3 && !found; hop += 1) {
                 const count = await page.evaluate(() => document.querySelectorAll('.cal-grid button').length);
                 for (let index = 0; index < count && !found; index += 1) {
-                    const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
+                    const marked = await page.evaluate((n) => !!document.querySelectorAll('.cal-grid button')[n]?.querySelector('.cal-event-title'), index);
                     if (!marked) continue;
                     const monthTitle = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
                     const body = await page.evaluate(async (n) => {

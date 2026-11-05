@@ -996,16 +996,25 @@ button.glass[aria-pressed="true"]:active {
 .day-rest-mark { color: var(--rest-ink); font-weight: 800; }
 .rest-banner { border-radius: 16px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .cal-grid .tap.day-rest { background: var(--rest-bg); }
-.cal-grid .tap.cal-today .num {
-    display: inline-grid;
+.cal-grid .cal-day-num,
+.cal-grid .tap .num {
+    display: grid;
     place-items: center;
-    min-width: 24px;
+    width: 24px;
     height: 24px;
+    margin: 0 auto;
     border-radius: 999px;
+    line-height: 1;
+    text-align: center;
+    box-sizing: border-box;
+}
+.cal-grid .tap.cal-today .num,
+.cal-grid .tap.cal-today .cal-day-num {
     background: var(--accent);
     color: var(--on-primary);
 }
 .dark .cal-grid .tap.cal-today .num { color: var(--bg); }
+.dark .cal-grid .tap.cal-today .cal-day-num { color: var(--bg); }
 .cal-grid .tap.cal-today.cal-picked { box-shadow: inset 0 0 0 2px var(--ink); }
 .cal-grid .day-rest-mark { font-weight: 500; }
 
@@ -1087,8 +1096,15 @@ button.glass[aria-pressed="true"]:active {
     font-weight: 400;
     text-align: left;
     color: var(--ink);
+    letter-spacing: -0.02em;
 }
 .cal-event-title.is-google { color: var(--st-early); font-weight: 400; }
+@media (min-width: 390px) {
+    .cal-event-title { font-size: 11px; line-height: 13px; letter-spacing: 0; }
+}
+@media (min-width: 720px) {
+    .cal-event-title { font-size: 12px; line-height: 14px; }
+}
 .gcal-mark {
     color: var(--st-early);
     font-size: 11px;

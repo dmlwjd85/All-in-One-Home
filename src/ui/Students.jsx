@@ -4,6 +4,8 @@ import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
+import { seoulYmd } from '../lib/date.js';
+import { csvEscape, htmlEscape } from '../lib/neisExport.js';
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -127,7 +129,7 @@ export function Student() {
                         </div>
                         {editingId === row.id ? (
                             <div style={{ marginTop: 8 }}>
-                                <textarea className="field" rows={3} aria-label="기록 고치기" value={draft} onChange={(event) => setDraft(event.target.value)} />
+                                <textarea className="field" rows={3} aria-label="기록 고치기" value={draft} autoFocus onChange={(event) => setDraft(event.target.value)} />
                                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                                     <Btn className="primary-btn" onClick={() => saveEdit(row)}>저장</Btn>
                                     <Btn className="chip" onClick={() => { setEditingId(''); setDraft(''); }}>취소</Btn>
@@ -156,12 +158,6 @@ export function Student() {
             <p className="muted">건강·민원처럼 민감한 내용은 자물쇠가 붙고, 클라우드로 보내지 않아요.</p>
         </div>
     );
-}
-
-function csvEscape(value) {
-    const text = String(value ?? '');
-    if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-    return text;
 }
 
 function neisCsv(groups, students) {
@@ -194,7 +190,10 @@ export function Neis() {
             if (!map.has(key)) map.set(key, []);
             map.get(key).push(row);
         });
-        return [...map.entries()];
+        return [...map.entries()].map(([sid, rows]) => [
+            sid,
+            [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.at || '').localeCompare(String(b.at || ''))),
+        ]);
     }, [records]);
 
     async function copyAll() {
@@ -220,14 +219,14 @@ export function Neis() {
         const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        const stamp = new Date().toISOString().slice(0, 10);
+        const stamp = seoulYmd();
         link.href = url;
         link.download = `나이스모아_${stamp}.csv`;
         document.body.appendChild(link);
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        showToast('엑셀에서 열 수 있는 표를 이 기기에만 내려받았어요. 인쇄도 그 파일로 하시면 됩니다.');
+        showToast('엑셀에서 열 수 있는 표를 이 기기에만 내려받았어요.');
     }
 
     function printTable() {
@@ -238,15 +237,18 @@ export function Neis() {
         const rowsHtml = groups.map(([sid, rows]) => {
             const student = data.students.find((item) => item.id === sid);
             const head = student ? `${student.no} ${student.name}` : '학생 미정';
-            const body = rows.map((row) => `<tr><td>${row.date || ''}</td><td>${row.kind || ''}</td><td>${(row.tags || []).join(' · ')}</td><td>${String(row.text || '').replace(/</g, '&lt;')}</td></tr>`).join('');
-            return `<h2>${head}</h2><table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>날짜</th><th>종류</th><th>태그</th><th>내용</th></tr></thead><tbody>${body}</tbody></table>`;
+            const body = rows.map((row) => {
+                const text = htmlEscape(row.text || '').replace(/\n/g, '<br>');
+                return `<tr><td>${htmlEscape(row.date || '')}</td><td>${htmlEscape(row.kind || '')}</td><td>${htmlEscape((row.tags || []).join(' · '))}</td><td>${text}</td></tr>`;
+            }).join('');
+            return `<h2>${htmlEscape(head)}</h2><table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>날짜</th><th>종류</th><th>태그</th><th>내용</th></tr></thead><tbody>${body}</tbody></table>`;
         }).join('');
         const win = window.open('', '_blank');
         if (!win) {
-            showToast('출력 창을 열지 못했어요. 먼저 「내려받기」로 받은 파일을 인쇄해 주세요.');
+            showToast('출력 창을 열지 못했어요. 먼저 「내려받기」로 받은 파일을 출력해 주세요.');
             return;
         }
-        win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>나이스 모아 보기</title><style>body{padding:16px}table{border-collapse:collapse;width:100%;margin-bottom:16px}td,th{vertical-align:top}</style></head><body><h1>나이스 모아 보기</h1><p>민감 기록은 이 기기에만 있어요. 서버로는 보내지 않습니다.</p>${rowsHtml}</body></html>`);
+        win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>나이스 모아 보기 · 쨈 교무수첩</title><style>body{padding:16px;color:#111}h1{font-size:20px;margin:0 0 4px}.brand{font-size:13px;color:#555;margin:0 0 12px}table{border-collapse:collapse;width:100%;margin-bottom:16px;table-layout:fixed}th,td{vertical-align:top;border:1px solid #999;padding:6px;word-break:break-word;white-space:pre-wrap}th:nth-child(1),td:nth-child(1){width:18%}th:nth-child(2),td:nth-child(2){width:12%}th:nth-child(3),td:nth-child(3){width:18%}th:nth-child(4),td:nth-child(4){width:52%}</style></head><body><p class="brand">쨈 교무수첩</p><h1>나이스 모아 보기</h1><p>민감 기록은 이 기기에만 있어요.</p>${rowsHtml}</body></html>`);
         win.document.close();
         win.focus();
         win.print();
@@ -270,7 +272,7 @@ export function Neis() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Btn className="primary-btn" style={{ flex: 1 }} onClick={copyAll}>전체 복사</Btn>
                 <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
-                <Btn className="chip" onClick={printTable}>인쇄</Btn>
+                <Btn className="chip" onClick={printTable}>출력</Btn>
             </div>
             {groups.map(([sid, rows]) => {
                 const student = data.students.find((item) => item.id === sid);
