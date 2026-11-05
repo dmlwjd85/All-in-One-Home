@@ -166,8 +166,8 @@ html.dark .tab-jelly.is-on .tbj-ico { background: linear-gradient(180deg, #5A3A4
     justify-content: flex-end;
 }
 .foil-fab .fab-disc.jar-disc {
-    width: 46px;
-    height: 46px;
+    width: 48px;
+    height: 48px;
     background:
         radial-gradient(ellipse 60% 38% at 30% 20%, rgba(255, 255, 255, 1), transparent 50%),
         linear-gradient(160deg, #FFFFFF, #FFE0EC 38%, #FFB0C0 100%);
