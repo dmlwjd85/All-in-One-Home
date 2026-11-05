@@ -1,10 +1,11 @@
 /**
  * 하단 탭바 배치 두 기기 동기화(에뮬레이터 + 실제 규칙 + 진짜 cloud.js). 나중에 고친 쪽이 이기고, 오프라인·로그인 전에는 이 기기에만 남습니다.
+ * T7 park/adopt·flush 리스너 0회, T8 손님→가방 없는 첫 로그인 승계 정책, T9 flush 중 계정 전환 격리.
  */
 import { cpSync, readFileSync, rmSync } from 'node:fs';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { execSync } from 'node:child_process';
-import { collection, doc, getDoc, getDocs, disableNetwork, enableNetwork, serverTimestamp, setDoc, Timestamp, terminate } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, deleteDoc, disableNetwork, enableNetwork, serverTimestamp, setDoc, Timestamp, terminate } from 'firebase/firestore';
 
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); };
@@ -75,6 +76,17 @@ for (const [name, dir] of [['A', 'a'], ['B', 'b']]) ts[name] = await import(new 
 const orderOf = (dev) => { cur = dev; return ts[dev].loadTabOrder().join(); };
 const setT = (dev, order) => on(dev, () => ts[dev].saveTabOrder(order));
 const cloudTab = async () => { const s = await getDoc(doc(admin(), 'users', UID, 'settings', 'tabbar')); return s.exists() ? s.data() : null; };
+
+const cloudTabOf = async (uid) => {
+    const s = await getDoc(doc(env.authenticatedContext(uid).firestore(), 'users', uid, 'settings', 'tabbar'));
+    return s.exists() ? s.data() : null;
+};
+const bindFs = (dev, uid) => {
+    const fs = env.authenticatedContext(uid).firestore();
+    devices[dev].fb.useFirebaseForTest({ config, bundle: { app: null, auth: null, db: fs, memoryOnly: false } });
+    devices[dev].fs = fs;
+};
+
 const O1 = ['minutes', 'todo', 'attend', 'schedule', 'students', 'more'];
 const O2 = ['notice', 'today', 'todo', 'attend', 'schedule', 'more'];
 const O3 = ['neis', 'settings', 'today', 'todo', 'more', 'attend'];
@@ -150,6 +162,94 @@ check(cloudAfter?.order?.join() === O1.join() && cloudAfter?.at === cloudBefore.
 await on('A', (db) => db.setAuth({ uid: UID }));
 await wait(50);
 check(orderOf('A') === O1.join() && ts.A.tabState().at > 0, `T6: A로 돌아왔을 때 배치가 되살아나지 않았습니다: ${orderOf('A')} / ${JSON.stringify(ts.A.tabState())}`);
+
+
+/* T7: parkTabAccount → at 0·가방 보관, adoptTabAccount 복원, 그동안 subscribeTabOrder(flush 트리거) 0회 */
+{
+    cur = 'A';
+    const parkedOrder = O3;
+    await setT('A', parkedOrder);
+    const before = ts.A.tabState();
+    check(before.at > 0 && before.order.join() === parkedOrder.join(), `T7: park 전 로컬 준비가 안 됐습니다: ${JSON.stringify(before)}`);
+    let flushListeners = 0;
+    const stopListen = ts.A.subscribeTabOrder(() => { flushListeners += 1; });
+    ts.A.parkTabAccount('A');
+    const parked = ts.A.tabState();
+    check(parked.at === 0 && parked.order.join() === ts.A.DEFAULT_ORDER.join(), `T7: park 뒤 at=0·기본 배치가 아닙니다: ${JSON.stringify(parked)}`);
+    const bagRaw = globalThis.localStorage.getItem(ts.A.TAB_ACCOUNTS_KEY);
+    const bag = bagRaw ? JSON.parse(bagRaw) : {};
+    check(bag.A && bag.A.at === before.at && bag.A.order.join() === before.order.join(), `T7: park 뒤 가방에 A가 없습니다: ${bagRaw}`);
+    const adopted = ts.A.adoptTabAccount('A');
+    check(adopted === true, 'T7: adoptTabAccount가 false를 돌려줬습니다.');
+    const after = ts.A.tabState();
+    check(after.at === before.at && after.order.join() === before.order.join(), `T7: adopt 뒤 복원이 안 됐습니다: ${JSON.stringify(after)}`);
+    stopListen();
+    check(flushListeners === 0, `T7: park/adopt 동안 flush 리스너가 ${flushListeners}회 불렸습니다(0이어야 함).`);
+}
+
+/* T8: 손님 배치(at>0) 뒤 가방 없는 B 첫 로그인 — 승계 정책: 로컬 손님 배치가 B 클라우드로 올라감(명시) */
+{
+    const UID2 = 'teacher-tabsync-b';
+    const OGUEST = ['notice', 'minutes', 'todo', 'attend', 'schedule', 'more'];
+    await on('B', (db) => db.setAuth(null));
+    await wait(30);
+    cur = 'B';
+    /* 진짜 손님(이전에 로그인 흔적 없음): lastCloudUid 비움 → setAuth가 전환이 아니라 첫 로그인(adopt) 경로 */
+    globalThis.localStorage.removeItem('ssug-gyomu-cloud-forget');
+    devices.B.db.reloadCloudForgetForTest();
+    globalThis.localStorage.removeItem(ts.B.TAB_ACCOUNTS_KEY);
+    globalThis.localStorage.removeItem(ts.B.TAB_KEY);
+    await setT('B', OGUEST);
+    const guest = ts.B.tabState();
+    check(guest.at > 0 && guest.order.join() === OGUEST.join(), `T8: 손님 배치 준비가 안 됐습니다: ${JSON.stringify(guest)}`);
+    check(!(await cloudTabOf(UID2)), `T8: 로그인 전 B 클라우드에 이미 문서가 있습니다: ${JSON.stringify(await cloudTabOf(UID2))}`);
+    const bagBefore = globalThis.localStorage.getItem(ts.B.TAB_ACCOUNTS_KEY);
+    check(!bagBefore || !JSON.parse(bagBefore || '{}')[UID2], `T8: B 가방이 비어 있어야 합니다: ${bagBefore}`);
+    bindFs('B', UID2);
+    await on('B', (db) => db.setAuth({ uid: UID2 }));
+    await wait(50);
+    /* adopt 실패(가방 없음) → 손님 배치 유지가 정책 */
+    check(orderOf('B') === OGUEST.join() && ts.B.tabState().at > 0, `T8: 첫 로그인 뒤 손님 배치가 유지되지 않았습니다: ${JSON.stringify(ts.B.tabState())}`);
+    await on('B', (db) => db.flushCloud());
+    const bCloud = await cloudTabOf(UID2);
+    check(bCloud?.order?.join() === OGUEST.join(), `T8: 승계 정책 — 가방 없는 첫 로그인 후 B 클라우드에 손님 배치가 올라가야 합니다: ${JSON.stringify(bCloud)}`);
+    /* 손님 승계는 B(UID2)에만 적용되고 A(UID) 클라우드 문서를 손님 배치로 덮지 않습니다. */
+    const aStill = await cloudTabOf(UID);
+    check(aStill?.order?.join() !== OGUEST.join(), `T8: A 클라우드에 손님 배치가 새어 들어갔습니다: ${JSON.stringify(aStill)}`);
+}
+
+/* T9: A flush 진행 중 B로 전환 — A cloud 배치 보존, B cloud에 A order 미기록 */
+{
+    const UID2 = 'teacher-tabsync-b';
+    bindFs('A', UID);
+    await on('A', (db) => db.setAuth({ uid: UID }));
+    await wait(GAP);
+    await setT('A', O1);
+    await on('A', (db) => db.flushCloud());
+    const before = await cloudTabOf(UID);
+    check(before?.order?.join() === O1.join(), `T9: 전환 전 A 클라우드 준비 실패: ${JSON.stringify(before)}`);
+    /* B 클라우드를 비워 둔 뒤(이전 T8 문서 삭제) 경합을 봅니다. */
+    try {
+        await deleteDoc(doc(env.authenticatedContext(UID2).firestore(), 'users', UID2, 'settings', 'tabbar'));
+    } catch { /* 없으면 무시 */ }
+    await wait(GAP);
+    /* 올릴 거리가 있게 한 번 더 고친 뒤, flush를 기다리기 전에 B로 바꿉니다. */
+    await setT('A', O1);
+    cur = 'A';
+    const pending = devices.A.db.flushCloud();
+    await on('A', (db) => db.setAuth({ uid: UID2 }));
+    /* 전환 뒤 B 토큰으로 바인딩해, 새면 B 경로에 실제로 쓰이게 합니다(미기록 검증). */
+    bindFs('A', UID2);
+    await pending.catch(() => {});
+    await wait(120);
+    await on('A', (db) => db.flushCloud()).catch(() => {});
+    const aAfter = await cloudTabOf(UID);
+    check(aAfter?.order?.join() === O1.join(), `T9: flush 중 전환 뒤 A 클라우드가 덮였습니다: ${JSON.stringify(aAfter)} / before ${JSON.stringify(before)}`);
+    check(Number(aAfter?.at) >= Number(before.at), `T9: A 클라우드 at이 줄었습니다: ${JSON.stringify(aAfter)} / before ${JSON.stringify(before)}`);
+    const bAfter = await cloudTabOf(UID2);
+    check(!bAfter || bAfter.order.join() !== O1.join(), `T9: B 클라우드에 A 배치(O1)가 기록됐습니다: ${JSON.stringify(bAfter)}`);
+}
+
 
 for (const d of Object.values(devices)) { try { await terminate(d.fs); } catch { /* 이미 닫힘 */ } }
 await env.cleanup();
