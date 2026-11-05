@@ -4,6 +4,7 @@ import { seoulParts } from '../lib/date.js';
 import { dueAlarms, markFired, readFired, splitAlarms } from '../lib/todoAlarm.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { alarmTimeLabel } from '../lib/jjaemPaste.js';
 
 /* 짧은 알림음 세 번. 파일 없이 WebAudio로 만듭니다. 브라우저가 소리를 막으면 팝업만 뜹니다. */
 let audioCtx = null;
@@ -78,6 +79,14 @@ export function TodoAlarm() {
     }, []);
     // 할 일을 고치거나 새로 받으면 20초를 기다리지 않고 바로 봅니다(이미 지난 시각이면 곧 울림).
     useEffect(() => { checkRef.current(); }, [todoSig]);
+    // Esc로 알림 카드를 닫습니다(확인 버튼과 같음).
+    const open = ringing.length > 0;
+    useEffect(() => {
+        if (!open) return undefined;
+        const onKey = (event) => { if (event.key === 'Escape') setRinging([]); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open]);
 
     if (!ringing.length) return null;
     const close = () => setRinging([]);
@@ -87,12 +96,23 @@ export function TodoAlarm() {
         <div className="sheet-back todo-alarm-back" onClick={close}>
             <div className="sheet todo-alarm" role="alertdialog" aria-modal="true" aria-label="할 일 알림" data-screen="todo-alarm" data-missed={allMissed ? "1" : "0"} onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
-                <h2 className="title-font" style={{ margin: '0 0 10px' }}>{allMissed ? '놓친 할 일 알림이 있어요' : '⏰ 할 일 시간이에요'}</h2>
+                <div className="todo-alarm-head">
+                    <div className="todo-alarm-bell" aria-hidden="true">⏰</div>
+                    <div>
+                        <h2 className="title-font" style={{ margin: 0, fontSize: 18 }}>{allMissed ? '놓친 할 일 알림이 있어요' : '할 일 알림'}</h2>
+                        <p className="todo-alarm-sub">{allMissed ? '앱을 여는 사이 지난 알림이에요' : '지금 울렸어요'}</p>
+                    </div>
+                </div>
                 <ul className="todo-alarm-list">
                     {live.map((row) => (
                         <li key={row.id} className="todo-alarm-item">
-                            <span className="num todo-alarm-time">{row.time}</span>
-                            <span className="todo-alarm-title">{row.title}{row.missed ? <span className="muted"> · 놓침</span> : null}</span>
+                            <div className="todo-alarm-main">
+                                <span className="num todo-alarm-time">{row.time}</span>
+                                <span className="todo-alarm-title">
+                                    <strong>{row.time ? `${alarmTimeLabel(row.time)} 할 일 알림` : '할 일 알림'}</strong>
+                                    <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ''}</div>
+                                </span>
+                            </div>
                             <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>
                     ))}

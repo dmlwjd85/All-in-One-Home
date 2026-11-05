@@ -1,4 +1,5 @@
-import { detectDate } from '../lib/parse.js';
+import { findDates } from '../lib/parse.js';
+import { isDurationDayTail } from '../lib/jjaemPaste.js';
 
 /** 분류 강조는 글이 잠깐 멈춘 뒤에만 바꿉니다. */
 export const SUGGEST_WAIT = 150;
@@ -80,8 +81,10 @@ export function studentNoFor(text, students, picked) {
  */
 export function quickSaveDate(kind, text, fallback, now = new Date()) {
     if (kind === '일정') {
-        const found = detectDate(text, now);
-        if (found) return found;
+        /* 할 일·기록과 같이 「3일 동안」「2일째」는 날짜가 아닙니다. 「15일 회의」「11월 15일」은 그대로 읽습니다. */
+        const found = findDates(text, now).filter((span) => !isDurationDayTail(text, span));
+        const hit = found.find((item) => item.explicit) || found[0];
+        if (hit?.ymd) return hit.ymd;
     }
     return fallback;
 }
