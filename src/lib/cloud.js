@@ -8,6 +8,7 @@ const LEAVE_MAX_WAIT = 6 * 3600 * 1000;
 const LEAVE_MAX_AGE = 2 * 24 * 3600 * 1000;
 export function resetLeaveBackoffForTest() { writeLeaveBackoff(null); }
 export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
+import { cleanTabbar, tabState } from '../ui/tabSlots.js';
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
@@ -264,6 +265,27 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         }
     }
 
+    /* 하단 탭바 배치: settings/tabbar 한 문서. 한 번이라도 고친 기기만 올리고, 클라우드가 더 늦게 고친 값이면 덮지 않습니다. */
+    const tabbar = cleanTabbar(tabState());
+    if (tabbar) {
+        const mark = fingerprint(tabbar);
+        if (nextHashes['settings/tabbar'] !== mark) {
+            try {
+                const ref = doc(ready.db, 'users', uid, 'settings', 'tabbar');
+                await firestore.runTransaction(ready.db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const theirs = snap.exists() ? cleanTabbar(snap.data()) : null;
+                    if (theirs && theirs.at >= tabbar.at) return;
+                    tx.set(ref, await stamp(firestore, tabbar, ['updatedAt']));
+                });
+                nextHashes['settings/tabbar'] = mark;
+            } catch (error) {
+                /* 탭바 문서를 모르는 옛 규칙의 거절은 다른 기록을 막지 않습니다(설정 문서와 같음). 그 밖의 실패는 다시 올립니다. */
+                if (classifyWriteError(error) === 'pending') pending += 1;
+            }
+        }
+    }
+
     for (const [localName, cloudName] of COLLECTIONS) {
         for (const row of state[localName] || []) {
             const shaped = toCloudRow(cloudName, row);
@@ -318,6 +340,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         if (leaveSnap.exists()) out.leave = cleanLeave(leaveSnap.data());
     } catch {
         /* 조퇴 문서를 모르는 옛 규칙이면 거절됩니다. */
+    }
+    try {
+        const tabSnap = await getDoc(doc(ready.db, 'users', uid, 'settings', 'tabbar'));
+        if (tabSnap.exists()) out.tabbar = cleanTabbar(tabSnap.data());
+    } catch {
+        /* 탭바 문서를 모르는 옛 규칙이면 거절됩니다. 이 기기 배치는 그대로 둡니다. */
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));

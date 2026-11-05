@@ -138,6 +138,16 @@ service cloud.firestore {
         // updatedAt: 서버 시각(serverTimestamp)만
         && l.updatedAt == request.time;
     }
+    // 하단 탭바 배치(settings/tabbar): { order: 탭 아이디 6개(겹침 없음, '더' 포함), at: 고친 시각(ms), updatedAt: 서버 시각 }.
+    // 늦게 고친 쪽이 이기므로 at 은 서버 시각 기준 5분 뒤까지만 받습니다(시계가 빠른 기기가 늘 이기지 않게).
+    function tabbarOk(t) {
+      return t.keys().hasAll(['order', 'at', 'updatedAt']) && t.keys().hasOnly(['order', 'at', 'updatedAt'])
+        && t.order is list && t.order.size() == 6 && t.order.toSet().size() == 6
+        && t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings'])
+        && t.order.hasAll(['more'])
+        && t.at is int && t.at > 0 && t.at <= request.time.toMillis() + 300000
+        && t.updatedAt == request.time;
+    }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {
       return t is list && t.size() <= 10
@@ -296,9 +306,10 @@ service cloud.firestore {
       // 기기끼리 같이 쓰는 설정 한 문서. 칸마다 고친 시각(ats)을 두고 칸 단위로 합칩니다.
       // 안쪽 값도 다른 컬렉션처럼 형식·길이·민감 낱말을 서버에서 다시 막습니다.
       match /settings/{key} {
-        allow read, delete: if isOwner(uid) && key in ['device', 'leave'];
+        allow read, delete: if isOwner(uid) && key in ['device', 'leave', 'tabbar'];
         allow create, update: if isOwner(uid)
-          && ((key == 'device' && settingsOk(request.resource.data)) || (key == 'leave' && leaveOk(request.resource.data)));
+          && (((key == 'device' && settingsOk(request.resource.data)) || (key == 'leave' && leaveOk(request.resource.data)))
+            || (key == 'tabbar' && tabbarOk(request.resource.data)));
       }
       match /timetable/{key} {
         allow read, delete: if isOwner(uid);

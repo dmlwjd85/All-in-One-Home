@@ -3,6 +3,7 @@ import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
 import { createVault } from './idb.js';
 import { DEFAULT_PERIODS } from './period.js';
+import { absorbTabbar, subscribeTabOrder, useTabClock } from '../ui/tabSlots.js';
 import { leaveState, patchPeriodLocal, readPeriodLocal, setExtraPeriod, setLeave, subscribePeriodLocal, useLeaveClock } from './periodLocal.js';
 import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
@@ -227,6 +228,8 @@ function bumpSettingAts(next, previous = {}) {
 
 /* 이 기기 시간표 설정(교시 길이·9·10교시 등)이 바뀌면 다른 기기와 같이 쓰도록 올립니다. */
 subscribePeriodLocal(() => { flushCloud().catch(() => {}); });
+/* 하단 탭바 배치를 고치면 바로 올립니다(로그인하지 않았으면 flushCloud 가 아무것도 하지 않습니다). */
+subscribeTabOrder(() => { flushCloud().catch(() => {}); });
 
 /*
  * 할 일마다 이 기기에서 마지막으로 고친 시각(editAt, ms)을 적습니다. 클라우드로는 올리지 않고(해시에도 안 들어감),
@@ -255,6 +258,7 @@ function saveClock() {
 export function serverNow() { return Math.round(deviceNow() + clock.o); }
 /* 조퇴 시각도 서버 기준 시계로 고친 시각을 찍습니다(기기 시계가 어긋나도 나중에 고친 쪽이 이기게). */
 useLeaveClock(() => serverNow());
+useTabClock(() => serverNow());
 /*
  * 이번 실행에서 서버 시각을 재는 데 성공했는지(PR #57 검수 치명 1번). 재기 전에는 기기 시계를 믿지 않습니다.
  *  - 고친 시각은 0(모름)으로 두고 기기 시각은 editD에 따로 적어 둡니다. 0이면 클라우드에는 serverTimestamp(올린 시각)로 올라갑니다.
@@ -950,6 +954,7 @@ function absorbCloud(draft, remote, seen = null) {
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     absorbSettings(draft, remote.settings);
     absorbLeave(remote.leave);
+        absorbTabbar(remote.tabbar);
     if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
     if (remote.profile?.classSize && !draft.profile.classSize) draft.profile.classSize = remote.profile.classSize;
     if ((remote.students || []).length || remote.profile?.className) {
@@ -1975,7 +1980,7 @@ async function connectCloudBody(uid) {
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return false;
-    const hasRemote = remote.settings || remote.leave || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
+    const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
         await updateFromCloud((draft) => pruneOnly(draft, remote, seen));
@@ -2207,6 +2212,7 @@ export async function pullFromCloudNow() {
         for (const [day, value] of Object.entries(remote.timetable || {})) draft.timetable[day] = value;
         absorbSettings(draft, remote.settings);
         absorbLeave(remote.leave);
+        absorbTabbar(remote.tabbar);
         if (remote.profile?.className) draft.profile.className = remote.profile.className;
         if (remote.profile?.classSize) draft.profile.classSize = remote.profile.classSize;
         rememberAllPulled(draft, remote, cloudHashes);

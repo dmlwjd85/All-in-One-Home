@@ -44,7 +44,8 @@
     "check:alarm": "node scripts/check-alarm.mjs",
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
-    "check:tabbar": "node scripts/check-tabbar.mjs"
+    "check:tabbar": "node scripts/check-tabbar.mjs",
+    "check:tabbarsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-tabbar-sync.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",

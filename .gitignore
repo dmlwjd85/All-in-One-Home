@@ -8,4 +8,5 @@ dist
 firebase-web-config.json
 .firebase/
 .twodev/
+.tabsyncdev/
 .locknote-*/
