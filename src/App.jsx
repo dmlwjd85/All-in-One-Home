@@ -610,7 +610,7 @@ export default function App() {
         attend: ['출결', `${data.profile.className || '우리 반'} · ${data.students.length || data.profile.classSize || 0}명`],
         students: ['학생 기록', data.profile.className || '번호순으로 볼 수 있어요'],
         student: ['학생', data.profile.className || ''],
-        neis: ['나이스에 옮길 것', '복사해서 옮긴 뒤 표시해 두세요'],
+        neis: ['나이스 모아 보기', '복사해서 옮긴 뒤 표시해 두세요'],
         schedule: ['일정', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],

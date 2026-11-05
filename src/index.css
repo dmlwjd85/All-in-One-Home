@@ -566,7 +566,18 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
 .cell-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .period-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .shortcut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+    max-width: 840px;
+    margin-inline: auto;
+}
+@media (min-width: 1024px) {
+    .cal-grid .tap { min-height: 72px; }
+    .cal-event-title { font-size: 12px; line-height: 14px; letter-spacing: 0; }
+}
 
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* QA 2차 5번: 어두운 화면에서 --primary(#A73D74)는 바탕(#2A2627)과 2.5:1뿐이라, 밝은 --accent(#E08B9A, 약 6:1)로 초점 테두리를 그립니다. */
@@ -996,22 +1007,28 @@ button.glass[aria-pressed="true"]:active {
 .day-rest-mark { color: var(--rest-ink); font-weight: 800; }
 .rest-banner { border-radius: 16px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .cal-grid .tap.day-rest { background: var(--rest-bg); }
-.cal-grid .cal-day-num,
-.cal-grid .tap .num {
-    display: grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
+.cal-grid .tap .num,
+.cal-grid .cal-day-num {
+    display: block;
+    width: max-content;
+    max-width: 100%;
     margin: 0 auto;
-    border-radius: 999px;
     line-height: 1;
     text-align: center;
-    box-sizing: border-box;
 }
 .cal-grid .tap.cal-today .num,
 .cal-grid .tap.cal-today .cal-day-num {
+    display: inline-grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: 24px;
+    min-width: 24px;
+    max-width: 24px;
+    height: 24px;
+    border-radius: 999px;
     background: var(--accent);
     color: var(--on-primary);
+    vertical-align: top;
 }
 .dark .cal-grid .tap.cal-today .num { color: var(--bg); }
 .dark .cal-grid .tap.cal-today .cal-day-num { color: var(--bg); }

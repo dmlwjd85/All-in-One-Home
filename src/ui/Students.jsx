@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinedRecords, removeItem, saveQuick, saveTextItem } from '../lib/db.js';
 import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
@@ -17,7 +17,7 @@ export function Students() {
         <div>
             <input className="field" placeholder="이름이나 번호" aria-label="학생 찾기" value={q} onChange={(event) => setQ(event.target.value)} />
             <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0' }}>
-                <Btn className="chip" onClick={() => go('#/students/neis')}>나이스에 옮길 것</Btn>
+                <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -44,6 +44,15 @@ export function Student() {
     const [text, setText] = useState('');
     const [editingId, setEditingId] = useState('');
     const [draft, setDraft] = useState('');
+    const editFieldRef = useRef(null);
+    useEffect(() => {
+        if (!editingId) return;
+        const node = editFieldRef.current;
+        if (!node) return;
+        node.focus();
+        const end = node.value.length;
+        try { node.setSelectionRange(end, end); } catch { /* 일부 환경은 선택 구간을 막습니다 */ }
+    }, [editingId]);
     const records = joinedRecords(data).filter((row) => row.sid === student?.id).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at || '').localeCompare(String(a.at || '')));
     const filtered = records.filter((row) => tab === '전체' || (tab === '관찰' && (row.kind === '관찰' || row.kind === '칭찬')) || row.kind === tab);
     if (!student) return <p>이 번호는 명단에 없어요. 설정에서 넣어 주세요.</p>;
@@ -53,6 +62,18 @@ export function Student() {
         ['칭찬', records.filter((row) => row.kind === '칭찬').length],
         ['나이스 옮김', records.filter((row) => row.neis && !row.neisMoved).length],
     ];
+
+    function focusEditButton(id) {
+        requestAnimationFrame(() => {
+            document.querySelector(`[data-edit-for="${CSS.escape(String(id))}"]`)?.focus();
+        });
+    }
+
+    function cancelEdit(rowId) {
+        setEditingId('');
+        setDraft('');
+        focusEditButton(rowId);
+    }
 
     async function saveEdit(row) {
         const next = draft.trim();
@@ -68,6 +89,7 @@ export function Student() {
         setEditingId('');
         setDraft('');
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '기록을 고쳤어요.', true);
+        focusEditButton(row.id);
     }
 
     async function removeRecord(row) {
@@ -129,10 +151,28 @@ export function Student() {
                         </div>
                         {editingId === row.id ? (
                             <div style={{ marginTop: 8 }}>
-                                <textarea className="field" rows={3} aria-label="기록 고치기" value={draft} autoFocus onChange={(event) => setDraft(event.target.value)} />
+                                <textarea
+                                    ref={editFieldRef}
+                                    className="field"
+                                    rows={3}
+                                    aria-label="기록 고치기"
+                                    value={draft}
+                                    onChange={(event) => setDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Escape') {
+                                            event.preventDefault();
+                                            cancelEdit(row.id);
+                                            return;
+                                        }
+                                        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                                            event.preventDefault();
+                                            saveEdit(row);
+                                        }
+                                    }}
+                                />
                                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                                     <Btn className="primary-btn" onClick={() => saveEdit(row)}>저장</Btn>
-                                    <Btn className="chip" onClick={() => { setEditingId(''); setDraft(''); }}>취소</Btn>
+                                    <Btn className="chip" onClick={() => cancelEdit(row.id)}>취소</Btn>
                                 </div>
                             </div>
                         ) : (
@@ -141,7 +181,11 @@ export function Student() {
                                 {row.localOnly && <p style={{ marginBottom: 0 }}>🔒 이 내용은 이 기기에만 있어요.</p>}
                                 {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
                                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                                    <Btn className="chip" onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}>수정</Btn>
+                                    <Btn
+                                        className="chip"
+                                        data-edit-for={row.id}
+                                        onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}
+                                    >수정</Btn>
                                     <Btn className="chip" onClick={() => removeRecord(row)}>삭제</Btn>
                                 </div>
                             </>
@@ -248,7 +292,7 @@ export function Neis() {
             showToast('출력 창을 열지 못했어요. 먼저 「내려받기」로 받은 파일을 출력해 주세요.');
             return;
         }
-        win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>나이스 모아 보기 · 쨈 교무수첩</title><style>body{padding:16px;color:#111}h1{font-size:20px;margin:0 0 4px}.brand{font-size:13px;color:#555;margin:0 0 12px}table{border-collapse:collapse;width:100%;margin-bottom:16px;table-layout:fixed}th,td{vertical-align:top;border:1px solid #999;padding:6px;word-break:break-word;white-space:pre-wrap}th:nth-child(1),td:nth-child(1){width:18%}th:nth-child(2),td:nth-child(2){width:12%}th:nth-child(3),td:nth-child(3){width:18%}th:nth-child(4),td:nth-child(4){width:52%}</style></head><body><p class="brand">쨈 교무수첩</p><h1>나이스 모아 보기</h1><p>민감 기록은 이 기기에만 있어요.</p>${rowsHtml}</body></html>`);
+        win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>나이스 모아 보기 · 쨈 교무수첩</title><style>body{padding:16px;color:#111}h1{font-size:20px;margin:0 0 4px}.brand{font-size:13px;color:#555;margin:0 0 12px}h2,table{break-inside:avoid;page-break-inside:avoid}table{border-collapse:collapse;width:100%;margin:0 0 16px;table-layout:fixed}th,td{vertical-align:top;border:1px solid #999;padding:6px;word-break:break-word;white-space:pre-wrap}th:nth-child(1),td:nth-child(1){width:6em}th:nth-child(2),td:nth-child(2){width:4em}th:nth-child(3),td:nth-child(3){width:6em}th:nth-child(4),td:nth-child(4){width:auto}td:nth-child(1){white-space:nowrap}</style></head><body><p class="brand">쨈 교무수첩</p><h1>나이스 모아 보기</h1><p>민감 기록은 이 기기에만 있어요.</p>${rowsHtml}</body></html>`);
         win.document.close();
         win.focus();
         win.print();

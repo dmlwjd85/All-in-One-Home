@@ -539,6 +539,7 @@ check(scheduleSrc.includes("className={row.google ? 'cal-event-title is-google' 
 const cssSrc = readFileSync(`${root}/src/index.css`, 'utf8');
 check(/\.hotkey-list\s*\{\s*display:\s*grid;\s*gap:\s*4px;\s*\}/.test(cssSrc), '단축키 목록 간격이 4px가 아닙니다.');
 check(cssSrc.includes('.cal-event-title') && cssSrc.includes('font-weight: 400'), '월간 제목 스타일이 빠졌습니다.');
+check(/cal-today \.num[\s\S]*?max-width:\s*24px/.test(cssSrc) || cssSrc.includes('.cal-grid .tap.cal-today .num'), '월간 오늘 동그라미 너비 제한이 없습니다.');
 const browserSrc = readFileSync(`${root}/scripts/check-browser.mjs`, 'utf8');
 check(browserSrc.includes("querySelector('.cal-event-title')") && !browserSrc.includes("innerText.includes('·')"), '브라우저 검사가 월간 제목 대신 · 점을 찾습니다.');
 check(seoulYmd(new Date('2026-11-05T00:30:00+09:00')) === '2026-11-05' && seoulYmd(new Date('2026-11-04T15:30:00Z')) === '2026-11-05', '한국 날짜 도우미가 UTC와 어긋납니다.');

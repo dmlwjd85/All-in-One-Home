@@ -123,8 +123,8 @@ export function Schedule() {
                                 ? `${formatKoDate(cell.ymd)} · ${titleNames.join(', ')} 고르기`
                                 : `${formatKoDate(cell.ymd)} 고르기`;
                             return (
-                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={aria} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44, alignItems: 'stretch', justifyContent: 'flex-start', padding: '3px 2px' }}>
-                                    <span className={`num cal-day-num${todayCell ? ' is-today' : ''}`} style={{ fontWeight: 700, color: todayCell ? undefined : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
+                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={aria} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44, padding: '3px 2px', textAlign: 'center' }}>
+                                    <span className="num" style={{ fontWeight: 700, color: todayCell ? undefined : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
                                     {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11, textAlign: 'center' }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
                                     {titles.length > 0 && (
                                         <span className="cal-marks">
