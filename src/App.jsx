@@ -611,7 +611,7 @@ export default function App() {
         students: ['학생 기록', data.profile.className || '번호순으로 볼 수 있어요'],
         student: ['학생', data.profile.className || ''],
         neis: ['나이스에 옮길 것', '복사해서 옮긴 뒤 표시해 두세요'],
-        schedule: ['일정·시간표', data.profile.className || ''],
+        schedule: ['일정', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],
         minutes: ['회의록', '여러 줄로 적고 저장 버튼으로 남겨요'],

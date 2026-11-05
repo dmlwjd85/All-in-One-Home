@@ -2,11 +2,11 @@
 export const MENU = [
     ['오늘', '#/today'],
     ['출결', '#/attend'],
-    ['학생 기록', '#/students'],
-    ['일정·시간표', '#/schedule'],
+    ['일정', '#/schedule'],
     ['할 일·메모', '#/todo'],
     ['회의록', '#/minutes'],
     ['알림장', '#/notice'],
+    ['학생 기록', '#/students'],
     ['나이스 모아 보기', '#/students/neis'],
     ['설정', '#/settings'],
 ];

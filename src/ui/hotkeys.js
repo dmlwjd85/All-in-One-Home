@@ -10,7 +10,7 @@ export const HOTKEY_ACTIONS = [
     { id: 'today', label: '오늘', group: '이동', fallback: '' },
     { id: 'attend', label: '출결', group: '이동', fallback: '' },
     { id: 'students', label: '학생 기록', group: '이동', fallback: '' },
-    { id: 'schedule', label: '일정·시간표', group: '이동', fallback: '' },
+    { id: 'schedule', label: '일정', group: '이동', fallback: '' },
     { id: 'todo', label: '할 일·메모', group: '이동', fallback: '' },
     { id: 'notice', label: '알림장', group: '이동', fallback: '' },
     { id: 'neis', label: '나이스 모아 보기', group: '이동', fallback: '' },
