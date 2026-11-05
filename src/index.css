@@ -1088,7 +1088,7 @@ button.glass[aria-pressed="true"]:active {
     text-align: left;
     color: var(--ink);
 }
-.cal-event-title.is-google { color: var(--st-early); font-weight: 500; }
+.cal-event-title.is-google { color: var(--st-early); font-weight: 400; }
 .gcal-mark {
     color: var(--st-early);
     font-size: 11px;
