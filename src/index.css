@@ -1432,7 +1432,7 @@ button.hero-pill.home-todo-link {
 .todo-edit-picked { margin-left: 6px; color: var(--accent); }
 .todo-edit-sheet .field { width: 100%; min-height: 44px; }
 /* 시안 A: 쨈 날짜 파란 둥근 칩 · 할 일 알림 노란 카드 */
-.jam-date-chip {
+.jjaem-date-chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1445,7 +1445,7 @@ button.hero-pill.home-todo-link {
     line-height: 1.2;
     max-width: 100%;
 }
-.jam-date-chip-cal {
+.jjaem-date-chip-cal {
     width: 16px;
     height: 16px;
     border-radius: 4px;
@@ -1458,9 +1458,9 @@ button.hero-pill.home-todo-link {
     font-weight: 800;
     flex: none;
 }
-.jam-date-chip-label { min-width: 0; overflow-wrap: anywhere; }
-.dark .jam-date-chip { background: color-mix(in srgb, #8ec5ff 22%, #1a2430); color: #b7d9ff; }
-.dark .jam-date-chip-cal { background: #1a2430; border-color: #8ec5ff; color: #b7d9ff; }
+.jjaem-date-chip-label { min-width: 0; overflow-wrap: anywhere; }
+.dark .jjaem-date-chip { background: color-mix(in srgb, #8ec5ff 22%, #1a2430); color: #b7d9ff; }
+.dark .jjaem-date-chip-cal { background: #1a2430; border-color: #8ec5ff; color: #b7d9ff; }
 
 /* 할 일 알림 팝업(PR #60) · 시안 A 노란 카드 */
 .todo-alarm-back { z-index: 60; }

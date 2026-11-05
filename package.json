@@ -44,7 +44,7 @@
     "check:alarm": "node scripts/check-alarm.mjs",
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
-    "check:jam-paste": "node scripts/check-jam-paste.mjs"
+    "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

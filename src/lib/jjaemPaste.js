@@ -18,7 +18,7 @@ function particleLen(text, end) {
 }
 
 /** 파란 둥근 칩 글자. 예: 「오늘 · 11월 5일」 */
-export function jamDateChip(ymd, today = seoulYmd()) {
+export function jjaemDateChip(ymd, today = seoulYmd()) {
     if (!isValidYmd(ymd)) return null;
     const month = Number(ymd.slice(5, 7));
     const day = Number(ymd.slice(8, 10));
@@ -77,7 +77,7 @@ function stripSpans(raw, spans) {
  * 쨈 한 줄에서 날짜·시각을 읽고 본문에서 그 낱말을 뺍니다.
  * date: detectDate와 같이 숫자 날짜를 말보다 먼저 둡니다.
  */
-export function readJamPaste(text, { now = new Date(), stripTime = true } = {}) {
+export function readJjaemPaste(text, { now = new Date(), stripTime = true } = {}) {
     const raw = String(text || '').trim();
     const today = seoulYmd(now);
     let dates = [];
@@ -99,7 +99,7 @@ export function readJamPaste(text, { now = new Date(), stripTime = true } = {}) 
         body,
         date,
         time,
-        chip: date ? jamDateChip(date, today) : null,
+        chip: date ? jjaemDateChip(date, today) : null,
         changed: Boolean(date || time),
         dateWord: primary ? raw.substr(primary.index, primary.length) : '',
     };
