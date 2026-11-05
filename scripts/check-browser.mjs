@@ -758,6 +758,49 @@ try {
         });
     }
 
+    for (const width of [390, 1440, 1920]) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate(() => { location.hash = '#/settings'; });
+            await delay(250);
+            await page.waitForSelector('[data-screen="hotkeys"]');
+            const hotkeyGaps = await page.evaluate(() => {
+                const root = document.querySelector('[data-screen="hotkeys"] .hotkey-lists')
+                    || document.querySelector('[data-screen="hotkeys"]');
+                if (!root) return { missing: true };
+                const labels = [...root.querySelectorAll('.hotkey-row > span')];
+                const keys = [...root.querySelectorAll('.hotkey-key')];
+                const n = Math.min(labels.length, keys.length);
+                if (!n) return { missing: true };
+                const rows = [];
+                for (let i = 0; i < n; i += 1) {
+                    const a = labels[i].getBoundingClientRect();
+                    const b = keys[i].getBoundingClientRect();
+                    if (a.width <= 0 || b.width <= 0) continue;
+                    const sameRow = Math.abs(a.top - b.top) < 28;
+                    const gap = sameRow ? (b.left - a.right) : Number.POSITIVE_INFINITY;
+                    rows.push({ gap: Math.round(gap * 10) / 10, sameRow, keyX: Math.round(b.left) });
+                }
+                const box = (document.querySelector('[data-screen="hotkeys"] .hotkey-lists')
+                    || document.querySelector('[data-screen="hotkeys"] .hotkey-list'))?.getBoundingClientRect();
+                const listW = Math.round(box?.width || 0);
+                return { missing: false, rows, listW };
+            });
+            if (hotkeyGaps.missing) {
+                check(width < 900, `단축키 목록이 ${width}에서 없습니다.`);
+                return;
+            }
+            check(hotkeyGaps.rows.length > 0, `단축키 줄을 ${width}에서 재지 못했습니다.`);
+            if (width >= 1440) {
+                const far = hotkeyGaps.rows.filter((row) => !row.sameRow || row.gap < 0 || row.gap > 40);
+                check(
+                    far.length === 0,
+                    `단축키 이름·키 간격이 ${width}에서 40px를 넘습니다: ${JSON.stringify({ listW: hotkeyGaps.listW, far: far.slice(0, 5), sample: hotkeyGaps.rows.slice(0, 3) })}`,
+                );
+                check(hotkeyGaps.listW <= 640, `단축키 목록 너비가 ${width}에서 640을 넘습니다: ${hotkeyGaps.listW}`);
+            }
+        }, width >= 900 ? 900 : 844);
+    }
+
     for (const width of [360, 390, 1920]) {
         await withDemo(width, 'light', async (page) => {
             await controlBoxes(page, 'button.hero-pill, .home-hero button.hero-action', `홈 칩 ${width}`);
@@ -1388,8 +1431,8 @@ try {
         check(week.includes('14:00–16:00') && week.includes('학부모 진로 특강'), `끝 시각이 ${label} 주간에 보이지 않습니다.`);
         async function showCalendar(monthTitle = '') {
             await page.evaluate(() => { location.hash = '#/schedule'; });
-            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
             await page.waitForSelector('.cal-grid');
             if (!monthTitle) return;
             for (let back = 0; back < 8; back += 1) {
@@ -1408,7 +1451,7 @@ try {
             for (let hop = 0; hop < 3 && !found; hop += 1) {
                 const count = await page.evaluate(() => document.querySelectorAll('.cal-grid button').length);
                 for (let index = 0; index < count && !found; index += 1) {
-                    const marked = await page.evaluate((n) => document.querySelectorAll('.cal-grid button')[n]?.innerText.includes('·'), index);
+                    const marked = await page.evaluate((n) => !!document.querySelectorAll('.cal-grid button')[n]?.querySelector('.cal-event-title'), index);
                     if (!marked) continue;
                     const monthTitle = await page.evaluate(() => document.querySelector('[aria-label="이전 달"]')?.parentElement?.querySelector('.title-font')?.innerText.trim() || '');
                     const body = await page.evaluate(async (n) => {
@@ -1459,8 +1502,8 @@ try {
     async function calendarPanel(page) {
         const todayHash = `#/schedule/month/${todayYmd}`;
         await page.evaluate(() => { location.hash = '#/schedule'; });
-        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+        await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         await page.waitForSelector('.cal-grid');
         const todayRing = await page.evaluate(() => {
@@ -1476,7 +1519,7 @@ try {
         const opened = await page.evaluate(() => ({
             panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
             today: document.querySelector('[data-cal-panel]')?.innerText.includes('오늘') || false,
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
         }));
         check(opened.panel === todayYmd && opened.today && opened.monthOn, `달력을 열면 오늘 패널이 아닙니다. ${JSON.stringify(opened)}`);
         const lenBeforeCells = await page.evaluate(() => history.length);
@@ -1531,6 +1574,31 @@ try {
             && todayDisk.weekend && !todayDisk.weekend.today && !todayDisk.weekend.filled,
             `오늘 칸이 채운 동그라미로 주말·고른 날과 구분되지 않습니다. ${JSON.stringify(todayDisk)}`,
         );
+        const todaySize = await page.evaluate((today) => {
+            const buttons = [...document.querySelectorAll('.cal-grid button')];
+            const el = buttons.find((btn) => Number(btn.querySelector('.num')?.textContent) === today && !String(btn.getAttribute('style') || '').includes('ink-sub'));
+            const num = el?.querySelector('.num');
+            if (!num) return null;
+            const box = num.getBoundingClientRect();
+            const style = getComputedStyle(num);
+            return {
+                w: Math.round(box.width),
+                h: Math.round(box.height),
+                width: style.width,
+                maxWidth: style.maxWidth,
+                minWidth: style.minWidth,
+                height: style.height,
+            };
+        }, todayDay);
+        check(
+            todaySize
+            && todaySize.w === 24
+            && todaySize.h === 24
+            && todaySize.width === '24px'
+            && todaySize.maxWidth === '24px'
+            && todaySize.height === '24px',
+            `오늘 동그라미가 24px 원이 아닙니다. ${JSON.stringify(todaySize)}`,
+        );
         await page.click('[aria-label="다음 달"]');
         const [year, month] = todayYmd.split('-').map(Number);
         const nextDate = new Date(year, month, 1);
@@ -1558,8 +1626,8 @@ try {
         await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/month/${picked}`);
         const back = await page.evaluate(() => ({
             panel: document.querySelector('[data-cal-panel]')?.getAttribute('data-cal-panel') || '',
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
             grid: Boolean(document.querySelector('.cal-grid')),
         }));
         check(back.panel === picked && back.monthOn && !back.weekOn && back.grid, `일지에서 돌아오면 달력 보기가 풀립니다. ${JSON.stringify(back)}`);
@@ -1570,35 +1638,135 @@ try {
         await page.evaluate(() => { location.hash = '#/schedule/month'; });
         await page.waitForFunction((hash) => location.hash === hash, {}, todayHash);
         const bareMonth = await page.evaluate(() => ({
-            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            monthOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
             grid: Boolean(document.querySelector('.cal-grid')),
         }));
         check(bareMonth.monthOn && !bareMonth.weekOn && bareMonth.grid, `날짜 없는 달력이 주 보기로 열립니다. ${JSON.stringify(bareMonth)}`);
         await page.evaluate(() => { location.hash = '#/schedule/month/2026-02-30'; });
         await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, todayHash);
-        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력' && el.classList.contains('on')));
+        const badMonth = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간' && el.classList.contains('on')));
         check(badMonth, '잘못된 달력 날짜가 주 보기로 열립니다.');
         await page.evaluate(() => { location.hash = '#/schedule/table'; });
         await page.waitForFunction((hash) => location.hash === hash, {}, `#/schedule/table/${todayYmd}`);
         const bareTable = await page.evaluate(() => ({
             tableOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')),
-            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')),
+            weekOn: [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')),
         }));
         check(bareTable.tableOn && !bareTable.weekOn, `날짜 없는 시간표가 주 보기로 열립니다. ${JSON.stringify(bareTable)}`);
         await page.evaluate(() => { location.hash = '#/schedule/table/2026-13-01'; });
         await page.waitForFunction((hash) => location.hash === hash && document.body.innerText.includes('달력에 없어요'), {}, `#/schedule/table/${todayYmd}`);
-        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주' && el.classList.contains('on')));
+        const badTable = await page.evaluate(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '시간표' && el.classList.contains('on')) && ![...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '주간' && el.classList.contains('on')));
         check(badTable, '잘못된 시간표 날짜가 주 보기로 열립니다.');
         await audit(page, '달력 패널');
     }
     await withDemo(390, 'light', async (page) => { await calendarPanel(page); }, 844);
 
+    async function monthLayoutGuard(width) {
+        await withDemo(width, 'light', async (page) => {
+            await page.evaluate((ymd) => { location.hash = `#/schedule/month/${ymd}`; }, todayYmd);
+            await page.waitForSelector('.cal-month .cal-grid .tap');
+            await page.waitForSelector('.cal-today .num');
+            const layout = await page.evaluate(() => {
+                const month = document.querySelector('.cal-month');
+                const grid = document.querySelector('.cal-grid');
+                const tap = document.querySelector('.cal-grid .tap');
+                const todayNum = document.querySelector('.cal-today .num');
+                const cs = (el) => (el ? getComputedStyle(el) : null);
+                const monthCs = cs(month);
+                const gridCs = cs(grid);
+                const tapCs = cs(tap);
+                const numBox = todayNum?.getBoundingClientRect();
+                const numCs = cs(todayNum);
+                return {
+                    monthMax: monthCs?.maxWidth || '',
+                    monthW: month ? Math.round(month.getBoundingClientRect().width) : 0,
+                    gridMax: gridCs?.maxWidth || '',
+                    gridW: grid ? Math.round(grid.getBoundingClientRect().width) : 0,
+                    tapMin: tapCs?.minHeight || '',
+                    tapH: tap ? Math.round(tap.getBoundingClientRect().height) : 0,
+                    todayW: numBox ? Math.round(numBox.width) : 0,
+                    todayH: numBox ? Math.round(numBox.height) : 0,
+                    todayWidth: numCs?.width || '',
+                    todayMaxW: numCs?.maxWidth || '',
+                };
+            });
+            const monthMaxPx = Number.parseFloat(layout.monthMax);
+            const gridMaxPx = Number.parseFloat(layout.gridMax);
+            check(
+                layout.monthMax === '840px' && Number.isFinite(monthMaxPx) && monthMaxPx <= 840 && layout.monthW <= 841,
+                `${width}: 월간 .cal-month max-width 840 상한이 없습니다. ${JSON.stringify(layout)}`,
+            );
+            check(
+                layout.gridMax === '840px' && Number.isFinite(gridMaxPx) && gridMaxPx <= 840 && layout.gridW <= 841,
+                `${width}: 월간 .cal-grid max-width 840 상한이 없습니다. ${JSON.stringify(layout)}`,
+            );
+            if (width >= 1024) {
+                const tapMinPx = Number.parseFloat(layout.tapMin);
+                check(
+                    layout.tapMin === '72px' || (Number.isFinite(tapMinPx) && tapMinPx >= 72) || layout.tapH >= 72,
+                    `${width}: 월간 칸 min-height 72가 없습니다. ${JSON.stringify(layout)}`,
+                );
+            }
+            check(
+                layout.todayW === 24 && layout.todayH === 24 && layout.todayWidth === '24px' && layout.todayMaxW === '24px',
+                `${width}: 오늘 동그라미가 24px가 아닙니다. ${JSON.stringify(layout)}`,
+            );
+
+            let titles = [];
+            for (let step = 0; step < 3; step += 1) {
+                titles = await page.evaluate(() => [...document.querySelectorAll('.cal-event-title')].map((el) => el.textContent.trim()).filter(Boolean));
+                if (titles.some((t) => t !== '·' && t !== '…')) break;
+                await page.click('[aria-label="다음 달"]');
+                await page.waitForSelector('.cal-grid');
+                await delay(120);
+            }
+            check(
+                titles.length > 0 && titles.some((t) => t !== '·' && t !== '…' && /[가-힣A-Za-z0-9]/.test(t)),
+                `${width}: 월간 일정 제목이 ·만 보이거나 없습니다. ${JSON.stringify(titles.slice(0, 8))}`,
+            );
+            const ariaOk = await page.evaluate(() => {
+                const buttons = [...document.querySelectorAll('.cal-grid button')].filter((el) => el.querySelector('.cal-event-title'));
+                if (!buttons.length) return false;
+                return buttons.every((el) => {
+                    const aria = el.getAttribute('aria-label') || '';
+                    const title = [...el.querySelectorAll('.cal-event-title')].map((node) => node.textContent.trim()).find((t) => t && t !== '·' && t !== '…') || '';
+                    return !title || aria.includes(title);
+                });
+            });
+            check(ariaOk, `${width}: 월간 칸 aria-label에 일정 제목이 없습니다.`);
+        }, width >= 900 ? 900 : 844);
+    }
+    await monthLayoutGuard(1024);
+    await monthLayoutGuard(1920);
+
+    async function deleteConfirmGuard() {
+        await withDemo(390, 'light', async (page) => {
+            await page.evaluate(() => { location.hash = '#/students/12'; });
+            await page.waitForFunction(() => document.body.innerText.includes('이하은'));
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '삭제'));
+            let asked = '';
+            page.once('dialog', async (dialog) => {
+                asked = dialog.message();
+                await dialog.dismiss();
+            });
+            const clicked = await page.evaluate(() => {
+                const btn = [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '삭제');
+                if (!btn) return false;
+                btn.click();
+                return true;
+            });
+            for (let i = 0; i < 20 && !asked; i += 1) await delay(100);
+            check(clicked && asked.includes('지울까요'), `학생 기록 삭제 확인이 뜨지 않습니다: clicked=${clicked} asked=${asked}`);
+        }, 844);
+    }
+    await deleteConfirmGuard();
+
     async function darkTodayContrast(width) {
         await withDemo(width, 'dark', async (page) => {
             await page.evaluate(() => { location.hash = '#/schedule'; });
-            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '달력'));
-            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '달력')?.click());
+            await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '월간'));
+            await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '월간')?.click());
             await page.waitForSelector('.cal-today .num');
             const ratio = await page.evaluate(() => {
                 const style = getComputedStyle(document.querySelector('.cal-today .num'));
@@ -2092,17 +2260,17 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
         await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('정리함에 뒀어요'));
+        await page.waitForFunction(() => document.body.innerText.includes('임시보관함에 뒀어요'));
         await page.evaluate(() => { location.hash = '#/todo'; });
-        await page.waitForFunction(() => document.body.innerText.includes('정리함') && document.body.innerText.includes('과학도서'));
+        await page.waitForFunction(() => document.body.innerText.includes('임시보관함') && document.body.innerText.includes('과학도서'));
         const parked = await page.evaluate(() => {
-            const inbox = document.querySelector('[aria-label="정리함"]');
+            const inbox = document.querySelector('[aria-label="임시보관함"]');
             return {
                 inbox: inbox?.innerText || '',
                 titles: [...document.querySelectorAll('.todo-title')].filter((el) => !inbox?.contains(el)).map((el) => el.innerText),
             };
         });
-        check(parked.inbox.includes('과학도서'), '나중에 정리한 콕 항목이 정리함에 없습니다.');
+        check(parked.inbox.includes('과학도서'), '나중에 정리한 콕 항목이 임시보관함에 없습니다.');
         check(!parked.titles.some((text) => text.includes('과학도서')), '나중에 정리한 콕 항목이 할 일로 등록되었습니다.');
         await page.type('[aria-label="할 일"]', '독서기록 12/31까지');
         await page.keyboard.press('Enter');
@@ -3017,7 +3185,7 @@ try {
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] .msg-card button')].find((el) => el.innerText.trim() === '나중에 정리')?.click());
         await page.waitForFunction(() => [...document.querySelectorAll('[data-screen="plus"] button')].some((el) => el.innerText.trim() === '지금 저장'));
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '남기기')?.click());
-        await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 정리함에'));
+        await page.waitForFunction(() => document.body.innerText.includes('1개 등록, 1개는 임시보관함에'));
     }, 844);
     // 숨은 반대쪽 행과 메모 민감어: 알림장·하루 메모·일정 줄을 실제 화면으로 고칩니다.
     await withDemo(390, 'light', async (page) => {

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
-import { joinedRecords, saveQuick } from '../lib/db.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { joinedRecords, removeItem, saveQuick, saveTextItem } from '../lib/db.js';
 import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
+import { seoulYmd } from '../lib/date.js';
+import { csvEscape, htmlEscape } from '../lib/neisExport.js';
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -15,7 +17,7 @@ export function Students() {
         <div>
             <input className="field" placeholder="이름이나 번호" aria-label="학생 찾기" value={q} onChange={(event) => setQ(event.target.value)} />
             <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0' }}>
-                <Btn className="chip" onClick={() => go('#/students/neis')}>나이스에 옮길 것</Btn>
+                <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -40,6 +42,17 @@ export function Student() {
     const student = data.students.find((row) => row.no === route.params.no);
     const [tab, setTab] = useState('전체');
     const [text, setText] = useState('');
+    const [editingId, setEditingId] = useState('');
+    const [draft, setDraft] = useState('');
+    const editFieldRef = useRef(null);
+    useEffect(() => {
+        if (!editingId) return;
+        const node = editFieldRef.current;
+        if (!node) return;
+        node.focus();
+        const end = node.value.length;
+        try { node.setSelectionRange(end, end); } catch { /* 일부 환경은 선택 구간을 막습니다 */ }
+    }, [editingId]);
     const records = joinedRecords(data).filter((row) => row.sid === student?.id).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at || '').localeCompare(String(a.at || '')));
     const filtered = records.filter((row) => tab === '전체' || (tab === '관찰' && (row.kind === '관찰' || row.kind === '칭찬')) || row.kind === tab);
     if (!student) return <p>이 번호는 명단에 없어요. 설정에서 넣어 주세요.</p>;
@@ -49,6 +62,50 @@ export function Student() {
         ['칭찬', records.filter((row) => row.kind === '칭찬').length],
         ['나이스 옮김', records.filter((row) => row.neis && !row.neisMoved).length],
     ];
+
+    function focusEditButton(id) {
+        requestAnimationFrame(() => {
+            document.querySelector(`[data-edit-for="${CSS.escape(String(id))}"]`)?.focus();
+        });
+    }
+
+    function cancelEdit(rowId) {
+        setEditingId('');
+        setDraft('');
+        focusEditButton(rowId);
+    }
+
+    async function saveEdit(row) {
+        const next = draft.trim();
+        if (!next) {
+            showToast('한 줄만 적어도 남길 수 있어요.');
+            return;
+        }
+        const result = await saveTextItem('records', { ...row, text: next }, { from: row.localOnly ? 'local' : 'cloud' });
+        if (result?.storageFailed) {
+            showToast(result.message || '기록을 저장하지 못했어요. 쓰던 글은 그대로 있어요.');
+            return;
+        }
+        setEditingId('');
+        setDraft('');
+        showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '기록을 고쳤어요.', true);
+        focusEditButton(row.id);
+    }
+
+    async function removeRecord(row) {
+        if (!window.confirm('이 기록을 지울까요?')) return;
+        const failed = await removeItem('records', row.id);
+        if (failed?.storageFailed) {
+            showToast(failed.message || '기록을 지우지 못했어요. 글은 그대로 있어요.');
+            return;
+        }
+        if (editingId === row.id) {
+            setEditingId('');
+            setDraft('');
+        }
+        showToast('기록을 지웠어요.', true);
+    }
+
     return (
         <div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -92,9 +149,47 @@ export function Student() {
                             <strong>{row.kind} · {(row.tags || []).join(' · ')}</strong>
                             <span className="num">{row.date === clock.ymd ? clock.hm : row.date.slice(5)}</span>
                         </div>
-                        <p style={{ marginBottom: 0 }}>{row.text}</p>
-                        {row.localOnly && <p style={{ marginBottom: 0 }}>🔒 이 내용은 이 기기에만 있어요.</p>}
-                        {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
+                        {editingId === row.id ? (
+                            <div style={{ marginTop: 8 }}>
+                                <textarea
+                                    ref={editFieldRef}
+                                    className="field"
+                                    rows={3}
+                                    aria-label="기록 고치기"
+                                    value={draft}
+                                    onChange={(event) => setDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Escape') {
+                                            event.preventDefault();
+                                            cancelEdit(row.id);
+                                            return;
+                                        }
+                                        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                                            event.preventDefault();
+                                            saveEdit(row);
+                                        }
+                                    }}
+                                />
+                                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                                    <Btn className="primary-btn" onClick={() => saveEdit(row)}>저장</Btn>
+                                    <Btn className="chip" onClick={() => cancelEdit(row.id)}>취소</Btn>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <p style={{ marginBottom: 0 }}>{row.text}</p>
+                                {row.localOnly && <p style={{ marginBottom: 0 }}>🔒 이 내용은 이 기기에만 있어요.</p>}
+                                {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
+                                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                                    <Btn
+                                        className="chip"
+                                        data-edit-for={row.id}
+                                        onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}
+                                    >수정</Btn>
+                                    <Btn className="chip" onClick={() => removeRecord(row)}>삭제</Btn>
+                                </div>
+                            </>
+                        )}
                     </article>
                 ))}
                 {!filtered.length && (
@@ -109,6 +204,26 @@ export function Student() {
     );
 }
 
+function neisCsv(groups, students) {
+    const lines = [['번호', '이름', '날짜', '종류', '태그', '내용'].map(csvEscape).join(',')];
+    groups.forEach(([sid, rows]) => {
+        const student = students.find((item) => item.id === sid);
+        const no = student?.no ?? '';
+        const name = student?.name || '학생 미정';
+        rows.forEach((row) => {
+            lines.push([
+                no,
+                name,
+                row.date || '',
+                row.kind || '',
+                (row.tags || []).join(' · '),
+                row.text || '',
+            ].map(csvEscape).join(','));
+        });
+    });
+    return `\uFEFF${lines.join('\n')}`;
+}
+
 export function Neis() {
     const { data, showToast } = useUi();
     const records = joinedRecords(data).filter((row) => row.neis && !row.neisMoved && !row.localOnly);
@@ -119,7 +234,10 @@ export function Neis() {
             if (!map.has(key)) map.set(key, []);
             map.get(key).push(row);
         });
-        return [...map.entries()];
+        return [...map.entries()].map(([sid, rows]) => [
+            sid,
+            [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.at || '').localeCompare(String(b.at || ''))),
+        ]);
     }, [records]);
 
     async function copyAll() {
@@ -136,6 +254,50 @@ export function Neis() {
         }
     }
 
+    function downloadCsv() {
+        if (!groups.length) {
+            showToast('내려받을 기록이 없어요.');
+            return;
+        }
+        const body = neisCsv(groups, data.students);
+        const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const stamp = seoulYmd();
+        link.href = url;
+        link.download = `나이스모아_${stamp}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast('엑셀에서 열 수 있는 표를 이 기기에만 내려받았어요.');
+    }
+
+    function printTable() {
+        if (!groups.length) {
+            showToast('출력할 기록이 없어요.');
+            return;
+        }
+        const rowsHtml = groups.map(([sid, rows]) => {
+            const student = data.students.find((item) => item.id === sid);
+            const head = student ? `${student.no} ${student.name}` : '학생 미정';
+            const body = rows.map((row) => {
+                const text = htmlEscape(row.text || '').replace(/\n/g, '<br>');
+                return `<tr><td>${htmlEscape(row.date || '')}</td><td>${htmlEscape(row.kind || '')}</td><td>${htmlEscape((row.tags || []).join(' · '))}</td><td>${text}</td></tr>`;
+            }).join('');
+            return `<h2>${htmlEscape(head)}</h2><table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>날짜</th><th>종류</th><th>태그</th><th>내용</th></tr></thead><tbody>${body}</tbody></table>`;
+        }).join('');
+        const win = window.open('', '_blank');
+        if (!win) {
+            showToast('출력 창을 열지 못했어요. 먼저 「내려받기」로 받은 파일을 출력해 주세요.');
+            return;
+        }
+        win.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>나이스 모아 보기 · 쨈 교무수첩</title><style>body{padding:16px;color:#111}h1{font-size:20px;margin:0 0 4px}.brand{font-size:13px;color:#555;margin:0 0 12px}h2,table{break-inside:avoid;page-break-inside:avoid}table{border-collapse:collapse;width:100%;margin:0 0 16px;table-layout:fixed}th,td{vertical-align:top;border:1px solid #999;padding:6px;word-break:break-word;white-space:pre-wrap}th:nth-child(1),td:nth-child(1){width:6em}th:nth-child(2),td:nth-child(2){width:4em}th:nth-child(3),td:nth-child(3){width:6em}th:nth-child(4),td:nth-child(4){width:auto}td:nth-child(1){white-space:nowrap}</style></head><body><p class="brand">쨈 교무수첩</p><h1>나이스 모아 보기</h1><p>민감 기록은 이 기기에만 있어요.</p>${rowsHtml}</body></html>`);
+        win.document.close();
+        win.focus();
+        win.print();
+    }
+
     async function moved(row) {
         const { update } = await import('../lib/db.js');
         const saved = await update((draft) => {
@@ -150,8 +312,12 @@ export function Neis() {
 
     return (
         <div>
-            <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요.</p>
-            <Btn className="primary-btn block" onClick={copyAll}>전체 복사</Btn>
+            <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」는 엑셀에서 열 수 있는 표(.csv)로 이 기기에만 받습니다.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Btn className="primary-btn" style={{ flex: 1 }} onClick={copyAll}>전체 복사</Btn>
+                <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
+                <Btn className="chip" onClick={printTable}>출력</Btn>
+            </div>
             {groups.map(([sid, rows]) => {
                 const student = data.students.find((item) => item.id === sid);
                 return (

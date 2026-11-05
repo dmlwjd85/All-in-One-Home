@@ -615,7 +615,7 @@ function withoutDropped(remote = []) {
     return (remote || []).filter((row) => row?.id && !inboxDropped.has(String(row.id)));
 }
 
-/** 클라우드에서 지우지 못한 정리함은 다음 받아오기에 다시 붙지 않습니다. */
+/** 클라우드에서 지우지 못한 임시보관함은 다음 받아오기에 다시 붙지 않습니다. */
 export function inboxKeptFromCloud(remoteInbox = []) {
     return unionById(state.inbox || [], withoutDropped(remoteInbox));
 }
@@ -1040,7 +1040,7 @@ export async function boot(query = '') {
             const dropped = await inboxVault.get('dropped');
             inboxDropped = new Set(Array.isArray(dropped) ? dropped.map(String) : []);
         } catch {
-            /* 정리함 칸이 없어도 할 일은 열립니다. */
+            /* 임시보관함 칸이 없어도 할 일은 열립니다. */
         }
         try {
             const savedHashes = await mainVault.get('cloudHashes');
@@ -1132,7 +1132,8 @@ function relocate(draft, bucket, row, local, from) {
         draft[bucket] = dropId(draft[bucket], row.id);
     }
     if (!local && from === 'local') draft.local[bucket] = dropId(draft.local[bucket], row.id);
-    put(local ? draft.local[bucket] : draft[bucket], { ...row, source: row.source || 'app' });
+    const { localOnly: _localOnlyFlag, ...stored } = row;
+    put(local ? draft.local[bucket] : draft[bucket], { ...stored, source: stored.source || 'app' });
     return draft;
 }
 
@@ -1247,8 +1248,8 @@ function blobOf(item) {
 }
 
 /**
- * 고른 항목은 할 일·일정에 넣고, 빼 둔 항목은 정리함(ssug-gyomu-inbox)에 둡니다.
- * 이미 등록된 아이디는 정리함으로 옮기지 않습니다.
+ * 고른 항목은 할 일·일정에 넣고, 빼 둔 항목은 임시보관함(ssug-gyomu-inbox)에 둡니다.
+ * 이미 등록된 아이디는 임시보관함으로 옮기지 않습니다.
  */
 export async function saveParsed(items, now = new Date()) {
     const list = (items || []).filter((item) => item && String(item.title || '').trim());
@@ -1324,7 +1325,7 @@ export async function saveParsed(items, now = new Date()) {
     }
     const parts = [];
     if (count) parts.push(`${count}개 등록했어요.`);
-    if (heldCount) parts.push(`${heldCount}개는 정리함에 뒀어요.`);
+    if (heldCount) parts.push(`${heldCount}개는 임시보관함에 뒀어요.`);
     if (skipped) parts.push(`겹친 ${skipped}개는 이미 있어서 넣지 않았어요.`);
     if (filled) parts.push('날짜가 비어 있던 일정은 오늘로 넣었어요.');
     let message = parts.join(' ');
@@ -1334,7 +1335,7 @@ export async function saveParsed(items, now = new Date()) {
 
 export async function dropInbox(id) {
     const target = inboxId(id);
-    if (!target) return { ok: false, message: '정리함에서 찾지 못했어요.' };
+    if (!target) return { ok: false, message: '임시보관함에서 찾지 못했어요.' };
     const failed = await update((draft) => {
         draft.inbox = (draft.inbox || []).filter((row) => row.id !== target);
         return draft;
@@ -1344,13 +1345,13 @@ export async function dropInbox(id) {
     if (state.auth?.uid) {
         deleteUserDoc(state.auth.uid, 'inbox', target, { memoryOnly: memoryOnly || state.profile.sharedPc }).catch(() => {});
     }
-    return { ok: true, message: '정리함에서 지웠어요.' };
+    return { ok: true, message: '임시보관함에서 지웠어요.' };
 }
 
 export async function promoteInbox(id) {
     const target = inboxId(id);
     const item = (state.inbox || []).find((row) => row.id === target);
-    if (!item) return { ok: false, message: '정리함에서 찾지 못했어요.', count: 0 };
+    if (!item) return { ok: false, message: '임시보관함에서 찾지 못했어요.', count: 0 };
     const result = await saveParsed([{ ...item, include: true }], new Date());
     if ((result.count || 0) > 0) {
         await rememberDropped(target);

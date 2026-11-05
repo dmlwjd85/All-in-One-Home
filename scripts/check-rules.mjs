@@ -241,7 +241,7 @@ try {
         kind: '할 일',
         title: '체험학습 동의서',
         date: '2026-12-31',
-        warning: '저장하면 정리함에 들어가요.',
+        warning: '저장하면 임시보관함에 들어가요.',
         source: 'msg',
     });
     if (!inboxRow || inboxRow.body.kind !== 'todo' || inboxRow.body.date !== '2026-12-31' || inboxRow.body.source !== 'app') {
@@ -252,7 +252,7 @@ try {
             title: '건강 조심', kind: 'todo', source: 'app', warning: '건강',
         }));
         await expectDeny('정리함 제목만 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth02'), {
-            title: '건강 조심', kind: 'todo', source: 'app', warning: '저장하면 정리함에 들어가요.',
+            title: '건강 조심', kind: 'todo', source: 'app', warning: '저장하면 임시보관함에 들어가요.',
         }));
         await expectDeny('정리함 안내만 건강', () => setDoc(doc(db, 'users/teacher-a/inbox/msghealth03'), {
             title: '체험학습 동의서', kind: 'todo', source: 'app', warning: '건강',

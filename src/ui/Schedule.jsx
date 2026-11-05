@@ -22,13 +22,15 @@ export function Schedule() {
     const [weekendOpen, setWeekendOpen] = useState(false);
     const { data, clock, route, go, showToast } = useUi();
     const focus = isValidYmd(route.params.date) ? route.params.date : (isValidYmd(route.params.week) ? route.params.week : clock.ymd);
-    const mode = route.params.view === '달력' ? '달력' : (route.params.view === '시간표' ? '시간표' : '주');
+    /* 칩 글자는 주간·월간·시간표. 주소 칸 view는 예전 '주'·'달력'도 그대로 받습니다. */
+    const mode = (route.params.view === '달력' || route.params.view === '월간') ? '월간'
+        : (route.params.view === '시간표' ? '시간표' : '주간');
     const ym = focus.slice(0, 7);
     const gcal = useGcal();
     useEffect(() => { refreshGcal().catch(() => {}); }, []);
     const weekStart = startOfWeekMon(focus);
     function openMode(item) {
-        if (item === '달력') go(`#/schedule/month/${focus}`);
+        if (item === '월간') go(`#/schedule/month/${focus}`);
         else if (item === '시간표') go(`#/schedule/table/${focus}`);
         else go(`#/schedule/week/${focus}`);
     }
@@ -54,9 +56,9 @@ export function Schedule() {
     return (
         <div>
             <div style={{ display: 'flex', gap: 8 }}>
-                {['주', '달력', '시간표'].map((item) => <Btn key={item} className={mode === item ? 'chip on' : 'chip'} onClick={() => openMode(item)}>{item}</Btn>)}
+                {['주간', '월간', '시간표'].map((item) => <Btn key={item} className={mode === item ? 'chip on' : 'chip'} onClick={() => openMode(item)}>{item}</Btn>)}
             </div>
-            {mode === '주' && (
+            {mode === '주간' && (
                 <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                     <div className="week-nav">
                         <Btn className="icon-btn" aria-label="이전 주" onClick={() => go(`#/schedule/week/${addDaysYmd(weekStart, -7)}`)}>‹</Btn>
@@ -97,9 +99,9 @@ export function Schedule() {
                     <AddEvent />
                 </div>
             )}
-            {mode === '달력' && (
-                <div style={{ marginTop: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {mode === '월간' && (
+                <div className="cal-month" style={{ marginTop: 12 }}>
+                    <div className="cal-month-head">
                         <Btn className="icon-btn" aria-label="이전 달" onClick={() => shiftMonth(-1)}>‹</Btn>
                         <strong className="title-font">{monthTitle(ym)}</strong>
                         <Btn className="icon-btn" aria-label="다음 달" onClick={() => shiftMonth(1)}>›</Btn>
@@ -109,19 +111,27 @@ export function Schedule() {
                         {monthCells(ym).map((cell, index) => {
                             const holiday = holidayCaption(cell.ymd);
                             const rest = restInfo(cell.ymd, classEvents);
-                            const has = classEvents.some((row) => onDay(row, cell.ymd));
-                            const hasGoogle = shown.some((row) => row.google && onDay(row, cell.ymd));
+                            const dayRows = shown.filter((row) => onDay(row, cell.ymd));
+                            const classDay = dayRows.filter((row) => !row.google);
+                            const googleDay = dayRows.filter((row) => row.google);
                             const weekend = index % 7 >= 5;
                             const selected = cell.ymd === focus;
                             const todayCell = cell.ymd === clock.ymd;
+                            const titles = [...classDay, ...googleDay].slice(0, 3);
+                            const titleNames = titles.map((row) => row.title || (row.google ? '구글' : '일정'));
+                            const aria = titleNames.length
+                                ? `${formatKoDate(cell.ymd)} · ${titleNames.join(', ')} 고르기`
+                                : `${formatKoDate(cell.ymd)} 고르기`;
                             return (
-                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={`${formatKoDate(cell.ymd)} 고르기`} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, minHeight: 44 }}>
+                                <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={aria} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, padding: '3px 2px', textAlign: 'center' }}>
                                     <span className="num" style={{ fontWeight: 700, color: todayCell ? undefined : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
-                                    {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11 }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
-                                    {(has || hasGoogle) && (
+                                    {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11, textAlign: 'center' }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
+                                    {titles.length > 0 && (
                                         <span className="cal-marks">
-                                            {has && <span aria-hidden="true">·</span>}
-                                            {hasGoogle && <span className="gcal-mark" aria-hidden="true">구</span>}
+                                            {titles.map((row) => (
+                                                <span key={row.id} className={row.google ? 'cal-event-title is-google' : 'cal-event-title'} title={row.title || ''}>{row.title || (row.google ? '구글' : '일정')}</span>
+                                            ))}
+                                            {dayRows.length > 3 && <span className="cal-event-title" aria-hidden="true">…</span>}
                                         </span>
                                     )}
                                 </Btn>
