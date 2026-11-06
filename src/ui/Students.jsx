@@ -27,14 +27,14 @@ export function Students() {
                 <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div className="roster-grid">
                 {rows.map((student) => {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
                     const follow = records.find((row) => row.sid === student.id && row.follow && row.follow >= clock.ymd);
                     return (
-                        <Btn key={student.id} block className="glass" style={{ justifyContent: 'space-between', display: 'flex', padding: '8px 12px' }} onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'students' } })}>
-                            <span><strong className="num">{student.no}</strong> {student.name}</span>
-                            <span className="muted">{mine.length ? `이번 달 ${mine.length}` : '이번 달 기록 없음'}{follow ? ` · ${Number(follow.follow.slice(5, 7))}/${Number(follow.follow.slice(8))} 다시` : ''}</span>
+                        <Btn key={student.id} className={mine.length ? 'glass roster-cell has-rec' : 'glass roster-cell'} onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'students' } })}>
+                            <span className="roster-name"><strong className="num">{student.no}</strong> {student.name}</span>
+                            <span className="muted roster-count">{mine.length ? `이번 달 ${mine.length}` : '기록 없음'}{follow ? ` · ${Number(follow.follow.slice(5, 7))}/${Number(follow.follow.slice(8))} 다시` : ''}</span>
                         </Btn>
                     );
                 })}
@@ -324,7 +324,7 @@ export function Neis() {
         <div>
             <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」는 엑셀에서 열 수 있는 표(.csv)로 이 기기에만 받습니다.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Btn className="primary-btn" style={{ flex: 1 }} onClick={copyAll}>전체 복사</Btn>
+                <Btn className="primary-btn fit-btn" onClick={copyAll}>전체 복사</Btn>
                 <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
                 <Btn className="chip" onClick={printTable}>출력</Btn>
             </div>
