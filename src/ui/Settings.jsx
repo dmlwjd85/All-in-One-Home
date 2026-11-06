@@ -83,8 +83,19 @@ function KeyPick({ pressed, label, ariaLabel, onPick, onPreview }) {
     );
 }
 
+/* 설정 첫 화면의 항목 버튼(선생님 시안 A, 11/6). 순서가 곧 화면 순서예요. */
+const SETTINGS_SECS = [
+    { id: 'class', icon: '🏫', label: '학급' },
+    { id: 'calendar', icon: '🗓️', label: '시간표·학사 일정' },
+    { id: 'screen', icon: '🎨', label: '화면·키보드 테마' },
+    { id: 'sound', icon: '🔊', label: '소리·진동' },
+    { id: 'keys', icon: '⌨️', label: '단축키' },
+    { id: 'account', icon: '☁️', label: '계정·백업' },
+];
+
 export function Settings() {
-    const { data, showToast, go, openHotkeyHelp } = useUi();
+    const { data, showToast, go, openHotkeyHelp, route } = useUi();
+    const sec = route?.params?.sec || '';
     const [className, setClassName] = useState(data.profile.className || '');
     const [font, setFontId] = useState(() => fontId());
     const [kbTheme, setKbThemeId] = useState(() => kbThemeId());
@@ -119,6 +130,15 @@ export function Settings() {
 
     return (
         <div style={{ display: 'grid', gap: 12 }}>
+            {!sec && (
+                <nav className="settings-menu" aria-label="설정 항목">
+                    {SETTINGS_SECS.map((row) => (
+                        <Btn key={row.id} className="key-btn settings-key" data-sec={row.id} onClick={() => go(`#/settings/${row.id}`, { state: { appFrom: 'settings' } })}><span aria-hidden="true">{row.icon}</span> {row.label}</Btn>
+                    ))}
+                    <Btn className="key-btn settings-key" data-sec="roster" onClick={() => go('#/settings/roster', { state: { rosterFrom: 'settings' } })}><span aria-hidden="true">👥</span> 학생 명단</Btn>
+                </nav>
+            )}
+            {sec === 'class' && (<>
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>학급</h2>
                 <input className="field" aria-label="학급 이름" value={className} onChange={(event) => setClassName(event.target.value)} />
@@ -130,13 +150,17 @@ export function Settings() {
                     showToast('학급 이름을 저장했어요.');
                 }}>학급 저장</Btn>
             </section>
+            </>)}
 
+            {sec === 'calendar' && (<>
             <TimetableSettings data={data} showToast={showToast} />
 
             <DefaultTimetable data={data} />
 
             <AcademicSettings data={data} showToast={showToast} />
+            </>)}
 
+            {sec === 'screen' && (<>
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>화면</h2>
                 <p className="muted" style={{ marginTop: 0 }}>작은 글자는 쨈 본문 글꼴이고, 큰 제목은 쨈 제목 글꼴이에요. 아주 작은 글씨는 보통 굵기로 둡니다.</p>
@@ -176,7 +200,9 @@ export function Settings() {
                 <p>아이폰 홈 화면에 예전에 꺼내 둔 이름은 자동으로 바뀌지 않아요. 아이콘을 지우고 다시 추가하면 ‘쨈 교무수첩’으로 보여요.</p>
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
+            </>)}
 
+            {sec === 'sound' && (<>
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>소리</h2>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -324,7 +350,9 @@ export function Settings() {
                 <p className="muted">칸을 누르면 미리 들려 드려요. 소리를 꺼 두어도 여기서는 들을 수 있고, 고른 소리는 이 기기에 남아요.</p>
                 </>)}
             </section>
+            </>)}
 
+            {sec === 'keys' && (<>
             <section className="glass" style={{ padding: 14 }} data-screen="hotkeys">
                 <h2 className="title-font" style={{ marginTop: 0 }}>단축키</h2>
                 <HotkeyForm onShowList={openHotkeyHelp} />
@@ -337,7 +365,9 @@ export function Settings() {
                 <p className="muted" style={{ wordBreak: 'break-all' }}>{typeof location === 'undefined' ? '' : `${location.origin}${location.pathname}?quick=1`}</p>
                 <p>이 주소는 Safari로 열립니다. 홈 화면에 넣어 둔 쨈 교무수첩 안의 기록과는 따로일 수 있어요. 그 앱에서 적으려면 아이콘을 연 다음 하단 쨈을 누르세요.</p>
             </section>
+            </>)}
 
+            {sec === 'account' && (<>
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>계정</h2>
                 <h3 style={{ marginBottom: 8 }}>공용 컴퓨터</h3>
@@ -471,8 +501,9 @@ export function Settings() {
                     )}
                 </div>
             </section>
+            </>)}
 
-            <GcalSettings />
+            {sec === 'calendar' && <GcalSettings />}
         </div>
     );
 }

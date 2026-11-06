@@ -740,7 +740,7 @@ try {
                 await page.evaluate(() => { location.hash = '#/schedule'; });
                 await delay(200);
             }
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/screen'; });
             await delay(200);
             await audit(page, `설정 ${width}`);
             if (width === 390) {
@@ -760,7 +760,7 @@ try {
 
     for (const width of [390, 1440, 1920]) {
         await withDemo(width, 'light', async (page) => {
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/keys'; });
             await delay(250);
             await page.waitForSelector('[data-screen="hotkeys"]');
             const hotkeyGaps = await page.evaluate(() => {
@@ -1801,7 +1801,7 @@ try {
         check(before > 1, `앞선 기록이 없어 명단 저장을 구분하지 못합니다. 기록 ${before}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
         try {
-            await page.waitForFunction(() => location.hash === '#/settings' && location.hostname === '127.0.0.1', { timeout: 4000 });
+            await page.waitForFunction(() => ['#/settings', '#/settings/class'].includes(location.hash) && location.hostname === '127.0.0.1', { timeout: 4000 });
         } catch {
             const where = await page.evaluate(() => location.href).catch(() => '');
             check(false, `명단을 저장하면 앱 밖으로 나갑니다. ${where}`);
@@ -1812,7 +1812,7 @@ try {
             host: location.hostname,
             outside: document.body.innerText.includes('다른 사이트'),
         }));
-        check(stayed.hash === '#/settings' && stayed.host === '127.0.0.1' && !stayed.outside, `명단을 저장한 뒤 설정에 머물지 않습니다. ${JSON.stringify(stayed)}`);
+        check(['#/settings', '#/settings/class'].includes(stayed.hash) && stayed.host === '127.0.0.1' && !stayed.outside, `명단을 저장한 뒤 설정에 머물지 않습니다. ${JSON.stringify(stayed)}`);
     }
 
     async function withRosterEntry(previous, label) {
@@ -1840,29 +1840,32 @@ try {
     await withRosterEntry('data:text/html,<title>outside</title><p>다른 사이트</p>', '다른 사이트에서 연');
 
     await withDemo(390, 'light', async (page) => {
-        await page.evaluate(() => { location.hash = '#/settings'; });
+        /* 공용 컴퓨터 단추는 계정·백업 화면에 있어요. */
+        await page.evaluate(() => { location.hash = '#/settings/account'; });
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.includes('공용 컴퓨터 모드')));
+        const shared = await page.evaluate(() => {
+            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'));
+            return button?.getAttribute('aria-pressed') || '';
+        });
+        check(shared === 'false' || shared === 'true', '공용 컴퓨터 버튼에 눌림 상태가 없습니다.');
+        await page.evaluate(() => { location.hash = '#/settings/class'; });
         await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.innerText.trim() === '명단 고치기'));
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 고치기')?.click());
         await page.waitForFunction(() => location.hash === '#/settings/roster' && history.state?.rosterFrom === 'settings');
         const marked = await page.evaluate(() => history.state?.rosterFrom === 'settings');
         check(marked, '설정에서 명단으로 들어올 때 표시가 없습니다.');
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '명단 저장')?.click());
-        await page.waitForFunction(() => location.hash === '#/settings');
-        const shared = await page.evaluate(() => {
-            const button = [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'));
-            return button?.getAttribute('aria-pressed') || '';
-        });
-        check(shared === 'false' || shared === 'true', '공용 컴퓨터 버튼에 눌림 상태가 없습니다.');
+        await page.waitForFunction(() => location.hash === '#/settings/class');
         await page.evaluate(() => history.back());
         let leftSettings = false;
         try {
-            await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/settings', { timeout: 3000 });
+            await page.waitForFunction(() => location.hostname === '127.0.0.1' && location.hash !== '#/settings/class', { timeout: 3000 });
             leftSettings = true;
         } catch {
             leftSettings = false;
         }
         const afterBack = await page.evaluate(() => ({ hash: location.hash, host: location.hostname }));
-        check(leftSettings && afterBack.host === '127.0.0.1' && afterBack.hash !== '#/settings', `설정에서 들어온 명단 저장이 설정 기록을 하나 더 남깁니다. ${JSON.stringify(afterBack)}`);
+        check(leftSettings && afterBack.host === '127.0.0.1' && afterBack.hash !== '#/settings/class', `설정에서 들어온 명단 저장이 설정 기록을 하나 더 남깁니다. ${JSON.stringify(afterBack)}`);
     }, 844);
 
     /* 오늘 화면 1안: 휴대폰에서는 카드가 한 줄 요약으로 접혀 있고, 누르면 펼치며, 카드마다 기억합니다. */
@@ -2537,7 +2540,7 @@ try {
         await withDemo(width, 'light', async (page) => {
             await page.setViewport({ width, height: width === 1920 ? 1080 : 844, deviceScaleFactor: 1 });
             await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound-notice', '1'));
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/sound'; });
             await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
             await page.waitForFunction(() => {
                 const el = document.querySelector('[aria-label="누를 때 소리 종류"]');
@@ -2563,7 +2566,7 @@ try {
             await page.waitForFunction(() => localStorage.getItem('ssug-gyomu-key-voice') === 'click' && localStorage.getItem('ssug-gyomu-key-volume') === 'loud');
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/sound'; });
             await page.waitForSelector('[aria-label="청축 클릭"]');
             const kept = await page.evaluate(() => ({
                 click: document.querySelector('[aria-label="청축 클릭"]')?.getAttribute('aria-pressed'),
@@ -2578,7 +2581,7 @@ try {
             });
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.waitForFunction(() => document.body.innerText.includes('소리 종류') || document.body.innerText.includes('오늘 우리 반'));
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/sound'; });
             await page.waitForSelector('[aria-label="누를 때 장난 소리"]');
             const hidden = await page.evaluate(() => {
                 window.__soundStarts = 0;
@@ -2600,10 +2603,16 @@ try {
             check(hidden.picks === 0 && hidden.words.length === 0, `숨긴 글자 소리가 설정에 보입니다. ${JSON.stringify(hidden)}`);
             check(hidden.pressBang === 'false', '누를 때 장난 소리에 방귀가 없거나 이미 골라져 있습니다.');
             check(await page.evaluate(() => !document.querySelector('[data-type-moved]')), '이미 고른 누를 때 소리가 있는데 옮김 안내가 나옵니다.');
+            /* 설정을 항목별로 나눈 뒤로 학급 이름 칸은 학급 화면에 있어요. 글자를 적어 보고 소리 화면으로 돌아옵니다. */
+            await page.evaluate(() => { location.hash = '#/settings/class'; });
+            await page.waitForSelector('[aria-label="학급 이름"]');
             await page.focus('[aria-label="학급 이름"]');
             await page.keyboard.type('ab c', { delay: 30 });
             await page.keyboard.press('Backspace');
             await page.keyboard.press('Enter');
+            await delay(120);
+            await page.evaluate(() => { location.hash = '#/settings/sound'; });
+            await page.waitForSelector('[aria-label="뽁 통통"]');
             await delay(120);
             const typed = await page.evaluate(() => ({
                 starts: window.__soundStarts,
@@ -2777,7 +2786,7 @@ try {
             localStorage.clear();
             localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
             for (const [key, value] of Object.entries(items)) localStorage.setItem(key, value);
-            location.hash = '#/settings';
+            location.hash = '#/settings/sound';
         }, seed);
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
@@ -2826,7 +2835,7 @@ try {
                 await page.waitForFunction(() => !document.querySelector('[data-type-moved]'));
                 const closedKey = await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-voice-moved'));
                 await page.reload({ waitUntil: 'domcontentloaded' });
-                await page.evaluate(() => { location.hash = '#/settings'; });
+                await page.evaluate(() => { location.hash = '#/settings/sound'; });
                 await page.waitForSelector('[aria-label="누를 때 소리 종류"]');
                 await page.evaluate(() => document.querySelector('[aria-label="누를 때 소리 종류"]')?.closest('section')?.scrollIntoView({ block: 'start' }));
                 await delay(150);
@@ -2996,7 +3005,7 @@ try {
                     check(after.quick === layout.quickTop && after.sixth === layout.sixthTop && after.cls < 0.001 && !after.toast, `${width} ${mode}에서 소리를 끄자 화면이 밀립니다: ${layout.quickTop}/${layout.sixthTop} → ${after.quick}/${after.sixth} cls ${after.cls} ${JSON.stringify({ shifts: after.shifts, fonts: after.fonts })}`);
                 } else {
                     check(!layout.visible && !layout.coversQuick && !layout.sixthUnderTab, `${width} ${mode}에서 숨긴 소리 팁이 화면을 가립니다: ${JSON.stringify(layout)}`);
-                    await page.evaluate(() => { location.hash = '#/settings'; });
+                    await page.evaluate(() => { location.hash = '#/settings/sound'; });
                     await page.waitForFunction(() => document.body.innerText.includes('누를 때 소리가 나요') && !document.body.innerText.includes('콕'));
                     const settings = await page.evaluate(() => {
                         const hits = (a, b) => Boolean(
@@ -3098,7 +3107,8 @@ try {
             window.scrollTo(0, Math.max(0, top - 80));
             return window.scrollY;
         });
-        check(before > 200, `온보딩이 아래로 내려가지 않았습니다. scrollY ${before}`);
+        /* 버튼을 글자 길이만큼 줄인 뒤로 온보딩이 짧아졌어요. 그래도 아래로 내려가야 보이는지만 봅니다. */
+        check(before > 80, `온보딩이 아래로 내려가지 않았습니다. scrollY ${before}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.trim() === '예시 학급으로 둘러보기')?.click());
         await page.waitForFunction(() => {
             const text = document.body.innerText;
@@ -3147,7 +3157,7 @@ try {
             ['#/schedule/month/2026-10-09', '한글날'],
             ['#/todo', '할 일'],
             ['#/students', '이하은'],
-            ['#/settings', '글꼴'],
+            ['#/settings/screen', '글꼴'],
         ]) {
             await page.evaluate((next) => { location.hash = next; }, hash);
             await page.waitForFunction((word) => document.body.innerText.includes(word), {}, ready);
@@ -3333,7 +3343,7 @@ try {
         check(!rowOf(vaults.main, 'events', 'qa-ev-2'), '숨은 행 검사: 민감어로 고친 일정의 예전 줄이 클라우드에 남았습니다.');
 
         // 내보내기(기기 전용 기록 빼기): 민감한 글이 파일에 들어가지 않습니다.
-        await open('#/settings');
+        await open('#/settings/account');
         await page.evaluate(() => {
             window.__qaExport = null;
             const make = URL.createObjectURL.bind(URL);
@@ -3586,7 +3596,7 @@ try {
     for (const width of [360, 390, 1280]) {
         await withDemo(width, 'light', async (page) => {
             await page.evaluate(() => { localStorage.setItem('ssug-gyomu-period-local', JSON.stringify({ level: '초', count: 10, locks: [3] })); });
-            await page.evaluate(() => { location.hash = '#/settings'; });
+            await page.evaluate(() => { location.hash = '#/settings/calendar'; });
             await page.reload({ waitUntil: 'domcontentloaded' });
             await page.waitForSelector('.tt-row');
             const rows = await page.evaluate(() => [...document.querySelectorAll('.tt-row')].map((row) => {

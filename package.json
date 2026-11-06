@@ -45,7 +45,8 @@
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
     "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs",
-    "check:tabbar": "node scripts/check-tabbar.mjs"
+    "check:tabbar": "node scripts/check-tabbar.mjs",
+    "check:ui-a": "node scripts/check-ui-a.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

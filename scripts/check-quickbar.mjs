@@ -532,7 +532,7 @@ if (!failures.length) {
         });
         await lockPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
         await lockPage.waitForSelector('.tabbar .fab');
-        await lockPage.evaluate(() => { location.hash = '#/settings'; });
+        await lockPage.evaluate(() => { location.hash = '#/settings/account'; });
         await lockPage.waitForFunction(() => document.body.innerText.includes('공용 컴퓨터 모드'));
         await lockPage.evaluate(() => {
             [...document.querySelectorAll('button')].find((el) => el.innerText.includes('공용 컴퓨터 모드'))?.click();
