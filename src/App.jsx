@@ -633,12 +633,26 @@ export default function App() {
                         </div>
                         <Motto />
                     </div>
-                    {MENU.map(([label, href]) => {
-                        const on = menuSelected(route.name, href);
-                        return (
-                            <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(menuTarget(href, clock.ymd))}>{label}</Btn>
-                        );
-                    })}
+                    <nav className="side-menu" aria-label="메뉴와 단축키">
+                        {MENU.map(([label, href]) => {
+                            const on = menuSelected(route.name, href);
+                            const action = HOTKEY_ACTIONS.find((item) => item.group === '이동' && item.label === label);
+                            const key = action && hotkeys[action.id] ? hotkeyLabel(hotkeys[action.id]) : '';
+                            return (
+                                <Btn key={label} block aria-current={on ? 'page' : undefined} aria-label={key ? `${label}, 단축키 ${key}` : label} className={on ? 'chip on' : 'chip'} onClick={() => go(menuTarget(href, clock.ymd))}>
+                                    <span>{label}</span>{key && <span className="side-hotkey muted" aria-hidden="true">{key}</span>}
+                                </Btn>
+                            );
+                        })}
+                        {HOTKEY_ACTIONS.filter((action) => action.group !== '이동' && hotkeys[action.id]).map((action) => {
+                            const key = hotkeyLabel(hotkeys[action.id]);
+                            return (
+                                <Btn key={action.id} block className="chip" aria-label={`${action.label}, 단축키 ${key}`} onClick={() => runHotkey(action.id)}>
+                                    <span>{action.label}</span><span className="side-hotkey muted" aria-hidden="true">{key}</span>
+                                </Btn>
+                            );
+                        })}
+                    </nav>
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>{kokHotkeyHint(hotkeys)}</p>
                 </aside>
                 <div className="main">
