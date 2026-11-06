@@ -11,6 +11,7 @@ assert.equal(await loginDeadline(Promise.resolve('ok'), 10), 'ok');
 assert.match(loginHint({ code: 'auth/login-timeout' }), /Safari/);
 globalThis.location = { host: 'example.github.io' };
 globalThis.window = {};
+globalThis.navigator = {};
 let redirected = false;
 useFirebaseForTest({ config: { projectId: 'test' }, bundle: { memoryOnly: false, auth: { config: { authDomain: 'test.firebaseapp.com' } } }, authModule: {
     GoogleAuthProvider: class { setCustomParameters() {} },

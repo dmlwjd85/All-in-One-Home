@@ -163,11 +163,14 @@ export async function signInGoogle() {
     const { pickLoginMode } = await import('./lib/googleLogin.js');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    const host = typeof location !== 'undefined' ? location.host : '';
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const win = typeof window !== 'undefined' ? window : {};
     const mode = pickLoginMode({
         authDomain: ready.auth?.config?.authDomain || '',
-        host: location.host,
-        nav: navigator,
-        win: window,
+        host,
+        nav,
+        win,
     });
     if (mode === 'redirect') {
         await signInWithRedirect(ready.auth, provider);
@@ -179,7 +182,7 @@ export async function signInGoogle() {
         if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/operation-not-supported-in-this-environment') {
             // GitHub Pages에는 같은 도메인의 /__/auth helper가 없습니다.
             // 교차 도메인 redirect로 돌려 첫 화면 루프를 되풀이하지 않습니다.
-            if (ready.auth?.config?.authDomain !== location.host) {
+            if (ready.auth?.config?.authDomain !== host) {
                 throw Object.assign(new Error('브라우저 로그인 필요'), { code: 'auth/popup-needs-browser' });
             }
             await signInWithRedirect(ready.auth, provider);

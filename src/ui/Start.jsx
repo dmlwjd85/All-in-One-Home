@@ -85,7 +85,7 @@ export function Start() {
             <p className="muted" style={{ fontSize: 15, marginTop: 4 }}>담임의 하루가 한 화면에 있어요.</p>
             {(step === 'sync' || step === 'sync-error') && <div className="solid-card" style={{ padding: 16 }} role="status">
                 <p>{step === 'sync' ? '로그인됐어요. 기존 학급 자료를 확인하고 있어요.' : '기존 학급 자료를 아직 확인하지 못했어요. 자료를 지키려고 새 학급 만들기를 멈췄어요.'}</p>
-                {step === 'sync-error' && <Btn onClick={() => setRetry((value) => value + 1)}>자료 다시 확인</Btn>}
+                {step === 'sync-error' && <Btn className="primary-btn block" onClick={() => setRetry((value) => value + 1)}>자료 다시 확인</Btn>}
             </div>}
             {step === 'choose' && (
                 <div className="solid-card" style={{ padding: 16 }}>
