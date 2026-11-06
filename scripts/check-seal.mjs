@@ -31,7 +31,7 @@ check(!/rgba\(\s*80\s*,\s*90\s*,\s*200/.test(foilCss) && foilCss.includes('0 6px
 /* 가계부 #31: 막대 위 컵 복사본·조각(0.38초, 방울 10~16px, 은박 14×9px)과 어두운 화면 조각 테두리 */
 check(foilCss.includes('animation: cup-bit .38s') && foilCss.includes('width: 14px;\n    height: 9px;') && foilCss.includes('html.dark .cup-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }') && foilCss.includes('html.dark .cup-foil { border-color: rgba(255,255,255,.8); }'), '가계부 #31 조각 크기·시간·어두운 화면 테두리가 다릅니다.');
 const appText = readFileSync(resolve(root, 'src/App.jsx'), 'utf8') + readFileSync(resolve(root, 'src/ui/TabBar.jsx'), 'utf8');
-/* 탭바 시안 A부터 휴대폰 가운데 버튼은 TabBar.jsx 에 있습니다. 컵 검사는 넓은 화면 키캡(.desk-fab)으로 합니다. */
+/* 탭바 시안 C: 휴대폰·컴퓨터 모두 JjaemJar. 아래 브라우저는 넓은 화면 desk-fab 병을 봅니다. */
 check((appText.match(/aria-label="쨈 빠른 입력 열기"/g) || []).length === 2 && appText.includes('openQuickBar') && !appText.includes('onClick={() => setPlus(true)}'), '버튼이 입력칸을 바로 열지 않거나, 휴대폰·데스크톱 두 버튼 중 하나의 이름이 바뀌었습니다(QA 2차 M2).');
 /* QA 1차 1번: 휴대폰에는 단축키가 없으므로, 빠른 입력 안에 + 화면으로 가는 단추가 있어야 합니다. */
 const quickText = readFileSync(resolve(root, 'src/ui/QuickBar.jsx'), 'utf8');
@@ -69,132 +69,106 @@ if (!failures.length) {
             localStorage.setItem('ssug-gyomu-theme', 'light');
         });
         await page.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
-        await page.waitForSelector('.desk-fab .seal-cup');
+        await page.waitForSelector('.desk-fab .jar-disc');
         const light = await page.evaluate(() => {
-            const cup = document.querySelector('.desk-fab .seal-cup');
-            const style = getComputedStyle(cup);
-            const ids = [...document.querySelectorAll('.seal-cup [id]')].map((el) => el.id);
+            const button = document.querySelector('.desk-fab');
+            const jar = button?.querySelector('.jar-disc');
+            const seal = button?.querySelector('.seal-cup, .seal-svg');
+            const disc = jar?.getBoundingClientRect();
             return {
-                flavor: cup.dataset.flavor,
-                fill: style.getPropertyValue('--seal-fill').trim().toUpperCase(),
-                jam: style.getPropertyValue('--cup-j1').trim().toUpperCase(),
-                plate: style.getPropertyValue('--cup-plate').trim().toUpperCase(),
-                label: document.querySelector('.desk-fab').getAttribute('aria-label'),
-                name: document.querySelector('.desk-fab .fab-txt')?.textContent || '',
-                drops: cup.querySelectorAll('.cup-pp').length,
-                dupIds: ids.length !== new Set(ids).size,
-                rawId: ids.some((id) => ['cupd-g', 'cupdjam', 'cupd-foil', 'cupd-dots'].includes(id)),
-                d2: getComputedStyle(cup.querySelector('.cup-d2')).display,
-                lbl1: getComputedStyle(cup.querySelector('.cup-lbl1')).display,
-                lbl2: getComputedStyle(cup.querySelector('.cup-lbl2')).display,
-                txt: document.querySelector('.desk-fab .fab-txt').getBoundingClientRect().bottom,
+                hasJar: Boolean(jar?.querySelector('.jar-svg [data-part="gingham"]')),
+                hasSeal: Boolean(seal),
+                label: button?.getAttribute('aria-label') || '',
+                name: button?.querySelector('.fab-txt')?.textContent || '',
+                discW: disc?.width || 0,
+                discH: disc?.height || 0,
+                txt: button?.querySelector('.fab-txt')?.getBoundingClientRect().bottom || 0,
                 bar: window.innerHeight,
             };
         });
-        check(light.flavor === EXPECTED_FLAVOR.light, `밝은 화면 맛이 ${light.flavor} 입니다.`);
-        check(light.fill === SEAL_FILL.light.toUpperCase(), `밝은 컵 색이 ${light.fill} 입니다.`);
-        check(light.jam === '#9E1630', `딸기 쨈 색이 ${light.jam} 입니다.`);
-        check(light.plate === '#F2F3F6', `밝은 접시 색이 ${light.plate} 입니다.`);
+        check(light.hasJar && !light.hasSeal, `밝은 화면 desk-fab이 시안 C 딸기잼 병이 아닙니다: ${JSON.stringify(light)}`);
         check(light.label === '쨈 빠른 입력 열기' && light.label.startsWith(light.name), `접근성 이름이 보이는 글자(쨈)로 시작하지 않거나 하는 일과 다릅니다: ${light.label}`);
         check(light.name === '쨈', `버튼 이름이 ${light.name} 입니다.`);
-        check(light.drops === DROP_COUNT, `방울이 ${light.drops}개입니다.`);
-        check(!light.dupIds && !light.rawId, '컵 그림 아이디가 겹치거나 접두가 없습니다.');
-        check(light.d2 === 'inline' && light.lbl1 === 'inline' && light.lbl2 === 'none', `60px 접시의 글자 단계가 아닙니다: ${light.d2}/${light.lbl1}/${light.lbl2}`);
+        check(Math.abs(light.discW - 60) < 0.6 && Math.abs(light.discH - 60) < 0.6, `밝은 화면 병 접시가 60px가 아닙니다: ${light.discW}×${light.discH}`);
         check(light.txt <= light.bar + 1, '버튼 이름이 하단 막대 밖으로 나갑니다.');
 
         await page.evaluate(() => document.documentElement.classList.add('dark'));
-        await page.waitForFunction((flavor) => document.querySelector('.desk-fab .seal-cup').dataset.flavor === flavor, {}, EXPECTED_FLAVOR.dark);
-        const darkFill = await page.evaluate(() => {
-            const style = getComputedStyle(document.querySelector('.desk-fab .seal-cup'));
+        const dark = await page.evaluate(() => {
+            const button = document.querySelector('.desk-fab');
             return {
-                fill: style.getPropertyValue('--seal-fill').trim().toUpperCase(),
-                jam: style.getPropertyValue('--cup-j1').trim().toUpperCase(),
-                plate: style.getPropertyValue('--cup-plate').trim().toUpperCase(),
+                hasJar: Boolean(button?.querySelector('.jar-disc .jar-svg [data-part="gingham"]')),
+                hasSeal: Boolean(button?.querySelector('.seal-cup, .seal-svg')),
+                name: button?.querySelector('.fab-txt')?.textContent || '',
             };
         });
-        check(darkFill.fill === SEAL_FILL.dark.toUpperCase(), `어두운 컵 색이 ${darkFill.fill} 입니다.`);
-        check(darkFill.jam === '#9E1630', `어두운 화면에서 쨈 색이 바뀌었습니다: ${darkFill.jam}`);
-        check(darkFill.plate === '#262833', `어두운 접시 색이 ${darkFill.plate} 입니다.`);
+        check(dark.hasJar && !dark.hasSeal && dark.name === '쨈', `어두운 화면 desk-fab이 시안 C 딸기잼 병이 아닙니다: ${JSON.stringify(dark)}`);
 
         await page.evaluate(() => document.documentElement.classList.remove('dark'));
         const burst = await page.evaluate(() => {
             const button = document.querySelector('.desk-fab');
-            const cup = button.querySelector('.seal-cup');
+            const jar = button.querySelector('.jar-disc');
             button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
-            const anims = cup.getAnimations({ subtree: true }).filter((anim) => String(anim.animationName || '').startsWith('cup-'));
-            const squishEl = cup.querySelector('.cup-squish');
+            const squishEl = jar.querySelector('.cup-squish');
             squishEl.style.transition = 'none';
             const squish = getComputedStyle(squishEl).transform;
             return {
-                anims: anims.length,
-                popping: button.classList.contains('is-popping'),
                 press: button.dataset.press || '',
                 squish,
+                hasSeal: Boolean(button.querySelector('.seal-cup, .seal-svg')),
             };
         });
-        check(burst.anims === 0 && !burst.popping, `누르는 동안 껍질이 먼저 벗겨집니다. ${JSON.stringify(burst)}`);
+        check(!burst.hasSeal, '누르는 동안 SealCup 회귀가 보입니다.');
         check(burst.press === 'down' && burst.squish.includes('1.1') && burst.squish.includes('0.86'), `누르고 있는 동안 눌린 채로 머물지 않습니다. ${JSON.stringify(burst)}`);
 
         const opened = await page.evaluate(() => {
             const button = document.querySelector('.desk-fab');
-            const cup = button.querySelector('.seal-cup');
+            window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
             button.click();
-            const first = cup.getAnimations({ subtree: true }).filter((anim) => anim.playState === 'running');
-            first.forEach((anim) => { anim.currentTime = 200; });
-            button.click();
-            const again = cup.getAnimations({ subtree: true }).filter((anim) => anim.playState === 'running');
-            const maxTime = again.reduce((max, anim) => Math.max(max, Number(anim.currentTime) || 0), 0);
-            const peel = again.some((anim) => String(anim.animationName || '').startsWith('cup-'));
             return {
-                running: first.length > 0,
-                replay: again.length >= 8 && maxTime < 50 && peel,
                 focused: document.activeElement?.classList.contains('quick-field') || false,
                 open: document.querySelector('.quick-bar')?.classList.contains('is-open') || false,
                 plus: Boolean(document.querySelector('[data-screen="plus"]')),
-                popping: button.classList.contains('is-popping'),
+                popping: button.classList.contains('is-popping') || button.classList.contains('is-flash'),
+                hasJar: Boolean(button.querySelector('.jar-disc .jar-svg [data-part="gingham"]')),
             };
         });
-        check(opened.running && opened.replay && opened.popping && opened.focused && opened.open && !opened.plus, `입력칸이 바로 열리지 않습니다: ${JSON.stringify(opened)}`);
+        check(opened.hasJar && opened.focused && opened.open && !opened.plus && opened.popping, `입력칸이 바로 열리지 않습니다: ${JSON.stringify(opened)}`);
 
         const rapid = await page.evaluate(() => {
             const button = document.querySelector('.desk-fab');
-            const cup = button.querySelector('.seal-cup');
-            const before = cup.getAnimations({ subtree: true }).length;
             for (let i = 0; i < 24; i += 1) button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
             return {
-                drops: cup.querySelectorAll('.cup-pp').length,
-                anims: cup.getAnimations({ subtree: true }).length,
-                before,
+                hasJar: Boolean(button.querySelector('.jar-disc .jar-svg [data-part="gingham"]')),
+                hasSeal: Boolean(button.querySelector('.seal-cup, .seal-svg')),
+                press: button.dataset.press || '',
             };
         });
-        check(rapid.drops === DROP_COUNT, `연타 뒤 방울이 ${rapid.drops}개로 늘었습니다.`);
-        check(rapid.anims <= rapid.before && rapid.anims <= 16, `연타 뒤 동작이 ${rapid.anims}개입니다.`);
+        check(rapid.hasJar && !rapid.hasSeal, `연타 뒤 desk-fab이 병이 아닙니다: ${JSON.stringify(rapid)}`);
 
         await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
         await page.reload({ waitUntil: 'networkidle0' });
-        await page.waitForSelector('.desk-fab .seal-cup');
+        await page.waitForSelector('.desk-fab .jar-disc');
         const reduced = await page.evaluate(() => {
             const button = document.querySelector('.desk-fab');
-            const cup = button.querySelector('.seal-cup');
+            const jar = button.querySelector('.jar-disc');
             button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-            const squish = getComputedStyle(cup.querySelector('.cup-squish')).transform;
+            const squish = getComputedStyle(jar.querySelector('.cup-squish')).transform;
             button.click();
-            const dropAnims = [...cup.querySelectorAll('.cup-pp')].reduce((sum, el) => sum + el.getAnimations().length, 0);
             return {
-                dropAnims,
                 squish,
-                drops: cup.querySelectorAll('.cup-pp').length,
                 press: button.dataset.press || '',
                 popping: button.classList.contains('is-popping'),
                 flash: button.classList.contains('is-flash'),
                 focused: document.activeElement?.classList.contains('quick-field') || false,
                 open: document.querySelector('.quick-bar')?.classList.contains('is-open') || false,
+                hasJar: Boolean(jar.querySelector('.jar-svg [data-part="gingham"]')),
+                hasSeal: Boolean(button.querySelector('.seal-cup, .seal-svg')),
             };
         });
-        check(reduced.dropAnims === 0 && !reduced.popping && reduced.flash, `움직임 줄이기에서 터짐이 남습니다: ${JSON.stringify(reduced)}`);
+        check(reduced.hasJar && !reduced.hasSeal, `움직임 줄이기에서 desk-fab이 병이 아닙니다: ${JSON.stringify(reduced)}`);
+        check(!reduced.popping && reduced.flash, `움직임 줄이기에서 터짐/번쩍임이 어긋납니다: ${JSON.stringify(reduced)}`);
         check(reduced.press === 'down' && (reduced.squish === 'none' || reduced.squish === 'matrix(1, 0, 0, 1, 0, 0)'), `움직임 줄이기에서 눌림이 남습니다. ${reduced.squish}`);
         check(reduced.focused && reduced.open, `움직임 줄이기에서 입력칸이 바로 열리지 않습니다. ${JSON.stringify(reduced)}`);
-        check(reduced.drops === DROP_COUNT, '움직임 줄이기에서 방울 요소가 사라졌습니다.');
     } finally {
         await browser.close();
         preview.kill('SIGTERM');
