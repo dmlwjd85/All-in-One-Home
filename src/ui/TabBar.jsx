@@ -209,6 +209,7 @@ export function TabPickSheet({ order, onClose, onSave }) {
                         </li>
                     ))}
                 </ol>
+                {!draft.includes('more') && <p className="muted" data-tbj-nomore style={{ margin: '4px 0 0' }}>「더」 칸을 빼도 괜찮아요. 맨 위 ≡ 메뉴 단추로 설정까지 모든 메뉴에 갈 수 있어요.</p>}
                 <div className="tbj-foot">
                     <Btn className="chip" onClick={() => setDraft([...DEFAULT_ORDER])}>기본 배치</Btn>
                     <Btn className="chip" onClick={onClose}>닫기</Btn>

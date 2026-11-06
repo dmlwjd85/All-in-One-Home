@@ -25,14 +25,14 @@ export const DEFAULT_ORDER = ['today', 'todo', 'attend', 'schedule', 'students',
 const byId = new Map(TAB_POOL.map((tab) => [tab.id, tab]));
 export const tabById = (id) => byId.get(id) || null;
 
-/** 모르는 아이디·겹친 아이디를 빼고, 모자란 칸은 기본 배치에서 채웁니다. '더'(메뉴)는 늘 한 칸 남깁니다. */
+/** 모르는 아이디·겹친 아이디를 빼고, 모자란 칸은 기본 배치에서 채웁니다.
+    '더'(메뉴) 칸도 선생님이 다른 탭으로 바꿀 수 있어요. 빼더라도 맨 위 ≡ 메뉴 단추로 설정까지 모든 메뉴에 갈 수 있습니다. */
 export function normalizeOrder(order) {
     const out = [];
     for (const id of Array.isArray(order) ? order : []) {
         if (byId.has(id) && !out.includes(id) && out.length < SIDE_COUNT) out.push(id);
     }
     for (const id of DEFAULT_ORDER) if (out.length < SIDE_COUNT && !out.includes(id)) out.push(id);
-    if (!out.includes('more')) out[SIDE_COUNT - 1] = 'more';
     return out;
 }
 

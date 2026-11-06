@@ -92,6 +92,9 @@ export function resolveHash(raw, today) {
     if (path === '/settings') return pack('settings', {}, '#/settings', incoming);
     if (path === '/settings/roster') return pack('roster', {}, '#/settings/roster', incoming);
     if (path === '/settings/legacy' || path === '/legacy') return pack('legacy', { page: '' }, '#/settings/legacy', incoming);
+    /* 설정 항목별 화면(선생님 시안 A, 11/6): 설정 첫 화면은 항목 버튼만 두고, 눌러서 들어갑니다. */
+    const settingsSec = path.match(/^\/settings\/(class|screen|sound|keys|account|calendar)$/);
+    if (settingsSec) return pack('settings', { sec: settingsSec[1] }, `#/settings/${settingsSec[1]}`, incoming);
     if (path === '/write') return pack('today', {}, '#/today', incoming, { openQuick: true });
     if (path === '/quick') return pack('today', {}, '#/today', incoming, { openQuickBar: true });
     if (path === '/counsel') return pack('students', {}, '#/students', incoming);

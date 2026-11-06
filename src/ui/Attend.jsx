@@ -260,7 +260,7 @@ export function ReasonSheet({ student, mark, date, onClose }) {
                     </>
                 )}
                 {status && status !== '출석' && (
-                    <Btn className="primary-btn block attend-save" style={{ marginTop: 12, minHeight: 52, width: '100%' }} aria-label="출결 저장" data-dirty={dirty ? '1' : '0'} disabled={saving} onClick={saveNow}>
+                    <Btn className="primary-btn block attend-save" style={{ marginTop: 12, minHeight: 52 }} aria-label="출결 저장" data-dirty={dirty ? '1' : '0'} disabled={saving} onClick={saveNow}>
                         {saving ? '저장하는 중…' : '저장'}
                     </Btn>
                 )}
