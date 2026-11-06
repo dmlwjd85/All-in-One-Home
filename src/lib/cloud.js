@@ -572,7 +572,10 @@ export async function watchAuth(onUser, { memoryOnly = false } = {}) {
     if (!syncAvailable()) return () => {};
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return () => {};
-    await finishRedirectSignIn();
+    // redirect 결과 대기와 observer 등록을 분리합니다. 오류는 로그인 안내로 전달합니다.
+    void finishRedirectSignIn().catch((error) => {
+        window.dispatchEvent(new CustomEvent('ssug-auth-error', { detail: { code: error?.code || 'auth/redirect-failed' } }));
+    });
     const { onAuthStateChanged } = await import('firebase/auth');
     return onAuthStateChanged(ready.auth, (user) => {
         onUser(user ? { uid: user.uid, name: user.displayName || '', email: user.email || '' } : null);

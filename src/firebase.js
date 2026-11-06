@@ -45,6 +45,8 @@ export function loginHint(error) {
     if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
         return '로그인 창을 닫으셨어요. 다시 눌러 주세요.';
     }
+    if (error.code === 'auth/popup-needs-browser') return '로그인 창을 열지 못했어요. 브라우저에서 팝업을 허용하거나 Safari에서 이 주소를 직접 열어 로그인해 주세요. 설치 앱과 로그인 상태가 다를 수 있어요.';
+    if (error.code === 'auth/login-timeout') return '로그인 결과가 돌아오지 않았어요. 다시 시도하거나 Safari에서 이 주소를 직접 열어 로그인해 주세요. Safari와 설치 앱의 로그인은 다를 수 있어요.';
     return '로그인하지 못했어요. 잠시 후 다시 눌러 주세요.';
 }
 
@@ -141,6 +143,15 @@ export function loginLoadOptions() {
     return { memoryOnly: bundle ? bundle.memoryOnly : sharedPcOn() };
 }
 
+export async function loginDeadline(task, ms = 30000) {
+    let timer;
+    try {
+        return await Promise.race([task, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(Object.assign(new Error('로그인 대기 초과'), { code: 'auth/login-timeout' })), ms);
+        })]);
+    } finally { clearTimeout(timer); }
+}
+
 export async function signInGoogle() {
     const ready = await loadFirebase(loginLoadOptions());
     if (!ready) {
@@ -152,20 +163,28 @@ export async function signInGoogle() {
     const { pickLoginMode } = await import('./lib/googleLogin.js');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+    const host = typeof location !== 'undefined' ? location.host : '';
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const win = typeof window !== 'undefined' ? window : {};
     const mode = pickLoginMode({
         authDomain: ready.auth?.config?.authDomain || '',
-        host: location.host,
-        nav: navigator,
-        win: window,
+        host,
+        nav,
+        win,
     });
     if (mode === 'redirect') {
         await signInWithRedirect(ready.auth, provider);
         return null;
     }
     try {
-        return await signInWithPopup(ready.auth, provider);
+        return await loginDeadline(signInWithPopup(ready.auth, provider));
     } catch (error) {
         if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/operation-not-supported-in-this-environment') {
+            // GitHub Pages에는 같은 도메인의 /__/auth helper가 없습니다.
+            // 교차 도메인 redirect로 돌려 첫 화면 루프를 되풀이하지 않습니다.
+            if (ready.auth?.config?.authDomain !== host) {
+                throw Object.assign(new Error('브라우저 로그인 필요'), { code: 'auth/popup-needs-browser' });
+            }
             await signInWithRedirect(ready.auth, provider);
             return null;
         }
@@ -177,11 +196,7 @@ export async function finishRedirectSignIn() {
     const ready = await loadFirebase(loginLoadOptions());
     if (!ready) return null;
     const { getRedirectResult } = await authModule();
-    try {
-        return await getRedirectResult(ready.auth);
-    } catch {
-        return null;
-    }
+    return getRedirectResult(ready.auth);
 }
 
 export async function signOutFirebase() {
