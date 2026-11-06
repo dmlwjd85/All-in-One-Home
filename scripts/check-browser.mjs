@@ -3366,9 +3366,9 @@ try {
         for (const mode of ['light', 'dark']) {
             await withDemo(width, mode, async (page) => {
                 const selector = width >= 900 ? '.desk-fab' : '.tabbar .fab';
-                /* 탭바 시안 A: 휴대폰 가운데는 48px 젤리 접시 + 아래 단단한 6px 두께 그림자. 넓은 화면 키캡은 그대로 60px. */
-                const size = width >= 900 ? 60 : 48;
-                const shadowRe = width >= 900 ? /\b0px 6px 20px -6px\b/ : /\b0px 6px 0px\b/;
+                /* 탭바 C(선생님 확정): 폰·컴퓨터 모두 JjaemJar. 접시 60px + 젤리 두께 6px(0 6px 0) 그림자. SealCup 연한 그림자 금지. */
+                const size = 60;
+                const shadowRe = /\b0px 6px 0px\b/;
                 const cap = await page.evaluate((sel) => {
                     const el = document.querySelector(sel);
                     if (!el) return null;
@@ -3390,7 +3390,7 @@ try {
                 if (!cap) return;
                 check(Math.abs(cap.discW - size) < 0.6 && Math.abs(cap.discH - size) < 0.6, `${width} ${mode} 쨈 접시가 ${size}px가 아닙니다: ${cap.discW}×${cap.discH}`);
                 check(cap.w >= 44 && cap.h >= 44, `${width} ${mode} 쨈 버튼 터치 영역이 44px보다 작습니다.`);
-                check(cap.shadow && cap.shadow !== 'none' && shadowRe.test(cap.shadow), `${width} ${mode} 쨈 접시 아래 6px 그림자가 없습니다: ${cap.shadow}`);
+                check(cap.shadow && cap.shadow !== 'none' && shadowRe.test(cap.shadow), `${width} ${mode} 쨈 병 접시 아래 6px 두께 그림자가 없습니다: ${cap.shadow}`);
                 check(cap.squish === 'none' && /transform/.test(cap.transition) && /0\.46s/.test(cap.transition), `${width} ${mode} 쨈 컵이 쉬는 모양이 아니거나 돌아오는 전환이 없습니다: ${cap.squish} ${cap.transition}`);
                 const pressed = await page.evaluate(async (sel) => {
                     const el = document.querySelector(sel);

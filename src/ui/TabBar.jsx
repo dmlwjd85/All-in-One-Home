@@ -27,16 +27,48 @@ function TabIcon({ id }) {
     return <svg className="tbj-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">{ICONS[id]}</svg>;
 }
 
-/** PDF팀 웹용 쨈 병 아이콘(글자 없는 판, gyomu/2027-build/아이콘_웹용)을 그대로 옮겼습니다. 글자 「쨈」은 아래에 따로 씁니다. */
+/** 시안 C 가운데 쨈: 딸기 쨈 병(주름 천 뚜껑·유리 반짝임·알갱이 쨈·딸기 라벨). 글자 「쨈」은 아래에 따로 씁니다. */
 export function JjaemJar() {
+    /* 선생님 확정(11/6 08:25) 시안 B2: 손그림 스티커 느낌의 딸기 쨈 병. 체크무늬 천 뚜껑과 리본, 흘러내리는 쨈, 딸기 라벨, 흰 스티커 테두리, 작은 하트. */
     return (
         <span className="fab-disc jar-disc" aria-hidden="true">
             <span className="cup-squish">
-                <svg className="jar-svg" viewBox="0 0 120 130" aria-hidden="true">
-                    <rect x="26" y="8" width="68" height="20" rx="7" fill="#FFD45E" stroke="#fff" strokeWidth="3" />
-                    <path d="M30 30h60c6 0 9 5 9 10v12c0 4 4 8 4 14v44c0 9-7 14-15 14H32c-8 0-15-5-15-14V66c0-6 4-10 4-14V40c0-5 3-10 9-10z" fill="#fff" stroke="#E9DED6" strokeWidth="3" />
-                    <path d="M26 30h68v6c0 4-3 6-6 6-3 0-5 2-5 6v6c0 3-2 5-4.5 5S74 57 74 54v-8c0-3-2-4-4-4H52c-2 0-3 2-3 4v3c0 3-2 5-4.5 5S40 52 40 49v-3c0-3-2-4-5-4h-3c-4 0-6-3-6-6z" fill="#E05A72" />
-                    <rect x="30" y="72" width="60" height="34" rx="8" fill="#FFF4CF" />
+                <svg className="jar-svg" viewBox="0 0 64 72" aria-hidden="true">
+                    <defs>
+                        <pattern id="tbj-gingham" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)">
+                            <rect width="6" height="6" fill="#FFF6F2" />
+                            <rect width="3" height="6" fill="#F28C9C" opacity=".75" />
+                            <rect width="6" height="3" fill="#F28C9C" opacity=".75" />
+                            <rect width="3" height="3" fill="#D9445E" />
+                        </pattern>
+                        <linearGradient id="tbj-jar-fill" x1="16" y1="28" x2="48" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#E8506A" /><stop offset=".5" stopColor="#C8304C" /><stop offset="1" stopColor="#9E1E38" /></linearGradient>
+                    </defs>
+                    {/* 흰 스티커 테두리 */}
+                    <path d="M14 15c5-6 31-6 36 0 2.5 1.8 3 4 1.4 6.4 4.4 4.5 7 10.5 7 17.8C58.4 55 47 67 32 67S5.6 55 5.6 39.2c0-7.3 2.6-13.3 7-17.8-1.6-2.4-1.1-4.6 1.4-6.4z" fill="#fff" stroke="#fff" strokeWidth="4.5" strokeLinejoin="round" />
+                    {/* 동그란 유리병 */}
+                    <path d="M13.4 24.6C10 28.4 8.4 33.4 8.4 39.4 8.4 53.6 18.6 63.6 32 63.6S55.6 53.6 55.6 39.4c0-6-1.6-11-5-14.8z" fill="#FFF8F6" stroke="#3A2A2C" strokeWidth="2" strokeLinejoin="round" />
+                    {/* 쨈 */}
+                    <path d="M11.6 34.2c3.4-1.8 6.2-.6 9.4-1.6 3.6-1.1 6.6.9 10.4-.2 4-1.2 7.4.8 11 0 3.2-.7 6.2-.4 9.4 1.6.6 1.6.9 3.4.9 5.4 0 12.2-8.6 21-20.7 21S11.3 51.8 11.3 39.6c0-2 .1-3.8.3-5.4z" fill="url(#tbj-jar-fill)" />
+                    <g fill="#FFC870"><ellipse cx="19" cy="40" rx="1.1" ry=".75" /><ellipse cx="45" cy="41" rx="1.1" ry=".75" /><ellipse cx="22" cy="53" rx="1" ry=".7" /><ellipse cx="43" cy="53" rx="1" ry=".7" /><ellipse cx="16.5" cy="47" rx=".9" ry=".65" /></g>
+                    {/* 유리 빛 */}
+                    <path d="M14.6 31c-2.4 4.4-2.8 10-1.2 14.6" stroke="#fff" strokeWidth="2" strokeLinecap="round" opacity=".85" fill="none" />
+                    {/* 딸기 라벨 */}
+                    <path d="M20.2 41.4h23.6l1.4 1.6v9.2l-1.4 1.6H20.2l-1.4-1.6V43z" fill="#FFF0D6" stroke="#3A2A2C" strokeWidth="1.3" strokeLinejoin="round" />
+                    <path d="M32 52.6c2.8 0 4.4-2.4 4.4-4.6 0-1.9-1.7-3-4.4-3s-4.4 1.1-4.4 3c0 2.2 1.6 4.6 4.4 4.6z" fill="#E0405C" stroke="#9E1E38" strokeWidth=".6" />
+                    <path d="M29.6 45.2c.8-1.3 1.6-1.3 2.4-.3.8-1 1.6-1 2.4.3-.9.5-1.7.4-2.4.2-.7.2-1.5.3-2.4-.2z" fill="#4E9A52" />
+                    <g fill="#FFE29A"><circle cx="30.6" cy="47.6" r=".45" /><circle cx="33.4" cy="47.8" r=".45" /><circle cx="32" cy="50" r=".45" /></g>
+                    {/* 체크무늬 천 뚜껑 (주름진 끝) */}
+                    <path data-part="gingham" d="M15 12.4c4.6-5 29.4-5 34 0 1.6 1.7 1.6 3.8.4 5.6 1.4 1.4 3 2.9 3.4 4.6.4 1.6-.9 2.4-2.2 1.9-1.4 1.6-3.2 1.8-4.6.6-1.6 1.6-3.8 1.6-5.2.2-1.8 1.6-4.2 1.6-5.8.1-1.6 1.5-4 1.5-5.6 0-1.6 1.5-4 1.5-5.8-.1-1.4 1.4-3.6 1.4-5.2-.2-1.4 1.2-3.2 1-4.6-.6-1.3.5-2.6-.3-2.2-1.9.4-1.7 2-3.2 3.4-4.6-1.2-1.8-1.2-3.9.4-5.6z" fill="url(#tbj-gingham)" stroke="#3A2A2C" strokeWidth="1.8" strokeLinejoin="round" />
+                    {/* 흘러내리는 쨈 두 줄기 */}
+                    <path d="M22 25.4c.4 2.6-.2 5 1 6.4 1.2 1.4 3 .4 2.8-1.6-.2-2-.2-3.4.2-4.8z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
+                    <path d="M35.6 25.8c.2 3.4-.4 7 .8 8.8 1.2 1.8 3.4.8 3.2-1.4-.2-2.4-.4-5 0-7.4z" fill="#C8304C" stroke="#3A2A2C" strokeWidth="1" strokeLinejoin="round" />
+                    <circle cx="37.6" cy="30" r=".55" fill="#fff" opacity=".8" />
+                    {/* 끈과 리본 */}
+                    <path d="M13.6 19.2c6 1.8 30.8 1.8 36.8 0" stroke="#D9445E" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                    <path d="M44 19.6c-2.6-2.6-5.6-2-5 .4.6 2 3.2 1.4 5-.4zm0 0c2.4-2.8 5.6-2.4 5.2 0-.4 2.2-3.2 1.8-5.2 0zm0 0l-2 5.4m2-5.4l2.8 5" stroke="#D9445E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="#F7A8B4" />
+                    {/* 작은 하트 */}
+                    <path d="M58.4 11.4c-.6-1.4-2.6-1-2.4.6.2 1.2 2.4 2.6 2.4 2.6s2.2-1.4 2.4-2.6c.2-1.6-1.8-2-2.4-.6z" fill="none" stroke="#E0405C" strokeWidth="1" strokeLinejoin="round" />
+                    <path d="M5 13c-.5-1.1-2.1-.8-1.9.5.1 1 1.9 2.1 1.9 2.1s1.8-1.1 1.9-2.1c.2-1.3-1.4-1.6-1.9-.5z" fill="none" stroke="#E0405C" strokeWidth=".9" strokeLinejoin="round" />
                 </svg>
             </span>
         </span>

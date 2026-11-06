@@ -675,8 +675,9 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
         align-self: start;
         height: calc(100dvh - 104px);
         overflow: auto;
-        padding: 20px 24px 28px;
-        scroll-padding-bottom: 28px;
+        /* desk-fab(병+「쨈」+bottom 24)이 「최근에 발라 둔 것」을 가리지 않게 */
+        padding: 20px 24px 120px;
+        scroll-padding-bottom: 120px;
         box-sizing: border-box;
     }
     .tabbar, .tip-bubble, .tip-bulb { display: none; }
@@ -964,7 +965,23 @@ button.glass[aria-pressed="true"]:active {
 
 @media (min-width: 900px) {
     .desk-fab { display: flex; }
+    /* 시안 C B2 병: 예전 SealCup 60px와 맞춤 */
+    .desk-fab .fab-disc.jar-disc {
+        width: 60px;
+        height: 60px;
+    }
+    .desk-fab .jar-svg {
+        width: 36px;
+        height: 40px;
+    }
+    .desk-fab .fab-txt {
+        position: relative;
+        color: #A01E42;
+        font-size: 13px;
+        font-weight: 800;
+    }
 }
+html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 
 .font-grid {
     display: grid;

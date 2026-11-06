@@ -638,12 +638,13 @@ check(hotkeyFootnote(legacyKeys).includes('아직 없어요') && !hotkeyFootnote
 check(hotkeyFootnote(defaultHotkeys()).includes('?') && hotkeyFootnote(defaultHotkeys()).includes('/'), '기본 단축키 안내가 빠졌습니다.');
 check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNote(legacyKeys).includes('/'), '키가 없는데 휴대폰 안내가 빗금을 말합니다.');
 
-// QA 1차 8번: 하단 버튼은 이제 가계부와 같은 쨈 컵(SealCup)과 글자 '쨈'을 그립니다. 쓰지 않던 글자 윤곽(KokMark)은 지웠습니다.
+// QA 1차 8번: 쓰지 않던 글자 윤곽(KokMark)은 지웠습니다. 시안 C: 넓은 화면 desk-fab도 딸기잼 병(JjaemJar)+「쨈」.
 const bits = readFileSync(`${root}/src/ui/bits.jsx`, 'utf8');
 check(!bits.includes('KokMark') && !bits.includes('kok-mark'), '쓰지 않는 하단 버튼 글자 윤곽이 남아 있습니다.');
 const appText = readFileSync(`${root}/src/App.jsx`, 'utf8');
-// 탭바 시안 A: 넓은 화면 키캡은 가계부 쨈 컵 그대로, 휴대폰 탭바 가운데는 웹용 쨈 병(글자 없음) + 아래 글자 「쨈」.
-check((appText.match(/<SealCup \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 1, '넓은 화면 버튼 글자가 가계부 쨈 컵과 다릅니다.');
+// 탭바 시안 C: 넓은 화면·휴대폰 모두 쨈 병(JjaemJar) + 아래 글자 「쨈」. SealCup 회귀 금지.
+check((appText.match(/<JjaemJar \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 1, '넓은 화면 desk-fab이 시안 C 딸기잼 병(JjaemJar)+「쨈」이 아닙니다.');
+check(!/<SealCup\b/.test(appText), '넓은 화면 desk-fab에 SealCup 회귀가 남아 있습니다.');
 {
     const tabText = readFileSync(`${root}/src/ui/TabBar.jsx`, 'utf8');
     check((tabText.match(/<JjaemJar \/><span className="fab-txt" aria-hidden="true">쨈<\/span>/g) || []).length === 1, '탭바 가운데가 쨈 병 + 글자 「쨈」이 아닙니다.');
@@ -699,7 +700,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v70'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v71'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);
