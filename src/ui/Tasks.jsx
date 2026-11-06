@@ -261,7 +261,7 @@ export function Notice() {
                         showToast('복사하지 못했어요. 글을 선택해 주세요.');
                     }
                 }}>복사</Btn>
-                <Btn className="primary-btn" style={{ flex: 1 }} disabled={saving} aria-busy={saving} onClick={() => save(text)}>저장</Btn>
+                <Btn className="primary-btn fit-btn" style={{ marginLeft: 'auto' }} disabled={saving} aria-busy={saving} onClick={() => save(text)}>저장</Btn>
             </div>
             <h3>지난 알림장</h3>
             {others.slice(0, 8).map((row) => (
