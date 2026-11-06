@@ -1533,15 +1533,15 @@ button.hero-pill.home-todo-link {
 .tap.primary-btn.block, .primary-btn.fit-btn { display: flex; width: fit-content; max-width: 100%; min-width: 88px; padding: 0 22px; margin-left: auto; }
 .tap.chip.block { display: flex; width: fit-content; max-width: 100%; padding: 0 18px; margin-right: auto; }
 /* 학생 기록 명단: 한 줄 4칸(넓은 화면도 4칸, 300px 이하는 3칸). 칸마다 번호·이름과 이번 달 기록 수를 두 줄로 보여 줍니다. */
-.roster-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.student-roster-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .roster-cell.tap { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 56px; min-width: 0; padding: 8px 6px; text-align: left; }
 .roster-name { font-size: 13px; line-height: 18px; letter-spacing: -0.3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .roster-name .num { color: var(--primary); margin-right: 3px; font-weight: 500; }
 .roster-name, .roster-count { font-weight: 500; }
 .roster-count { font-size: 11px; line-height: 15px; font-weight: 500; }
 .roster-cell.has-rec .roster-count { color: var(--primary); font-weight: 500; }
-@media (min-width: 900px) { .roster-grid { max-width: 840px; gap: 10px; } }
-@media (max-width: 300px) { .roster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .student-roster-grid { max-width: 840px; gap: 10px; } }
+@media (max-width: 300px) { .student-roster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 /* 설정 첫 화면: 항목 버튼을 글자 길이만큼 줄지어 놓고, 자리가 모자라면 다음 줄로 넘깁니다. */
 .settings-menu { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .settings-key.tap { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 14px; background: var(--bg); color: var(--ink); font-weight: 700; box-shadow: var(--neo-raise-sm); justify-content: flex-start; }

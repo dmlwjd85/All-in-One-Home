@@ -27,7 +27,7 @@ export function Students() {
                 <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
-            <div className="roster-grid">
+            <div className="student-roster-grid">
                 {rows.map((student) => {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
                     const follow = records.find((row) => row.sid === student.id && row.follow && row.follow >= clock.ymd);
