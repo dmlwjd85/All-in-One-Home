@@ -236,6 +236,8 @@ if (!failures.length) {
                 const fab = document.querySelector('.desk-fab');
                 if (!fab) return { ok: false };
                 const style = getComputedStyle(fab);
+                const main = document.querySelector('.main');
+                const mainPad = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0;
                 const recent = document.querySelector('.home-recent');
                 const fabBox = fab.getBoundingClientRect();
                 const title = recent?.querySelector('h3, .fold-hide, summary, .fold-top, [class*="fold"]') || recent;
@@ -252,11 +254,13 @@ if (!failures.length) {
                     aria: fab.getAttribute('aria-label') || '',
                     label: fab.querySelector('.fab-txt')?.textContent || '',
                     overlap,
+                    mainPad,
                 };
             });
             check(desk.ok && desk.display !== 'none', '컴퓨터에서 desk-fab이 보이지 않습니다.');
             check(desk.hasJar && !desk.hasSeal, `desk-fab이 시안 C 딸기잼 병이 아닙니다: ${JSON.stringify(desk)}`);
             check(desk.aria.includes('쨈') && desk.label === '쨈', `desk-fab 라벨/aria가 다릅니다: ${JSON.stringify(desk)}`);
+            check(desk.mainPad >= 120, `컴퓨터 .main 하단 여백이 120px보다 작습니다: ${JSON.stringify(desk)}`);
             check(!desk.overlap, `desk-fab이 「최근에 발라 둔 것」 글자를 가립니다: ${JSON.stringify(desk)}`);
         }
     } finally {
