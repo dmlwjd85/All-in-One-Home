@@ -1566,7 +1566,7 @@ button.hero-pill.home-todo-link {
 .settings-menu { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .settings-key.tap { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 14px; background: var(--bg); color: var(--ink); font-weight: 700; box-shadow: var(--neo-raise-sm); justify-content: flex-start; }
 
-/* 왼쪽 메뉴: 글자 길이에 맞춘 버튼과 일정한 사이 간격을 유지합니다. */
+/* 왼쪽 메뉴: 데스크톱 사이드바 폭에 맞춰 버튼 너비를 통일합니다. */
 .side-menu { display: flex; flex-direction: column; gap: 8px; }
-.side-menu .tap.chip.block { flex-shrink: 0; margin: 0; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
+.side-menu .tap.chip.block { flex-shrink: 0; margin: 0; width: 100%; box-sizing: border-box; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
 .side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
