@@ -1,6 +1,6 @@
 /* 나이스·설정 두 칸(시안 A)과 실시간 날짜·시각 칩(기간 비변환·오전오후 고침) 검사. */
 import { readFileSync } from 'node:fs';
-import { readEventChips } from '../src/lib/dateChips.js';
+import { applyLiveChips, readEventChips } from '../src/lib/dateChips.js';
 import { findDates } from '../src/lib/parse.js';
 
 let bad = 0;
@@ -35,14 +35,24 @@ check(flow.includes('LiveEventChips') && flow.includes('ampmFlip'), 'FlowSheet �
 const quick = readFileSync('src/ui/QuickSheet.jsx', 'utf8');
 check(quick.includes('LiveEventChips'), 'QuickSheet 실시간 칩이 없어요');
 const plus = readFileSync('src/ui/PlusSheet.jsx', 'utf8');
-check(plus.includes('LiveEventChips'), 'PlusSheet 실시간 칩이 없어요');
+check(plus.includes('LiveEventChips') && plus.includes('applyLiveChips'), 'PlusSheet 실시간 칩·저장 맞춤이 없어요');
 const msg = readFileSync('src/ui/MsgSheet.jsx', 'utf8');
-check(msg.includes('LiveEventChips'), 'MsgSheet 실시간 칩이 없어요');
+check(msg.includes('LiveEventChips') && msg.includes('applyLiveChips'), 'MsgSheet 실시간 칩·파서 합침이 없어요');
+const bar = readFileSync('src/ui/QuickBar.jsx', 'utf8');
+check(bar.includes('LiveEventChips') && bar.includes('chip.time'), 'QuickBar 실시간 칩이 없어요');
+const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
+check(tasks.includes('LiveEventChips') && tasks.includes('todoChipRead'), '할 일 상단 실시간 칩이 없어요');
 const liveUi = readFileSync('src/ui/LiveEventChips.jsx', 'utf8');
 check(liveUi.includes('오전↔오후') && liveUi.includes('data-live-chips'), 'LiveEventChips 오전오후 고침이 없어요');
 
+/* 변이: 칩 시각과 저장값이 어긋나면 안 됩니다(오전↔오후). */
+const draft = [{ id: 'x', kind: '일정', title: '학년 회의', date: '2026-11-07', time: '15:00' }];
+const synced = applyLiveChips(draft, flipped);
+check(synced[0].time === '03:00', `칩≠저장값 변이: ${synced[0].time}`);
+check(bar.includes('body.time = chip.time') || bar.includes('chip.time'), 'QuickBar가 칩 시각을 저장에 안 넣어요');
+
 const sw = readFileSync('public/sw.js', 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v70'"), 'SW가 v70이 아닙니다');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v71'"), 'SW가 v71이 아닙니다');
 
 if (bad) {
     console.error(`나이스·날짜칩 검사 실패 ${bad}건`);

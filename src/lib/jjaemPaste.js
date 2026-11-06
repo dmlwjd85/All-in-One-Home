@@ -147,7 +147,7 @@ function rollPast(raw, span, today) {
  * stripDate: true면 날짜 낱말을 어디서든 빼고(할 일·일정 제목), 'lead'면 맨 앞에 있을 때만 뺍니다(기록·메모 본문 보존).
  * future: 할 일·일정처럼 앞일을 적는 줄. 요일은 다가오는 날, 한참 지난 달·일은 내년으로 봅니다.
  */
-export function readJjaemPaste(text, { now = new Date(), stripTime = true, stripDate = true, future = false } = {}) {
+export function readJjaemPaste(text, { now = new Date(), stripTime = true, stripDate = true, future = false, ampmFlip = [] } = {}) {
     const raw = String(text || '').trim();
     const today = seoulYmd(now);
     let dates = [];
@@ -163,7 +163,13 @@ export function readJjaemPaste(text, { now = new Date(), stripTime = true, strip
     const dateSpans = dropDate
         ? [{ index: primary.index, length: primary.length + particleLen(raw, primary.index + primary.length), ymd: date }]
         : [];
-    const timeSpans = findTimeSpans(raw);
+    const flipSet = new Set(ampmFlip);
+    const timeSpans = findTimeSpans(raw).map((span) => {
+        const id = `t${span.index}`;
+        if (!flipSet.has(id)) return span;
+        const [h, mi] = span.time.split(':').map(Number);
+        return { ...span, time: `${pad((h + 12) % 24)}:${pad(mi)}` };
+    });
     const time = timeSpans[0]?.time || '';
     const remove = [
         ...dateSpans,

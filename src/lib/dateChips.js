@@ -111,3 +111,16 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
         timeChip: Boolean(timeChip),
     };
 }
+
+/** 미리보기·저장 목록에 실시간 칩(날짜·시각·제목)을 맞춰 넣습니다. 칩이 없으면 그대로 둡니다. */
+export function applyLiveChips(items, chipRead) {
+    if (!chipRead?.changed || !Array.isArray(items) || !items.length) return items || [];
+    return items.map((item) => {
+        const next = { ...item };
+        if (chipRead.date) next.date = chipRead.date;
+        if (chipRead.time) next.time = chipRead.time;
+        if (chipRead.period) next.period = chipRead.period;
+        if (chipRead.title && (item.kind === '일정' || item.kind === '할 일')) next.title = chipRead.title;
+        return next;
+    });
+}

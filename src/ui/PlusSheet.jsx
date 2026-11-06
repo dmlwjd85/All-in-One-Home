@@ -9,7 +9,7 @@ import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
 import { ClayMark } from './ClayMark.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
-import { readEventChips } from '../lib/dateChips.js';
+import { applyLiveChips, readEventChips } from '../lib/dateChips.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 
 const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
@@ -97,12 +97,15 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
 
     function preview() {
         speech.stop();
-        const drafts = captureDrafts(text, {
-            now: new Date(),
+        const now = new Date();
+        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
+        let drafts = captureDrafts(text, {
+            now,
             periods,
             students: data.students,
             selectedNo,
         });
+        drafts = applyLiveChips(drafts, chip);
         if (!drafts.length) {
             showToast('한 줄만 적어도 남길 수 있어요.');
             return;

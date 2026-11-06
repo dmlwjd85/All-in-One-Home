@@ -6,7 +6,7 @@ import { useUi } from './context.jsx';
 import { Area, Btn, HoldToggle } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
-import { readEventChips } from '../lib/dateChips.js';
+import { applyLiveChips, readEventChips } from '../lib/dateChips.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 
 function MicIcon() {
@@ -164,7 +164,9 @@ export function MsgSheet({ onClose }) {
     function apply(text) {
         speech.stop();
         const periods = allStarts(data.profile.periodStarts);
-        const parsed = parseSchoolMessages(text, { now: new Date(), periods });
+        const now = new Date();
+        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
+        const parsed = parseSchoolMessages(text, { now, periods });
         setRaw(text);
         if (!parsed.items.length) {
             setHint('일정이나 할 일로 읽을 말이 없어요. 날짜나 부탁을 조금 적어 주세요.');
@@ -175,7 +177,10 @@ export function MsgSheet({ onClose }) {
         const ids = new Set([
             ...data.todos, ...data.local.todos, ...data.events, ...data.local.events,
         ].map((row) => row.id));
-        setItems(parsed.items.map((item) => (ids.has(item.id) ? { ...item, duplicate: true, include: false } : item)));
+        const merged = applyLiveChips(parsed.items, chip).map((item) => (
+            ids.has(item.id) ? { ...item, duplicate: true, include: false } : item
+        ));
+        setItems(merged);
         setPhase('preview');
     }
 

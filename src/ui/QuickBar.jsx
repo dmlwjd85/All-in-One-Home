@@ -6,6 +6,9 @@ import { playSealBurst } from './sealBurst.js';
 import { quickDateLabel, textFromField } from './quickText.js';
 import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/minutes.js';
 import { readJjaemPaste } from '../lib/jjaemPaste.js';
+import { readEventChips } from '../lib/dateChips.js';
+import { allStarts } from '../lib/periodLocal.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
@@ -37,6 +40,8 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const [live, setLive] = useState('');
     const [hint, setHint] = useState('');
     const [listening, setListening] = useState(false);
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
 
     useEffect(() => {
         const node = barRef.current;
@@ -61,6 +66,8 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     useEffect(() => {
         if (!String(live || '').trim()) {
             setHint('');
+            setChipOff([]);
+            setAmpmFlip([]);
             return undefined;
         }
         const timer = setTimeout(() => setHint(suggestKind(live, students)), SUGGEST_WAIT);
@@ -111,11 +118,14 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const used = kind || lastKind.current || '메모';
         lastKind.current = used;
         const ahead = used === '할 일' || used === '일정';
+        const now = new Date();
+        const periods = allStarts(data?.profile?.periodStarts);
+        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
         /* saveQuick과 같은 규칙으로 날짜를 읽습니다. 「3일 동안」처럼 날짜가 아닌 말은 고른 날(dateYmd)을 그대로 씁니다. */
-        const paste = readJjaemPaste(text, { now: new Date(), stripTime: ahead, future: ahead });
+        const paste = readJjaemPaste(text, { now, stripTime: ahead, future: ahead, ampmFlip });
         const date = used === '일정'
-            ? (paste.date || quickSaveDate(used, text, dateYmd, new Date()))
-            : (paste.date || dateYmd);
+            ? (chip.date || paste.date || quickSaveDate(used, text, dateYmd, now))
+            : (chip.date || paste.date || dateYmd);
         const no = studentNoFor(text, students, picked.current);
         const pickedBefore = picked.current;
         if (inputRef.current) inputRef.current.value = '';
@@ -123,13 +133,17 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         picked.current = null;
         setLive('');
         setHint('');
+        setChipOff([]);
+        setAmpmFlip([]);
         try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
         setListening(false);
         onClose();
         const body = { kind: used, text, date };
         if (no) body.no = no;
         if (used === '할 일') body.due = date;
-        /* 시각은 saveQuick이 본문에서 읽어 알림으로 맞춥니다(시안 A). */
+        /* 칩에 보이는 시각이 곧 저장값입니다(시안 A). */
+        if (ahead && chip.time) body.time = chip.time;
+        else if (ahead && chip.changed && !chip.time) body.time = '';
         /* 저장이 안 되면 적던 글을 입력칸에 돌려 둡니다. 그 사이 새로 적은 글이 있으면 건드리지 않습니다. */
         const keepText = (message) => {
             const input = inputRef.current;
@@ -274,6 +288,10 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     }
 
     const candidates = nameCandidates(live, students);
+    const periods = allStarts(data?.profile?.periodStarts);
+    const chipRead = live.trim()
+        ? readEventChips(live, { now: new Date(), periods, off: chipOff, ampmFlip })
+        : null;
 
     return (
         <>
@@ -342,6 +360,15 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                     onClick={onMic}
                 >{listening ? '듣는 중' : '마이크'}</Btn>
             </div>
+            {chipRead ? (
+                <LiveEventChips
+                    chipRead={chipRead}
+                    chipOff={chipOff}
+                    ampmFlip={ampmFlip}
+                    onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                    onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                />
+            ) : null}
             <div className="quick-chips" role="group" aria-label="분류">
                 {CHIPS.map((kind) => (
                     <Btn
