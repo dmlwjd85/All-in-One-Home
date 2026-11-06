@@ -16,7 +16,9 @@ const check = (ok, msg) => { if (!ok) failures.push(msg); };
 /* 1) 칸 배치 규칙 */
 check(DEFAULT_ORDER.join() === 'today,todo,attend,schedule,students,more', '기본 배치가 오늘·할 일·출결 | 일정·기록·더 가 아닙니다.');
 check(normalizeOrder(['x', 'todo', 'todo']).length === 6 && normalizeOrder([]).join() === DEFAULT_ORDER.join(), '모르는·겹친 칸을 정리하지 못합니다.');
-check(normalizeOrder(['today', 'todo', 'attend', 'schedule', 'students', 'minutes']).includes('more'), '「더」(메뉴) 칸이 빠질 수 있습니다.');
+/* 선생님 요청(11/6): 「더」 칸도 회의록 같은 다른 탭으로 바꿀 수 있어야 합니다(예전에는 마지막 칸을 다시 「더」로 덮어써서 되돌아갔어요). */
+check(normalizeOrder(['today', 'todo', 'attend', 'schedule', 'students', 'minutes']).join() === 'today,todo,attend,schedule,students,minutes', '「더」를 회의록으로 바꾸면 다시 「더」로 돌아갑니다.');
+check(/data-tbj-nomore/.test(readFileSync(new URL('../src/ui/TabBar.jsx', import.meta.url), 'utf8')), '「더」를 뺄 때 다른 메뉴 길 안내가 없습니다.');
 check(pickTab(DEFAULT_ORDER, 0, 'schedule').slice(0, 4).join() === 'schedule,todo,attend,today', '이미 있는 탭을 고르면 두 칸을 맞바꾸지 않습니다.');
 check(moveTab(DEFAULT_ORDER, 0, 1).slice(0, 2).join() === 'todo,today' && moveTab(DEFAULT_ORDER, 0, -1).join() === DEFAULT_ORDER.join(), '칸 옮기기가 다릅니다.');
 {
@@ -170,6 +172,29 @@ if (!failures.length) {
             const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), TAB_KEY);
             check(Array.isArray(saved.order) && Number.isInteger(saved.at), '저장값 모양이 { order, at } 가 아닙니다.');
             if (shots) await page.screenshot({ path: `${shots}/tabbar-saved-390.png` });
+            /* 더 → 회의록: 저장하고 새로고침해도 회의록이 남고, 맨 위 ≡ 메뉴로 설정에 갈 수 있어요. */
+            const more = await page.$('.tab-jelly[data-tab="todo"]');
+            const mr = await more.boundingBox();
+            await page.touchscreen.touchStart(mr.x + mr.width / 2, mr.y + mr.height / 2);
+            await new Promise((done) => setTimeout(done, 700));
+            await page.touchscreen.touchEnd();
+            await page.waitForSelector('.tbj-sheet', { timeout: 3000 });
+            await page.select('#tbj-slot-0', 'today');
+            await page.select('#tbj-slot-5', 'minutes');
+            check(Boolean(await page.$('[data-tbj-nomore]')), '「더」를 뺄 때 안내가 보이지 않습니다.');
+            await page.evaluate(() => [...document.querySelectorAll('.tbj-foot button')].find((b) => b.textContent === '저장').click());
+            await page.waitForFunction(() => !document.querySelector('.tbj-sheet'));
+            await page.reload({ waitUntil: 'networkidle0' });
+            await page.waitForSelector('.tab-jelly');
+            const noMore = await page.$$eval('.tabbar .tbj-label', (els) => els.map((e) => e.textContent).join());
+            check(noMore === '오늘,할 일,출결,일정,기록,회의록', `더 → 회의록 배치가 새로고침 뒤 남지 않습니다: ${noMore}`);
+            await page.evaluate(() => document.querySelector('[aria-label="메뉴"]')?.click());
+            await page.waitForSelector('.sheet[aria-label="메뉴"]', { timeout: 3000 }).catch(() => {});
+            const canSettings = await page.evaluate(() => [...document.querySelectorAll('.sheet[aria-label="메뉴"] a, .sheet[aria-label="메뉴"] button')].some((el) => el.textContent.includes('설정')));
+            check(canSettings, '「더」를 뺀 뒤 맨 위 메뉴에서 설정으로 갈 수 없습니다.');
+            await page.evaluate(() => localStorage.removeItem('ssug-gyomu-tabbar'));
+            await page.reload({ waitUntil: 'networkidle0' });
+            await page.waitForSelector('.tab-jelly');
         }
 
 
