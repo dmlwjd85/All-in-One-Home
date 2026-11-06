@@ -55,7 +55,7 @@ async function open(width, mode) {
         localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
         localStorage.setItem('ssug-gyomu-theme', theme);
     }, mode);
-    await page.goto(`${origin}?demo=1&at=08:42&mode=${mode}#/settings`, { waitUntil: 'networkidle0' });
+    await page.goto(`${origin}?demo=1&at=08:42&mode=${mode}#/settings/calendar`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-screen="academic"] .acad-day');
     return page;
 }

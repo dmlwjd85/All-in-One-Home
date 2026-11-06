@@ -61,6 +61,7 @@ jobs:
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
+          npm run check:jjaem-paste
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless
           npm run check:rules
@@ -76,6 +77,8 @@ jobs:
           CHROME_PATH=/usr/bin/google-chrome npm run check:attendsave
           CHROME_PATH=/usr/bin/google-chrome npm run check:swreload
           CHROME_PATH=/usr/bin/google-chrome npm run check:tabbar
+          CHROME_PATH=/usr/bin/google-chrome npm run check:ui-a
+          CHROME_PATH=/usr/bin/google-chrome npm run check:side-hotkey
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./

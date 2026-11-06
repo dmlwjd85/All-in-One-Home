@@ -8,12 +8,14 @@ import { leaveState, patchPeriodLocal, readPeriodLocal, setExtraPeriod, setLeave
 import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
+import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
+import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
-import { dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
+import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 
@@ -1146,11 +1148,20 @@ export async function saveQuick(input, now = new Date()) {
     const text = String(input.text || '').trim();
     if (!text) return { ok: false, message: '한 줄만 적어도 남길 수 있어요.' };
     const parsed = parseNote(text, now);
+    /* 시안 A: 날짜·시각 낱말은 칩·알람으로 옮기고 할 일·일정 제목에서는 뺍니다. 기록·메모는 맨 앞 날짜 낱말만 빼고 본문을 그대로 둡니다. */
+    const ahead = input.kind === '할 일' || input.kind === '일정';
+    const paste = readJjaemPaste(text, { now, stripTime: ahead || !input.kind, future: ahead });
+    const body = paste.body || text;
     const tags = [...new Set([...(input.tags || []), ...parsed.tags])].filter(Boolean).slice(0, 10);
     const sensitive = parsed.sensitive || isSensitiveText(text, tags);
     const no = parsed.studentNo || input.no || 0;
     const clock = seoulParts(now);
-    const date = input.date || parsed.detectedDate || clock.ymd;
+    /* 날짜는 쨈 규칙(「3일 동안」·「2일째」는 날짜 아님)으로만 읽고, 못 읽으면 오늘입니다. */
+    const date = input.date || paste.date || clock.ymd;
+    /* input.time을 넘긴 경우(빈 칸 포함)는 그 값을 따르고, 안 넘긴 쨈 빠른 입력만 본문에서 시각을 읽습니다. */
+    const alarmTime = input.time !== undefined
+        ? (isTodoTime(input.time) ? input.time : '')
+        : (paste.time || '');
     let message = '남겼어요.';
     const failed = await update((draft) => {
         const student = draft.students.find((row) => row.no === Number(no));
@@ -1160,13 +1171,14 @@ export async function saveQuick(input, now = new Date()) {
         const local = sensitive;
         if (['관찰', '상담', '보호자', '칭찬'].includes(kind)) {
             const chosen = tags.length ? tags : (kind === '관찰' ? ['학습'] : kind === '상담' ? ['교우'] : kind === '보호자' ? ['전화'] : []);
+            const recordBody = readJjaemPaste(text, { now, stripTime: false, stripDate: 'lead' }).body || text;
             const row = {
                 ...base,
                 id: nid('rec'),
                 date,
                 kind,
                 sid,
-                text,
+                text: recordBody,
                 tags: chosen,
                 neis: input.neis != null ? Boolean(input.neis) : kind === '관찰' || kind === '칭찬',
             };
@@ -1174,9 +1186,15 @@ export async function saveQuick(input, now = new Date()) {
             put(local ? draft.local.records : draft.records, row);
             message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
         } else if (kind === '할 일') {
-            const row = { ...base, id: nid('todo'), title: stripTokens(text) || text, done: false, due: input.due != null ? input.due : (parsed.detectedDate || '') };
+            const titleSrc = String(input.title || body).trim();
+            /* 「밤 12시」는 오늘 00:00(이미 지남)이 아니라 다음 날 00:00(오늘 밤)으로 둡니다. */
+            let due = input.due != null ? input.due : (paste.date || '');
+            if (alarmTime === '00:00') due = addDaysYmd(due || clock.ymd, 1);
+            const row = { ...base, id: nid('todo'), title: stripTokens(titleSrc) || titleSrc, done: false, due };
+            if (alarmTime) row.time = alarmTime;
             put(local ? draft.local.todos : draft.todos, row);
-            message = '할 일에 넣었어요.';
+            const timeLabel = alarmTime === '00:00' ? '오늘 밤 12시' : alarmTimeLabel(alarmTime);
+            message = alarmTime ? `할 일에 넣고 ${timeLabel} 알림을 맞춰 두었어요.` : '할 일에 넣었어요.';
         } else if (kind === '일정') {
             const eventKind = ['학급', '학교', '휴일', '내 일정'].includes(input.eventKind) ? input.eventKind : '학급';
             const bits = [];
@@ -1186,13 +1204,15 @@ export async function saveQuick(input, now = new Date()) {
                 ...base,
                 id: nid('event'),
                 date,
-                title: (stripTokens(String(input.title || '').trim() || text) || text).slice(0, 60),
+                title: (stripTokens(String(input.title != null ? input.title : body).trim()) || body || text).slice(0, 60),
                 kind: eventKind,
                 memo: bits.join(' · ').slice(0, 300),
             };
             /* 날짜 칩(B1)으로 날짜 낱말을 뺀 제목이면 처음 적은 글을 raw에 둡니다. raw는 이 기기에만 두고 클라우드 칸에는 올리지 않습니다. */
             if (input.raw && String(input.raw).trim() !== row.title) row.raw = String(input.raw).trim().slice(0, 300);
-            if (input.time) row.time = input.time;
+            else if (!input.raw && paste.changed && paste.raw !== row.title) row.raw = paste.raw.slice(0, 300);
+            if (alarmTime) row.time = alarmTime;
+            else if (input.time) row.time = input.time;
             if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
             put(local ? draft.local.events : draft.events, row);
             message = '일정에 넣었어요.';
@@ -1202,7 +1222,8 @@ export async function saveQuick(input, now = new Date()) {
             put(local ? draft.local.notices : draft.notices, row);
             message = '알림장에 넣었어요.';
         } else {
-            put(local ? draft.local.notes : draft.notes, { ...base, id: nid('note'), text, date, pinned: false });
+            const noteBody = readJjaemPaste(text, { now, stripTime: false, stripDate: 'lead' }).body || text;
+            put(local ? draft.local.notes : draft.notes, { ...base, id: nid('note'), text: noteBody, date, pinned: false });
             message = '메모로 남겼어요.';
         }
         return draft;

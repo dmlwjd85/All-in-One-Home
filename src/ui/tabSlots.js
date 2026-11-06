@@ -3,7 +3,8 @@
     계정마다 따로 두는 보관은 ssug-gyomu-tabbar-accounts 에 { [uid]: { order, at } } 로 둡니다(last-sync·계정 vault와 같은 규칙).
     로그인하면 users/{uid}/settings/tabbar 문서로 다른 기기와 같이 씁니다. at 이 더 늦은 쪽(나중에 고친 쪽)이 이깁니다.
     계정 전환·로그아웃 때 지금 값을 그 uid 몫으로 넣고 다른 계정 값을 꺼내 써서, A 배치가 B 클라우드로 올라가지 않게 합니다.
-    오프라인이거나 로그인하지 않았으면 이 기기에만 둡니다. */
+    오프라인이거나 로그인하지 않았으면 이 기기에만 둡니다.
+    '더'(메뉴) 칸도 선생님이 다른 탭으로 바꿀 수 있어요. 빼더라도 맨 위 ≡ 메뉴 단추로 설정까지 모든 메뉴에 갈 수 있습니다. */
 
 export const TAB_KEY = 'ssug-gyomu-tabbar';
 export const TAB_ACCOUNTS_KEY = 'ssug-gyomu-tabbar-accounts';
@@ -29,14 +30,14 @@ export const DEFAULT_ORDER = ['today', 'todo', 'attend', 'schedule', 'students',
 const byId = new Map(TAB_POOL.map((tab) => [tab.id, tab]));
 export const tabById = (id) => byId.get(id) || null;
 
-/** 모르는 아이디·겹친 아이디를 빼고, 모자란 칸은 기본 배치에서 채웁니다. '더'(메뉴)는 늘 한 칸 남깁니다. */
+/** 모르는 아이디·겹친 아이디를 빼고, 모자란 칸은 기본 배치에서 채웁니다.
+    '더'(메뉴) 칸도 선생님이 다른 탭으로 바꿀 수 있어요. 빼더라도 맨 위 ≡ 메뉴 단추로 설정까지 모든 메뉴에 갈 수 있습니다. */
 export function normalizeOrder(order) {
     const out = [];
     for (const id of Array.isArray(order) ? order : []) {
         if (byId.has(id) && !out.includes(id) && out.length < SIDE_COUNT) out.push(id);
     }
     for (const id of DEFAULT_ORDER) if (out.length < SIDE_COUNT && !out.includes(id)) out.push(id);
-    if (!out.includes('more')) out[SIDE_COUNT - 1] = 'more';
     return out;
 }
 

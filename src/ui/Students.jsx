@@ -4,8 +4,15 @@ import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
-import { seoulYmd } from '../lib/date.js';
+import { seoulParts, seoulYmd } from '../lib/date.js';
 import { csvEscape, htmlEscape } from '../lib/neisExport.js';
+import { DateChip } from './DateChip.jsx';
+
+/** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
+function recordHm(row, fallback) {
+    const at = row?.at ? new Date(row.at) : null;
+    return at && !Number.isNaN(at.getTime()) ? seoulParts(at).hm : fallback;
+}
 
 export function Students() {
     const { data, clock, go, openQuick } = useUi();
@@ -20,14 +27,14 @@ export function Students() {
                 <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div className="student-roster-grid">
                 {rows.map((student) => {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
                     const follow = records.find((row) => row.sid === student.id && row.follow && row.follow >= clock.ymd);
                     return (
-                        <Btn key={student.id} block className="glass" style={{ justifyContent: 'space-between', display: 'flex', padding: '8px 12px' }} onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'students' } })}>
-                            <span><strong className="num">{student.no}</strong> {student.name}</span>
-                            <span className="muted">{mine.length ? `이번 달 ${mine.length}` : '이번 달 기록 없음'}{follow ? ` · ${Number(follow.follow.slice(5, 7))}/${Number(follow.follow.slice(8))} 다시` : ''}</span>
+                        <Btn key={student.id} className={mine.length ? 'glass roster-cell has-rec' : 'glass roster-cell'} onClick={() => go(`#/students/${student.no}`, { state: { appFrom: 'students' } })}>
+                            <span className="roster-name"><strong className="num">{student.no}</strong> {student.name}</span>
+                            <span className="muted roster-count">{mine.length ? `이번 달 ${mine.length}` : '기록 없음'}{follow ? ` · ${Number(follow.follow.slice(5, 7))}/${Number(follow.follow.slice(8))} 다시` : ''}</span>
                         </Btn>
                     );
                 })}
@@ -145,9 +152,12 @@ export function Student() {
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {filtered.map((row) => (
                     <article key={row.id} className="solid-card" style={{ padding: 12, background: row.kind === '상담' ? 'var(--k-counsel)' : row.kind === '보호자' ? 'var(--k-parent)' : row.kind === '칭찬' ? 'var(--k-praise)' : 'var(--k-observe)', color: 'var(--ink)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                             <strong>{row.kind} · {(row.tags || []).join(' · ')}</strong>
-                            <span className="num">{row.date === clock.ymd ? clock.hm : row.date.slice(5)}</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <DateChip ymd={row.date} today={clock.ymd} />
+                                {row.date === clock.ymd ? <span className="num muted" data-role="record-hm">{recordHm(row, clock.hm)}</span> : null}
+                            </span>
                         </div>
                         {editingId === row.id ? (
                             <div style={{ marginTop: 8 }}>
@@ -314,7 +324,7 @@ export function Neis() {
         <div>
             <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」는 엑셀에서 열 수 있는 표(.csv)로 이 기기에만 받습니다.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Btn className="primary-btn" style={{ flex: 1 }} onClick={copyAll}>전체 복사</Btn>
+                <Btn className="primary-btn fit-btn" onClick={copyAll}>전체 복사</Btn>
                 <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
                 <Btn className="chip" onClick={printTable}>출력</Btn>
             </div>

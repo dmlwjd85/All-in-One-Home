@@ -1,5 +1,13 @@
 /** 하루 하나. 화면 위에 두고 5초 뒤 전구로 접습니다. 같은 팁을 두 번 닫으면 다시 안 봅니다. */
 export const TIPS = [
+    { id: 'tab-hold', text: '하단 바로가기를 꾹 누르면 바꿀 수 있어요' },
+    { id: 'hotkey-settings', text: '자주 여는 입력창은 설정에서 손에 익은 단축키를 붙여 보세요.' },
+    { id: 'hotkey-side', text: '컴퓨터 왼쪽 메뉴에서 내가 정한 단축키를 함께 볼 수 있어요.' },
+    { id: 'tip-return', text: '팁을 다 읽기 전에 접혔나요? 전구를 누르면 다시 볼 수 있어요.' },
+    { id: 'minutes-note', text: '회의 중 놓치기 아까운 말은 회의록에 짧게라도 남겨 두세요.' },
+    { id: 'student-lookback', text: '학생 기록에서 친구 이름을 누르면 그동안 적은 이야기를 모아 볼 수 있어요.' },
+    { id: 'paste-message', text: '긴 메시지는 다시 치지 말고 메시지 붙여넣기로 가져와 보세요.' },
+    { id: 'short-record', text: '오늘 본 작은 변화도 한 줄이면 충분해요. 학생 기록에 남겨 두세요.' },
     { id: 'attend-tap', text: '출결은 안 온 친구만 누르면 끝이에요.' },
     { id: 'attend-hold', text: '친구를 누르면 사유까지 적을 수 있어요.' },
     { id: 'at-number', text: '@12처럼 번호를 붙이면 그 친구 기록으로 바로 들어가요.' },

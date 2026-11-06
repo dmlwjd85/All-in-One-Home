@@ -176,7 +176,7 @@ export default function App() {
 
     const route = useMemo(() => resolveHash(hash, clock.ymd), [hash, clock.ymd]);
     const place = data
-        ? `${data.profile.started ? '1' : '0'}|${route.name}|${route.params.date || ''}|${route.params.no || ''}|${route.params.page || ''}|${route.params.week || ''}|${route.params.view || ''}`
+        ? `${data.profile.started ? '1' : '0'}|${route.name}|${route.params.date || ''}|${route.params.no || ''}|${route.params.page || ''}|${route.params.week || ''}|${route.params.view || ''}|${route.params.sec || ''}`
         : '';
     useLayoutEffect(() => {
         if (!place) return;
@@ -310,7 +310,7 @@ export default function App() {
         }
         const parent = route.name === 'day'
             ? (route.params.date ? `#/schedule/month/${route.params.date}` : '#/schedule')
-            : route.name === 'roster'
+            : route.name === 'roster' || (route.name === 'settings' && route.params.sec)
                 ? '#/settings'
                 : route.name === 'student'
                     ? '#/students'
@@ -327,7 +327,7 @@ export default function App() {
             location.replace(parent);
         }
         setHash(parent);
-    }, [route.name, route.params.date, route.params.page, route.params.mode, route.params.id]);
+    }, [route.name, route.params.date, route.params.page, route.params.mode, route.params.id, route.params.sec]);
 
     const runHotkey = useCallback((id) => {
         const ymd = clock.ymd;
@@ -633,20 +633,34 @@ export default function App() {
                         </div>
                         <Motto />
                     </div>
-                    {MENU.map(([label, href]) => {
-                        const on = menuSelected(route.name, href);
-                        return (
-                            <Btn key={label} block aria-current={on ? 'page' : undefined} className={on ? 'chip on' : 'chip'} style={{ justifyContent: 'flex-start' }} onClick={() => go(menuTarget(href, clock.ymd))}>{label}</Btn>
-                        );
-                    })}
+                    <nav className="side-menu" aria-label="메뉴와 단축키">
+                        {MENU.map(([label, href]) => {
+                            const on = menuSelected(route.name, href);
+                            const action = HOTKEY_ACTIONS.find((item) => item.group === '이동' && item.label === label);
+                            const key = action && hotkeys[action.id] ? hotkeyLabel(hotkeys[action.id]) : '';
+                            return (
+                                <Btn key={label} block aria-current={on ? 'page' : undefined} aria-label={key ? `${label}, 단축키 ${key}` : label} className={on ? 'chip on' : 'chip'} onClick={() => go(menuTarget(href, clock.ymd))}>
+                                    <span>{label}</span>{key && <span className="side-hotkey muted" aria-hidden="true">{key}</span>}
+                                </Btn>
+                            );
+                        })}
+                        {HOTKEY_ACTIONS.filter((action) => action.group !== '이동' && hotkeys[action.id]).map((action) => {
+                            const key = hotkeyLabel(hotkeys[action.id]);
+                            return (
+                                <Btn key={action.id} block className="chip" aria-label={`${action.label}, 단축키 ${key}`} onClick={() => runHotkey(action.id)}>
+                                    <span>{action.label}</span><span className="side-hotkey muted" aria-hidden="true">{key}</span>
+                                </Btn>
+                            );
+                        })}
+                    </nav>
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>{kokHotkeyHint(hotkeys)}</p>
                 </aside>
                 <div className="main">
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
-                    <header className={`topbar${cloudReady() ? ' has-sync' : ''}${['student', 'legacy', 'day', 'roster'].includes(route.name) ? ' has-back' : ''}`}>
-                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster') && (
+                    <header className={`topbar${cloudReady() ? ' has-sync' : ''}${(['student', 'legacy', 'day', 'roster'].includes(route.name) || (route.name === 'settings' && route.params.sec)) ? ' has-back' : ''}`}>
+                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster' || (route.name === 'settings' && route.params.sec)) && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
                         {route.name === 'today' ? (

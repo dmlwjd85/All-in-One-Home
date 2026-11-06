@@ -5,6 +5,7 @@ import { Btn } from './bits.jsx';
 import { playSealBurst } from './sealBurst.js';
 import { quickDateLabel, textFromField } from './quickText.js';
 import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/minutes.js';
+import { readJjaemPaste } from '../lib/jjaemPaste.js';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
@@ -109,7 +110,12 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         document.querySelectorAll('.seal-cup').forEach((cup) => playSealBurst(cup));
         const used = kind || lastKind.current || '메모';
         lastKind.current = used;
-        const date = quickSaveDate(used, text, dateYmd, new Date());
+        const ahead = used === '할 일' || used === '일정';
+        /* saveQuick과 같은 규칙으로 날짜를 읽습니다. 「3일 동안」처럼 날짜가 아닌 말은 고른 날(dateYmd)을 그대로 씁니다. */
+        const paste = readJjaemPaste(text, { now: new Date(), stripTime: ahead, future: ahead });
+        const date = used === '일정'
+            ? (paste.date || quickSaveDate(used, text, dateYmd, new Date()))
+            : (paste.date || dateYmd);
         const no = studentNoFor(text, students, picked.current);
         const pickedBefore = picked.current;
         if (inputRef.current) inputRef.current.value = '';
@@ -123,6 +129,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const body = { kind: used, text, date };
         if (no) body.no = no;
         if (used === '할 일') body.due = date;
+        /* 시각은 saveQuick이 본문에서 읽어 알림으로 맞춥니다(시안 A). */
         /* 저장이 안 되면 적던 글을 입력칸에 돌려 둡니다. 그 사이 새로 적은 글이 있으면 건드리지 않습니다. */
         const keepText = (message) => {
             const input = inputRef.current;
