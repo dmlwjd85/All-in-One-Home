@@ -413,6 +413,8 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
     border: 0;
 }
 .tip-bubble::before { display: none; }
+.tip-bubble { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.tip-bubble .icon-btn { flex-shrink: 0; }
 .tip-bulb {
     width: 44px;
     height: 44px;
@@ -665,6 +667,7 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
         position: sticky;
         top: 0;
         height: 100dvh;
+        overflow-y: auto;
         background: var(--bg);
     }
     .app-frame { height: 100dvh; overflow: hidden; }
@@ -1545,3 +1548,8 @@ button.hero-pill.home-todo-link {
 /* 설정 첫 화면: 항목 버튼을 글자 길이만큼 줄지어 놓고, 자리가 모자라면 다음 줄로 넘깁니다. */
 .settings-menu { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .settings-key.tap { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 14px; background: var(--bg); color: var(--ink); font-weight: 700; box-shadow: var(--neo-raise-sm); justify-content: flex-start; }
+
+/* 왼쪽 메뉴: 글자 길이에 맞춘 버튼과 일정한 사이 간격을 유지합니다. */
+.side-menu { display: flex; flex-direction: column; gap: 8px; }
+.side-menu .tap.chip.block { flex-shrink: 0; margin: 0; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
+.side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
