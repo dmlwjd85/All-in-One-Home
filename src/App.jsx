@@ -13,7 +13,6 @@ import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
 import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
-import { SealCup } from './ui/SealCup.jsx';
 import { playFoilPop } from './ui/sealBurst.js';
 import { bloomQuickBar, guardCupBurst, playCupGhost, resetQuickLayer } from './ui/cupBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
@@ -26,7 +25,7 @@ import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteComposi
 import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
 import { Minutes } from './ui/Minutes.jsx';
 import { MENU, menuSelected, menuTarget } from './ui/menu.js';
-import { TabBar } from './ui/TabBar.jsx';
+import { JjaemJar, TabBar } from './ui/TabBar.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
@@ -715,7 +714,7 @@ export default function App() {
                     <div data-screen={route.name}>{screen}</div>
                 </div>
                 <TabBar routeName={route.name} ymd={clock.ymd} go={go} menuOpen={menu} onMenu={() => setMenu(true)} onCenter={(event) => openQuickBar(event)} />
-                <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><SealCup /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
+                <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><JjaemJar /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
                 <TodoAlarm />
                 {plus && (

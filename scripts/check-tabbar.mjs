@@ -222,6 +222,43 @@ if (!failures.length) {
         await page.evaluate(() => document.querySelector('.tabbar .fab')?.click());
         await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open'), { timeout: 3000 }).catch(() => {});
         check(await page.evaluate(() => document.querySelector('.quick-bar')?.classList.contains('is-open')), '가운데 쨈이 빠른 입력을 열지 않습니다.');
+
+        /* 컴퓨터 desk-fab도 시안 C B2 딸기잼 병(JjaemJar)이어야 함. SealCup 회귀 금지. */
+        {
+            await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
+            await page.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+            await page.waitForSelector('.desk-fab');
+            await page.evaluate(() => {
+                const main = document.querySelector('.main');
+                if (main) main.scrollTop = main.scrollHeight;
+            });
+            const desk = await page.evaluate(() => {
+                const fab = document.querySelector('.desk-fab');
+                if (!fab) return { ok: false };
+                const style = getComputedStyle(fab);
+                const recent = document.querySelector('.home-recent');
+                const fabBox = fab.getBoundingClientRect();
+                const title = recent?.querySelector('h3, .fold-hide, summary, .fold-top, [class*="fold"]') || recent;
+                const titleBox = title?.getBoundingClientRect();
+                /* 제목·카드 하단이 fixed desk-fab과 겹치면 가림 */
+                const cardBox = recent?.getBoundingClientRect();
+                const hit = (box) => Boolean(box && box.bottom > fabBox.top + 2 && box.top < fabBox.bottom - 2 && box.left < fabBox.right - 2 && box.right > fabBox.left + 2);
+                const overlap = hit(titleBox) || (cardBox && hit({ top: cardBox.bottom - 24, bottom: cardBox.bottom, left: cardBox.left, right: cardBox.right }));
+                return {
+                    ok: true,
+                    display: style.display,
+                    hasJar: Boolean(fab.querySelector('.jar-disc .jar-svg [data-part="gingham"]')),
+                    hasSeal: Boolean(fab.querySelector('.seal-cup, .seal-svg')),
+                    aria: fab.getAttribute('aria-label') || '',
+                    label: fab.querySelector('.fab-txt')?.textContent || '',
+                    overlap,
+                };
+            });
+            check(desk.ok && desk.display !== 'none', '컴퓨터에서 desk-fab이 보이지 않습니다.');
+            check(desk.hasJar && !desk.hasSeal, `desk-fab이 시안 C 딸기잼 병이 아닙니다: ${JSON.stringify(desk)}`);
+            check(desk.aria.includes('쨈') && desk.label === '쨈', `desk-fab 라벨/aria가 다릅니다: ${JSON.stringify(desk)}`);
+            check(!desk.overlap, `desk-fab이 「최근에 발라 둔 것」 글자를 가립니다: ${JSON.stringify(desk)}`);
+        }
     } finally {
         await browser.close();
         preview.kill('SIGTERM');
