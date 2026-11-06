@@ -249,6 +249,10 @@ export function Neis() {
             [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.at || '').localeCompare(String(b.at || ''))),
         ]);
     }, [records]);
+    const [picked, setPicked] = useState(() => groups[0]?.[0] || '');
+    const activeSid = groups.some(([sid]) => sid === picked) ? picked : (groups[0]?.[0] || '');
+    const activeRows = groups.find(([sid]) => sid === activeSid)?.[1] || [];
+    const activeStudent = data.students.find((item) => item.id === activeSid);
 
     async function copyAll() {
         const lines = groups.map(([sid, rows]) => {
@@ -323,26 +327,43 @@ export function Neis() {
     return (
         <div>
             <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」는 엑셀에서 열 수 있는 표(.csv)로 이 기기에만 받습니다.</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="neis-tools" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Btn className="primary-btn fit-btn" onClick={copyAll}>전체 복사</Btn>
                 <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
                 <Btn className="chip" onClick={printTable}>출력</Btn>
             </div>
-            {groups.map(([sid, rows]) => {
-                const student = data.students.find((item) => item.id === sid);
-                return (
-                    <section key={sid} className="glass" style={{ padding: 12, marginTop: 12 }}>
-                        <h3 style={{ marginTop: 0 }}>{student ? `${student.no} ${student.name}` : '학생을 아직 안 골랐어요'}</h3>
-                        {rows.map((row) => (
+            {!groups.length && <p className="muted">옮길 기록이 없어요. 관찰을 남길 때 ‘나이스에 옮길 것’이 켜져 있어요.</p>}
+            {groups.length > 0 && (
+                <div className="neis-split" data-neis-split="1" style={{ marginTop: 12 }}>
+                    <nav className="neis-list" aria-label="나이스 학생 목록">
+                        {groups.map(([sid, rows]) => {
+                            const student = data.students.find((item) => item.id === sid);
+                            const label = student ? `${student.no} ${student.name}` : '학생을 아직 안 골랐어요';
+                            return (
+                                <Btn
+                                    key={sid}
+                                    className={sid === activeSid ? 'chip on neis-list-item is-on' : 'chip neis-list-item'}
+                                    aria-current={sid === activeSid ? 'true' : undefined}
+                                    onClick={() => setPicked(sid)}
+                                >
+                                    {label}
+                                    <span className="muted" style={{ display: 'block', fontWeight: 500 }}>{rows.length}건</span>
+                                </Btn>
+                            );
+                        })}
+                    </nav>
+                    <section className="glass neis-detail" style={{ padding: 12 }}>
+                        <h3 style={{ marginTop: 0 }}>{activeStudent ? `${activeStudent.no} ${activeStudent.name}` : '학생을 아직 안 골랐어요'}</h3>
+                        {activeRows.map((row) => (
                             <div key={row.id} style={{ marginBottom: 8 }}>
                                 <p style={{ margin: '0 0 4px' }}>({row.date.slice(5)}) {row.text}</p>
                                 <Btn className="chip" onClick={() => moved(row)}>옮겼어요</Btn>
                             </div>
                         ))}
+                        {!activeRows.length && <p className="muted">이 학생 기록이 없어요.</p>}
                     </section>
-                );
-            })}
-            {!groups.length && <p className="muted">옮길 기록이 없어요. 관찰을 남길 때 ‘나이스에 옮길 것’이 켜져 있어요.</p>}
+                </div>
+            )}
         </div>
     );
 }

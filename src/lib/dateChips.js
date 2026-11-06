@@ -23,8 +23,14 @@ function tail(text, end) {
     return m ? m[0].length : 0;
 }
 
-/** 칩 목록과 제목·날짜·시각·교시를 돌려줍니다. off: 해제한 칩 id 목록. */
-export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIODS, off = [] } = {}) {
+function flipHm(hm) {
+    const [h, mi] = hm.split(':').map(Number);
+    const next = (h + 12) % 24;
+    return `${pad(next)}:${pad(mi)}`;
+}
+
+/** 칩 목록과 제목·날짜·시각·교시를 돌려줍니다. off: 해제한 칩 id 목록. ampmFlip: 오전·오후를 뒤집은 시각 칩 id 목록. */
+export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIODS, off = [], ampmFlip = [] } = {}) {
     const raw = String(text || '');
     const chips = [];
     let dates = [];
@@ -39,15 +45,38 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
         const start = periods[n - 1] || '';
         chips.push({ id: `p${m.index}`, type: 'period', index: m.index, length: m[0].length + tail(raw, m.index + m[0].length), period: n, time: start, word: m[0], label: `⏰ ${n}교시${start ? ` ${start}` : ''}` });
     }
+    const flipSet = new Set(ampmFlip);
     for (const m of raw.matchAll(/(?<![\d가-힣])(오전|오후|아침|저녁)?\s*(\d{1,2})\s*시(?!간|험|작|키)(?:\s*(\d{1,2})\s*분|\s*(반))?/g)) {
         let hour = Number(m[2]);
         const min = m[4] ? 30 : Number(m[3] || 0);
         if (hour > 24 || min > 59 || taken(m.index, m[0].length)) continue;
+        const writtenMeridian = Boolean(m[1]);
         if ((m[1] === '오후' || m[1] === '저녁') && hour < 12) hour += 12;
-        if (!m[1] && hour >= 1 && hour <= 6) hour += 12; // 학교 시간: '3시'는 오후 3시
+        if ((m[1] === '오전' || m[1] === '아침') && hour === 12) hour = 0;
+        /* 학교 시간: 오전·오후 없이 '3시'는 오후로 두고, 고칠 수 있게 ambiguous로 표시합니다. */
+        let ambiguous = false;
+        if (!writtenMeridian && hour >= 1 && hour <= 6) {
+            hour += 12;
+            ambiguous = true;
+        } else if (!writtenMeridian && hour >= 7 && hour <= 11) {
+            ambiguous = true;
+        }
         if (hour === 24) hour = 0;
-        const hm = `${pad(hour)}:${pad(min)}`;
-        chips.push({ id: `t${m.index}`, type: 'time', index: m.index, length: m[0].length + tail(raw, m.index + m[0].length), time: hm, word: m[0].trim(), label: `⏰ ${hm}` });
+        let hm = `${pad(hour)}:${pad(min)}`;
+        const id = `t${m.index}`;
+        if (ambiguous && flipSet.has(id)) hm = flipHm(hm);
+        const merid = Number(hm.slice(0, 2)) < 12 ? '오전' : '오후';
+        const label = ambiguous ? `⏰ ${hm} · ${merid}` : `⏰ ${hm}`;
+        chips.push({
+            id,
+            type: 'time',
+            index: m.index,
+            length: m[0].length + tail(raw, m.index + m[0].length),
+            time: hm,
+            word: m[0].trim(),
+            label,
+            ambiguous,
+        });
     }
     chips.sort((a, b) => a.index - b.index);
     const blocked = new Set(off);
@@ -81,4 +110,17 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
         warning: warnings.join(' '),
         timeChip: Boolean(timeChip),
     };
+}
+
+/** 미리보기·저장 목록에 실시간 칩(날짜·시각·제목)을 맞춰 넣습니다. 칩이 없으면 그대로 둡니다. */
+export function applyLiveChips(items, chipRead) {
+    if (!chipRead?.changed || !Array.isArray(items) || !items.length) return items || [];
+    return items.map((item) => {
+        const next = { ...item };
+        if (chipRead.date) next.date = chipRead.date;
+        if (chipRead.time) next.time = chipRead.time;
+        if (chipRead.period) next.period = chipRead.period;
+        if (chipRead.title && (item.kind === '일정' || item.kind === '할 일')) next.title = chipRead.title;
+        return next;
+    });
 }

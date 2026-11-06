@@ -6,6 +6,9 @@ import { joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Area, Btn, KINDS, SpreadHint, TAGS } from './bits.jsx';
 import { recentStudents } from './capture.js';
+import { readEventChips } from '../lib/dateChips.js';
+import { allStarts } from '../lib/periodLocal.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 export function QuickSheet({ initial, onClose }) {
     const { data, clock, showToast } = useUi();
@@ -15,6 +18,8 @@ export function QuickSheet({ initial, onClose }) {
     const [pad, setPad] = useState(false);
     const [neis, setNeis] = useState(kind === '관찰' || kind === '칭찬');
     const [tags, setTags] = useState(TAGS[kind]?.[0] ? [TAGS[kind][0]] : []);
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const box = useRef(null);
     const parsed = useMemo(() => parseNote(text), [text]);
     const chosenNo = parsed.studentNo || no;
@@ -29,7 +34,16 @@ export function QuickSheet({ initial, onClose }) {
     }, [kind]);
 
     async function save() {
-        const result = await saveQuick({ kind, text, no: chosenNo, tags, neis }, new Date());
+        const chipped = chipRead && chipRead.changed ? chipRead : null;
+        const result = await saveQuick({
+            kind,
+            text: chipped && (kind === '일정' || kind === '할 일') ? (chipped.title || text) : text,
+            ...(kind === '일정' && chipped ? { title: chipped.title || text, raw: chipped.raw, date: chipped.date || undefined, time: chipped.time || undefined, period: chipped.period || 0 } : {}),
+            ...(kind === '할 일' && chipped ? { due: chipped.date || undefined, time: chipped.time || undefined } : {}),
+            no: chosenNo,
+            tags,
+            neis,
+        }, new Date());
         if (!result.ok) {
             showToast(result.message, false);
             return;
@@ -46,6 +60,9 @@ export function QuickSheet({ initial, onClose }) {
     }
 
     const needsStudent = ['관찰', '상담', '보호자', '칭찬'].includes(kind);
+    const chipKinds = kind === '일정' || kind === '할 일';
+    const chipRead = chipKinds ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip }) : null;
+
 
     return (
         <div className="sheet-back" onClick={onClose}>
@@ -76,7 +93,14 @@ export function QuickSheet({ initial, onClose }) {
                     </>
                 )}
                 <SpreadHint />
-                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} />
+                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => { const next = event.target.value; setText(next); if (!next.trim()) { setChipOff([]); setAmpmFlip([]); } }} onKeyDown={onKey} />
+                <LiveEventChips
+                    chipRead={chipRead}
+                    chipOff={chipOff}
+                    ampmFlip={ampmFlip}
+                    onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                    onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {(TAGS[kind] || []).map((tag) => (
                         <Btn key={tag} className={tags.includes(tag) ? 'chip on' : 'chip'} onClick={() => setTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])}>#{tag}</Btn>
