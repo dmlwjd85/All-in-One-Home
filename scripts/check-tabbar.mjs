@@ -47,7 +47,8 @@ check(moveTab(DEFAULT_ORDER, 0, 1).slice(0, 2).join() === 'todo,today' && moveTa
     check(tabJsx.includes('aria-label="쨈 빠른 입력 열기"'), '가운데 쨈 aria-label이 없습니다.');
     check(/event\.key === 'Escape'\)\s*onClose\(\)/.test(tabJsx) || /if \(event\.key === 'Escape'\) onClose\(\)/.test(tabJsx), '배치 시트 Esc 닫기가 없습니다.');
     const buildAt = workflow.indexOf('npm run build');
-    const tabbarAt = workflow.indexOf('npm run check:tabbar');
+    // check:tabbarsync에 걸리지 않게 check:tabbar만 찾습니다.
+    const tabbarAt = workflow.search(/npm run check:tabbar(?!sync)/);
     check(tabbarAt > buildAt && buildAt >= 0, 'CI에서 check:tabbar가 build 뒤에 없습니다.');
 }
 
