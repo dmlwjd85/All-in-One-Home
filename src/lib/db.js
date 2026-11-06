@@ -1992,6 +1992,7 @@ async function connectCloud(uid) {
     let ok = false;
     try {
         ok = await connectCloudBody(uid);
+        return ok;
     } finally {
         syncEnd({ ok, pull: true, pending: ok ? 0 : undefined });
     }
@@ -2340,9 +2341,12 @@ export async function setAuth(auth) {
     /* 같은 계정 재로그인(로그아웃 뒤): 보관해 둔 탭바를 되살립니다. 전환은 switchAccountLocal이 이미 처리. */
     if (!switching) adoptTabAccount(next.uid);
     if (connectTask?.uid === next.uid) return connectTask.promise;
-    const promise = connectCloud(next.uid).catch(() => {});
+    const promise = connectCloud(next.uid).catch(() => false);
     connectTask = { uid: next.uid, promise };
-    promise.then(() => startTodoWatch(next.uid));
+    promise.then((ok) => {
+        if (!ok && connectTask?.promise === promise) connectTask = null;
+        startTodoWatch(next.uid);
+    });
     return promise;
 }
 

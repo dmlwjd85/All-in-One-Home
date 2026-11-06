@@ -74,6 +74,7 @@ jobs:
           npm run build
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./google-chrome-stable_current_amd64.deb
+          CHROME_PATH=/usr/bin/google-chrome npm run check:ioslogin
           CHROME_PATH=/usr/bin/google-chrome npm run check:attendsave
           CHROME_PATH=/usr/bin/google-chrome npm run check:swreload
           CHROME_PATH=/usr/bin/google-chrome npm run check:tabbar
