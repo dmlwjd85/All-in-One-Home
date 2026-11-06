@@ -61,6 +61,7 @@ jobs:
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
+          npm run check:nice-datechip
           npm run check:jjaem-paste
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jre-headless

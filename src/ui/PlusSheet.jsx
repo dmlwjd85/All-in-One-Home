@@ -9,6 +9,8 @@ import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
 import { ClayMark } from './ClayMark.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
+import { readEventChips } from '../lib/dateChips.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 const ATTEND_STATUS = ['출석', '결석', '지각', '조퇴', '결과'];
@@ -73,10 +75,13 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     const [items, setItems] = useState([]);
     const [savedRecord, setSavedRecord] = useState(false);
     const [savedNote, setSavedNote] = useState('');
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const box = useRef(null);
     const speech = useSpeechDictation(text, setText);
     const recent = useMemo(() => recentStudents(data.students, joinedRecords(data)), [data]);
     const periods = allStarts(data.profile.periodStarts);
+    const chipRead = phase === 'write' ? readEventChips(text, { now: new Date(), periods, off: chipOff, ampmFlip }) : null;
     const keptCount = items.filter((item) => item.include !== false).length;
 
     /* 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기를 펼친 채 그 칸을 보여 줍니다(키보드가 칸을 가리지 않게 입력칸은 비워 둠). */
@@ -240,7 +245,11 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                 aria-label="기록"
                                 placeholder="여기에 발라 두세요"
                                 value={text}
-                                onChange={(event) => speech.onEdit(event.target.value)}
+                                onChange={(event) => {
+                                    const next = event.target.value;
+                                    speech.onEdit(next);
+                                    if (!next.trim()) { setChipOff([]); setAmpmFlip([]); }
+                                }}
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter' && !event.shiftKey) {
                                         event.preventDefault();
@@ -260,6 +269,13 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                 </Btn>
                             )}
                         </div>
+                        <LiveEventChips
+                            chipRead={chipRead}
+                            chipOff={chipOff}
+                            ampmFlip={ampmFlip}
+                            onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                            onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                        />
                         {speech.available && speech.note && <p className="muted mic-note" role="status">{speech.note}</p>}
                         {speech.needConfirm && <Btn className="chip block" style={{ marginTop: 8 }} onClick={speech.confirm}>알고 시작할게요</Btn>}
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>

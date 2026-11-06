@@ -6,6 +6,8 @@ import { useUi } from './context.jsx';
 import { Area, Btn, HoldToggle } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
+import { readEventChips } from '../lib/dateChips.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 function MicIcon() {
     return (
@@ -137,10 +139,13 @@ function MsgCard({ item, clock, periods, onPatch }) {
 export function MsgSheet({ onClose }) {
     const { data, clock, showToast } = useUi();
     const [phase, setPhase] = useState('paste');
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const [raw, setRaw] = useState('');
     const [hint, setHint] = useState('메시지를 붙여 넣으세요.');
     const [items, setItems] = useState([]);
     const speech = useSpeechDictation(raw, setRaw);
+    const chipRead = phase === 'paste' ? readEventChips(raw, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip }) : null;
 
     useEffect(() => {
         let alive = true;
@@ -205,7 +210,7 @@ export function MsgSheet({ onClose }) {
                     <>
                         <p className="muted" style={{ marginTop: 0 }}>{hint}</p>
                         <div className="msg-compose">
-                            <Area rows={8} aria-label="메시지" placeholder="카톡이나 문자에 온 안내를 붙여 넣으세요" value={raw} onChange={(event) => speech.onEdit(event.target.value)} />
+                            <Area rows={8} aria-label="메시지" placeholder="카톡이나 문자에 온 안내를 붙여 넣으세요" value={raw} onChange={(event) => { const next = event.target.value; speech.onEdit(next); if (!next.trim()) { setChipOff([]); setAmpmFlip([]); } }} />
                             {speech.available && (
                                 <Btn
                                     className={speech.listening ? 'icon-btn mic-btn is-on' : 'icon-btn mic-btn'}
@@ -218,6 +223,13 @@ export function MsgSheet({ onClose }) {
                                 </Btn>
                             )}
                         </div>
+                        <LiveEventChips
+                            chipRead={chipRead}
+                            chipOff={chipOff}
+                            ampmFlip={ampmFlip}
+                            onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                            onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                        />
                         {speech.note && <p className="muted mic-note" role="status">{speech.note}</p>}
                         {speech.needConfirm && <Btn className="chip block" style={{ marginTop: 8 }} onClick={speech.confirm}>알고 시작할게요</Btn>}
                         <Btn className="primary-btn block" style={{ marginTop: 12 }} onClick={() => apply(raw)}>이 메시지 읽기</Btn>

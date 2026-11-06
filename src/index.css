@@ -1545,3 +1545,54 @@ button.hero-pill.home-todo-link {
 /* 설정 첫 화면: 항목 버튼을 글자 길이만큼 줄지어 놓고, 자리가 모자라면 다음 줄로 넘깁니다. */
 .settings-menu { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .settings-key.tap { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 14px; background: var(--bg); color: var(--ink); font-weight: 700; box-shadow: var(--neo-raise-sm); justify-content: flex-start; }
+
+/* 시안 A(11/6): 설정 항목 두 칸 · 나이스 목록·상세 두 칸 · 실시간 칩 */
+@media (min-width: 900px) {
+    .settings-menu {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        align-items: stretch;
+    }
+    .settings-menu .settings-key {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .neis-split {
+        display: grid;
+        grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+    }
+    .neis-list {
+        border-right: 1px solid var(--line);
+        padding-right: 12px;
+        max-height: min(70vh, 640px);
+        overflow: auto;
+    }
+}
+.neis-list-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 0 0 8px;
+}
+.neis-list-item.is-on {
+    font-weight: 800;
+}
+.neis-detail .neis-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.date-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.date-chip-ampm {
+    font-size: 12px;
+    opacity: 0.85;
+}
