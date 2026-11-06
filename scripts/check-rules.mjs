@@ -1,7 +1,7 @@
 /** 에뮬레이터에서 건강·보건이 든 글이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { deleteDoc, deleteField, doc, getDoc, setDoc } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { eventBodyWithoutEndTime, fromCloudRow, fromCloudSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
@@ -186,9 +186,48 @@ async function settingsSuite(env) {
     return out;
 }
 
+/** 하단 탭바 배치(settings/tabbar) 검사 묶음: 본인 읽기·쓰기만, 남의 uid·다른 경로·잘못된 모양은 거절. */
+async function tabbarSuite(env) {
+    const out = [];
+    const deny = async (label, op) => { try { await assertFails(op()); } catch (error) { out.push(`탭바: ${label} 요청이 거절되지 않았습니다. ${error?.message || error}`); } };
+    const allow = async (label, op) => { try { await assertSucceeds(op()); } catch (error) { out.push(`탭바: ${label} 요청이 거절되었습니다. ${error?.message || error}`); } };
+    const me = env.authenticatedContext('teacher-tab').firestore();
+    const other = env.authenticatedContext('teacher-tab-b').firestore();
+    const guest = env.unauthenticatedContext().firestore();
+    const ref = (fs, path = 'users/teacher-tab/settings/tabbar') => doc(fs, path);
+    const order = ['minutes', 'todo', 'attend', 'schedule', 'students', 'more'];
+    const body = (patch = {}) => ({ order, at: Date.now(), updatedAt: serverTimestamp(), ...patch });
+    await allow('본인 쓰기', () => setDoc(ref(me), body()));
+    await allow('본인 읽기', () => getDoc(ref(me)));
+    await allow('본인 다시 쓰기', () => setDoc(ref(me), body({ order: [...order].reverse() })));
+    await deny('남의 uid 읽기', () => getDoc(ref(other)));
+    await deny('남의 uid 쓰기', () => setDoc(ref(other), body()));
+    await deny('로그인 없이 읽기', () => getDoc(ref(guest)));
+    await deny('로그인 없이 쓰기', () => setDoc(ref(guest), body()));
+    await deny('다른 이름의 설정 문서', () => setDoc(ref(me, 'users/teacher-tab/settings/tabbar2'), body()));
+    await deny('다른 컬렉션', () => setDoc(ref(me, 'users/teacher-tab/tabbar/main'), body()));
+    await deny('users 밖 경로', () => setDoc(ref(me, 'tabbar/teacher-tab'), body()));
+    await deny('모르는 칸', () => setDoc(ref(me), body({ extra: 1 })));
+    await deny('5칸', () => setDoc(ref(me), body({ order: order.slice(0, 5) })));
+    await deny('겹친 칸', () => setDoc(ref(me), body({ order: ['todo', 'todo', 'attend', 'schedule', 'students', 'more'] })));
+    await deny('모르는 탭', () => setDoc(ref(me), body({ order: ['hack', 'todo', 'attend', 'schedule', 'students', 'more'] })));
+    await deny('「더」 없음', () => setDoc(ref(me), body({ order: ['today', 'todo', 'attend', 'schedule', 'students', 'minutes'] })));
+    await deny('미래 시각', () => setDoc(ref(me), body({ at: Date.now() + 3600 * 1000 })));
+    await deny('시각 0', () => setDoc(ref(me), body({ at: 0 })));
+    await deny('글자 시각', () => setDoc(ref(me), body({ at: '1' })));
+    await deny('서버 시각 아닌 updatedAt', () => setDoc(ref(me), body({ updatedAt: 1 })));
+    await deny('남의 uid 삭제', () => deleteDoc(ref(other)));
+    await allow('본인 삭제', () => deleteDoc(ref(me)));
+    return out;
+}
+
 /* 규칙 돌연변이: 설정 검사를 하나씩 풀어 본 판에서 위 묶음이 실패해야 합니다(검사가 빈말이 아닌지). */
 const RULE_MUTANTS = [
-    ['읽기 열기', "allow read, delete: if isOwner(uid) && key in ['device', 'leave'];", 'allow read, delete: if true;'],
+    ['읽기 열기', "allow read, delete: if isOwner(uid) && key in ['device', 'leave', 'tabbar'];", 'allow read, delete: if true;'],
+    ['탭바 겹침 검사 빼기', "&& t.order.toSet().size() == 6", ''],
+    ['탭바 탭 이름 빼기', "&& t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings'])", ''],
+    ['탭바 미래 시각 빼기', "&& t.at <= request.time.toMillis() + 300000", ''],
+    ['탭바 키 제한 빼기', "&& t.keys().hasOnly(['order', 'at', 'updatedAt'])", ''],
     ['at 검사 빼기', "&& v.at is int && v.at > 0 && v.at <= 4102444800000", ''],
     ['periodLocal 키 제한 빼기', "&& p.keys().hasOnly(['level', 'count', 'lengths', 'extraStarts', 'locks', 'cellLocks', 'workStart', 'workEnd', 'extra'])\n", '\n'],
     ['extra 칸 이름 제한 빼기', "e.matches('^((mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}([|](mon|tue|wed|thu|fri)-[ps](9|10)=([^|=%]|%(25|7C|3D)){0,20}){0,19})?$')", "e.matches('(?s).*')"],
@@ -214,7 +253,7 @@ async function rulesMutantCheck() {
         if (!rules.includes(from)) { out.push(`규칙 돌연변이 "${label}"의 원문을 규칙에서 찾지 못했습니다.`); continue; }
         const env = await initializeTestEnvironment({ projectId: `demo-ssug-mut-${n}`, firestore: { rules: rules.replace(from, () => to), host, port: Number(portText) } });
         try {
-            const found = await settingsSuite(env);
+            const found = [...await settingsSuite(env), ...await tabbarSuite(env)];
             if (!found.length) out.push(`규칙 돌연변이 "${label}"을(를) 검사가 잡지 못했습니다.`);
         } finally {
             await env.cleanup();
@@ -307,6 +346,7 @@ try {
 
     /* 기기끼리 같이 쓰는 설정: 휴대폰에서 올린 9교시·학사일정이 PC에서 그대로 읽히는지, 안쪽 값도 막는지. */
     failures.push(...await settingsSuite(testEnv));
+    failures.push(...await tabbarSuite(testEnv));
 
     const uid = 'teacher-span';
     const deviceA = testEnv.authenticatedContext(uid).firestore();
