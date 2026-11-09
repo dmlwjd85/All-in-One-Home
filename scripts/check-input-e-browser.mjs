@@ -57,6 +57,7 @@ async function fresh(browser, { width = 1280, height = 900, mode = 'light', loca
     }, FIXED, local);
     await page.goto(`${origin}?demo=1&mode=${mode}#/today`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('.quick-bar');
+    if (process.env.E_THROTTLE) await page.emulateCPUThrottling(Number(process.env.E_THROTTLE));
     return page;
 }
 
@@ -149,11 +150,16 @@ try {
                 const start = AudioBufferSourceNode.prototype.start;
                 AudioBufferSourceNode.prototype.start = function (...a) { window.__snd += 1; return start.apply(this, a); };
                 window.__seen = { pressedAtClick: false, popGen: 0, bloom: false, ghost: false };
+                const quickBarOpen = () => document.querySelector('.quick-bar').classList.contains('is-open');
                 for (const b of document.querySelectorAll('.desk-fab, .tbj-mid')) {
+                    b.addEventListener('click', () => {
+                        const d = b.querySelector('.fab-disc')?.getBoundingClientRect();
+                        window.__seen.atClick = { disc: Math.round(d?.width || 0), bar: Math.round(document.querySelector('.quick-bar').getBoundingClientRect().width), reduce: matchMedia('(prefers-reduced-motion: reduce)').matches, open: quickBarOpen() };
+                    }, true);
                     new MutationObserver(() => { if (b.classList.contains('is-pressed')) window.__seen.pressedAtClick = true; window.__seen.popGen = Math.max(window.__seen.popGen, Number(b.dataset.popGen) || 0); }).observe(b, { attributes: true });
                 }
                 const bar = document.querySelector('.quick-bar');
-                new MutationObserver(() => { if (bar.classList.contains('is-bloom')) window.__seen.bloom = true; }).observe(bar, { attributes: true });
+                new MutationObserver(() => { if (bar.classList.contains('is-bloom')) window.__seen.bloom = true; window.__seen.bx = bar.style.getPropertyValue('--bloom-x'); }).observe(bar, { attributes: true });
                 new MutationObserver(() => { if (document.querySelector('[class*="ghost"]')) window.__seen.ghost = true; }).observe(document.body, { childList: true, subtree: true });
             });
             /* 소리 잠금을 풀기 위해 빈 곳을 한 번 누른 뒤 셉니다(사람도 페이지를 한 번은 만집니다). */
@@ -189,7 +195,7 @@ try {
             check(end.open && end.focus, `${tag}: 쨈 팝업이 안 열림 ${JSON.stringify(end)}`);
             check(mid.pressedAtClick, `${tag}: 키캡 눌림 없음`);
             check(mid.popGen >= 1, `${tag}: 쨈 튐(포일 팝) 효과 없음`);
-            check(mid.bloom, `${tag}: 팝업 번짐 효과 없음`);
+            check(mid.bloom, `${tag}: 팝업 번짐 효과 없음 ${JSON.stringify(mid)}`);
             check(end.snd > 0, `${tag}: 딸깍 소리 없음`);
             check(!end.pressed, `${tag}: 키캡이 눌린 채 남음`);
             check(!end.sheet && end.bars === 1, `${tag}: / 전용 창이나 시트가 따로 열림`);
