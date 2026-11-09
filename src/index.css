@@ -1570,3 +1570,65 @@ button.hero-pill.home-todo-link {
 .side-menu { display: flex; flex-direction: column; gap: 8px; }
 .side-menu .tap.chip.block { flex-shrink: 0; margin: 0; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
 .side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
+
+/* ── 할 일 성취(PR C): 중요도 표시·정렬·하루 목표·완료 효과 ── */
+.pri-mark { flex: none; display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; padding: 0 1px; }
+.pri-mark i { display: block; width: 4px; border-radius: 2px; background: var(--line); }
+.pri-mark i:nth-child(1) { height: 6px; }
+.pri-mark i:nth-child(2) { height: 10px; }
+.pri-mark i:nth-child(3) { height: 14px; }
+.pri-mark i.on { background: var(--accent); }
+.pri-mark[data-pri="1"] i.on { background: var(--ink-sub); }
+.pri-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pri-picks .choice-tile { min-height: 44px; padding: 4px 6px; gap: 6px; }
+.todo-add-row { display: grid; gap: 8px; }
+.todo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.todo-sort { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; flex: 1 1 220px; max-width: 320px; }
+.todo-sort .choice-tile { min-height: 44px; padding: 4px 8px; }
+.goal-meter { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-inset); font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; }
+.goal-meter .goal-pips { display: inline-flex; gap: 3px; }
+.goal-meter .goal-pips i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.goal-meter .goal-pips i.on { background: var(--accent); }
+.goal-meter.is-hit { color: var(--accent); }
+.goal-seal { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 900; line-height: 1; transform: rotate(-12deg); }
+.cal-goal { display: block; margin: 2px auto 0; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); font-size: 9px; font-weight: 900; line-height: 11px; text-align: center; transform: rotate(-12deg); }
+.goal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.goal-grid .choice-tile { min-height: 48px; padding: 4px; }
+.fx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fx-grid .choice-tile { flex-direction: column; gap: 2px; min-height: 64px; }
+.fx-grid .choice-tile span + span { font-weight: 500; font-size: 12px; }
+
+/* 체크 칸 딸깍: 키캡처럼 한 번 눌렸다 올라옵니다. */
+.todo-check.done-click, .done-click { animation: done-click 240ms cubic-bezier(.2,.8,.2,1); }
+@keyframes done-click {
+    0% { transform: translateY(0) scale(1); }
+    35% { transform: translateY(2px) scale(.9); box-shadow: var(--neo-inset); }
+    100% { transform: translateY(0) scale(1); }
+}
+.todo-check[aria-pressed="true"] { color: var(--accent); box-shadow: var(--neo-inset); }
+
+.done-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 90; overflow: hidden; }
+.done-drop { position: absolute; display: block; border-radius: 50% 50% 50% 12%; background: #C2577A; will-change: transform, opacity; }
+.done-drop.seed { background: #E8A0B5; }
+.done-drop.deep { background: #9E3F5E; }
+.done-drop.round { border-radius: 50%; background: #C2577A; }
+.done-drop.glint { background: #FFFFFF; opacity: .8; box-shadow: 0 0 0 1px rgba(194, 87, 122, .35); }
+.done-ring { position: absolute; display: block; width: 44px; height: 44px; border-radius: 50%; border: 2px solid #C2577A; opacity: 0; }
+.done-stamp {
+    position: absolute; left: 50%; top: 42%; width: 128px; height: 128px; border-radius: 50%;
+    border: 4px solid #C2577A; color: #C2577A; background: color-mix(in srgb, var(--bg) 82%, transparent);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    text-align: center; opacity: 0; transform: translate(-50%, -50%);
+    box-shadow: inset 0 0 0 2px rgba(194, 87, 122, .22);
+}
+.done-stamp-ring { position: absolute; inset: 8px; border-radius: 50%; border: 1.5px dashed rgba(194, 87, 122, .6); }
+.done-stamp b { font-size: 17px; font-weight: 900; letter-spacing: -.04em; line-height: 1.15; max-width: 96px; word-break: keep-all; }
+.done-stamp small { font-size: 10px; font-weight: 700; opacity: .8; }
+.dark .done-stamp { color: #E08B9A; border-color: #E08B9A; }
+@media (prefers-reduced-motion: reduce) {
+    .done-drop, .done-ring { display: none !important; }
+    .todo-check.done-click, .done-click { animation: none; }
+}
+@media (min-width: 720px) {
+    .todo-add-row { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: center; }
+}

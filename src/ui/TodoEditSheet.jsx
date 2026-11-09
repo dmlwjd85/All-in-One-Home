@@ -4,6 +4,8 @@ import { formatKoDate, addDaysYmd, isValidYmd } from '../lib/date.js';
 import { TIME_CHOICES, dueChoices, isTodoTime, shiftTime } from '../lib/todoAlarm.js';
 import { useUi } from './context.jsx';
 import { Btn, Field } from './bits.jsx';
+import { priOf } from '../lib/todoAchieve.js';
+import { PriPicks } from './todoUi.jsx';
 
 /**
  * 저장한 할 일 고치기(PR #60): 제목·마감 날짜·알림 시각.
@@ -16,6 +18,7 @@ export function TodoEditSheet({ row, onClose }) {
     const [title, setTitle] = useState(row?.title || '');
     const [due, setDue] = useState(isValidYmd(row?.due) ? row.due : '');
     const [time, setTime] = useState(isTodoTime(row?.time) ? row.time : '');
+    const [pri, setPri] = useState(priOf(row));
     const [busy, setBusy] = useState(false);
     useEffect(() => {
         const onKey = (event) => { if (event.key === 'Escape') onClose(); };
@@ -37,6 +40,8 @@ export function TodoEditSheet({ row, onClose }) {
         setBusy(true);
         const { localOnly, pendingNos, ...rest } = row;
         const next = { ...rest, title: clean.slice(0, 100), due: due || '' };
+        /* 중요도: 고르지 않은 옛 줄은 보통 그대로 두어 괜히 다시 올리지 않습니다. */
+        if (pri !== priOf(row) || 'pri' in row) next.pri = pri;
         if (time) next.time = time;
         else if (isTodoTime(row.time)) next.time = '';
         else delete next.time;
@@ -55,6 +60,9 @@ export function TodoEditSheet({ row, onClose }) {
                 <h2 className="title-font" style={{ margin: '0 0 12px' }}>할 일 고치기</h2>
                 <label className="minutes-label" htmlFor="todo-edit-title">제목</label>
                 <Field id="todo-edit-title" value={title} maxLength={100} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); save(); } }} />
+
+                <div className="minutes-label" id="todo-edit-pri">중요도</div>
+                <PriPicks value={pri} onPick={setPri} idBase="todo-edit" />
 
                 <div className="minutes-label" id="todo-edit-due">마감 날짜 <strong className="todo-edit-picked" data-role="todo-due">{due ? formatKoDate(due) : '없음'}</strong></div>
                 <div className="todo-edit-chips" role="group" aria-labelledby="todo-edit-due">

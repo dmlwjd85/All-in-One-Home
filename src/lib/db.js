@@ -18,6 +18,7 @@ import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } fro
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
+import { allDoneToday, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
@@ -57,6 +58,8 @@ export function emptyState() {
         timetable: {},
         legacyPages: [],
         inbox: [],
+        /* 할 일 하루 목표와 날짜별 달성 기록(PR C). 계정 몫이고 settings/goal 문서로 기기끼리 맞춥니다. */
+        goals: { n: DEFAULT_GOAL, nAt: 0, days: {} },
         local: { records: [], notes: [], events: [], todos: [], notices: [], contacts: [], pages: [], backup: null },
         auth: null,
         tip: { hidden: [], seen: [], closes: {}, snooze: '' },
@@ -664,7 +667,7 @@ export function clippedCopy(mine, theirs) {
 }
 
 /* 받아 온 값으로 바꿉니다. 클라우드에 없는 칸(다른 기기에서 비운 칸)은 이 기기에서도 비웁니다. */
-const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'], todos: ['time'] };
+const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'], todos: ['time', 'pri', 'doneOn', 'doneHm'] };
 export function takeRemote(cloudName, row, theirs) {
     const next = { ...row, ...theirs };
     for (const key of OPTIONAL_FROM_CLOUD[cloudName] || []) if (!(key in theirs)) delete next[key];
@@ -957,6 +960,7 @@ function absorbCloud(draft, remote, seen = null) {
     absorbSettings(draft, remote.settings);
     absorbLeave(remote.leave);
         absorbTabbar(remote.tabbar);
+    absorbGoals(draft, remote.goal);
     if (remote.profile?.className && !draft.profile.className) draft.profile.className = remote.profile.className;
     if (remote.profile?.classSize && !draft.profile.classSize) draft.profile.classSize = remote.profile.classSize;
     if ((remote.students || []).length || remote.profile?.className) {
@@ -1022,6 +1026,7 @@ export async function boot(query = '') {
     state = emptyState();
     if (stored && typeof stored === 'object') state = { ...state, ...stored, local: state.local };
     if (local && typeof local === 'object') state.local = { ...state.local, ...local };
+    state.goals = normalizeGoals(state.goals);
     try {
         const tips = JSON.parse(localStorage.getItem(TIP_KEY) || 'null');
         if (tips) state.tip = { ...state.tip, ...tips };
@@ -1532,12 +1537,92 @@ export async function markChecked(date, on) {
     });
 }
 
+/** 서버 기준 지금의 서울 날짜·시각. */
+function seoulStamp() {
+    const p = seoulParts(new Date(serverNow()));
+    return { ymd: p.ymd, hm: p.hm };
+}
+
+/** 할 일 두 목록(클라우드·이 기기)을 한 줄씩. */
+function allTodos(draft) {
+    return [...(draft.todos || []), ...(draft.local?.todos || [])];
+}
+
+/**
+ * 끝냄 표시를 바꿉니다. 끝낼 때 끝낸 날·시각(서울)을 적고, 풀면 지웁니다('' = 클라우드 칸도 지움).
+ * 하루 목표에 닿으면 그 날 달성 기록을 남기고, 풀어서 목표 아래로 내려가면 지웁니다.
+ * 돌려주는 값은 화면 효과용입니다: { done, pri, allDone, goalHit, goalCleared, storageFailed }.
+ */
 export async function toggleTodo(id) {
-    await update((draft) => {
+    let info = { done: false, pri: 2, allDone: false, goalHit: false, goalCleared: false, found: false };
+    const failed = await update((draft) => {
         const lists = [draft.todos, draft.local.todos];
+        const { ymd, hm } = seoulStamp();
+        let day = '';
+        let turnedOn = false;
+        let seen = false;
         for (const list of lists) {
             const row = list.find((item) => item.id === id);
-            if (row) row.done = !row.done;
+            if (!row) continue;
+            if (!seen) { turnedOn = !row.done; seen = true; info.pri = priOf(row); }
+            const before = row.doneOn;
+            row.done = turnedOn;
+            if (turnedOn) { row.doneOn = ymd; row.doneHm = hm; day = ymd; }
+            else {
+                if (!day && typeof before === 'string' && before) day = before;
+                row.doneOn = '';
+                row.doneHm = '';
+            }
+        }
+        if (!seen) return draft;
+        info.found = true;
+        info.done = turnedOn;
+        const settled = settleGoalDay(draft.goals, allTodos(draft), day, serverNow(), { unchecked: !turnedOn });
+        draft.goals = settled.goals;
+        info.goalHit = settled.hit;
+        info.goalCleared = settled.cleared;
+        info.allDone = turnedOn && allDoneToday(joinedRows(draft.todos, draft.local.todos), ymd);
+        return draft;
+    }, { undoable: true });
+    if (failed?.storageFailed) return { ...info, storageFailed: true, done: false };
+    return info;
+}
+
+/** 두 목록을 id 하나로(이 기기 줄이 같은 id면 이 기기 쪽). 오늘 목록이 다 끝났는지 셀 때만 씁니다. */
+function joinedRows(cloudRows, localRows) {
+    const map = new Map();
+    for (const row of cloudRows || []) if (row?.id != null) map.set(String(row.id), row);
+    for (const row of localRows || []) if (row?.id != null) map.set(String(row.id), row);
+    return [...map.values()];
+}
+
+/** 하루 목표 개수(0은 끔). 고친 시각을 함께 남겨 다른 기기와 늦게 고친 쪽으로 맞춥니다. */
+export async function setTodoGoal(n) {
+    return update((draft) => {
+        const goals = normalizeGoals(draft.goals);
+        goals.n = cleanGoalN(n);
+        goals.nAt = Math.max(serverNow(), goals.nAt + 1);
+        /* 오늘 끝낸 개수로 이미 새 목표를 채웠으면 바로 기록합니다(배지는 지우지 않습니다). */
+        draft.goals = settleGoalDay(goals, allTodos(draft), seoulYmd(new Date(serverNow())), serverNow()).goals;
+        return draft;
+    }, { undoable: true });
+}
+
+/** 다른 기기 목표 문서를 합치고, 받아 온 할 일로 오늘 목표를 채웠으면 배지를 더합니다(지우지는 않음). */
+function absorbGoals(draft, remoteGoal) {
+    const merged = mergeGoals(draft.goals, remoteGoal || null);
+    const today = seoulYmd(new Date(serverNow()));
+    const settled = settleGoalDay(merged, allTodos(draft), today, serverNow());
+    if (!sameGoals(settled.goals, draft.goals)) draft.goals = settled.goals;
+}
+
+/** 중요도만 바꿉니다(1 낮음 · 2 보통 · 3 높음). */
+export async function setTodoPri(id, pri) {
+    if (!isPri(pri)) return null;
+    return update((draft) => {
+        for (const list of [draft.todos, draft.local.todos]) {
+            const row = list.find((item) => item.id === id);
+            if (row) row.pri = pri;
         }
         return draft;
     }, { undoable: true });
@@ -1549,7 +1634,13 @@ export async function receiveOne(id, no) {
         if (!row?.pendingNos) return draft;
         row.pendingNos = row.pendingNos.filter((item) => item !== no);
         row.got = Math.max(0, (row.of || 0) - row.pendingNos.length);
-        if (row.pendingNos.length === 0) row.done = true;
+        if (row.pendingNos.length === 0 && !row.done) {
+            const { ymd, hm } = seoulStamp();
+            row.done = true;
+            row.doneOn = ymd;
+            row.doneHm = hm;
+            draft.goals = settleGoalDay(draft.goals, allTodos(draft), ymd, serverNow()).goals;
+        }
         return draft;
     });
 }
@@ -1893,7 +1984,7 @@ export async function importText(text, mode, hooks = {}) {
 }
 
 /* 계정마다 따로 두는 자료. 기기 설정(테마·공용 PC 등)은 기기 것이라 그대로 둡니다. */
-const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox'];
+const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox', 'goals'];
 const ACCOUNT_PROFILE = ['className', 'schoolYear', 'classSize', 'periodStarts', 'ttEdited', 'academic', 'settingsAts', 'settingsAt', 'checkedDates'];
 const accountKey = (uid) => `account:${uid}`;
 
@@ -2007,7 +2098,7 @@ async function connectCloudBody(uid) {
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc });
     if (!remote) return false;
-    const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
+    const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.goal || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
         await updateFromCloud((draft) => pruneOnly(draft, remote, seen));
@@ -2240,6 +2331,7 @@ export async function pullFromCloudNow() {
         absorbSettings(draft, remote.settings);
         absorbLeave(remote.leave);
         absorbTabbar(remote.tabbar);
+        absorbGoals(draft, remote.goal);
         if (remote.profile?.className) draft.profile.className = remote.profile.className;
         if (remote.profile?.classSize) draft.profile.classSize = remote.profile.classSize;
         rememberAllPulled(draft, remote, cloudHashes);

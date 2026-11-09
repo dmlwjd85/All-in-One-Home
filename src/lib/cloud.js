@@ -10,6 +10,7 @@ export function resetLeaveBackoffForTest() { writeLeaveBackoff(null); }
 export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
 import { cleanTabbar, tabState } from '../ui/tabSlots.js';
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
+import { fromGoalDoc, mergeGoals, toGoalDoc } from './todoAchieve.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
 const COLLECTIONS = [
@@ -286,6 +287,29 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
         }
     }
 
+    /* 할 일 하루 목표·달성 기록: settings/goal 한 문서(PR C). 클라우드 값과 합친 뒤(목표는 늦게 고친 쪽, 날짜마다 늦게 고친 쪽) 달라졌을 때만 씁니다. */
+    const goalDoc = toGoalDoc(state.goals);
+    if (goalDoc) {
+        const mark = fingerprint(goalDoc);
+        if (nextHashes['settings/goal'] !== mark) {
+            try {
+                const ref = doc(ready.db, 'users', uid, 'settings', 'goal');
+                await firestore.runTransaction(ready.db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const theirs = snap.exists() ? fromGoalDoc(snap.data()) : null;
+                    const merged = toGoalDoc(mergeGoals(state.goals, theirs));
+                    const same = theirs && JSON.stringify(toGoalDoc(theirs)) === JSON.stringify(merged);
+                    if (!merged || same) return;
+                    tx.set(ref, await stamp(firestore, merged, ['updatedAt']));
+                });
+                nextHashes['settings/goal'] = mark;
+            } catch (error) {
+                /* 목표 문서를 모르는 옛 규칙의 거절은 다른 기록을 막지 않습니다(탭바 문서와 같음). 그 밖의 실패는 다시 올립니다. */
+                if (classifyWriteError(error) === 'pending') pending += 1;
+            }
+        }
+    }
+
     for (const [localName, cloudName] of COLLECTIONS) {
         for (const row of state[localName] || []) {
             const shaped = toCloudRow(cloudName, row);
@@ -346,6 +370,12 @@ export async function pullUserData(uid, { memoryOnly = false } = {}) {
         if (tabSnap.exists()) out.tabbar = cleanTabbar(tabSnap.data());
     } catch {
         /* 탭바 문서를 모르는 옛 규칙이면 거절됩니다. 이 기기 배치는 그대로 둡니다. */
+    }
+    try {
+        const goalSnap = await getDoc(doc(ready.db, 'users', uid, 'settings', 'goal'));
+        if (goalSnap.exists()) out.goal = fromGoalDoc(goalSnap.data());
+    } catch {
+        /* 목표 문서를 모르는 옛 규칙이면 거절됩니다. 이 기기 목표는 그대로 둡니다. */
     }
     for (const [localName, cloudName] of COLLECTIONS) {
         const snap = await getDocs(collection(ready.db, 'users', uid, cloudName));

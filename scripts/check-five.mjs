@@ -21,7 +21,7 @@ check(ev.some(([k, v]) => k === '메모' && v.includes('우비')), '일정 메�
 const todo = detailRows('todo', { title: '가정통신문', due: '2026-05-12', done: false, of: 25, got: 20 });
 check(todo.some(([k]) => k === '마감') && todo.some(([k, v]) => k === '받기' && v === '25명 중 20명'), '할 일 자세히가 모자랍니다.');
 const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
-check(tasks.includes('todo-check') && tasks.includes('isClipped(title)') && tasks.includes('toggleTodo(row.id)'), '할 일 체크 칸과 잘린 제목 팝업이 나뉘지 않았습니다.');
+check(tasks.includes('todo-check') && tasks.includes('isClipped(title)') && (tasks.includes('toggleTodo(row.id)') || tasks.includes('toggle(row.id, event)')), '할 일 체크 칸과 잘린 제목 팝업이 나뉘지 않았습니다.');
 const home = readFileSync('src/ui/Home.jsx', 'utf8');
 check(home.includes('data-home-todo') && home.includes('data-home-event') && home.includes('<DetailSheet'), '홈 할 일·일정에서 팝업이 열리지 않습니다.');
 
@@ -165,7 +165,7 @@ check(recentSummary({ title: '', text: '' }) === '아직 기록이 없어요' &&
 check(joinSummary(['a', null, '']) === 'a', '빈 조각을 빼지 않습니다.');
 
 /* 캐시 판 */
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v73"), '서비스 워커가 v73가 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v76"), '서비스 워커가 v76이 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');

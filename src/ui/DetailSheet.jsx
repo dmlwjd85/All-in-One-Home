@@ -49,7 +49,7 @@ export function DetailSheet({ kind, row, onClose, onToggle, onEdit, onSave, onDe
                 <div className="detail-actions">
                     {onSave && !editing ? <Btn className="choice-tile" onClick={() => { setTitle(row.title || ''); setEditing(true); }}>고치기</Btn> : null}
                     {onDelete && !confirmDrop ? <Btn className="choice-tile" onClick={() => setConfirmDrop(true)}>지우기</Btn> : null}
-                    {onToggle ? <Btn className="choice-tile" onClick={() => { onToggle(); onClose(); }}>{row.done ? '다시 남기기' : '끝냄 표시'}</Btn> : null}
+                    {onToggle ? <Btn className="choice-tile" onClick={(event) => { onToggle(event); onClose(); }}>{row.done ? '다시 남기기' : '끝냄 표시'}</Btn> : null}
                     {onEdit ? <Btn className="choice-tile" data-role="detail-edit" onClick={onEdit}>고치기</Btn> : null}
                     <Btn className="choice-tile" onClick={onClose}>닫기</Btn>
                 </div>

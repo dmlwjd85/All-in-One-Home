@@ -23,6 +23,7 @@ import { DefaultTimetable } from './DefaultTimetable.jsx';
 import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { TodoSettings } from './TodoSettings.jsx';
 
 const PUBLIC_LABELS = {
     ssugeokInbox: '받은 기록',
@@ -89,6 +90,7 @@ const SETTINGS_SECS = [
     { id: 'calendar', icon: '🗓️', label: '시간표·학사 일정' },
     { id: 'screen', icon: '🎨', label: '화면·키보드 테마' },
     { id: 'sound', icon: '🔊', label: '소리·진동' },
+    { id: 'todo', icon: '✅', label: '할 일 목표·효과' },
     { id: 'keys', icon: '⌨️', label: '단축키' },
     { id: 'account', icon: '☁️', label: '계정·백업' },
 ];
@@ -201,6 +203,8 @@ export function Settings() {
                 <Btn className="chip" onClick={() => import('../lib/db.js').then(({ saveTip }) => saveTip({ hidden: [], seen: [], closes: {}, snooze: '' }).then((saved) => { if (!saved?.storageFailed) showToast('팁을 다시 보여 드릴게요.'); }))}>팁 다시 보기</Btn>
             </section>
             </>)}
+
+            {sec === 'todo' && <TodoSettings data={data} showToast={showToast} />}
 
             {sec === 'sound' && (<>
             <section className="glass" style={{ padding: 14 }}>

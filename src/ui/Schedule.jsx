@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, eventClock, formatKoDate, isValidYmd, monthCells, monthTitle, startOfWeekMon, weekSpanLabel } from '../lib/date.js';
 import { holidayCaption } from '../lib/holidays.js';
 import { restInfo } from '../lib/daymark.js';
+import { badgeOn, normalizeGoals } from '../lib/todoAchieve.js';
 import { joined, setTimetable } from '../lib/db.js';
 import { EventLine, WeekEvent } from './EventLine.jsx';
 import { eventEnd, onDay, weekRows } from '../lib/weekRows.js';
@@ -21,6 +22,7 @@ const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['
 export function Schedule() {
     const [weekendOpen, setWeekendOpen] = useState(false);
     const { data, clock, route, go, showToast } = useUi();
+    const goalDays = normalizeGoals(data.goals).days;
     const focus = isValidYmd(route.params.date) ? route.params.date : (isValidYmd(route.params.week) ? route.params.week : clock.ymd);
     /* 칩 글자는 주간·월간·시간표. 주소 칸 view는 예전 '주'·'달력'도 그대로 받습니다. */
     const mode = (route.params.view === '달력' || route.params.view === '월간') ? '월간'
@@ -110,6 +112,7 @@ export function Schedule() {
                         {['월', '화', '수', '목', '금', '토', '일'].map((label, index) => <div key={label} className={index >= 5 ? 'day-rest-mark' : undefined} style={{ textAlign: 'center', fontSize: 12, fontWeight: 500 }}>{label}</div>)}
                         {monthCells(ym).map((cell, index) => {
                             const holiday = holidayCaption(cell.ymd);
+                            const goalHit = badgeOn(goalDays[cell.ymd]);
                             const rest = restInfo(cell.ymd, classEvents);
                             const dayRows = shown.filter((row) => onDay(row, cell.ymd));
                             const classDay = dayRows.filter((row) => !row.google);
@@ -120,11 +123,12 @@ export function Schedule() {
                             const titles = [...classDay, ...googleDay].slice(0, 3);
                             const titleNames = titles.map((row) => row.title || (row.google ? '구글' : '일정'));
                             const aria = titleNames.length
-                                ? `${formatKoDate(cell.ymd)} · ${titleNames.join(', ')} 고르기`
-                                : `${formatKoDate(cell.ymd)} 고르기`;
+                                ? `${formatKoDate(cell.ymd)}${goalHit ? ' · 할 일 목표 달성' : ''} · ${titleNames.join(', ')} 고르기`
+                                : `${formatKoDate(cell.ymd)}${goalHit ? ' · 할 일 목표 달성' : ''} 고르기`;
                             return (
                                 <Btn key={cell.ymd} className={`${selected ? 'block neo-in cal-picked' : 'block'}${rest.off || weekend ? ' day-rest' : ''}${todayCell ? ' cal-today' : ''}`} aria-current={selected ? 'date' : undefined} aria-label={aria} onClick={() => go(`#/schedule/month/${cell.ymd}`, { replace: true })} style={{ color: cell.inMonth ? 'var(--ink)' : 'var(--ink-sub)', borderRadius: 12, padding: '3px 2px', textAlign: 'center' }}>
                                     <span className="num" style={{ fontWeight: 700, color: todayCell ? undefined : (rest.off ? 'var(--rest-ink)' : 'inherit') }}>{cell.day}</span>
+                                    {goalHit && <span className="cal-goal" data-role="cal-goal" title="할 일 목표 달성" aria-hidden="true">✓</span>}
                                     {(holiday?.isHoliday || (rest.school && rest.label)) && <span className="day-rest-mark" style={{ display: 'block', fontSize: 11, textAlign: 'center' }}>{holiday?.isHoliday ? (holiday.primary.short || '휴일') : '휴업'}</span>}
                                     {titles.length > 0 && (
                                         <span className="cal-marks">

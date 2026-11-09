@@ -49,7 +49,10 @@
     "check:ui-a": "node scripts/check-ui-a.mjs",
     "check:side-hotkey": "node scripts/check-side-hotkey.mjs",
     "check:tabbarsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-tabbar-sync.mjs\"",
-    "check:ioslogin": "node scripts/check-ios-login.mjs"
+    "check:ioslogin": "node scripts/check-ios-login.mjs",
+    "check:todoachieve": "node scripts/check-todo-achieve.mjs",
+    "check:todoshots": "node scripts/shots-todo-achieve.mjs",
+    "check:goalsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-goal-sync.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",
