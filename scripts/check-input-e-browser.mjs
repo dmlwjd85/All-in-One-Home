@@ -230,6 +230,23 @@ try {
             await page.close();
         }
     }
+    /* 6. 넓은 화면 사이드바 메뉴 너비 통일(900·1920 × 라이트·다크). 탭바 동기화는 건드리지 않고 CSS만 봅니다. */
+    for (const mode of ['light', 'dark']) {
+        for (const width of [900, 1920]) {
+            const page = await fresh(browser, { width, height: 1000, mode });
+            const side = await page.evaluate(() => {
+                const btns = [...document.querySelectorAll('.side-menu button')].filter((el) => el.getBoundingClientRect().width > 0);
+                const menu = document.querySelector('.side-menu')?.getBoundingClientRect();
+                return { shown: btns.length, widths: [...new Set(btns.map((el) => Math.round(el.getBoundingClientRect().width)))], menuW: Math.round(menu?.width || 0) };
+            });
+            if (side.shown) {
+                check(side.widths.length === 1 && Math.abs(side.widths[0] - side.menuW) <= 1, `${mode} ${width} 사이드바 메뉴 너비가 다름: ${JSON.stringify(side)}`);
+                await audit(page, `${mode} ${width} 사이드바`, '.side-menu');
+            } else check(width < 900, `${mode} ${width} 사이드바가 안 보임`);
+            if (shots) await page.screenshot({ path: `${shots}/사이드바-${width}-${mode}.png` });
+            await page.close();
+        }
+    }
     /* 5. 추천값 적용은 한 번 눌러 저장, 이미 값 있으면 카드 없음 */
     {
         const page = await fresh(browser);

@@ -225,6 +225,7 @@ const css = src('src/index.css');
 check(/\.attend-close\.is-closed\s*\{[^}]*box-shadow:\s*var\(--neo-inset-deep\)/.test(css), '마감됨이 눌린 모양이 아님');
 check(/\.attend-close\s*\{[^}]*box-shadow:\s*var\(--neo-raise-sm\)/.test(css), '마감하기가 튀어나온 모양이 아님');
 check(/\.attend-close\s*\{[^}]*min-height:\s*(4[4-9]|5\d)px/.test(css), '마감 단추 44px 미만');
+check(/\.side-menu \.tap\.chip\.block \{[^}]*width: 100%; box-sizing: border-box;/.test(css), '사이드바 메뉴 버튼 너비가 통일되지 않음');
 const quick = src('src/ui/QuickBar.jsx');
 check(quick.includes('resolveTimePhrase(text, timeContext(data, now)') && quick.includes('quick-ask low-card'), '빠른 입력 시간구·노란 카드 연결 없음');
 check(/if \(pre\.time\) return null;/.test(quick), '시계 시각이 시간구보다 먼저가 아님');
