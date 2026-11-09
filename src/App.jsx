@@ -353,9 +353,10 @@ export default function App() {
             return;
         }
         if (id === 'plus') {
-            /* / 키도 쨈 버튼과 같은 빠른 입력창을 엽니다. 이미 열려 있으면 닫지 않고 입력칸으로 갑니다. */
+            /* / 키는 화면 아래 쨈 버튼을 직접 누른 것과 똑같습니다: 키캡 눌림·딸깍 소리 → 버튼 클릭(쨈 튐·같은 쨈 팝업) → 키캡 복귀.
+               / 전용 입력창은 따로 두지 않습니다. */
             closeLayers();
-            openQuickBar(undefined, { keep: true });
+            pressJamButton();
             return;
         }
         if (id === 'memo') {
@@ -559,12 +560,24 @@ export default function App() {
         );
     }
 
-    function openQuickBar(event, { keep = false } = {}) {
-        /* / 키(keep)로 다시 부르면 닫지 않고 입력칸으로만 갑니다. */
-        if (keep && quickOpenRef.current) {
-            quickInput.current?.focus();
-            return;
-        }
+    function pressJamButton() {
+        /* 지금 보이는 쨈 버튼(넓은 화면 .desk-fab, 좁은 화면 탭바 가운데)을 찾아 사람이 누른 것처럼 누릅니다. */
+        const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+        const btn = [...document.querySelectorAll('.desk-fab, .tbj-mid')].find(shown);
+        if (!btn) { openQuickBar(); return; }
+        const feel = jamFeelEnabled();
+        pressDown(btn);
+        if (!feel) playKey('down');
+        btn.dataset.via = 'slash';
+        btn.click();
+        window.setTimeout(() => {
+            pressUp(btn);
+            if (!feel) playKey('up');
+            delete btn.dataset.via;
+        }, 140);
+    }
+
+    function openQuickBar(event) {
         /* 열려 있으면 쨈 버튼이 닫기입니다. 막 연 뒤 0.4초 안의 두 번째 탭(연타)은 무시합니다. */
         if (quickOpenRef.current) {
             if (performance.now() - quickOpenedAt.current > 400) closeQuickBar();

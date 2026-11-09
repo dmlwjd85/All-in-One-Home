@@ -215,7 +215,11 @@ check(!sd.bellsLookDefault(['08:50', '09:40', '10:30', '11:20', '13:10', '14:00'
 /* ───── 8. 화면 연결(소스) ───── */
 const app = src('src/App.jsx');
 const runHot = app.slice(app.indexOf('const runHotkey = useCallback'), app.indexOf('}, [clock.ymd, go]);'));
-check(/id === 'plus'[\s\S]{0,200}openQuickBar\(undefined, \{ keep: true \}\)/.test(runHot), '/ 키가 쨈 빠른 입력(openQuickBar)을 열지 않음');
+check(/id === 'plus'[\s\S]{0,300}pressJamButton\(\);/.test(runHot), '/ 키가 쨈 버튼 누르기(pressJamButton)를 하지 않음');
+const pj = app.slice(app.indexOf('function pressJamButton()'), app.indexOf('function openQuickBar('));
+check(/pressDown\(btn\)[\s\S]*btn\.click\(\)[\s\S]*pressUp\(btn\)/.test(pj), '/ 키가 키캡 눌림→클릭→복귀 순서가 아님');
+check(/if \(!feel\) playKey\('down'\)/.test(pj) && /if \(!feel\) playKey\('up'\)/.test(pj), '/ 키에 딸깍 소리가 없음');
+check(!/keep/.test(app.slice(app.indexOf('function openQuickBar('), app.indexOf('function closeQuickBar('))), '/ 전용 열기 분기(keep)가 남음');
 check(!/id === 'plus'[\s\S]{0,120}setPlus\(true\)/.test(runHot), '/ 키가 아직 발라 두기 시트를 엶');
 check(/modalOpen\(\) \|\| quickOpenRef\.current/.test(app), '모달·빠른 입력창이 떠 있어도 단축키가 먹음');
 check(/seedHotkeys\(Boolean\(data\.profile\?\.started\)\)/.test(app), '새 설치 판단이 없음');

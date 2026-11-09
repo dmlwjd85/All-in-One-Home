@@ -90,7 +90,7 @@ async function audit(page, label, scope) {
     check(!r.hscroll, `${label}: 가로 넘침`);
 }
 
-const browser = await puppeteer.launch({ executablePath: chrome, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await puppeteer.launch({ executablePath: chrome, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] });
 try {
     /* 1. / 키와 기본 단축키 */
     {
@@ -138,6 +138,86 @@ try {
         await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Process', keyCode: 229, bubbles: true })));
         await wait(120);
         check(!await page.evaluate(() => document.querySelector('.quick-bar').classList.contains('is-open')), '한글 조합 중 / 가 창을 엶');
+        await page.close();
+    }
+    /* 1-1. / 키 = 화면 아래 쨈 버튼을 직접 누른 것과 같음(키캡 눌림·딸깍·쨈 튐·같은 팝업). 넓은 화면·좁은 화면, 쨈 손맛 켬·끔 */
+    for (const [width, jam] of [[1280, '1'], [1280, '0'], [900, '1'], [1920, '0']]) {
+        for (const how of ['button', 'slash']) {
+            const page = await fresh(browser, { width, local: { 'ssug-gyomu-press-feel': jam, 'ssug-gyomu-key-sound': '1' } });
+            await page.evaluate(() => {
+                window.__snd = 0;
+                const start = AudioBufferSourceNode.prototype.start;
+                AudioBufferSourceNode.prototype.start = function (...a) { window.__snd += 1; return start.apply(this, a); };
+                window.__seen = { pressedAtClick: false, popGen: 0, bloom: false, ghost: false };
+                for (const b of document.querySelectorAll('.desk-fab, .tbj-mid')) {
+                    new MutationObserver(() => { if (b.classList.contains('is-pressed')) window.__seen.pressedAtClick = true; window.__seen.popGen = Math.max(window.__seen.popGen, Number(b.dataset.popGen) || 0); }).observe(b, { attributes: true });
+                }
+                const bar = document.querySelector('.quick-bar');
+                new MutationObserver(() => { if (bar.classList.contains('is-bloom')) window.__seen.bloom = true; }).observe(bar, { attributes: true });
+                new MutationObserver(() => { if (document.querySelector('[class*="ghost"]')) window.__seen.ghost = true; }).observe(document.body, { childList: true, subtree: true });
+            });
+            /* 소리 잠금을 풀기 위해 빈 곳을 한 번 누른 뒤 셉니다(사람도 페이지를 한 번은 만집니다). */
+            await page.mouse.click(5, 895);
+            await wait(120);
+            await page.evaluate(() => { window.__snd = 0; });
+            const fab = await page.evaluate(() => { const el = [...document.querySelectorAll('.desk-fab, .tbj-mid')].find((e) => e.getBoundingClientRect().width > 0); return el ? el.className : ''; });
+            if (how === 'button') {
+                const box = await page.evaluate(() => { const el = [...document.querySelectorAll('.desk-fab, .tbj-mid')].find((e) => e.getBoundingClientRect().width > 0); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+                await page.mouse.move(box.x, box.y);
+                await page.mouse.down();
+                await wait(60);
+                await page.mouse.up();
+            } else {
+                await page.keyboard.down('/');
+                await wait(60);
+                await page.keyboard.up('/');
+            }
+            await wait(30);
+            const mid = await page.evaluate(() => ({ ...window.__seen }));
+            if (shots && how === 'slash' && jam === '1') await page.screenshot({ path: `${shots}/슬래시-쨈팝-${width}-light.png` });
+            await wait(400);
+            const end = await page.evaluate(() => ({
+                open: document.querySelector('.quick-bar').classList.contains('is-open'),
+                focus: document.activeElement?.classList.contains('quick-field'),
+                pressed: [...document.querySelectorAll('.desk-fab, .tbj-mid')].some((b) => b.classList.contains('is-pressed')),
+                sheet: Boolean(document.querySelector('.sheet-back')),
+                bars: document.querySelectorAll('.quick-bar').length,
+                snd: window.__snd,
+            }));
+            const tag = `${how} ${width} 쨈손맛${jam}`;
+            check(fab, `${tag}: 쨈 버튼이 안 보임`);
+            check(end.open && end.focus, `${tag}: 쨈 팝업이 안 열림 ${JSON.stringify(end)}`);
+            check(mid.pressedAtClick, `${tag}: 키캡 눌림 없음`);
+            check(mid.popGen >= 1, `${tag}: 쨈 튐(포일 팝) 효과 없음`);
+            check(mid.bloom, `${tag}: 팝업 번짐 효과 없음`);
+            check(end.snd > 0, `${tag}: 딸깍 소리 없음`);
+            check(!end.pressed, `${tag}: 키캡이 눌린 채 남음`);
+            check(!end.sheet && end.bars === 1, `${tag}: / 전용 창이나 시트가 따로 열림`);
+            page.__r = { ...mid, ...end };
+            (globalThis.__slashCmp ||= {})[`${width}-${jam}-${how}`] = { ...mid, ...end };
+            await page.close();
+        }
+        const a = globalThis.__slashCmp[`${width}-${jam}-button`], b = globalThis.__slashCmp[`${width}-${jam}-slash`];
+        for (const k of ['open', 'pressedAtClick', 'bloom', 'ghost', 'pressed', 'sheet', 'bars']) check(a[k] === b[k], `${width} 쨈손맛${jam}: 버튼과 / 의 ${k}가 다름 (${a[k]} ≠ ${b[k]})`);
+        check(Math.sign(a.snd) === Math.sign(b.snd), `${width} 쨈손맛${jam}: 버튼과 / 의 소리가 다름 (${a.snd} / ${b.snd})`);
+    }
+    /* 1-2. 글자 칸(input·textarea·편집 가능한 영역)에 커서가 있으면 / 는 글자로 들어감 */
+    {
+        const page = await fresh(browser);
+        await page.evaluate(() => {
+            const wrap = document.createElement('div');
+            wrap.id = 'slash-probe';
+            wrap.innerHTML = '<input id="sp-i"><textarea id="sp-t"></textarea><div id="sp-c" contenteditable="true"></div>';
+            document.body.appendChild(wrap);
+        });
+        for (const sel of ['#sp-i', '#sp-t', '#sp-c']) {
+            await page.focus(sel);
+            await page.keyboard.type('1/2');
+            const v = await page.$eval(sel, (el) => ('value' in el ? el.value : el.textContent));
+            check(v === '1/2', `${sel}에서 / 가 글자로 안 들어감: ${v}`);
+            check(!await page.evaluate(() => document.querySelector('.quick-bar').classList.contains('is-open')), `${sel}에서 / 가 쨈 팝업을 엶`);
+            check(!await page.evaluate(() => [...document.querySelectorAll('.desk-fab, .tbj-mid')].some((b) => b.classList.contains('is-pressed') || Number(b.dataset.popGen) > 0)), `${sel}에서 / 가 쨈 버튼을 누름`);
+        }
         await page.close();
     }
     /* 2. 예전부터 쓰던 기기(저장값)는 그대로 */
