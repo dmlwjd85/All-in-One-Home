@@ -592,8 +592,15 @@ export default function App() {
         setQuickInvite(false);
         setQuickOpen(true);
         playFoilPop(event?.currentTarget);
-        bloomQuickBar(event?.currentTarget);
-        playCupGhost(event?.currentTarget);
+        const opener = event?.currentTarget;
+        bloomQuickBar(opener);
+        /* React가 열림 상태를 그리며 className을 다시 쓰면 방금 붙인 번짐(is-bloom)이 같은 틀 안에서 지워질 수 있습니다.
+           다음 틀에 아직 열려 있는데 번짐이 없으면 한 번 더 붙입니다(버튼·/ 키 모두 같은 길). */
+        requestAnimationFrame(() => {
+            const bar = document.querySelector('.quick-bar');
+            if (quickOpenRef.current && bar && !bar.classList.contains('is-bloom')) bloomQuickBar(opener);
+        });
+        playCupGhost(opener);
     }
 
     function closeQuickBar() {
