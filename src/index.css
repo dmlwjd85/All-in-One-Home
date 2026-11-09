@@ -224,6 +224,48 @@ a.chip,
     font-weight: 800;
     box-shadow: var(--neo-inset);
 }
+/* 기본 환경 추천(출퇴근·종 시각·시간표 예시). 저장값이 아니라 눌러야 적용되는 제안입니다. */
+.suggest-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg);
+    box-shadow: var(--neo-inset);
+}
+.suggest-text { flex: 1 1 220px; min-width: 0; margin: 0; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.suggest-rows { flex: 1 1 100%; margin: 0; font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
+.suggest-card .chip { flex: 0 0 auto; min-height: 44px; max-width: 100%; white-space: normal; }
+/* 출결 마감: 풀린 상태는 튀어나온 로즈 단추, 마감한 상태는 눌려 들어간 단추(글자·체크로도 구별). */
+.attend-close-wrap { display: grid; gap: 6px; }
+.attend-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    border-radius: 16px;
+    font-weight: 800;
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: var(--neo-raise-sm);
+    transform: translateY(-1px);
+    transition: box-shadow .16s ease, transform .16s ease, background-color .16s ease;
+}
+.attend-close.is-closed {
+    background: var(--bg);
+    color: var(--accent);
+    box-shadow: var(--neo-inset-deep);
+    transform: translateY(1px);
+}
+.attend-close-mark { min-width: 1em; font-size: 18px; line-height: 1; }
+.attend-close:not(.is-closed) .attend-close-mark { display: none; }
+.attend-close-note { margin: 0; font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .attend-close { transition: none; } }
 .key-picks {
     display: flex;
     flex-wrap: wrap;
@@ -554,6 +596,14 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
     display: flex;
     gap: 6px;
 }
+.quick-ask {
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+}
+.quick-ask-text { margin: 0 0 8px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.quick-ask-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.quick-ask-chips .chip { flex: 1 1 auto; min-height: 44px; white-space: normal; text-align: center; }
 .quick-chip {
     flex: 1 1 0;
     min-width: 0;

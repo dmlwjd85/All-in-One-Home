@@ -96,7 +96,7 @@ for (const tip of tips) for (const [, label] of tip.matchAll(/‘([^’]+)’/g)
     check(label === '내일' || src.includes(real), `팁의 단추 글자 '${label}'가 화면에 없습니다.`);
 }
 // r2 3번: 따옴표 밖에 적은 단추 이름도 봅니다. 화면의 진짜 단추 이름은 늘 ‘’로 감싸고, 그 밖에 '…를 눌러'·'…만 눌러'는 일반 이름(쨈 버튼 등)만 씁니다.
-const realButtons = ['출결 하기', '출결 고치기', '오늘 출결 마쳤어요', '일정 보기', '회의록 작성', '메시지·회의록 붙여넣기', '저장'];
+const realButtons = ['출결 하기', '출결 고치기', '마감하기', '마감됨', '일정 보기', '회의록 작성', '메시지·회의록 붙여넣기', '저장'];
 const genericTap = new Set(['쨈 버튼', '마이크 버튼', '네모 칸', '칩', '✎', '단추']);
 for (const tip of tips) {
     const bare = tip.replace(/‘[^’]*’/g, '‘’');
@@ -106,7 +106,7 @@ for (const tip of tips) {
         check(what.endsWith('‘’') || genericTap.has(plain) || [...genericTap].some((g) => what.endsWith(g)), `팁의 '${what}' 누르기가 실제 단추 이름과 맞는지 알 수 없습니다: ${tip}`);
     }
 }
-check(tips.some((t) => t.includes('‘오늘 출결 마쳤어요’')), '모두 출석인 날 팁이 실제 단추 이름 ‘오늘 출결 마쳤어요’를 쓰지 않습니다.');
+check(tips.some((t) => t.includes('‘마감하기’')), '모두 출석인 날 팁이 실제 단추 이름 ‘마감하기’를 쓰지 않습니다.');
 // 1: 예전 규칙이 시각을 거절해 시각 없이 올린 할 일은, 내용이 같으면 받을 때 이 기기 시각을 지킵니다.
 const { takeRemote } = await import('../src/lib/db.js');
 const mine = { id: 'h1', title: '시각 지킬 일', due: '2026-11-04', time: '10:15', done: false };

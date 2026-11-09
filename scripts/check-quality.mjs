@@ -607,22 +607,22 @@ const hotStore = {
     setItem(key, value) { this.map.set(key, String(value)); },
     removeItem(key) { this.map.delete(key); },
 };
-check(defaultHotkeys().plus === '/' && defaultHotkeys().help === '?' && defaultHotkeys().attend === '', '단축키 기본이 / 와 물음표가 아닙니다.');
+check(defaultHotkeys().plus === '/' && defaultHotkeys().help === '?' && defaultHotkeys().attend === 'a' && defaultHotkeys({ legacy: true }).attend === '', '단축키 기본(새 설치 / ? a, 예전 기기 / ? 만)이 다릅니다.');
 check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 발라 두기가 / 가 아닙니다.');
 const moved = assignHotkey(loadHotkeys(hotStore), 'attend', '/');
-check(moved.movedFrom === '발라 두기' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 발라 두기에 그대로 둡니다.');
+check(moved.movedFrom === '쨈 빠른 입력' && moved.map.attend === '/' && moved.map.plus === '', '겹치는 키를 쨈 빠른 입력에 그대로 둡니다.');
 check(hotkeyFromEvent({ key: 'A' }) === 'a' && hotkeyFromEvent({ key: 'k', ctrlKey: true }) === '', 'Ctrl 조합이나 대문자를 그대로 받습니다.');
 check(hotkeyFromEvent({ key: 'F3' }) === '' && hotkeyFromEvent({ key: 'F6' }) === '' && hotkeyFromEvent({ key: 'F5' }) === '' && hotkeyFromEvent({ key: 'F12' }) === '', '브라우저 기능키를 단축키로 받습니다.');
 check(hotkeyFromEvent({ key: 'F8' }) === 'F8' && isStoredHotkey('F8') && !isStoredHotkey('F3') && !isStoredHotkey('F6'), '브라우저가 쓰지 않는 기능키까지 막거나, 막은 키를 저장합니다.');
 check(passesThroughCapture({ key: 'Tab' }) && passesThroughCapture({ key: 'Tab', shiftKey: true }) && passesThroughCapture({ key: 'Shift' }) && passesThroughCapture({ key: 'Control' }) && passesThroughCapture({ key: 'Alt' }) && passesThroughCapture({ key: 'Meta' }) && !passesThroughCapture({ key: 'a' }), 'Shift+Tab이나 수정 키가 단축키 칸에 갇힙니다.');
 check(shortcutBlocked({ key: 'a', target: fakeControl('INPUT', { type: 'text' }) }), '글자 칸에서 단축키가 먹습니다.');
 check(shortcutBlocked({ key: 'Process', isComposing: true, target: { tagName: 'BODY' } }), '한글 조합 중에 단축키가 먹습니다.');
-check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 발라 두기를 열지 않습니다.');
-check(matchHotkey({ key: '/', target: fakeControl('TEXTAREA') }, defaultHotkeys()) === '', '글자 칸의 / 가 발라 두기를 엽니다.');
+check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, defaultHotkeys()) === 'plus', '/ 키가 쨈 빠른 입력을 열지 않습니다.');
+check(matchHotkey({ key: '/', target: fakeControl('TEXTAREA') }, defaultHotkeys()) === '', '글자 칸의 / 가 쨈 빠른 입력을 엽니다.');
 saveHotkeys(moved.map, hotStore);
 check(loadHotkeys(hotStore).attend === '/' && loadHotkeys(hotStore).plus === '', '옮긴 단축키가 저장되지 않습니다.');
 resetHotkeys(hotStore);
-check(loadHotkeys(hotStore).plus === '/' && loadHotkeys(hotStore).attend === '', '기본값으로 되돌리기가 남지 않습니다.');
+check(loadHotkeys(hotStore).plus === '/' && loadHotkeys(hotStore).attend === 'a', '기본값으로 되돌리기가 남지 않습니다.');
 hotStore.setItem('ssug-gyomu-hotkeys', JSON.stringify({ plus: 'F6', attend: '/' }));
 const legacyKeys = loadHotkeys(hotStore);
 const legacyValues = Object.values(legacyKeys).filter(Boolean);
@@ -630,10 +630,10 @@ check(legacyKeys.attend === '/' && legacyKeys.plus === '' && legacyKeys.help ===
 check(matchHotkey({ key: '/', target: { tagName: 'BODY' } }, legacyKeys) === 'attend', '겹친 / 가 발라 두기를 엽니다.');
 const freshDefaults = resetHotkeys(hotStore);
 const freshValues = Object.values(freshDefaults).filter(Boolean);
-check(freshDefaults.plus === '/' && freshDefaults.attend === '' && freshDefaults.help === '?' && new Set(freshValues).size === freshValues.length, '기본으로 되돌리면 같은 키가 두 동작에 걸립니다.');
-check(kokHotkeyHint(defaultHotkeys()) === '기본으로 / 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.', '기본 발라 두기 안내가 달라졌습니다.');
-check(kokHotkeyHint(legacyKeys) === '발라 두는 키는 아직 없어요. 설정에서 정해 주시면 돼요.' && !kokHotkeyHint(legacyKeys).includes('/'), '발라 두기 키가 없는데 사이드바가 빗금을 말합니다.');
-check(kokHotkeyHint({ ...defaultHotkeys(), plus: 'a' }) === 'A 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.', '바꾼 키를 사이드바가 따라가지 않습니다.');
+check(freshDefaults.plus === '/' && freshDefaults.attend === 'a' && freshDefaults.help === '?' && new Set(freshValues).size === freshValues.length, '기본으로 되돌리면 같은 키가 두 동작에 걸립니다.');
+check(kokHotkeyHint(defaultHotkeys()) === '기본으로 / 키를 누르면 쨈 빠른 입력이 열려요. 설정에서 바꿀 수 있어요.', '기본 쨈 빠른 입력 안내가 달라졌습니다.');
+check(kokHotkeyHint(legacyKeys) === '쨈 빠른 입력 키는 아직 없어요. 설정에서 정해 주시면 돼요.' && !kokHotkeyHint(legacyKeys).includes('/'), '쨈 빠른 입력 키가 없는데 사이드바가 빗금을 말합니다.');
+check(kokHotkeyHint({ ...defaultHotkeys(), plus: 'a' }) === 'A 키를 누르면 쨈 빠른 입력이 열려요. 설정에서 바꿀 수 있어요.', '바꾼 키를 사이드바가 따라가지 않습니다.');
 check(hotkeyFootnote(legacyKeys).includes('아직 없어요') && !hotkeyFootnote(legacyKeys).includes('/ 키'), '키가 없는데 단축키 안내가 빗금을 말합니다.');
 check(hotkeyFootnote(defaultHotkeys()).includes('?') && hotkeyFootnote(defaultHotkeys()).includes('/'), '기본 단축키 안내가 빠졌습니다.');
 check(hotkeyPhoneNote(legacyKeys).includes('아직 없어요') && !hotkeyPhoneNote(legacyKeys).includes('/'), '키가 없는데 휴대폰 안내가 빗금을 말합니다.');
@@ -700,7 +700,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v73'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v75'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

@@ -674,7 +674,9 @@ try {
         ['home-360-lilac.png', 360, 'light', async (page) => page],
         ['attend-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
-        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
+        /* / 키는 쨈 버튼과 같은 빠른 입력창을 엽니다(PR E). 발라 두기 시트는 빠른 입력창의 붙여넣기 단추로 엽니다. */
+        ['quick-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await page.waitForSelector('.quick-bar.is-open'); }],
+        ['plus-360-lilac.png', 360, 'light', async (page) => { await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }))); await page.waitForSelector('.quick-bar.is-open'); await page.click('.quick-paste'); await page.waitForSelector('[aria-label="할 일 고르기"][role="dialog"]'); }],
         ['home-360-dark.png', 360, 'dark', async () => {}],
         ['attend-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/attend'; }); await delay(200); }],
         ['record-360-dark.png', 360, 'dark', async (page) => { await page.evaluate(() => { location.hash = '#/students/12'; }); await page.waitForFunction(() => document.body.innerText.includes('이하은')); }],
@@ -3738,7 +3740,7 @@ try {
             check(Boolean(card), `${width} 출퇴근 시각이 없는데 홈에 안내 카드가 없습니다.`);
             if (!card) return;
             check(card.text === '출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요.' && card.lines >= 1 && card.lines <= 2, `${width} 안내 카드 문구가 두 줄을 넘거나 다릅니다: ${JSON.stringify(card)}`);
-            check(card.start === '08:40' && card.end === '16:40' && !('workEnd' in await savedWork(page)), `${width} 안내 카드에 08:40·16:40이 미리 없거나 저장 전에 써 버립니다: ${JSON.stringify(card)}`);
+            check(card.start === '08:30' && card.end === '16:30' && !('workEnd' in await savedWork(page)), `${width} 안내 카드에 추천값 08:30·16:30이 미리 없거나 저장 전에 써 버립니다: ${JSON.stringify(card)}`);
             check(card.saveTap && card.laterTap && card.inside && card.saveWidth < 160 && card.saveWidth < card.cardWidth / 2, `${width} 안내 카드 버튼이 앱 버튼이 아니거나 카드 밖·길게 늘어납니다: ${JSON.stringify(card)}`);
             check(/has-leave/.test(card.grid) && (width < 900 || card.besideHero), `${width} 안내 카드가 타이머 자리에 없습니다: ${JSON.stringify(card)}`);
             await audit(page, `출퇴근 안내 카드 ${width}`);
@@ -4715,7 +4717,7 @@ try {
                 await page.evaluate(() => { location.hash = '#/minutes'; });
                 await page.waitForSelector('[data-screen="minutes-list"] .minutes-item');
                 if (width >= 900) {
-                    const menuOn = await page.evaluate(() => [...document.querySelectorAll('.side a, .side button')].some((el) => el.innerText.trim() === '회의록' && (el.getAttribute('aria-current') === 'page' || el.className.includes('on'))));
+                    const menuOn = await page.evaluate(() => [...document.querySelectorAll('.side a, .side button')].some((el) => el.innerText.trim().split('\n')[0].trim() === '회의록' && (el.getAttribute('aria-current') === 'page' || el.className.includes('on'))));
                     check(menuOn, `${width} ${mode} 넓은 화면 메뉴에 회의록이 없거나 켜지지 않습니다.`);
                 }
                 await audit(page, `회의록 목록 ${width} ${mode}`);

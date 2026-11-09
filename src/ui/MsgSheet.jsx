@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { allStarts } from '../lib/periodLocal.js';
 import { clipboardHint, EVENT_KINDS, parseSchoolMessages, readClipboard } from '../lib/msgParse.js';
 import { saveParsed } from '../lib/db.js';
+import { applyTimePhrases } from '../lib/timePhrase.js';
+import { timeContext } from './timeContext.js';
 import { useUi } from './context.jsx';
 import { Area, Btn, HoldToggle } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
@@ -170,7 +172,10 @@ export function MsgSheet({ onClose }) {
         const ids = new Set([
             ...data.todos, ...data.local.todos, ...data.events, ...data.local.events,
         ].map((row) => row.id));
-        setItems(parsed.items.map((item) => (ids.has(item.id) ? { ...item, duplicate: true, include: false } : item)));
+        /* '퇴근 전까지'·'수업 끝나고' 같은 말은 내 퇴근·조퇴·교시 시각으로 시각을 채웁니다. 설정이 비었으면 노란 카드로 둡니다. */
+        let timed = parsed.items;
+        try { timed = applyTimePhrases(parsed.items, timeContext(data)); } catch { timed = parsed.items; }
+        setItems(timed.map((item) => (ids.has(item.id) ? { ...item, duplicate: true, include: false } : item)));
         setPhase('preview');
     }
 

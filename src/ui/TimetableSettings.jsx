@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { patchProfile } from '../lib/db.js';
-import { LEVEL_LENGTH, MAX_PERIODS, isHm } from '../lib/period.js';
-import { allLengths, allStarts, patchPeriodLocal, usedCount } from '../lib/periodLocal.js';
+import { DEFAULT_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from '../lib/period.js';
+import { allLengths, allStarts, patchPeriodLocal, readPeriodLocal, usedCount } from '../lib/periodLocal.js';
+import { ELEMENTARY_BELLS, SUGGESTED_WORK, bellRows, bellsLookDefault, needsWorkSuggestion, workSuggestionPatch } from '../lib/schoolDefaults.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { Btn } from './bits.jsx';
 
@@ -33,6 +34,20 @@ export function TimetableSettings({ data, showToast }) {
         <section className="glass tt-settings" style={{ padding: 14 }} aria-label="시간표와 출퇴근">
             <h2 className="title-font" style={{ marginTop: 0 }}>시간표와 출퇴근</h2>
             <p className="muted" style={{ marginTop: 0 }}>출근·퇴근 시각을 함께 적어 두면 출근 뒤부터 홈에 퇴근까지 남은 시간이 보여요. 비워 두면 타이머는 숨어요. 로그인하면 웹·태블릿·휴대폰이 같이 써요.</p>
+            {needsWorkSuggestion(local) && !workStart && !workEnd && (
+                <div className="suggest-card" role="group" aria-label="출퇴근 추천값" data-suggest="work">
+                    <p className="suggest-text">아직 출퇴근 시각이 없어요. 추천값은 <strong className="num">출근 {SUGGESTED_WORK.workStart}</strong> · <strong className="num">퇴근 {SUGGESTED_WORK.workEnd}</strong>이에요.</p>
+                    <Btn className="chip" onClick={() => {
+                        /* 누르는 순간 다른 기기에서 값이 들어왔으면 덮어쓰지 않습니다. */
+                        const patch = workSuggestionPatch(readPeriodLocal());
+                        if (!patch) { showToast('이미 정해 둔 출퇴근 시각이 있어서 그대로 둘게요.'); return; }
+                        patchPeriodLocal(patch);
+                        setWorkStart(patch.workStart);
+                        setWorkEnd(patch.workEnd);
+                        showToast(`출근 ${patch.workStart} · 퇴근 ${patch.workEnd}로 맞췄어요. 언제든 고칠 수 있어요.`);
+                    }}>추천값 적용</Btn>
+                </div>
+            )}
             <div className="tt-work">
                 <label>
                     <span className="muted">출근</span>
@@ -67,6 +82,16 @@ export function TimetableSettings({ data, showToast }) {
             </div>
 
             <h3 style={{ margin: '18px 0 6px', fontSize: 16 }}>교시별 시작과 길이</h3>
+            {local.level === '초' && bellsLookDefault(starts, DEFAULT_PERIODS) && (
+                <div className="suggest-card" role="group" aria-label="초등 기본 종 시각 예시" data-suggest="bells">
+                    <p className="suggest-text">초등 기본 종 시각 예시예요(40분 수업, 2교시 뒤 중간놀이, 4교시 뒤 점심). 학교마다 다르니 확인하고 저장해 주세요.</p>
+                    <p className="suggest-rows num muted">{bellRows(ELEMENTARY_BELLS).map((row) => `${row.n}교시 ${row.start}–${row.end}`).join(' · ')}</p>
+                    <Btn className="chip" onClick={() => {
+                        setStarts((prev) => prev.map((item, index) => (index < ELEMENTARY_BELLS.length ? ELEMENTARY_BELLS[index] : item)));
+                        showToast('예시 시각을 칸에 넣었어요. 아래 ‘교시 저장’을 눌러야 저장돼요.');
+                    }}>예시 시각 칸에 넣기</Btn>
+                </div>
+            )}
             <p className="muted" style={{ marginTop: 0 }}>잠근 교시는 홈에 🔒로 보이고 시간 안내에서 빠져요. 9·10교시도 로그인하면 다른 기기와 같이 써요.</p>
             {count > local.count && <p className="muted" style={{ marginTop: 0 }}>시간표에 {count}교시까지 과목이 있어서 {count}교시까지 보여 드려요. 과목을 지우면 정한 교시 수로 돌아가요.</p>}
             <div className="tt-rows">

@@ -5,7 +5,9 @@ import { Btn } from './bits.jsx';
 import { playSealBurst } from './sealBurst.js';
 import { quickDateLabel, textFromField } from './quickText.js';
 import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/minutes.js';
-import { readJjaemPaste } from '../lib/jjaemPaste.js';
+import { alarmTimeLabel, readJjaemPaste } from '../lib/jjaemPaste.js';
+import { phraseAskText, resolveTimePhrase } from '../lib/timePhrase.js';
+import { timeContext } from './timeContext.js';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
@@ -37,6 +39,8 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const [live, setLive] = useState('');
     const [hint, setHint] = useState('');
     const [listening, setListening] = useState(false);
+    /* 시간구('퇴근 전까지' 등)를 설정으로 못 정했거나 이미 지났을 때 띄우는 노란 확인 카드. */
+    const [ask, setAsk] = useState(null);
 
     useEffect(() => {
         const node = barRef.current;
@@ -88,20 +92,50 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
     }, []);
 
+    /* 창을 닫으면 노란 확인 카드도 접습니다. 적던 글은 그대로 남습니다. */
+    useEffect(() => { if (!open) setAsk(null); }, [open]);
+
     function readText() {
         return textFromField(inputRef.current, composing.current).trim();
     }
 
     function publishLive() {
         setLive(textFromField(inputRef.current, composing.current));
+        setAsk(null);
     }
 
-    function save(kind) {
+    /**
+     * 할 일·일정에서 시간구를 시각으로 바꿉니다. 시계 시각('3시')이 적혀 있으면 그쪽이 이깁니다.
+     * 돌려줌: null(시간구 없음) · { ask } (노란 카드로 확인) · { time, date, basis }.
+     */
+    function phraseFor(used, text) {
+        if (used !== '할 일' && used !== '일정') return null;
+        const now = new Date();
+        const pre = readJjaemPaste(text, { now, stripTime: true, future: true });
+        if (pre.time) return null;
+        const baseDate = used === '일정' ? (pre.date || quickSaveDate(used, text, dateYmd, now)) : (pre.date || dateYmd);
+        let res = null;
+        try { res = resolveTimePhrase(text, timeContext(data, now), { date: baseDate }); } catch { res = null; }
+        if (!res) return null;
+        if (res.missing || res.late) return { ask: res };
+        return { time: res.time, date: res.date, basis: res.basis };
+    }
+
+    /** override: 노란 카드에서 고른 { time, date }. 그때는 다시 묻지 않습니다. */
+    function save(kind, override) {
         const text = readText();
         if (!text) {
             showToast('한 줄만 적어도 남길 수 있어요.');
             return;
         }
+        const usedKind = kind || lastKind.current || '메모';
+        const phrase = override || phraseFor(usedKind, text);
+        if (phrase?.ask) {
+            lastKind.current = usedKind;
+            setAsk({ kind: usedKind, res: phrase.ask });
+            return;
+        }
+        setAsk(null);
         const bar = barRef.current;
         if (bar) {
             bar.classList.remove('is-open');
@@ -113,9 +147,9 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const ahead = used === '할 일' || used === '일정';
         /* saveQuick과 같은 규칙으로 날짜를 읽습니다. 「3일 동안」처럼 날짜가 아닌 말은 고른 날(dateYmd)을 그대로 씁니다. */
         const paste = readJjaemPaste(text, { now: new Date(), stripTime: ahead, future: ahead });
-        const date = used === '일정'
+        const date = phrase?.date || (used === '일정'
             ? (paste.date || quickSaveDate(used, text, dateYmd, new Date()))
-            : (paste.date || dateYmd);
+            : (paste.date || dateYmd));
         const no = studentNoFor(text, students, picked.current);
         const pickedBefore = picked.current;
         if (inputRef.current) inputRef.current.value = '';
@@ -129,6 +163,8 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const body = { kind: used, text, date };
         if (no) body.no = no;
         if (used === '할 일') body.due = date;
+        /* 시간구로 정한 시각(빈 값이면 '시각 없이')을 넘깁니다. 안 넘기면 saveQuick이 본문의 시계 시각을 읽습니다. */
+        if (phrase && typeof phrase.time === 'string') body.time = phrase.time;
         /* 시각은 saveQuick이 본문에서 읽어 알림으로 맞춥니다(시안 A). */
         /* 저장이 안 되면 적던 글을 입력칸에 돌려 둡니다. 그 사이 새로 적은 글이 있으면 건드리지 않습니다. */
         const keepText = (message) => {
@@ -146,6 +182,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                 return;
             }
             let message = result.message;
+            if (phrase?.basis && phrase.time) message = `${message} (${phrase.basis} 기준)`;
             if (used === '일정' && date !== dateYmd) {
                 const label = quickDateLabel(date);
                 if (label) message = message.replace('일정에 넣었어요.', `${label} 일정에 넣었어요.`);
@@ -342,6 +379,27 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                     onClick={onMic}
                 >{listening ? '듣는 중' : '마이크'}</Btn>
             </div>
+            {ask && (
+                <div className="quick-ask low-card" role="group" aria-label="시각 확인" data-quick-ask={ask.res.missing || 'late'}>
+                    <p className="quick-ask-text">{phraseAskText(ask.res)}</p>
+                    <div className="quick-ask-chips">
+                        {ask.res.suggestTime && (
+                            <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: ask.res.suggestTime, date: ask.res.date })}>
+                                추천값으로 {alarmTimeLabel(ask.res.suggestTime)} 알림
+                            </Btn>
+                        )}
+                        {ask.res.late && ask.res.time && (
+                            <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: ask.res.time, date: ask.res.date })}>
+                                그래도 {alarmTimeLabel(ask.res.time)}
+                            </Btn>
+                        )}
+                        <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: '', date: ask.res.date })}>시각 없이 넣기</Btn>
+                        {(ask.res.missing === 'workEnd' || ask.res.missing === 'workStart') && (
+                            <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => { setAsk(null); onClose(); go?.('#/settings/calendar'); }}>설정에서 정하기</Btn>
+                        )}
+                    </div>
+                </div>
+            )}
             <div className="quick-chips" role="group" aria-label="분류">
                 {CHIPS.map((kind) => (
                     <Btn

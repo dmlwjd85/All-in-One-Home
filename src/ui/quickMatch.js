@@ -1,5 +1,6 @@
 import { findDates } from '../lib/parse.js';
 import { isDurationDayTail } from '../lib/jjaemPaste.js';
+import { actionStem, classifyEnding, findTimePhrases } from '../lib/timePhrase.js';
 
 /** 분류 강조는 글이 잠깐 멈춘 뒤에만 바꿉니다. */
 export const SUGGEST_WAIT = 150;
@@ -61,7 +62,16 @@ export function suggestKind(text, students) {
     const raw = String(text || '').trim();
     if (!raw) return '';
     if (namedStudents(raw, students).length) return '관찰';
-    if (SCHEDULE.test(raw)) return '일정';
+    /* 어미로 먼저 거릅니다: 이미 한 일은 메모, 취소·안 해도 되는 일은 추천하지 않습니다. */
+    const ending = classifyEnding(raw);
+    if (ending === 'done') return '메모';
+    if (ending === 'cancel' || ending === 'negate') return '';
+    const stem = actionStem(raw);
+    const phrase = findTimePhrases(raw)[0];
+    /* '퇴근 전까지 회신', '내일까지 제출해 주세요'처럼 마감과 행동이 함께 있으면 할 일입니다. */
+    const deadline = (phrase && phrase.edge === 'before') || /까지|안에|내로/.test(raw);
+    if (stem && (deadline || ending === 'request')) return '할 일';
+    if (SCHEDULE.test(raw) || phrase) return '일정';
     if (TASK.test(raw)) return '할 일';
     return '';
 }

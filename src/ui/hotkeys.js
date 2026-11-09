@@ -1,17 +1,23 @@
-/** 단축키. 기본은 예전과 같이 / 키가 발라 두기를 엽니다. 나머지는 비어 있고, ? 는 목록입니다.
+/** 단축키. / 키는 쨈 버튼과 같은 빠른 입력창을 엽니다. ? 는 목록입니다.
+    새로 설치한 기기에는 t·a·s·d·m·n·f 같은 기본 이동 키를 둡니다(fallback).
+    이 버전 전부터 쓰던 기기는 예전처럼 / 와 ? 만 두고(legacy), 고르거나 비워 둔 값은 그대로 지킵니다.
     값은 이 기기에만 둡니다. Ctrl·Command·Alt 조합은 브라우저 몫이라 받지 않습니다. */
 
 const STORAGE_KEY = 'ssug-gyomu-hotkeys';
+/** 기본 키를 어느 쪽으로 볼지: 'fresh'(새 기본) 또는 'legacy'(예전 기본, / 와 ? 만). 새로 더한 키입니다. */
+export const HOTKEY_SEED_KEY = 'ssug-gyomu-hotkeys-seed';
+/** 저장 모양 판. 2부터는 빠진 칸을 새 기본으로 채웁니다. */
+const STORE_VERSION = 2;
 
 export const HOTKEY_ACTIONS = [
-    { id: 'plus', label: '발라 두기', group: '동작', fallback: '/' },
-    { id: 'help', label: '단축키 목록', group: '동작', fallback: '?' },
-    { id: 'search', label: '찾기', group: '동작', fallback: '' },
-    { id: 'today', label: '오늘', group: '이동', fallback: '' },
-    { id: 'attend', label: '출결', group: '이동', fallback: '' },
-    { id: 'schedule', label: '일정', group: '이동', fallback: '' },
-    { id: 'todo', label: '할 일·메모', group: '이동', fallback: '' },
-    { id: 'minutesList', label: '회의록', group: '이동', fallback: '' },
+    { id: 'plus', label: '쨈 빠른 입력', group: '동작', fallback: '/', legacy: '/' },
+    { id: 'help', label: '단축키 목록', group: '동작', fallback: '?', legacy: '?' },
+    { id: 'search', label: '찾기', group: '동작', fallback: 'f' },
+    { id: 'today', label: '오늘', group: '이동', fallback: 't' },
+    { id: 'attend', label: '출결', group: '이동', fallback: 'a' },
+    { id: 'schedule', label: '일정', group: '이동', fallback: 's' },
+    { id: 'todo', label: '할 일·메모', group: '이동', fallback: 'd' },
+    { id: 'minutesList', label: '회의록', group: '이동', fallback: 'm' },
     { id: 'notice', label: '알림장', group: '이동', fallback: '' },
     { id: 'students', label: '학생 기록', group: '이동', fallback: '' },
     { id: 'neis', label: '나이스 모아 보기', group: '이동', fallback: '' },
@@ -19,6 +25,7 @@ export const HOTKEY_ACTIONS = [
     { id: 'quick:상담', label: '상담 적기', group: '자주 쓰는 일', fallback: '' },
     { id: 'quick:할 일', label: '할 일 적기', group: '자주 쓰는 일', fallback: '' },
     { id: 'quick:일정', label: '일정 적기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'memo', label: '메모 적기', group: '자주 쓰는 일', fallback: 'n' },
     { id: 'message', label: '메시지 붙여넣기', group: '자주 쓰는 일', fallback: '' },
     { id: 'minutes', label: '회의록 적기', group: '자주 쓰는 일', fallback: '' },
 ];
@@ -65,10 +72,44 @@ function dedupeHotkeys(map, explicit) {
     return next;
 }
 
-export function defaultHotkeys() {
+function readSeed(storage) {
+    try {
+        const value = readStore(storage)?.getItem?.(HOTKEY_SEED_KEY);
+        return value === 'legacy' || value === 'fresh' ? value : '';
+    } catch {
+        return '';
+    }
+}
+
+function writeSeed(value, storage) {
+    try { readStore(storage)?.setItem?.(HOTKEY_SEED_KEY, value); } catch { /* 못 남겨도 지금 화면은 그대로 씁니다. */ }
+}
+
+/** 새 기본 키(새로 설치한 기기). legacy가 true면 예전 기본(/ 와 ? 만)입니다. */
+export function defaultHotkeys({ legacy = false } = {}) {
     const map = {};
-    for (const action of HOTKEY_ACTIONS) map[action.id] = action.fallback;
+    for (const action of HOTKEY_ACTIONS) map[action.id] = legacy ? (action.legacy || '') : action.fallback;
     return dedupeHotkeys(map);
+}
+
+/** 예전 기본. 이 버전 전부터 쓰던 기기에서 저장해 둔 값이 없을 때 씁니다. */
+export function legacyHotkeys() {
+    return defaultHotkeys({ legacy: true });
+}
+
+/**
+ * 이 기기를 새 설치로 볼지 정합니다. 앱이 자료를 처음 읽은 뒤 한 번 부릅니다.
+ * 저장한 단축키가 없고 표시도 없을 때만 정합니다: 이미 시작한 기기(started)는 예전 기본을 지키고, 아니면 새 기본입니다.
+ * 이미 저장한 값이나 표시가 있으면 아무것도 바꾸지 않습니다. 돌려준 값이 'legacy'·'fresh'면 새로 정한 것입니다.
+ */
+export function seedHotkeys(started, storage) {
+    if (readSeed(storage)) return '';
+    let saved = null;
+    try { saved = readStore(storage)?.getItem?.(STORAGE_KEY); } catch { saved = null; }
+    const seed = started || saved ? 'legacy' : 'fresh';
+    writeSeed(seed, storage);
+    if (seed === 'legacy' && !saved) notifyHotkeys();
+    return seed;
 }
 
 export function isStoredHotkey(value) {
@@ -81,7 +122,6 @@ export function isStoredHotkey(value) {
 }
 
 export function loadHotkeys(storage) {
-    const base = defaultHotkeys();
     let saved = null;
     try {
         const raw = readStore(storage)?.getItem?.(STORAGE_KEY);
@@ -89,7 +129,10 @@ export function loadHotkeys(storage) {
     } catch {
         saved = null;
     }
-    if (!saved || typeof saved !== 'object') return base;
+    const seed = readSeed(storage);
+    if (!saved || typeof saved !== 'object') return defaultHotkeys({ legacy: seed === 'legacy' });
+    /* 판 2 전의 저장값은 그때의 기본(/ 와 ? 만)에 덮어 봅니다. 그래야 비워 둔 칸에 새 글자 키가 끼어들지 않습니다. */
+    const base = defaultHotkeys({ legacy: saved._v !== STORE_VERSION });
     const explicit = new Set();
     for (const action of HOTKEY_ACTIONS) {
         if (Object.prototype.hasOwnProperty.call(saved, action.id) && isStoredHotkey(saved[action.id])) {
@@ -109,7 +152,7 @@ function notifyHotkeys() {
 }
 
 export function saveHotkeys(map, storage) {
-    const out = {};
+    const out = { _v: STORE_VERSION };
     for (const action of HOTKEY_ACTIONS) {
         const value = map?.[action.id];
         out[action.id] = isStoredHotkey(value) ? value : '';
@@ -123,18 +166,26 @@ export function saveHotkeys(map, storage) {
     }
 }
 
+/** 기본 단축키로 되돌립니다. 예전부터 쓰던 기기도 새 기본(t·a·s·d·m·n·f)으로 바뀝니다. */
 export function resetHotkeys(storage) {
     try { readStore(storage)?.removeItem?.(STORAGE_KEY); } catch { /* 지워지지 않아도 화면은 기본으로 돌립니다. */ }
+    writeSeed('fresh', storage);
     notifyHotkeys();
     return defaultHotkeys();
 }
 
-/** 사이드바 안내. 저장된 발라 두기 키를 따르고, 키가 없으면 기본 빗금을 말하지 않습니다. */
+/** 목록 화면에 보일 기본 키 한 줄씩. 예: [{ label: '오늘', key: 'T' }] */
+export function defaultHotkeyRows() {
+    const map = defaultHotkeys();
+    return HOTKEY_ACTIONS.filter((action) => map[action.id]).map((action) => ({ id: action.id, label: action.label, key: hotkeyLabel(map[action.id]) }));
+}
+
+/** 사이드바 안내. 저장된 쨈 빠른 입력 키를 따르고, 키가 없으면 기본 빗금을 말하지 않습니다. */
 export function kokHotkeyHint(map = loadHotkeys()) {
     const key = map?.plus || '';
-    if (!key) return '발라 두는 키는 아직 없어요. 설정에서 정해 주시면 돼요.';
-    if (key === '/') return '기본으로 / 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.';
-    return `${hotkeyLabel(key)} 키를 누르면 발라 두기가 열려요. 설정에서 바꿀 수 있어요.`;
+    if (!key) return '쨈 빠른 입력 키는 아직 없어요. 설정에서 정해 주시면 돼요.';
+    if (key === '/') return '기본으로 / 키를 누르면 쨈 빠른 입력이 열려요. 설정에서 바꿀 수 있어요.';
+    return `${hotkeyLabel(key)} 키를 누르면 쨈 빠른 입력이 열려요. 설정에서 바꿀 수 있어요.`;
 }
 
 /** 단축키 설정 아래 안내. 목록 키와 발라 두기 키 모두 지금 저장된 값을 말합니다. */
@@ -143,19 +194,19 @@ export function hotkeyFootnote(map = loadHotkeys()) {
     const plus = map?.plus || '';
     const helpText = help ? `${hotkeyLabel(help)} 키` : '';
     const plusText = plus ? `${hotkeyLabel(plus)} 키` : '';
-    if (!plus && !help) return '발라 두기와 목록 키는 아직 없어요. 위에서 정해 주시면 돼요.';
-    if (!plus) return `목록은 ${helpText}로도 볼 수 있어요. 발라 두는 키는 아직 없어요.`;
-    if (!help) return `발라 두기는 ${plusText}로 열려요. 목록 키는 아직 없어요.`;
-    if (plus === '/' && help === '?') return '목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 발라 두기를 엽니다.';
-    return `목록은 ${helpText}로도 볼 수 있어요. 발라 두기는 ${plusText}로 열려요.`;
+    if (!plus && !help) return '쨈 빠른 입력과 목록 키는 아직 없어요. 위에서 정해 주시면 돼요.';
+    if (!plus) return `목록은 ${helpText}로도 볼 수 있어요. 쨈 빠른 입력 키는 아직 없어요.`;
+    if (!help) return `쨈 빠른 입력은 ${plusText}로 열려요. 목록 키는 아직 없어요.`;
+    if (plus === '/' && help === '?') return '목록은 ? 키로도 볼 수 있어요. 기본으로는 / 키가 쨈 빠른 입력을 엽니다.';
+    return `목록은 ${helpText}로도 볼 수 있어요. 쨈 빠른 입력은 ${plusText}로 열려요.`;
 }
 
 /** 키보드가 없는 화면. 휴대폰에서 열릴 키도 저장된 값을 따릅니다. */
 export function hotkeyPhoneNote(map = loadHotkeys()) {
     const plus = map?.plus || '';
-    if (!plus) return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 발라 두는 키가 아직 없어요.';
-    if (plus === '/') return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 발라 두기를 엽니다.';
-    return `키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 ${hotkeyLabel(plus)} 키가 발라 두기를 엽니다.`;
+    if (!plus) return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 쨈 빠른 입력 키가 아직 없어요.';
+    if (plus === '/') return '키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 기본으로 / 키가 쨈 빠른 입력을 엽니다.';
+    return `키보드가 있을 때 쓸 수 있어요. 컴퓨터에서는 여기서 키를 정하고, 휴대폰에서는 ${hotkeyLabel(plus)} 키가 쨈 빠른 입력을 엽니다.`;
 }
 
 export function assignHotkey(map, id, key) {
@@ -235,6 +286,15 @@ export function shortcutBlocked(event) {
     if (target && typeof target.closest === 'function' && target.closest('[data-hotkey-capture]')) return true;
     if (typingElement(target)) return true;
     return false;
+}
+
+/** 대화상자(모달)가 떠 있는지. 쨈 빠른 입력창은 모달이 아니라 셈하지 않습니다. */
+export function modalOpen(doc = typeof document !== 'undefined' ? document : null) {
+    try {
+        return Boolean(doc?.querySelector?.('[aria-modal="true"], .sheet-back'));
+    } catch {
+        return false;
+    }
 }
 
 export function matchHotkey(event, map = loadHotkeys()) {

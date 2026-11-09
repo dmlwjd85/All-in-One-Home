@@ -49,7 +49,9 @@
     "check:ui-a": "node scripts/check-ui-a.mjs",
     "check:side-hotkey": "node scripts/check-side-hotkey.mjs",
     "check:tabbarsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-tabbar-sync.mjs\"",
-    "check:ioslogin": "node scripts/check-ios-login.mjs"
+    "check:ioslogin": "node scripts/check-ios-login.mjs",
+    "check:input-e": "node scripts/check-input-e.mjs && node scripts/mutate-input-e.mjs",
+    "check:input-e-browser": "node scripts/check-input-e-browser.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",
