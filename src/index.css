@@ -625,6 +625,21 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
 .quick-bar.is-open ~ .toast {
     bottom: calc(340px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
 }
+/* 팝업·시트가 열린 동안 뜬 알림은 위쪽 바탕 자리로(시트 아래 단추를 가리지 않게). */
+body:has(.sheet[aria-modal="true"]) .toast {
+    top: calc(8px + env(safe-area-inset-top));
+    bottom: auto;
+    z-index: 62;
+}
+/* 그 알림이 떠 있는 동안만 시트 키를 줄여 위쪽 자리를 비웁니다(찾기·메뉴처럼 긴 시트의 맨 위 칸을 가리지 않게). */
+body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
+    max-height: min(92dvh, 820px, calc(100dvh - 112px - env(safe-area-inset-top)));
+}
+@media (min-width: 900px) {
+    body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
+        max-height: min(86dvh, 820px, calc(100dvh - 224px));
+    }
+}
 /* 안내 글이 길어도 「되돌리기」 같은 단추 글자는 한 줄로 둡니다(낱자 줄바꿈 방지). */
 .toast > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .toast > button, .toast > .tap { flex: none; white-space: nowrap; word-break: keep-all; }
@@ -1080,11 +1095,20 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     box-shadow: var(--neo-raise-sm);
     padding: 0 10px;
 }
-.todo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-/* 좁은 화면에서는 할 일 제목을 말줄임표로 자르지 않고 줄을 바꿉니다. */
-@media (max-width: 899px) {
-    .todo-title { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; }
+/* 제목은 자르지 않고 줄을 바꿉니다(평점관 P2). 아주 긴 제목만 3줄에서 멈추고, 그 줄을 누르면 상세 팝업이 열립니다. */
+.todo-title {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
 }
+.todo-main { padding-top: 8px; padding-bottom: 8px; }
 /* 충돌 사본(PR #57): K 뉴모피즘 토큰으로 오목한 배지를 달아 일반 할 일과 구분하고, 제목은 자르지 않고 줄을 바꿉니다(320px). */
 .is-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; white-space: normal; overflow: visible; text-overflow: clip; min-width: 0; padding: 6px 0; }
 .home-line .home-line-text.is-conflict { white-space: normal; overflow: visible; text-overflow: clip; }
@@ -1093,10 +1117,25 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .todo-line:has(.is-conflict) .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
 .todo-main { min-width: 96px; }
 /* 좁은 화면(PR #60): 고치기 ✎가 늘어 제목이 눌리지 않게 마감 글자는 아랫줄 오른쪽으로 내립니다. */
-@media (max-width: 380px) {
+@media (max-width: 719px) {
     .todo-line { flex-wrap: wrap; }
     .todo-line .todo-main { flex: 1 1 0; }
     .todo-line .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
+}
+/* 좁은 폰 화면(320·360·390·414·430): 제목이 한 줄을 다 쓰게, 마감·고치기·지우기는 아랫줄로 내립니다(평점관 P2, 390px 제목 3줄 문제로 440px 아래까지 넓힘). */
+@media (max-width: 439px) {
+    .todo-line, .todo-line:has(.is-conflict) {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+        grid-template-areas: "check main main main" ". due edit del";
+        align-items: center;
+        gap: 6px;
+    }
+    .todo-line > .todo-check { grid-area: check; }
+    .todo-line > .todo-main, .todo-line:has(.is-conflict) > .todo-main { grid-area: main; min-width: 0; }
+    .todo-line > .todo-due, .todo-line:has(.is-conflict) > .todo-due { grid-area: due; padding-right: 0; text-align: left; white-space: normal; }
+    .todo-line > .todo-edit-btn { grid-area: edit; }
+    .todo-line > .icon-btn:last-child { grid-area: del; }
 }
 .fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
 .fold-sum .is-conflict { padding: 2px 0; }
@@ -1633,3 +1672,69 @@ button.hero-pill.home-todo-link {
 .side-menu { display: flex; flex-direction: column; gap: 8px; }
 .side-menu .tap.chip.block { flex-shrink: 0; margin: 0; width: 100%; box-sizing: border-box; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
 .side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
+
+/* ── 할 일 성취(PR C): 중요도 표시·정렬·하루 목표·완료 효과 ── */
+.pri-mark { flex: none; display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; padding: 0 1px; }
+.pri-mark i { display: block; width: 4px; border-radius: 2px; background: transparent; box-shadow: inset 0 0 0 1px var(--ink-sub); opacity: .55; }
+.pri-mark i:nth-child(1) { height: 6px; }
+.pri-mark i:nth-child(2) { height: 10px; }
+.pri-mark i:nth-child(3) { height: 14px; }
+.pri-mark i.on { background: var(--accent); box-shadow: none; opacity: 1; }
+/* 색을 못 봐도 구분되게: 채운 막대 수(모양)로 1·2·3을, 빈 막대는 테두리만 그립니다. */
+.pri-mark[data-pri="1"] i.on { background: var(--ink-sub); }
+.pri-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pri-picks .choice-tile { min-height: 44px; padding: 4px 6px; gap: 6px; }
+.todo-add-row { display: grid; gap: 8px; }
+.todo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.todo-sort { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; flex: 1 1 220px; max-width: 320px; }
+.todo-sort .choice-tile { min-height: 44px; padding: 4px 8px; }
+.goal-meter { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-inset); font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; }
+.goal-meter .goal-pips { display: inline-flex; gap: 3px; }
+.goal-meter .goal-pips i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.goal-meter .goal-pips i.on { background: var(--accent); }
+.goal-meter.is-hit { color: var(--accent); }
+.goal-seal { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-size: 11px; font-weight: 900; line-height: 1; transform: rotate(-12deg); }
+.cal-goal { display: block; margin: 2px auto 0; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); font-size: 9px; font-weight: 900; line-height: 11px; text-align: center; transform: rotate(-12deg); }
+.goal-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.goal-grid .choice-tile { min-height: 48px; padding: 4px; }
+.fx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 560px) { .fx-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.fx-grid .choice-tile { flex-direction: column; gap: 2px; min-height: 64px; }
+.fx-grid .choice-tile span + span { font-weight: 500; font-size: 12px; }
+
+/* 화면 읽기에만 들리는 완료 알림(aria-live). */
+.sr-only { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+/* 체크 칸 딸깍: 키캡처럼 한 번 눌렸다 올라옵니다(transform만). */
+.todo-check.done-click, .done-click { animation: done-click 240ms cubic-bezier(.2,.8,.2,1); }
+@keyframes done-click {
+    0% { transform: translateY(0) scale(1); }
+    35% { transform: translateY(2px) scale(.9); }
+    100% { transform: translateY(0) scale(1); }
+}
+.todo-check[aria-pressed="true"] { color: var(--accent); box-shadow: var(--neo-inset); }
+
+.done-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 90; overflow: hidden; }
+.done-drop { position: absolute; left: 0; top: 0; display: block; contain: strict; border-radius: 50% 50% 50% 12%; background: #C2577A; will-change: transform, opacity; }
+.done-drop.seed { background: #E8A0B5; }
+.done-drop.deep { background: #9E3F5E; }
+.done-drop.round { border-radius: 50%; background: #C2577A; }
+.done-drop.glint { background: #FFFFFF; opacity: .8; box-shadow: 0 0 0 1px rgba(194, 87, 122, .35); }
+.done-ring { position: absolute; left: 0; top: 0; will-change: transform, opacity; display: block; width: 44px; height: 44px; border-radius: 50%; border: 2px solid #C2577A; opacity: 0; }
+.done-stamp {
+    position: absolute; left: 50%; top: 42%; width: 128px; height: 128px; border-radius: 50%;
+    border: 4px solid #C2577A; color: #C2577A; background: color-mix(in srgb, var(--bg) 82%, transparent);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    text-align: center; opacity: 0; transform: translate(-50%, -50%);
+    box-shadow: inset 0 0 0 2px rgba(194, 87, 122, .22);
+}
+.done-stamp-ring { position: absolute; inset: 8px; border-radius: 50%; border: 1.5px dashed rgba(194, 87, 122, .6); }
+.done-stamp b { font-size: 17px; font-weight: 900; letter-spacing: -.04em; line-height: 1.15; max-width: 96px; word-break: keep-all; }
+.done-stamp small { font-size: 10px; font-weight: 700; opacity: .8; }
+.dark .done-stamp { color: #E08B9A; border-color: #E08B9A; }
+@media (prefers-reduced-motion: reduce) {
+    .done-drop, .done-ring { display: none !important; }
+    .todo-check.done-click, .done-click { animation: none; }
+}
+@media (min-width: 720px) {
+    .todo-add-row { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: center; }
+}

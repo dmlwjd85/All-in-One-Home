@@ -479,6 +479,11 @@ function masterBus(audio) {
     return busIn;
 }
 
+/** 다른 짧은 소리(할 일 완료 톡)도 같은 리미터 길로 내보냅니다. */
+export function keyAudioBus(audio) {
+    return masterBus(audio);
+}
+
 function releaseVoice(entry, audio, fadeSec) {
     const now = audio?.currentTime || 0;
     const param = entry.gain?.gain;

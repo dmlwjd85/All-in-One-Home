@@ -26,7 +26,7 @@ export function detailRows(kind, row = {}) {
     return out;
 }
 
-/** 줄임표로 잘렸는지. 잘린 것만 팝업을 띄웁니다. */
+/** 잘렸는지(한 줄 줄임표로 옆이 잘렸거나, 여러 줄 제한으로 아래가 잘림). 잘린 것만 팝업을 띄웁니다. */
 export function isClipped(el) {
-    return Boolean(el && el.scrollWidth > el.clientWidth + 1);
+    return Boolean(el && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1));
 }

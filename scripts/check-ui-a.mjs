@@ -33,7 +33,7 @@ try {
         await page.waitForSelector('.settings-menu .settings-key');
         const keys = await page.$$eval('.settings-menu .settings-key', (els) => els.map((el) => { const r = el.getBoundingClientRect(); return { sec: el.dataset.sec, w: r.width, h: r.height, right: r.right }; }));
         const vw = await page.evaluate(() => document.documentElement.clientWidth);
-        check(keys.length === 7, `[${name}] 설정 항목 버튼이 7개가 아닙니다: ${keys.length}`);
+        check(keys.length === 8, `[${name}] 설정 항목 버튼이 8개가 아닙니다: ${keys.length}`);
         check(keys.every((k) => k.h >= 44 && k.right <= vw + 0.5), `[${name}] 설정 버튼이 44px보다 작거나 화면 밖으로 나갑니다: ${JSON.stringify(keys)}`);
         if (scale === 1) check(keys.every((k) => k.w < vw * 0.8), `[${name}] 설정 버튼이 화면 끝까지 늘어납니다: ${JSON.stringify(keys)}`);
         if (shots) await page.screenshot({ path: `${shots}/settings-${name}.png` });

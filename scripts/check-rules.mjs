@@ -5,6 +5,7 @@ import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc } from 'fi
 import { eventBodyWithoutEndTime, fromCloudRow, fromCloudSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
+import { toGoalDoc } from '../src/lib/todoAchieve.js';
 
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
 
@@ -221,9 +222,73 @@ async function tabbarSuite(env) {
     return out;
 }
 
+/** 할 일 하루 목표·달성 기록(settings/goal, PR C) 검사 묶음. 앱이 만드는 모양 그대로(toGoalDoc) 받고, 모양이 틀리면 거절. */
+async function goalSuite(env) {
+    const out = [];
+    const deny = async (label, op) => { try { await assertFails(op()); } catch (error) { out.push(`목표: ${label} 요청이 거절되지 않았습니다. ${error?.message || error}`); } };
+    const allow = async (label, op) => { try { await assertSucceeds(op()); } catch (error) { out.push(`목표: ${label} 요청이 거절되었습니다. ${error?.message || error}`); } };
+    const me = env.authenticatedContext('teacher-goal').firestore();
+    const other = env.authenticatedContext('teacher-goal-b').firestore();
+    const ref = (fs, path = 'users/teacher-goal/settings/goal') => doc(fs, path);
+    const shaped = toGoalDoc({ n: 3, nAt: Date.now() - 1000, days: { '2026-11-09': { c: 3, g: 3, at: Date.now() - 500 }, '2026-11-08': { c: 1, g: 3, at: Date.now() - 900 } } });
+    const body = (patch = {}) => ({ ...shaped, updatedAt: serverTimestamp(), ...patch });
+    const many = Array.from({ length: 400 }, (_, i) => { const d = new Date(Date.UTC(2026, 0, 1) + i * 86400000).toISOString().slice(0, 10); return `${d}~10~10~${1762650000000 + i}`; }).join('|');
+    await allow('앱 모양 쓰기', () => setDoc(ref(me), body()));
+    await allow('본인 읽기', () => getDoc(ref(me)));
+    await allow('목표 끔(0)·빈 기록', () => setDoc(ref(me), body({ n: 0, days: '' })));
+    await allow('400일 기록', () => setDoc(ref(me), body({ days: many })));
+    await deny('401일 기록', () => setDoc(ref(me), body({ days: `${many}|2027-02-05~1~1~1` })));
+    await deny('남의 uid 쓰기', () => setDoc(ref(other), body()));
+    await deny('남의 uid 읽기', () => getDoc(ref(other)));
+    await deny('목표 21개', () => setDoc(ref(me), body({ n: 21 })));
+    await deny('목표 음수', () => setDoc(ref(me), body({ n: -1 })));
+    await deny('목표 글자', () => setDoc(ref(me), body({ n: '3' })));
+    await deny('미래 목표 시각', () => setDoc(ref(me), body({ nAt: Date.now() + 3600 * 1000 })));
+    await deny('모르는 칸', () => setDoc(ref(me), body({ extra: 1 })));
+    await deny('updatedAt 없음', () => setDoc(ref(me), { ...shaped }));
+    await deny('서버 시각 아닌 updatedAt', () => setDoc(ref(me), body({ updatedAt: 1 })));
+    await deny('없는 날짜', () => setDoc(ref(me), body({ days: '2026-13-01~3~3~1' })));
+    await deny('목표 0인 날짜 기록', () => setDoc(ref(me), body({ days: '2026-11-09~3~0~1' })));
+    await deny('기록 끝 쉼표 숨기기', () => setDoc(ref(me), body({ days: '2026-11-09~3~3~1|' })));
+    await deny('기록에 글 숨기기', () => setDoc(ref(me), body({ days: '2026-11-09~3~3~1 학폭' })));
+    await deny('기록 목록', () => setDoc(ref(me), body({ days: ['2026-11-09~3~3~1'] })));
+    await deny('기록 너무 김', () => setDoc(ref(me), body({ days: 'x'.repeat(12401) })));
+    await allow('본인 삭제', () => deleteDoc(ref(me)));
+    return out;
+}
+
+/** 할 일 중요도·끝낸 날(PR C): 앱이 올리는 모양은 받고, 틀린 값은 거절. */
+async function todoAchieveSuite(env) {
+    const out = [];
+    const deny = async (label, op) => { try { await assertFails(op()); } catch (error) { out.push(`할 일 중요도: ${label} 요청이 거절되지 않았습니다. ${error?.message || error}`); } };
+    const allow = async (label, op) => { try { await assertSucceeds(op()); } catch (error) { out.push(`할 일 중요도: ${label} 요청이 거절되었습니다. ${error?.message || error}`); } };
+    const me = env.authenticatedContext('teacher-pri').firestore();
+    const shaped = toCloudRow('todos', { id: 'pri1', title: '가정통신문 출력', done: true, doneOn: '2026-11-09', doneHm: '09:12', pri: 3, source: 'app' });
+    if (!shaped || shaped.body.pri !== 3 || shaped.body.doneOn !== '2026-11-09' || shaped.body.doneHm !== '09:12') out.push('할 일 중요도: 앱 모양에 pri·doneOn·doneHm이 없습니다.');
+    const body = (patch = {}) => ({ ...shaped.body, ...patch });
+    const ref = (id = 'pri1') => doc(me, `users/teacher-pri/todos/${id}`);
+    await allow('앱 모양 쓰기', () => setDoc(ref(), body()));
+    await allow('낮음', () => setDoc(ref('pri2'), body({ pri: 1 })));
+    await allow('중요도 없는 옛 모양', () => setDoc(ref('pri3'), { title: '옛 할 일', done: false, source: 'app' }));
+    await deny('중요도 4', () => setDoc(ref('pri4'), body({ pri: 4 })));
+    await deny('중요도 0', () => setDoc(ref('pri5'), body({ pri: 0 })));
+    await deny('중요도 글자', () => setDoc(ref('pri6'), body({ pri: '높음' })));
+    await deny('끝낸 날 글자', () => setDoc(ref('pri7'), body({ doneOn: '오늘' })));
+    await deny('없는 끝낸 날', () => setDoc(ref('pri8'), body({ doneOn: '2026-02-30' })));
+    await deny('끝낸 시각 25시', () => setDoc(ref('pri9'), body({ doneHm: '25:00' })));
+    const undone = toCloudRow('todos', { id: 'pri1', title: '가정통신문 출력', done: false, doneOn: '', doneHm: '', pri: 3, source: 'app' });
+    if (!undone || 'doneOn' in undone.body || !undone.clear.includes('doneOn') || !undone.clear.includes('doneHm')) out.push('할 일 중요도: 체크를 풀면 끝낸 날 칸을 지우라고 알리지 않습니다.');
+    return out;
+}
+
 /* 규칙 돌연변이: 설정 검사를 하나씩 풀어 본 판에서 위 묶음이 실패해야 합니다(검사가 빈말이 아닌지). */
 const RULE_MUTANTS = [
     ['읽기 열기', "allow read, delete: if isOwner(uid) && key in ['device', 'leave', 'tabbar'];", 'allow read, delete: if true;'],
+    ['목표 읽기 열기', "match /settings/goal {\n        allow read, delete: if isOwner(uid);", "match /settings/goal {\n        allow read, delete: if true;"],
+    ['목표 개수 상한 빼기', "&& g.n is int && g.n >= 0 && g.n <= 20", "&& g.n is int"],
+    ['목표 미래 시각 빼기', "&& g.nAt <= request.time.toMillis() + 300000", ''],
+    ['목표 키 제한 빼기', "&& g.keys().hasOnly(['n', 'nAt', 'days', 'updatedAt'])", ''],
+    ['목표 날짜 기록 모양 빼기', "&& g.days.matches('^(20[2-9]", "&& g.days.matches('(?s).*') || g.days.matches('^(20[2-9]"],
     ['탭바 겹침 검사 빼기', "&& t.order.toSet().size() == 6", ''],
     ['탭바 탭 이름 빼기', "&& t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings'])", ''],
     ['탭바 미래 시각 빼기', "&& t.at <= request.time.toMillis() + 300000", ''],
@@ -253,7 +318,7 @@ async function rulesMutantCheck() {
         if (!rules.includes(from)) { out.push(`규칙 돌연변이 "${label}"의 원문을 규칙에서 찾지 못했습니다.`); continue; }
         const env = await initializeTestEnvironment({ projectId: `demo-ssug-mut-${n}`, firestore: { rules: rules.replace(from, () => to), host, port: Number(portText) } });
         try {
-            const found = [...await settingsSuite(env), ...await tabbarSuite(env)];
+            const found = [...await settingsSuite(env), ...await tabbarSuite(env), ...await goalSuite(env)];
             if (!found.length) out.push(`규칙 돌연변이 "${label}"을(를) 검사가 잡지 못했습니다.`);
         } finally {
             await env.cleanup();
@@ -347,6 +412,8 @@ try {
     /* 기기끼리 같이 쓰는 설정: 휴대폰에서 올린 9교시·학사일정이 PC에서 그대로 읽히는지, 안쪽 값도 막는지. */
     failures.push(...await settingsSuite(testEnv));
     failures.push(...await tabbarSuite(testEnv));
+    failures.push(...await goalSuite(testEnv));
+    failures.push(...await todoAchieveSuite(testEnv));
 
     const uid = 'teacher-span';
     const deviceA = testEnv.authenticatedContext(uid).firestore();

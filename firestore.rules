@@ -148,6 +148,16 @@ service cloud.firestore {
         && t.at is int && t.at > 0 && t.at <= request.time.toMillis() + 300000
         && t.updatedAt == request.time;
     }
+    // 할 일 하루 목표·달성 기록(settings/goal, PR C): { n: 목표 개수(0 끔~20), nAt: 목표 고친 시각(ms), days: 날짜 기록 글자, updatedAt: 서버 시각 }.
+    // days 는 'YYYY-MM-DD~끝낸 개수~목표~고친 시각(ms)' 을 '|'로 이은 글자 하나(400개까지)입니다. 반복문 없이 정규식 한 번으로 봅니다.
+    function goalOk(g) {
+      return g.keys().hasAll(['n', 'nAt', 'days', 'updatedAt']) && g.keys().hasOnly(['n', 'nAt', 'days', 'updatedAt'])
+        && g.n is int && g.n >= 0 && g.n <= 20
+        && g.nAt is int && g.nAt >= 0 && g.nAt <= request.time.toMillis() + 300000
+        && g.days is string && g.days.size() <= 12400
+        && g.days.matches('^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])~[0-9]{1,2}~([1-9]|1[0-9]|20)~[0-9]{1,13}([|]20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])~[0-9]{1,2}~([1-9]|1[0-9]|20)~[0-9]{1,13}){0,399})?$')
+        && g.updatedAt == request.time;
+    }
     // 태그: 10개까지, 각 1~12자, 줄바꿈 금지
     function tagsOk(t) {
       return t is list && t.size() <= 10
@@ -244,11 +254,15 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(tid)
           && d().keys().hasAll(['title', 'done'])
-          && d().keys().hasOnly(['title', 'done', 'due', 'time', 'got', 'of', 'order', 'source', 'createdAt', 'updatedAt', 'doneAt', 'hlc', 'u'])
+          && d().keys().hasOnly(['title', 'done', 'due', 'time', 'got', 'of', 'order', 'source', 'createdAt', 'updatedAt', 'doneAt', 'hlc', 'u', 'pri', 'doneOn', 'doneHm'])
           && str(d().title, 1, 100) && safeText(d().title) && d().done is bool
           && (!('due' in d()) || ymd(d().due))
           // 알림 시각(PR #60): 'HH:MM'만 받습니다.
           && (!('time' in d()) || hm(d().time))
+          // 중요도(PR C): 1 낮음 · 2 보통 · 3 높음. 끝낸 날·시각: 서울 날짜 'YYYY-MM-DD'와 'HH:MM'.
+          && optInt('pri', 1, 3)
+          && (!('doneOn' in d()) || ymd(d().doneOn))
+          && (!('doneHm' in d()) || hm(d().doneHm))
           && optInt('got', 0, 50) && optInt('of', 0, 50) && optInt('order', 0, 100000)
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
           && optTs('createdAt') && optTs('updatedAt') && optTs('doneAt') && optTs('hlc')
@@ -310,6 +324,11 @@ service cloud.firestore {
         allow create, update: if isOwner(uid)
           && (((key == 'device' && settingsOk(request.resource.data)) || (key == 'leave' && leaveOk(request.resource.data)))
             || (key == 'tabbar' && tabbarOk(request.resource.data)));
+      }
+      // 할 일 하루 목표·달성 기록(PR C). 위 설정 문서의 계산 한도(1000)를 아끼려고 따로 둡니다(device 쓰기에는 이 블록이 계산되지 않음).
+      match /settings/goal {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && goalOk(request.resource.data);
       }
       match /timetable/{key} {
         allow read, delete: if isOwner(uid);
