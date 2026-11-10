@@ -19,6 +19,7 @@ import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
+import { mergeLinks, readLinks } from './eduLinks.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
@@ -1897,6 +1898,8 @@ export async function forgetLegacyImports() {
 
 export function exportFile(includeLocal) {
     const data = buildExport(state, { includeLocal, at: new Date().toISOString() });
+    /* G1: 교육 사이트 바로가기(이름·주소만)도 함께 넣습니다. */
+    try { data.bookmarks = readLinks(); } catch { /* 없어도 백업은 됩니다. */ }
     downloadJson(`쨈 교무수첩-${seoulYmd()}.json`, data);
     return data;
 }
@@ -1954,6 +1957,8 @@ export async function importText(text, mode, hooks = {}) {
         return { ok: true, kind: 'legacy', summary: plan.summary };
     }
     const data = checked.data;
+    /* G1: 백업에 든 바로가기는 이 브라우저 목록에 모자란 것만 더합니다(바꾸기에서도 지우지 않음). */
+    try { if (Array.isArray(data.bookmarks)) mergeLinks(readLinks(), data.bookmarks); } catch { /* 바로가기는 건너뜁니다. */ }
     const sensitive = splitSensitive(data.records || []);
     if (mode !== 'replace') {
         const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode));

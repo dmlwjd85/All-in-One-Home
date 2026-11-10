@@ -240,7 +240,7 @@ check(title('t6') === keptRejected[0] && title('t7') === keptRejected[1], `클�
     const store = (path) => box.shouldStoreRuntime(base + path, list, scope);
     check(sw.includes('shouldStoreRuntime(request.url, PRECACHE'), '서비스 워커가 저장 전에 shouldStoreRuntime을 보지 않습니다');
     check(!store('assets/index-OLD.js') && !store('assets/index-OLD.css'), '옛 판 assets를 새 캐시에 넣습니다');
-    check(!store('precache-manifest.js?v=ssug-gyomu-shell-v74'), '목록 파일을 런타임 캐시에 넣습니다');
+    check(!store('precache-manifest.js?v=ssug-gyomu-shell-v75'), '목록 파일을 런타임 캐시에 넣습니다');
     check(store('assets/index-NEW.js') && store('index.html') && store('sounds/ding.mp3') && store('icon-jjaem.svg'), '목록의 파일이나 소리·아이콘을 저장하지 않습니다');
 }
 
