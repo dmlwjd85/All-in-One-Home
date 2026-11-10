@@ -52,7 +52,8 @@
     "check:ioslogin": "node scripts/check-ios-login.mjs",
     "check:todoachieve": "node scripts/check-todo-achieve.mjs",
     "check:todoshots": "node scripts/shots-todo-achieve.mjs",
-    "check:goalsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-goal-sync.mjs\""
+    "check:goalsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-goal-sync.mjs\"",
+    "check:g1": "node scripts/check-g1.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

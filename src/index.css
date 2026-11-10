@@ -1611,7 +1611,7 @@ button.hero-pill.home-todo-link {
 
 /* 왼쪽 메뉴: 글자 길이에 맞춘 버튼과 일정한 사이 간격을 유지합니다. */
 .side-menu { display: flex; flex-direction: column; gap: 8px; }
-.side-menu .tap.chip.block { flex-shrink: 0; margin: 0; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
+.side-menu .tap.chip.block { flex-shrink: 0; margin: 0; width: 100%; box-sizing: border-box; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
 .side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }
 
 /* ── 할 일 성취(PR C): 중요도 표시·정렬·하루 목표·완료 효과 ── */
@@ -1679,3 +1679,88 @@ button.hero-pill.home-todo-link {
 @media (min-width: 720px) {
     .todo-add-row { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); align-items: center; }
 }
+
+/* G1 시안 B: 오늘 화면 맨 위 자료 저장·보호 안내(접는 카드). 글자는 자르지 않고 줄을 바꿉니다. */
+.store-notice { padding: 14px; margin-bottom: 12px; min-width: 0; }
+/* 휴대폰: 접힌 머리 줄은 맨 위가 아니라 오늘 화면 맨 아래에 둡니다(첫 화면 시간표 자리 지키기). 넓은 화면은 맨 위 그대로. */
+.store-notice.at-end { margin: 12px 0 0; }
+@media (max-width: 899px) { .store-notice.at-top.is-folded { display: none; } }
+@media (min-width: 900px) { .store-notice.at-end { display: none; } }
+.store-notice-h { margin: 0; font: inherit; }
+.store-notice-head {
+    display: flex; width: 100%; align-items: center; gap: 10px; min-height: 44px;
+    padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.store-notice-head:focus-visible, .home-links-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.store-badge {
+    flex: none; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px;
+    border-radius: 10px; background: var(--bg); color: var(--accent); font-size: 14px; font-weight: 800; box-shadow: var(--neo-inset);
+}
+.store-notice-title { flex: 1; min-width: 0; font-size: 16px; font-weight: 800; }
+.store-chev {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 24px;
+    color: var(--accent); font-size: 16px;
+}
+.store-notice-body { margin-top: 10px; }
+.store-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+@media (min-width: 900px) { .store-items { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1600px) { .store-items { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.store-item, .guide-step { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 16px; background: var(--bg); box-shadow: var(--neo-inset); min-width: 0; }
+.store-num {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+    border-radius: 10px; background: var(--bg); color: var(--accent); font-weight: 800; border: 1.5px solid var(--line);
+}
+.store-num.is-done { color: var(--on-primary); background: var(--primary); border-color: var(--primary); }
+.store-text { min-width: 0; flex: 1; }
+.store-text h3 { margin: 0 0 2px; font-size: 15px; line-height: 22px; font-weight: 800; }
+.store-text p { margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-sub); }
+.store-code { display: inline-block; font-size: 12px; line-height: 18px; color: var(--ink-hint); overflow-wrap: anywhere; word-break: break-all; }
+.store-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.store-actions .chip { flex: 0 1 auto; }
+.store-guide-btn { color: var(--accent); }
+.store-foot { margin: 8px 0 0; font-size: 13px; line-height: 19px; }
+.guide-steps { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 10px; }
+.guide-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.guide-step[data-done="1"] .store-text h3 { color: var(--accent); }
+
+/* G1 시안 C: 교육 사이트 묶음. 넓은 화면은 왼쪽 메뉴 아래(메뉴와 같은 너비), 좁은 화면은 오늘 화면의 접는 블록. */
+.side-links { display: none; }
+@media (min-width: 900px) {
+    .side-links { display: block; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .home-links { display: none; }
+}
+.side-links-title { margin: 0 4px 8px; font-size: 14px; line-height: 20px; font-weight: 800; color: var(--ink-sub); }
+.side-links-list { display: flex; flex-direction: column; gap: 8px; }
+.side-links .tap.chip.block.side-link {
+    display: flex; width: 100%; max-width: none; margin: 0; min-height: 44px; height: auto; padding: 10px 12px; box-sizing: border-box;
+    align-items: center; justify-content: flex-start; gap: 8px; text-decoration: none; color: var(--ink); border-radius: 14px;
+}
+.side-links .side-link-edit { color: var(--accent); }
+.edu-name { min-width: 0; overflow-wrap: anywhere; }
+.edu-ext { flex: none; margin-left: auto; font-size: 12px; font-weight: 500; }
+.side-links-note { margin: 8px 4px 0; font-size: 12px; line-height: 18px; }
+.home-links { padding: 14px; margin-top: 12px; min-width: 0; }
+.home-links-h { margin: 0; font: inherit; }
+.home-links-head {
+    display: flex; width: 100%; align-items: center; gap: 8px; min-height: 44px;
+    padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.home-links-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.home-links-title { font-size: 16px; font-weight: 700; }
+.home-links-sum { font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
+.edu-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.edu-chip { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--ink); max-width: 100%; }
+.edu-chip .edu-ext { margin-left: 0; }
+.edu-chip-edit { color: var(--accent); }
+.edu-note { margin: 8px 0 0; font-size: 13px; line-height: 19px; }
+.links-rows { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
+.links-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; box-shadow: var(--neo-inset); min-width: 0; }
+.links-row-text { display: grid; flex: 1 1 120px; min-width: 0; }
+.links-host { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.links-row-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.links-row-btns .chip { padding: 0 12px; }
+.links-form { display: grid; gap: 6px; margin-top: 4px; }
+.links-label { font-size: 14px; font-weight: 800; }
+.links-form-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.links-form-btns .primary-btn { padding: 0 18px; min-height: 44px; color: var(--on-primary); border-radius: 14px; font-weight: 800; }
+.links-msg { margin: 8px 0 0; font-size: 14px; color: var(--accent); font-weight: 700; }

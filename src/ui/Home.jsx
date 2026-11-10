@@ -21,6 +21,8 @@ import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
 import { pickHomeTip } from '../lib/homeTips.js';
+import { StorageNotice } from './StorageNotice.jsx';
+import { HomeLinks } from './EduLinks.jsx';
 
 export function Home() {
     const { data, go, showToast } = useUi();
@@ -122,6 +124,9 @@ export function Home() {
     );
     const lead = Boolean(timer || setup);
     return (
+        <>
+        {/* G1 시안 B: 자료 저장·보호 안내는 오늘 화면 맨 위 접는 카드입니다(칸 배치 grid 밖). */}
+        <StorageNotice />
         <div className={timer || setup ? 'home-grid has-leave' : 'home-grid'}>
             <section className="hero home-hero">
                 {todayRest.off ? (
@@ -259,5 +264,9 @@ export function Home() {
             })()}
             {editTodo && <TodoEditSheet row={todos.find((item) => item.id === editTodo.id) || editTodo} onClose={() => setEditTodo(null)} />}
         </div>
+        {/* G1 시안 C: 좁은 화면에서만 보이는 교육 사이트 접는 블록. 넓은 화면은 왼쪽 메뉴 아래 묶음입니다. */}
+        <StorageNotice place="end" />
+        <HomeLinks />
+        </>
     );
 }

@@ -20,6 +20,8 @@ let foldPreset = true;
 async function pinBrowserClock(page) {
     await page.evaluateOnNewDocument((open) => {
         if (open && !localStorage.getItem('ssug-gyomu-home-fold')) localStorage.setItem('ssug-gyomu-home-fold', JSON.stringify({ time: true, todo: true, event: true, recent: true }));
+        /* G1 자료 저장·보호 안내: 첫날 펼친 모습은 check:g1 이 봅니다. 여기서는 평소(접힌) 모습으로 홈 배치를 봅니다. */
+        if (!localStorage.getItem('ssug-gyomu-onboard')) localStorage.setItem('ssug-gyomu-onboard', JSON.stringify({ notice: 'folded', auto: false, day: '', steps: {} }));
     }, foldPreset);
     await page.evaluateOnNewDocument((iso) => {
         const fixed = new Date(iso).valueOf();
