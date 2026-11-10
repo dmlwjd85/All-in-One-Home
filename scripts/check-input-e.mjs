@@ -91,6 +91,24 @@ for (const [text, time, endTime, body] of [
     eq([r.time, r.endTime, r.body], [time, endTime, body], `시각 범위 ${text}`);
     check(!/[~～\-–—]/.test(r.body), `시각 범위 이음표가 제목에 남음: ${text} → ${r.body}`);
 }
+/* 평점관 r79-3 ①: 성경 책 이름 뒤 「장:절」은 시각이 아니고 제목에 그대로 남습니다. 「…기」로 끝나는 흔한 낱말·사람 이름은 시각을 지킵니다. */
+for (const text of ['요한복음 3:16 읽기', '창세기 1:1 암송', '출애굽기 20:3 묵상', '시편 23:1 묵상', '잠언 3:5 쓰기', '전도서 3:1 낭독', '이사야 40:31 필사', '로마서 8:28 나눔', '고린도전서 13:4 필사', '고린도후서 5:17 읽기', '요한계시록 21:4 읽기', '마태복음 5:9 암송']) {
+    const r = jp.readJjaemPaste(text, { now: CLOCK_NOW, stripTime: true, stripDate: true, future: true });
+    eq([r.time, r.body], ['', text], `성경 구절은 시각 아님 ${text}`);
+}
+for (const [text, time, body] of [['일기 15:00 검사', '15:00', '일기 검사'], ['청소기 16:00 점검', '16:00', '청소기 점검'], ['독서 일기 14:30 제출', '14:30', '독서 일기 제출'], ['다니엘 15:00 상담', '15:00', '다니엘 상담'], ['요나 14:00 상담', '14:00', '요나 상담'], ['전기 16:00 점검', '16:00', '전기 점검'], ['동시편 15:00 발표', '15:00', '동시편 발표']]) {
+    const r = jp.readJjaemPaste(text, { now: CLOCK_NOW, stripTime: true, stripDate: true, future: true });
+    eq([r.time, r.body], [time, body], `성경 책 아님 ${text}`);
+}
+/* 평점관 r79-3 ②: 밤을 넘기거나 거꾸로 적은 범위는 묶지 않고 제목에 그대로 둡니다(알림은 시작 시각). 「1:30~3:00」은 13:30~15:00 그대로. */
+for (const [text, time] of [['23:00~01:00 야간 당직', '23:00'], ['22:30-06:00 숙직', '22:30'], ['오후 11시~1시 당직', '23:00'], ['15:00~14:00 회의', '15:00'], ['22:00~22:00 점검', '22:00']]) {
+    const r = jp.readJjaemPaste(text, { now: CLOCK_NOW, stripTime: true, stripDate: true, future: true });
+    eq([r.time, r.endTime, r.body], [time, '', text], `밤 넘김·거꾸로 범위는 제목에 남음 ${text}`);
+}
+{
+    const r = jp.readJjaemPaste('1:30~3:00 상담', { now: CLOCK_NOW, stripTime: true, stripDate: true, future: true });
+    eq([r.time, r.endTime, r.body], ['13:30', '15:00', '상담'], '1:30~3:00은 13:30~15:00');
+}
 /* P2: 「오전 12시」는 낮·밤이 갈려 ask=am12로 노란 카드에서 묻습니다. 다른 시각은 묻지 않습니다. */
 for (const text of ['오전 12시 마감', '오전 12:00 서버 점검', '오전 12시 반 방송']) eq(jp.readJjaemPaste(text, { now: CLOCK_NOW }).ask, 'am12', `오전 12시 확인 ${text}`);
 for (const text of ['오후 12시 급식', '정오 방송', '밤 12시 점검', '12:00 급식', '오전 11시 회의']) eq(jp.readJjaemPaste(text, { now: CLOCK_NOW }).ask, '', `오전 12시 아님 ${text}`);
