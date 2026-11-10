@@ -8,8 +8,8 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_LINKS, EDU_LINKS_KEY, MAX_LINKS, addLink, cleanUrl, normalizeLinks, readLinks, removeLink, restoreDefaults } from '../src/lib/eduLinks.js';
-import { GUIDE_STEPS, ONBOARD_KEY, markNoticeSeen, noticeFor, normalizeOnboard, readOnboard, setNotice } from '../src/lib/onboard.js';
+import { DEFAULT_LINKS, EDU_LINKS_KEY, MAX_LINKS, addLink, cleanUrl, mergeLinks, normalizeLinks, readLinks, removeLink, restoreDefaults } from '../src/lib/eduLinks.js';
+import { GUIDE_STEPS, ONBOARD_KEY, foldForReturning, isReturning, markNoticeSeen, noticeFor, normalizeOnboard, readOnboard, setNotice } from '../src/lib/onboard.js';
 import { SENSITIVE_WORDS } from '../src/lib/sensitive.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,6 +58,25 @@ check(normalizeOnboard({ notice: 'hidden', steps: { attend: true, x: true } }).s
     check(noticeFor(readOnboard(store), '2026-11-12') === 'open', '직접 펼친 안내를 저절로 접습니다.');
     setNotice('hidden', store);
     check(noticeFor(readOnboard(store), '2026-11-13') === 'hidden', '숨긴 안내가 다시 보입니다.');
+}
+{
+    /* 이미 쓰던 선생님은 업데이트 첫날부터 접힘, 예시 학급·오늘 처음 만든 학급은 펼침 */
+    const store = memStore();
+    const old = { profile: {}, todos: [{ date: '2026-11-03' }], local: {} };
+    check(isReturning(old, '2026-11-10') && !isReturning({ profile: { demo: true }, todos: [{ date: '2026-11-03' }] }, '2026-11-10') && !isReturning({ profile: {}, todos: [{ date: '2026-11-10' }] }, '2026-11-10'), '이미 쓰던 선생님 판단이 틀립니다.');
+    check(noticeFor(readOnboard(store), '2026-11-10', true) === 'folded', '기존 사용자에게 첫날 안내가 펼쳐집니다.');
+    foldForReturning('2026-11-10', store);
+    check(readOnboard(store).notice === 'folded' && readOnboard(store).day === '2026-11-10', '기존 사용자 접힘이 저장되지 않습니다.');
+    const ls = memStore();
+    const merged = mergeLinks(readLinks(ls), [{ id: 'neis', title: 'x', url: 'https://www.neis.go.kr/' }, { id: 'u1', title: '우리 학교', url: 'https://school.example.kr/' }, { id: 'u2', title: '나쁨', url: 'javascript:1' }], ls);
+    check(merged.length === 7 && merged[6].id === 'u1', `백업 바로가기 합치기가 틀립니다: ${merged.length}`);
+}
+check(DEFAULT_LINKS[0].title === '나이스 대국민서비스' && DEFAULT_LINKS[0].url === 'https://www.neis.go.kr/', '나이스 첫 화면 이름이 대국민서비스가 아닙니다.');
+{
+    const dbText = readFileSync(resolve(root, 'src/lib/db.js'), 'utf8');
+    check(dbText.includes('data.bookmarks = readLinks()') && dbText.includes('mergeLinks(readLinks(), data.bookmarks)'), '백업 파일에 바로가기가 들어가지 않거나 가져오지 않습니다.');
+    const ui = readFileSync(resolve(root, 'src/ui/EduLinks.jsx'), 'utf8') + readFileSync(resolve(root, 'src/ui/StorageNotice.jsx'), 'utf8');
+    check((ui.match(/createPortal\(/g) || []).length >= 2 && (ui.match(/useEscape\(onClose\)/g) || []).length >= 2, '시트가 body 포털·Escape 닫기를 쓰지 않습니다.');
 }
 check(GUIDE_STEPS.map((s) => s.id).join() === 'storage,attend,jjaem,neis', '5분 가이드 단계 순서가 다릅니다.');
 check(ONBOARD_KEY.startsWith('ssug-gyomu') && EDU_LINKS_KEY.startsWith('ssug-gyomu'), '새 키가 ssug-gyomu 로 시작하지 않습니다.');
@@ -132,7 +151,7 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                 const sh = getComputedStyle(el).boxShadow;
                 if (sh && sh !== 'none' && !sh.includes('inset')) out.push(`누를 수 없는데 볼록함 ${el.tagName}.${el.className}`);
             }
-            const kids = [...box.querySelectorAll('.store-item, .side-link, .edu-chip, .links-row, .guide-step, .store-actions > *, .guide-actions > *, .links-row-btns > *')].filter(shown).map((el) => ({ el, r: el.getBoundingClientRect() }));
+            const kids = [...box.querySelectorAll('.store-item, .side-link, .edu-chip, .links-row, .links-name, .guide-step, .store-actions > *, .guide-actions > *, .links-row-btns > *')].filter(shown).map((el) => ({ el, r: el.getBoundingClientRect() }));
             for (let i = 0; i < kids.length; i += 1) for (let j = i + 1; j < kids.length; j += 1) {
                 const a = kids[i].r; const b = kids[j].r;
                 if (kids[i].el.contains(kids[j].el) || kids[j].el.contains(kids[i].el)) continue;
@@ -149,6 +168,16 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
             localStorage.clear();
             localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
             localStorage.setItem('ssug-gyomu-theme', t);
+            /* 띄어쓰기 없는 긴 이름 바로가기 하나를 미리 넣어 잘림·겹침을 봅니다. */
+            localStorage.setItem('ssug-gyomu-bookmarks', JSON.stringify({ v: 1, items: [
+                { id: 'neis', title: '나이스 대국민서비스', url: 'https://www.neis.go.kr/', builtIn: true },
+                { id: 'edunet', title: '에듀넷', url: 'https://www.edunet.net/', builtIn: true },
+                { id: 'indischool', title: '인디스쿨', url: 'https://indischool.com/', builtIn: true },
+                { id: 'iscream', title: '아이스크림', url: 'https://www.i-scream.co.kr/', builtIn: true },
+                { id: 'hiclass', title: '하이클래스', url: 'https://www.hiclass.net/', builtIn: true },
+                { id: 'teacherville', title: '티처빌', url: 'https://www.teacherville.co.kr/', builtIn: true },
+                { id: 'ulong', title: '서울특별시교육청업무포털', url: 'https://www.sen.go.kr/' },
+            ] }));
             sessionStorage.setItem('g1-prepped', '1');
         }
     };
@@ -181,10 +210,10 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                         menu: [...document.querySelectorAll('.side-menu button')].map((el) => Math.round(el.getBoundingClientRect().width)),
                         links: [...document.querySelectorAll('.side-links .side-link')].map((el) => Math.round(el.getBoundingClientRect().width)),
                     }));
-                    check(widths.links.length === 7 && new Set([...widths.menu, ...widths.links]).size === 1, `[${tag}] 사이드 메뉴·사이트 너비가 다릅니다: ${JSON.stringify(widths)}`);
+                    check(widths.links.length === 8 && new Set([...widths.menu, ...widths.links]).size === 1, `[${tag}] 사이드 메뉴·사이트 너비가 다릅니다: ${JSON.stringify(widths)}`);
                 }
                 const links = await page.$$eval('a[data-edu-link]', (els) => els.filter((el) => el.getClientRects().length).map((el) => ({ href: el.href, target: el.target, rel: el.rel })));
-                check(links.length === 6 && links.every((l) => l.target === '_blank' && /noopener/.test(l.rel) && l.href.startsWith('https://')), `[${tag}] 바로가기가 새 탭·noopener·https 가 아닙니다: ${JSON.stringify(links)}`);
+                check(links.length === 7 && links.every((l) => l.target === '_blank' && /noopener/.test(l.rel) && l.href.startsWith('https://')), `[${tag}] 바로가기가 새 탭·noopener·https 가 아닙니다: ${JSON.stringify(links)}`);
                 for (const issue of await audit(page, '.store-notice, .home-links, .side-links')) failures.push(`[${tag}] 오늘: ${issue}`);
                 if (shots) {
                     await page.evaluate(() => { window.scrollTo(0, 0); document.querySelector('.main')?.scrollTo(0, 0); });
@@ -200,6 +229,12 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                 await page.waitForSelector('[data-guide="sheet"]');
                 for (const issue of await audit(page, '.guide-sheet')) failures.push(`[${tag}] 가이드: ${issue}`);
                 if (shots) await page.screenshot({ path: `${shots}/guide-${tag}.png` });
+                check(await page.evaluate(() => document.querySelector('.guide-sheet')?.closest('.sheet-back')?.parentElement === document.body), `[${tag}] 가이드 시트가 body 에 그려지지 않습니다.`);
+                await page.keyboard.press('Escape');
+                await delay(100);
+                check(!(await page.$('[data-guide="sheet"]')), `[${tag}] Escape 로 가이드가 닫히지 않습니다.`);
+                await tap(page, '[data-guide="open"]');
+                await page.waitForSelector('[data-guide="sheet"]');
                 await tap(page, '[data-guide-go="neis"]');
                 await page.waitForFunction(() => location.hash === '#/students/neis', { timeout: 3000 }).catch(() => {});
                 check(await page.evaluate(() => location.hash) === '#/students/neis', `[${tag}] 가이드 나이스 단계가 화면을 옮기지 않습니다.`);
@@ -212,6 +247,8 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                 await tap(page, '[data-edu-add]');
                 await page.waitForSelector('[data-edu-form]');
                 for (const issue of await audit(page, '.links-sheet')) failures.push(`[${tag}] 고치기 시트: ${issue}`);
+                check(await page.evaluate(() => document.querySelector('.links-sheet')?.closest('.sheet-back')?.parentElement === document.body), `[${tag}] 바로가기 시트가 body 에 그려지지 않습니다.`);
+                check(await page.evaluate(() => { const n = document.querySelector('.links-row[data-edu-row="ulong"] .links-name'); const b = document.querySelector('.links-row[data-edu-row="ulong"] .links-row-btns'); if (!n || !b) return false; const r = n.getBoundingClientRect(); const q = b.getBoundingClientRect(); return n.scrollWidth <= n.clientWidth + 1 && (r.right <= q.left + 1 || r.bottom <= q.top + 1); }), `[${tag}] 긴 이름이 버튼에 가리거나 잘립니다.`);
                 if (shots) await page.screenshot({ path: `${shots}/links-sheet-${tag}.png` });
                 if (width === 390 || width === 1920) {
                     await page.type('#edu-title', '우리 학교');
@@ -227,7 +264,12 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                     await tap(page, '[data-edu-del-yes="neis"]');
                     await page.reload({ waitUntil: 'networkidle0' });
                     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-bookmarks')).items);
-                    check(saved.length === 6 && saved.some((r) => r.url === 'https://school.example.kr/') && !saved.some((r) => r.id === 'neis'), `[${tag}] 더하기·지우기가 새로 고친 뒤 남지 않습니다: ${JSON.stringify(saved)}`);
+                    check(saved.length === 7 && saved.some((r) => r.url === 'https://school.example.kr/') && !saved.some((r) => r.id === 'neis'), `[${tag}] 더하기·지우기가 새로 고친 뒤 남지 않습니다: ${JSON.stringify(saved)}`);
+                }
+                if (await page.$('[data-edu-sheet]')) {
+                    await page.keyboard.press('Escape');
+                    await delay(100);
+                    check(!(await page.$('[data-edu-sheet]')), `[${tag}] Escape 로 바로가기 시트가 닫히지 않습니다.`);
                 }
                 /* 숨기기 → 새로 고쳐도 숨김 → 설정에서 다시 열기 */
                 await fresh(page, '#/today');
@@ -273,6 +315,28 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                 if (shots) { await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: `${shots}/today-folded-${tag}.png` }); }
                 await context.close();
             }
+        }
+        /* 1024·1366×768: 사이드에서 연 시트가 오른쪽 아래 쨈 버튼(z 30)에 가리지 않는지 */
+        for (const width of [1024, 1366]) {
+            const context = await browser.createBrowserContext();
+            const page = await context.newPage();
+            await page.setViewport({ width, height: 768 });
+            await page.evaluateOnNewDocument(prep('light'), 'light');
+            await page.goto(`${origin}?demo=1#/today`, { waitUntil: 'networkidle0' });
+            for (const [open, sheet] of [['[data-edu-edit="side"]', '.links-sheet'], ['[data-guide="open"]', '.guide-sheet']]) {
+                await tap(page, open);
+                await page.waitForSelector(sheet);
+                const top = await page.evaluate((sel) => {
+                    const fab = document.querySelector('.desk-fab').getBoundingClientRect();
+                    const hit = document.elementFromPoint(fab.left + fab.width / 2, fab.top + fab.height / 2);
+                    return { underSheet: Boolean(hit?.closest('.sheet-back')), fabHit: Boolean(hit?.closest('.desk-fab')) };
+                }, sheet);
+                check(top.underSheet && !top.fabHit, `[${width}×768] ${sheet} 위로 쨈 버튼이 올라옵니다: ${JSON.stringify(top)}`);
+                if (shots) await page.screenshot({ path: `${shots}/fab-${sheet.slice(1)}-${width}x768.png` });
+                await page.keyboard.press('Escape');
+                await delay(100);
+            }
+            await context.close();
         }
     } finally {
         await browser.close();
