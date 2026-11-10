@@ -156,6 +156,7 @@ check(label.keptLabel({ kind: 'events', id: 'e', row: { title: '나'.repeat(60) 
     check(/data-kept-empty/.test(body) && /보관한 값이 없어요/.test(body), '화면: 빈 보관함 안내 한 줄이 없습니다.');
     check(/지금 값/.test(body) && /data-kept-confirm/.test(body) && /data-kept-cancel/.test(body), '화면: 되돌리기 확인(지금 값·확인·그만두기)이 없습니다.');
     check(!/<select/.test(body), '화면: 보관함에 드롭다운이 있습니다.');
+    check(/data-kept-restore=\{i\}[^\n]*onClick=\{\(\) => setAsking\(i\)\}/.test(body) && (body.match(/restoreKeptLegacy\(/g) || []).length === 1, '화면: 되돌리기 버튼이 확인 없이 바로 되돌립니다.');
     check(/restoreKeptLegacy\(i, k\)/.test(body), '화면: 되돌리기가 확인한 줄을 넘기지 않습니다.');
 }
 
@@ -186,7 +187,7 @@ await wait(300);
     check(!('onboard' in (out || {})) && !JSON.stringify(out || {}).includes('ssug-gyomu-onboard'), '#81 ① 안내 진행(onboard)이 백업에 들어갔습니다(기기 몫).');
     /* 가져오기 · 합치기: 파일에만 있는 바로가기를 더하고 이 브라우저 것은 남깁니다. */
     const add = { id: 'kp-new', title: '새 사이트', url: 'https://new.example.kr/' };
-    const withNew = { ...out, bookmarks: [...out.bookmarks, add] };
+    const withNew = { ...out, bookmarks: [...(Array.isArray(out?.bookmarks) ? out.bookmarks : [mine]), add] };
     links.writeLinks(links.readLinks().filter((r) => r.id !== 'kp-my'));
     await db.importText(JSON.stringify(withNew), 'merge');
     check(linkIds().includes('kp-my') && linkIds().includes('kp-new'), `#81 ① 합치기 가져오기로 바로가기가 되살아나지 않습니다: ${linkIds()}`);
