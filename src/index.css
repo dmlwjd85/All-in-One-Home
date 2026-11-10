@@ -625,6 +625,9 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
 .quick-bar.is-open ~ .toast {
     bottom: calc(340px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
 }
+/* 안내 글이 길어도 「되돌리기」 같은 단추 글자는 한 줄로 둡니다(낱자 줄바꿈 방지). */
+.toast > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.toast > button, .toast > .tap { flex: none; white-space: nowrap; word-break: keep-all; }
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
 .toast {

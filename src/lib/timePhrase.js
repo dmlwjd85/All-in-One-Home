@@ -247,6 +247,7 @@ export function phraseAskText(res) {
     if (!res) return '';
     if (res.missing === 'workEnd') return `‘${res.word}’를 정하려면 퇴근 시각이 필요해요. 설정에 아직 없어요.`;
     if (res.missing === 'workStart') return `‘${res.word}’를 정하려면 출근 시각이 필요해요. 설정에 아직 없어요.`;
+    if (res.missing === 'am12') return `‘${res.word}’가 낮 12시인지 밤 12시인지 골라 주세요.`;
     if (res.missing === 'vague') return `‘${String(res.word).replace(/\s*(?:에|때|쯤)$/, '')}’은 몇 시인지 정해지지 않았어요.`;
     if (res.missing === 'timetable') return `‘${res.word}’를 정할 교시 시각이 없어요.`;
     if (res.late) return `‘${res.word}’(${res.basis})는 오늘 이미 지났어요.`;

@@ -1214,8 +1214,14 @@ export async function saveQuick(input, now = new Date()) {
             if (alarmTime) row.time = alarmTime;
             else if (input.time) row.time = input.time;
             if (/^([01]\d|2[0-3]):[0-5]\d$/.test(input.endTime || '')) row.endTime = input.endTime;
+            /* 「10:30~11:20」처럼 본문에서 읽은 범위는 끝 시각도 둡니다(시작을 따로 고른 경우는 빼요). */
+            else if (input.endTime === undefined && paste.endTime && row.time === paste.time && paste.endTime > row.time) row.endTime = paste.endTime;
             put(local ? draft.local.events : draft.events, row);
-            message = '일정에 넣었어요.';
+            /* 시각이 있으면 안내 글에도 적어, 노란 카드에서 고른 시각(예: 저녁 오후 6시)이 들어갔는지 바로 보입니다. */
+            const clockLabel = !row.time ? '' : row.endTime
+                ? `${alarmTimeLabel(row.time)}부터 ${alarmTimeLabel(row.endTime)}까지예요.`
+                : `${alarmTimeLabel(row.time)} 시작이에요.`;
+            message = clockLabel ? `일정에 넣었어요. ${clockLabel}` : '일정에 넣었어요.';
         } else if (kind === '알림장') {
             const prev = (local ? draft.local.notices : draft.notices).find((item) => item.date === date);
             const row = { ...base, id: date, date, text: String(prev?.text || '').trim() ? `${prev.text}\n${text}` : text };

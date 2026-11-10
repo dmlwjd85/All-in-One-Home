@@ -284,6 +284,48 @@ try {
         check(!await page.$('.quick-ask') && /퇴근 16:40 기준/.test(toast2) && /4시 30분/.test(toast2), `퇴근이 있는데 바로 넣지 않음: ${toast2}`);
         await page.close();
     }
+    /* 3-2. 평점관 r79-2: 저녁 6시 고르면 안내에 시각, 범위는 끝 시각까지, 「오전 12시」는 낮·밤을 묻습니다. */
+    {
+        const page = await fresh(browser);
+        const clear = async () => {
+            await page.focus('.quick-bar textarea, .quick-bar input').catch(() => {});
+            await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control'); await page.keyboard.press('Backspace');
+        };
+        await press(page, '/');
+        await page.keyboard.type('모레 저녁 학부모 간담회');
+        await page.click('.quick-chip[data-kind="일정"]');
+        await page.waitForSelector('[data-quick-ask="vague"]', { timeout: 3000 }).catch(() => {});
+        await page.evaluate(() => { window.__toasts = []; [...document.querySelectorAll('.quick-ask button')].find((el) => el.innerText.includes('오후 6시'))?.click(); });
+        await wait(600);
+        const t1 = await page.evaluate(() => window.__toasts.join(' / '));
+        check(/일정에 넣었어요/.test(t1) && /오후 6시 시작/.test(t1), `저녁 6시 고른 뒤 안내에 시각 없음: ${t1}`);
+        const ev = await page.evaluate(() => { const d = JSON.parse(localStorage.getItem('ssug-gyomu-data') || localStorage.getItem('ssug-gyomu') || '{}'); return JSON.stringify(d).match(/"title":"[^"]*간담회[^"]*"[^}]*/)?.[0] || ''; });
+        if (ev) check(/"time":"18:00"/.test(ev), `저녁 6시가 일정에 안 들어감: ${ev}`);
+        await press(page, '/');
+        await clear();
+        await page.keyboard.type('10:30~11:20 보강 수업');
+        await page.evaluate(() => { window.__toasts = []; });
+        await page.click('.quick-chip[data-kind="일정"]');
+        await wait(600);
+        const t2 = await page.evaluate(() => window.__toasts.join(' / '));
+        check(/오전 10시 30분부터 오전 11시 20분까지/.test(t2), `시각 범위 안내가 다름: ${t2}`);
+        const undoLines = await page.evaluate(() => { const b = [...document.querySelectorAll('.toast button')].find((el) => el.innerText.includes('되돌리')); if (!b) return 0; const r = document.createRange(); r.selectNodeContents(b); return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size; });
+        check(undoLines <= 1, `긴 안내에서 되돌리기 글자가 줄바꿈됨: ${undoLines}줄`);
+        await press(page, '/');
+        await clear();
+        await page.keyboard.type('오전 12시 성적 마감');
+        await page.click('.quick-chip[data-kind="할 일"]');
+        await page.waitForSelector('[data-quick-ask="am12"]', { timeout: 3000 }).catch(() => {});
+        const am = await page.evaluate(() => ({ text: document.querySelector('.quick-ask')?.innerText || '', btns: [...document.querySelectorAll('.quick-ask button')].map((b) => b.innerText.trim()) }));
+        check(/낮 12시인지 밤 12시인지/.test(am.text) && am.btns.includes('낮 12시 알림') && am.btns.includes('밤 12시 알림') && am.btns.includes('시각 없이 넣기'), `오전 12시 노란 카드가 다름: ${JSON.stringify(am)}`);
+        await audit(page, '오전 12시 노란 카드 1280', '.quick-bar');
+        if (shots) await page.screenshot({ path: `${shots}/오전12시카드-1280-light.png` });
+        await page.evaluate(() => { window.__toasts = []; document.querySelector('.quick-ask [data-choice="12:00"]')?.click(); });
+        await wait(600);
+        const t3 = await page.evaluate(() => window.__toasts.join(' / '));
+        check(/오후 12시 알림/.test(t3), `낮 12시 고른 뒤 알림 안내가 다름: ${t3}`);
+        await page.close();
+    }
     /* 4. 폭·테마별: 출결 마감, 설정 추천 카드, 노란 카드 */
     for (const mode of ['light', 'dark']) {
         for (const width of [320, 360, 390, 900, 1920]) {

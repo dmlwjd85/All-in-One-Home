@@ -112,8 +112,13 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         if (used !== '할 일' && used !== '일정') return null;
         const now = new Date();
         const pre = readJjaemPaste(text, { now, stripTime: true, future: true });
-        if (pre.time) return null;
         const baseDate = used === '일정' ? (pre.date || quickSaveDate(used, text, dateYmd, now)) : (pre.date || dateYmd);
+        /* 「오전 12시」는 낮·밤이 갈려 노란 카드에서 고르게 합니다. */
+        if (pre.ask === 'am12') {
+            const min = pre.time.slice(3);
+            return { ask: { missing: 'am12', word: pre.timeWord, date: baseDate, time: '', suggestTime: '', choices: [`12:${min}`, `00:${min}`] } };
+        }
+        if (pre.time) return null;
         let res = null;
         try { res = resolveTimePhrase(text, timeContext(data, now), { date: baseDate }); } catch { res = null; }
         if (!res) return null;
@@ -383,6 +388,11 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                 <div className="quick-ask low-card" role="group" aria-label="시각 확인" data-quick-ask={ask.res.missing || 'late'}>
                     <p className="quick-ask-text">{phraseAskText(ask.res)}</p>
                     <div className="quick-ask-chips">
+                        {(ask.res.choices || []).map((hm) => (
+                            <Btn key={hm} className="chip" data-choice={hm} onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: hm, date: ask.res.date })}>
+                                {hm.startsWith('12') ? '낮' : '밤'} 12시{hm.slice(3) === '00' ? '' : ` ${Number(hm.slice(3))}분`} 알림
+                            </Btn>
+                        ))}
                         {ask.res.suggestTime && (
                             <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: ask.res.suggestTime, date: ask.res.date })}>
                                 추천값으로 {alarmTimeLabel(ask.res.suggestTime)} 알림
