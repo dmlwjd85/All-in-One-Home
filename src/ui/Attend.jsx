@@ -98,13 +98,31 @@ export function Attend() {
                                 </Btn>
                             );
                         })}
-                        <Btn className="primary-btn block" onClick={() => markChecked(date, !data.profile.checkedDates.includes(date))}>
-                            {data.profile.checkedDates.includes(date) ? '출결 확인을 해제할게요' : '오늘 출결 마쳤어요'}
-                        </Btn>
+                        <AttendCloseButton closed={data.profile.checkedDates.includes(date)} onToggle={(next) => markChecked(date, next)} />
                     </aside>
                 </div>
             )}
             {reasonFor && <ReasonSheet student={reasonFor} mark={byId.get(reasonFor.id)} date={date} onClose={() => setReasonFor(null)} />}
+        </div>
+    );
+}
+
+/** 출결 마감 단추. 마감하면 눌린 모양(안으로 들어간 그림자, aria-pressed=true, '마감됨'), 풀면 튀어나온 모양('마감하기')입니다.
+    색만으로 가르지 않도록 글자와 아래 안내도 같이 바뀝니다. */
+export function AttendCloseButton({ closed, onToggle }) {
+    return (
+        <div className="attend-close-wrap">
+            <Btn
+                className={closed ? 'attend-close is-closed' : 'attend-close'}
+                aria-pressed={closed ? 'true' : 'false'}
+                aria-label={closed ? '출결 마감됨, 누르면 마감을 풀어요' : '출결 마감하기'}
+                data-attend-close={closed ? 'closed' : 'open'}
+                onClick={() => onToggle(!closed)}
+            >
+                <span className="attend-close-mark" aria-hidden="true">{closed ? '✓' : ''}</span>
+                <span>{closed ? '마감됨' : '마감하기'}</span>
+            </Btn>
+            <p className="muted attend-close-note" aria-live="polite">{closed ? '오늘 출결을 마감했어요. 다시 누르면 마감이 풀려요.' : '다 확인했으면 눌러 마감해요.'}</p>
         </div>
     );
 }

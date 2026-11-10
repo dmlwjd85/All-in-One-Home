@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SUGGESTED_WORK } from '../lib/schoolDefaults.js';
 import { clockFrozen, seoulParts } from '../lib/date.js';
 import { leaveProblem, workTimeProblem, workTimer } from '../lib/period.js';
 import { hideWorkCard, leaveFor, patchPeriodLocal, setLeave, subscribePeriodLocal } from '../lib/periodLocal.js';
@@ -116,8 +117,9 @@ export function LeaveForm({ ymd, local, leave, now, showToast, draft, setDraft, 
 
 /** 출퇴근 시각이 없을 때 타이머 자리에 보이는 작은 안내 카드. 저장을 눌러야만 이 기기 설정에 씁니다. */
 export function WorkSetup({ local, showToast, now }) {
-    const [workStart, setWorkStart] = useState(local.workStart || '08:40');
-    const [workEnd, setWorkEnd] = useState(local.workEnd || '16:40');
+    /* 비어 있으면 추천값(출근 08:30·퇴근 16:30)을 칸에 보여 줍니다. '저장'을 눌러야 이 기기 설정에 씁니다. */
+    const [workStart, setWorkStart] = useState(local.workStart || SUGGESTED_WORK.workStart);
+    const [workEnd, setWorkEnd] = useState(local.workEnd || SUGGESTED_WORK.workEnd);
     /* 폰 첫 화면에서는 한 줄 띠로 접어 두고, 누르면 펼칩니다(펼침은 기억하지 않습니다). 넓은 화면은 늘 펼친 그대로입니다. */
     const [open, setOpen] = useState(false);
     const box = useRef(null);

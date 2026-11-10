@@ -53,6 +53,8 @@
     "check:todoachieve": "node scripts/check-todo-achieve.mjs",
     "check:todoshots": "node scripts/shots-todo-achieve.mjs",
     "check:goalsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-goal-sync.mjs\"",
+    "check:input-e": "node scripts/check-input-e.mjs && node scripts/mutate-input-e.mjs",
+    "check:input-e-browser": "node scripts/check-input-e-browser.mjs",
     "check:g1": "node scripts/check-g1.mjs"
   },
   "dependencies": {

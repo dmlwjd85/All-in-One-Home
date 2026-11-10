@@ -44,6 +44,10 @@ button, input, textarea { font-family: inherit; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+/* 좁은 화면(320px 등)에서는 말줄임표 대신 줄을 바꿉니다. */
+@media (max-width: 899px) {
+    .cloud-note { white-space: normal; overflow: visible; text-overflow: clip; word-break: keep-all; overflow-wrap: anywhere; }
+}
 .side { display: none; }
 
 .glass, .solid-card {
@@ -224,6 +228,48 @@ a.chip,
     font-weight: 800;
     box-shadow: var(--neo-inset);
 }
+/* 기본 환경 추천(출퇴근·종 시각·시간표 예시). 저장값이 아니라 눌러야 적용되는 제안입니다. */
+.suggest-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: var(--bg);
+    box-shadow: var(--neo-inset);
+}
+.suggest-text { flex: 1 1 220px; min-width: 0; margin: 0; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.suggest-rows { flex: 1 1 100%; margin: 0; font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
+.suggest-card .chip { flex: 0 0 auto; min-height: 44px; max-width: 100%; white-space: normal; }
+/* 출결 마감: 풀린 상태는 튀어나온 로즈 단추, 마감한 상태는 눌려 들어간 단추(글자·체크로도 구별). */
+.attend-close-wrap { display: grid; gap: 6px; }
+.attend-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    border-radius: 16px;
+    font-weight: 800;
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: var(--neo-raise-sm);
+    transform: translateY(-1px);
+    transition: box-shadow .16s ease, transform .16s ease, background-color .16s ease;
+}
+.attend-close.is-closed {
+    background: var(--bg);
+    color: var(--accent);
+    box-shadow: var(--neo-inset-deep);
+    transform: translateY(1px);
+}
+.attend-close-mark { min-width: 1em; font-size: 18px; line-height: 1; }
+.attend-close:not(.is-closed) .attend-close-mark { display: none; }
+.attend-close-note { margin: 0; font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .attend-close { transition: none; } }
 .key-picks {
     display: flex;
     flex-wrap: wrap;
@@ -554,6 +600,14 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
     display: flex;
     gap: 6px;
 }
+.quick-ask {
+    margin: 0 0 8px;
+    padding: 10px 12px;
+    border-radius: 14px;
+}
+.quick-ask-text { margin: 0 0 8px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.quick-ask-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.quick-ask-chips .chip { flex: 1 1 auto; min-height: 44px; white-space: normal; text-align: center; }
 .quick-chip {
     flex: 1 1 0;
     min-width: 0;
@@ -586,6 +640,9 @@ body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
         max-height: min(86dvh, 820px, calc(100dvh - 224px));
     }
 }
+/* 안내 글이 길어도 「되돌리기」 같은 단추 글자는 한 줄로 둡니다(낱자 줄바꿈 방지). */
+.toast > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.toast > button, .toast > .tap { flex: none; white-space: nowrap; word-break: keep-all; }
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
 .toast {
@@ -1304,7 +1361,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .detail-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .todo-check { flex: none; width: 44px; min-height: 44px; font-size: 18px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-raise-sm); }
 .home-line { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 4px; border-radius: 12px; }
-.home-line .home-line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 오늘 화면 줄 글은 말줄임표로 자르지 않고 줄을 바꿉니다(900px 등 중간 폭 포함). */
+.home-line .home-line-text { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; padding: 4px 0; }
 .home-event-line { width: 100%; min-height: 44px; display: block; text-align: left; padding: 4px; border-radius: 12px; }
 .home-event-line .clip2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .term-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
@@ -1359,7 +1417,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     .fold-h { margin: 0; font: inherit; flex: 1; min-width: 0; }
     .fold-h .fold-head { width: 100%; }
     .fold-title { font-size: 16px; font-weight: 700; }
-    .fold-sum { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+    /* 좁은 화면(320~899px)에서는 요약을 말줄임표로 자르지 않고 줄을 바꿉니다. */
+    .fold-sum { display: block; overflow: visible; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; text-overflow: clip; font-size: 13px; }
     .fold-arrow { flex: none; color: var(--accent); font-size: 16px; min-width: 24px; text-align: center; }
     .fold[data-open="0"] .fold-body { display: none; }
     .fold[data-open="1"] .fold-body { margin-top: 0; }
@@ -1609,7 +1668,7 @@ button.hero-pill.home-todo-link {
 .settings-menu { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
 .settings-key.tap { display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 14px; background: var(--bg); color: var(--ink); font-weight: 700; box-shadow: var(--neo-raise-sm); justify-content: flex-start; }
 
-/* 왼쪽 메뉴: 글자 길이에 맞춘 버튼과 일정한 사이 간격을 유지합니다. */
+/* 왼쪽 메뉴: 데스크톱 사이드바 폭에 맞춰 버튼 너비를 통일합니다. */
 .side-menu { display: flex; flex-direction: column; gap: 8px; }
 .side-menu .tap.chip.block { flex-shrink: 0; margin: 0; width: 100%; box-sizing: border-box; min-height: 44px; height: auto; padding: 10px 12px; align-items: center; justify-content: flex-start; gap: 8px; }
 .side-hotkey { font-size: 12px; font-weight: 400; margin-left: auto; white-space: nowrap; }

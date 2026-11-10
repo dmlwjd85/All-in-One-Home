@@ -312,7 +312,7 @@ check(local.workCardOff() && !bag.has(local.WORK_CARD_KEY), "공용 PC에서 '�
 bag.clear();
 local.clearPeriodLocal();
 const setupSrc = timerSrc.slice(timerSrc.indexOf('export function WorkSetup'));
-check(/useState\(local\.workStart \|\| '08:40'\)/.test(setupSrc) && /useState\(local\.workEnd \|\| '16:40'\)/.test(setupSrc), '안내 카드에 08:40·16:40이 미리 들어 있지 않습니다.');
+check(/useState\(local\.workStart \|\| SUGGESTED_WORK\.workStart\)/.test(setupSrc) && /useState\(local\.workEnd \|\| SUGGESTED_WORK\.workEnd\)/.test(setupSrc), '안내 카드에 추천값(08:30·16:30)이 미리 들어 있지 않습니다.');
 check(/const problem = workTimeProblem\(workStart, workEnd\);\s*if \(problem\) \{ showToast\?\.\(problem\); return; \}\s*patchPeriodLocal\(\{ workStart, workEnd \}\);/.test(setupSrc) && (setupSrc.match(/patchPeriodLocal\(/g) || []).length === 1, '안내 카드가 검사 전에 저장하거나 다른 곳에 저장합니다.');
 check(/hideWorkCard\(\)/.test(setupSrc) && />다음에</.test(setupSrc) && /className="primary-btn"/.test(setupSrc) && /<Btn className="chip"/.test(setupSrc), "안내 카드에 '다음에'·저장 버튼이 앱 버튼 모양이 아닙니다.");
 check(/출근·퇴근 시각을 정하면 퇴근까지 남은 시간을 보여 드려요\./.test(setupSrc), '안내 카드 문구가 없습니다.');

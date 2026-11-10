@@ -22,7 +22,7 @@ import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVo
 import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
-import { HOTKEY_ACTIONS, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey } from './ui/hotkeys.js';
+import { HOTKEY_ACTIONS, defaultHotkeyRows, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey, modalOpen, seedHotkeys } from './ui/hotkeys.js';
 import { Minutes } from './ui/Minutes.jsx';
 import { MENU, menuSelected, menuTarget } from './ui/menu.js';
 import { JjaemJar, TabBar } from './ui/TabBar.jsx';
@@ -106,6 +106,16 @@ export default function App() {
         const id = idle(() => loadKbVoice(voice));
         return () => stop(id);
     }, []);
+
+    /* 자료를 처음 읽으면 이 기기가 새 설치인지 한 번만 정합니다. 이미 쓰던 기기는 예전 단축키(/ 와 ?)를 그대로 둡니다. */
+    const hotkeySeeded = useRef(false);
+    useEffect(() => {
+        if (!data || hotkeySeeded.current) return;
+        hotkeySeeded.current = true;
+        /* 데모 둘러보기는 실제 사용 기록이 아니므로 표시를 남기지 않습니다. */
+        if (data.profile?.demo) return;
+        if (seedHotkeys(Boolean(data.profile?.started))) setHotkeys(loadHotkeys());
+    }, [data]);
 
     useEffect(() => {
         const sync = () => setHotkeys(loadHotkeys());
@@ -345,8 +355,20 @@ export default function App() {
             return;
         }
         if (id === 'plus') {
+            /* / 키는 화면 아래 쨈 버튼을 직접 누른 것과 똑같습니다: 키캡 눌림·딸깍 소리 → 버튼 클릭(쨈 튐·같은 쨈 팝업) → 키캡 복귀.
+               / 전용 입력창은 따로 두지 않습니다. */
             closeLayers();
-            setPlus(true);
+            pressJamButton();
+            return;
+        }
+        if (id === 'memo') {
+            closeLayers();
+            go('#/todo');
+            window.setTimeout(() => {
+                const box = document.querySelector('textarea[aria-label="메모"]');
+                box?.scrollIntoView?.({ block: 'center' });
+                box?.focus?.({ preventScroll: true });
+            }, 60);
             return;
         }
         if (id === 'search') {
@@ -403,6 +425,9 @@ export default function App() {
             if (!data?.profile.started) return;
             const id = matchHotkey(event, loadHotkeys());
             if (!id) return;
+            /* 대화상자나 쨈 빠른 입력창이 떠 있으면 단축키는 쉽니다. 단축키 목록만 같은 키로 닫을 수 있어요. */
+            const helpOpen = Boolean(document.querySelector('[aria-modal="true"][aria-label="단축키"]'));
+            if (id === 'help' ? (modalOpen() && !helpOpen) : (modalOpen() || quickOpenRef.current)) return;
             event.preventDefault();
             runHotkey(id);
         };
@@ -552,6 +577,23 @@ export default function App() {
         );
     }
 
+    function pressJamButton() {
+        /* 지금 보이는 쨈 버튼(넓은 화면 .desk-fab, 좁은 화면 탭바 가운데)을 찾아 사람이 누른 것처럼 누릅니다. */
+        const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+        const btn = [...document.querySelectorAll('.desk-fab, .tbj-mid')].find(shown);
+        if (!btn) { openQuickBar(); return; }
+        const feel = jamFeelEnabled();
+        pressDown(btn);
+        if (!feel) playKey('down');
+        btn.dataset.via = 'slash';
+        btn.click();
+        window.setTimeout(() => {
+            pressUp(btn);
+            if (!feel) playKey('up');
+            delete btn.dataset.via;
+        }, 140);
+    }
+
     function openQuickBar(event) {
         /* 열려 있으면 쨈 버튼이 닫기입니다. 막 연 뒤 0.4초 안의 두 번째 탭(연타)은 무시합니다. */
         if (quickOpenRef.current) {
@@ -567,8 +609,15 @@ export default function App() {
         setQuickInvite(false);
         setQuickOpen(true);
         playFoilPop(event?.currentTarget);
-        bloomQuickBar(event?.currentTarget);
-        playCupGhost(event?.currentTarget);
+        const opener = event?.currentTarget;
+        bloomQuickBar(opener);
+        /* React가 열림 상태를 그리며 className을 다시 쓰면 방금 붙인 번짐(is-bloom)이 같은 틀 안에서 지워질 수 있습니다.
+           다음 틀에 아직 열려 있는데 번짐이 없으면 한 번 더 붙입니다(버튼·/ 키 모두 같은 길). */
+        requestAnimationFrame(() => {
+            const bar = document.querySelector('.quick-bar');
+            if (quickOpenRef.current && bar && !bar.classList.contains('is-bloom')) bloomQuickBar(opener);
+        });
+        playCupGhost(opener);
     }
 
     function closeQuickBar() {
@@ -808,6 +857,7 @@ function HotkeySheet({ onClose }) {
                     </p>
                 ))}
                 {!rows.length && <p>아직 잡아 둔 키가 없어요.</p>}
+                <p className="muted hotkey-defaults">기본 단축키: {defaultHotkeyRows().map((row) => `${row.key} ${row.label}`).join(' · ')}. 설정 › 단축키에서 ‘기본값으로 되돌리기’를 누르면 이대로 맞춰요.</p>
                 <Btn className="chip block" onClick={onClose}>닫기</Btn>
             </div>
         </div>
