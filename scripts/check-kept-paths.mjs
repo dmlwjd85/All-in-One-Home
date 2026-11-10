@@ -148,6 +148,17 @@ check(label.keptLabel({ kind: 'notes', id: 'n', row: { text: '가'.repeat(41) } 
 check(!label.keptLabel({ kind: 'notes', id: 'n', row: { text: '가'.repeat(40) } }).endsWith('…'), '이름표가 잘리지 않았는데 …이 붙습니다.');
 check(label.keptLabel({ kind: 'events', id: 'e', row: { title: '나'.repeat(60) } }).endsWith('…'), '일정 이름표가 잘릴 때 …이 없습니다.');
 
+/* 화면: 보관함 구역은 비어도 늘 보이고 빈 목록 안내 한 줄, 되돌리기는 지금 값을 보여 주고 확인받습니다(드롭다운 없음). */
+{
+    const ui = readFileSync(new URL('src/ui/Settings.jsx', root), 'utf8');
+    const body = ui.slice(ui.indexOf('function KeptLegacy('), ui.indexOf('const PUBLIC_LABELS'));
+    check(body.length > 0 && !/if \(!list\.length\) return null/.test(body), '화면: 보관함이 비면 구역이 숨습니다.');
+    check(/data-kept-empty/.test(body) && /보관한 값이 없어요/.test(body), '화면: 빈 보관함 안내 한 줄이 없습니다.');
+    check(/지금 값/.test(body) && /data-kept-confirm/.test(body) && /data-kept-cancel/.test(body), '화면: 되돌리기 확인(지금 값·확인·그만두기)이 없습니다.');
+    check(!/<select/.test(body), '화면: 보관함에 드롭다운이 있습니다.');
+    check(/restoreKeptLegacy\(i, k\)/.test(body), '화면: 되돌리기가 확인한 줄을 넘기지 않습니다.');
+}
+
 /* 되돌리기: 확인하는 사이 목록이 바뀌었으면 엉뚱한 줄을 되돌리지 않습니다. */
 await setKept([entry('mon', 31), entry('tue', 32)]);
 const r1 = await db.restoreKeptLegacy(0, { kind: 'timetable', id: 'tue', at: 32 });
@@ -156,6 +167,53 @@ const r2 = await db.restoreKeptLegacy(1, { kind: 'timetable', id: 'tue', at: 32 
 check(r2.ok && db.snapshot().timetable?.tue?.p1 === 'K32' && keys() === 'timetable:mon:31', `되돌리기 결과가 다릅니다: ${r2.ok} ${db.snapshot().timetable?.tue?.p1} ${keys()}`);
 await wait(300);
 
+/* #81 새 키(이 기기·브라우저 몫, 클라우드 없음): ssug-gyomu-bookmarks(바로가기), ssug-gyomu-onboard(안내·가이드 진행).
+   ① 바로가기는 백업 내보내기에 들고, 가져오기는 모자란 것만 더합니다(바꾸기에서도 지우지 않음, #81 설계).
+   ②③④ 두 키 모두 계정 몫이 아니라 기기 몫이므로 계정 바꾸기·로그아웃·다시 받기·모두 지우기에 바뀌지 않아야 합니다. */
+{
+    const links = await import(new URL('.keptpaths/src/lib/eduLinks.js', root));
+    const onboard = await import(new URL('.keptpaths/src/lib/onboard.js', root));
+    const mine = { id: 'kp-my', title: '우리 학교', url: 'https://school.example.kr/' };
+    links.writeLinks([...links.readLinks(), mine]);
+    onboard.setStep('attend', true);
+    const linkIds = () => links.readLinks().map((r) => r.id).join(',');
+    const onboardRaw = () => store.get(onboard.ONBOARD_KEY) || '';
+    const L0 = linkIds();
+    const O0 = onboardRaw();
+    check(L0.includes('kp-my') && /attend/.test(O0), `#81 준비 실패: ${L0} ${O0}`);
+    const out = db.exportFile(true);
+    check(Array.isArray(out?.bookmarks) && out.bookmarks.some((r) => r.id === 'kp-my'), '#81 ① 백업 내보내기에 바로가기(ssug-gyomu-bookmarks)가 없습니다.');
+    check(!('onboard' in (out || {})) && !JSON.stringify(out || {}).includes('ssug-gyomu-onboard'), '#81 ① 안내 진행(onboard)이 백업에 들어갔습니다(기기 몫).');
+    /* 가져오기 · 합치기: 파일에만 있는 바로가기를 더하고 이 브라우저 것은 남깁니다. */
+    const add = { id: 'kp-new', title: '새 사이트', url: 'https://new.example.kr/' };
+    const withNew = { ...out, bookmarks: [...out.bookmarks, add] };
+    links.writeLinks(links.readLinks().filter((r) => r.id !== 'kp-my'));
+    await db.importText(JSON.stringify(withNew), 'merge');
+    check(linkIds().includes('kp-my') && linkIds().includes('kp-new'), `#81 ① 합치기 가져오기로 바로가기가 되살아나지 않습니다: ${linkIds()}`);
+    const L1 = linkIds();
+    /* 바꾸기: 빈 바로가기 파일이어도 이 브라우저 바로가기를 지우지 않습니다. */
+    await db.importText(JSON.stringify({ ...out, bookmarks: [] }), 'replace');
+    check(linkIds() === L1, `#81 ① 바꾸기 가져오기가 바로가기를 지웠습니다: ${linkIds()}`);
+    check(onboardRaw() === O0, '#81 ① 가져오기가 안내 진행(onboard)을 바꿨습니다.');
+    /* ②③ 계정 바꾸기·로그아웃 */
+    useFs(B); await db.setAuth({ uid: B }); await wait(300);
+    check(linkIds() === L1 && onboardRaw() === O0, `#81 ②③ 계정을 바꾸자 기기 몫 키가 바뀌었습니다: ${linkIds()} ${onboardRaw()}`);
+    useFs(A); await db.setAuth({ uid: A }); await wait(300);
+    await db.setAuth(null);
+    check(linkIds() === L1 && onboardRaw() === O0, '#81 ③ 로그아웃이 기기 몫 키를 바꿨습니다.');
+    await db.setAuth({ uid: A }); await wait(300);
+    /* ④ 다시 받기 */
+    await db.pullFromCloudNow();
+    check(linkIds() === L1 && onboardRaw() === O0, '#81 ④ 다시 받기가 기기 몫 키를 바꿨습니다.');
+    for (const name of ['bookmarks', 'onboard']) {
+        const snap = await getDocs(collection(fsOf(A), 'users', A, name)).catch(() => ({ size: 0 }));
+        check(!snap.size, `#81 ④ ${name}이 클라우드에 올라갔습니다.`);
+    }
+    /* 모두 지우기(학급 기록)는 기기 설정 키를 건드리지 않습니다(테마와 같음). */
+    await db.clearAll();
+    check(linkIds() === L1 && onboardRaw() === O0, '#81 ③ 모두 지우기가 기기 몫 키를 바꿨습니다.');
+}
+
 await env.cleanup();
 rmSync(new URL('.keptpaths/', root), { recursive: true, force: true });
 if (failures.length) {
@@ -163,5 +221,5 @@ if (failures.length) {
     for (const f of failures) console.error(`- ${f}`);
     process.exit(1);
 }
-console.log('보관함·새 칸 전수 점검 통과(내보내기·합치기·바꾸기·계정별·계정 바꾸기·로그아웃·모두 지우기·다시 받기·이름표·되돌리기 확인)');
+console.log('보관함·새 칸 전수 점검 통과(내보내기·합치기·바꾸기·계정별·계정 바꾸기·로그아웃·모두 지우기·다시 받기·이름표·되돌리기, #81 바로가기·안내 키)');
 process.exit(0);
