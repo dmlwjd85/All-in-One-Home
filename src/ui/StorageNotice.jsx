@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cloudReady } from '../firebase.js';
 import { GUIDE_STEPS, guideDone, markNoticeSeen, noticeFor, readOnboard, setNotice, setStep, subscribeOnboard } from '../lib/onboard.js';
 import { useUi } from './context.jsx';
@@ -91,11 +92,23 @@ function pressJjaem() {
     shown?.click();
 }
 
+/** Escape 로 시트를 닫습니다. */
+export function useEscape(onClose) {
+    const ref = useRef(onClose);
+    ref.current = onClose;
+    useEffect(() => {
+        const onKey = (event) => { if (event.key === 'Escape') { event.stopPropagation(); ref.current?.(); } };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, []);
+}
+
 /** 앱 안 5분 시작 가이드. 단계마다 실제 화면으로 옮겨 주고, 한 단계는 이 기기에 표시해 둡니다. */
 export function GuideSheet({ onClose }) {
     const { go, clock } = useUi();
     const onboard = useOnboard();
     const done = guideDone(onboard);
+    useEscape(onClose);
     function run(step) {
         setStep(step.id, true);
         onClose();
@@ -104,7 +117,8 @@ export function GuideSheet({ onClose }) {
         if (step.go === 'neis') go('#/students/neis');
         if (step.go === 'jjaem') setTimeout(pressJjaem, 0);
     }
-    return (
+    /* 카드·사이드 안의 쌓임 순서에 갇히지 않게 body 에 그립니다. */
+    return createPortal(
         <div className="sheet-back" onClick={onClose}>
             <div className="sheet guide-sheet" role="dialog" aria-modal="true" aria-labelledby="guide-title" data-guide="sheet" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
@@ -130,6 +144,7 @@ export function GuideSheet({ onClose }) {
                 </ol>
                 <Btn className="chip block" onClick={onClose}>닫기</Btn>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

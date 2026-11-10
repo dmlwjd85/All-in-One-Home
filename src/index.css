@@ -1756,6 +1756,8 @@ button.hero-pill.home-todo-link {
 .links-rows { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 8px; }
 .links-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; box-shadow: var(--neo-inset); min-width: 0; }
 .links-row-text { display: grid; flex: 1 1 120px; min-width: 0; }
+/* 띄어쓰기 없는 긴 이름(예: 서울특별시교육청업무포털)도 버튼 밑으로 숨지 않고 줄을 바꿉니다. */
+.links-name { min-width: 0; overflow-wrap: anywhere; }
 .links-host { font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
 .links-row-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .links-row-btns .chip { padding: 0 12px; }

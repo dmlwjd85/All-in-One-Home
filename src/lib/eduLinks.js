@@ -7,9 +7,10 @@ export const MAX_LINKS = 12;
 export const MAX_TITLE = 20;
 export const MAX_URL = 300;
 
-/* 기본 여섯 곳. 2026-11-10 curl 로 200 응답을 확인한 공개 첫 화면 주소입니다. 로고는 쓰지 않고 이름 글자만 씁니다. */
+/* 기본 여섯 곳. 2026-11-10 curl 로 200 응답을 확인한 공개 첫 화면 주소입니다. 로고는 쓰지 않고 이름 글자만 씁니다.
+   www.neis.go.kr 는 학생·학부모용 대국민서비스라 이름에 그대로 적습니다. 교직원 업무 나이스(교육청별 주소)는 '사이트 더하기'로 넣습니다. */
 export const DEFAULT_LINKS = [
-    { id: 'neis', title: '나이스', url: 'https://www.neis.go.kr/', builtIn: true },
+    { id: 'neis', title: '나이스 대국민서비스', url: 'https://www.neis.go.kr/', builtIn: true },
     { id: 'edunet', title: '에듀넷', url: 'https://www.edunet.net/', builtIn: true },
     { id: 'indischool', title: '인디스쿨', url: 'https://indischool.com/', builtIn: true },
     { id: 'iscream', title: '아이스크림', url: 'https://www.i-scream.co.kr/', builtIn: true },
@@ -160,4 +161,19 @@ export function linkHost(url) {
     } catch {
         return '';
     }
+}
+
+/** 백업 파일에서 받은 바로가기를 합칩니다. 같은 id 나 같은 주소는 건너뛰고, 모자란 것만 뒤에 붙입니다. */
+export function mergeLinks(items, incoming, storage) {
+    const add = normalizeLinks({ items: Array.isArray(incoming) ? incoming : [] });
+    const ids = new Set(items.map((row) => row.id));
+    const urls = new Set(items.map((row) => row.url));
+    const next = [...items];
+    for (const row of add) {
+        if (ids.has(row.id) || urls.has(row.url)) continue;
+        next.push(row);
+        ids.add(row.id);
+        urls.add(row.url);
+    }
+    return next.length === items.length ? items : writeLinks(next, storage);
 }

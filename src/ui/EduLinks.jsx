@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useEscape } from './StorageNotice.jsx';
 import { DEFAULT_LINKS, MAX_LINKS, MAX_TITLE, MAX_URL, addLink, linkHost, moveLink, readLinks, removeLink, restoreDefaults, subscribeLinks, updateLink } from '../lib/eduLinks.js';
 import { readFold, writeFold } from './Fold.jsx';
 import { Btn } from './bits.jsx';
@@ -76,6 +78,7 @@ export function LinksSheet({ onClose }) {
     const [ask, setAsk] = useState('');
     const [message, setMessage] = useState('');
     const missing = DEFAULT_LINKS.some((row) => !items.some((item) => item.id === row.id));
+    useEscape(onClose);
     function save(event) {
         event.preventDefault();
         const result = form.id ? updateLink(items, form.id, form) : addLink(items, form);
@@ -83,7 +86,8 @@ export function LinksSheet({ onClose }) {
         setMessage(form.id ? '고쳤어요.' : '더했어요.');
         setForm(null);
     }
-    return (
+    /* 사이드바(sticky) 쌓임 순서에 갇히면 오른쪽 아래 쨈 버튼(z 30)이 시트를 가립니다. body 에 바로 그립니다. */
+    return createPortal(
         <div className="sheet-back" onClick={onClose}>
             <div className="sheet links-sheet" role="dialog" aria-modal="true" aria-labelledby="links-sheet-title" data-edu-sheet="1" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
@@ -93,7 +97,7 @@ export function LinksSheet({ onClose }) {
                     {items.map((row, index) => (
                         <li key={row.id} className="links-row" data-edu-row={row.id}>
                             <div className="links-row-text">
-                                <strong>{row.title}</strong>
+                                <strong className="links-name">{row.title}</strong>
                                 <span className="muted links-host">{linkHost(row.url)}</span>
                             </div>
                             {ask === row.id ? (
@@ -133,6 +137,7 @@ export function LinksSheet({ onClose }) {
                 {message && <p role="status" className="links-msg">{message}</p>}
                 <Btn className="chip block" style={{ marginTop: 12 }} onClick={onClose}>닫기</Btn>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
