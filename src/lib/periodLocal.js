@@ -79,7 +79,8 @@ export function patchPeriodLocal(patch, { fromCloud = false } = {}) {
     const prev = readPeriodLocal();
     const next = { ...prev, ...patch };
     if (!fromCloud) {
-        const now = Date.now();
+        /* 고친 시각은 서버 보정 시각입니다(db.js가 useLeaveClock으로 serverNow를 끼움). 기기 시각이면 +1일 기기가 하루 동안 이겼습니다(PR #66 r5). */
+        const now = leaveClock();
         const legacy = Number(prev.syncAt) || 0;
         const period = prev.syncAts?.period ?? legacy;
         /* work: 출퇴근 시각 칸. 예전 값(칸 시각 없음)은 시각이 있으면 교시 칸 시각, 없으면 0(한 번도 안 정함). */

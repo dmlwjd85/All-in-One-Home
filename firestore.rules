@@ -21,6 +21,28 @@ service cloud.firestore {
     // 시각이 서버가 받은 때보다 5분 넘게 앞서면 거절합니다(시계가 틀린 기기의 미래 시각이 이후 수정을 이기지 않게, PR #57 검수).
     // v46은 serverTimestamp(= request.time)를 써서 그대로 통과합니다.
     function notAhead(v) { return v is timestamp && v <= request.time + duration.value(5, 'm'); }
+    // 일정·회의록·출결(PR 동기화 2): updatedAt은 마지막으로 고친 시각. 미래 시각(5분 넘게)과 클라우드보다 이른 고친 시각의 덮어쓰기를 거절합니다.
+    // 새 판은 hlc(= updatedAt, 고친 시각)를 함께 씁니다. 옛 판(serverTimestamp·hlc 없음)은 hlc가 없는 문서만 고칠 수 있고,
+    // 새 판이 한 번이라도 쓴 문서(hlc 있음)·묘비가 있는 키는 새 판의 더 늦은 고친 시각만 받습니다(구버전 혼용 M2·M3).
+    function lwwWrite() {
+      return 'hlc' in d() && 'updatedAt' in d() && d().hlc == d().updatedAt
+        && d().updatedAt != request.time && notAhead(d().updatedAt);
+    }
+    function lwwOk(name, docId) {
+      return (!('updatedAt' in d()) || notAhead(d().updatedAt))
+        && (!('hlc' in d()) || lwwWrite())
+        // 새 판이 쓴 문서(hlc)는 새 판의 더 늦은 고친 시각만 덮습니다. hlc·editAt 없는 옛 판 쓰기는 거절합니다.
+        && (resource == null || !('hlc' in resource.data) || (lwwWrite() && d().updatedAt >= resource.data.updatedAt))
+        // 묘비가 있으면 그보다 늦은 새 판 쓰기만 되살립니다(옛 판 serverTimestamp 되살리기 거절).
+        && (resource != null || !exists(lwwTomb(name, docId)) || (lwwWrite() && d().updatedAt > get(lwwTomb(name, docId)).data.at));
+    }
+    // 시간표(요일·날짜 문서): 새 판 hlc가 있으면 같은 방식으로 보호합니다.
+    function ttOk() {
+      return (!('updatedAt' in d()) || notAhead(d().updatedAt))
+        && (!('hlc' in d()) || lwwWrite())
+        && (resource == null || !('hlc' in resource.data) || (lwwWrite() && d().updatedAt >= resource.data.updatedAt));
+    }
+    function lwwTomb(name, docId) { return /databases/$(database)/documents/users/$(request.auth.uid)/tombs/$(name + '-' + docId); }
     // ── 할 일 고친 시각(PR #57) ──
     // v47은 hlc(= updatedAt, 고친 시각)를 함께 씁니다. v46은 hlc를 모르고 updatedAt을 올린 시각으로 씁니다.
     function v47Todo() { return 'hlc' in d() && 'updatedAt' in d() && d().hlc == d().updatedAt; }
@@ -200,13 +222,13 @@ service cloud.firestore {
         allow create, update: if isOwner(uid)
           && aid.matches('^20[2-9][0-9]-[0-1][0-9]-[0-3][0-9]_[A-Za-z0-9_-]{1,40}$')
           && d().keys().hasAll(['date', 'sid', 'status'])
-          && d().keys().hasOnly(['date', 'sid', 'status', 'reason', 'period', 'paper', 'note', 'updatedAt'])
+          && d().keys().hasOnly(['date', 'sid', 'status', 'reason', 'period', 'paper', 'note', 'updatedAt', 'hlc'])
           && ymd(d().date) && id(d().sid) && aid == d().date + '_' + d().sid
           && d().status in ['absent', 'late', 'early', 'out']
           && (!('reason' in d()) || d().reason in ['sick', 'unexcused', 'approved', 'other'])
           && optInt('period', 1, 8) && optBool('paper')
           && optStr('note', 100) && (!('note' in d()) || safeText(d().note))
-          && optTs('updatedAt');
+          && optTs('updatedAt') && optTs('hlc') && lwwOk('attendance', aid);
       }
 
       // 관찰·상담·보호자·칭찬 기록
@@ -230,7 +252,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(eid)
           && d().keys().hasAll(['date', 'title'])
-          && d().keys().hasOnly(['date', 'end', 'time', 'endTime', 'title', 'kind', 'memo', 'source', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['date', 'end', 'time', 'endTime', 'title', 'kind', 'memo', 'source', 'createdAt', 'updatedAt', 'hlc'])
           && ymd(d().date) && (!('end' in d()) || (ymd(d().end) && d().end >= d().date))
           && (!('time' in d()) || hm(d().time))
           && (!('endTime' in d()) || hm(d().endTime))
@@ -238,15 +260,15 @@ service cloud.firestore {
           && (!('kind' in d()) || d().kind in ['class', 'school', 'holiday', 'mine'])
           && optStr('memo', 300) && (!('memo' in d()) || safeText(d().memo))
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
-          && optTs('createdAt') && optTs('updatedAt');
+          && optTs('createdAt') && optTs('updatedAt') && optTs('hlc') && lwwOk('events', eid);
       }
 
       // 지운 할 일 표시(묘비): 다른 기기가 지운 할 일을 그보다 먼저 고친 기기가 되살리지 않게 지운 시각만 남깁니다.
       match /tombs/{key} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && key.matches('^todos-[A-Za-z0-9_-]{1,40}$')
+        allow create, update: if isOwner(uid) && key.matches('^(todos-[A-Za-z0-9_-]{1,40}|(events|notes|attendance)-[A-Za-z0-9_-]{1,60})$')
           && d().keys().hasAll(['k', 'at']) && d().keys().hasOnly(['k', 'at'])
-          && d().k == 'todos' && notAhead(d().at);
+          && d().k in ['todos', 'events', 'notes', 'attendance'] && key.matches('^' + d().k + '-.*') && notAhead(d().at);
       }
 
       // 할 일 (걷기 진행: got / of)
@@ -295,14 +317,14 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(nid)
           && d().keys().hasAll(['text'])
-          && d().keys().hasOnly(['text', 'title', 'attendees', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['text', 'title', 'attendees', 'date', 'tags', 'pinned', 'source', 'createdAt', 'updatedAt', 'hlc'])
           && str(d().text, 1, 20000) && safeText(d().text)
           && optStr('title', 60) && (!('title' in d()) || safeText(d().title))
           && optStr('attendees', 200) && (!('attendees' in d()) || safeText(d().attendees))
           && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsOk(d().tags))
           && optBool('pinned')
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
-          && optTs('createdAt') && optTs('updatedAt');
+          && optTs('createdAt') && optTs('updatedAt') && optTs('hlc') && lwwOk('notes', nid);
       }
 
       // 알림장: 문서 id = 날짜
@@ -336,13 +358,13 @@ service cloud.firestore {
           && (key in ['mon', 'tue', 'wed', 'thu', 'fri'] || ymd(key))
           && d().keys().hasOnly(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8',
                                  's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8',
-                                 'p9', 'p10', 's9', 's10', 'updatedAt'])
+                                 'p9', 'p10', 's9', 's10', 'updatedAt', 'hlc'])
           && subjOk(d(), 'p9') && subjOk(d(), 'p10') && subjOk(d(), 's9') && subjOk(d(), 's10')
           && optStr('p1', 20) && optStr('p2', 20) && optStr('p3', 20) && optStr('p4', 20)
           && optStr('p5', 20) && optStr('p6', 20) && optStr('p7', 20) && optStr('p8', 20)
           && optStr('s1', 20) && optStr('s2', 20) && optStr('s3', 20) && optStr('s4', 20)
           && optStr('s5', 20) && optStr('s6', 20) && optStr('s7', 20) && optStr('s8', 20)
-          && optTs('updatedAt');
+          && optTs('updatedAt') && optTs('hlc') && ttOk();
       }
 
       // 예전 교무수첩에서 새 구조로 못 옮긴 쪽을 글 그대로 보관(읽기 전용 보관함). 민감 쪽은 여기 오지 않음

@@ -265,7 +265,7 @@ check(app.includes('refreshFromCloud'), '앱으로 돌아올 때 다른 기기 �
     check(/if \(classifyWriteError\(again\) === 'rejected'\) rejected\.push\(key\);/.test(cloudSrc), '클라우드 다시 쓰기 거절을 모으지 않습니다(again).');
     check(/return \{[^}]*\brejected\b[^}]*\};\s*\}\s*$/m.test(cloudSrc), 'pushUserData가 거절 목록을 돌려주지 않습니다.');
     const flushBody = dbSrc.slice(dbSrc.indexOf('async function flushCloudOnce()'), dbSrc.indexOf('async function flushCloudOnce()') + 2000);
-    check(/tellRejected\(result\.rejected\)/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
+    check(/tellRejected\(result\.rejected[).]/.test(flushBody), 'flushCloud가 거절을 알리지 않습니다.');
     check(/tellStorageIssue\(cloudRejectedMessage\(keys\)\)/.test(dbSrc), '거절 알림이 화면 알림으로 가지 않습니다.');
     check(cloudRejectedMessage(['notes/meet-a', 'todos/t1']).includes('기록 2개'), '거절 알림 문구가 다릅니다.');
 }
@@ -355,7 +355,8 @@ useAuthForTest('u1');
     await setAttendance('2026-10-27', 's1', '출석');
     await forgetQueuedCloudForTest(fake);
     const mine = calls.find((c) => c.id === '2026-10-27_s1');
-    check(mine?.uid === 'u1' && Number.isFinite(mine?.opts?.notAfter), '원래 계정에서는 지운 시각과 함께 지워야 합니다.');
+    /* 서버 시각을 재지 않은 기기의 지운 시각은 기기 시각이라 믿지 않고, 지문(expect)이 맞을 때만 지웁니다(PR #66 r4). */
+    check(mine?.uid === 'u1' && mine?.opts?.notAfter == null && mine?.opts?.exact === true && mine?.opts?.tombNow === true, `원래 계정에서는 (시각을 재지 않았으므로) 지문으로만 지워야 합니다: ${JSON.stringify(mine?.opts)}`);
 
     /* 로그아웃 뒤 지운 줄은 마지막 계정(u1)에 붙고, 한 번도 로그인 안 했으면 남기지 않습니다. */
     useAuthForTest(null);

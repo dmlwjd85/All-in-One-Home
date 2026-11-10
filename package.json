@@ -38,6 +38,8 @@
     "check:attendsave": "node scripts/check-attend-save.mjs",
     "check:todosync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-todo-sync.mjs\"",
     "check:leavesync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-leave-sync.mjs\"",
+    "check:lwwsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-sync.mjs\"",
+    "check:lwwprev": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-prevrules.mjs\"",
     "check:twodevice": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-two-device.mjs\"",
     "check:locknote": "node scripts/check-locknote.mjs",
     "check:hlc": "node scripts/check-hlc.mjs",
@@ -55,7 +57,9 @@
     "check:goalsync": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-goal-sync.mjs\"",
     "check:input-e": "node scripts/check-input-e.mjs && node scripts/mutate-input-e.mjs",
     "check:input-e-browser": "node scripts/check-input-e-browser.mjs",
-    "check:g1": "node scripts/check-g1.mjs"
+    "check:g1": "node scripts/check-g1.mjs",
+    "check:keptpaths": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-kept-paths.mjs\"",
+    "check:lwwmix": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-mix.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",

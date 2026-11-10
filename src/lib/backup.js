@@ -137,6 +137,8 @@ export function buildExport(state, { includeLocal = false, at } = {}) {
         timetable: copyData(state.timetable),
         legacy: copyData(state.legacyPages),
         inbox: copyData(inboxExportRows(state, includeLocal)),
+        /* 업데이트 전 수정 보관함(PR #66): 다른 기기의 나중 수정에 밀린 이 기기 값. 백업에도 남깁니다. */
+        keptLegacy: copyData(state.keptLegacy || []),
     };
     if (includeLocal) {
         const source = state.local || {};

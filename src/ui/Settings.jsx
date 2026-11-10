@@ -15,7 +15,8 @@ import { disconnectGcal, forgetGcalLocal, settleGcalQueue } from '../lib/gcalLiv
 import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
-import { lastSyncAt, pullFromCloudNow, setAuth } from '../lib/db.js';
+import { lastSyncAt, pullFromCloudNow, restoreKeptLegacy, setAuth } from '../lib/db.js';
+import { keptLabel, keptNow, keptValue } from '../lib/keptLabel.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
 import { AcademicSettings } from './AcademicSettings.jsx';
@@ -27,6 +28,43 @@ import { TodoSettings } from './TodoSettings.jsx';
 import { GuideSheet, useOnboard } from './StorageNotice.jsx';
 import { LinksSheet } from './EduLinks.jsx';
 import { setNotice } from '../lib/onboard.js';
+
+/* 업데이트 전 수정 보관함(PR #66): 다른 기기의 나중 수정에 밀린 이 기기 값. */
+function KeptLegacy({ data, showToast }) {
+    const [asking, setAsking] = useState(-1);
+    const list = Array.isArray(data.keptLegacy) ? data.keptLegacy : [];
+    const students = data.students || [];
+    return (
+        <div data-kept-legacy="1">
+            <h3>보관함</h3>
+            <p className="muted">업데이트 전에 이 기기에서 고친 값이 다른 기기의 더 나중 수정에 밀리면 여기에 남겨 둬요. 되돌리면 지금 고친 것으로 다른 기기에도 올라가요. 백업 파일에도 들어가요.</p>
+            {!list.length && <p className="muted" data-kept-empty="1">보관한 값이 없어요.</p>}
+            <div style={{ display: 'grid', gap: 8 }}>
+                {list.map((k, i) => (
+                    <div key={`${k.kind}-${k.id}-${k.at}-${i}`} className="kept-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <span style={{ flex: '1 1 180px', minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45 }}>{keptLabel(k, students)}</span>
+                        {asking !== i && <Btn className="chip" data-kept-restore={i} aria-label={`보관한 값으로 되돌리기: ${keptLabel(k, students)}`} onClick={() => setAsking(i)}>되돌리기</Btn>}
+                        {asking === i && (
+                            <div className="glass" role="alertdialog" aria-label="보관한 값으로 되돌리기" data-kept-ask={i} style={{ padding: 12, flex: '1 1 100%', minWidth: 0 }}>
+                                <p style={{ marginTop: 0, overflowWrap: 'anywhere' }}><b>지금 값</b> · {keptValue(k.kind, k.id, keptNow(k, data), students)}</p>
+                                <p style={{ overflowWrap: 'anywhere' }}><b>보관한 값</b> · {keptValue(k.kind, k.id, k.row, students)}</p>
+                                <p className="muted">지금 값을 보관한 값으로 바꿀까요? 다른 기기에도 이 값이 올라가요.</p>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <Btn className="primary-btn" data-kept-confirm={i} onClick={async () => {
+                                        setAsking(-1);
+                                        const result = await restoreKeptLegacy(i, k);
+                                        showToast(result.ok ? '보관한 값으로 되돌렸어요.' : '되돌리지 못했어요. 보관함에 그대로 남아 있어요.');
+                                    }}>이 값으로 되돌리기</Btn>
+                                    <Btn className="chip" data-kept-cancel={i} onClick={() => setAsking(-1)}>그만두기</Btn>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 const PUBLIC_LABELS = {
     ssugeokInbox: '받은 기록',
@@ -407,6 +445,7 @@ export function Settings() {
                     const result = await importText(text, importMode);
                     showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
                 }} />
+                <KeptLegacy data={data} showToast={showToast} />
                 <h3>로그인</h3>
                 {!cloudReady() && <p>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                 {cloudReady() && !data.auth?.uid && <Btn className="chip" onClick={async () => {
