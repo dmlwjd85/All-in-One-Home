@@ -290,6 +290,33 @@ check(['A', 'B'].every((d) => tt(d, 'fri').p5 === '폰새값'), `S6: 금요일�
     await on('B', (db) => db.retryServerClockForTest());
 }
 
+/* SETDAY(PR #66 r5 P1): 시계가 +1일인 기기(B)의 설정·교시(출퇴근) 수정. 고친 시각이 기기 시각이면 하루 동안 늘 이겨 A의 더 나중 수정을 조용히 덮었습니다.
+   서버 보정 시각으로 찍어 나중에 고친 쪽(A)이 이깁니다. */
+{
+    const DAY = 24 * HOUR;
+    await on('B', (db) => db.useDeviceClockForTest(() => Date.now() + DAY));
+    await on('B', (db) => db.retryServerClockForTest());
+    await both();
+    const pl = {};
+    for (const [name, dir] of [['A', 'a'], ['B', 'b']]) pl[name] = await import(new URL(`.lwwdev/${dir}/src/lib/periodLocal.js`, root));
+    await on('B', (db) => db.update((d) => { d.profile.periodStarts = ['08:41']; return d; }));
+    await on('B', () => pl.B.patchPeriodLocal({ workStart: '07:41' }));
+    await flush('B');
+    await wait(GAP);
+    await on('A', (db) => db.update((d) => { d.profile.periodStarts = ['08:52']; return d; }));
+    await on('A', () => pl.A.patchPeriodLocal({ workStart: '07:52' }));
+    await flush('A');
+    await both(); await flush('B'); await both();
+    const ps = (dev) => getState(dev).profile?.periodStarts?.[0];
+    const ws = (dev) => { cur = dev; return pl[dev].readPeriodLocal().workStart; };
+    check(ps('A') === '08:52' && ps('B') === '08:52', `SETDAY: +1일 기기의 설정이 나중 수정을 덮었습니다: A ${ps('A')}, B ${ps('B')}`);
+    check(ws('A') === '07:52' && ws('B') === '07:52', `SETDAY: +1일 기기의 출퇴근(교시) 설정이 나중 수정을 덮었습니다: A ${ws('A')}, B ${ws('B')}`);
+    const bAt = getState('B').profile?.settingsAts?.periodStarts;
+    check(!(Number(bAt) > Date.now() + 60_000), `SETDAY: 설정 고친 시각이 미래(기기 시각)입니다: ${bAt}`);
+    await on('B', (db) => db.useDeviceClockForTest(() => Date.now() + HOUR));
+    await on('B', (db) => db.retryServerClockForTest());
+}
+
 /* TEN(PR #66 r4 2번): 재기가 10분 넘게 실패한 +1일 기기의 삭제. 기기 시각(notAfter)으로 견주면 다른 기기의 나중 수정까지 지웠습니다.
    지문(expect)이 맞을 때만 지우고(다른 기기가 고쳤으면 남김), 묘비는 서버 시각입니다. */
 {
