@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
-import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage, toggleTodo } from '../lib/db.js';
+import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage } from '../lib/db.js';
+import { sortTodos } from '../lib/todoAchieve.js';
+import { toggleTodoFx } from './doneFx.js';
+import { GoalMeter, PriMark, PriPicks, SortToggle, useTodoSort } from './todoUi.jsx';
 import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
@@ -17,6 +20,9 @@ export function Tasks() {
     const [title, setTitle] = useState('');
     const [detail, setDetail] = useState(null);
     const [editing, setEditing] = useState(null);
+    const [pri, setPri] = useState(2);
+    const [sort, setSort] = useTodoSort();
+    const toggle = (id, event) => toggleTodoFx(id, event, { showToast });
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
     const allNotes = joined(data, 'notes');
@@ -26,9 +32,9 @@ export function Tasks() {
     const start = startOfWeekMon(clock.ymd);
     const end = addDaysYmd(start, 6);
     const groups = [
-        ['오늘', todos.filter((row) => !row.due || row.due <= clock.ymd)],
-        ['이번 주', todos.filter((row) => row.due > clock.ymd && row.due <= end)],
-        ['나중에', todos.filter((row) => row.due > end)],
+        ['오늘', sortTodos(todos.filter((row) => !row.due || row.due <= clock.ymd), sort)],
+        ['이번 주', sortTodos(todos.filter((row) => row.due > clock.ymd && row.due <= end), sort)],
+        ['나중에', sortTodos(todos.filter((row) => row.due > end), sort)],
     ];
     return (
         <div>
@@ -36,12 +42,16 @@ export function Tasks() {
                 event.preventDefault();
                 if (!title.trim()) return;
                 const read = readTodoLine(title.trim(), new Date(), clock.ymd);
-                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: read.title, done: false, due: read.due, source: 'app' });
+                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: read.title, done: false, due: read.due, pri, source: 'app' });
                 if (result?.storageFailed) return;
                 setTitle('');
+                setPri(2);
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
             }}>
-                <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
+                <div className="todo-add-row">
+                    <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
+                    <PriPicks value={pri} onPick={setPri} idBase="todo-add" />
+                </div>
             </form>
             <section aria-label="임시보관함" style={{ marginTop: 16 }}>
                 <h3 style={{ marginBottom: 8 }}>임시보관함</h3>
@@ -74,6 +84,12 @@ export function Tasks() {
                 </div>
             )}
             {todos.some((row) => row.localOnly) && <LockNote style={{ marginTop: 16, marginBottom: 0 }} />}
+            {todos.length > 0 && (
+                <div className="todo-tools">
+                    <SortToggle sort={sort} onPick={setSort} />
+                    <GoalMeter goals={data.goals} todos={todos} today={clock.ymd} />
+                </div>
+            )}
             {groups.map(([label, rows]) => (
                 <section key={label} style={{ marginTop: 16 }}>
                     <h3 style={{ marginBottom: 8 }}>{label}</h3>
@@ -81,15 +97,16 @@ export function Tasks() {
                     {rows.map((row) => (
                         <article key={row.id} className="todo-block">
                             <div className="todo-line">
-                                <Btn className="todo-check" aria-label={row.done ? '다시 남기기' : '끝냄 표시'} aria-pressed={Boolean(row.done)} onClick={() => toggleTodo(row.id)}>
+                                <Btn className="todo-check" data-todo-check={row.id} aria-label={row.done ? `다시 남기기: ${row.title}` : `끝냄 표시: ${row.title}`} aria-pressed={Boolean(row.done)} onClick={(event) => toggle(row.id, event)}>
                                     <span aria-hidden="true">{row.done ? '☑' : '☐'}</span>
                                 </Btn>
                                 <Btn className="todo-main" data-todo-title="1" onClick={(event) => {
                                     /* 잘린 제목은 자세히 보기, 다 보이는 제목은 예전처럼 끝냄 표시. 체크 칸은 늘 끝냄 표시입니다. */
                                     const title = event.currentTarget.querySelector('.todo-title');
                                     if (isClipped(title)) setDetail(row);
-                                    else toggleTodo(row.id);
+                                    else toggle(row.id, { currentTarget: event.currentTarget.parentElement?.querySelector('.todo-check') || event.currentTarget });
                                 }}>
+                                    <PriMark row={row} />
                                     <TodoTitle className="todo-title" lead={row.localOnly ? '🔒 ' : ''} title={row.title} />
                                 </Btn>
                                 {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}{row.time ? ` ${row.time}` : ''}</span> : null}
@@ -131,7 +148,7 @@ export function Tasks() {
                 <Btn className="chip" onClick={() => go('#/minutes')}>회의록 열기</Btn>
             </p>
             {!notes.length && <p className="muted">고정해 두고 싶은 메모가 있으면 여기에 남겨요.</p>}
-            {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={() => toggleTodo(detail.id)} onEdit={() => { setEditing(todos.find((item) => item.id === detail.id) || detail); setDetail(null); }} />}
+            {detail && <DetailSheet kind="todo" row={todos.find((item) => item.id === detail.id) || detail} onClose={() => setDetail(null)} onToggle={(event) => toggle(detail.id, event)} onEdit={() => { setEditing(todos.find((item) => item.id === detail.id) || detail); setDetail(null); }} />}
             {editing && <TodoEditSheet row={todos.find((item) => item.id === editing.id) || editing} onClose={() => setEditing(null)} />}
         </div>
     );

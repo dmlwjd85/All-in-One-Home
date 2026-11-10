@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, dueLabel, eventClock, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { iraParticle, restInfo } from '../lib/daymark.js';
 import { periodStatus, workTimer } from '../lib/period.js';
-import { joined, joinedRecords, toggleTodo } from '../lib/db.js';
+import { joined, joinedRecords } from '../lib/db.js';
+import { toggleTodoFx } from './doneFx.js';
 import { visibleGoogleEvents } from '../lib/gcalCore.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
@@ -254,7 +255,7 @@ export function Home() {
             {detail && (() => {
                 const row = (detail.kind === 'todo' ? todos : events).find((item) => item.id === detail.id);
                 if (!row) return null;
-                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? () => toggleTodo(row.id) : null} onEdit={detail.kind === 'todo' ? () => { setEditTodo(row); setDetail(null); } : null} />;
+                return <DetailSheet kind={detail.kind} row={row} onClose={() => setDetail(null)} onToggle={detail.kind === 'todo' ? (event) => toggleTodoFx(row.id, event, { showToast }) : null} onEdit={detail.kind === 'todo' ? () => { setEditTodo(row); setDetail(null); } : null} />;
             })()}
             {editTodo && <TodoEditSheet row={todos.find((item) => item.id === editTodo.id) || editTodo} onClose={() => setEditTodo(null)} />}
         </div>

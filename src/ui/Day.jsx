@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, formatKoDate, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
-import { joined, joinedRecords, removeItem, saveTextItem, toggleTodo } from '../lib/db.js';
+import { joined, joinedRecords, removeItem, saveTextItem } from '../lib/db.js';
+import { toggleTodoFx } from './doneFx.js';
+import { badgeOn, normalizeGoals } from '../lib/todoAchieve.js';
 import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
 import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
@@ -62,9 +64,13 @@ export function Day() {
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>할 일</h2>
+                {(() => {
+                    const entry = normalizeGoals(data.goals).days[date];
+                    return badgeOn(entry) ? <p className="goal-day-line" data-role="day-goal" style={{ margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: 'var(--accent)' }}><span className="goal-seal" aria-hidden="true">✓</span>하루 목표 {entry.g}개를 채운 날이에요.</p> : null;
+                })()}
                 {todos.map((row) => (
                     <div key={row.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={() => toggleTodo(row.id)}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
+                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
                         <Btn className="chip" onClick={() => removeItem('todos', row.id).then(() => showToast('할 일을 지웠어요.'))}>지우기</Btn>
                     </div>
                 ))}

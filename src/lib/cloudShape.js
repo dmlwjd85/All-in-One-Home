@@ -152,9 +152,11 @@ export function eventBodyWithoutEndTime(body) {
 
 /** 규칙이 할 일 시각 칸을 아직 모르면 그 칸만 빼고 올립니다. 시각은 이 기기에 남아 알림은 그대로 울립니다. */
 export function todoBodyWithoutTime(body) {
-    if (!body || !('time' in body)) return null;
+    /* 중요도·끝낸 날(PR C) 칸도 아직 모르는 규칙이면 함께 빼고 올립니다. 이 기기에는 남습니다. */
+    const extra = ['time', 'pri', 'doneOn', 'doneHm'];
+    if (!body || !extra.some((key) => key in body)) return null;
     const next = { ...body };
-    delete next.time;
+    for (const key of extra) delete next[key];
     return next;
 }
 
@@ -166,12 +168,16 @@ function toTodo(row) {
     if (row.due) body.due = row.due;
     /* 알림 시각(PR #60). 있을 때만 올리고, 고치기에서 일부러 지운 줄('')만 클라우드 칸도 지웁니다. 옛 줄의 지문은 그대로라 한꺼번에 다시 올리지 않습니다. */
     if (/^([01]\d|2[0-3]):[0-5]\d$/.test(row.time || '')) body.time = row.time;
+    /* 중요도·끝낸 날·끝낸 시각(PR C). 있을 때만 올려 옛 줄의 지문은 그대로입니다. 체크를 풀어 ''로 둔 칸만 클라우드에서도 지웁니다. */
+    if (row.pri === 1 || row.pri === 2 || row.pri === 3) body.pri = row.pri;
+    if (row.done && /^20[2-9]\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(row.doneOn || '')) body.doneOn = row.doneOn;
+    if (row.done && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.doneHm || '')) body.doneHm = row.doneHm;
     if (row.got != null) body.got = Number(row.got);
     if (row.of != null) body.of = Number(row.of);
     if (row.order != null) body.order = Number(row.order);
     /* at: 이 기기에서 마지막으로 고친 시각(서버 시각으로 보정한 ms). 클라우드 updatedAt으로 올라가 기기끼리 '마지막 수정'을 견줍니다. 해시에는 안 들어갑니다. */
     const at = Number(row.editAt);
-    return { id, body, stamps: row.done ? stamps(['updatedAt', 'hlc', 'doneAt']) : stamps(['updatedAt', 'hlc']), clear: [...emptied(body, ['due']), ...(row.time === '' ? ['time'] : [])], ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
+    return { id, body, stamps: row.done ? stamps(['updatedAt', 'hlc', 'doneAt']) : stamps(['updatedAt', 'hlc']), clear: [...emptied(body, ['due']), ...(row.time === '' ? ['time'] : []), ...(row.doneOn === '' && !body.doneOn ? ['doneOn'] : []), ...(row.doneHm === '' && !body.doneHm ? ['doneHm'] : [])], ...(Number.isFinite(at) && at > 0 ? { at } : {}) };
 }
 
 function toNote(row) {
@@ -308,6 +314,9 @@ export function fromCloudRow(collection, id, data = {}) {
             done: Boolean(data.done),
             due: data.due || '',
             ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(data.time || '') ? { time: data.time } : {}),
+            ...(data.pri === 1 || data.pri === 2 || data.pri === 3 ? { pri: data.pri } : {}),
+            ...(/^20[2-9]\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(data.doneOn || '') ? { doneOn: data.doneOn } : {}),
+            ...(/^([01]\d|2[0-3]):[0-5]\d$/.test(data.doneHm || '') ? { doneHm: data.doneHm } : {}),
             got: data.got,
             of: data.of,
             order: data.order,

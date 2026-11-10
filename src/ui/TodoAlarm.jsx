@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { joined, toggleTodo } from '../lib/db.js';
+import { joined } from '../lib/db.js';
+import { toggleTodoFx } from './doneFx.js';
 import { seoulParts } from '../lib/date.js';
 import { dueAlarms, markFired, readFired, splitAlarms } from '../lib/todoAlarm.js';
 import { useUi } from './context.jsx';
@@ -113,7 +114,7 @@ export function TodoAlarm() {
                                     <div className="todo-alarm-sub">{row.title}{row.missed ? ' · 놓침' : ''}</div>
                                 </span>
                             </div>
-                            <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={() => toggleTodo(row.id)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
+                            <Btn className="chip" aria-label={`${row.title} 끝냄 표시`} disabled={row.done} onClick={(event) => toggleTodoFx(row.id, event)}>{row.done ? '끝냄' : '끝냄 표시'}</Btn>
                         </li>
                     ))}
                 </ul>
