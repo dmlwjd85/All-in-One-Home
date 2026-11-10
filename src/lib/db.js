@@ -13,8 +13,8 @@ import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
-import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
+import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
+import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
@@ -295,10 +295,15 @@ function setClockOffset(offset) {
     saveClock();
     return true;
 }
-/** 재기 전에 기기 시각(editD)만 적어 둔 시각을 서버 기준으로 바꿉니다. 지금보다 늦은 값은 지금으로 자릅니다. */
+/** 재기 전에 기기 시각(editD)만 적어 둔 시각을 서버 기준으로 바꿉니다.
+ *  지금보다 늦게 나오면(그 사이 기기 시계를 바꿈) 고친 시각을 믿을 수 없으므로 -1('모름')을 돌려줍니다(PR #66 r4 전수 점검).
+ *  예전에는 지금으로 잘라 찍어, 그 사이 다른 기기가 더 나중에 고친 값을 이길 수 있었습니다. */
+const SETTLE_SLACK_MS = 2000;
 function settleDeviceTime(d) {
     if (!clockOk || !Number.isFinite(d) || d <= 0) return 0;
-    const at = Math.min(Math.round(d + clock.o), serverNow());
+    const raw = Math.round(d + clock.o);
+    if (raw > serverNow() + SETTLE_SLACK_MS) return -1;
+    const at = Math.min(raw, serverNow());
     return at > 0 ? at : 0;
 }
 /** 검사용: 기기 시계를 바꿔 끼웁니다(시계가 어긋난 기기 흉내). */
@@ -314,20 +319,50 @@ export function stampTodoEdits(prev, next, now = null) {
         row.editAt = t;
         if (t > 0) delete row.editD; else row.editD = deviceNow();
     };
-    const before = new Map([...(prev?.todos || []), ...(prev?.local?.todos || [])].filter((row) => row?.id).map((row) => [String(row.id), row]));
+    /* 할 일·일정·회의록(메모)·출결: 바뀐 줄마다 고친 시각을 찍습니다. 목록마다 따로 견줍니다(같은 id가 다른 목록에 있어도 섞이지 않게). */
     const strip = (row) => { const { editAt, editD, ...rest } = row; return JSON.stringify(rest); };
-    for (const list of [next?.todos || [], next?.local?.todos || []]) {
-        for (const row of list) {
-            if (!row?.id) continue;
-            const old = before.get(String(row.id));
-            if (!old) { if (!Number.isFinite(row.editAt)) mark(row); continue; }
-            if (strip(old) !== strip(row)) mark(row);
-            else {
-                if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
-                if (Number.isFinite(old.editD) && !Number.isFinite(row.editD) && !(row.editAt > 0)) row.editD = old.editD;
+    const groups = [
+        [[...(prev?.todos || []), ...(prev?.local?.todos || [])], [next?.todos || [], next?.local?.todos || []]],
+        [prev?.events || [], [next?.events || []]],
+        [prev?.notes || [], [next?.notes || []]],
+        [prev?.attendance || [], [next?.attendance || []]],
+    ];
+    for (const [olds, lists] of groups) {
+        const before = new Map(olds.filter((row) => row?.id).map((row) => [String(row.id), row]));
+        for (const list of lists) {
+            for (const row of list) {
+                if (!row?.id) continue;
+                const old = before.get(String(row.id));
+                if (!old) { if (!Number.isFinite(row.editAt)) mark(row); continue; }
+                if (strip(old) !== strip(row)) mark(row);
+                else {
+                    if (Number.isFinite(old.editAt) && !Number.isFinite(row.editAt)) row.editAt = old.editAt;
+                    if (Number.isFinite(old.editD) && !Number.isFinite(row.editD) && !(row.editAt > 0)) row.editD = old.editD;
+                }
             }
         }
     }
+    /* 시간표: 요일(날짜)마다 고친 시각을 찍습니다. */
+    const oldTable = prev?.timetable || {};
+    for (const [day, value] of Object.entries(next?.timetable || {})) {
+        if (!value || typeof value !== 'object') continue;
+        const old = oldTable[day];
+        /* 요일 기본값을 복사해 만든 날짜(setDayTimetable)는 복사된 editAt이 있어도 새로 고친 것으로 찍습니다. */
+        if (!old || strip(old) !== strip(value)) { mark(value); continue; }
+        if ('editAt' in old) value.editAt = old.editAt; else delete value.editAt;
+        if ('editD' in old) value.editD = old.editD; else delete value.editD;
+    }
+}
+/** 받은 시간표 하루를 이 기기 값 대신 쓸지: 이 기기 고친 시각을 알면 클라우드가 더 늦게 고쳤을 때만, 모르면 예전 규칙(fallback). */
+function takeRemoteDay(mine, remoteAt, fallback) {
+    if (!mine || !Object.keys(mine).filter((k) => k !== 'editAt' && k !== 'editD').length) return true;
+    /* 재기 전에 고친 날(editD): 고친 시각이 정해질 때까지 이 기기 값을 지킵니다(정착 뒤 다시 견줌). 받아오기 fallback이 덮지 않게 합니다. */
+    if (!(Number(mine.editAt) > 0) && Number.isFinite(mine.editD)) return false;
+    if (Number(mine.editAt) > 0 && Number.isFinite(remoteAt) && remoteAt > 0) return remoteAt > Number(mine.editAt);
+    return fallback;
+}
+function remoteDay(value, remoteAt) {
+    return Number.isFinite(remoteAt) && remoteAt > 0 ? { ...value, editAt: remoteAt } : { ...value };
 }
 function updateFromCloud(recipe) {
     fromCloud += 1;
@@ -377,7 +412,9 @@ export function cloudRejectedMessage(keys = []) {
     const minutes = keys.filter((key) => key.startsWith('notes/meet-')).length;
     if (keys.length === 1 && keys[0] === 'settings/leave') return '클라우드가 오늘 조퇴 시각을 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.';
     const what = minutes === keys.length ? '회의록' : '기록';
-    return `클라우드가 ${what} ${keys.length}개를 받지 않았어요. 이 기기에는 그대로 남아 있고, 나중에 다시 올려요.`;
+    /* 새 판에서 남는 거절은 규칙 검증 거절입니다(시각 정착 전 거절은 알리지 않음). 같은 내용으로는 다시 올려도 거절되고,
+       규칙이 앱보다 새것일 때는 새로고침(최신 판)이 도움이 됩니다. 로컬은 지우지 않습니다. */
+    return `클라우드가 ${what} ${keys.length}개를 받지 않았어요. 이 기기에는 그대로 남아 있어요. 앱을 새로고침해도 계속 뜨면 그 ${what}을 한 번 고쳐 저장해 주세요.`;
 }
 
 function tellRejected(keys = []) {
@@ -423,6 +460,131 @@ export function mergePushedHashes(sent, now, pushed) {
     return out;
 }
 
+/*
+ * 업데이트 전에(구버전에서) 고치고 못 올린 일정·회의록·출결·시간표 줄(PR #66 r3 P1).
+ * 구버전은 고친 시각(editAt)을 남기지 않아, 새 판이 한 번 쓴 문서(hlc)·묘비 있는 문서에는 규칙이 hlc 없는 쓰기를 늘 거절하고
+ * lost로도 판정되지 않아 두 기기가 영영 갈라졌습니다. 아직 못 올린 줄(올린 해시와 지문이 다름)에만 지금을 고친 시각으로 찍습니다.
+ * 서버 시각을 못 쟀으면 editD(기기 시각)를 찍어 두고 settleUnsureEdits가 재기 뒤 정착합니다. 로컬 수정은 버리지 않습니다.
+ */
+const LEGACY_STAMP = [['events', 'events'], ['notes', 'notes'], ['attendance', 'attendance']];
+function legacyUnsent(cloudName, row) {
+    if (!row || Number(row.editAt) > 0 || Number.isFinite(row.editD)) return false;
+    const mark = rowMark(cloudName, row);
+    return Boolean(mark) && cloudHashes[mark.key] !== mark.mark;
+}
+/*
+ * 단, 업데이트 전 수정이 다른 기기의 더 늦은 수정을 덮으면 안 됩니다(PR #66 r4 A7: 구버전에서 T1에 고침 → 다른 기기 신판이 T2에 고침 → 업데이트).
+ * 업데이트 전 수정은 고친 시각을 모르므로, 클라우드 문서가 이 기기가 마지막으로 올리거나 받은 판(cloudHashes)과 다르면 덮지 않습니다.
+ *  - 일정·회의록: 클라우드 값을 받고, 이 기기 수정은 '(충돌 사본)' 새 줄로 따로 올려 양쪽 수정이 모두 남습니다(할 일 충돌 사본 배지 재사용).
+ *  - 출결·시간표: 같은 학생·날짜(요일)에 줄이 하나라 사본을 만들 수 없습니다. 클라우드 값을 받고, 이 기기 값은 기기 보관함(legacyKept)에 남기고 알립니다.
+ * 클라우드를 읽지 못하면(오프라인·캐시) 이번에는 찍지 않고 다음 올리기에서 다시 봅니다(거절 안내도 띄우지 않음).
+ */
+const LEGACY_KEPT_KEY = 'legacyKept';
+async function stampUnsentLegacy() {
+    const tableRow = (day, value) => (value && typeof value === 'object' ? { id: day, ...value } : null);
+    const found = LEGACY_STAMP.some(([local, cloudName]) => (state[local] || []).some((row) => legacyUnsent(cloudName, row)))
+        || Object.entries(state.timetable || {}).some(([day, value]) => legacyUnsent('timetable', tableRow(day, value)));
+    if (!found) return 0;
+    const uid = state.auth?.uid;
+    if (!uid || !cloudApi.pull) return 0;
+    let remote = null;
+    try { remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc }); } catch { remote = null; }
+    if (!remote || remote.fresh === false || state.auth?.uid !== uid) return 0;
+    let count = 0;
+    const copies = [];
+    const kept = [];
+    const mark = (row) => {
+        const at = editClock();
+        if (at > 0) { row.editAt = at; delete row.editD; } else { row.editAt = 0; row.editD = deviceNow(); }
+        count += 1;
+    };
+    /* 클라우드가 이 기기가 마지막으로 알던 판 그대로이거나(또는 없음·같은 내용) 덮어도 되는지 */
+    const safe = (cloudName, mine, theirs) => {
+        if (!theirs) return true;
+        const m = rowMark(cloudName, mine);
+        const t = rowMark(cloudName, theirs);
+        if (!m || !t) return true;
+        return t.mark === m.mark || (Boolean(cloudHashes[m.key]) && t.mark === cloudHashes[m.key]);
+    };
+    await updateFromCloud((draft) => {
+        for (const [local, cloudName] of LEGACY_STAMP) {
+            const byId = new Map((remote[local] || []).filter((r) => r?.id).map((r) => [String(r.id), r]));
+            const next = [];
+            for (const row of draft[local] || []) {
+                if (!legacyUnsent(cloudName, row)) { next.push(row); continue; }
+                const theirs = byId.get(String(row.id)) || null;
+                if (safe(cloudName, row, theirs)) { mark(row); next.push(row); continue; }
+                const got = withRemoteAt(cloudName, takeRemote(cloudName, row, theirs), remote);
+                delete got.editD;
+                next.push(got);
+                const m = rowMark(cloudName, got); if (m) cloudHashes[m.key] = m.mark;
+                if (cloudName === 'attendance') { kept.push({ kind: cloudName, id: String(row.id), row }); continue; }
+                const copy = legacyCopy(row);
+                copies.push(cloudName);
+                next.push(copy);
+                /* 제목이 길어 사본 제목이 잘릴 수도 있어, 원래 줄도 기기 보관함에 그대로 남깁니다. */
+                kept.push({ kind: cloudName, id: String(row.id), row, copy: copy.id });
+            }
+            draft[local] = next;
+        }
+        for (const [day, value] of Object.entries(draft.timetable || {})) {
+            if (!legacyUnsent('timetable', tableRow(day, value))) continue;
+            const theirs = remote.timetable?.[day] ? { id: day, ...remote.timetable[day] } : null;
+            if (safe('timetable', tableRow(day, value), theirs)) { mark(value); continue; }
+            kept.push({ kind: 'timetable', id: day, row: value });
+            draft.timetable[day] = remoteDay(remote.timetable[day], remote.ats?.timetable?.[day]);
+            const m = rowMark('timetable', { id: day, ...draft.timetable[day] }); if (m) cloudHashes[m.key] = m.mark;
+        }
+        return draft;
+    });
+    if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
+    if (kept.length && !memoryOnly) {
+        try {
+            const prev = await mainVault.get(LEGACY_KEPT_KEY);
+            const list = Array.isArray(prev) ? prev : [];
+            await mainVault.set(LEGACY_KEPT_KEY, [...list, ...kept.map((k) => ({ ...k, at: Date.now() }))].slice(-200));
+        } catch { /* 보관 실패: 안내는 그대로 */ }
+    }
+    const keptOnly = kept.filter((k) => !k.copy).length;
+    if (copies.length || keptOnly) tellStorageIssue(legacyConflictMessage(copies.length, keptOnly));
+    return count + copies.length + keptOnly;
+}
+/** 업데이트 전 수정의 사본: 새 id, 제목 앞에 '(충돌 사본)'. 아직 올리지 않은 새 줄이고 고친 시각은 지금입니다. */
+function legacyCopy(row) {
+    /* 회의록(meet-)은 사본도 회의록으로 보이게 머리를 지킵니다. */
+    const head = String(row?.id || '').startsWith('meet-') ? 'meet-' : '';
+    const id = `${head}c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    const { editAt, editD, ...rest } = row || {};
+    const base = String(row?.title || '');
+    const title = (base.startsWith(CONFLICT_PREFIX) ? base : `${CONFLICT_PREFIX}${base}`).slice(0, 60);
+    const at = editClock();
+    return { ...rest, id, title, source: 'app', ...(at > 0 ? { editAt: at } : { editAt: 0, editD: deviceNow() }) };
+}
+export function legacyConflictMessage(copied = 0, kept = 0) {
+    const parts = [];
+    if (copied) parts.push(`다른 기기에서 나중에 고친 기록 ${copied}개가 있어, 업데이트 전에 이 기기에서 고친 내용은 '충돌 사본'으로 따로 남겼어요.`);
+    if (kept) parts.push(`출결·시간표 ${kept}개는 다른 기기에서 나중에 고친 값으로 맞추고, 이 기기에서 고친 값은 기기에 보관해 두었어요.`);
+    return parts.join(' ');
+}
+/** 서버 시각을 재기 전에 고쳐(editD만) 아직 고친 시각이 정해지지 않은 줄의 클라우드 키. */
+function unsureKeys() {
+    const keys = new Set();
+    const unsure = (row) => row && !(Number(row.editAt) > 0) && Number.isFinite(row.editD);
+    for (const [local, cloudName] of [...LEGACY_STAMP, ['todos', 'todos']]) {
+        for (const row of state[local] || []) { if (!unsure(row)) continue; const m = rowMark(cloudName, row); if (m) keys.add(m.key); }
+    }
+    /* 업데이트 전 수정(아직 시각을 못 찍음, 클라우드를 읽지 못한 동안)도 다음 올리기에서 다시 보므로 알리지 않습니다. */
+    for (const [local, cloudName] of LEGACY_STAMP) for (const row of state[local] || []) if (legacyUnsent(cloudName, row)) { const m = rowMark(cloudName, row); if (m) keys.add(m.key); }
+    for (const [day, value] of Object.entries(state.timetable || {})) {
+        if (legacyUnsent('timetable', { id: day, ...value })) { const m = rowMark('timetable', { id: day, ...value }); if (m) keys.add(m.key); continue; }
+        if (!unsure(value)) continue;
+        const m = rowMark('timetable', { id: day, ...value }); if (m) keys.add(m.key);
+    }
+    return keys;
+}
+/** 검사용 */
+export function stampUnsentLegacyForTest() { return stampUnsentLegacy(); }
+
 async function flushCloudTracked() {
     if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
     /* 동기화 칩: 올리는 동안 '동기화 중', 끝나면 다 올렸는지에 따라 '동기화됨' 또는 '동기화하지 못했어요'. */
@@ -445,14 +607,16 @@ async function flushCloudOnce() {
     /* 지켜 둔 시각(예전 규칙에 거절됨)은 해시를 비워 다시 올립니다. 새 규칙이면 시각까지 올라가고 지킴 기록이 지워집니다(PR #62 r2 1번). */
     const retry = new Set(heldTimesToRetry(state.todos));
     if (retry.size) {
-        /* 같은 updatedAt으로는 규칙이 시각만 바꾸는 쓰기를 거절하므로, 시각을 더하는 지금을 고친 시각으로 둡니다. */
+        /* 같은 updatedAt으로는 규칙이 시각만 바꾸는 쓰기를 거절하므로 고친 시각을 1ms 올립니다. 예전에는 '지금'을 찍어,
+           그 사이 다른 기기가 더 나중에 고친 할 일을 이길 수 있었습니다(PR #66 r4 전수 점검). 고친 시각을 모르면 예전처럼 지금. */
         state = { ...state, todos: (state.todos || []).map((row) => {
             if (!retry.has(String(row?.id))) return row;
-            const at = editClock();
+            const at = Number(row?.editAt) > 0 ? Number(row.editAt) + 1 : editClock();
             return at > 0 ? { ...row, editAt: at } : row;
         }) };
         for (const id of retry) delete cloudHashes[`todos/${id}`];
     }
+    await stampUnsentLegacy();
     const sent = { ...cloudHashes };
     const held = heldTodos;
     const sending = held.size ? { ...state, todos: (state.todos || []).filter((row) => !held.has(toCloudRow('todos', row)?.id)) } : state;
@@ -464,7 +628,10 @@ async function flushCloudOnce() {
         cloudHashes = mergePushedHashes(sent, cloudHashes, result.hashes);
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
-    if (Array.isArray(result?.rejected)) tellRejected(result.rejected);
+    /* 서버 시각을 재기 전(editD만 있음)에 고친 줄은 hlc 문서에 거절돼도 재기 뒤 다시 올라가므로 알리지 않습니다(PR #66 r3 P2-2). */
+    if (Array.isArray(result?.rejected)) { const waiting = unsureKeys(); tellRejected(result.rejected.filter((key) => !waiting.has(key))); }
+    /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
+    if ((result?.lost || []).length) setTimeout(() => { refreshFromCloud({ force: true }).catch(() => {}); }, 0);
     await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
     return result;
 }
@@ -527,14 +694,14 @@ function readCloudForget() {
             && typeof item.k === 'string' && /^[a-z]+\/[A-Za-z0-9_-]{1,120}$/.test(item.k)
             && Number.isFinite(item.at))
             .slice(-500)
-            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(Number.isFinite(item.d) ? { d: item.d } : {}), ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}), ...(typeof item.y === 'string' && /^f[a-z0-9]{1,20}$/.test(item.y) ? { also: item.y } : {}) }]);
+            .map((item) => [forgetEntryKey(item.u, item.k), { uid: item.u, key: item.k, at: item.at, ...(Number.isFinite(item.d) ? { d: item.d } : {}), ...(item.e === 1 ? { exact: true } : {}), ...(item.s === 1 ? { server: true } : {}), ...(typeof item.x === 'string' && /^f[a-z0-9]{1,20}$/.test(item.x) ? { expect: item.x } : {}), ...(typeof item.y === 'string' && /^f[a-z0-9]{1,20}$/.test(item.y) ? { also: item.y } : {}), ...(typeof item.z === 'string' && /^f[a-z0-9]{1,20}$/.test(item.z) ? { back: item.z } : {}) }]);
     } catch { return []; }
 }
 
 function saveCloudForget() {
     try {
         if (memoryOnly || state?.profile?.sharedPc) return;
-        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(Number.isFinite(e.d) ? { d: e.d } : {}), ...(e.expect ? { x: e.expect } : {}), ...(e.also ? { y: e.also } : {}) }));
+        const list = [...cloudForget.values()].slice(-500).map((e) => ({ u: e.uid, k: e.key, at: e.at, ...(Number.isFinite(e.d) ? { d: e.d } : {}), ...(e.exact ? { e: 1 } : {}), ...(e.server ? { s: 1 } : {}), ...(e.expect ? { x: e.expect } : {}), ...(e.also ? { y: e.also } : {}), ...(e.back ? { z: e.back } : {}) }));
         if (list.length || lastCloudUid) globalThis.localStorage?.setItem(CLOUD_FORGET_KEY, JSON.stringify({ last: lastCloudUid, items: list }));
         else globalThis.localStorage?.removeItem(CLOUD_FORGET_KEY);
     } catch { /* 저장 공간이 없으면 이번 실행 동안만 기억합니다. */ }
@@ -546,9 +713,9 @@ export function useAuthForTest(uid) {
     if (uid) rememberCloudUid(uid);
 }
 
-/** 검사용: 가짜 삭제 함수로 대기열 처리를 돌립니다. */
+/** 검사용: 가짜 삭제 함수로 대기열 처리를 돌립니다(서버 시각 재기 기다림은 건너뜀. 기다림은 check:lwwsync DAY1이 봅니다). */
 export function forgetQueuedCloudForTest(remove) {
-    return forgetQueuedCloud(remove, { skipSyncCheck: true });
+    return forgetQueuedCloud(remove, { skipSyncCheck: true, skipClockWait: true });
 }
 
 /** 검사용: 새로고침을 흉내 내어 저장된 대기열을 다시 읽습니다. */
@@ -579,10 +746,24 @@ function queueCloudForget(bucket, id, row = null) {
     const marked = row && bucket !== 'attendance' ? rowMark(bucket, row) : null;
     const mine = shaped?.id ? printDigest(fingerprint(shaped.body, shaped.clear || [])) : (marked ? printDigest(marked.mark) : null);
     const also = mine && mine !== expect ? mine : null;
+    /* 지문만으로 지울 때(시각을 믿을 수 없음) 견줄 '클라우드에서 다시 읽은 모양'의 요약. 올린 그대로인 줄만 남깁니다(PR #66 r4).
+       회의록처럼 받을 때 기본값이 붙는 줄은 올린 지문과 다시 읽은 지문이 달라, 이것 없이는 지우지 못하고 남깁니다. */
+    let back = null;
+    if (row && mine && mine === expect) {
+        const sent = toCloudRow(bucket, row);
+        const again = sent?.id ? fromCloudRow(bucket, sent.id, sent.body) : null;
+        const m = again ? rowMark(bucket, again) : null;
+        back = m ? printDigest(m.mark) : null;
+        if (back === expect) back = null;
+    }
     if (uid) {
-        /* 할 일만 '모름(0)'을 씁니다(묘비·보류로 견줌). 다른 줄은 예전(v46)처럼 기기 시각으로 지운 뒤 고친 문서를 지킵니다. */
+        /* 할 일만 '모름(0)'을 씁니다(묘비·보류로 견줌). 다른 줄은 예전처럼 기기 시각으로 지운 뒤 고친 문서를 지킵니다.
+           할 일의 d는 서버 시각 재기 뒤 settleUnsureEdits가 고칩니다. */
+        /* 서버 시각을 못 잰 기기(+1일 등)는 기기 시각 그대로 묘비를 남기면 규칙(notAhead)에 걸리거나, 그 뒤 다른 기기가 고친 문서까지 지웁니다.
+           다른 줄도 d(기기 시각)를 남기고, 재기 뒤 settleUnsureEdits가 at을 서버 기준으로 바꾼 다음에 지웁니다(PR #66 r3 P2-3). */
         const at = editClock() || (bucket === 'todos' ? 0 : deviceNow());
-        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at, ...(bucket === 'todos' && !clockOk ? { d: deviceNow() } : {}), ...(expect ? { expect } : {}), ...(also ? { also } : {}) });
+        /* server: at이 서버 기준(editClock)인지. 아닌 항목(재기 전·구버전이 남긴 대기열)은 지운 시각으로 견주지 않습니다. */
+        cloudForget.set(forgetEntryKey(uid, key), { uid, key, at, ...(clockOk ? { server: true } : { d: deviceNow() }), ...(expect ? { expect } : {}), ...(also ? { also } : {}), ...(back ? { back } : {}) });
         saveCloudForget();
         syncQueued(queuedCloudKeys().length);
     }
@@ -592,7 +773,8 @@ function queueCloudForget(bucket, id, row = null) {
     }
 }
 
-async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false } = {}) {
+const UNSURE_FORGET_WAIT_MS = 10 * 60 * 1000;
+async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false, skipClockWait = false } = {}) {
     if (!cloudForget.size || !state.auth?.uid || (!skipSyncCheck && !cloudApi.available())) return;
     const uid = state.auth.uid;
     const memory = memoryOnly || state.profile?.sharedPc;
@@ -605,8 +787,15 @@ async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false
             cloudForget.delete(entryKey);
             continue;
         }
+        /* 일정·회의록·출결: 서버 시각을 재기 전에 지운 줄은 재기 뒤 정착한 시각으로 지웁니다(로컬에서는 이미 빠졌고, 받아오기에도 다시 붙지 않음).
+           10분 넘게 재지 못하면 기기 시각(notAfter)은 쓰지 않고, 클라우드 문서가 마지막으로 알던 내용(expect) 그대로일 때만 지웁니다.
+           묘비는 서버가 받은 시각으로 남겨 notAhead에 걸리지 않게 합니다(PR #66 r4 2번). */
+        const waiting = bucket !== 'todos' && Number.isFinite(entry.d) && !clockOk;
+        /* 기기 시각으로만 지운 시각(at)이 남은 일정·회의록·출결(옛 대기열 포함, 재기 전 d 없음)도 시각을 믿지 않습니다. */
+        const unsure = bucket !== 'todos' && (waiting || entry.exact === true || entry.server !== true || !(entry.at > 0));
+        if (waiting && !skipClockWait && cloudApi.clock && deviceNow() - entry.d < UNSURE_FORGET_WAIT_MS) continue;
         /* 클라우드 문서가 지운 시각보다 나중에 고쳐졌으면 지우지 않습니다. */
-        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: entry.at > 0 ? entry.at : null, expect: [entry.expect, entry.also].filter(Boolean).join(',') || null }).catch(() => ({ ok: false }));
+        const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: !unsure && entry.at > 0 ? entry.at : null, expect: [entry.expect, entry.also, ...(unsure ? [entry.back] : [])].filter(Boolean).join(',') || null, ...(unsure ? { tombNow: true, exact: true } : {}) }).catch(() => ({ ok: false }));
         if (result?.ok) cloudForget.delete(entryKey);
     }
     saveCloudForget();
@@ -687,8 +876,8 @@ export function remoteIsLater(row, remoteAt) {
 
 /** 받아 온 할 일에는 클라우드의 고친 시각을 editAt으로 붙여 둡니다(다음 비교의 기준). */
 function withRemoteAt(cloudName, row, remote) {
-    if (cloudName !== 'todos' || !row?.id) return row;
-    const at = remote?.ats?.todos?.[String(row.id)];
+    if (!LWW_NAMES.includes(cloudName) || !row?.id) return row;
+    const at = remote?.ats?.[cloudName]?.[String(row.id)];
     return Number.isFinite(at) && at > 0 ? { ...row, editAt: at } : row;
 }
 
@@ -777,14 +966,14 @@ function refreshShared(local = [], remote = [], cloudName, hashes, ats = null, s
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
         if (!other) return row;
-        const remoteAt = cloudName === 'todos' ? ats?.[String(row.id)] : undefined;
+        const remoteAt = LWW_NAMES.includes(cloudName) ? ats?.[String(row.id)] : undefined;
         if (!unchangedSincePush(hashes, cloudName, row)) {
             /* 할 일: 이 기기에서 고친 뒤 아직 못 올렸어도, 다른 기기가 더 늦게 고쳤으면(고친 시각 기준) 그쪽 값이 이깁니다. */
-            if (cloudName === 'todos' && !softAts?.[String(row.id)] && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
+            if (LWW_NAMES.includes(cloudName) && !softAts?.[String(row.id)] && remoteIsLater(row, remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
             return row;
         }
         /* 올린 그대로인 할 일은 클라우드 값과 그 고친 시각을 받습니다(다음 비교의 기준). */
-        if (cloudName === 'todos' && Number.isFinite(remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
+        if (LWW_NAMES.includes(cloudName) && Number.isFinite(remoteAt)) return { ...takeRemote(cloudName, row, other), editAt: remoteAt };
         if (cloudName === 'notes' && clippedCopy(row.text, other.text)) {
             /* 옛 판(v30)은 본문을 2000자로 잘라 다시 올립니다. 잘린 사본이면 이 기기 본문을 지키고 다시 올립니다. */
             if (hashes) delete hashes[`${cloudName}/${row.id}`];
@@ -835,7 +1024,7 @@ export function pruneDeletedElsewhere(draft, remote, hashes) {
             if (!shaped?.id || present.has(String(shaped.id))) return true;
             if (!unchangedSincePush(hashes, cloudName, row)) {
                 /* 할 일을 이 기기에서 고쳤어도, 다른 기기가 그보다 나중에 지웠으면(묘비 시각) 지웁니다. 지운 시각을 모르면 지키고 다시 올립니다. */
-                if (cloudName !== 'todos' || !remoteIsLater(row, remote?.tombs?.todos?.[String(shaped.id)])) return true;
+                if (!LWW_NAMES.includes(cloudName) || !remoteIsLater(row, remote?.tombs?.[cloudName]?.[String(shaped.id)])) return true;
             }
             if (hashes) delete hashes[`${cloudName}/${shaped.id}`];
             return false;
@@ -906,8 +1095,8 @@ function pruneOnly(draft, remote, seen) {
 }
 
 function seeRemoteClock(remote) {
-    for (const at of Object.values(remote?.ats?.todos || {})) seeClock(at);
-    for (const at of Object.values(remote?.tombs?.todos || {})) seeClock(at);
+    for (const name of LWW_NAMES) for (const at of Object.values(remote?.ats?.[name] || {})) seeClock(at);
+    for (const name of LWW_NAMES) for (const at of Object.values(remote?.tombs?.[name] || {})) seeClock(at);
 }
 
 function absorbCloud(draft, remote, seen = null) {
@@ -941,20 +1130,20 @@ function absorbCloud(draft, remote, seen = null) {
         for (const key of before) if (!(key in guard)) delete cloudHashes[key];
     }
     draft.students = unionById(draft.students, remote.students);
-    draft.attendance = unionById(draft.attendance, remote.attendance);
+    draft.attendance = unionById(draft.attendance, (remote.attendance || []).map((row) => withRemoteAt('attendance', row, remote)));
     rememberPulledHashes(draft.attendance, remote.attendance, cloudHashes);
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     draft.records = unionById(draft.records, remote.records);
-    draft.events = unionById(draft.events, remote.events);
+    draft.events = unionById(draft.events, (remote.events || []).map((row) => withRemoteAt('events', row, remote)));
     draft.todos = unionById(draft.todos, (remote.todos || []).map((row) => withRemoteAt('todos', row, remote)));
-    draft.notes = unionById(draft.notes, remote.notes);
+    draft.notes = unionById(draft.notes, (remote.notes || []).map((row) => withRemoteAt('notes', row, remote)));
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
     draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
     for (const [day, value] of Object.entries(remote.timetable || {})) {
         const mine = draft.timetable[day];
-        if (!mine || !Object.keys(mine).length) draft.timetable[day] = value;
-        else if (unchangedSincePush(guard, 'timetable', { id: day, ...mine })) draft.timetable[day] = value;
+        const remoteAt = remote.ats?.timetable?.[day];
+        if (takeRemoteDay(mine, remoteAt, Boolean(mine) && unchangedSincePush(guard, 'timetable', { id: day, ...mine }))) draft.timetable[day] = remoteDay(value, remoteAt);
     }
     rememberAllPulled(draft, remote, cloudHashes);
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
@@ -2158,24 +2347,33 @@ function startClockRetry(uid) {
 }
 /** 검사용: 다시 재기를 바로 한 번 돌립니다. */
 export async function retryServerClockForTest() { const uid = state.auth?.uid; return uid ? syncServerClock(uid) : false; }
-/** 재기 전에 고친 할 일과 지운 기록의 시각을 서버 기준으로 바꿉니다. */
+/** 재기 전에 고친 할 일·일정·회의록·출결·시간표와 지운 기록의 시각을 서버 기준으로 바꿉니다. */
 async function settleUnsureEdits() {
     let forgot = false;
     for (const entry of cloudForget.values()) {
-        if (entry.at > 0 || !Number.isFinite(entry.d)) continue;
+        if (!Number.isFinite(entry.d)) continue;
         const at = settleDeviceTime(entry.d);
-        if (at > 0) { entry.at = at; delete entry.d; forgot = true; }
+        if (at > 0) { entry.at = at; entry.server = true; delete entry.d; forgot = true; }
+        /* 지운 시각을 믿을 수 없음: 시각 대신 지문(expect)이 맞을 때만 지웁니다. */
+        else if (at < 0) { entry.at = 0; entry.exact = true; delete entry.d; forgot = true; }
     }
     if (forgot) saveCloudForget();
     const unsure = (row) => !(row?.editAt > 0) && Number.isFinite(row?.editD);
-    if (![...(state.todos || []), ...(state.local?.todos || [])].some(unsure)) return;
+    /* 줄(행) 목록이지 배열의 배열이 아닙니다. 시간표는 요일 객체 자체가 한 줄입니다. */
+    const rowsOf = (draft) => [
+        ...(draft.todos || []), ...(draft.local?.todos || []),
+        ...(draft.events || []), ...(draft.notes || []), ...(draft.attendance || []),
+        ...Object.values(draft.timetable || {}).filter((v) => v && typeof v === 'object'),
+    ];
+    if (!rowsOf(state).some(unsure)) return;
     await updateFromCloud((draft) => {
-        for (const list of [draft.todos || [], draft.local?.todos || []]) {
-            for (const row of list) {
-                if (!unsure(row)) continue;
-                const at = settleDeviceTime(row.editD);
-                if (at > 0) { row.editAt = at; delete row.editD; }
-            }
+        for (const row of rowsOf(draft)) {
+            if (!unsure(row)) continue;
+            const at = settleDeviceTime(row.editD);
+            if (at > 0) { row.editAt = at; delete row.editD; }
+            /* 고친 시각을 믿을 수 없음: '모름'(editAt 0, editD 없음)으로 둡니다. 일정·회의록·출결·시간표는 stampUnsentLegacy가,
+               할 일은 planTodoConflict(legacy)가 클라우드 판과 견줘, 다르면 사본(또는 보관)으로 양쪽을 남깁니다. */
+            else if (at < 0) { row.editAt = 0; delete row.editD; }
         }
         return draft;
     });
@@ -2329,7 +2527,7 @@ export async function pullFromCloudNow() {
                     /* 올린 그대로인 줄만 클라우드 값으로 바꿉니다. 거절된 줄·올릴 수 없는 줄·그 사이 고친 줄은 이 기기 값을 지킵니다. */
                     const synced = mark && !rejected.has(mark.key) && cloudHashes[mark.key] === mark.mark;
                     /* 할 일은 양쪽에서 고쳤으면 더 늦게 고친 쪽이 이깁니다(클라우드 updatedAt ↔ 이 기기 editAt). */
-                    const later = !synced && cloudName === 'todos' && mark && !rejected.has(mark.key) && remoteIsLater(row, remote.ats?.todos?.[String(row.id)]);
+                    const later = !synced && LWW_NAMES.includes(cloudName) && mark && !rejected.has(mark.key) && remoteIsLater(row, remote.ats?.[cloudName]?.[String(row.id)]);
                     next.push(synced || later ? withRemoteAt(cloudName, takeRemote(cloudName, row, theirs), remote) : row);
                     continue;
                 }
@@ -2341,7 +2539,10 @@ export async function pullFromCloudNow() {
             next.push(...[...byId.values()].map((row) => withRemoteAt(cloudName, row, remote)));
             draft[localName] = next;
         }
-        for (const [day, value] of Object.entries(remote.timetable || {})) draft.timetable[day] = value;
+        for (const [day, value] of Object.entries(remote.timetable || {})) {
+            const remoteAt = remote.ats?.timetable?.[day];
+            if (takeRemoteDay(draft.timetable[day], remoteAt, true)) draft.timetable[day] = remoteDay(value, remoteAt);
+        }
         absorbSettings(draft, remote.settings);
         absorbLeave(remote.leave);
         absorbTabbar(remote.tabbar);
