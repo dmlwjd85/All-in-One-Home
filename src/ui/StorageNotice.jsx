@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cloudReady } from '../firebase.js';
-import { GUIDE_STEPS, guideDone, markNoticeSeen, noticeFor, readOnboard, setNotice, setStep, subscribeOnboard } from '../lib/onboard.js';
+import { GUIDE_STEPS, foldForReturning, guideDone, isReturning, markNoticeSeen, noticeFor, readOnboard, setNotice, setStep, subscribeOnboard } from '../lib/onboard.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 
@@ -16,9 +16,9 @@ export function noticeItems({ ready, signedIn, shared }) {
         ? { title: '클라우드는 아직 연결 전이에요', text: '지금은 모두 이 기기에만 저장돼요.' }
         : signedIn
             ? { title: '로그인한 내 계정 칸에만 올라가요', text: '명단·출결·기록·일정·할 일·메모·알림장이 내 구글 계정 칸에 올라가 폰과 컴퓨터에서 이어져요. 그 계정으로 로그인해야만 열 수 있어요.' }
-            : { title: '로그인하면 내 계정 칸에만 올라가요', text: '지금은 이 기기에만 있어요. 구글로 로그인하면 명단·출결·기록·일정·할 일이 내 계정 칸에 올라가 폰과 컴퓨터에서 이어져요.' };
+            : { title: '로그인하면 내 계정 칸에만 올라가요', text: '지금은 이 기기에만 있어요. 구글로 로그인하면 명단·출결·기록·일정·할 일·메모·알림장이 내 계정 칸에 올라가 폰과 컴퓨터에서 이어져요.' };
     return [
-        { id: 'device', title: '먼저 이 기기에 저장해요', text: '할 일·일정·출결·명단·기록은 먼저 이 브라우저 저장소에 남아요.', code: 'ssug-gyomu' },
+        { id: 'device', title: '먼저 이 기기에 저장해요', text: '할 일·일정·출결·명단·기록은 먼저 이 브라우저 저장소에 남아요. 브라우저 데이터를 지우면 함께 사라지니 설정 › 계정·백업에서 백업 파일을 받아 두세요.', code: 'ssug-gyomu' },
         { id: 'sensitive', title: '민감한 기록은 이 기기에만 둬요', text: '학교폭력·민원·투약·알레르기·건강처럼 민감한 낱말이 든 기록은 따로 두고 클라우드에 올리지 않아요.', code: 'ssug-gyomu-local' },
         { id: 'cloud', ...cloud },
         shared
@@ -33,22 +33,32 @@ export function useOnboard() {
     return onboard;
 }
 
+/** 휴대폰(900px 미만)에서 접은 머리 줄 자리. 'end' = 오늘 화면 맨 아래, 'top' = 맨 위.
+    사용자 결정에 따라 이 한 줄만 바꾸면 됩니다('top'이면 check:browser 의 6교시 첫 화면 규칙을 따로 맞춰야 합니다). */
+export const PHONE_FOLD_PLACE = 'end';
+
 /** 오늘 화면 맨 위 접는 카드(시안 B). 처음엔 펼친 채로, 숨기면 설정 › 계정·백업에서 다시 엽니다.
     휴대폰(900px 미만)에서 접으면 머리 줄을 오늘 화면 맨 아래(place="end")로 내려, 첫 화면에 시간표가 그대로 보이게 합니다. */
 export function StorageNotice({ place = 'top' }) {
     const { data, clock } = useUi();
     const onboard = useOnboard();
     const [guide, setGuide] = useState(false);
-    const state = noticeFor(onboard, clock.ymd);
-    useEffect(() => { if (state === 'open') markNoticeSeen(clock.ymd); }, [state, clock.ymd]);
+    const returning = isReturning(data, clock.ymd);
+    const state = noticeFor(onboard, clock.ymd, returning);
+    useEffect(() => {
+        if (onboard.day) return;
+        if (returning) foldForReturning(clock.ymd);
+        else if (state === 'open') markNoticeSeen(clock.ymd);
+    }, [state, clock.ymd, returning, onboard.day]);
     if (state === 'hidden') return guide ? <GuideSheet onClose={() => setGuide(false)} /> : null;
     const open = state === 'open';
-    if (place === 'end' && open) return null;
+    if (place === 'end' && (open || PHONE_FOLD_PLACE !== 'end')) return null;
+    const phoneHide = place === 'top' && !open && PHONE_FOLD_PLACE === 'end';
     const ids = place === 'end' ? { body: 'store-notice-body-end', title: 'store-notice-title-end' } : { body: 'store-notice-body', title: 'store-notice-title' };
     const items = noticeItems({ ready: cloudReady(), signedIn: Boolean(data.auth?.uid), shared: Boolean(data.profile.sharedPc) });
     const done = guideDone(onboard);
     return (
-        <section className={`glass store-notice at-${place}${open ? '' : ' is-folded'}`} data-store-notice={place === 'top' ? state : undefined} data-store-notice-end={place === 'end' ? state : undefined} aria-labelledby={ids.title}>
+        <section className={`glass store-notice at-${place}${open ? '' : ' is-folded'}${phoneHide ? ' phone-hide' : ''}`} data-store-notice={place === 'top' ? state : undefined} data-store-notice-end={place === 'end' ? state : undefined} aria-labelledby={ids.title}>
             <h2 className="store-notice-h">
                 <Btn className="store-notice-head" aria-expanded={open} aria-controls={ids.body} onClick={() => {
                     setNotice(open ? 'folded' : 'open');
@@ -77,7 +87,7 @@ export function StorageNotice({ place = 'top' }) {
                         <Btn className="chip store-guide-btn" data-guide="open" onClick={() => setGuide(true)}>5분 시작 가이드{done ? ` ${done}/${GUIDE_STEPS.length}` : ''}</Btn>
                         <Btn className="chip" data-store-notice-hide="1" onClick={() => setNotice('hidden')}>안내 숨기기</Btn>
                     </div>
-                    <p className="muted store-foot">휴대폰에서 접으면 오늘 화면 맨 아래로 내려가요. 숨겨도 설정 › 계정·백업 맨 아래에서 다시 열 수 있어요.</p>
+                    <p className="muted store-foot">{PHONE_FOLD_PLACE === 'end' ? '휴대폰에서 접으면 오늘 화면 맨 아래로 내려가요. ' : ''}숨겨도 설정 › 계정·백업 맨 아래에서 다시 열 수 있어요.</p>
                 </div>
             )}
             {guide && <GuideSheet onClose={() => setGuide(false)} />}

@@ -45,7 +45,8 @@ export function normalizeOnboard(saved) {
 }
 
 /** 오늘 보일 상태. 저절로 펼친 안내는 처음 본 날에만 펼칩니다. */
-export function noticeFor(onboard, ymd) {
+export function noticeFor(onboard, ymd, returning = false) {
+    if (!onboard.day && onboard.auto && onboard.notice === 'open' && returning) return 'folded';
     if (onboard.notice === 'open' && onboard.auto && onboard.day && onboard.day !== ymd) return 'folded';
     return onboard.notice;
 }
@@ -82,6 +83,13 @@ export function setNotice(notice, store) {
     return write({ ...readOnboard(store), notice, auto: false }, store);
 }
 
+/** 이미 자료가 있던 선생님: 업데이트 첫날부터 접힌 채로 둡니다(한 번만 적습니다). */
+export function foldForReturning(ymd, store) {
+    const prev = readOnboard(store);
+    if (prev.day || !YMD.test(ymd || '')) return prev;
+    return write({ ...prev, notice: 'folded', auto: false, day: ymd }, store);
+}
+
 /** 처음 펼친 날을 적어 둡니다. 이미 적었으면 그대로입니다. */
 export function markNoticeSeen(ymd, store) {
     const prev = readOnboard(store);
@@ -101,4 +109,15 @@ export function guideDone(onboard) {
 /** 검사용: 메모리 값을 비웁니다. */
 export function resetOnboardMemory() {
     memory = null;
+}
+
+/** 오늘 전에 적은 자료가 있으면(예시 학급 제외) 이미 쓰던 선생님으로 봅니다. */
+export function isReturning(data, ymd) {
+    if (!data || data.profile?.demo) return false;
+    const buckets = ['attendance', 'records', 'events', 'todos', 'notes', 'notices'];
+    const rows = buckets.flatMap((name) => [...(data[name] || []), ...(data.local?.[name] || [])]);
+    return rows.some((row) => {
+        const day = String(row?.date || row?.at || '').slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(day) && day < ymd;
+    }) || Boolean(data.profile?.migratedAt);
 }

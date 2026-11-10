@@ -1684,7 +1684,11 @@ button.hero-pill.home-todo-link {
 .store-notice { padding: 14px; margin-bottom: 12px; min-width: 0; }
 /* 휴대폰: 접힌 머리 줄은 맨 위가 아니라 오늘 화면 맨 아래에 둡니다(첫 화면 시간표 자리 지키기). 넓은 화면은 맨 위 그대로. */
 .store-notice.at-end { margin: 12px 0 0; }
-@media (max-width: 899px) { .store-notice.at-top.is-folded { display: none; } }
+@media (max-width: 899px) {
+    .store-notice.phone-hide { display: none; }
+    /* 펼친 안내의 아래 끝이 탭바·가운데 쨈에 가리지 않게 다음 카드와 띄웁니다. */
+    .store-notice.at-top:not(.is-folded) { margin-bottom: 20px; }
+}
 @media (min-width: 900px) { .store-notice.at-end { display: none; } }
 .store-notice-h { margin: 0; font: inherit; }
 .store-notice-head {

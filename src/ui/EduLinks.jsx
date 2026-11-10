@@ -92,7 +92,7 @@ export function LinksSheet({ onClose }) {
             <div className="sheet links-sheet" role="dialog" aria-modal="true" aria-labelledby="links-sheet-title" data-edu-sheet="1" onClick={(event) => event.stopPropagation()}>
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
                 <h2 id="links-sheet-title" className="title-font" style={{ margin: 0 }}>교육 사이트 바로가기</h2>
-                <p className="muted" style={{ marginTop: 4 }}>이름과 주소만 이 브라우저에 둬요. 아이디·비밀번호는 적는 칸이 없어요. 로그인은 사이트에서 직접 해 주세요.</p>
+                <p className="muted" style={{ marginTop: 4 }}>이름과 주소만 이 브라우저에 두고, 계정·백업의 '기록 내려받기' 파일에도 함께 넣어요. 아이디·비밀번호는 적는 칸이 없어요. 로그인은 사이트에서 직접 해 주세요.</p>
                 <ul className="links-rows">
                     {items.map((row, index) => (
                         <li key={row.id} className="links-row" data-edu-row={row.id}>
