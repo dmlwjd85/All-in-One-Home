@@ -1805,6 +1805,10 @@ button.hero-pill.home-todo-link {
     align-items: center; justify-content: flex-start; gap: 8px; text-decoration: none; color: var(--ink); border-radius: 14px;
 }
 .side-links .side-link-edit { color: var(--accent); }
+/* 기본 사이트 이름(「나이스 대국민서비스」)이 176px 칸에서 두 줄로 꺾이지 않게 글자·여백을 조금 줄입니다. 더 긴 이름은 자르지 않고 줄을 바꿉니다. */
+.side-links .tap.chip.block.side-link { padding: 10px 10px; gap: 6px; }
+.side-links .side-link .edu-name { font-size: 14px; letter-spacing: -0.01em; }
+.side-links .side-link .edu-ext { font-size: 13px; }
 .edu-name { min-width: 0; overflow-wrap: anywhere; }
 .edu-ext { flex: none; margin-left: auto; font-size: 12px; font-weight: 500; }
 .side-links-note { margin: 8px 4px 0; font-size: 12px; line-height: 18px; }
@@ -1835,3 +1839,54 @@ button.hero-pill.home-todo-link {
 .links-form-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .links-form-btns .primary-btn { padding: 0 18px; min-height: 44px; color: var(--on-primary); border-radius: 14px; font-weight: 800; }
 .links-msg { margin: 8px 0 0; font-size: 14px; color: var(--accent); font-weight: 700; }
+
+/* 시안 A(11/6): 설정 항목 두 칸 · 나이스 목록·상세 두 칸 · 실시간 칩 */
+@media (min-width: 900px) {
+    .settings-menu {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        align-items: stretch;
+    }
+    .settings-menu .settings-key {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .neis-split {
+        display: grid;
+        grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+    }
+    .neis-list {
+        border-right: 1px solid var(--line);
+        padding-right: 12px;
+        max-height: min(70vh, 640px);
+        overflow: auto;
+    }
+}
+.neis-list-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin: 0 0 8px;
+}
+.neis-list-item.is-on {
+    font-weight: 800;
+}
+.neis-detail .neis-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.date-chip-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.date-chip-ampm {
+    font-size: 12px;
+    opacity: 0.85;
+}

@@ -14,10 +14,15 @@ import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
 import { isMinutes } from '../lib/minutes.js';
+import { readEventChips } from '../lib/dateChips.js';
+import { allStarts } from '../lib/periodLocal.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 export function Tasks() {
     const { data, clock, showToast, go } = useUi();
     const [title, setTitle] = useState('');
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const [detail, setDetail] = useState(null);
     const [editing, setEditing] = useState(null);
     const [pri, setPri] = useState(2);
@@ -36,22 +41,46 @@ export function Tasks() {
         ['이번 주', sortTodos(todos.filter((row) => row.due > clock.ymd && row.due <= end), sort)],
         ['나중에', sortTodos(todos.filter((row) => row.due > end), sort)],
     ];
+    const todoChipRead = title.trim()
+        ? readEventChips(title, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip, future: true })
+        : null;
     return (
         <div>
             <form onSubmit={async (event) => {
                 event.preventDefault();
                 if (!title.trim()) return;
-                const read = readTodoLine(title.trim(), new Date(), clock.ymd);
-                const result = await saveTextItem('todos', { id: `todo-${Date.now()}`, title: read.title, done: false, due: read.due, pri, source: 'app' });
+                const now = new Date();
+                const periods = allStarts(data.profile?.periodStarts);
+                const chip = readEventChips(title.trim(), { now, periods, off: chipOff, ampmFlip, future: true });
+                const read = readTodoLine(title.trim(), now, clock.ymd);
+                const due = chip.date || read.due;
+                const row = { id: `todo-${Date.now()}`, title: chip.changed && chip.title ? chip.title : read.title, done: false, due, pri, source: 'app' };
+                if (chip.time) row.time = chip.time;
+                const result = await saveTextItem('todos', row);
                 if (result?.storageFailed) return;
                 setTitle('');
                 setPri(2);
+                setChipOff([]);
+                setAmpmFlip([]);
                 showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '할 일에 넣었어요.', true);
             }}>
                 <div className="todo-add-row">
-                    <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => setTitle(event.target.value)} />
+                    <input className="field" aria-label="할 일" placeholder="발라 두고 엔터" value={title} onChange={(event) => {
+                        const next = event.target.value;
+                        setTitle(next);
+                        if (!next.trim()) { setChipOff([]); setAmpmFlip([]); }
+                    }} />
                     <PriPicks value={pri} onPick={setPri} idBase="todo-add" />
                 </div>
+                {todoChipRead ? (
+                    <LiveEventChips
+                        chipRead={todoChipRead}
+                        chipOff={chipOff}
+                        ampmFlip={ampmFlip}
+                        onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                        onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                    />
+                ) : null}
             </form>
             <section aria-label="임시보관함" style={{ marginTop: 16 }}>
                 <h3 style={{ marginBottom: 8 }}>임시보관함</h3>
@@ -155,18 +184,40 @@ export function Tasks() {
 }
 
 function NoteBox() {
-    const { showToast } = useUi();
+    const { data, showToast } = useUi();
     const [text, setText] = useState('');
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
+    const chipRead = text.trim()
+        ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip })
+        : null;
     return (
         <form style={{ marginBottom: 12 }} onSubmit={async (event) => {
             event.preventDefault();
             if (!text.trim()) return;
-            const result = await saveTextItem('notes', { id: `note-${Date.now()}`, text: text.trim(), date: '', pinned: true, source: 'app' });
+            const chip = chipRead;
+            const row = { id: `note-${Date.now()}`, text: text.trim(), date: chip?.date || '', pinned: true, source: 'app' };
+            const result = await saveTextItem('notes', row);
             if (result?.storageFailed) return;
             setText('');
+            setChipOff([]);
+            setAmpmFlip([]);
             showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '메모로 남겼어요.', true);
         }}>
-            <textarea className="field" rows={3} aria-label="메모" placeholder="여기에 발라 둘 말" value={text} onChange={(event) => setText(event.target.value)} />
+            <textarea className="field" rows={3} aria-label="메모" placeholder="여기에 발라 둘 말" value={text} onChange={(event) => {
+                const next = event.target.value;
+                setText(next);
+                if (!next.trim()) { setChipOff([]); setAmpmFlip([]); }
+            }} />
+            {chipRead ? (
+                <LiveEventChips
+                    chipRead={chipRead}
+                    chipOff={chipOff}
+                    ampmFlip={ampmFlip}
+                    onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                    onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                />
+            ) : null}
             <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={(event) => event.currentTarget.form?.requestSubmit()}>메모 남기기</Btn>
         </form>
     );

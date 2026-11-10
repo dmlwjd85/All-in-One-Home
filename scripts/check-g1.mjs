@@ -245,6 +245,9 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                         menu: [...document.querySelectorAll('.side-menu button')].map((el) => Math.round(el.getBoundingClientRect().width)),
                         links: [...document.querySelectorAll('.side-links .side-link')].map((el) => Math.round(el.getBoundingClientRect().width)),
                     }));
+                    /* 기본 사이트 이름은 한 줄(44px)에 들어가야 합니다(「나이스 대국민서비스」 두 줄 P2). */
+                    const tall = await page.evaluate((ids) => [...document.querySelectorAll('.side-links a[data-edu-link]')].filter((el) => ids.includes(el.dataset.eduLink)).map((el) => [el.dataset.eduLink, Math.round(el.getBoundingClientRect().height)]).filter(([, h]) => h > 44), DEFAULT_LINKS.map((row) => row.id));
+                    check(!tall.length, `[${tag}] 기본 사이트 이름이 두 줄로 꺾입니다: ${JSON.stringify(tall)}`);
                     check(widths.links.length === 8 && new Set([...widths.menu, ...widths.links]).size === 1, `[${tag}] 사이드 메뉴·사이트 너비가 다릅니다: ${JSON.stringify(widths)}`);
                 }
                 const links = await page.$$eval('a[data-edu-link]', (els) => els.filter((el) => el.getClientRects().length).map((el) => ({ href: el.href, target: el.target, rel: el.rel })));

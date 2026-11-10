@@ -7,6 +7,7 @@ import { Area, Btn, SpreadHint, TAGS } from './bits.jsx';
 import { ChoiceGrid, DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 const EVENT_OPTIONS = [
     { id: '학급', label: '학급' },
@@ -37,14 +38,16 @@ export function FlowSheet({ flow, onClose }) {
     const [meetKind, setMeetKind] = useState('');
     const [text, setText] = useState('');
     const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const [tags, setTags] = useState(() => (TAGS[flow.kind]?.[0] ? [TAGS[flow.kind][0]] : []));
     const [neis, setNeis] = useState(flow.kind === '관찰' || flow.kind === '칭찬' || !flow.kind);
     const name = steps[step] || 'text';
     const kind = flow.kind || '메모';
     const student = data.students.find((row) => row.no === Number(no));
     const needsStudent = ['관찰', '상담', '칭찬', '보호자'].includes(kind);
-    /* 일정: '내일'·'3교시' 같은 낱말을 칩으로 옮기고 제목에서는 뺍니다(B1). */
-    const chipRead = kind === '일정' && flow.id !== 'minutes' ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff }) : null;
+    /* 일정·할 일: 입력 중 날짜·시각 칩을 바로 아래에 보여 줍니다(시안 A). */
+    const chipKinds = kind === '일정' || kind === '할 일';
+    const chipRead = chipKinds && flow.id !== 'minutes' ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip, future: true }) : null;
 
     useEffect(() => {
         if (name === 'text') document.querySelector('[data-flow-text]')?.focus();
@@ -80,11 +83,12 @@ export function FlowSheet({ flow, onClose }) {
             kind,
             text: body,
             ...(kind === '일정' ? { title: chipped ? chipped.title : body, raw: chipped ? chipped.raw : '' } : {}),
+            ...(kind === '할 일' && chipped ? { text: chipped.title || body, raw: chipped.raw } : {}),
             no,
             tags,
             neis: needsStudent ? neis : undefined,
             date: kind === '일정' ? ((chipped && chipped.date) || date || clock.ymd) : (date || undefined),
-            due: kind === '할 일' ? date : undefined,
+            due: kind === '할 일' ? ((chipped && chipped.date) || date || undefined) : undefined,
             eventKind,
             time: chipped && chipped.time ? chipped.time : time,
             period: chipped && (chipped.period || chipped.time) ? chipped.period : period,
@@ -140,28 +144,19 @@ export function FlowSheet({ flow, onClose }) {
                     <>
                         {student && <p style={{ fontWeight: 800, marginTop: 0 }}>{student.no}번 {student.name}</p>}
                         <SpreadHint />
-                        <Area data-flow-text rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+                        <Area data-flow-text rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => { const next = event.target.value; setText(next); if (!next.trim()) { setChipOff([]); setAmpmFlip([]); } }} onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
                                 event.preventDefault();
                                 save();
                             }
                         }} />
-                        {chipRead && chipRead.chips.length > 0 && (
-                            <div className="date-chips" data-date-chips="1">
-                                <div className="date-chip-row">
-                                    {chipRead.chips.map((chip) => {
-                                        const isOff = chipOff.includes(chip.id);
-                                        return (
-                                            <Btn key={chip.id} className={isOff ? 'chip date-chip is-off' : 'chip on date-chip'} aria-pressed={!isOff} aria-label={isOff ? `'${chip.word}' 다시 ${chip.type === 'date' ? '날짜' : '시각'}로 쓰기` : `${chip.label.slice(2)} 칩 빼고 '${chip.word}'를 글에 두기`} onClick={() => setChipOff((prev) => (prev.includes(chip.id) ? prev.filter((id) => id !== chip.id) : [...prev, chip.id]))}>
-                                                {isOff ? `↩ ${chip.word}` : chip.label}
-                                            </Btn>
-                                        );
-                                    })}
-                                </div>
-                                <p className="muted date-chip-note">저장될 제목: <strong>{chipRead.title}</strong> · 칩을 누르면 빼고 글에 그대로 둬요.</p>
-                                {chipRead.warning && <p className="msg-card low-card date-chip-warn" role="status">{chipRead.warning}</p>}
-                            </div>
-                        )}
+                        <LiveEventChips
+                            chipRead={chipRead}
+                            chipOff={chipOff}
+                            ampmFlip={ampmFlip}
+                            onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                            onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                        />
                         {(TAGS[kind] || []).length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                                 {TAGS[kind].map((tag) => (

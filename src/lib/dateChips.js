@@ -4,7 +4,7 @@
  * 누른(해제한) 칩은 적용하지 않고 그 낱말을 제목에 그대로 둡니다.
  * 기존 일정은 건드리지 않습니다. 새로 적는 글에만 씁니다.
  */
-import { findDates } from './parse.js';
+import { findTimeSpans, readDateSpans } from './jjaemPaste.js';
 import { DEFAULT_PERIODS } from './period.js';
 import { weekdayKo } from './date.js';
 
@@ -23,14 +23,40 @@ function tail(text, end) {
     return m ? m[0].length : 0;
 }
 
-/** 칩 목록과 제목·날짜·시각·교시를 돌려줍니다. off: 해제한 칩 id 목록. */
-export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIODS, off = [] } = {}) {
-    const raw = String(text || '');
+function flipHm(hm) {
+    const [h, mi] = hm.split(':').map(Number);
+    const next = (h + 12) % 24;
+    return `${pad(next)}:${pad(mi)}`;
+}
+
+/* 앞말(오전·오후·밤 등)이 적혀 있으면 오전·오후가 이미 정해진 시각입니다. */
+const WRITTEN_AMPM = /^(?:오전|오후|아침|저녁|밤|새벽|낮)/;
+
+/** 앞말 없이 적은 1~11시(「3시」「8:30」「세 시」)만 오전·오후를 고칠 수 있게 둡니다. 「03:00」「15시」「정오」는 정해진 시각입니다. */
+function isAmbiguousWord(word) {
+    const w = String(word || '').trim();
+    if (!w || WRITTEN_AMPM.test(w) || /^(?:정오|자정)/.test(w)) return false;
+    const num = /^(\d{1,2})/.exec(w);
+    if (num) {
+        if (num[1].length === 2 && num[1][0] === '0') return false;
+        const h = Number(num[1]);
+        return h >= 1 && h <= 11;
+    }
+    return !/^열두/.test(w);
+}
+
+/**
+ * 칩 목록과 제목·날짜·시각·교시를 돌려줍니다. off: 해제한 칩 id 목록. ampmFlip: 오전·오후를 뒤집은 시각 칩 id 목록.
+ * 날짜·시각은 저장(readJjaemPaste)과 같은 규칙으로 읽어, 칩에 보이는 값이 곧 저장값이 되게 합니다.
+ * future: 할 일·일정처럼 앞일을 적는 줄(다가오는 요일·지난 달은 내년).
+ */
+export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIODS, off = [], ampmFlip = [], future = false } = {}) {
+    /* 저장 쪽(readJjaemPaste)은 앞뒤 빈칸을 뺀 글로 자리를 셉니다. 칩 id(t자리)가 같게 앞 빈칸을 뺍니다. */
+    const raw = String(text || '').replace(/^\s+/, '');
     const chips = [];
-    let dates = [];
-    try { dates = findDates(raw, now); } catch { dates = []; }
+    const { spans: dates, primary } = readDateSpans(raw, { now, future });
     dates.forEach((span, index) => {
-        chips.push({ id: `d${index}-${span.index}`, type: 'date', index: span.index, length: span.length + tail(raw, span.index + span.length), ymd: span.ymd, word: raw.substr(span.index, span.length), label: `📅 ${shortDate(span.ymd)}`, warning: span.warning || '' });
+        chips.push({ id: `d${index}-${span.index}`, type: 'date', index: span.index, length: span.length + tail(raw, span.index + span.length), ymd: span.ymd, word: raw.substr(span.index, span.length), label: `📅 ${shortDate(span.ymd)}`, warning: span.warning || '', primary: span === primary });
     });
     const taken = (at, len) => chips.some((chip) => at < chip.index + chip.length && chip.index < at + len);
     for (const m of raw.matchAll(/(?<![\d가-힣])(\d{1,2})\s*교시/g)) {
@@ -39,15 +65,34 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
         const start = periods[n - 1] || '';
         chips.push({ id: `p${m.index}`, type: 'period', index: m.index, length: m[0].length + tail(raw, m.index + m[0].length), period: n, time: start, word: m[0], label: `⏰ ${n}교시${start ? ` ${start}` : ''}` });
     }
-    for (const m of raw.matchAll(/(?<![\d가-힣])(오전|오후|아침|저녁)?\s*(\d{1,2})\s*시(?!간|험|작|키)(?:\s*(\d{1,2})\s*분|\s*(반))?/g)) {
-        let hour = Number(m[2]);
-        const min = m[4] ? 30 : Number(m[3] || 0);
-        if (hour > 24 || min > 59 || taken(m.index, m[0].length)) continue;
-        if ((m[1] === '오후' || m[1] === '저녁') && hour < 12) hour += 12;
-        if (!m[1] && hour >= 1 && hour <= 6) hour += 12; // 학교 시간: '3시'는 오후 3시
-        if (hour === 24) hour = 0;
-        const hm = `${pad(hour)}:${pad(min)}`;
-        chips.push({ id: `t${m.index}`, type: 'time', index: m.index, length: m[0].length + tail(raw, m.index + m[0].length), time: hm, word: m[0].trim(), label: `⏰ ${hm}` });
+    const flipSet = new Set(ampmFlip);
+    let spans = [];
+    try { spans = findTimeSpans(raw); } catch { spans = []; }
+    for (const span of spans) {
+        if (taken(span.index, span.length)) continue;
+        const id = `t${span.index}`;
+        const ambiguous = isAmbiguousWord(span.word);
+        let hm = span.time;
+        let endHm = span.endTime || '';
+        if (ambiguous && flipSet.has(id)) {
+            hm = flipHm(hm);
+            if (endHm) endHm = flipHm(endHm);
+        }
+        const merid = Number(hm.slice(0, 2)) < 12 ? '오전' : '오후';
+        const shown = endHm ? `${hm}~${endHm}` : hm;
+        chips.push({
+            id,
+            type: 'time',
+            index: span.index,
+            /* 밤을 넘기는 범위처럼 글에 그대로 두는 시각은 제목에서 빼지 않습니다. */
+            length: span.keep ? 0 : span.length,
+            time: hm,
+            endTime: endHm,
+            word: span.word,
+            label: ambiguous ? `⏰ ${shown} · ${merid}` : `⏰ ${shown}`,
+            ambiguous,
+            ask: span.ask || '',
+        });
     }
     chips.sort((a, b) => a.index - b.index);
     const blocked = new Set(off);
@@ -55,6 +100,7 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
     let title = '';
     let at = 0;
     for (const chip of on) {
+        if (chip.index < at) continue;
         title += raw.slice(at, chip.index);
         at = chip.index + chip.length;
     }
@@ -62,10 +108,12 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
     title = title.replace(/\s+/g, ' ').replace(/^[\s,·.:\-]+|[\s,·:\-]+$/g, '').trim();
     const dateChips = on.filter((chip) => chip.type === 'date');
     const distinct = [...new Set(dateChips.map((chip) => chip.ymd))];
+    /* 저장과 같게: 숫자로 적은 날짜를 먼저, 없으면 글 순서 첫 날짜. */
+    const firstDate = dateChips.find((chip) => chip.primary) || dateChips[0] || null;
     const periodChip = on.find((chip) => chip.type === 'period');
     const timeChip = on.find((chip) => chip.type === 'time');
     const warnings = [];
-    if (distinct.length > 1) warnings.push(`날짜가 둘 이상 적혀 있어요. 첫 날짜(${shortDate(distinct[0])})로 넣을게요. 아니면 칩을 눌러 빼 주세요.`);
+    if (distinct.length > 1) warnings.push(`날짜가 둘 이상 적혀 있어요. ${shortDate(firstDate.ymd)}로 넣을게요. 아니면 칩을 눌러 빼 주세요.`);
     dateChips.forEach((chip) => { if (chip.warning) warnings.push(chip.warning); });
     if (on.filter((chip) => chip.type !== 'date').length > 1) warnings.push('시각이 둘 이상 적혀 있어요. 첫 시각으로 넣을게요.');
     if (on.length && !title) warnings.push('날짜 말고 내용도 한 줄 적어 주세요.');
@@ -73,12 +121,28 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
     return {
         chips,
         title: title || raw.trim(),
-        date: distinct[0] || '',
+        date: firstDate?.ymd || '',
         time: first?.time || '',
+        endTime: first?.type === 'time' ? first.endTime : '',
         period: first?.type === 'period' ? periodChip.period : 0,
         raw: raw.trim(),
         changed: on.length > 0,
         warning: warnings.join(' '),
         timeChip: Boolean(timeChip),
+        /* 시각 칩을 눌러 뺐으면 저장도 시각 없이 합니다. */
+        timeOff: chips.some((chip) => chip.type !== 'date' && blocked.has(chip.id)) && !first,
     };
+}
+
+/** 미리보기·저장 목록에 실시간 칩(날짜·시각·제목)을 맞춰 넣습니다. 칩이 없으면 그대로 둡니다. */
+export function applyLiveChips(items, chipRead) {
+    if (!chipRead?.changed || !Array.isArray(items) || !items.length) return items || [];
+    return items.map((item) => {
+        const next = { ...item };
+        if (chipRead.date) next.date = chipRead.date;
+        if (chipRead.time) next.time = chipRead.time;
+        if (chipRead.period) next.period = chipRead.period;
+        if (chipRead.title && (item.kind === '일정' || item.kind === '할 일')) next.title = chipRead.title;
+        return next;
+    });
 }

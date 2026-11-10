@@ -295,7 +295,7 @@ export function findDates(text, now = new Date()) {
         const at = match.index + match[0].lastIndexOf(second);
         pushRaw(spans, at, second.length, weekYmd(match[1], match[3], today), match[3]);
     });
-    eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*일${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
+    eachMatch(new RegExp(`(?<![\\d./월])(?<!박\\s*)(\\d{1,2})\\s*일(?!\\s*동안)(?!간)${WEEK_TAIL_CAP}`, 'g'), raw, (match) => {
         const day = Number(match[1]);
         if (day < 1 || day > 31) return;
         pushSpan(spans, match, dayOnlyYmd(day, today), { explicit: true, weekday: match[2] || match[3] || '', bare: true });
