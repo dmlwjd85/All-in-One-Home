@@ -571,6 +571,12 @@ html { scroll-padding-bottom: calc(70px + 36px + env(safe-area-inset-bottom, 0px
 .quick-bar.is-open ~ .toast {
     bottom: calc(340px + var(--quick-lift, 0px) + env(safe-area-inset-bottom));
 }
+/* 팝업·시트가 열린 동안 뜬 알림은 위쪽 바탕 자리로(시트 아래 단추를 가리지 않게). */
+body:has(.sheet[aria-modal="true"]) .toast {
+    top: calc(8px + env(safe-area-inset-top));
+    bottom: auto;
+    z-index: 62;
+}
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
 .toast {
@@ -1050,8 +1056,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     .todo-line .todo-main { flex: 1 1 0; }
     .todo-line .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
 }
-/* 아주 좁은 화면(320·360): 제목이 한 줄을 다 쓰게, 마감·고치기·지우기는 아랫줄로 내립니다(평점관 P2). */
-@media (max-width: 380px) {
+/* 좁은 폰 화면(320·360·390·414·430): 제목이 한 줄을 다 쓰게, 마감·고치기·지우기는 아랫줄로 내립니다(평점관 P2, 390px 제목 3줄 문제로 440px 아래까지 넓힘). */
+@media (max-width: 439px) {
     .todo-line, .todo-line:has(.is-conflict) {
         display: grid;
         grid-template-columns: 44px minmax(0, 1fr) 44px 44px;

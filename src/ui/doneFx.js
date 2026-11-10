@@ -49,6 +49,17 @@ export function setFxLevel(v, storage) {
     return next;
 }
 
+/** 예전 저장값('on' 등 지금 없는 값)을 첫 실행 때 'mid'(보통)로 다시 적어 통일합니다(QA 권장). 고친 값을 돌려줍니다. */
+export function migrateFxLevel(storage) {
+    try {
+        const box = storage || store();
+        const raw = box?.getItem?.(FX_KEY);
+        if (raw == null || FX_LEVELS.some((item) => item.id === raw)) return null;
+        box.setItem(FX_KEY, FX_DEFAULT);
+        return FX_DEFAULT;
+    } catch { return null; }
+}
+
 export function reducedMotion() {
     try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 }

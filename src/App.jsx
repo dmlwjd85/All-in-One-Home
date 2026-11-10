@@ -41,6 +41,7 @@ import { Day } from './ui/Day.jsx';
 import { Start } from './ui/Start.jsx';
 import { SyncChip } from './ui/SyncChip.jsx';
 import { FuseBar } from './ui/FuseBar.jsx';
+import { migrateFxLevel } from './ui/doneFx.js';
 import { syncAuthKnown } from './lib/syncStatus.js';
 
 export default function App() {
@@ -70,7 +71,7 @@ export default function App() {
     const [hotkeys, setHotkeys] = useState(() => loadHotkeys());
     const toastTimer = useRef(0);
 
-    useEffect(() => { applyStoredFont(); }, []);
+    useEffect(() => { applyStoredFont(); migrateFxLevel(); }, []);
     // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다. 1분에 한 번까지만.
     useEffect(() => {
         const again = () => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); };
@@ -505,6 +506,21 @@ export default function App() {
         const timer = window.setTimeout(() => setTipFolded(true), 5000);
         return () => window.clearTimeout(timer);
     }, [todayTipId]);
+
+    /* 팝업·시트가 열리면 떠 있던 알림을 닫습니다(평점관: 알림이 팝업 아래쪽 단추를 5초간 덮음).
+       팝업이 열린 뒤에 새로 뜬 알림은 CSS에서 화면 위쪽으로 옮겨 시트 단추를 가리지 않습니다. */
+    useEffect(() => {
+        if (!toast || typeof MutationObserver === 'undefined') return undefined;
+        const modalOpen = () => Boolean(document.querySelector('[aria-modal="true"]'));
+        if (modalOpen()) return undefined;
+        const mo = new MutationObserver(() => {
+            if (!modalOpen()) return;
+            clearTimeout(toastTimer.current);
+            setToast(null);
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
+        return () => mo.disconnect();
+    }, [toast]);
 
     function showToast(message, undoable = false, action = null) {
         clearTimeout(toastTimer.current);

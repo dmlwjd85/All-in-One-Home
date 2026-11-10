@@ -150,6 +150,16 @@ check(fx.burstPlan({ pri: 2, allDone: true, streak: 2 }).big, '연달아 체크�
 check(fx.burstPlan({ pri: 3, level: 'low' }).count < hi.count && !fx.burstPlan({ pri: 3, level: 'low' }).big && fx.burstPlan({ level: 'off' }).count === 0, '작게·끄기가 방울 수에 반영되지 않습니다.');
 check(fx.burstPlan({ pri: 2, level: 'big' }).count > fx.burstPlan({ pri: 2 }).count, '크게가 보통보다 크지 않습니다.');
 check(fx.FX_DEFAULT === 'mid' && fx.normalizeFx('x') === 'mid' && fx.normalizeFx('on') === 'mid' && fx.normalizeFx(null) === 'mid' && fx.normalizeFx('off') === 'off' && fx.normalizeFx('big') === 'big', '효과 설정 기본값이 보통이 아니거나 예전 값을 못 읽습니다.');
+{
+    const m = new Map([['ssug-gyomu-done-fx', 'on']]);
+    const box = { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) };
+    const first = fx.migrateFxLevel(box);
+    const again = fx.migrateFxLevel(box);
+    m.set('ssug-gyomu-done-fx', 'low');
+    const keep = fx.migrateFxLevel(box);
+    const empty = fx.migrateFxLevel({ getItem: () => null, setItem: () => { throw new Error('쓰면 안 됨'); } });
+    check(first === 'mid' && again === null && keep === null && m.get('ssug-gyomu-done-fx') === 'low' && empty === null, `예전 'on' 값을 'mid'로 다시 적지 않거나 다른 값을 건드립니다: ${JSON.stringify({ first, again, keep, empty })}`);
+}
 check(fx.FX_LEVELS.map((x) => x.id).join() === 'big,mid,low,off', '효과 세기 타일이 크게·보통·작게·끄기가 아닙니다.');
 fx.resetChecks();
 check(fx.noteCheck(1000) === 0 && fx.noteCheck(1500) === 1 && fx.noteCheck(2000) === 2 && fx.noteCheck(9000) === 0, '연달아 체크 세기가 틀립니다.');
