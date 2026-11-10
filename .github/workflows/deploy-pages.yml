@@ -75,6 +75,7 @@ jobs:
           npm run check:lwwsync
           npm run check:lwwprev
           npm run check:lwwmix
+          npm run check:keptpaths
           npm run check:tabbarsync
           npm run check:goalsync
           npm run build
