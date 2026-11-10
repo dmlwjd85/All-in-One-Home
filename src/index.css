@@ -577,6 +577,15 @@ body:has(.sheet[aria-modal="true"]) .toast {
     bottom: auto;
     z-index: 62;
 }
+/* 그 알림이 떠 있는 동안만 시트 키를 줄여 위쪽 자리를 비웁니다(찾기·메뉴처럼 긴 시트의 맨 위 칸을 가리지 않게). */
+body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
+    max-height: min(92dvh, 820px, calc(100dvh - 112px - env(safe-area-inset-top)));
+}
+@media (min-width: 900px) {
+    body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
+        max-height: min(86dvh, 820px, calc(100dvh - 224px));
+    }
+}
 .toast-notice { pointer-events: none; }
 .toast-notice .tap { pointer-events: auto; }
 .toast {

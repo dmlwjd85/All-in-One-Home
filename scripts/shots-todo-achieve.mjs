@@ -249,7 +249,7 @@ try {
     await new Promise((r) => setTimeout(r, 1800));
     await checkBy('높음 하나');
     const bigCount = await peak();
-    check(bigCount >= 16 && bigCount <= 24, `중요도 3이 크게(20개 안팎) 터지지 않습니다: ${bigCount}`);
+    check(bigCount >= 16 && bigCount <= 20, `중요도 3이 크게(20개 안팎) 터지지 않습니다: ${bigCount}`);
     const hidden = await page.evaluate(() => document.querySelector('.done-fx-layer')?.getAttribute('aria-hidden'));
     check(hidden === 'true', '효과 층이 화면 읽기에 숨겨지지 않습니다.');
     await new Promise((r) => setTimeout(r, 1800));
@@ -289,6 +289,63 @@ try {
     const plainTap = await page.evaluate(() => ({ sheet: Boolean(document.querySelector('.detail-title')), pressed: [...document.querySelectorAll('.todo-block')].find((x) => x.textContent.includes('보통 둘'))?.querySelector('.todo-check')?.getAttribute('aria-pressed') }));
     check(!plainTap.sheet, `다 보이는 제목을 눌렀는데 상세 팝업이 뜹니다: ${JSON.stringify(plainTap)}`);
 
+    /* 알림(토스트)이 팝업·시트 단추를 가리지 않는지(평점관 배포 전 필수): 할 일을 넣자마자 상세·쨈·메뉴를 엽니다. */
+    const toastCover = (pg) => pg.evaluate(() => {
+        const t = document.querySelector('.toast');
+        if (!t) return { toast: false, hits: [] };
+        const tr = t.getBoundingClientRect();
+        const scopes = [...document.querySelectorAll('.sheet[aria-modal="true"], .quick-bar.is-open')];
+        const hits = [];
+        for (const sc of scopes) for (const el of sc.querySelectorAll('button, [role="button"], input, textarea, [role="option"]')) {
+            const r = el.getBoundingClientRect();
+            if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
+            const x = Math.min(r.right, tr.right) - Math.max(r.left, tr.left);
+            const y = Math.min(r.bottom, tr.bottom) - Math.max(r.top, tr.top);
+            if (x > 1 && y > 1) hits.push((el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 16));
+        }
+        return { toast: true, scopes: scopes.length, hits };
+    });
+    const sheetsSeen = [];
+    const LONG = '학년 협의회 자료를 아주 길게 정리해서 공유 폴더에 올리고, 학부모 안내문 초안도 함께 써서 교감 선생님께 검토 부탁드리고, 수정본을 다시 받아 인쇄실에 맡기기까지 끝내기';
+    for (const [w, h] of [[320, 568], [360, 640], [390, 844], [900, 700], [1920, 1080]]) {
+        /* 1920px는 이 제목도 3줄 안에 다 보여 상세가 안 열리므로(잘린 것만 상세), 메뉴·찾기 시트로 같은 자리를 잽니다. */
+        for (const kind of (w >= 1200 ? ['quick', 'menu', 'find'] : ['detail', 'quick', 'menu', 'find'])) {
+            await page.browserContext().close();
+            page = await fresh();
+            await page.setViewport({ width: w, height: h, isMobile: w < 900, hasTouch: w < 900 });
+            await page.goto(`${origin}?demo=1&mode=light#/todo`, { waitUntil: 'networkidle0' });
+            await page.waitForSelector('.todo-add-row');
+            await addTodo(page, kind === 'detail' ? LONG : `알림 가림 ${kind}`, 2);
+            const had = await page.waitForSelector('.toast', { timeout: 3000 }).then(() => true).catch(() => false);
+            check(had, `${w}px ${kind}: 할 일을 넣었는데 알림이 안 떴습니다(검사 전제).`);
+            if (kind === 'detail') await page.evaluate(() => [...document.querySelectorAll('.todo-main')].find((x) => x.textContent.includes('인쇄실'))?.click());
+            else if (kind === 'quick') await page.evaluate(() => [...document.querySelectorAll('[aria-label="쨈 빠른 입력 열기"]')].find((b) => b.getBoundingClientRect().width > 0)?.click());
+            else if (kind === 'find') await page.evaluate(() => [...document.querySelectorAll('[aria-label="찾기"]')].find((x) => x.getBoundingClientRect().width > 0)?.click());
+            else await page.evaluate(() => { const b = [...document.querySelectorAll('[aria-label="메뉴"], .tbj-more, [aria-label="더 보기"]')].find((x) => x.getBoundingClientRect().width > 0); b?.click(); });
+            await new Promise((r) => setTimeout(r, 400));
+            const res = await toastCover(page);
+            const opened = await page.evaluate(() => Boolean(document.querySelector('.sheet[aria-modal="true"], .quick-bar.is-open')));
+            if (kind === 'detail' || kind === 'quick') check(opened, `${w}px ${kind}: 팝업이 열리지 않았습니다.`);
+            check(!res.hits.length, `${w}px ${kind}: 알림이 팝업 단추를 가립니다: ${res.hits.join(', ')}`);
+            if (opened && kind !== 'quick') check(!res.toast, `${w}px ${kind}: 시트를 열었는데 넣기 알림이 닫히지 않았습니다.`);
+            sheetsSeen.push(`${w}:${kind}:${opened ? 'open' : 'none'}`);
+            /* 팝업이 열린 동안 새로 뜬 알림(가장 큰 되돌리기 알림 모양)은 위쪽으로: 시트 단추와 안 겹쳐야 합니다. */
+            if (opened && kind !== 'quick') {
+                await page.evaluate(() => {
+                    const t = document.createElement('div');
+                    t.className = 'toast'; t.setAttribute('role', 'status'); t.dataset.probe = '1';
+                    t.innerHTML = '<i style="display:block;width:44px;height:44px"></i><span>할 일에 넣었어요. 이 내용은 이 기기에만 남겨 둘게요.</span><button style="min-height:44px">되돌리기</button>';
+                    document.body.appendChild(t);
+                });
+                const late = await toastCover(page);
+                check(!late.hits.length, `${w}px ${kind}: 팝업이 열린 뒤 뜬 알림이 단추를 가립니다: ${late.hits.join(', ')}`);
+                if (shots && (w === 390 || w === 1920)) await page.screenshot({ path: `${shots}/toast-over-${kind}-${w}.png` });
+                await page.evaluate(() => document.querySelector('[data-probe="1"]')?.remove());
+            }
+        }
+    }
+
+    console.log(`알림 가림 검사: ${sheetsSeen.join(' ')}`);
     /* 동작 줄이기: 방울은 안 뜨고, 도장만 */
     await page.browserContext().close();
     page = await fresh();
