@@ -795,6 +795,15 @@ async function forgetQueuedCloud(remove = deleteUserDoc, { skipSyncCheck = false
         /* 기기 시각으로만 지운 시각(at)이 남은 일정·회의록·출결(옛 대기열 포함, 재기 전 d 없음)도 시각을 믿지 않습니다. */
         const unsure = bucket !== 'todos' && (waiting || entry.exact === true || entry.server !== true || !(entry.at > 0));
         if (waiting && !skipClockWait && cloudApi.clock && deviceNow() - entry.d < UNSURE_FORGET_WAIT_MS) continue;
+        /* 지문(expect)도 시각도 믿을 것이 없으면 지울지 판정할 수 없습니다(PR #66 r5 P2-2). 시각을 아직 못 쟀으면 대기열에 남겨
+           재기 뒤 서버 시각으로 지우고(로컬은 지운 채, 받아오기에도 다시 붙지 않음), 재었는데도 모르면 대기열에서 빼 클라우드 항목을 남깁니다
+           (다시 보일 수 있지만 다른 기기의 수정을 지우지 않음). 묘비를 서버 시각으로 쓰면 그 뒤 다른 기기가 되살린 수정까지 막으므로 쓰지 않습니다. */
+        const known = [entry.expect, entry.also, entry.back].some(Boolean);
+        if (unsure && !known && !skipClockWait) {
+            if (!clockOk) continue;
+            cloudForget.delete(entryKey);
+            continue;
+        }
         /* 클라우드 문서가 지운 시각보다 나중에 고쳐졌으면 지우지 않습니다. */
         const result = await remove(uid, bucket, id, { memoryOnly: memory, notAfter: !unsure && entry.at > 0 ? entry.at : null, expect: [entry.expect, entry.also, ...(unsure ? [entry.back] : [])].filter(Boolean).join(',') || null, ...(unsure ? { tombNow: true, exact: true } : {}) }).catch(() => ({ ok: false }));
         if (result?.ok) cloudForget.delete(entryKey);
