@@ -1050,6 +1050,21 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     .todo-line .todo-main { flex: 1 1 0; }
     .todo-line .todo-due { order: 5; flex-basis: 100%; text-align: right; padding-right: 100px; }
 }
+/* 아주 좁은 화면(320·360): 제목이 한 줄을 다 쓰게, 마감·고치기·지우기는 아랫줄로 내립니다(평점관 P2). */
+@media (max-width: 380px) {
+    .todo-line, .todo-line:has(.is-conflict) {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+        grid-template-areas: "check main main main" ". due edit del";
+        align-items: center;
+        gap: 6px;
+    }
+    .todo-line > .todo-check { grid-area: check; }
+    .todo-line > .todo-main, .todo-line:has(.is-conflict) > .todo-main { grid-area: main; min-width: 0; }
+    .todo-line > .todo-due, .todo-line:has(.is-conflict) > .todo-due { grid-area: due; padding-right: 0; text-align: left; white-space: normal; }
+    .todo-line > .todo-edit-btn { grid-area: edit; }
+    .todo-line > .icon-btn:last-child { grid-area: del; }
+}
 .fold-sum:has(.is-conflict) { white-space: normal; overflow: visible; text-overflow: clip; }
 .fold-sum .is-conflict { padding: 2px 0; }
 .detail-title .is-conflict, .day-todo-title.is-conflict { padding: 0; }

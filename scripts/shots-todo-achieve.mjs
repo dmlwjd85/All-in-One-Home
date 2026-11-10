@@ -48,10 +48,53 @@ const report = (tag, res) => {
     check(!res.outside.length, `${tag} 화면 밖: ${res.outside.join(', ')}`);
     check(!res.overlap.length, `${tag} 겹침: ${res.overlap.join(', ')}`);
 };
+/* 글자 잘림: 말줄임·넘침 숨김으로 글자가 잘렸거나, 글자가 화면 밖으로 나가면 셉니다(평점관 P2·3). */
+const clipAudit = (page, scope) => page.evaluate((scope) => {
+    const vw = document.documentElement.clientWidth;
+    const out = [];
+    const roots = [...document.querySelectorAll(scope)];
+    for (const rootEl of roots) {
+        for (const el of [rootEl, ...rootEl.querySelectorAll('*')]) {
+            if (el.closest('[data-clip-ok], .sr-only, .done-fx-layer, svg')) continue;
+            const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+            if (!own) continue;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            if (!r.width || !r.height || cs.visibility === 'hidden' || cs.display === 'none') continue;
+            const name = el.textContent.trim().slice(0, 20);
+            const hides = /hidden|clip/.test(cs.overflowX + cs.overflowY + cs.overflow);
+            if (cs.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1) out.push(`${name}(말줄임)`);
+            else if (hides && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1)) out.push(`${name}(숨김 ${el.scrollWidth}x${el.scrollHeight}>${el.clientWidth}x${el.clientHeight})`);
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const tr = range.getBoundingClientRect();
+            if (tr.width && (tr.left < -0.5 || tr.right > vw + 0.5)) out.push(`${name}(화면 밖 ${Math.round(tr.left)}~${Math.round(tr.right)})`);
+            /* 조상이 넘침을 숨겨 글자가 잘리는지 */
+            let a = el.parentElement;
+            while (a && a !== document.body) {
+                const acs = getComputedStyle(a);
+                if (/hidden|clip/.test(acs.overflowX + acs.overflowY) && a.scrollHeight <= a.clientHeight + 1) {
+                    const ar = a.getBoundingClientRect();
+                    if (tr.width && (tr.right > ar.right + 1 || tr.left < ar.left - 1 || tr.bottom > ar.bottom + 1)) { out.push(`${name}(부모에 잘림)`); break; }
+                }
+                a = a.parentElement;
+            }
+        }
+    }
+    return [...new Set(out)];
+}, scope);
+const reportClip = async (tag, page, scope) => {
+    const res = await clipAudit(page, scope);
+    check(!res.length, `${tag} 글자 잘림: ${res.join(', ')}`);
+};
 const TODO_SEL = '.todo-add-row .field, .pri-picks .choice-tile, .todo-sort .choice-tile, .goal-meter, .todo-line > *, .todo-main .pri-mark, .todo-main .todo-title';
 
 async function addTodo(page, title, pri) {
-    await page.click(`.todo-add-row [data-pri-pick="${pri}"]`);
+    /* 앞 할 일을 넣은 뒤 입력칸·중요도가 처음으로 돌아온 다음에 고릅니다(빠른 기계에서 고른 값이 덮이지 않게). */
+    await page.waitForFunction(() => document.querySelector('input[aria-label="할 일"]')?.value === '', { timeout: 8000 });
+    await new Promise((r) => setTimeout(r, 80));
+    await page.$eval(`.todo-add-row [data-pri-pick="${pri}"]`, (el) => el.click());
+    await page.waitForFunction((p) => document.querySelector(`.todo-add-row [data-pri-pick="${p}"]`)?.getAttribute('aria-pressed') === 'true', { timeout: 4000 }, String(pri));
     await page.type('input[aria-label="할 일"]', title);
     await page.keyboard.press('Enter');
     await page.waitForFunction((t) => [...document.querySelectorAll('.todo-title')].some((el) => el.textContent.includes(t)), { timeout: 8000 }, title).catch(async (error) => {
@@ -90,6 +133,16 @@ try {
             const marks = await page.$$eval('.todo-main .pri-mark', (els) => els.map((el) => el.dataset.pri));
             check(marks.includes('3') && marks.includes('1'), `${tag} 목록에 중요도 표시가 없습니다: ${marks}`);
             report(`${tag} 할 일`, await audit(page, TODO_SEL));
+            await reportClip(`${tag} 할 일`, page, 'main');
+            /* 긴 제목은 말줄임 없이 줄을 바꾸고, 다 보이면 줄을 눌러도 상세 팝업이 아니라 끝냄 표시입니다. */
+            const wrap = await page.evaluate(() => {
+                const t = [...document.querySelectorAll('.todo-title')].find((el) => el.textContent.includes('협의회 자료'));
+                const cs = getComputedStyle(t);
+                const lines = Math.round(t.getBoundingClientRect().height / parseFloat(cs.lineHeight));
+                return { ellipsis: cs.textOverflow === 'ellipsis', nowrap: cs.whiteSpace === 'nowrap', clipped: t.scrollHeight > t.clientHeight + 1 || t.scrollWidth > t.clientWidth + 1, lines };
+            });
+            check(!wrap.ellipsis && !wrap.nowrap && !wrap.clipped, `${tag} 할 일 제목이 잘립니다: ${JSON.stringify(wrap)}`);
+            if (width <= 390) check(wrap.lines >= 2, `${tag} 긴 제목이 줄을 바꾸지 않습니다: ${JSON.stringify(wrap)}`);
             /* 중요도순 → 높음이 맨 위 */
             await page.click('.todo-sort [data-sort="pri"]');
             const firstPri = await page.$eval('section .todo-block .pri-mark', (el) => el.dataset.pri);
@@ -107,18 +160,20 @@ try {
                 if (!btn) break;
                 const inToday = await btn.evaluate((el) => el.closest('section')?.querySelector('h3')?.textContent === '오늘');
                 if (!inToday) break;
-                await btn.click();
+                await btn.evaluate((el) => el.click());
                 await new Promise((r) => setTimeout(r, 120));
             }
             await page.waitForSelector('.goal-meter.is-hit', { timeout: 4000 }).catch(() => {});
             await new Promise((r) => setTimeout(r, 400));
             check(Boolean(await page.$('.goal-meter.is-hit')), `${tag} 목표를 채워도 달성 표시가 없습니다.`);
             report(`${tag} 달성 뒤`, await audit(page, TODO_SEL));
+            await reportClip(`${tag} 달성 뒤`, page, 'main');
             if (shots) { await new Promise((r) => setTimeout(r, 1700)); await page.evaluate(() => { document.querySelectorAll('.toast, [role="status"]').forEach((el) => { el.style.visibility = 'hidden'; }); document.querySelector('.todo-tools')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); }); await page.screenshot({ path: `${shots}/todo-done-${width}-${mode}.png` }); }
             /* 고치기 시트 */
             await page.$eval('.todo-edit-btn', (el) => el.click());
             await page.waitForSelector('.todo-edit-sheet .pri-picks');
             report(`${tag} 고치기`, await audit(page, '.todo-edit-sheet .choice-tile, .todo-edit-sheet .chip, .todo-edit-sheet .field'));
+            await reportClip(`${tag} 고치기`, page, '.todo-edit-sheet');
             if (shots) await page.screenshot({ path: `${shots}/edit-${width}-${mode}.png` });
             await page.keyboard.press('Escape');
             /* 달력 달성 도장 */
@@ -133,17 +188,106 @@ try {
             report(`${tag} 달력`, await audit(page, '.cal-grid > button', { heightOnly: true }));
             const cellOk = await page.$eval('.cal-goal', (g) => { const cell = g.closest('button').getBoundingClientRect(); const r = g.getBoundingClientRect(); const n = g.closest('button').querySelector('.num').getBoundingClientRect(); return r.left >= cell.left && r.right <= cell.right && r.top >= n.bottom - 0.5; }).catch(() => false);
             check(cellOk, `${tag} 달성 도장이 날짜 숫자와 겹치거나 칸 밖으로 나갑니다.`);
+            await reportClip(`${tag} 달력`, page, '.cal-grid .cal-goal, .cal-grid .cal-day-num, .cal-grid .num');
             if (shots) await page.screenshot({ path: `${shots}/calendar-${width}-${mode}.png`, fullPage: width >= 900 });
             /* 설정 › 할 일 목표·효과 */
             await page.evaluate(() => { location.hash = '#/settings/todo'; });
             await page.waitForSelector('[data-screen="todo-settings"]');
             report(`${tag} 설정`, await audit(page, '[data-screen="todo-settings"] .choice-tile, [data-screen="todo-settings"] .chip'));
+            await reportClip(`${tag} 설정`, page, '[data-screen="todo-settings"]');
             if (shots) await page.screenshot({ path: `${shots}/settings-${width}-${mode}.png`, fullPage: true });
             const sel = await page.evaluate(() => [...document.querySelectorAll('[data-screen="todo-settings"] select, [data-screen="todo-settings"] input[type="range"]')].length);
             check(sel === 0, `${tag} 설정에 드롭다운·스크롤 피커가 있습니다.`);
             await client.detach();
         }
     }
+
+    /* 완료 효과 세기(평점관 P1): 기본 보통, 평소 작고 짧게, 높음만 크게, 연달아면 줄임, 끝나면 DOM 정리, 알림·포커스 */
+    await page.browserContext().close();
+    page = await fresh();
+    await page.evaluateOnNewDocument(() => {
+        window.__osc = 0;
+        const C = window.AudioContext || window.webkitAudioContext;
+        if (C) { const make = C.prototype.createOscillator; C.prototype.createOscillator = function patched() { window.__osc += 1; return make.call(this); }; }
+        window.__added = 0;
+        new MutationObserver((list) => { for (const m of list) for (const n of m.addedNodes) { if (n.classList?.contains('done-drop')) window.__added += 1; } }).observe(document, { childList: true, subtree: true });
+    });
+    await page.setViewport({ width: 390, height: 800, isMobile: true, hasTouch: true });
+    await page.goto(`${origin}?demo=1&mode=light#/todo`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('.todo-add-row');
+    check(await page.evaluate(() => localStorage.getItem('ssug-gyomu-done-fx')) === null, '효과 설정이 처음부터 저장돼 있습니다.');
+    await addTodo(page, '보통 하나', 2);
+    await addTodo(page, '보통 둘', 2);
+    await addTodo(page, '보통 셋', 2);
+    await addTodo(page, '높음 하나', 3);
+    await addTodo(page, '보통 넷', 2);
+    const checkBy = (title) => page.evaluate((t) => {
+        const b = [...document.querySelectorAll('.todo-block')].find((x) => x.querySelector('.todo-title')?.textContent.includes(t))?.querySelector('.todo-check');
+        b.focus();
+        b.click();
+        return b.dataset.todoCheck;
+    }, title);
+    const peak = async (ms = 400) => {
+        let max = 0;
+        const end = Date.now() + ms;
+        while (Date.now() < end) { max = Math.max(max, await page.evaluate(() => document.querySelectorAll('.done-drop').length)); await new Promise((r) => setTimeout(r, 25)); }
+        return max;
+    };
+    const idA = await checkBy('보통 하나');
+    const small = await peak();
+    await new Promise((r) => setTimeout(r, 500));
+    const left = await page.evaluate(() => ({ drops: document.querySelectorAll('.done-drop, .done-ring').length, layer: Boolean(document.querySelector('.done-fx-layer')) }));
+    check(small >= 6 && small <= 10, `평소 완료 방울이 6~10개가 아닙니다: ${small}`);
+    check(left.drops === 0 && !left.layer, `평소 효과가 0.6초 안에 끝나지 않거나 DOM이 남습니다: ${JSON.stringify(left)}`);
+    const a11y = await page.evaluate((id) => {
+        const live = document.querySelector('.done-fx-live');
+        const active = document.activeElement;
+        return { live: live?.textContent || '', role: live?.getAttribute('aria-live'), hidden: document.querySelector('.done-fx-layer')?.getAttribute('aria-hidden') ?? 'gone', focus: active?.dataset?.todoCheck === id, label: active?.getAttribute('aria-label') || '' };
+    }, idA);
+    check(a11y.live.includes('보통 하나') && a11y.live.includes('끝냈어요') && a11y.role === 'polite', `완료를 화면 읽기에 알리지 않습니다: ${JSON.stringify(a11y)}`);
+    check(a11y.focus && a11y.label.includes('보통 하나'), `체크 뒤 포커스가 체크 칸에 남지 않습니다: ${JSON.stringify(a11y)}`);
+    await new Promise((r) => setTimeout(r, 1800));
+    await checkBy('높음 하나');
+    const bigCount = await peak();
+    check(bigCount >= 16 && bigCount <= 24, `중요도 3이 크게(20개 안팎) 터지지 않습니다: ${bigCount}`);
+    const hidden = await page.evaluate(() => document.querySelector('.done-fx-layer')?.getAttribute('aria-hidden'));
+    check(hidden === 'true', '효과 층이 화면 읽기에 숨겨지지 않습니다.');
+    await new Promise((r) => setTimeout(r, 1800));
+    /* 연달아 세 개: 뒤로 갈수록 줄어듭니다. */
+    const counts = [];
+    for (const t of ['보통 둘', '보통 셋', '보통 넷']) {
+        await page.evaluate(() => { window.__added = 0; });
+        await checkBy(t);
+        await new Promise((r) => setTimeout(r, 150));
+        counts.push(await page.evaluate(() => window.__added));
+    }
+    check(counts[0] >= 6 && counts[0] <= 10 && counts[1] < counts[0] && counts[2] <= 4, `연달아 체크해도 효과가 줄지 않습니다: ${counts}`);
+    const pseudo = await page.evaluate(() => { const el = document.querySelector('.done-drop'); if (!el) return 'none'; const cs = getComputedStyle(el); return `${cs.left}/${cs.top}`; });
+    check(pseudo === 'none' || pseudo === '0px/0px', `방울이 left/top으로 움직입니다: ${pseudo}`);
+    /* 소리: 누를 때 소리를 끄면 완료 소리도 없습니다. */
+    const soundOn = await page.evaluate(() => window.__osc);
+    await page.evaluate(() => localStorage.setItem('ssug-gyomu-key-sound', '0'));
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForSelector('.todo-add-row');
+    check(await page.evaluate(() => localStorage.getItem('ssug-gyomu-key-sound')) === '0', '버튼 소리를 끄지 못했습니다.');
+    await page.evaluate(() => { document.querySelectorAll('.todo-check[aria-pressed="true"]').forEach((b) => b.click()); });
+    await new Promise((r) => setTimeout(r, 300));
+    await page.evaluate(() => { window.__osc = 0; });
+    await checkBy('보통 하나');
+    await new Promise((r) => setTimeout(r, 400));
+    const soundOff = await page.evaluate(() => window.__osc);
+    check(soundOff === 0, `버튼 소리가 꺼져도 완료 소리가 납니다: ${soundOff}`);
+    console.log(`효과 측정: 평소 ${small}개 · 높음 ${bigCount}개 · 연달아 ${counts.join('→')} · 소리 켬 오실레이터 ${soundOn} / 끔 ${soundOff}`);
+    /* 아주 긴 제목(3줄 넘음)은 줄을 누르면 상세 팝업 */
+    await addTodo(page, '학년 협의회 자료를 아주 길게 정리해서 공유 폴더에 올리고, 학부모 안내문 초안도 함께 써서 교감 선생님께 검토 부탁드리고, 수정본을 다시 받아 인쇄실에 맡기기까지 끝내기', 2);
+    await page.evaluate(() => [...document.querySelectorAll('.todo-main')].find((x) => x.textContent.includes('인쇄실'))?.click());
+    const sheet = await page.waitForSelector('.detail-title', { timeout: 3000 }).then(() => true).catch(() => false);
+    check(sheet, '3줄을 넘어 잘린 제목을 눌러도 상세 팝업이 뜨지 않습니다.');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => [...document.querySelectorAll('.todo-main')].find((x) => x.textContent.includes('보통 둘'))?.click());
+    await new Promise((r) => setTimeout(r, 300));
+    const plainTap = await page.evaluate(() => ({ sheet: Boolean(document.querySelector('.detail-title')), pressed: [...document.querySelectorAll('.todo-block')].find((x) => x.textContent.includes('보통 둘'))?.querySelector('.todo-check')?.getAttribute('aria-pressed') }));
+    check(!plainTap.sheet, `다 보이는 제목을 눌렀는데 상세 팝업이 뜹니다: ${JSON.stringify(plainTap)}`);
 
     /* 동작 줄이기: 방울은 안 뜨고, 도장만 */
     await page.browserContext().close();
@@ -159,17 +303,17 @@ try {
     /* 끄기: 아무 효과 없음 */
     await page.click('[data-fx-pick="off"]');
     check(await page.evaluate(() => localStorage.getItem('ssug-gyomu-done-fx')) === 'off', '효과 끄기를 기억하지 않습니다.');
-    await page.click('[data-fx-pick="on"]');
+    await page.click('[data-fx-pick="mid"]');
     await page.click('[data-fx-pick="low"]');
     await page.click('[data-role="fx-preview"]');
     await new Promise((r) => setTimeout(r, 60));
     const low = await page.evaluate(() => document.querySelectorAll('.done-drop').length);
     await new Promise((r) => setTimeout(r, 1800));
-    await page.click('[data-fx-pick="on"]');
+    await page.click('[data-fx-pick="big"]');
     await page.click('[data-role="fx-preview"]');
     await new Promise((r) => setTimeout(r, 60));
     const full = await page.evaluate(() => document.querySelectorAll('.done-drop').length);
-    check(low > 0 && full > low, `줄이기·켜기 방울 수가 다르지 않습니다: 줄이기 ${low} / 켜기 ${full}`);
+    check(low > 0 && full > low && full <= 24, `작게·크게 방울 수가 다르지 않거나 너무 많습니다: 작게 ${low} / 크게 ${full}`);
     await new Promise((r) => setTimeout(r, 1800));
     check(await page.evaluate(() => document.querySelectorAll('.done-drop, .done-ring').length) === 0, '효과가 끝난 뒤에도 방울이 남습니다.');
 
