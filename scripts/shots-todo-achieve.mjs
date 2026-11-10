@@ -313,7 +313,7 @@ try {
     await page.click('[data-role="fx-preview"]');
     await new Promise((r) => setTimeout(r, 60));
     const full = await page.evaluate(() => document.querySelectorAll('.done-drop').length);
-    check(low > 0 && full > low && full <= 24, `작게·크게 방울 수가 다르지 않거나 너무 많습니다: 작게 ${low} / 크게 ${full}`);
+    check(low > 0 && full > low && full <= 20, `작게·크게 방울 수가 다르지 않거나 너무 많습니다: 작게 ${low} / 크게 ${full}`);
     await new Promise((r) => setTimeout(r, 1800));
     check(await page.evaluate(() => document.querySelectorAll('.done-drop, .done-ring').length) === 0, '효과가 끝난 뒤에도 방울이 남습니다.');
 

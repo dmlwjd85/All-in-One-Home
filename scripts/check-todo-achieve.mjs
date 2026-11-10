@@ -142,7 +142,7 @@ check(fx.burstPlan({ pri: 2 }).count > fx.burstPlan({ pri: 1 }).count, '중요�
 const hi = fx.burstPlan({ pri: 3 });
 const last = fx.burstPlan({ pri: 1, allDone: true });
 check(hi.big && last.big && hi.count >= 16 && hi.count <= 22 && last.count <= 22 && last.reach > fx.burstPlan({ pri: 1 }).reach, `중요도 3·마지막 할 일만 크게 터지지 않습니다: ${JSON.stringify({ hi, last })}`);
-check(fx.burstPlan({ pri: 3, level: 'big', allDone: true }).count <= fx.MAX_DROPS && fx.MAX_DROPS <= 24, '크게에서도 방울이 20개 안팎을 넘습니다.');
+check(fx.burstPlan({ pri: 3, level: 'big', allDone: true }).count <= fx.MAX_DROPS && fx.MAX_DROPS === 20 && [1, 2, 3].every((pri) => ['big', 'mid', 'low'].every((level) => fx.burstPlan({ pri, level, allDone: true }).count <= 20)), '크게에서도 방울이 20개를 넘습니다.');
 const rapid1 = fx.burstPlan({ pri: 2, streak: 1 });
 const rapid3 = fx.burstPlan({ pri: 3, streak: 3 });
 check(rapid1.count < fx.burstPlan({ pri: 2 }).count && !rapid3.big && rapid3.count <= 4 && !rapid3.ring, `연달아 체크해도 효과가 줄지 않습니다: ${JSON.stringify({ rapid1, rapid3 })}`);
