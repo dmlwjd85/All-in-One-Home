@@ -16,6 +16,7 @@ import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
 import { cloudReady, loginHint, signInGoogle, signOutFirebase } from '../firebase.js';
 import { lastSyncAt, pullFromCloudNow, restoreKeptLegacy, setAuth } from '../lib/db.js';
+import { keptLabel, keptNow, keptValue } from '../lib/keptLabel.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
 import { AcademicSettings } from './AcademicSettings.jsx';
@@ -29,24 +30,10 @@ import { LinksSheet } from './EduLinks.jsx';
 import { setNotice } from '../lib/onboard.js';
 
 /* 업데이트 전 수정 보관함(PR #66): 다른 기기의 나중 수정에 밀린 이 기기 값. */
-const KEPT_KIND = { events: '일정', notes: '회의록·메모', attendance: '출결', timetable: '시간표' };
-const KEPT_DAY = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
-function keptLabel(k, students = []) {
-    const row = k?.row || {};
-    let what = '';
-    if (k.kind === 'events') what = row.title || '';
-    else if (k.kind === 'notes') what = row.title || String(row.text || '').slice(0, 40);
-    else if (k.kind === 'attendance') {
-        const who = students.find((st) => String(st.id) === String(row.sid))?.name || row.sid || '';
-        what = `${row.date || ''} · ${who} · ${row.status || ''}`;
-    } else if (k.kind === 'timetable') {
-        const periods = Object.keys(row).filter((key) => /^p\d+$/.test(key) && row[key]).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
-        what = `${KEPT_DAY[k.id] || k.id} · ${periods.map((key) => `${key.slice(1)}교시 ${row[key]}`).join(', ')}`;
-    }
-    return `${KEPT_KIND[k.kind] || '기록'} · ${what}`;
-}
-
-function KeptLegacy({ list, students, showToast }) {
+function KeptLegacy({ data, showToast }) {
+    const [asking, setAsking] = useState(-1);
+    const list = Array.isArray(data.keptLegacy) ? data.keptLegacy : [];
+    const students = data.students || [];
     if (!list.length) return null;
     return (
         <div data-kept-legacy="1">
@@ -56,10 +43,22 @@ function KeptLegacy({ list, students, showToast }) {
                 {list.map((k, i) => (
                     <div key={`${k.kind}-${k.id}-${k.at}-${i}`} className="kept-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                         <span style={{ flex: '1 1 180px', minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45 }}>{keptLabel(k, students)}</span>
-                        <Btn className="chip" data-kept-restore={i} aria-label={`보관한 값으로 되돌리기: ${keptLabel(k, students)}`} onClick={async () => {
-                            const result = await restoreKeptLegacy(i);
-                            showToast(result.ok ? '보관한 값으로 되돌렸어요.' : '되돌리지 못했어요. 이 기기에는 그대로 남아 있어요.');
-                        }}>되돌리기</Btn>
+                        {asking !== i && <Btn className="chip" data-kept-restore={i} aria-label={`보관한 값으로 되돌리기: ${keptLabel(k, students)}`} onClick={() => setAsking(i)}>되돌리기</Btn>}
+                        {asking === i && (
+                            <div className="glass" role="alertdialog" aria-label="보관한 값으로 되돌리기" data-kept-ask={i} style={{ padding: 12, flex: '1 1 100%', minWidth: 0 }}>
+                                <p style={{ marginTop: 0, overflowWrap: 'anywhere' }}><b>지금 값</b> · {keptValue(k.kind, k.id, keptNow(k, data), students)}</p>
+                                <p style={{ overflowWrap: 'anywhere' }}><b>보관한 값</b> · {keptValue(k.kind, k.id, k.row, students)}</p>
+                                <p className="muted">지금 값을 보관한 값으로 바꿀까요? 다른 기기에도 이 값이 올라가요.</p>
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <Btn className="primary-btn" data-kept-confirm={i} onClick={async () => {
+                                        setAsking(-1);
+                                        const result = await restoreKeptLegacy(i, k);
+                                        showToast(result.ok ? '보관한 값으로 되돌렸어요.' : '되돌리지 못했어요. 보관함에 그대로 남아 있어요.');
+                                    }}>이 값으로 되돌리기</Btn>
+                                    <Btn className="chip" data-kept-cancel={i} onClick={() => setAsking(-1)}>그만두기</Btn>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -446,7 +445,7 @@ export function Settings() {
                     const result = await importText(text, importMode);
                     showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
                 }} />
-                <KeptLegacy list={Array.isArray(data.keptLegacy) ? data.keptLegacy : []} students={data.students || []} showToast={showToast} />
+                <KeptLegacy data={data} showToast={showToast} />
                 <h3>로그인</h3>
                 {!cloudReady() && <p>아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                 {cloudReady() && !data.auth?.uid && <Btn className="chip" onClick={async () => {
