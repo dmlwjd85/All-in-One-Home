@@ -172,7 +172,7 @@ check(row('m3')?.title === '신판복구', `M3: 신판 복구가 실패했습니
 /*
  * M6(PR #66 r4 A7): 구버전에서 오프라인으로 고침(T1) → 다른 기기 신판이 같은 항목을 더 나중에 고침(T2, hlc) → 업데이트.
  * 업데이트 전 수정은 고친 시각을 모르므로 '지금'으로 덮으면 안 됩니다. 일정·회의록은 클라우드 값을 받고 이 기기 수정은 '(충돌 사본)'으로 따로 올리고,
- * 사본을 만들 수 없는 출결·시간표는 클라우드 값을 받고 이 기기 값을 기기 보관함(legacyKept)에 남깁니다. 어느 쪽 수정도 사라지지 않아야 합니다.
+ * 사본을 만들 수 없는 출결·시간표는 클라우드 값을 받고 이 기기 값을 보관함(state.keptLegacy, 백업에도 들어감)에 남기고, 설정에서 되돌릴 수 있습니다. 어느 쪽 수정도 사라지지 않아야 합니다.
  */
 {
     cur = 'NEW';
@@ -216,11 +216,26 @@ check(row('m3')?.title === '신판복구', `M3: 신판 복구가 실패했습니
     check(noteCopy && String(noteCopy.id).startsWith('meet-') && String(noteCopy.title).startsWith('(충돌 사본) ') && (await cloud6('notes', noteCopy.id))?.text === 'A구버전회의', `M6: 회의록 충돌 사본이 없습니다: ${JSON.stringify(noteCopy)}`);
     check((await cloud6('attendance', attId))?.status === 'late' && (db.snapshot().attendance || []).find((r) => r.id === attId)?.status === '지각', `M6: 출결 나중 수정이 덮였습니다: ${JSON.stringify((db.snapshot().attendance || []).find((r) => r.id === attId))}`);
     check((await cloud6('timetable', 'thu'))?.p1 === 'B신판수학' && db.snapshot().timetable?.thu?.p1 === 'B신판수학', `M6: 시간표 나중 수정이 덮였습니다: ${db.snapshot().timetable?.thu?.p1}`);
-    const keptList = (await MAIN.get('legacyKept')) || [];
+    const keptList = db.keptLegacyList();
+    check(JSON.stringify((await MAIN.get('state'))?.keptLegacy || []).includes('A구버전과학'), 'M6: 보관함이 기기 저장소에 남지 않았습니다.');
     check(keptList.some((k) => k.kind === 'attendance' && k.row?.status === '조퇴') && keptList.some((k) => k.kind === 'timetable' && k.row?.p1 === 'A구버전과학'), `M6: 사본을 못 만드는 출결·시간표의 이 기기 값이 보관되지 않았습니다: ${JSON.stringify(keptList)}`);
     check(keptList.some((k) => k.kind === 'events' && k.row?.title === 'A구버전먼저'), 'M6: 일정 원래 줄이 보관함에 없습니다.');
-    check(told6.some((m) => /충돌 사본/.test(m)) && told6.some((m) => /보관해 두었어요/.test(m)), `M6: 사본·보관 안내가 없습니다: ${told6.join(' / ')}`);
+    check(told6.some((m) => /충돌 사본/.test(m)) && told6.some((m) => /보관함에 남겨/.test(m)), `M6: 사본·보관 안내가 없습니다: ${told6.join(' / ')}`);
     check(!(r6?.rejected || []).length && !(r6b?.rejected || []).length, `M6: 거절이 남았습니다: ${JSON.stringify([r6?.rejected, r6b?.rejected])}`);
+    /* 보관함에서 되돌리기: 이 기기 값이 지금 고친 것으로 올라감 */
+    {
+        const backup = await import(new URL('.lwwmix/new/src/lib/backup.js', root));
+        const exp = backup.buildExport(db.snapshot(), { at: 'x' });
+        check(JSON.stringify(exp.keptLegacy || []).includes('A구버전과학') && JSON.stringify(exp.keptLegacy || []).includes('조퇴'), 'M6: 백업 파일에 보관함이 없습니다.');
+        const ia = db.keptLegacyList().findIndex((k) => k.kind === 'attendance');
+        check((await db.restoreKeptLegacy(ia)).ok, 'M6: 출결 되돌리기 실패');
+        const it = db.keptLegacyList().findIndex((k) => k.kind === 'timetable');
+        check((await db.restoreKeptLegacy(it)).ok, 'M6: 시간표 되돌리기 실패');
+        await flush(); await wait(100); await sync();
+        check((await cloud6('attendance', attId))?.status === 'early' && (db.snapshot().attendance || []).find((r) => r.id === attId)?.status === '조퇴', `M6: 출결 되돌리기가 올라가지 않았습니다: ${JSON.stringify(await cloud6('attendance', attId))}`);
+        check((await cloud6('timetable', 'thu'))?.p1 === 'A구버전과학' && db.snapshot().timetable?.thu?.p1 === 'A구버전과학', `M6: 시간표 되돌리기가 올라가지 않았습니다: ${JSON.stringify(await cloud6('timetable', 'thu'))}`);
+        check(!db.keptLegacyList().some((k) => k.kind === 'attendance' || k.kind === 'timetable'), 'M6: 되돌린 항목이 보관함에 남았습니다.');
+    }
     /* 두 번째 실행에서 사본을 또 만들지 않음 */
     await db.boot(''); await db.setAuth({ uid: UID }); await wait(200); await flush();
     check((db.snapshot().events || []).filter((r) => r.title === '(충돌 사본) A구버전먼저').length === 1, 'M6: 다시 켜니 충돌 사본이 또 생겼습니다.');

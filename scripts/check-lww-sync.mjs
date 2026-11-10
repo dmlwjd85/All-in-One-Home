@@ -299,8 +299,14 @@ check(['A', 'B'].every((d) => tt(d, 'fri').p5 === '폰새값'), `S6: 금요일�
     await both();
     const pl = {};
     for (const [name, dir] of [['A', 'a'], ['B', 'b']]) pl[name] = await import(new URL(`.lwwdev/${dir}/src/lib/periodLocal.js`, root));
-    await on('B', (db) => db.update((d) => { d.profile.periodStarts = ['08:41']; return d; }));
-    await on('B', () => pl.B.patchPeriodLocal({ workStart: '07:41' }));
+    /* B 기기 안에서는 Date.now도 +1일(기기 시계가 틀린 기기 흉내). 네트워크 쓰기 전에 되돌립니다. */
+    const realNow = Date.now;
+    await on('B', (db) => db.useDeviceClockForTest(() => realNow() + DAY));
+    Date.now = () => realNow() + DAY;
+    try {
+        await on('B', (db) => db.update((d) => { d.profile.periodStarts = ['08:41']; return d; }));
+        await on('B', () => pl.B.patchPeriodLocal({ workStart: '07:41' }));
+    } finally { Date.now = realNow; }
     await flush('B');
     await wait(GAP);
     await on('A', (db) => db.update((d) => { d.profile.periodStarts = ['08:52']; return d; }));
