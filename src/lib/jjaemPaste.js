@@ -74,6 +74,13 @@ function clockHour(ap, hour, { zeroLed = false } = {}) {
     return h;
 }
 
+/* 「점수 10:30」「3:2 비율」「10:8로 이김」처럼 콜론이 점수·비율을 뜻하는 말은 시각이 아닙니다. */
+const SCORE_BEFORE = /(?:점수|스코어|비율|배율|비|성적|결과|경기|득점|대비|세트)(?:는|은|가|이|도|를|을)?\s*$/;
+const SCORE_AFTER = /^\s*(?:비율|배율|비(?![가-힣])|승|패|무(?![가-힣])|스코어|점(?![검심수])|(?:으로|로)\s*(?:이기|이겼|이김|지|졌|짐|승|패|비기|비겼|나누|나눠|나눔|맞추|맞춰|섞))/;
+function notClockColon(text, start, end) {
+    return SCORE_BEFORE.test(text.slice(Math.max(0, start - 8), start)) || SCORE_AFTER.test(text.slice(end));
+}
+
 /**
  * 본문에서 시계 시각을 찾습니다. 학교 습관으로 앞말 없는 1~6시는 오후로 둡니다.
  * 읽는 꼴: 「3시」「3시 반」「3시 20분」「15시」「세 시」「오후 세시」「15:30」「오전 10:30」「오후 3:05」「정오」「자정」.
@@ -94,6 +101,7 @@ export function findTimeSpans(raw) {
         const min = Number(m[3]);
         if (hour > 24 || (hour === 24 && min)) continue;
         if (m[1] && hour > 12) continue; /* 「오후 15:30」은 섞어 쓴 말이라 그대로 두지 않고 24시간 값을 씁니다. */
+        if (!m[1] && notClockColon(text, m.index, m.index + m[0].length)) continue;
         push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min);
     }
     for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])`, 'g'))) {
@@ -115,8 +123,13 @@ export function findTimeSpans(raw) {
     /* 3) 정오·자정 */
     for (const m of text.matchAll(/(?<![가-힣])(정오|자정)(?=\s*(?:까지|전|에|부터|무렵|쯤|$|[^가-힣]))/g)) {
         const tail = text.slice(m.index + m[0].length);
+        const about = /^\s*(?:쯤|무렵|경)(?![가-힣])/.exec(tail);
+        if (about) { push(m.index, m[0] + about[0], m[1] === '정오' ? 12 : 0, 0); continue; }
         if (m[1] === '정오') push(m.index, m[0], 12, 0);
-        else if (/^\s*(?:까지|전)/.test(tail)) push(m.index, m[0], 23, 59);
+        else if (/^\s*(?:까지|전)/.test(tail)) {
+            const before = /^\s*전(?:\s*까지|에|으로)?(?![가-힣])/.exec(tail);
+            push(m.index, before ? m[0] + before[0] : m[0], 23, 59);
+        }
         else push(m.index, m[0], 0, 0);
     }
     return spans.sort((a, b) => a.index - b.index);

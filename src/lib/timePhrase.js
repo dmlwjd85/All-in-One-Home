@@ -104,6 +104,9 @@ const PHRASES = [
     { kind: 'morning', edge: 'at', dayShift: 1, re: /내일\s*아침(?:에|부터|까지)?/ },
     { kind: 'morning', edge: 'at', dayShift: 2, re: /모레\s*아침(?:에|부터|까지)?/ },
     { kind: 'morning', edge: 'at', re: /(?<![가-힣])(?:아침\s*(?:에|일찍|조회\s*전)|오늘\s*아침에?)/ },
+    { kind: 'evening', edge: 'at', dayShift: 1, re: /내일\s*저녁(?:에|때|쯤)?(?!\s*(?:밥|식사|메뉴))/ },
+    { kind: 'evening', edge: 'at', dayShift: 2, re: /모레\s*저녁(?:에|때|쯤)?(?!\s*(?:밥|식사|메뉴))/ },
+    { kind: 'evening', edge: 'at', re: /(?<![가-힣])(?:오늘\s*저녁(?:에|때|쯤)?(?!\s*(?:밥|식사|메뉴))|저녁\s*(?:에|때|쯤)(?![가-힣]))/ },
     { kind: 'lunch', edge: 'before', re: new RegExp(`점심(?:\\s*시간)?${BEFORE}`) },
     { kind: 'lunch', edge: 'after', re: new RegExp(`점심(?:\\s*시간)?(?:\\s*먹고|${AFTER})`) },
     { kind: 'lunch', edge: 'at', re: /(?<![가-힣])점심\s*(?:시간|때)(?:에|에는|쯤)?/ },
@@ -129,6 +132,9 @@ export function findTimePhrases(text) {
     }
     return out.sort((a, b) => a.index - b.index);
 }
+
+/** 「저녁」 추천 시각. */
+const EVENING_SUGGEST = '18:00';
 
 /** 학교급과 상관없이 점심은 4교시 끝부터 5교시 시작까지로 봅니다. */
 const LUNCH_AFTER_PERIOD = 4;
@@ -160,6 +166,9 @@ function boundaryOf(span, date, ctx) {
         case 'morning':
             if (isHm(ctx.workStart)) return { boundary: ctx.workStart, basis: `출근 ${ctx.workStart}` };
             return { boundary: '', basis: '', missing: 'workStart', suggest: SUGGEST_WORK.workStart };
+        case 'evening':
+            /* 「저녁」은 사람마다 시각이 달라 정하지 않고, 18:00을 추천값으로 노란 카드에서 묻습니다. */
+            return { boundary: '', basis: '', missing: 'vague', suggest: EVENING_SUGGEST };
         case 'lunch': {
             const at = span.edge === 'after' ? ctx.starts?.[LUNCH_AFTER_PERIOD] : periodEnd(ctx, LUNCH_AFTER_PERIOD);
             if (!isHm(at)) return { boundary: '', basis: '', missing: 'timetable', suggest: span.edge === 'after' ? '13:10' : '12:20' };
@@ -238,6 +247,7 @@ export function phraseAskText(res) {
     if (!res) return '';
     if (res.missing === 'workEnd') return `‘${res.word}’를 정하려면 퇴근 시각이 필요해요. 설정에 아직 없어요.`;
     if (res.missing === 'workStart') return `‘${res.word}’를 정하려면 출근 시각이 필요해요. 설정에 아직 없어요.`;
+    if (res.missing === 'vague') return `‘${String(res.word).replace(/\s*(?:에|때|쯤)$/, '')}’은 몇 시인지 정해지지 않았어요.`;
     if (res.missing === 'timetable') return `‘${res.word}’를 정할 교시 시각이 없어요.`;
     if (res.late) return `‘${res.word}’(${res.basis})는 오늘 이미 지났어요.`;
     return '';

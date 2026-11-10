@@ -1319,7 +1319,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .detail-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .todo-check { flex: none; width: 44px; min-height: 44px; font-size: 18px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-raise-sm); }
 .home-line { width: 100%; min-height: 44px; display: flex; justify-content: space-between; gap: 8px; align-items: center; text-align: left; padding: 0 4px; border-radius: 12px; }
-.home-line .home-line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 오늘 화면 줄 글은 말줄임표로 자르지 않고 줄을 바꿉니다(900px 등 중간 폭 포함). */
+.home-line .home-line-text { min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; padding: 4px 0; }
 .home-event-line { width: 100%; min-height: 44px; display: block; text-align: left; padding: 4px; border-radius: 12px; }
 .home-event-line .clip2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .term-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }

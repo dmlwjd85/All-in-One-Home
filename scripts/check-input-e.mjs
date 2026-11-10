@@ -45,6 +45,17 @@ const CLOCK_CORPUS = [
     ['자정까지 성적 입력', '23:59', '', '성적 입력'],
     ['밤 12시 서버 점검', '00:00', '', '서버 점검'],
     ['내일 오후 2:00 연수', '14:00', '2026-11-10', '연수'],
+    ['오후 3시반 회의', '15:30', '', '회의'],
+    ['3시반 회의', '15:30', '', '회의'],
+    ['15시 30분 제출', '15:30', '', '제출'],
+    ['내일 아침 9시 회의', '09:00', '2026-11-10', '회의'],
+    ['내일 저녁 7시 회식', '19:00', '2026-11-10', '회식'],
+    ['모레 오전 10:30 공개수업', '10:30', '2026-11-11', '공개수업'],
+    ['정오쯤 방송', '12:00', '', '방송'],
+    ['자정 전 성적 입력', '23:59', '', '성적 입력'],
+    ['자정에 서버 점검', '00:00', '', '서버 점검'],
+    ['2학년 1:30 출발', '13:30', '', '2학년 출발'],
+    ['10:30 점검', '10:30', '', '점검'],
 ];
 for (const [text, time, date, body] of CLOCK_CORPUS) {
     const r = jp.readJjaemPaste(text, { now: CLOCK_NOW, stripTime: true, stripDate: true, future: true });
@@ -52,7 +63,7 @@ for (const [text, time, date, body] of CLOCK_CORPUS) {
     eq(r.date, date, `시계 날짜 ${text}`);
     eq(r.body, body, `시계 본문 ${text}`);
 }
-for (const text of ['3시 방향으로 이동', '한시적 운영', '세시 풍속 조사', '2:1로 이김', '네 시간 동안 연수', '시청 방문', '점수 3:2', '1:1 상담']) {
+for (const text of ['3시 방향으로 이동', '한시적 운영', '세시 풍속 조사', '2:1로 이김', '네 시간 동안 연수', '시청 방문', '점수 3:2', '1:1 상담', '3:2 비율로 나누기', '점수 10:30', '점수가 10:30', '비율 3:2', '경기 결과 12:10', '10:30 비율', '12:10으로 이김', '21:19로 졌다', '세트 25:23']) {
     eq(jp.findTimeSpans(text).map((s) => s.time), [], `시각 아님 ${text}`);
 }
 
@@ -105,6 +116,21 @@ for (const [text, time, date, kind] of TIME_CORPUS) {
     check(Boolean(res), `시간구를 못 찾음: ${text}`);
     if (!res) continue;
     eq([res.time, res.date, res.kind, res.missing], [time, date || CTX.today, kind, ''], `시간구 ${text}`);
+}
+/* 「저녁」은 시각을 정하지 않고 노란 카드(18:00 추천)로 묻습니다. 모레·내일은 날짜를 옮깁니다. */
+for (const [text, date] of [['모레 저녁 회식', '2026-11-11'], ['모레 저녁에 연락', '2026-11-11'], ['내일 저녁 학부모 전화', '2026-11-10'], ['오늘 저녁에 채점', '2026-11-09'], ['저녁에 메일 확인', '2026-11-09']]) {
+    const res = tp.resolveTimePhrase(text, CTX);
+    check(Boolean(res), `저녁 시간구를 못 찾음: ${text}`);
+    if (!res) continue;
+    eq([res.kind, res.date, res.time, res.missing, res.suggestTime], ['evening', date, '', 'vague', '18:00'], `저녁 노란 카드 ${text}`);
+    check(/몇 시인지/.test(tp.phraseAskText(res)), `저녁 노란 카드 문구 ${text}`);
+}
+{
+    const [card] = tp.applyTimePhrases([{ kind: '일정', raw: '모레 저녁 학부모 간담회', title: '학부모 간담회', date: '', time: '' }], CTX);
+    eq([card.low, card.include, card.time], [true, false, ''], '메시지 붙여넣기: 모레 저녁은 노란 카드');
+}
+for (const text of ['저녁밥 메뉴', '저녁 메뉴 정하기', '내일 저녁밥 예약', '저녁노을 사진']) {
+    eq(tp.findTimePhrases(text).map((s) => s.kind), [], `저녁 시간구 아님 ${text}`);
 }
 /* 시간구가 아닌 말은 건드리지 않습니다. */
 for (const text of ['그냥 메모', '퇴근길 풍경이 예뻤다', '아침밥 메뉴', '13교시', '점심 메뉴 사진', '수업 자료', '3시간 동안 연수', '교시 배정표 정리', '출근부 확인']) {

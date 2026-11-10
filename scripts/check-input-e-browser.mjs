@@ -226,8 +226,8 @@ try {
         }
         await page.close();
     }
-    /* 1-3. 좁은 화면(320·360·390, 라이트·다크)에서 말줄임표(…)로 잘린 글자가 없음 — 줄을 바꿉니다. */
-    for (const [width, mode] of [[320, 'light'], [360, 'dark'], [390, 'light'], [390, 'dark']]) {
+    /* 1-3. 다섯 폭(320·360·390·900·1920) × 라이트·다크에서 말줄임표(…)로 잘린 글자가 없음 — 줄을 바꿉니다. */
+    for (const [width, mode] of [320, 360, 390, 900, 1920].flatMap((w) => [[w, 'light'], [w, 'dark']])) {
         const page = await fresh(browser, { width, height: 844, mode });
         for (const hash of ['#/today', '#/attend', '#/schedule', '#/todo', '#/minutes', '#/notice', '#/students', '#/settings']) {
             await page.evaluate((h) => { location.hash = h; }, hash);
@@ -238,7 +238,7 @@ try {
                 return el.scrollWidth > el.clientWidth + 1;
             }).map((el) => `${el.className || el.tagName}: ${el.innerText.slice(0, 24)}`));
             check(!cut.length, `${mode} ${width} ${hash} 말줄임표로 잘림: ${cut.join(' / ')}`);
-            if (shots && width === 390 && (hash === '#/todo' || hash === '#/today')) await page.screenshot({ path: `${shots}/줄바꿈-${hash.slice(2)}-${width}-${mode}.png` });
+            if (shots && (hash === '#/todo' || hash === '#/today')) await page.screenshot({ path: `${shots}/줄바꿈-${hash.slice(2)}-${width}-${mode}.png` });
         }
         await page.close();
     }
@@ -329,6 +329,17 @@ try {
             check(Boolean(await page.$('.quick-ask')), `${mode} ${width} 노란 카드 없음`);
             await audit(page, `${mode} ${width} 노란 카드`, '.quick-bar');
             if (shots) await page.screenshot({ path: `${shots}/노란카드-${width}-${mode}.png` });
+            /* 「모레 저녁」은 시각을 정하지 않고 노란 카드(오후 6시 추천)로 묻습니다. */
+            await page.evaluate(() => { const el = document.querySelector('.quick-bar textarea, .quick-bar input'); if (el) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); } });
+            await page.focus('.quick-bar textarea, .quick-bar input').catch(() => {});
+            await page.keyboard.down('Control'); await page.keyboard.press('a'); await page.keyboard.up('Control'); await page.keyboard.press('Backspace');
+            await page.keyboard.type('모레 저녁 학부모 간담회');
+            await page.click('.quick-chip[data-kind="일정"]');
+            await page.waitForSelector('[data-quick-ask="vague"]', { timeout: 3000 }).catch(() => {});
+            const eve = await page.evaluate(() => ({ text: document.querySelector('.quick-ask')?.innerText || '', btns: [...document.querySelectorAll('.quick-ask button')].map((b) => b.innerText.trim()) }));
+            check(/모레 저녁/.test(eve.text) && /몇 시인지/.test(eve.text) && eve.btns.some((t) => t.includes('오후 6시')), `${mode} ${width} 모레 저녁 노란 카드가 다름: ${JSON.stringify(eve)}`);
+            await audit(page, `${mode} ${width} 저녁 노란 카드`, '.quick-bar');
+            if (shots) await page.screenshot({ path: `${shots}/저녁카드-${width}-${mode}.png` });
             await page.close();
         }
     }
