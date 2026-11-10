@@ -3,7 +3,7 @@
  * SHOTS=폴더 를 주면 그 폴더에 PNG를 남기고, GIF=1 이면 완료 효과 프레임도 남깁니다. 실패가 있으면 1로 끝납니다.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
@@ -332,21 +332,33 @@ try {
             await p2.evaluate(() => window.scrollTo(0, 0));
             /* 오늘 칸에서 남은 것 하나만 두고 끝내기 */
             const pending = async () => p2.$$eval('section', (secs) => { const s = secs.find((x) => x.querySelector('h3')?.textContent === '오늘'); return s ? [...s.querySelectorAll('.todo-check[aria-pressed="false"]')].length : 0; });
+            const dir = `${shots}/gif-${mode}-${w}`;
+            const grab = async (folder, n, click) => {
+                mkdirSync(folder, { recursive: true });
+                const times = [];
+                const t0 = Date.now();
+                await p2.screenshot({ path: `${folder}/f000.png` });
+                times.push(0);
+                await click();
+                const s0 = Date.now();
+                for (let i = 1; i <= n; i += 1) {
+                    await p2.screenshot({ path: `${folder}/f${String(i).padStart(3, '0')}.png` });
+                    times.push(Date.now() - s0);
+                }
+                writeFileSync(`${folder}/times.json`, JSON.stringify({ t0, times }));
+            };
+            await p2.addStyleTag({ content: '.toast { display: none !important; }' });
+            let first = true;
             while (await pending() > 1) {
-                await p2.evaluate(() => { const s = [...document.querySelectorAll('section')].find((x) => x.querySelector('h3')?.textContent === '오늘'); [...s.querySelectorAll('.todo-check[aria-pressed="false"]')].pop().click(); });
+                const tap = () => p2.evaluate(() => { const s = [...document.querySelectorAll('section')].find((x) => x.querySelector('h3')?.textContent === '오늘'); const b = [...s.querySelectorAll('.todo-check[aria-pressed="false"]')].find((x) => !x.closest('.todo-block').querySelector('.pri-mark[data-pri="3"]')) || [...s.querySelectorAll('.todo-check[aria-pressed="false"]')].pop(); b.scrollIntoView({ block: 'center' }); b.click(); });
+                /* 평소 완료(보통) 한 번을 먼저 찍습니다. */
+                if (first) { first = false; await new Promise((r) => setTimeout(r, 400)); await grab(`${dir}-small`, 16, tap); } else await tap();
                 await new Promise((r) => setTimeout(r, 1700));
             }
             const last = await p2.evaluateHandle(() => { const s = [...document.querySelectorAll('section')].find((x) => x.querySelector('h3')?.textContent === '오늘'); return s.querySelector('.todo-check[aria-pressed="false"]'); });
             await last.evaluate((el) => el.scrollIntoView({ block: 'center' }));
             await new Promise((r) => setTimeout(r, 1700));
-            const dir = `${shots}/gif-${mode}-${w}`;
-            mkdirSync(dir, { recursive: true });
-            await p2.addStyleTag({ content: '.toast { display: none !important; }' });
-            await p2.screenshot({ path: `${dir}/f000.png` });
-            await last.evaluate((el) => el.click());
-            for (let i = 1; i <= 34; i += 1) {
-                await p2.screenshot({ path: `${dir}/f${String(i).padStart(3, '0')}.png` });
-            }
+            await grab(dir, 34, () => last.evaluate((el) => el.click()));
             await p2.close();
         }
     }
