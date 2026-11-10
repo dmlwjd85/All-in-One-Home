@@ -61,6 +61,8 @@ export function emptyState() {
         inbox: [],
         /* 할 일 하루 목표와 날짜별 달성 기록(PR C). 계정 몫이고 settings/goal 문서로 기기끼리 맞춥니다. */
         goals: { n: DEFAULT_GOAL, nAt: 0, days: {} },
+        /* 업데이트 전 수정 보관함(PR #66). 계정 몫이고 이 기기·백업에만 둡니다(클라우드에는 올리지 않음). */
+        keptLegacy: [],
         local: { records: [], notes: [], events: [], todos: [], notices: [], contacts: [], pages: [], backup: null },
         auth: null,
         tip: { hidden: [], seen: [], closes: {}, snooze: '' },
@@ -570,9 +572,11 @@ export function keptLegacyList() { return Array.isArray(state.keptLegacy) ? stat
  * 보관함의 이 기기 값으로 되돌립니다. 지금 고친 것으로 찍혀(서버 보정 시각) 다른 기기에도 올라갑니다.
  * 일정·회의록은 원래 줄을 되돌리고(사본은 그대로 둠), 출결·시간표는 그 학생·날짜(요일) 줄을 바꿉니다.
  */
-export async function restoreKeptLegacy(index) {
+export async function restoreKeptLegacy(index, expect = null) {
     const entry = keptLegacyList()[index];
     if (!entry?.row) return { ok: false };
+    /* 확인하는 사이 목록이 바뀌었으면(다른 탭·가져오기) 엉뚱한 줄을 되돌리지 않습니다. */
+    if (expect && (expect.kind !== entry.kind || String(expect.id) !== String(entry.id) || Number(expect.at) !== Number(entry.at))) return { ok: false };
     const { editAt, editD, ...row } = structuredClone(entry.row);
     const result = await update((draft) => {
         if (entry.kind === 'timetable') {
@@ -2139,6 +2143,15 @@ export function downloadOriginal() {
     return true;
 }
 
+const KEPT_KINDS = ['events', 'notes', 'attendance', 'timetable'];
+const keptKey = (k) => `${k.kind}\u0000${k.id}\u0000${Number(k.at) || 0}`;
+/* 백업 파일의 보관함은 모양이 맞는 것만 받습니다. */
+function keptFromFile(list) {
+    if (!Array.isArray(list)) return [];
+    return list.filter((k) => k && typeof k === 'object' && KEPT_KINDS.includes(k.kind) && (typeof k.id === 'string' || typeof k.id === 'number') && k.row && typeof k.row === 'object' && !Array.isArray(k.row))
+        .map((k) => ({ kind: k.kind, id: String(k.id), at: Number(k.at) || 0, row: structuredClone(k.row), ...(typeof k.copy === 'string' ? { copy: k.copy } : {}) }));
+}
+
 function applyIncoming(draft, data, sensitive, mode) {
     const merge = (current, incoming) => {
         if (mode === 'replace') return incoming || [];
@@ -2156,6 +2169,18 @@ function applyIncoming(draft, data, sensitive, mode) {
     if (Array.isArray(data.inbox)) draft.inbox = merge(draft.inbox, data.inbox);
     dropRegisteredInbox(draft);
     draft.legacyPages = merge(draft.legacyPages, data.legacy);
+    /* 보관함: 합치기는 kind+id+at이 같은 것을 하나로(파일 값 우선) 두고 최근 KEPT_MAX개, 바꾸기는 파일 값으로 통째로. */
+    const keptIn = keptFromFile(data.keptLegacy);
+    if (mode === 'replace') draft.keptLegacy = keptIn.slice(-KEPT_MAX);
+    else {
+        const byKey = new Map();
+        for (const k of [...(Array.isArray(draft.keptLegacy) ? draft.keptLegacy : []), ...keptIn]) {
+            const key = keptKey(k);
+            byKey.delete(key);
+            byKey.set(key, k);
+        }
+        draft.keptLegacy = [...byKey.values()].sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0)).slice(-KEPT_MAX);
+    }
     draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
     if (data.profile?.className) draft.profile.className = data.profile.className;
     if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
@@ -2221,7 +2246,7 @@ export async function importText(text, mode, hooks = {}) {
 }
 
 /* 계정마다 따로 두는 자료. 기기 설정(테마·공용 PC 등)은 기기 것이라 그대로 둡니다. */
-const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox', 'goals'];
+const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox', 'goals', 'keptLegacy'];
 const ACCOUNT_PROFILE = ['className', 'schoolYear', 'classSize', 'periodStarts', 'ttEdited', 'academic', 'settingsAts', 'settingsAt', 'checkedDates'];
 const accountKey = (uid) => `account:${uid}`;
 
