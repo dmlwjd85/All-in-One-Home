@@ -7,7 +7,7 @@ import { findDates } from './parse.js';
 import { addDaysYmd, isValidYmd, seoulYmd } from './date.js';
 
 /* 날짜·시각 낱말 바로 뒤에 붙는 조사. 뒤에 한글이 이어지면(예: 「오늘도서관」) 조사로 보지 않습니다. */
-const PARTICLE = '(?:(?:에는|에도|에서|에|엔|부터|까지는|까지|은|는|이|가|도|의|로)(?![가-힣]))?';
+const PARTICLE = '(?:(?:에는|에도|에서|에|엔|부터|까지는|까지|은|는|이|가|도|의|으로|로)(?![가-힣]))?';
 /* 「N일」만 적힌 말은 뒤에 이 조사나 요일이 올 때만 날짜로 봅니다(「3일 동안」「2일째」는 날짜가 아님). */
 const BARE_DAY_OK = /^(?:\s*(?:에는|에도|에서|에|엔|부터|까지는|까지|은|는|도|날|자)(?![가-힣])|\s*[(（.]?\s*[월화수목금토일]요일)/;
 /* 날짜 뒤에 오면 기간·횟수라서 날짜가 아닌 말. */
@@ -74,12 +74,23 @@ function clockHour(ap, hour, { zeroLed = false } = {}) {
     return h;
 }
 
-/* 「점수 10:30」「3:2 비율」「10:8로 이김」처럼 콜론이 점수·비율을 뜻하는 말은 시각이 아닙니다. */
-const SCORE_BEFORE = /(?:점수|스코어|비율|배율|비|성적|결과|경기|득점|대비|세트)(?:는|은|가|이|도|를|을)?\s*$/;
-const SCORE_AFTER = /^\s*(?:비율|배율|비(?![가-힣])|승|패|무(?![가-힣])|스코어|점(?![검심수])|(?:으로|로)\s*(?:이기|이겼|이김|지|졌|짐|승|패|비기|비겼|나누|나눠|나눔|맞추|맞춰|섞))/;
+/*
+ * 「점수 10:30」「3:2 비율」「12:10으로 이김」「요한 3:16 낭독」처럼 콜론이 점수·비율·성경 구절을 뜻하는 말은 시각이 아닙니다.
+ * 낱말 경계를 지켜 「학급비 16:00」「성적 17:00까지」「경기 15:00 시작」「15:30 승진 심사」「14:00 점호」「14:00으로 지정」은 시각으로 둡니다.
+ */
+const SCORE_BEFORE = /(?<![가-힣])(?:점수|스코어|비율|배율|비|득점|대비|세트)(?:는|은|가|이|도|를|을)?\s*$/;
+const SCORE_AFTER = /^\s*(?:비율|배율|비(?![가-힣])|승(?![가-힣])|패(?![가-힣])|무(?![가-힣])|스코어|점으로|점\s*차|(?:으로|로)\s*(?:이기|이겼|이김|졌|짐|지고|승리|패배|비기|비겼|비김|나누|나눠|나눔|맞추|맞춰|섞)|낭독|봉독|성경|말씀|절(?![가-힣]))/;
 function notClockColon(text, start, end) {
     return SCORE_BEFORE.test(text.slice(Math.max(0, start - 8), start)) || SCORE_AFTER.test(text.slice(end));
 }
+
+/* 「13:00시」「12:30분」처럼 콜론 시각 뒤에 덧붙인 시·분은 시각과 함께 뺍니다. */
+const COLON_UNIT = '(?:\\s*(?:시|분)(?=$|[^가-힣]|에|까지|부터|엔|전|쯤))?';
+/* 「오전 12시」는 낮 12시로 쓰는 사람과 밤 12시로 쓰는 사람이 갈려, 00:00으로 읽되 ask로 노란 카드에서 다시 묻습니다. */
+const am12 = (ap, hour) => (ap === '오전' && hour === 12 ? { ask: 'am12' } : {});
+
+/* 범위 이음표: 10:30~11:20, 2시-3시 */
+const DASH = '\\s*[~～\\-–—]\\s*';
 
 /**
  * 본문에서 시계 시각을 찾습니다. 학교 습관으로 앞말 없는 1~6시는 오후로 둡니다.
@@ -88,23 +99,52 @@ function notClockColon(text, start, end) {
  * 「자정까지·자정 전」은 그날 끝(23:59)으로 봅니다. 「2:1」처럼 분이 두 자리가 아니면 시각이 아닙니다.
  */
 export function findTimeSpans(raw) {
-    const text = String(raw || '');
+    /* 전각 콜론(15：30)은 같은 길이의 반각으로 바꿔 읽습니다(자리 번호는 그대로). */
+    const text = String(raw || '').replace(/：/g, ':');
     const spans = [];
-    const push = (index, word, hour, min) => {
+    const push = (index, word, hour, min, extra = {}) => {
         if (spans.some((o) => index < o.index + o.length && o.index < index + word.length)) return;
         const length = word.length + particleLen(text, index + word.length);
-        spans.push({ index, length, time: `${pad(hour)}:${pad(min)}`, word: word.trim() });
+        spans.push({ index, length, time: `${pad(hour)}:${pad(min)}`, word: word.trim(), ...extra });
     };
-    /* 1) 콜론 시각: 15:30, 오전 10:30, 오후 3:05 */
-    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?(\\d{1,2}):([0-5]\\d)(?![\\d:])`, 'g'))) {
+    /* 끝 시각: 앞말이 없으면 시작의 앞말을 이어 쓰고, 그래도 시작보다 이르면 12시간 뒤로 봅니다(「1:30~3:00」→13:30~15:00). */
+    const endHour = (ap, hour, startHour, zeroLed) => {
+        let h = clockHour(ap, hour, { zeroLed });
+        if (h < startHour && h + 12 < 24 && !zeroLed) h += 12;
+        return h;
+    };
+    /* 0) 범위: 10:30~11:20, 오후 2시~3시, 2시 30분-4시 (한 덩어리로 빼고 time·endTime으로 돌려줍니다) */
+    const CLOCK = '(\\d{1,2}):([0-5]\\d)';
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?${CLOCK}${COLON_UNIT}${DASH}(?:${AMPM}\\s*)?${CLOCK}(?![\\d:])${COLON_UNIT}`, 'g'))) {
+        const [h1, m1, h2, m2] = [Number(m[2]), Number(m[3]), Number(m[5]), Number(m[6])];
+        if (h1 > 23 || h2 > 24 || (m[1] && h1 > 12)) continue;
+        if (notClockColon(text, m.index, m.index + m[0].length)) continue;
+        const z1 = (m[2].length === 2 && m[2][0] === '0') || h1 > 12;
+        const start = clockHour(m[1], h1, { zeroLed: z1 });
+        const end = endHour(m[4] || m[1], h2, start, (m[5].length === 2 && m[5][0] === '0') || h2 > 12);
+        push(m.index, m[0], start, m1, { endTime: `${pad(end % 24)}:${pad(m2)}` });
+    }
+    const HOUR_RANGE_NOT = '(?!간|험|작|키|\\s*방향|\\s*쪽)';
+    for (const m of text.matchAll(new RegExp(`(?<![\\d가-힣])(?:${AMPM}\\s*)?(\\d{1,2})\\s*시(?:\\s*(\\d{1,2})\\s*분|\\s*(반))?${DASH}(?:${AMPM}\\s*)?(\\d{1,2})\\s*시${HOUR_RANGE_NOT}(?:\\s*(\\d{1,2})\\s*분|\\s*(반))?`, 'g'))) {
+        const h1 = Number(m[2]);
+        const h2 = Number(m[6]);
+        const min1 = m[4] ? 30 : Number(m[3] || 0);
+        const min2 = m[8] ? 30 : Number(m[7] || 0);
+        if (h1 > 24 || h2 > 24 || min1 > 59 || min2 > 59) continue;
+        const start = clockHour(m[1], h1);
+        const end = endHour(m[5] || m[1], h2, start, false);
+        push(m.index, m[0], start, min1, { endTime: `${pad(end % 24)}:${pad(min2)}` });
+    }
+    /* 1) 콜론 시각: 15:30, 오전 10:30, 오후 3:05, 13:00시 */
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?(\\d{1,2}):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         const hour = Number(m[2]);
         const min = Number(m[3]);
         if (hour > 24 || (hour === 24 && min)) continue;
         if (m[1] && hour > 12) continue; /* 「오후 15:30」은 섞어 쓴 말이라 그대로 두지 않고 24시간 값을 씁니다. */
         if (!m[1] && notClockColon(text, m.index, m.index + m[0].length)) continue;
-        push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min);
+        push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min, am12(m[1], hour));
     }
-    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])`, 'g'))) {
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         push(m.index, m[0], Number(m[2]), Number(m[3]));
     }
     /* 2) 숫자 시: 3시, 3시 반, 3시 20분, 15시 / 한글 시: 세 시, 오후 세시, 열두 시 반 (「한시적」「세시 풍속」「시청」 같은 말은 빼요) */
@@ -117,7 +157,7 @@ export function findTimeSpans(raw) {
             const hour = KO_HOURS[m[2]] || Number(m[2]);
             const min = m[4] ? 30 : Number(m[3] || 0);
             if (hour > 24 || min > 59) continue;
-            push(m.index, m[0], clockHour(m[1], hour), min);
+            push(m.index, m[0], clockHour(m[1], hour), min, am12(m[1], hour));
         }
     }
     /* 3) 정오·자정 */
@@ -216,6 +256,8 @@ export function readJjaemPaste(text, { now = new Date(), stripTime = true, strip
         : [];
     const timeSpans = findTimeSpans(raw);
     const time = timeSpans[0]?.time || '';
+    const endTime = timeSpans[0]?.endTime || '';
+    const ask = timeSpans[0]?.ask || '';
     const remove = [
         ...dateSpans,
         ...(stripTime ? timeSpans : []),
@@ -226,6 +268,9 @@ export function readJjaemPaste(text, { now = new Date(), stripTime = true, strip
         body,
         date,
         time,
+        endTime,
+        ask,
+        timeWord: timeSpans[0]?.word || '',
         chip: date ? jjaemDateChip(date, today) : null,
         changed: Boolean(date || time),
         dateWord: primary ? raw.substr(primary.index, primary.length) : '',
