@@ -28,6 +28,7 @@ import { MENU, menuSelected, menuTarget } from './ui/menu.js';
 import { JjaemJar, TabBar } from './ui/TabBar.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
+import { SideLinks } from './ui/EduLinks.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { TodoAlarm } from './ui/TodoAlarm.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
@@ -717,6 +718,7 @@ export default function App() {
                             );
                         })}
                     </nav>
+                    <SideLinks />
                     <p className="muted" style={{ marginTop: 'auto', fontSize: 13, padding: 8 }}>{kokHotkeyHint(hotkeys)}</p>
                 </aside>
                 <div className="main">

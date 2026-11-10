@@ -24,6 +24,9 @@ import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 import { TodoSettings } from './TodoSettings.jsx';
+import { GuideSheet, useOnboard } from './StorageNotice.jsx';
+import { LinksSheet } from './EduLinks.jsx';
+import { setNotice } from '../lib/onboard.js';
 
 const PUBLIC_LABELS = {
     ssugeokInbox: '받은 기록',
@@ -505,10 +508,33 @@ export function Settings() {
                     )}
                 </div>
             </section>
+            <StoreGuideSection />
             </>)}
 
             {sec === 'calendar' && <GcalSettings />}
         </div>
+    );
+}
+
+/* G1: 오늘 화면의 자료 저장·보호 안내를 숨긴 뒤 다시 여는 곳, 5분 시작 가이드, 교육 사이트 바로가기 고치기. */
+function StoreGuideSection() {
+    const { go } = useUi();
+    const onboard = useOnboard();
+    const [guide, setGuide] = useState(false);
+    const [links, setLinks] = useState(false);
+    const shown = onboard.notice !== 'hidden';
+    return (
+        <section className="glass" style={{ padding: 14 }} data-screen="store-guide">
+            <h2 className="title-font" style={{ marginTop: 0 }}>자료 저장·보호</h2>
+            <p>기록은 먼저 이 기기에 남고, 민감한 낱말이 든 기록은 이 기기에만 둬요. 구글로 로그인하면 나머지가 내 계정 칸에 올라가요.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Btn className={shown ? 'chip on' : 'chip'} aria-pressed={shown} data-store-reopen="1" onClick={() => { if (!shown) { setNotice('open'); go('#/today'); } else setNotice('hidden'); }}>{shown ? '오늘 화면에 안내 보이는 중' : '오늘 화면에 안내 다시 보이기'}</Btn>
+                <Btn className="chip" data-guide="settings" onClick={() => setGuide(true)}>5분 시작 가이드</Btn>
+                <Btn className="chip" data-edu-edit="settings" onClick={() => setLinks(true)}>교육 사이트 바로가기 고치기</Btn>
+            </div>
+            {guide && <GuideSheet onClose={() => setGuide(false)} />}
+            {links && <LinksSheet onClose={() => setLinks(false)} />}
+        </section>
     );
 }
 
