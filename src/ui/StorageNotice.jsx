@@ -62,8 +62,11 @@ export function StorageNotice({ place = 'top' }) {
             <h2 className="store-notice-h">
                 <Btn className="store-notice-head" aria-expanded={open} aria-controls={ids.body} onClick={() => {
                     setNotice(open ? 'folded' : 'open');
-                    /* 맨 아래 머리 줄에서 펼치면 맨 위 카드로 올라가 보여 줍니다. */
-                    if (place === 'end') requestAnimationFrame(() => document.querySelector('.store-notice.at-top')?.scrollIntoView({ block: 'start' }));
+                    /* 맨 아래 머리 줄에서 펼치면 맨 위 카드로 올라가 보여 주고, 가이드·숨기기 줄이 탭바·쨈에 가리면 보이는 데까지만 굴립니다. */
+                    if (!open) requestAnimationFrame(() => {
+                        if (place === 'end') document.querySelector('.store-notice.at-top')?.scrollIntoView({ block: 'start' });
+                        document.querySelector('.store-notice.at-top .store-actions')?.scrollIntoView({ block: 'nearest' });
+                    });
                 }}>
                     <span className="store-badge" aria-hidden="true">보호</span>
                     <span id={ids.title} className="store-notice-title">자료 저장·보호 안내</span>

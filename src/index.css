@@ -1688,7 +1688,13 @@ button.hero-pill.home-todo-link {
     .store-notice.phone-hide { display: none; }
     /* 펼친 안내의 아래 끝이 탭바·가운데 쨈에 가리지 않게 다음 카드와 띄웁니다. */
     .store-notice.at-top:not(.is-folded) { margin-bottom: 20px; }
+    /* 휴대폰은 카드가 화면보다 길어 맨 아래 단추가 탭바·쨈 밑에 깔립니다. 가이드·숨기기 줄을 머리 줄 바로 아래로 올립니다. */
+    .store-notice .store-notice-body { display: flex; flex-direction: column; }
+    .store-notice .store-notice-body .store-actions { order: -1; margin: 0 0 12px; }
 }
+/* 펼칠 때 단추 줄을 화면에 맞출 때 탭바(70)·위로 솟은 쨈(36)·홈 막대(safe-area)만큼 비웁니다. */
+.store-notice .store-actions { scroll-margin-top: 16px; scroll-margin-bottom: calc(70px + 36px + 16px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) { .store-notice .store-actions { scroll-margin-bottom: 96px; } }
 @media (min-width: 900px) { .store-notice.at-end { display: none; } }
 .store-notice-h { margin: 0; font: inherit; }
 .store-notice-head {
