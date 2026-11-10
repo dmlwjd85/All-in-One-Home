@@ -57,31 +57,69 @@ export function jjaemDateChip(ymd, today = seoulYmd()) {
     };
 }
 
+/* 한글로 쓴 시(「세 시」「열두시」). 긴 말부터 맞춥니다. */
+const KO_HOURS = { 열한: 11, 열두: 12, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 한: 1, 두: 2, 세: 3, 네: 4, 열: 10 };
+const KO_HOUR_RE = '열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열';
+const AMPM = '(오전|오후|아침|저녁|밤|새벽|낮)';
+
+/** 오전·오후 같은 앞말과 학교 습관(앞말 없는 1~6시는 오후)으로 24시간 시각을 정합니다. zeroLed: 「03:00」처럼 0을 앞에 쓴 시각은 그대로 둡니다. */
+function clockHour(ap, hour, { zeroLed = false } = {}) {
+    let h = hour;
+    if ((ap === '저녁' || ap === '밤') && h === 12) h = 0;
+    else if ((ap === '오후' || ap === '저녁' || ap === '밤') && h < 12) h += 12;
+    else if (ap === '낮' && h >= 1 && h <= 6) h += 12;
+    else if ((ap === '오전' || ap === '새벽') && h === 12) h = 0;
+    if (!ap && !zeroLed && h >= 1 && h <= 6) h += 12;
+    if (h === 24) h = 0;
+    return h;
+}
+
 /**
- * 본문에서 시계 시각(N시·오전/오후)을 찾습니다. 학교 습관으로 1~6시는 오후로 둡니다.
+ * 본문에서 시계 시각을 찾습니다. 학교 습관으로 앞말 없는 1~6시는 오후로 둡니다.
+ * 읽는 꼴: 「3시」「3시 반」「3시 20분」「15시」「세 시」「오후 세시」「15:30」「오전 10:30」「오후 3:05」「정오」「자정」.
  * 「저녁·밤 12시」와 「24시」는 자정(00:00)입니다. 「오후 12시」는 낮 12시입니다. 「3시 방향」은 시각이 아닙니다.
+ * 「자정까지·자정 전」은 그날 끝(23:59)으로 봅니다. 「2:1」처럼 분이 두 자리가 아니면 시각이 아닙니다.
  */
 export function findTimeSpans(raw) {
     const text = String(raw || '');
     const spans = [];
-    for (const m of text.matchAll(/(?<![\d가-힣])(오전|오후|아침|저녁|밤|새벽)?\s*(\d{1,2})\s*시(?!간|험|작|키|\s*방향|\s*쪽)(?:\s*(\d{1,2})\s*분|\s*(반))?/g)) {
-        let hour = Number(m[2]);
-        const min = m[4] ? 30 : Number(m[3] || 0);
-        if (hour > 24 || min > 59) continue;
-        if ((m[1] === '저녁' || m[1] === '밤') && hour === 12) hour = 0;
-        else if ((m[1] === '오후' || m[1] === '저녁' || m[1] === '밤') && hour < 12) hour += 12;
-        else if ((m[1] === '오전' || m[1] === '새벽') && hour === 12) hour = 0;
-        if (!m[1] && hour >= 1 && hour <= 6) hour += 12;
-        if (hour === 24) hour = 0;
-        const length = m[0].length + particleLen(text, m.index + m[0].length);
-        spans.push({
-            index: m.index,
-            length,
-            time: `${pad(hour)}:${pad(min)}`,
-            word: m[0].trim(),
-        });
+    const push = (index, word, hour, min) => {
+        if (spans.some((o) => index < o.index + o.length && o.index < index + word.length)) return;
+        const length = word.length + particleLen(text, index + word.length);
+        spans.push({ index, length, time: `${pad(hour)}:${pad(min)}`, word: word.trim() });
+    };
+    /* 1) 콜론 시각: 15:30, 오전 10:30, 오후 3:05 */
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?(\\d{1,2}):([0-5]\\d)(?![\\d:])`, 'g'))) {
+        const hour = Number(m[2]);
+        const min = Number(m[3]);
+        if (hour > 24 || (hour === 24 && min)) continue;
+        if (m[1] && hour > 12) continue; /* 「오후 15:30」은 섞어 쓴 말이라 그대로 두지 않고 24시간 값을 씁니다. */
+        push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min);
     }
-    return spans;
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])`, 'g'))) {
+        push(m.index, m[0], Number(m[2]), Number(m[3]));
+    }
+    /* 2) 숫자 시: 3시, 3시 반, 3시 20분, 15시 / 한글 시: 세 시, 오후 세시, 열두 시 반 (「한시적」「세시 풍속」「시청」 같은 말은 빼요) */
+    const forms = [
+        ['\\d{1,2}', '(?!간|험|작|키|\\s*방향|\\s*쪽)'],
+        [KO_HOUR_RE, '(?!간|험|작|키|청|장|절|대|적|풍|\\s*방향|\\s*쪽|\\s*풍속)'],
+    ];
+    for (const [hourWord, notAfter] of forms) {
+        for (const m of text.matchAll(new RegExp(`(?<![\\d가-힣])(?:${AMPM}\\s*)?(${hourWord})\\s*시${notAfter}(?:\\s*(\\d{1,2})\\s*분|\\s*(반))?`, 'g'))) {
+            const hour = KO_HOURS[m[2]] || Number(m[2]);
+            const min = m[4] ? 30 : Number(m[3] || 0);
+            if (hour > 24 || min > 59) continue;
+            push(m.index, m[0], clockHour(m[1], hour), min);
+        }
+    }
+    /* 3) 정오·자정 */
+    for (const m of text.matchAll(/(?<![가-힣])(정오|자정)(?=\s*(?:까지|전|에|부터|무렵|쯤|$|[^가-힣]))/g)) {
+        const tail = text.slice(m.index + m[0].length);
+        if (m[1] === '정오') push(m.index, m[0], 12, 0);
+        else if (/^\s*(?:까지|전)/.test(tail)) push(m.index, m[0], 23, 59);
+        else push(m.index, m[0], 0, 0);
+    }
+    return spans.sort((a, b) => a.index - b.index);
 }
 
 function stripSpans(raw, spans) {

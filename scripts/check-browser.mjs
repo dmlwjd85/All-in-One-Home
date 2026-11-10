@@ -1883,7 +1883,8 @@ try {
                     sum: sum?.innerText.trim() || '', sumH: sum ? sum.getBoundingClientRect().height : 0, expanded: el.querySelector('.fold-head').getAttribute('aria-expanded') };
             }));
             check(shut.length === 4 && shut.every((c) => c.open === '0' && c.body === 0 && c.expanded === 'false'), `휴대폰 오늘 카드가 기본으로 접혀 있지 않습니다. ${JSON.stringify(shut)}`);
-            check(shut.every((c) => c.sum && c.sumH > 0 && c.sumH < 24), `접힌 카드에 한 줄 요약이 없거나 두 줄입니다. ${JSON.stringify(shut)}`);
+            /* PR E(QA r79): 좁은 화면은 요약을 말줄임표로 자르지 않고 줄을 바꿉니다. 요약은 있어야 하고 세 줄을 넘지 않습니다. */
+            check(shut.every((c) => c.sum && c.sumH > 0 && c.sumH < 70), `접힌 카드에 요약이 없거나 너무 깁니다. ${JSON.stringify(shut)}`);
             check(shut.every((c) => c.heading === 'H3' && c.level), `접는 카드 제목이 h3 안의 버튼이 아닙니다. ${JSON.stringify(shut)}`);
             check(shut.every((c) => !/·\s*$/.test(c.sum)), `접힌 카드 요약 끝에 ' · '가 남았습니다. ${JSON.stringify(shut)}`);
             check(shut.every((c) => c.h >= 44 && c.w >= 44), `접는 카드 머리가 44px보다 작습니다. ${JSON.stringify(shut)}`);

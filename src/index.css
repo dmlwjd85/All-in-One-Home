@@ -44,6 +44,10 @@ button, input, textarea { font-family: inherit; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+/* 좁은 화면(320px 등)에서는 말줄임표 대신 줄을 바꿉니다. */
+@media (max-width: 899px) {
+    .cloud-note { white-space: normal; overflow: visible; text-overflow: clip; word-break: keep-all; overflow-wrap: anywhere; }
+}
 .side { display: none; }
 
 .glass, .solid-card {
@@ -1074,6 +1078,10 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     padding: 0 10px;
 }
 .todo-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* 좁은 화면에서는 할 일 제목을 말줄임표로 자르지 않고 줄을 바꿉니다. */
+@media (max-width: 899px) {
+    .todo-title { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; }
+}
 /* 충돌 사본(PR #57): K 뉴모피즘 토큰으로 오목한 배지를 달아 일반 할 일과 구분하고, 제목은 자르지 않고 줄을 바꿉니다(320px). */
 .is-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; white-space: normal; overflow: visible; text-overflow: clip; min-width: 0; padding: 6px 0; }
 .home-line .home-line-text.is-conflict { white-space: normal; overflow: visible; text-overflow: clip; }
@@ -1366,7 +1374,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     .fold-h { margin: 0; font: inherit; flex: 1; min-width: 0; }
     .fold-h .fold-head { width: 100%; }
     .fold-title { font-size: 16px; font-weight: 700; }
-    .fold-sum { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+    /* 좁은 화면(320~899px)에서는 요약을 말줄임표로 자르지 않고 줄을 바꿉니다. */
+    .fold-sum { display: block; overflow: visible; white-space: normal; overflow-wrap: anywhere; word-break: keep-all; text-overflow: clip; font-size: 13px; }
     .fold-arrow { flex: none; color: var(--accent); font-size: 16px; min-width: 24px; text-align: center; }
     .fold[data-open="0"] .fold-body { display: none; }
     .fold[data-open="1"] .fold-body { margin-top: 0; }

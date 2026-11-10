@@ -226,6 +226,22 @@ try {
         }
         await page.close();
     }
+    /* 1-3. 좁은 화면(320·360·390, 라이트·다크)에서 말줄임표(…)로 잘린 글자가 없음 — 줄을 바꿉니다. */
+    for (const [width, mode] of [[320, 'light'], [360, 'dark'], [390, 'light'], [390, 'dark']]) {
+        const page = await fresh(browser, { width, height: 844, mode });
+        for (const hash of ['#/today', '#/attend', '#/schedule', '#/todo', '#/minutes', '#/notice', '#/students', '#/settings']) {
+            await page.evaluate((h) => { location.hash = h; }, hash);
+            await wait(500);
+            const cut = await page.evaluate(() => [...document.querySelectorAll('body *')].filter((el) => {
+                const cs = getComputedStyle(el);
+                if (cs.textOverflow !== 'ellipsis' || !el.getBoundingClientRect().width) return false;
+                return el.scrollWidth > el.clientWidth + 1;
+            }).map((el) => `${el.className || el.tagName}: ${el.innerText.slice(0, 24)}`));
+            check(!cut.length, `${mode} ${width} ${hash} 말줄임표로 잘림: ${cut.join(' / ')}`);
+            if (shots && width === 390 && (hash === '#/todo' || hash === '#/today')) await page.screenshot({ path: `${shots}/줄바꿈-${hash.slice(2)}-${width}-${mode}.png` });
+        }
+        await page.close();
+    }
     /* 2. 예전부터 쓰던 기기(저장값)는 그대로 */
     {
         const page = await fresh(browser, { local: { 'ssug-gyomu-hotkeys': JSON.stringify({ plus: '/', help: '?', today: '', attend: '', schedule: '' }) } });
