@@ -224,7 +224,8 @@ function bumpSettingAts(next, previous = {}) {
         if (settingKey(next, part) === settingKey(previous, part)) continue;
         if ((next.settingsAts || {})[part] !== (previous.settingsAts || {})[part]) continue;
         if (ats[part] === undefined) for (const p of PROFILE_SETTING_PARTS) ats[p] ??= Number(previous.settingsAt) || 0;
-        ats[part] = Date.now();
+        /* 서버 보정 시각(조퇴·탭바와 같음). 기기 시각이면 시계가 +1일인 기기의 설정이 하루 동안 늘 이겼습니다(PR #66 r5 P1). */
+        ats[part] = serverNow();
         changed = true;
     }
     if (!changed) return;
