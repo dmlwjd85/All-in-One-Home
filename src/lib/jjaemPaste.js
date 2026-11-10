@@ -100,10 +100,19 @@ const BIBLE_CUE_AFTER = /^\s*(?:낭독|봉독|성경|말씀|절)(?![가-힣])/;
 function bibleAfter(before, after) {
     return NAME_BOOK_BEFORE.test(before) && BIBLE_CUE_AFTER.test(after);
 }
+/* 콜론 시각 뒤에 마감·시작 말(까지·부터·전·이전·이후·에·시작·마감)이 오면 점수·성경 거르기보다 먼저 시각으로 봅니다(「점수 15:00까지 입력」). */
+const TIME_CUE_AFTER = /^\s*(?:까지|부터|이전|이후|전(?![가-힣])|전에|전까지|에(?![가-힣])|시작|마감)/;
+/* 「세트 3:15 남음」처럼 세트 뒤 남은 시간은 시각이 아닙니다. 정각·반(「무대 세트 16:00 정리」)은 시각으로 둡니다. */
+const SET_BEFORE = /(?<![가-힣])세트(?:는|가)?\s*$/;
 function notClockColon(text, start, end) {
     const before = text.slice(Math.max(0, start - 12), start);
     const after = text.slice(end);
-    return SCORE_BEFORE.test(before.slice(-8)) || BIBLE_BEFORE.test(before) || bibleAfter(before, after) || SCORE_AFTER.test(after);
+    if (TIME_CUE_AFTER.test(after)) return false;
+    const minute = /:(\d{2})/.exec(text.slice(start, end))?.[1] || '';
+    /* 분이 00이면(「시편 15:00 낭송」) 성경 장:절로 보지 않습니다. */
+    const bible = minute !== '00' && (BIBLE_BEFORE.test(before) || bibleAfter(before, after));
+    const setLeft = SET_BEFORE.test(before) && minute !== '00' && minute !== '30';
+    return SCORE_BEFORE.test(before.slice(-8)) || bible || setLeft || SCORE_AFTER.test(after);
 }
 
 /* 「13:00시」「12:30분」처럼 콜론 시각 뒤에 덧붙인 시·분은 시각과 함께 뺍니다. */
