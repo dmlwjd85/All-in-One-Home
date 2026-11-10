@@ -477,10 +477,10 @@ function legacyUnsent(cloudName, row) {
  * 단, 업데이트 전 수정이 다른 기기의 더 늦은 수정을 덮으면 안 됩니다(PR #66 r4 A7: 구버전에서 T1에 고침 → 다른 기기 신판이 T2에 고침 → 업데이트).
  * 업데이트 전 수정은 고친 시각을 모르므로, 클라우드 문서가 이 기기가 마지막으로 올리거나 받은 판(cloudHashes)과 다르면 덮지 않습니다.
  *  - 일정·회의록: 클라우드 값을 받고, 이 기기 수정은 '(충돌 사본)' 새 줄로 따로 올려 양쪽 수정이 모두 남습니다(할 일 충돌 사본 배지 재사용).
- *  - 출결·시간표: 같은 학생·날짜(요일)에 줄이 하나라 사본을 만들 수 없습니다. 클라우드 값을 받고, 이 기기 값은 기기 보관함(legacyKept)에 남기고 알립니다.
+ *  - 출결·시간표: 같은 학생·날짜(요일)에 줄이 하나라 사본을 만들 수 없습니다. 클라우드 값을 받고, 이 기기 값은 보관함(state.keptLegacy: 이 기기에 저장, 백업 파일에도 들어감, 설정에서 되돌리기)에 남기고 알립니다.
  * 클라우드를 읽지 못하면(오프라인·캐시) 이번에는 찍지 않고 다음 올리기에서 다시 봅니다(거절 안내도 띄우지 않음).
  */
-const LEGACY_KEPT_KEY = 'legacyKept';
+const KEPT_MAX = 200;
 async function stampUnsentLegacy() {
     const tableRow = (day, value) => (value && typeof value === 'object' ? { id: day, ...value } : null);
     const found = LEGACY_STAMP.some(([local, cloudName]) => (state[local] || []).some((row) => legacyUnsent(cloudName, row)))
@@ -536,16 +536,13 @@ async function stampUnsentLegacy() {
             draft.timetable[day] = remoteDay(remote.timetable[day], remote.ats?.timetable?.[day]);
             const m = rowMark('timetable', { id: day, ...draft.timetable[day] }); if (m) cloudHashes[m.key] = m.mark;
         }
+        if (kept.length) {
+            const at = serverNow();
+            draft.keptLegacy = [...(Array.isArray(draft.keptLegacy) ? draft.keptLegacy : []), ...kept.map((k) => ({ ...k, row: structuredClone(k.row), at }))].slice(-KEPT_MAX);
+        }
         return draft;
     });
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
-    if (kept.length && !memoryOnly) {
-        try {
-            const prev = await mainVault.get(LEGACY_KEPT_KEY);
-            const list = Array.isArray(prev) ? prev : [];
-            await mainVault.set(LEGACY_KEPT_KEY, [...list, ...kept.map((k) => ({ ...k, at: Date.now() }))].slice(-200));
-        } catch { /* 보관 실패: 안내는 그대로 */ }
-    }
     const keptOnly = kept.filter((k) => !k.copy).length;
     if (copies.length || keptOnly) tellStorageIssue(legacyConflictMessage(copies.length, keptOnly));
     return count + copies.length + keptOnly;
@@ -564,9 +561,36 @@ function legacyCopy(row) {
 export function legacyConflictMessage(copied = 0, kept = 0) {
     const parts = [];
     if (copied) parts.push(`다른 기기에서 나중에 고친 기록 ${copied}개가 있어, 업데이트 전에 이 기기에서 고친 내용은 '충돌 사본'으로 따로 남겼어요.`);
-    if (kept) parts.push(`출결·시간표 ${kept}개는 다른 기기에서 나중에 고친 값으로 맞추고, 이 기기에서 고친 값은 기기에 보관해 두었어요.`);
+    if (kept) parts.push(`출결·시간표 ${kept}개는 다른 기기에서 나중에 고친 값으로 맞추고, 이 기기에서 고친 값은 설정 › 계정 › 보관함에 남겨 두었어요(되돌릴 수 있어요).`);
     return parts.join(' ');
 }
+/** 보관함 목록(설정 화면). */
+export function keptLegacyList() { return Array.isArray(state.keptLegacy) ? state.keptLegacy : []; }
+/**
+ * 보관함의 이 기기 값으로 되돌립니다. 지금 고친 것으로 찍혀(서버 보정 시각) 다른 기기에도 올라갑니다.
+ * 일정·회의록은 원래 줄을 되돌리고(사본은 그대로 둠), 출결·시간표는 그 학생·날짜(요일) 줄을 바꿉니다.
+ */
+export async function restoreKeptLegacy(index) {
+    const entry = keptLegacyList()[index];
+    if (!entry?.row) return { ok: false };
+    const { editAt, editD, ...row } = structuredClone(entry.row);
+    const result = await update((draft) => {
+        if (entry.kind === 'timetable') {
+            draft.timetable = { ...(draft.timetable || {}), [entry.id]: row };
+        } else if (['events', 'notes', 'attendance'].includes(entry.kind)) {
+            const list = draft[entry.kind] || [];
+            const at = list.findIndex((r) => String(r?.id) === String(entry.id));
+            if (at >= 0) list[at] = { ...row, id: list[at].id }; else list.push({ ...row, id: entry.id });
+            draft[entry.kind] = list;
+        } else return draft;
+        draft.keptLegacy = keptLegacyList().filter((_, i) => i !== index);
+        return draft;
+    });
+    if (result?.storageFailed) return { ok: false };
+    flushCloud().catch(() => {});
+    return { ok: true };
+}
+
 /** 서버 시각을 재기 전에 고쳐(editD만) 아직 고친 시각이 정해지지 않은 줄의 클라우드 키. */
 function unsureKeys() {
     const keys = new Set();
