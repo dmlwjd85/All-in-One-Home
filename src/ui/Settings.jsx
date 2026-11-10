@@ -34,11 +34,11 @@ function KeptLegacy({ data, showToast }) {
     const [asking, setAsking] = useState(-1);
     const list = Array.isArray(data.keptLegacy) ? data.keptLegacy : [];
     const students = data.students || [];
-    if (!list.length) return null;
     return (
         <div data-kept-legacy="1">
             <h3>보관함</h3>
-            <p className="muted">업데이트 전에 이 기기에서 고쳤지만, 다른 기기에서 더 나중에 고친 값이 있어 밀린 내용이에요. 되돌리면 지금 고친 것으로 다른 기기에도 올라가요. 백업 파일에도 들어가요.</p>
+            <p className="muted">업데이트 전에 이 기기에서 고친 값이 다른 기기의 더 나중 수정에 밀리면 여기에 남겨 둬요. 되돌리면 지금 고친 것으로 다른 기기에도 올라가요. 백업 파일에도 들어가요.</p>
+            {!list.length && <p className="muted" data-kept-empty="1">보관한 값이 없어요.</p>}
             <div style={{ display: 'grid', gap: 8 }}>
                 {list.map((k, i) => (
                     <div key={`${k.kind}-${k.id}-${k.at}-${i}`} className="kept-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
