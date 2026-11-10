@@ -197,6 +197,41 @@ if (!chrome || !existsSync(resolve(root, 'dist/index.html'))) {
                 /* 안내가 오늘 화면 맨 위(첫 카드)인지 */
                 check(await page.evaluate(() => { const n = document.querySelector('.store-notice').getBoundingClientRect(); const g = document.querySelector('.home-grid').getBoundingClientRect(); return n.bottom <= g.top + 1; }), `[${tag}] 안내가 오늘 카드들 위에 있지 않거나 겹칩니다.`);
                 check((await page.$$eval('.store-item', (els) => els.length)) === 4, `[${tag}] 안내 항목이 4개가 아닙니다.`);
+                /* 펼친 안내의 가이드·숨기기 단추가 굴리지 않아도 탭바·쨈(폰)·오른쪽 아래 쨈(넓은 화면) 위로 온전히 보이는지 */
+                const actionsClear = () => page.evaluate(() => {
+                    const shown = (el) => el && el.getClientRects().length && getComputedStyle(el).display !== 'none';
+                    const covers = ['.tabbar', '.tabbar .fab', '.desk-fab', '.add-event-fab'].flatMap((sel) => [...document.querySelectorAll(sel)]).filter(shown).map((el) => el.getBoundingClientRect());
+                    const btns = [...document.querySelectorAll('.store-notice.at-top .store-actions button')].filter(shown);
+                    if (btns.length !== 2) return `단추 ${btns.length}개`;
+                    for (const btn of btns) {
+                        const r = btn.getBoundingClientRect();
+                        if (r.top < 0 || r.bottom > innerHeight) return `${btn.innerText} 화면 밖 ${Math.round(r.top)}~${Math.round(r.bottom)}/${innerHeight}`;
+                        for (const c of covers) {
+                            const ox = Math.min(r.right, c.right) - Math.max(r.left, c.left);
+                            const oy = Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top);
+                            if (ox > 0 && oy > 0) return `${btn.innerText} 가림 ${Math.round(r.top)}~${Math.round(r.bottom)} / ${Math.round(c.top)}`;
+                        }
+                        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                        if (!hit || !btn.contains(hit)) return `${btn.innerText} 가운데를 다른 것이 덮음`;
+                    }
+                    return '';
+                });
+                {
+                    const issue = await actionsClear();
+                    check(!issue, `[${tag}] 처음 펼친 안내 단추가 가립니다: ${issue}`);
+                    if (shots && width === 390) await page.screenshot({ path: `${shots}/notice-open-390-${theme}.png` });
+                }
+                if (mobile) {
+                    /* 접고 → 맨 아래 머리 줄에서 다시 펼쳐도 단추가 보이는지 */
+                    await tap(page, '.store-notice.at-top .store-notice-head');
+                    await page.waitForSelector('.store-notice.at-end .store-notice-head');
+                    await tap(page, '.store-notice.at-end .store-notice-head');
+                    await page.waitForSelector('.store-notice.at-top:not(.is-folded) .store-actions');
+                    await delay(400);
+                    const issue = await actionsClear();
+                    check(!issue, `[${tag}] 아래에서 다시 펼친 안내 단추가 가립니다: ${issue}`);
+                    await page.evaluate(() => window.scrollTo(0, 0));
+                }
                 if (mobile) {
                     check(await page.$eval('.home-links', (el) => getComputedStyle(el).display !== 'none'), `[${tag}] 좁은 화면에 바로가기 블록이 없습니다.`);
                     check(await page.$eval('.side-links', (el) => getComputedStyle(el).display === 'none').catch(() => true), `[${tag}] 좁은 화면에 사이드 묶음이 보입니다.`);
