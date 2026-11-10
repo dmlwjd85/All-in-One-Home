@@ -32,10 +32,10 @@ export function TodoSettings({ data, showToast }) {
                     </Btn>
                 ))}
             </div>
-            <p className="muted">중요도가 높을수록 쨈 방울이 더 튀고, 오늘 할 일을 다 끝내면 도장이 찍혀요. 소리는 ‘누를 때 소리’ 설정을 따라요.{reducedMotion() ? ' 이 기기는 동작 줄이기가 켜져 있어 방울 없이 도장만 보여요.' : ''} 이 기기에만 저장돼요.</p>
+            <p className="muted">평소에는 딸깍과 함께 방울이 작게 톡 튀어요. 중요도 ‘높음’이나 그날 마지막 할 일을 끝내면 크게 터지고, 다 끝낸 날엔 도장이 찍혀요. 여러 개를 연달아 체크하면 효과를 줄여요. 소리는 ‘누를 때 소리’가 켜져 있을 때만 나요.{reducedMotion() ? ' 이 기기는 동작 줄이기가 켜져 있어 방울 없이 도장만 보여요.' : ''} 이 기기에만 저장돼요.</p>
             <Btn className="chip" data-role="fx-preview" disabled={fx === 'off'} onClick={(event) => {
                 const button = event.currentTarget;
-                celebrateDone({ done: true, pri: 3, allDone: true }, { rect: button.getBoundingClientRect(), button, level: fx });
+                celebrateDone({ done: true, pri: 3, allDone: true }, { rect: button.getBoundingClientRect(), button, level: fx, streak: 0 });
             }}>효과 미리 보기</Btn>
         </section>
     );

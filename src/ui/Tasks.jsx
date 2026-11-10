@@ -97,7 +97,7 @@ export function Tasks() {
                     {rows.map((row) => (
                         <article key={row.id} className="todo-block">
                             <div className="todo-line">
-                                <Btn className="todo-check" aria-label={row.done ? '다시 남기기' : '끝냄 표시'} aria-pressed={Boolean(row.done)} onClick={(event) => toggle(row.id, event)}>
+                                <Btn className="todo-check" data-todo-check={row.id} aria-label={row.done ? `다시 남기기: ${row.title}` : `끝냄 표시: ${row.title}`} aria-pressed={Boolean(row.done)} onClick={(event) => toggle(row.id, event)}>
                                     <span aria-hidden="true">{row.done ? '☑' : '☐'}</span>
                                 </Btn>
                                 <Btn className="todo-main" data-todo-title="1" onClick={(event) => {

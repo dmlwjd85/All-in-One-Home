@@ -107,6 +107,7 @@ check(info.done && info.pri === 3 && row.doneOn === '2026-11-09' && row.doneHm =
 check(!info.allDone && !info.goalHit, '하나만 끝냈는데 다 끝냈다고 합니다.');
 await db.toggleTodo('g2');
 info = await db.toggleTodo('g3');
+check(info.title === '셋' && info.goal === 3 && info.count === 3, `알림용 제목·목표·끝낸 수가 없습니다: ${JSON.stringify(info)}`);
 check(info.goalHit && info.allDone, `목표 3개·오늘 할 일을 다 끝냈는데 알리지 않습니다: ${JSON.stringify(info)}`);
 check(A.badgeOn(db.snapshot().goals.days['2026-11-09']), '목표를 채웠는데 그날 배지가 없습니다.');
 info = await db.toggleTodo('g2');
@@ -132,11 +133,30 @@ check(g4.pri === 1 && g4.editAt > beforeAt, '중요도를 바꿔도 고친 시�
 const src = readFileSync(new URL('../src/lib/db.js', import.meta.url), 'utf8');
 check(/const ACCOUNT_PARTS = \[[^\]]*'goals'/.test(src), '목표가 계정 전환 때 계정 몫으로 보관되지 않습니다.');
 
-/* 6. 완료 효과 계획 */
-check(fx.burstPlan({ pri: 3 }).count > fx.burstPlan({ pri: 1 }).count, '중요도가 높아도 방울이 늘지 않습니다.');
-check(fx.burstPlan({ pri: 2, allDone: true }).count > fx.burstPlan({ pri: 2 }).count && fx.burstPlan({ pri: 2, allDone: true }).reach > fx.burstPlan({ pri: 2 }).reach, '다 끝냈을 때 버스트가 커지지 않습니다.');
-check(fx.burstPlan({ pri: 3, level: 'low' }).count < fx.burstPlan({ pri: 3 }).count && fx.burstPlan({ level: 'off' }).count === 0, '줄이기·끄기가 방울 수에 반영되지 않습니다.');
-check(fx.normalizeFx('x') === 'on' && fx.normalizeFx('off') === 'off', '효과 설정 기본값이 켜기가 아닙니다.');
+/* 6. 완료 효과 계획(평점관 P1: 평소는 작고 짧게, 높음·마지막만 크게, 연달아면 줄임) */
+for (const pri of [1, 2]) {
+    const p = fx.burstPlan({ pri });
+    check(p.count >= 6 && p.count <= 10 && p.ms <= 600 && !p.big, `평소 완료(중요도 ${pri})가 작고 짧지 않습니다: ${JSON.stringify(p)}`);
+}
+check(fx.burstPlan({ pri: 2 }).count > fx.burstPlan({ pri: 1 }).count, '중요도에 따라 방울 수가 달라지지 않습니다.');
+const hi = fx.burstPlan({ pri: 3 });
+const last = fx.burstPlan({ pri: 1, allDone: true });
+check(hi.big && last.big && hi.count >= 16 && hi.count <= 22 && last.count <= 22 && last.reach > fx.burstPlan({ pri: 1 }).reach, `중요도 3·마지막 할 일만 크게 터지지 않습니다: ${JSON.stringify({ hi, last })}`);
+check(fx.burstPlan({ pri: 3, level: 'big', allDone: true }).count <= fx.MAX_DROPS && fx.MAX_DROPS <= 24, '크게에서도 방울이 20개 안팎을 넘습니다.');
+const rapid1 = fx.burstPlan({ pri: 2, streak: 1 });
+const rapid3 = fx.burstPlan({ pri: 3, streak: 3 });
+check(rapid1.count < fx.burstPlan({ pri: 2 }).count && !rapid3.big && rapid3.count <= 4 && !rapid3.ring, `연달아 체크해도 효과가 줄지 않습니다: ${JSON.stringify({ rapid1, rapid3 })}`);
+check(fx.burstPlan({ pri: 2, allDone: true, streak: 2 }).big, '연달아 체크하다 마지막 할 일을 끝내도 크게 터지지 않습니다.');
+check(fx.burstPlan({ pri: 3, level: 'low' }).count < hi.count && !fx.burstPlan({ pri: 3, level: 'low' }).big && fx.burstPlan({ level: 'off' }).count === 0, '작게·끄기가 방울 수에 반영되지 않습니다.');
+check(fx.burstPlan({ pri: 2, level: 'big' }).count > fx.burstPlan({ pri: 2 }).count, '크게가 보통보다 크지 않습니다.');
+check(fx.FX_DEFAULT === 'mid' && fx.normalizeFx('x') === 'mid' && fx.normalizeFx('on') === 'mid' && fx.normalizeFx(null) === 'mid' && fx.normalizeFx('off') === 'off' && fx.normalizeFx('big') === 'big', '효과 설정 기본값이 보통이 아니거나 예전 값을 못 읽습니다.');
+check(fx.FX_LEVELS.map((x) => x.id).join() === 'big,mid,low,off', '효과 세기 타일이 크게·보통·작게·끄기가 아닙니다.');
+fx.resetChecks();
+check(fx.noteCheck(1000) === 0 && fx.noteCheck(1500) === 1 && fx.noteCheck(2000) === 2 && fx.noteCheck(9000) === 0, '연달아 체크 세기가 틀립니다.');
+fx.resetChecks();
+/* 화면 읽기 알림 문장 */
+check(fx.doneMessage({ done: true, title: '알림장 쓰기', goal: 3, count: 1 }) === '‘알림장 쓰기’ 끝냈어요. 오늘 목표 3개 중 1개.', '완료 알림 문장이 다릅니다.');
+check(fx.doneMessage({ done: true, title: 'a', allDone: true, goal: 3, count: 3, goalHit: true }).includes('모두 끝냈어요') && fx.doneMessage({ done: false, title: 'a' }) === '‘a’ 다시 남겼어요.', '마지막·풀기 알림 문장이 다릅니다.');
 let seq = 0;
 const words = new Set(Array.from({ length: 20 }, () => fx.pickWord(() => ((seq += 0.37) % 1))));
 check(words.size >= 3 && [...words].every((w) => fx.STAMP_WORDS.includes(w)), '도장 문구가 바뀌지 않습니다.');
@@ -144,7 +164,20 @@ check(fx.pickWord(() => 0, '참 잘했어요') !== '참 잘했어요', '같은 �
 check(fx.celebrateDone({ done: false }) === null && fx.celebrateDone({ done: true, storageFailed: true }) === null, '풀기·저장 실패에도 효과를 띄웁니다.');
 const fxSrc = readFileSync(new URL('../src/ui/doneFx.js', import.meta.url), 'utf8');
 check(fxSrc.includes('prefers-reduced-motion') && fxSrc.includes('keySoundEnabled()'), '동작 줄이기·누를 때 소리 설정을 따르지 않습니다.');
+check(/function popSound[^]*?if \(!keySoundEnabled\(\)\) return false;/.test(fxSrc) && fxSrc.includes('keyAudioBus(audio)') && !fxSrc.includes('audio.destination'), '완료 소리가 누를 때 소리 설정·리미터 길을 따르지 않습니다.');
+{
+    const animated = [...fxSrc.matchAll(/\{ (?:opacity|transform)[^}]*\}/g)].map((m) => m[0]);
+    const props = new Set(animated.flatMap((f) => [...f.matchAll(/(\w+):/g)].map((m) => m[1])));
+    for (const p of props) check(['opacity', 'transform', 'offset'].includes(p), `방울 애니메이션이 transform·opacity 말고 ${p}를 움직입니다.`);
+    check(fxSrc.includes('createDocumentFragment') && fxSrc.includes('dropDone(el)') && fxSrc.includes('sweepLater('), '방울을 한 번에 붙이고 끝나면 치우지 않습니다.');
+    check(fxSrc.includes("'aria-hidden', 'true'") && fxSrc.includes("'aria-live', 'polite'") && fxSrc.includes('keepFocus(button, id)'), '효과 층 숨김·완료 알림·포커스 유지가 빠졌습니다.');
+}
 const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+check(!/@keyframes done-click \{[^}]*\{[^}]*box-shadow/.test(css), '딸깍 애니메이션이 그림자를 움직입니다.');
+check(/\.pri-mark i \{[^}]*box-shadow: inset/.test(css), '중요도 빈 막대가 색으로만 구분됩니다.');
+check(/\.todo-title \{[^}]*white-space: normal;[^}]*-webkit-line-clamp: 3/.test(css) && !/\.todo-title \{[^}]*text-overflow: ellipsis/.test(css), '할 일 제목이 줄바꿈 대신 말줄임으로 잘립니다.');
+const detailSrc = readFileSync(new URL('../src/lib/detail.js', import.meta.url), 'utf8');
+check(detailSrc.includes('el.scrollHeight > el.clientHeight + 1'), '여러 줄에서 잘린 제목이 상세 팝업을 열지 않습니다.');
 check(/@media \(prefers-reduced-motion: reduce\) \{\s*\.done-drop, \.done-ring \{ display: none !important; \}/.test(css), '동작 줄이기에서 방울을 숨기지 않습니다.');
 /* 원격 수신·처음 불러오기에서는 효과를 부르지 않습니다: 효과는 toggleTodoFx(사용자 누름) 한 곳에서만. */
 for (const file of ['Tasks.jsx', 'Home.jsx', 'Day.jsx', 'TodoAlarm.jsx']) {

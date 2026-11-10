@@ -18,7 +18,7 @@ import { legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } fro
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
-import { allDoneToday, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
+import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
@@ -1551,10 +1551,10 @@ function allTodos(draft) {
 /**
  * 끝냄 표시를 바꿉니다. 끝낼 때 끝낸 날·시각(서울)을 적고, 풀면 지웁니다('' = 클라우드 칸도 지움).
  * 하루 목표에 닿으면 그 날 달성 기록을 남기고, 풀어서 목표 아래로 내려가면 지웁니다.
- * 돌려주는 값은 화면 효과용입니다: { done, pri, allDone, goalHit, goalCleared, storageFailed }.
+ * 돌려주는 값은 화면 효과·알림용입니다: { done, pri, title, allDone, goal, count, goalHit, goalCleared, storageFailed }.
  */
 export async function toggleTodo(id) {
-    let info = { done: false, pri: 2, allDone: false, goalHit: false, goalCleared: false, found: false };
+    let info = { done: false, pri: 2, title: '', allDone: false, goal: 0, count: 0, goalHit: false, goalCleared: false, found: false };
     const failed = await update((draft) => {
         const lists = [draft.todos, draft.local.todos];
         const { ymd, hm } = seoulStamp();
@@ -1564,7 +1564,7 @@ export async function toggleTodo(id) {
         for (const list of lists) {
             const row = list.find((item) => item.id === id);
             if (!row) continue;
-            if (!seen) { turnedOn = !row.done; seen = true; info.pri = priOf(row); }
+            if (!seen) { turnedOn = !row.done; seen = true; info.pri = priOf(row); info.title = String(row.title || ''); }
             const before = row.doneOn;
             row.done = turnedOn;
             if (turnedOn) { row.doneOn = ymd; row.doneHm = hm; day = ymd; }
@@ -1581,7 +1581,10 @@ export async function toggleTodo(id) {
         draft.goals = settled.goals;
         info.goalHit = settled.hit;
         info.goalCleared = settled.cleared;
-        info.allDone = turnedOn && allDoneToday(joinedRows(draft.todos, draft.local.todos), ymd);
+        const joined = joinedRows(draft.todos, draft.local.todos);
+        info.allDone = turnedOn && allDoneToday(joined, ymd);
+        info.goal = normalizeGoals(draft.goals).n;
+        info.count = doneCount(joined, ymd);
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ...info, storageFailed: true, done: false };
