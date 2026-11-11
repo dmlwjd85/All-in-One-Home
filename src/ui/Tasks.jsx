@@ -13,7 +13,8 @@ import { DetailSheet } from './DetailSheet.jsx';
 import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
-import { isMinutes } from '../lib/minutes.js';
+import { isMinutes, minutesList, minutesTitle } from '../lib/minutes.js';
+import { minutesOf } from '../lib/minutesExtract.js';
 import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
@@ -148,6 +149,10 @@ export function Tasks() {
                                     if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
                                 }}><IconTrash /></Btn>
                             </div>
+                            {(() => {
+                                const meet = minutesOf(row.id, minutesList(allNotes));
+                                return meet ? <Btn className="chip minutes-from" data-minutes-from={meet.id} onClick={() => go(`#/minutes/${meet.id}`)}>📝 회의록 · {minutesTitle(meet)}</Btn> : null;
+                            })()}
                             {row.of ? <p className="num" style={{ margin: '4px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
                             {(row.pendingNos || []).length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

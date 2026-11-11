@@ -97,8 +97,25 @@ const BIBLE_BEFORE = new RegExp(`(?<![가-힣])(?:${BIBLE_BOOKS.join('|')})\\s*$
 const NAME_BOOKS = ['여호수아', '사무엘', '느헤미야', '이사야', '예레미야', '에스겔', '오바댜', '스바냐', '스가랴', '다니엘', '요나', '미가', '요엘', '에스더', '에스라', '아가', '나훔', '아모스', '호세아', '학개', '룻', '욥', '요한', '마태', '마가', '누가', '유다'];
 const NAME_BOOK_BEFORE = new RegExp(`(?<![가-힣])(?:${NAME_BOOKS.join('|')})\\s*$`);
 const BIBLE_CUE_AFTER = /^\s*(?:낭독|봉독|성경|말씀|절)(?![가-힣])/;
+/*
+ * 평점관 r4 P1: 책 이름 줄임(「마 5:13」「롬 8:28」「요 3:16」)도 장:절입니다. 낱말로도 흔한 말(수·전·아·사·나·학·말·스·느·에·단·신·시·출·민·미·약·대상 등)은 뺍니다.
+ * 줄임 + 분이 00·30이 아닌 콜론, 사람 이름으로도 쓰는 책(요한·마태 등) + 5분 단위가 아닌 콜론(「요한 3:16 묵상」)은 시각이 아닙니다.
+ * 「요한 3:30 상담」「요한 3:15 상담」처럼 5분 단위는 시각으로 둡니다. 「까지·부터·전·시작」이 뒤에 오면 언제나 시각입니다(TIME_CUE_AFTER).
+ */
+const ABBR_BOOKS = [
+    '창', '레', '삿', '룻', '삼상', '삼하', '왕상', '왕하', '대하', '욥', '잠', '렘', '애', '겔', '호', '욜', '암', '옵', '욘',
+    '합', '습', '슥', '마', '막', '눅', '요', '행', '롬', '고후', '갈', '엡', '빌', '골', '살전', '살후', '딤전', '딤후', '딛', '몬',
+    '히', '벧전', '벧후', '요일', '요이', '요삼', '유', '계',
+];
+const ABBR_BOOK_BEFORE = new RegExp(`(?<![가-힣0-9])(?:${ABBR_BOOKS.join('|')})\\s*$`);
 function bibleAfter(before, after) {
     return NAME_BOOK_BEFORE.test(before) && BIBLE_CUE_AFTER.test(after);
+}
+function bibleShort(before, minute) {
+    const m = Number(minute);
+    if (!minute || minute === '00') return false;
+    if (ABBR_BOOK_BEFORE.test(before) && minute !== '30') return true;
+    return NAME_BOOK_BEFORE.test(before) && m % 5 !== 0;
 }
 /* 콜론 시각 뒤에 마감·시작 말(까지·부터·전·이전·이후·에·시작·마감)이 오면 점수·성경 거르기보다 먼저 시각으로 봅니다(「점수 15:00까지 입력」). */
 const TIME_CUE_AFTER = /^\s*(?:까지|부터|이전|이후|전(?![가-힣])|전에|전까지|에(?![가-힣])|시작|마감)/;
@@ -110,7 +127,7 @@ function notClockColon(text, start, end) {
     if (TIME_CUE_AFTER.test(after)) return false;
     const minute = /:(\d{2})/.exec(text.slice(start, end))?.[1] || '';
     /* 분이 00이면(「시편 15:00 낭송」) 성경 장:절로 보지 않습니다. */
-    const bible = minute !== '00' && (BIBLE_BEFORE.test(before) || bibleAfter(before, after));
+    const bible = minute !== '00' && (BIBLE_BEFORE.test(before) || bibleAfter(before, after) || bibleShort(before, minute));
     const setLeft = SET_BEFORE.test(before) && minute !== '00' && minute !== '30';
     return SCORE_BEFORE.test(before.slice(-8)) || bible || setLeft || SCORE_AFTER.test(after);
 }

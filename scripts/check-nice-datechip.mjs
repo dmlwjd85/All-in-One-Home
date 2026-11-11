@@ -163,7 +163,7 @@ check(offT.timeOff && !offT.time, `시각 칩을 뺐는데 timeOff가 없어요:
 check(!readEventChips('내일 학년 회의', { now }).timeOff, '시각이 없는 글에 timeOff가 켜졌어요');
 
 const sw = readFileSync('public/sw.js', 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v78'"), 'SW가 v78이 아닙니다');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v79'"), 'SW가 v79가 아닙니다');
 
 if (bad) {
     console.error(`나이스·날짜칩 검사 실패 ${bad}건`);

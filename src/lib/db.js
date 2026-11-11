@@ -13,13 +13,14 @@ import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
-import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
+import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, clearTombs, deleteUserDoc, fingerprint, measureServerClock, peekMinutes, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos, writeTombs } from './cloud.js';
 import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 import { mergeLinks, readLinks } from './eduLinks.js';
+import { dropMinutesTombs, freshCandidates, noteMinutesGone, noteMinutesTidied, readMinutesTidied, unnoteMinutesTidied, readMinutesGone, unnoteMinutesGone, minutesCandidates, minutesNow, queueMinutesTombs, readMinutesLinks, readMinutesPending, readMinutesTombQueue, rememberMinutesLinks, setMinutesPending, untouchedSince, vanishedCandidates } from './minutesExtract.js';
 
 let mainVault = createVault('ssug-gyomu');
 let localVault = createVault('ssug-gyomu-local');
@@ -432,11 +433,11 @@ export function tellRejectedForTest(keys) {
 }
 
 /* 검사에서 클라우드 올리기·당겨오기를 에뮬레이터 대신 끼울 수 있게 둡니다. */
-const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, watch: watchTodos, available: syncAvailable };
+const REAL_CLOUD = { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: peekTodos, clock: measureServerClock, sweep: sweepTombs, watch: watchTodos, tomb: writeTombs, minutesPeek: peekMinutes, untomb: clearTombs, available: syncAvailable };
 let cloudApi = { ...REAL_CLOUD };
 /* 검사용: 넣은 함수만 바꿉니다. peek·clock을 넣지 않은 가짜 클라우드에서는 그 단계를 건너뜁니다(진짜 클라우드 함수가 불리지 않게). */
 export function useCloudForTest(api = null) {
-    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, watch: null, available: () => true, ...api } : { ...REAL_CLOUD };
+    cloudApi = api ? { push: pushUserData, pull: pullUserData, remove: deleteUserDoc, peek: null, clock: null, sweep: null, watch: null, tomb: null, minutesPeek: null, untomb: null, available: () => true, ...api } : { ...REAL_CLOUD };
 }
 let signOutHook = null;
 export function useSignOutForTest(fn = null) { signOutHook = fn; }
@@ -1065,6 +1066,8 @@ export function pruneDeletedElsewhere(draft, remote, hashes) {
                 if (!LWW_NAMES.includes(cloudName) || !remoteIsLater(row, remote?.tombs?.[cloudName]?.[String(shaped.id)])) return true;
             }
             if (hashes) delete hashes[`${cloudName}/${shaped.id}`];
+            /* 다른 기기가 지운 회의록 항목은 기억해 두어, 묘비가 정리된 뒤 다시 저장해도 되살리지 않습니다. */
+            if (localName === 'todos' || localName === 'events') noteMinutesGone([String(shaped.id)]);
             return false;
         });
     }
@@ -1513,6 +1516,162 @@ function blobOf(item) {
 }
 
 /**
+ * 회의록 후보 id 가운데 클라우드에 이미 있거나(다른 기기가 등록) 지운 기록(할 일·일정 묘비)이 있는 것.
+ * sure=false 면 서버에 닿지 못해 모릅니다(오프라인). 그때 빈 집합으로 보고 만들면 지운 항목이 되살아나므로(PR #64 r2 1번) 부른 쪽은 등록을 미룹니다.
+ * 로그인하지 않았거나 클라우드를 쓰지 않는 기기는 다른 기기가 없으므로 sure=true 입니다.
+ */
+export async function minutesCloudCheck(ids = []) {
+    const uid = state.auth?.uid;
+    if (!uid || !ids.length || !cloudApi.minutesPeek || !cloudApi.available()) return { known: new Set(), sure: true };
+    const out = await Promise.resolve(cloudApi.minutesPeek(uid, ids, { memoryOnly: memoryOnly || state.profile?.sharedPc })).catch(() => null);
+    if (!out || typeof out !== 'object') return { known: new Set(), sure: false };
+    return { known: new Set(ids.filter((id) => out[id] === true)), sure: ids.every((id) => typeof out[id] === 'boolean') };
+}
+
+/** 회의록 노란 카드에서 빼기로 정한 id 를 클라우드 묘비로 남깁니다(다른 기기에서 다시 묻지 않게). 못 쓰면 대기열에 두고 다시 씁니다(PR #64 r2 3번). */
+export async function markMinutesDeclined(ids = []) {
+    if (!state.auth?.uid || !ids.length) return 0;
+    queueMinutesTombs(ids);
+    return flushMinutesTombs();
+}
+
+/** 대기열의 '뺀 결정' 묘비를 씁니다. 쓴 개수. */
+export async function flushMinutesTombs() {
+    const uid = state.auth?.uid;
+    const queue = readMinutesTombQueue();
+    if (!uid || !queue.length || !cloudApi.tomb || !cloudApi.available()) return 0;
+    const done = await Promise.resolve(cloudApi.tomb(uid, queue, { memoryOnly: memoryOnly || state.profile?.sharedPc })).catch(() => []);
+    const written = Array.isArray(done) ? done.filter((id) => queue.includes(id)) : [];
+    dropMinutesTombs(written);
+    return written.length;
+}
+
+function minutesRowsById() {
+    const out = new Map();
+    for (const bucket of ['todos', 'events']) {
+        for (const row of [...(state[bucket] || []), ...(state.local?.[bucket] || [])]) out.set(row.id, { bucket, row });
+    }
+    return out;
+}
+
+/**
+ * 회의록을 저장한 뒤 본문에서 일정·할 일을 찾아 등록합니다(Minutes.jsx 저장 흐름).
+ * - 분명한 줄은 바로 등록(auto), 흐린 줄은 노란 카드로 돌려줍니다(ask).
+ * - 다른 기기에서 이미 등록했거나, 지웠거나(묘비), 빼기로 정한 id 는 다시 만들거나 묻지 않습니다.
+ * - 클라우드를 확인하지 못하면(오프라인) 바로 등록을 미루고, 연결되면 다시 확인한 뒤 등록합니다(settleMinutesPending).
+ * - 줄을 고쳐 다시 저장하면 사라진 옛 줄의 항목은 사용자가 손대지 않았을 때만 정리합니다.
+ */
+export async function registerMinutes({ id, title = '', date = '', text = '', prev = null, periods = DEFAULT_PERIODS, timeCtx = null } = {}) {
+    const opts = { periods, title, timeCtx };
+    const tidied = await tidyEditedMinutes(id, prev, { text, date }, opts);
+    const byId = minutesRowsById();
+    const found = freshCandidates(
+        minutesCandidates(text, id, { ...opts, now: minutesNow(date) }),
+        { registered: [...byId.keys()], remembered: notTidied([...readMinutesLinks(id), ...readMinutesGone()]) },
+    );
+    const check = await minutesCloudCheck([...found.auto, ...found.ask].map((item) => item.id));
+    revivedTidied(check, found.auto);
+    if (check.known.size) {
+        found.auto = found.auto.filter((item) => !check.known.has(item.id));
+        found.ask = found.ask.filter((item) => !check.known.has(item.id));
+        /* 묘비가 30일 뒤 정리돼도 이 기기는 기억해 두고 되살리지 않습니다. */
+        rememberMinutesLinks(id, [...check.known]);
+    }
+    if (!check.sure) {
+        const deferred = found.auto.length;
+        setMinutesPending(id, found.auto);
+        return { count: 0, deferred, ask: found.ask, tidied, sure: false };
+    }
+    setMinutesPending(id, null);
+    let count = 0;
+    if (found.auto.length) {
+        const put = await saveParsed(found.auto);
+        if (put?.storageFailed) return { storageFailed: true, count: 0, deferred: 0, ask: [], tidied };
+        rememberMinutesLinks(id, found.auto.map((item) => item.id));
+        count = put?.count || 0;
+    }
+    await releaseTidied(found.auto);
+    return { count, deferred: 0, ask: found.ask, tidied, sure: true };
+}
+
+/** 노란 카드 끝내기: 고른 카드는 등록하고, 모든 카드를 기억하며(다시 묻지 않음), 뺀 카드는 묘비로 다른 기기에 알립니다. */
+export async function finishMinutesAsk(minutesId, items = [], chosen = []) {
+    let put = null;
+    if (chosen.length) {
+        put = await saveParsed(chosen);
+        if (put?.storageFailed) return put;
+    }
+    rememberMinutesLinks(minutesId, items.map((item) => item.id));
+    const chosenIds = new Set(chosen.map((item) => item.id));
+    /* 묘비 쓰기는 기다리지 않습니다(오프라인이면 몇 초 걸림). 못 쓴 것은 대기열에 남아 연결되면 다시 씁니다. */
+    const declined = markMinutesDeclined(items.map((item) => item.id).filter((id) => !chosenIds.has(id))).catch(() => 0);
+    return { ...(put || { ok: true, count: 0 }), declined };
+}
+
+/* 고친 줄을 되돌리면(PR #64 r3 F1): 이 기기가 정리하며 지운 id 는 클라우드 묘비가 있어도 '이미 있음'으로 보지 않습니다.
+   정리 묘비는 사용자가 지운 기록이 아니기 때문입니다. 등록한 뒤 묘비를 풀어 다른 기기에서도 남게 합니다. */
+function notTidied(ids) {
+    const mine = new Set(readMinutesTidied());
+    return ids.filter((id) => !mine.has(id));
+}
+function revivedTidied(check, items = []) {
+    const mine = new Set(readMinutesTidied());
+    for (const item of items) if (mine.has(item.id)) check.known.delete(item.id);
+}
+async function releaseTidied(items = []) {
+    const mine = new Set(readMinutesTidied());
+    const back = items.map((item) => item.id).filter((id) => mine.has(id) && minutesRowsById().has(id));
+    if (!back.length) return;
+    const uid = state.auth?.uid;
+    if (uid && cloudApi.untomb && cloudApi.available()) {
+        const done = await Promise.resolve(cloudApi.untomb(uid, back, { memoryOnly: memoryOnly || state.profile?.sharedPc })).catch(() => []);
+        unnoteMinutesTidied(done);
+    }
+}
+
+/** 고친 줄 정리: 옛 본문에서만 나온 항목 중 회의록이 만든 그대로인 것을 지웁니다. 지운 개수. */
+async function tidyEditedMinutes(id, prev, next, opts) {
+    if (!id || !prev) return 0;
+    const byId = minutesRowsById();
+    let n = 0;
+    for (const item of vanishedCandidates(prev, next, id, opts)) {
+        const hit = byId.get(item.id);
+        if (!hit || !untouchedSince(item, hit.row, hit.bucket)) continue;
+        const failed = await removeItem(hit.bucket, item.id);
+        /* 고친 줄 정리는 사용자가 지운 게 아니므로, 줄을 되돌리면 다시 등록되게 '지움' 기억에서 뺍니다. */
+        unnoteMinutesGone([item.id]);
+        if (!failed?.storageFailed) { n += 1; noteMinutesTidied([item.id]); }
+    }
+    return n;
+}
+
+/** 오프라인에서 미룬 회의록 등록과 '뺀 결정' 묘비를 연결된 뒤 마저 합니다. 등록한 개수. */
+export async function settleMinutesPending() {
+    if (!state.auth?.uid) return 0;
+    await flushMinutesTombs().catch(() => 0);
+    let total = 0;
+    for (const [mid, items] of Object.entries(readMinutesPending())) {
+        const byId = minutesRowsById();
+        const fresh = freshCandidates({ auto: Array.isArray(items) ? items : [], ask: [] }, { registered: [...byId.keys()], remembered: notTidied([...readMinutesLinks(mid), ...readMinutesGone()]) }).auto;
+        if (!fresh.length) { setMinutesPending(mid, null); continue; }
+        const check = await minutesCloudCheck(fresh.map((item) => item.id));
+        if (!check.sure) continue;
+        revivedTidied(check, fresh);
+        if (check.known.size) rememberMinutesLinks(mid, [...check.known]);
+        const rest = fresh.filter((item) => !check.known.has(item.id));
+        if (rest.length) {
+            const put = await saveParsed(rest);
+            if (put?.storageFailed) continue;
+            rememberMinutesLinks(mid, rest.map((item) => item.id));
+            total += put?.count || 0;
+        }
+        await releaseTidied(rest);
+        setMinutesPending(mid, null);
+    }
+    return total;
+}
+
+/**
  * 고른 항목은 할 일·일정에 넣고, 빼 둔 항목은 임시보관함(ssug-gyomu-inbox)에 둡니다.
  * 이미 등록된 아이디는 임시보관함으로 옮기지 않습니다.
  */
@@ -1899,6 +2058,7 @@ export async function saveTextItem(bucket, row, { from } = {}) {
 }
 
 export async function removeItem(bucket, id) {
+    if (bucket === 'todos' || bucket === 'events') { noteMinutesGone([id]); unnoteMinutesTidied([id]); }
     return update((draft) => {
         /* 지운 줄은 클라우드 문서도 지웁니다. 안 지우면 다음 받기에서 이 기기와 다른 기기 모두 되살아납니다(PR #52 검수 1번). */
         for (const item of draft[bucket] || []) if (item.id === id) forgetRow(bucket, item);
@@ -2345,6 +2505,8 @@ async function connectCloud(uid) {
     let ok = false;
     try {
         ok = await connectCloudBody(uid);
+        /* 오프라인에서 미룬 회의록 등록·뺀 결정을 연결된 뒤 마저 합니다(PR #64 r2 1·3번). 다시 확인하지 못하면 다음 연결 때. */
+        if (ok && state.auth?.uid === uid) await settleMinutesPending().catch(() => 0);
         return ok;
     } finally {
         syncEnd({ ok, pull: true, pending: ok ? 0 : undefined });

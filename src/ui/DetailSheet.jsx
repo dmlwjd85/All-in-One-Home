@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
 import { detailRows } from '../lib/detail.js';
 import { Btn, TodoTitle } from './bits.jsx';
+import { useUi } from './context.jsx';
+import { joined } from '../lib/db.js';
+import { minutesList, minutesTitle } from '../lib/minutes.js';
+import { minutesOf } from '../lib/minutesExtract.js';
 
 /** 길어서 잘린 할 일·일정을 눌렀을 때 전체 내용을 보여 주는 팝업. */
 export function DetailSheet({ kind, row, onClose, onToggle, onEdit, onSave, onDelete }) {
+    const { data, go } = useUi();
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(row?.title || '');
     const [confirmDrop, setConfirmDrop] = useState(false);
@@ -14,6 +19,8 @@ export function DetailSheet({ kind, row, onClose, onToggle, onEdit, onSave, onDe
     }, [onClose]);
     if (!row) return null;
     const rows = detailRows(kind, row);
+    /* 회의록에서 등록한 항목은 원래 회의록으로 돌아가는 단추를 둡니다. */
+    const meet = minutesOf(row.id, minutesList(joined(data, 'notes')));
     return (
         <div className="sheet-back" onClick={onClose}>
             <div className="sheet detail-sheet" role="dialog" aria-modal="true" aria-label={kind === 'todo' ? '할 일 자세히' : '일정 자세히'} data-screen="detail" onClick={(event) => event.stopPropagation()}>
@@ -50,6 +57,7 @@ export function DetailSheet({ kind, row, onClose, onToggle, onEdit, onSave, onDe
                     {onSave && !editing ? <Btn className="choice-tile" onClick={() => { setTitle(row.title || ''); setEditing(true); }}>고치기</Btn> : null}
                     {onDelete && !confirmDrop ? <Btn className="choice-tile" onClick={() => setConfirmDrop(true)}>지우기</Btn> : null}
                     {onToggle ? <Btn className="choice-tile" onClick={(event) => { onToggle(event); onClose(); }}>{row.done ? '다시 남기기' : '끝냄 표시'}</Btn> : null}
+                    {meet ? <Btn className="choice-tile" data-role="detail-minutes" onClick={() => { onClose(); go(`#/minutes/${meet.id}`); }}>📝 회의록 보기 · {minutesTitle(meet)}</Btn> : null}
                     {onEdit ? <Btn className="choice-tile" data-role="detail-edit" onClick={onEdit}>고치기</Btn> : null}
                     <Btn className="choice-tile" onClick={onClose}>닫기</Btn>
                 </div>
