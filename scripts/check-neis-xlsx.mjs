@@ -94,12 +94,13 @@ function readXlsx(buf) {
     const widths = [...sheet.matchAll(/<col min="(\d+)" max="(\d+)" width="([\d.]+)"/g)].map((m) => ({ min: Number(m[1]), max: Number(m[2]), w: Number(m[3]) }));
     const width = (col) => widths.find((c) => col >= c.min && col <= c.max)?.w || 0;
     const rows = Math.max(0, ...[...cells.keys()].map((k) => Number(k.replace(/^[A-Z]+/, ''))));
-    return { files, cells, width, rows, hasFormula: /<f[\s>]/.test(sheet) };
+    const frozen = /<pane [^>]*ySplit="1"[^>]*topLeftCell="A2"[^>]*state="frozen"/.test(sheet);
+    return { files, cells, width, rows, frozen, hasFormula: /<f[\s>]/.test(sheet) };
 }
 
 const HEAD = ['번호', '이름', '날짜', '종류', '태그', '내용'];
 const COLS = ['A', 'B', 'C', 'D', 'E', 'F'];
-const TRICKY = ['=1+1', '+CMD|calc', '@SUM(A1)', '-=1', '＝1+1', '\t=HYPERLINK("x")', '첫 줄\n둘째 줄\n셋째 줄', '<b>&amp;</b> "따옴표"', '한글 가나다 漢字 😀'];
+const TRICKY = ['=1+1', '+CMD|calc', '@SUM(A1)', '-=1', '＝1+1', '\t=HYPERLINK("x")', '첫 줄\n둘째 줄\n셋째 줄', '<b>&amp;</b> "따옴표"', '한글 가나다 漢字 😀', '0123', '010-1234-5678', '12345'];
 
 /** 읽은 xlsx가 우리 기준에 맞는지 봅니다. 실패 문장 목록을 돌려줍니다. */
 function judge(x, { tag, expect }) {
@@ -111,6 +112,7 @@ function judge(x, { tag, expect }) {
         if (!c.bold) bad.push(`${tag} 머리글 ${COLS[i]}1이 굵지 않아요`);
     });
     if (x.hasFormula) bad.push(`${tag} 수식 칸(<f>)이 들어 있어요`);
+    if (!x.frozen) bad.push(`${tag} 머리글 줄이 맨 위에 고정되지 않았어요(pane ySplit=1 frozen 없음)`);
     for (const [ref, c] of x.cells) {
         if (c.formula) bad.push(`${tag} ${ref}가 수식 칸이에요`);
         if (/^\s*[=+@\-＝＋＠－]/.test(c.value) && !['s', 'inlineStr', 'str'].includes(c.type)) bad.push(`${tag} ${ref}('${c.value}')가 글자 칸이 아니에요(${c.type})`);
@@ -124,6 +126,8 @@ function judge(x, { tag, expect }) {
         row.forEach((want, i) => {
             const c = cell(`${COLS[i]}${r + 2}`);
             if (String(c.value) !== String(want)) bad.push(`${tag} ${COLS[i]}${r + 2} 값이 달라요: ${JSON.stringify(c.value)} ≠ ${JSON.stringify(want)}`);
+            /* 내용 칸은 숫자만 있어도(0123·12345) 글자 칸으로 남아 앞자리 0을 지켜야 합니다. */
+            if (i === 5 && want !== '' && !['s', 'inlineStr'].includes(c.type)) bad.push(`${tag} ${COLS[i]}${r + 2}('${want}') 내용 칸이 글자 칸이 아니에요(${c.type})`);
             if (i === 5 && String(want).includes('\n') && !c.wrap) bad.push(`${tag} ${COLS[i]}${r + 2} 줄바꿈 칸이 칸 안에서 줄이 안 바뀌어요(wrapText 없음)`);
         });
     });
@@ -156,6 +160,8 @@ const mutants = [
     ['글자 칸을 수식 칸으로', (s) => s.replace('t="s"><v>${sst(text)}</v></c>`', '><f>${xmlText(text).slice(1)}</f><v>${sst(text)}</v></c>`')],
     ['내용 칸 줄바꿈 끔', (s) => s.replace('<alignment vertical="top" wrapText="1"/>', '<alignment vertical="top"/>')],
     ['머리글 굵게 끔', (s) => s.replace('<font><b/>', '<font>')],
+    ['맨 위 고정 지움', (s) => s.replace('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>', '')],
+    ['숫자만 있는 칸을 모두 숫자 칸으로', (s) => s.replace('r > 0 && c === 0 && /^\\d{1,4}$/.test(text)', 'r > 0 && /^\\d{1,5}$/.test(text)')],
 ];
 const tmp = mkdtempSync(join(tmpdir(), 'neis-xlsx-'));
 try {
@@ -173,6 +179,11 @@ try {
         console.log(`변이 '${name}': ${caught ? '잡음' : '못 잡음'}`);
     }
 } finally { rmSync(tmp, { recursive: true, force: true }); }
+
+/* 누를 때는 미리 불러 둔 엑셀 코드를 기다리지 않고 씁니다(크롬은 손짓이 몇 초 남아 브라우저로는 가려내기 어려워 코드로 봅니다). */
+const studentsSrc = readFileSync(resolve(root, 'src/ui/Students.jsx'), 'utf8');
+check(studentsSrc.includes("const xlsx = xlsxRef.current || await import('../lib/neisXlsx.js');")
+    && /useEffect\(\(\) => \{[\s\S]{0,200}import\('\.\.\/lib\/neisXlsx\.js'\)\.then\(\(mod\) => \{ if \(alive\) xlsxRef\.current = mod; \}\)/.test(studentsSrc), '내려받기가 미리 불러 둔 엑셀 코드를 쓰지 않아요(누른 손짓이 끊길 수 있음).');
 
 /* ---------- 3) 브라우저에서 실제로 내려받기 ---------- */
 const chrome = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].filter(Boolean).find(existsSync);
@@ -202,6 +213,28 @@ for (let i = 0; i < 60; i += 1) {
     await wait(250);
 }
 
+/* 공유 창(navigator.share)을 흉내 내고, 주소 풀기(revokeObjectURL) 때를 기록합니다. 컴퓨터에서도 공유가 되는 척합니다. */
+const MOCK = () => {
+    localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+    localStorage.setItem('ssug-gyomu-speech-notice', '1');
+    window.__shareCalls = [];
+    window.__revoked = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = (u) => { window.__revoked.push(Date.now()); revoke(u); };
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: (d) => !!(d && d.files && d.files.length) });
+    Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: async (d) => {
+            const f = d.files[0];
+            const buf = new Uint8Array(await f.arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < buf.length; i += 1) bin += String.fromCharCode(buf[i]);
+            window.__shareCalls.push({ name: f.name, type: f.type, b64: btoa(bin), active: navigator.userActivation?.isActive ?? null });
+            if (localStorage.getItem('neis-share-mode') === 'abort') throw new DOMException('취소했어요', 'AbortError');
+        },
+    });
+};
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const EDITED = '=1+1 먼저 계산해 보자고 했어요.\n둘째 줄: 친구와 <실험> 기구를 & 나눴어요.';
 const downloads = mkdtempSync(join(tmpdir(), 'neis-dl-'));
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
@@ -211,10 +244,7 @@ try {
         const page = await browser.newPage();
         await page.setViewport({ width, height });
         page.on('pageerror', (error) => failures.push(`화면 오류(${width}): ${error?.message || error}`));
-        await page.evaluateOnNewDocument(() => {
-            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
-            localStorage.setItem('ssug-gyomu-speech-notice', '1');
-        });
+        await page.evaluateOnNewDocument(MOCK);
         const dir = join(downloads, String(width));
         mkdirSync(dir, { recursive: true });
         const cdp = await page.createCDPSession();
@@ -232,8 +262,12 @@ try {
         await page.type('textarea[aria-label="기록 고치기"]', second);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.innerText.trim() === '저장')?.click());
         await page.waitForFunction(() => !document.querySelector('textarea[aria-label="기록 고치기"]'), { timeout: 5000 }).catch(() => {});
+        const loaded = [];
+        page.on('request', (req) => { if (/neisXlsx[^/]*\.js/.test(req.url())) loaded.push(req.url()); });
         await page.goto(`${origin}?mode=light#/students/neis`, { waitUntil: 'networkidle0' });
         await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.innerText.trim() === '내려받기'), { timeout: 15000 });
+        /* 엑셀 코드는 누르기 전에 미리 불러 둬야 누른 손짓이 끊기지 않습니다. */
+        check(loaded.length > 0, `${tag} 나이스 화면을 열었는데 엑셀 코드를 미리 불러오지 않았어요.`);
         const guide = await page.evaluate(() => [...document.querySelectorAll('p')].map((p) => p.innerText).find((t) => t.includes('내려받기')) || '');
         check(guide.includes('엑셀 파일(.xlsx)') && !guide.includes('.csv'), `${tag} 안내 문구가 엑셀 파일이 아니에요: ${guide}`);
         await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.innerText.trim() === '내려받기').click());
@@ -244,6 +278,11 @@ try {
         }
         const toast = await page.evaluate(() => document.body.innerText.includes('엑셀 파일(.xlsx)을 이 기기에만 내려받았어요.'));
         check(toast, `${tag} 내려받은 뒤 알림이 보이지 않아요.`);
+        /* 컴퓨터(휴대폰 아님)는 공유 창 없이 바로 내려받고, 주소는 곧바로 풀지 않습니다(1분 뒤). */
+        await wait(2500);
+        const after = await page.evaluate(() => ({ share: window.__shareCalls.length, revoked: window.__revoked.length }));
+        check(after.share === 0, `${tag} 컴퓨터인데 공유 창을 띄웠어요.`);
+        check(after.revoked === 0, `${tag} 내려받은 뒤 2.5초 안에 파일 주소를 풀었어요(아이폰에서 받기가 끊길 수 있음).`);
         if (shots) await page.screenshot({ path: join(shots, `neis-${width}.png`) });
         check(/^나이스모아_\d{4}-\d{2}-\d{2}\.xlsx$/.test(name), `${tag} 받은 파일 이름이 나이스모아_날짜.xlsx가 아니에요: '${name}'`);
         if (name) {
@@ -285,6 +324,48 @@ print(json.dumps({"title": ws.title, "head": rows[0], "bold": all(c.font.b for c
         }
         await page.close();
     }
+
+    /* 아이폰: 공유 창으로 파일을 넘기고, 취소하면 아무 말 없이 끝납니다. 데모 기록을 그대로 씁니다. */
+    for (const mode of ['ok', 'abort']) {
+        const tag = `[아이폰 공유 ${mode === 'ok' ? '저장' : '취소'}]`;
+        const page = await browser.newPage();
+        await page.setUserAgent(IPHONE);
+        await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+        page.on('pageerror', (error) => failures.push(`화면 오류(${tag}): ${error?.message || error}`));
+        await page.evaluateOnNewDocument(MOCK);
+        const dir = join(downloads, `iphone-${mode}`);
+        mkdirSync(dir, { recursive: true });
+        const cdp = await page.createCDPSession();
+        await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: dir, eventsEnabled: true });
+        await page.goto(`${origin}?demo=1&mode=light#/students/neis`, { waitUntil: 'networkidle0' });
+        await page.evaluate((m) => localStorage.setItem('neis-share-mode', m), mode);
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.innerText.trim() === '내려받기'), { timeout: 15000 });
+        await wait(300);
+        await page.tap('.neis-tools button:nth-child(2)');
+        await wait(1500);
+        const got = await page.evaluate(() => ({
+            calls: window.__shareCalls,
+            text: document.body.innerText,
+        }));
+        const files = readdirSync(dir);
+        check(got.calls.length === 1, `${tag} 공유 창이 한 번 뜨지 않았어요: ${got.calls.length}`);
+        check(files.length === 0, `${tag} 공유를 쓰는데 따로 내려받기도 했어요: ${files.join(',')}`);
+        check(!got.text.includes('이 기기에만 내려받았어요') && !got.text.includes('엑셀 파일을 만들지 못했어요'), `${tag} 엉뚱한 알림이 보여요.`);
+        const call = got.calls[0];
+        if (call) {
+            check(call.active !== false, `${tag} 공유를 부를 때 누른 손짓이 끊겼어요(userActivation 없음).`);
+            check(/^나이스모아_\d{4}-\d{2}-\d{2}\.xlsx$/.test(call.name) && call.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `${tag} 넘긴 파일 이름·종류가 달라요: ${call.name} ${call.type}`);
+            try {
+                const x = readXlsx(Buffer.from(call.b64, 'base64'));
+                check(x.frozen && x.cells.get('A1')?.bold && x.cells.get('A1')?.value === '번호' && x.rows > 1, `${tag} 넘긴 파일 내용이 달라요.`);
+            } catch (error) { failures.push(`${tag} 넘긴 파일을 풀지 못했어요: ${error.message}`); }
+        }
+        if (mode === 'ok') check(got.text.includes('엑셀 파일(.xlsx)을 넘겼어요.'), `${tag} 공유 뒤 알림이 없어요.`);
+        else check(!got.text.includes('넘겼어요'), `${tag} 공유를 취소했는데 알림이 떴어요(조용히 끝나야 함).`);
+        if (shots && mode === 'ok') await page.screenshot({ path: join(shots, 'neis-iphone-share.png') });
+        console.log(`${tag} 공유 ${got.calls.length}번 · 내려받은 파일 ${files.length}개`);
+        await page.close();
+    }
 } finally {
     await browser.close();
     preview.kill();
@@ -296,4 +377,4 @@ if (failures.length) {
     failures.forEach((m) => console.error(`- ${m}`));
     process.exit(1);
 }
-console.log(`나이스 엑셀 내려받기 검사 통과 (직접 ${okDirect ? '통과' : '실패'} · 변이 ${mutants.length}개 잡음 · 브라우저 390·1280 실제 파일)`);
+console.log(`나이스 엑셀 내려받기 검사 통과 (직접 ${okDirect ? '통과' : '실패'} · 변이 ${mutants.length}개 잡음 · 브라우저 390·1280 실제 파일 · 아이폰 공유 저장·취소)`);

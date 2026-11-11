@@ -233,6 +233,13 @@ export function Neis() {
     const activeSid = groups.some(([sid]) => sid === picked) ? picked : (groups[0]?.[0] || '');
     const activeRows = groups.find(([sid]) => sid === activeSid)?.[1] || [];
     const activeStudent = data.students.find((item) => item.id === activeSid);
+    const xlsxRef = useRef(null);
+    useEffect(() => {
+        /* 엑셀 만드는 코드를 화면이 열릴 때 미리 불러 둡니다(첫 화면 묶음에는 넣지 않음). */
+        let alive = true;
+        import('../lib/neisXlsx.js').then((mod) => { if (alive) xlsxRef.current = mod; }).catch(() => {});
+        return () => { alive = false; };
+    }, []);
 
     async function copyAll() {
         const lines = groups.map(([sid, rows]) => {
@@ -253,27 +260,37 @@ export function Neis() {
             showToast('내려받을 기록이 없어요.');
             return;
         }
-        let bytes;
-        let type;
+        let file;
         try {
-            /* 엑셀 파일 만드는 코드는 「내려받기」를 누를 때만 불러옵니다. */
-            const xlsx = await import('../lib/neisXlsx.js');
-            bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, data.students));
-            type = xlsx.NEIS_XLSX_TYPE;
+            /* 미리 불러 둔 엑셀 코드가 있으면 기다리지 않아, 누른 손짓이 끊기지 않습니다(아이폰 공유·내려받기). */
+            const xlsx = xlsxRef.current || await import('../lib/neisXlsx.js');
+            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, data.students));
+            file = new File([bytes], `나이스모아_${seoulYmd()}.xlsx`, { type: xlsx.NEIS_XLSX_TYPE });
         } catch {
             showToast('엑셀 파일을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.');
             return;
         }
-        const blob = new Blob([bytes], { type });
-        const url = URL.createObjectURL(blob);
+        /* 휴대폰(아이폰 홈 화면 앱 등)은 내려받기가 막힐 수 있어 공유 창으로 파일을 넘깁니다. 컴퓨터는 바로 내려받습니다. */
+        const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (mobile && navigator.canShare?.({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: file.name });
+                showToast('엑셀 파일(.xlsx)을 넘겼어요. 「파일에 저장」을 고르면 이 기기에 남아요.');
+                return;
+            } catch (error) {
+                if (error?.name === 'AbortError') return;
+                /* 공유가 안 되면 아래에서 내려받기로 이어 갑니다. */
+            }
+        }
+        const url = URL.createObjectURL(file);
         const link = document.createElement('a');
-        const stamp = seoulYmd();
         link.href = url;
-        link.download = `나이스모아_${stamp}.xlsx`;
+        link.download = file.name;
         document.body.appendChild(link);
         link.click();
         link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        /* 휴대폰은 파일을 늦게 읽기도 해서, 주소는 1분 뒤에 풉니다. */
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
         showToast('엑셀 파일(.xlsx)을 이 기기에만 내려받았어요.');
     }
 
