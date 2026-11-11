@@ -8,7 +8,7 @@ import { useUi } from './context.jsx';
 import { Area, Btn, HoldToggle } from './bits.jsx';
 import { ChoiceGrid, DateGrid, PeriodRow, TimeChips } from './pickers.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
-import { applyLiveChips, readEventChips } from '../lib/dateChips.js';
+import { applyChipAmpm, readEventChips } from '../lib/dateChips.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 
 function MicIcon() {
@@ -152,9 +152,9 @@ export function MsgSheet({ onClose }) {
         const periods = allStarts(data.profile?.periodStarts);
         const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
         const parsed = parseSchoolMessages(text, { now, periods });
-        /* 메시지는 메시지 파서(기간·앞당김·변경)가 읽은 값을 그대로 씁니다. 한 건으로 읽힌 글에만, 사용자가 칩에서 직접 고친 것(빼기·오전↔오후)을 맞춥니다.
-           여러 건이면 건마다 읽은 값을 그대로 두고 미리보기 카드에서 고칩니다. 제목·기간은 고쳐도 파서 값을 그대로 둡니다. */
-        const chipped = parsed.items.length === 1 ? applyLiveChips(parsed.items, chip, { off: chipOff, ampmFlip }) : parsed.items;
+        /* 메시지는 메시지 파서(기간·앞당김·변경)가 읽은 제목·날짜를 그대로 씁니다(평점관 r4 P2-2).
+           칩으로는 한 건으로 읽힌 글의 오전↔오후만 고치고, 기간(end)이 있는 항목에는 대지 않습니다. 여러 건이면 미리보기 카드에서 건마다 고칩니다. */
+        const chipped = parsed.items.length === 1 ? applyChipAmpm(parsed.items, chip, ampmFlip) : parsed.items;
         /* '퇴근 전까지'·'수업 끝나고' 같은 말은 내 퇴근·조퇴·교시 시각으로 시각을 채웁니다. 설정이 비었으면 노란 카드로 둡니다. */
         let timed = chipped;
         try { timed = applyTimePhrases(chipped, timeContext(data)); } catch { timed = chipped; }
@@ -239,6 +239,7 @@ export function MsgSheet({ onClose }) {
                             )}
                         </div>
                         <LiveEventChips
+                            ampmOnly
                             chipRead={chipRead}
                             saved={live?.items}
                             chipOff={chipOff}

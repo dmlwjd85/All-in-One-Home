@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseNote } from '../lib/parse.js';
+import { readJjaemPaste } from '../lib/jjaemPaste.js';
 import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick } from '../lib/db.js';
 import { joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Area, Btn, KINDS, SpreadHint, TAGS } from './bits.jsx';
 import { recentStudents } from './capture.js';
-import { readEventChips } from '../lib/dateChips.js';
+import { chipSave, readEventChips } from '../lib/dateChips.js';
+import { seoulYmd } from '../lib/date.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 
@@ -34,12 +36,14 @@ export function QuickSheet({ initial, onClose }) {
     }, [kind]);
 
     async function save() {
-        const chipped = chipRead && chipRead.changed ? chipRead : null;
+        /* 칩 = 저장값(평점관 r4 P2-1): 날짜 칩을 뺐으면 글의 「내일」로 돌아가지 않고 오늘에 넣고, 제목은 칩 미리보기 그대로입니다. */
+        const chipped = chipKinds ? chipSave(chipRead, chipOff, seoulYmd(new Date()), ampmFlip) : null;
+        const chipTime = chipped ? (chipped.time || (chipped.timeOff ? '' : undefined)) : undefined;
         const result = await saveQuick({
             kind,
-            text: chipped && (kind === '일정' || kind === '할 일') ? (chipped.title || text) : text,
-            ...(kind === '일정' && chipped ? { title: chipped.title || text, raw: chipped.raw, date: chipped.date || undefined, time: chipped.time || undefined, period: chipped.period || 0 } : {}),
-            ...(kind === '할 일' && chipped ? { due: chipped.date || undefined, time: chipped.time || undefined } : {}),
+            text,
+            ...(kind === '일정' && chipped ? { ...(chipped.title ? { title: chipped.title, raw: chipped.raw } : {}), date: chipped.date || undefined, time: chipTime, period: chipped.period || 0 } : {}),
+            ...(kind === '할 일' && chipped ? { ...(chipped.title ? { title: chipped.title } : {}), due: chipped.date || undefined, time: chipTime } : {}),
             no: chosenNo,
             tags,
             neis,
@@ -95,6 +99,7 @@ export function QuickSheet({ initial, onClose }) {
                 <SpreadHint />
                 <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => { const next = event.target.value; setText(next); if (!next.trim()) { setChipOff([]); setAmpmFlip([]); } }} onKeyDown={onKey} />
                 <LiveEventChips
+                    title={chipRead ? (readJjaemPaste(text.trim(), { now: new Date(), stripTime: true, future: true }).body || text.trim()).replace(/\s+/g, ' ').trim() : null}
                     chipRead={chipRead}
                     chipOff={chipOff}
                     ampmFlip={ampmFlip}

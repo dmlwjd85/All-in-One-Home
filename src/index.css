@@ -1646,6 +1646,7 @@ button.hero-pill.home-todo-link {
 .date-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .date-chip { min-height: 44px; }
 .date-chip.is-off { text-decoration: line-through; opacity: .85; }
+.date-chip.is-static { display: inline-flex; align-items: center; cursor: default; box-shadow: none; }
 .date-chip-note { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .date-chip-warn { margin: 0; padding: 10px 12px; font-weight: 700; border-radius: 14px; }
 .detail-edit { display: grid; gap: 8px; margin-bottom: 8px; }

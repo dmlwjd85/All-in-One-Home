@@ -1,6 +1,6 @@
 /* 나이스·설정 두 칸(시안 A)과 실시간 날짜·시각 칩(기간 비변환·오전오후 고침) 검사. */
 import { readFileSync } from 'node:fs';
-import { applyLiveChips, readEventChips } from '../src/lib/dateChips.js';
+import { applyChipAmpm, applyLiveChips, chipSave, readEventChips } from '../src/lib/dateChips.js';
 import { findDates } from '../src/lib/parse.js';
 import { readJjaemPaste } from '../src/lib/jjaemPaste.js';
 import { parseSchoolMessages } from '../src/lib/msgParse.js';
@@ -44,10 +44,12 @@ check(applyLiveChips(draft, flipped) === draft, '칩을 안 건드렸는데(고�
 
 /* 칩을 안 건드리면 파서 값(제목·날짜·기간·시각) 그대로. 고쳐도 제목·기간은 파서 값. */
 const n11 = new Date('2026-11-11T09:00:00+09:00');
+/* + 화면은 applyLiveChips(뺀 칩·오전↔오후), 메시지는 applyChipAmpm(오전↔오후만, 평점관 r4 P2-2) — 각 화면과 같은 함수. */
 const flow = (text, read, off = [], flip = []) => {
     const items = read(text);
     const chip = readEventChips(text, { now: n11, off, ampmFlip: flip });
-    return items.length === 1 ? applyLiveChips(items, chip, { off, ampmFlip: flip }) : items;
+    if (items.length !== 1) return items;
+    return read === msgRead ? applyChipAmpm(items, chip, flip) : applyLiveChips(items, chip, { off, ampmFlip: flip });
 };
 const plusRead = (text) => captureDrafts(text, { now: n11 });
 const msgRead = (text) => parseSchoolMessages(text, { now: n11 }).items;
@@ -61,7 +63,8 @@ for (const [name, read] of [['+ 화면', plusRead], ['메시지', msgRead]]) {
     const f = flow(NOTICE, read, [], [t.id])[0];
     check(f.title === '학년 회의' && f.time === '03:00' && f.date === '2026-11-12', `${name}: 오전↔오후 뒤 제목·시각 ${f.title} ${f.date} ${f.time}`);
     const o = flow(NOTICE, read, [t.id])[0];
-    check(o.title === '학년 회의' && !o.time, `${name}: 시각 칩을 빼도 시각이 남거나 제목이 바뀌어요: ${o.title} ${o.time}`);
+    if (name === '메시지') check(o.title === '학년 회의' && o.time === '15:00' && o.date === '2026-11-12', `메시지: 칩 빼기가 파서 값을 바꿔요(오전↔오후만 고쳐야 해요): ${o.title} ${o.date} ${o.time}`);
+    else check(o.title === '학년 회의' && !o.time, `${name}: 시각 칩을 빼도 시각이 남거나 제목이 바뀌어요: ${o.title} ${o.time}`);
     const d = readEventChips(TRIP, { now: n11 }).chips.find((c) => c.type === 'date');
     const r = flow(TRIP, read, [d.id])[0];
     check(r.title === '수학여행' && r.date === '2026-11-18' && r.end === '2026-11-20', `${name}: 시작 날짜 칩을 빼면 기간이 망가져요: ${r.title} ${r.date}~${r.end}`);
@@ -72,6 +75,61 @@ for (const [name, read] of [['+ 화면', plusRead], ['메시지', msgRead]]) {
     const f = flow(NOTICE, msgRead, [], [t.id])[0];
     check(!String(f.warning || '').includes('오후로 봤어요'), `메시지: 오전↔오후를 고쳤는데 '오후로 봤어요'가 남아요: ${f.warning}`);
 }
+
+/* 평점관 r4 P2-1: 빠른 입력·할 일에서 날짜 칩을 빼면 「내일」로 돌아가지 않고 고른 날·오늘, 제목은 칩 미리보기 그대로. 건드리지 않으면 null(파서 값). */
+const r4now = n11;
+const r4on = readEventChips('내일 3시 학부모 상담', { now: r4now, future: true });
+const r4dateId = r4on.chips.find((c) => c.type === 'date')?.id;
+const r4off = readEventChips('내일 3시 학부모 상담', { now: r4now, future: true, off: [r4dateId] });
+const r4save = chipSave(r4off, [r4dateId], '2026-11-11');
+check(r4save && r4save.date === '2026-11-11' && r4save.dateOff && r4save.title === '내일 학부모 상담' && r4save.time === '15:00', `날짜 칩을 뺐는데 저장값이 미리보기와 달라요: ${JSON.stringify(r4save)}`);
+check(r4off.title === '내일 학부모 상담', `날짜 칩을 뺀 미리보기 제목: ${r4off.title}`);
+check(chipSave(r4on, [], '2026-11-11') === null, '칩을 건드리지 않았는데 칩 값을 저장에 써요');
+const r4flipId = r4on.chips.find((c) => c.ambiguous)?.id;
+const r4flip = chipSave(readEventChips('내일 3시 학부모 상담', { now: r4now, future: true, ampmFlip: [r4flipId] }), [], '2026-11-11', [r4flipId]);
+check(r4flip && r4flip.time === '03:00' && r4flip.title === '' && !r4flip.dateOff, `오전↔오후만 고쳤는데 제목·날짜까지 칩으로: ${JSON.stringify(r4flip)}`);
+const r4allIds = r4on.chips.map((c) => c.id);
+const r4all = chipSave(readEventChips('내일 3시 학부모 상담', { now: r4now, future: true, off: r4allIds }), r4allIds, '2026-11-13');
+check(r4all && r4all.date === '2026-11-13' && r4all.title === '내일 3시 학부모 상담' && !r4all.time && r4all.timeOff, `칩을 모두 빼면 처음 글 그대로·고른 날·시각 없음: ${JSON.stringify(r4all)}`);
+check(chipSave(readEventChips('학년 회의', { now: r4now }), [], '2026-11-11') === null, '칩 없는 글은 원래 저장 규칙에 맡겨야 해요');
+/* 저장 경로가 모두 chipSave를 써야 미리보기 = 저장값입니다(빠른 입력 일정·할 일은 check:quickbar가 화면으로 봅니다). */
+const quick = readFileSync('src/ui/QuickSheet.jsx', 'utf8');
+const tasksUi = readFileSync('src/ui/Tasks.jsx', 'utf8');
+const flowUi = readFileSync('src/ui/FlowSheet.jsx', 'utf8');
+const barUi = readFileSync('src/ui/QuickBar.jsx', 'utf8');
+check(barUi.includes('const saved = ahead ? chipSave(chip, chipOff, dateYmd, ampmFlip) : null;') && barUi.includes('offDate?.dateOff ? offDate.date'), 'QuickBar가 날짜 칩을 빼도 글의 날짜로 저장해요');
+check(quick.includes('chipSave(chipRead, chipOff, seoulYmd(new Date()), ampmFlip)') && quick.includes("...(kind === '할 일' && chipped ? { ...(chipped.title ? { title: chipped.title } : {}), due:"), 'QuickSheet가 날짜 칩을 빼도 글의 날짜·제목으로 저장해요(할 일 포함)');
+check(tasksUi.includes('const saved = chipSave(chip, chipOff, clock.ymd, ampmFlip);'), '할 일 화면이 날짜 칩을 빼도 글의 날짜로 저장해요');
+check(flowUi.includes('chipSave(chipRead, chipOff, date || clock.ymd, ampmFlip)'), 'FlowSheet가 날짜 칩을 빼도 글의 날짜로 저장해요');
+
+/* 평점관 r4 P2-2: 메시지에서는 칩으로 오전·오후만 바꾸고 제목·날짜는 파서 값 그대로, 기간(end) 항목에는 칩을 대지 않습니다. */
+for (const text of ['학부모 상담 주간 11/17~11/21, 3시 시작', '11/20 3시 학부모 상담', '내일 2시 학년 협의회', '[공지] 11/20 3시 학부모 상담 있습니다', '안녕하세요. 11/20(금) 3시에 학년 협의회가 있습니다.']) {
+    const items = parseSchoolMessages(text, { now: r4now }).items;
+    const base = readEventChips(text, { now: r4now });
+    const timeChip = base.chips.find((c) => c.type === 'time' && c.ambiguous);
+    const flips = timeChip ? [timeChip.id] : [];
+    const flippedChip = readEventChips(text, { now: r4now, ampmFlip: flips });
+    const out = applyChipAmpm(items, flippedChip, flips);
+    check(out.length === items.length, `메시지 건수가 바뀌었어요 「${text}」`);
+    out.forEach((item, i) => {
+        const was = items[i];
+        check(item.title === was.title && item.date === was.date && item.end === was.end, `칩 오전↔오후가 메시지 제목·날짜를 바꿨어요 「${text}」: ${JSON.stringify([was.title, was.date, was.end])} → ${JSON.stringify([item.title, item.date, item.end])}`);
+        if (was.end) check(item.time === was.time, `기간 항목에 칩 시각을 댔어요 「${text}」: ${was.time} → ${item.time}`);
+        else if (was.time && timeChip) check(item.time !== was.time && item.time === flippedChip.time, `한 날 항목의 오전↔오후가 안 바뀌어요 「${text}」: ${was.time} → ${item.time}`);
+    });
+    check(JSON.stringify(applyChipAmpm(items, base, [])) === JSON.stringify(items), `고치지 않은 칩이 메시지 값을 바꿨어요 「${text}」`);
+}
+/* 기간 항목: + 화면에서 날짜·시각 칩을 빼도 기간 항목(제목·날짜·시각)은 그대로입니다. */
+{
+    const RANGE = '학부모 상담 주간 11/17~11/21, 3시 시작';
+    const items = captureDrafts(RANGE, { now: r4now });
+    const chips = readEventChips(RANGE, { now: r4now }).chips;
+    const offIds = chips.filter((c) => c.type !== 'date' || c === chips.find((x) => x.type === 'date')).map((c) => c.id);
+    const out = applyLiveChips(items, readEventChips(RANGE, { now: r4now, off: offIds }), { off: offIds });
+    check(JSON.stringify(out) === JSON.stringify(items) || items.every((it) => !it.end), `+ 화면 기간 항목에 칩을 댔어요: ${JSON.stringify(items.map((x) => [x.title, x.date, x.end, x.time]))} → ${JSON.stringify(out.map((x) => [x.title, x.date, x.end, x.time]))}`);
+}
+const msgUi = readFileSync('src/ui/MsgSheet.jsx', 'utf8');
+check(msgUi.includes('applyChipAmpm(parsed.items, chip, ampmFlip)') && msgUi.includes('ampmOnly') && !msgUi.includes('applyLiveChips'), 'MsgSheet 칩이 오전↔오후만 고치지 않아요');
 
 /* 칩 = 저장값: 칩은 저장(readJjaemPaste, #79 파서)과 같은 날짜·시각을 보여야 합니다. */
 const same = [

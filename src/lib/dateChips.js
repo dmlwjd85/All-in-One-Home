@@ -135,6 +135,51 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
 }
 
 /**
+ * 빠른 입력·할 일 저장(평점관 r4 P2-1): 칩을 직접 바꿨을 때만 칩 값을 저장에 씁니다. 건드리지 않았으면 null → 각 화면의 파서 값 그대로.
+ * - 칩을 뺐으면: 제목은 칩 미리보기 그대로(뺀 낱말이 제목에 남음), 날짜 칩을 뺐으면 글의 「내일」로 돌아가지 않고 fallbackDate(고른 날·오늘).
+ * - 오전↔오후만 고쳤으면: 시각만 칩 값, 제목(title '')은 파서 값을 그대로 둡니다.
+ */
+export function chipSave(chipRead, off = [], fallbackDate = '', flips = []) {
+    if (!chipRead) return null;
+    const blocked = new Set(off || []);
+    const offAny = chipRead.chips.some((chip) => blocked.has(chip.id));
+    const flipAny = chipRead.chips.some((chip) => chip.ambiguous && (flips || []).includes(chip.id));
+    if (!offAny && !flipAny) return null;
+    const dateOff = chipRead.chips.some((chip) => chip.type === 'date' && blocked.has(chip.id)) && !chipRead.date;
+    return {
+        title: offAny ? chipRead.title : '',
+        offAny,
+        raw: chipRead.raw,
+        date: chipRead.date || (dateOff ? fallbackDate : ''),
+        dateOff,
+        time: chipRead.time,
+        endTime: chipRead.endTime || '',
+        timeOff: Boolean(chipRead.timeOff),
+        period: chipRead.period || 0,
+    };
+}
+
+/**
+ * 메시지 붙여넣기(평점관 r4 P2-2): 칩으로는 오전·오후만 고칩니다. 제목·날짜는 메시지 파서 값을 그대로 두고,
+ * 기간(end)이 있는 항목에는 칩을 대지 않습니다. 뒤집은 시각 칩의 원래 시각과 같은 시각만 바꿉니다.
+ */
+export function applyChipAmpm(items, chipRead, ampmFlip = []) {
+    if (!Array.isArray(items) || !items.length || !chipRead || !ampmFlip?.length) return items || [];
+    const flips = new Map();
+    for (const chip of chipRead.chips) {
+        if (chip.type === 'time' && chip.ambiguous && ampmFlip.includes(chip.id)) flips.set(flipHm(chip.time), chip.time);
+    }
+    if (!flips.size) return items;
+    return items.map((item) => {
+        if (!item || item.end || !item.time || !flips.has(item.time)) return item;
+        const next = { ...item, time: flips.get(item.time) };
+        /* 오전·오후를 직접 정했으니 '오후로 봤어요' 안내는 지웁니다. */
+        if (typeof item.warning === 'string') next.warning = item.warning.replace('오전·오후가 없어 오후로 봤어요.', '').replace(/\s{2,}/g, ' ').trim();
+        return next;
+    });
+}
+
+/**
  * 미리보기·저장 목록(파서가 읽은 값)에, 사용자가 칩에서 직접 고친 것만 맞춰 넣습니다.
  * 칩을 건드리지 않았으면(off·ampmFlip이 비었으면) 파서 값(제목·날짜·기간·시각)을 그대로 둡니다.
  * 고쳤어도 제목은 파서 제목을 그대로 두고, 기간(시작~끝)으로 읽힌 날짜는 덮지 않습니다.
@@ -153,9 +198,10 @@ export function applyLiveChips(items, chipRead, { off = [], ampmFlip = [] } = {}
     const flipped = chips.some((chip) => chip.type === 'time' && chip.ambiguous && flipSet.has(chip.id) && !offSet.has(chip.id));
     if (!offDate && !offTime && !flipped) return items;
     return items.map((item) => {
+        /* 기간(end)이 있는 항목에는 칩을 대지 않습니다(평점관 r4 P2-2: 날짜 칩 하나를 빼도 기간이 줄지 않게). */
+        if (!item || item.end) return item;
         const next = { ...item };
-        const ranged = Boolean(item.end && item.end !== item.date);
-        if (offDate && !ranged && chipRead.date) next.date = chipRead.date;
+        if (offDate && chipRead.date) next.date = chipRead.date;
         if (offTime || flipped) {
             next.time = chipRead.time || '';
             next.period = chipRead.period || 0;

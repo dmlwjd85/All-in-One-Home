@@ -14,7 +14,7 @@ import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
 import { isMinutes } from '../lib/minutes.js';
-import { readEventChips } from '../lib/dateChips.js';
+import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 
@@ -53,8 +53,11 @@ export function Tasks() {
                 const periods = allStarts(data.profile?.periodStarts);
                 const chip = readEventChips(title.trim(), { now, periods, off: chipOff, ampmFlip, future: true });
                 const read = readTodoLine(title.trim(), now, clock.ymd);
-                const due = chip.date || read.due;
-                const row = { id: `todo-${Date.now()}`, title: chip.changed && chip.title ? chip.title : read.title, done: false, due, pri, source: 'app' };
+                /* 칩 = 저장값(평점관 r4 P2-1): 날짜 칩을 뺐으면 글의 「내일」이 아니라 오늘로 두고, 제목은 칩 미리보기 그대로입니다. */
+                const saved = chipSave(chip, chipOff, clock.ymd, ampmFlip);
+                /* 할 일 칸은 칩이 곧 파서입니다(readTodoLine은 날짜·시각 낱말을 빼지 않음). 칩을 안 건드렸으면 칩이 읽은 값 그대로. */
+                const due = saved?.date || chip.date || read.due;
+                const row = { id: `todo-${Date.now()}`, title: saved?.title || (chip.changed && chip.title ? chip.title : read.title), done: false, due, pri, source: 'app' };
                 if (chip.time) row.time = chip.time;
                 const result = await saveTextItem('todos', row);
                 if (result?.storageFailed) return;

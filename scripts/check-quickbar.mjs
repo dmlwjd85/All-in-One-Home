@@ -525,6 +525,76 @@ if (!failures.length) {
         check(!fromQuery.focused && fromQuery.quick !== '1', `바로가기 주소가 입력칸을 열지 않거나 키보드를 올립니다: ${JSON.stringify(fromQuery)}`);
         await invitePage.close();
 
+        /* 평점관 r4 P2-1: 날짜 칩을 빼면 미리보기(「내일 학부모 상담」)와 저장값이 같아야 합니다.
+           「내일」로 돌아가 다음 날에 넣지 않고 고른 날(오늘)에, 제목은 칩 미리보기 그대로 넣습니다. 일정·할 일 둘 다 봅니다. */
+        const chipPage = await browser.newPage();
+        await chipPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+        await chipPage.evaluateOnNewDocument(() => { localStorage.setItem('ssug-gyomu-key-sound-notice', '1'); });
+        await chipPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+        await chipPage.waitForSelector('.tabbar .fab');
+        const chipToday = quickDate('today', '', new Date());
+        const chipTomorrow = new Date(`${chipToday}T12:00:00+09:00`);
+        chipTomorrow.setUTCDate(chipTomorrow.getUTCDate() + 1);
+        const chipNext = chipTomorrow.toISOString().slice(0, 10);
+        for (const [used, typed, kept] of [['일정', '내일 3시 학부모 상담', '내일 학부모 상담'], ['할 일', '내일 3시 동의서 걷기', '내일 동의서 걷기']]) {
+            await chipPage.evaluate(() => { location.hash = '#/today'; });
+            await chipPage.evaluate(() => document.querySelector('.tabbar .fab')?.click());
+            await chipPage.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open'));
+            await chipPage.evaluate((text) => {
+                const field = document.querySelector('.quick-field');
+                field.value = text;
+                field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            }, typed);
+            await chipPage.waitForSelector('.quick-bar [data-live-chips] [data-chip-type="date"]');
+            await chipPage.evaluate(() => document.querySelector('.quick-bar [data-live-chips] [data-chip-type="date"]').click());
+            await chipPage.waitForFunction((want) => (document.querySelector('.quick-bar .date-chip-note')?.innerText || '').includes(want), {}, kept);
+            const note = await chipPage.evaluate(() => document.querySelector('.quick-bar .date-chip-note')?.innerText || '');
+            await chipPage.evaluate((kind) => {
+                document.querySelector(`[data-kind="${kind}"]`).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+            }, used);
+            await chipPage.waitForFunction(() => (document.querySelector('.toast')?.innerText || '').includes('되돌리기'));
+            await chipPage.evaluate((day) => { location.hash = `#/day/${day}`; }, chipToday);
+            await chipPage.waitForSelector('[data-screen="day"]');
+            await chipPage.waitForFunction((want) => document.body.innerText.includes(want), { timeout: 4000 }, kept).catch(() => null);
+            const onToday = await chipPage.evaluate((want) => document.querySelector('[data-screen="day"]')?.innerText.includes(want) || false, kept);
+            await chipPage.evaluate((day) => { location.hash = `#/day/${day}`; }, chipNext);
+            await chipPage.waitForFunction((day) => location.hash.endsWith(day) && document.querySelector('[data-screen="day"]'), {}, chipNext);
+            await new Promise((resolveWait) => setTimeout(resolveWait, 200));
+            const onNext = await chipPage.evaluate((want) => (document.querySelector('[data-screen="day"]')?.innerText || '').includes(want.replace('내일 ', '')), kept);
+            check(note.includes(kept) && onToday && !onNext, `날짜 칩을 뺀 ${used}이 미리보기와 다르게 저장돼요: 미리보기「${note}」 오늘 ${onToday} / 다음 날 ${onNext}`);
+        }
+        await chipPage.close();
+
+        /* QA r4 꼭 고칠 것: + 화면 한 줄은 칩을 건드리지 않으면 파서 제목(「학년 회의」) 그대로 미리보기·저장합니다. */
+        const plusPage = await browser.newPage();
+        await plusPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+        await plusPage.evaluateOnNewDocument(() => { localStorage.setItem('ssug-gyomu-key-sound-notice', '1'); });
+        await plusPage.goto(`${origin}?demo=1&mode=light`, { waitUntil: 'networkidle0' });
+        await plusPage.waitForSelector('.tabbar .fab');
+        await plusPage.evaluate(() => document.querySelector('.tabbar .fab')?.click());
+        await plusPage.waitForSelector('.quick-bar.is-open .quick-paste');
+        await plusPage.evaluate(() => document.querySelector('.quick-bar.is-open .quick-paste').click());
+        await plusPage.waitForSelector('[data-screen="plus"] textarea');
+        for (const [typed, want, bad] of [['[알림] 내일 3시 학년 회의가 있습니다. 참석 바랍니다.', '학년 회의', '[알림]'], ['11월 18일~11월 20일 수학여행', '수학여행', '~ 수학여행']]) {
+            await plusPage.evaluate(() => { const el = document.querySelector('[data-screen="plus"] textarea'); el.focus(); el.select(); });
+            await plusPage.keyboard.press('Backspace');
+            await plusPage.type('[data-screen="plus"] textarea', typed);
+            await plusPage.waitForSelector('[data-screen="plus"] [data-live-chips] .date-chip-note');
+            const plusNote = await plusPage.evaluate(() => document.querySelector('[data-screen="plus"] .date-chip-note strong')?.innerText || '');
+            await plusPage.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => el.innerText.trim() === '다음')?.click());
+            await plusPage.waitForFunction(() => !document.querySelector('[data-screen="plus"] textarea') || document.querySelector('[data-screen="plus"] .msg-card, [data-screen="plus"] input.field'), { timeout: 4000 }).catch(() => null);
+            await delay(300);
+            const shown = await plusPage.evaluate(() => {
+                const root = document.querySelector('[data-screen="plus"]');
+                return `${root?.innerText || ''}\n${[...(root?.querySelectorAll('input, textarea') || [])].map((el) => el.value).join('\n')}`;
+            });
+            check(plusNote === want && shown.includes(want) && !shown.includes(bad), `+ 화면 칩을 안 건드렸는데 파서 제목이 덮였어요 「${typed}」: 미리보기「${plusNote}」 다음 화면에 「${bad}」 ${shown.includes(bad)}`);
+            /* 다시 쓰기 화면으로 */
+            await plusPage.evaluate(() => [...document.querySelectorAll('[data-screen="plus"] button')].find((el) => /다시 적기/.test(el.innerText))?.click());
+            await plusPage.waitForSelector('[data-screen="plus"] textarea', { timeout: 3000 }).catch(() => null);
+        }
+        await plusPage.close();
+
         const lockPage = await browser.newPage();
         await lockPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
         await lockPage.evaluateOnNewDocument(() => {

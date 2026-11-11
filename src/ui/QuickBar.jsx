@@ -8,7 +8,7 @@ import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/m
 import { alarmTimeLabel, readJjaemPaste } from '../lib/jjaemPaste.js';
 import { phraseAskText, resolveTimePhrase } from '../lib/timePhrase.js';
 import { timeContext } from './timeContext.js';
-import { readEventChips } from '../lib/dateChips.js';
+import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 import {
@@ -119,7 +119,10 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         if (used !== '할 일' && used !== '일정') return null;
         const now = new Date();
         const pre = readJjaemPaste(text, { now, stripTime: true, future: true });
-        const baseDate = used === '일정' ? (pre.date || quickSaveDate(used, text, dateYmd, now)) : (pre.date || dateYmd);
+        /* 날짜 칩을 뺐으면 글의 날짜 낱말이 아니라 고른 날을 기준으로 합니다(평점관 r4 P2-1). */
+        const offDate = chipSave(readEventChips(text, { now, periods: allStarts(data?.profile?.periodStarts), off: chipOff, ampmFlip, future: true }), chipOff, dateYmd, ampmFlip);
+        const baseDate = offDate?.dateOff ? offDate.date
+            : (used === '일정' ? (pre.date || quickSaveDate(used, text, dateYmd, now)) : (pre.date || dateYmd));
         /* 「오전 12시」는 낮·밤이 갈려 노란 카드에서 고르게 합니다. */
         if (pre.ask === 'am12') {
             const min = pre.time.slice(3);
@@ -162,9 +165,11 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip, future: ahead });
         /* saveQuick과 같은 규칙으로 날짜를 읽습니다. 「3일 동안」처럼 날짜가 아닌 말은 고른 날(dateYmd)을 그대로 씁니다. */
         const paste = readJjaemPaste(text, { now, stripTime: ahead, future: ahead, ampmFlip });
-        const date = phrase?.date || (used === '일정'
-            ? (chip.date || paste.date || quickSaveDate(used, text, dateYmd, now))
-            : (chip.date || paste.date || dateYmd));
+        /* 칩 = 저장값: 날짜 칩을 뺐으면 「내일」로 돌아가지 않고 고른 날(dateYmd)에 넣고, 제목은 칩 미리보기 그대로입니다. */
+        const saved = ahead ? chipSave(chip, chipOff, dateYmd, ampmFlip) : null;
+        const date = phrase?.date || saved?.date || (used === '일정'
+            ? (paste.date || quickSaveDate(used, text, dateYmd, now))
+            : (paste.date || dateYmd));
         const no = studentNoFor(text, students, picked.current);
         const pickedBefore = picked.current;
         if (inputRef.current) inputRef.current.value = '';
@@ -180,6 +185,10 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const body = { kind: used, text, date };
         if (no) body.no = no;
         if (used === '할 일') body.due = date;
+        if (saved?.title) {
+            body.title = saved.title;
+            if (used === '일정' && saved.raw !== saved.title) body.raw = saved.raw;
+        }
         /* 시간구로 정한 시각(빈 값이면 '시각 없이')을 넘깁니다. 노란 카드에서 고른 값도 여기로 옵니다. */
         if (phrase && typeof phrase.time === 'string') body.time = phrase.time;
         /* 그 밖에는 칩에 보이는 시각이 곧 저장값입니다(시안 A). 시각 칩을 눌러 뺐으면 시각 없이 넣습니다. */
@@ -336,6 +345,10 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const chipRead = live.trim()
         ? readEventChips(live, { now: new Date(), periods, off: chipOff, ampmFlip, future: liveKind === '할 일' || liveKind === '일정' })
         : null;
+    /* 칩을 건드리지 않은 할 일·일정은 저장(saveQuick)이 읽는 제목을 그대로 보여 줍니다. */
+    const parsedTitle = chipRead && (liveKind === '할 일' || liveKind === '일정')
+        ? (readJjaemPaste(live.trim(), { now: new Date(), stripTime: true, future: true }).body || live.trim()).replace(/\s+/g, ' ').trim()
+        : null;
 
     return (
         <>
@@ -432,6 +445,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             )}
             {chipRead ? (
                 <LiveEventChips
+                    title={parsedTitle}
                     chipRead={chipRead}
                     chipOff={chipOff}
                     ampmFlip={ampmFlip}
