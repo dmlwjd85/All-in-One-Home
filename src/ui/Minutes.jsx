@@ -99,7 +99,11 @@ function MinutesView({ row }) {
     }
     return (
         <article className="minutes minutes-view" data-screen="minutes-view">
-            <Btn className="chip minutes-back" onClick={() => go('#/minutes')}>‹ 회의록 목록</Btn>
+            {/* 긴 회의록도 내리지 않고 바로 고칠 수 있게 고치기는 맨 위 줄에 둡니다. */}
+            <div className="minutes-view-top">
+                <Btn className="chip minutes-back" onClick={() => go('#/minutes')}>‹ 회의록 목록</Btn>
+                <Btn className="primary-btn minutes-edit-top" data-role="minutes-edit" onClick={() => go(`#/minutes/${row.id}/edit`)}>고치기</Btn>
+            </div>
             <h2 className="title-font minutes-view-title">{row.localOnly ? '🔒 ' : ''}{minutesTitle(row)}</h2>
             <p className="minutes-view-meta">{dateLabel(row.date)}</p>
             {row.attendees ? <p className="minutes-view-meta">참석: {row.attendees}</p> : null}
@@ -116,7 +120,6 @@ function MinutesView({ row }) {
                 </div>
             ) : (
                 <div className="minutes-actions">
-                    <Btn className="primary-btn" onClick={() => go(`#/minutes/${row.id}/edit`)}>고치기</Btn>
                     <Btn className="chip" onClick={() => setAsking(true)}>지우기</Btn>
                 </div>
             )}

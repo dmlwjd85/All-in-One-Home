@@ -1438,6 +1438,10 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .minutes-actions > .primary-btn { padding: 0 20px; }
 .minutes-new { min-width: 160px; }
 .minutes-back { align-self: flex-start; }
+/* 회의록 보기 맨 위 줄: 목록으로 · 고치기. 버튼은 글자 길이만큼만(줄 폭으로 늘지 않음). */
+.minutes-view-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.minutes-view-top > .tap { flex: none; width: auto; }
+.minutes-view-top > .minutes-edit-top { min-height: 44px; padding: 0 20px; }
 .minutes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .minutes-row { display: flex; flex-direction: column; gap: 6px; }
 .minutes-item {
