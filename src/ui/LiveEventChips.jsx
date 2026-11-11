@@ -3,13 +3,32 @@ import { Btn } from './bits.jsx';
 /**
  * 입력창 바로 아래 실시간 날짜·시각 칩.
  * 칩을 누르면 빼고 글에 두고, 애매한 오전·오후는 옆 단추로 고칩니다.
+ * saved: 실제로 저장될 목록(+ 화면·메시지 붙여넣기). 주면 칩 대신 그 값을 '저장될 제목·저장값'으로 보입니다.
+ *   여러 건이면 칩 고침이 반영되지 않으므로 칩 줄을 숨기고 건마다 미리보기에서 고치라고 알립니다.
+ * dateOnly: 날짜만 저장하는 칸(메모). 시각 칩과 시각 저장값을 보이지 않습니다.
  */
-export function LiveEventChips({ chipRead, chipOff, onToggleOff, ampmFlip, onToggleAmpm }) {
+export function LiveEventChips({ chipRead, chipOff, onToggleOff, ampmFlip, onToggleAmpm, saved, dateOnly = false }) {
     if (!chipRead || !chipRead.chips.length) return null;
+    if (Array.isArray(saved) && saved.length > 1) {
+        return (
+            <div className="date-chips" data-date-chips="1" data-live-chips="1" data-live-multi={saved.length}>
+                <p className="muted date-chip-note">{saved.length}건으로 읽었어요. 날짜·시각은 다음 화면에서 건마다 고쳐요.</p>
+            </div>
+        );
+    }
+    const one = Array.isArray(saved) ? saved[0] : null;
+    const shownChips = dateOnly ? chipRead.chips.filter((chip) => chip.type === 'date') : chipRead.chips;
+    if (!shownChips.length) return null;
+    const title = one ? one.title : chipRead.title;
+    const values = one
+        ? [one.end && one.end !== one.date ? `${one.date}~${one.end}` : one.date, one.time]
+        : [chipRead.date, dateOnly ? '' : chipRead.time];
+    const savedValue = values.filter(Boolean).join(' ');
+    if (Array.isArray(saved) && !one) return null;
     return (
         <div className="date-chips" data-date-chips="1" data-live-chips="1">
             <div className="date-chip-row">
-                {chipRead.chips.map((chip) => {
+                {shownChips.map((chip) => {
                     const isOff = chipOff.includes(chip.id);
                     return (
                         <span key={chip.id} className="date-chip-wrap">
@@ -38,9 +57,9 @@ export function LiveEventChips({ chipRead, chipOff, onToggleOff, ampmFlip, onTog
                 })}
             </div>
             <p className="muted date-chip-note">
-                저장될 제목: <strong>{chipRead.title}</strong>
-                {chipRead.date || chipRead.time ? <> · 저장값 { [chipRead.date, chipRead.time].filter(Boolean).join(' ') }</> : null}
-                {' '}· 칩을 누르면 빼고 글에 그대로 둬요.
+                {dateOnly ? '저장될 글' : '저장될 제목'}: <strong data-live-title="1">{title}</strong>
+                {savedValue ? <> · 저장값 <span data-live-value="1">{savedValue}</span></> : null}
+                {' '}· {one ? '칩을 누르면 빼요.' : '칩을 누르면 빼고 글에 그대로 둬요.'}
             </p>
             {chipRead.warning && <p className="msg-card low-card date-chip-warn" role="status">{chipRead.warning}</p>}
         </div>

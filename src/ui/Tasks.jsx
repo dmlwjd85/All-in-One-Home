@@ -212,6 +212,9 @@ function NoteBox() {
             {chipRead ? (
                 <LiveEventChips
                     chipRead={chipRead}
+                    /* 메모는 글 전체와 날짜만 저장합니다(시각은 저장하지 않음). */
+                    saved={[{ title: text.trim(), date: chipRead.date || '' }]}
+                    dateOnly
                     chipOff={chipOff}
                     ampmFlip={ampmFlip}
                     onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}

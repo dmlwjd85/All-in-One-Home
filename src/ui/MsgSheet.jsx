@@ -147,7 +147,21 @@ export function MsgSheet({ onClose }) {
     const [hint, setHint] = useState('메시지를 붙여 넣으세요.');
     const [items, setItems] = useState([]);
     const speech = useSpeechDictation(raw, setRaw);
-    const chipRead = phase === 'paste' ? readEventChips(raw, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip }) : null;
+    /* 칩과 저장 목록을 같은 함수로 읽어, 칩 아래 '저장될 제목·저장값'이 미리보기와 같게 합니다. */
+    function readItems(text, now) {
+        const periods = allStarts(data.profile?.periodStarts);
+        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
+        const parsed = parseSchoolMessages(text, { now, periods });
+        /* 메시지는 메시지 파서(기간·앞당김·변경)가 읽은 값을 그대로 씁니다. 한 건으로 읽힌 글에만, 사용자가 칩에서 직접 고친 것(빼기·오전↔오후)을 맞춥니다.
+           여러 건이면 건마다 읽은 값을 그대로 두고 미리보기 카드에서 고칩니다. 제목·기간은 고쳐도 파서 값을 그대로 둡니다. */
+        const chipped = parsed.items.length === 1 ? applyLiveChips(parsed.items, chip, { off: chipOff, ampmFlip }) : parsed.items;
+        /* '퇴근 전까지'·'수업 끝나고' 같은 말은 내 퇴근·조퇴·교시 시각으로 시각을 채웁니다. 설정이 비었으면 노란 카드로 둡니다. */
+        let timed = chipped;
+        try { timed = applyTimePhrases(chipped, timeContext(data)); } catch { timed = chipped; }
+        return { chip, items: timed };
+    }
+    const live = phase === 'paste' && raw.trim() ? readItems(raw, new Date()) : null;
+    const chipRead = live ? live.chip : null;
 
     useEffect(() => {
         let alive = true;
@@ -165,12 +179,9 @@ export function MsgSheet({ onClose }) {
 
     function apply(text) {
         speech.stop();
-        const periods = allStarts(data.profile.periodStarts);
-        const now = new Date();
-        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
-        const parsed = parseSchoolMessages(text, { now, periods });
+        const { items: timed } = readItems(text, new Date());
         setRaw(text);
-        if (!parsed.items.length) {
+        if (!timed.length) {
             setHint('일정이나 할 일로 읽을 말이 없어요. 날짜나 부탁을 조금 적어 주세요.');
             setItems([]);
             setPhase('paste');
@@ -179,13 +190,6 @@ export function MsgSheet({ onClose }) {
         const ids = new Set([
             ...data.todos, ...data.local.todos, ...data.events, ...data.local.events,
         ].map((row) => row.id));
-        /* 메시지는 메시지 파서(기간·앞당김·변경)가 읽은 값을 그대로 씁니다. 칩을 눌러 빼거나 오전↔오후를 고친 때만,
-           한 건으로 읽힌 글에 그 고침을 맞춥니다(여러 건이면 건마다 읽은 값을 그대로 둡니다). 미리보기 카드에서 다시 고칠 수 있어요. */
-        const touched = chipOff.length > 0 || ampmFlip.length > 0;
-        const chipped = parsed.items.length === 1 && touched ? applyLiveChips(parsed.items, chip) : parsed.items;
-        /* '퇴근 전까지'·'수업 끝나고' 같은 말은 내 퇴근·조퇴·교시 시각으로 시각을 채웁니다. 설정이 비었으면 노란 카드로 둡니다. */
-        let timed = chipped;
-        try { timed = applyTimePhrases(chipped, timeContext(data)); } catch { timed = chipped; }
         setItems(timed.map((item) => (ids.has(item.id) ? { ...item, duplicate: true, include: false } : item)));
         setPhase('preview');
     }
@@ -236,6 +240,7 @@ export function MsgSheet({ onClose }) {
                         </div>
                         <LiveEventChips
                             chipRead={chipRead}
+                            saved={live?.items}
                             chipOff={chipOff}
                             ampmFlip={ampmFlip}
                             onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}

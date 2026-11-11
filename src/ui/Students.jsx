@@ -347,7 +347,7 @@ export function Neis() {
                                     onClick={() => setPicked(sid)}
                                 >
                                     {label}
-                                    <span className="muted" style={{ display: 'block', fontWeight: 500 }}>{rows.length}건</span>
+                                    <span className="muted neis-count">{rows.length}건</span>
                                 </Btn>
                             );
                         })}

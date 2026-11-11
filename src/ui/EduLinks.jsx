@@ -14,12 +14,11 @@ export function useEduLinks() {
     return items;
 }
 
-/* ext: 새 탭 표시. 왼쪽 메뉴(176px)는 「나이스 대국민서비스」가 한 줄에 들어가게 짧은 ↗ 표시를 씁니다(읽어 주기는 aria-label이 「새 탭에서 열기」로 알려요). */
-function LinkA({ row, className, ext = '새 탭' }) {
+function LinkA({ row, className }) {
     return (
         <a className={className} href={row.url} target="_blank" rel="noopener noreferrer" data-edu-link={row.id} aria-label={`${row.title}, 새 탭에서 열기`}>
             <span className="edu-name">{row.title}</span>
-            <span className="edu-ext muted" aria-hidden="true">{ext}</span>
+            <span className="edu-ext muted" aria-hidden="true">새 탭</span>
         </a>
     );
 }
@@ -32,7 +31,7 @@ export function SideLinks() {
         <section className="side-links" aria-labelledby="side-links-title">
             <h2 id="side-links-title" className="side-links-title">교육 사이트</h2>
             <div className="side-links-list">
-                {items.map((row) => <LinkA key={row.id} row={row} className="tap chip block side-link" ext="↗" />)}
+                {items.map((row) => <LinkA key={row.id} row={row} className="tap chip block side-link" />)}
                 <Btn block className="chip side-link side-link-edit" data-edu-edit="side" onClick={() => setEdit(true)}>사이트 고치기</Btn>
             </div>
             <p className="muted side-links-note">비밀번호는 저장하지 않아요.</p>

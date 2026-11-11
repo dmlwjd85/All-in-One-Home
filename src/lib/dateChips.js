@@ -134,15 +134,35 @@ export function readEventChips(text, { now = new Date(), periods = DEFAULT_PERIO
     };
 }
 
-/** 미리보기·저장 목록에 실시간 칩(날짜·시각·제목)을 맞춰 넣습니다. 칩이 없으면 그대로 둡니다. */
-export function applyLiveChips(items, chipRead) {
-    if (!chipRead?.changed || !Array.isArray(items) || !items.length) return items || [];
+/**
+ * 미리보기·저장 목록(파서가 읽은 값)에, 사용자가 칩에서 직접 고친 것만 맞춰 넣습니다.
+ * 칩을 건드리지 않았으면(off·ampmFlip이 비었으면) 파서 값(제목·날짜·기간·시각)을 그대로 둡니다.
+ * 고쳤어도 제목은 파서 제목을 그대로 두고, 기간(시작~끝)으로 읽힌 날짜는 덮지 않습니다.
+ * - 시각 칩을 뺐으면: 남은 시각 칩 값, 없으면 시각 없이
+ * - 오전↔오후를 눌렀으면: 그 칩 시각
+ * - 날짜 칩을 뺐으면: 기간이 아닐 때만 남은 날짜 칩 값
+ */
+export function applyLiveChips(items, chipRead, { off = [], ampmFlip = [] } = {}) {
+    if (!Array.isArray(items) || !items.length) return items || [];
+    if (!chipRead || (!off.length && !ampmFlip.length)) return items;
+    const offSet = new Set(off);
+    const flipSet = new Set(ampmFlip);
+    const chips = chipRead.chips || [];
+    const offDate = chips.some((chip) => chip.type === 'date' && offSet.has(chip.id));
+    const offTime = chips.some((chip) => chip.type !== 'date' && offSet.has(chip.id));
+    const flipped = chips.some((chip) => chip.type === 'time' && chip.ambiguous && flipSet.has(chip.id) && !offSet.has(chip.id));
+    if (!offDate && !offTime && !flipped) return items;
     return items.map((item) => {
         const next = { ...item };
-        if (chipRead.date) next.date = chipRead.date;
-        if (chipRead.time) next.time = chipRead.time;
-        if (chipRead.period) next.period = chipRead.period;
-        if (chipRead.title && (item.kind === '일정' || item.kind === '할 일')) next.title = chipRead.title;
+        const ranged = Boolean(item.end && item.end !== item.date);
+        if (offDate && !ranged && chipRead.date) next.date = chipRead.date;
+        if (offTime || flipped) {
+            next.time = chipRead.time || '';
+            next.period = chipRead.period || 0;
+            if ('endTime' in item) next.endTime = chipRead.endTime || '';
+            /* 오전·오후를 직접 정했으니 '오후로 봤어요' 안내는 지웁니다. */
+            if (flipped && typeof item.warning === 'string') next.warning = item.warning.replace('오전·오후가 없어 오후로 봤어요.', '').replace(/\s{2,}/g, ' ').trim();
+        }
         return next;
     });
 }
