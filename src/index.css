@@ -1909,3 +1909,35 @@ button.hero-pill.home-todo-link {
     font-size: 12px;
     opacity: 0.85;
 }
+
+/* 회의록: 작성 칸을 위로, 넓은 화면은 2단(쓰기·보기 | 목록) */
+.minutes-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.minutes-head .minutes-view-title { margin: 0; }
+.minutes-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.minutes-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.minutes-cell .minutes-label { margin-top: 0; }
+.minutes-date-btn { min-height: 44px; justify-content: flex-start; gap: 6px; max-width: 100%; }
+.minutes-date-btn .minutes-date-picked { margin-left: 0; overflow-wrap: anywhere; }
+.minutes-extra { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.minutes-cal { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.minutes-ask-list { display: flex; flex-direction: column; gap: 8px; }
+.minutes-from { margin-top: 4px; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.minutes-item.on { box-shadow: var(--neo-inset); }
+.minutes-top { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+@media (max-width: 420px) { .minutes-cal { padding-left: 8px; padding-right: 8px; } }
+@media (min-width: 900px) {
+    .minutes-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+        gap: 20px;
+        align-items: start;
+        max-width: 1600px;
+    }
+    .minutes-split .minutes { max-width: none; }
+    .minutes-side { position: sticky; top: 0; max-height: calc(100dvh - 152px); overflow: auto; padding: 4px; }
+    .minutes-editor.is-wide .minutes-text { min-height: 0; height: max(240px, calc(100dvh - 540px)); resize: vertical; }
+    .minutes-editor.is-wide .minutes-extra { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; }
+}
+@media (min-width: 1280px) {
+    .minutes-editor.is-wide .minutes-text { height: max(300px, calc(100dvh - 500px)); }
+}
