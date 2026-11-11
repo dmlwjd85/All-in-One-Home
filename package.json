@@ -62,7 +62,8 @@
     "check:lwwmix": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-mix.mjs\"",
     "check:nice-datechip": "node scripts/check-nice-datechip.mjs && node scripts/mutate-r4-chip.mjs",
     "check:nice-datechip-browser": "node scripts/check-nice-datechip-browser.mjs",
-    "check:minutes-edit-top": "node scripts/check-minutes-edit-top.mjs"
+    "check:minutes-edit-top": "node scripts/check-minutes-edit-top.mjs",
+    "check:neis-xlsx": "node scripts/check-neis-xlsx.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",
