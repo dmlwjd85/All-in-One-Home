@@ -61,6 +61,7 @@ jobs:
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
+          npm run check:nice-datechip
           npm run check:jjaem-paste
           npm run check:todoachieve
           npm run check:input-e
@@ -90,6 +91,7 @@ jobs:
           CHROME_PATH=/usr/bin/google-chrome npm run check:todoshots
           CHROME_PATH=/usr/bin/google-chrome npm run check:input-e-browser
           CHROME_PATH=/usr/bin/google-chrome npm run check:g1
+          CHROME_PATH=/usr/bin/google-chrome npm run check:nice-datechip-browser
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./

@@ -267,12 +267,34 @@ function rollPast(raw, span, today) {
 }
 
 /**
+ * 실시간 날짜 칩이 저장과 같은 날짜를 보이도록, readJjaemPaste와 같은 규칙으로 날짜 낱말을 돌려줍니다.
+ * 「3일 동안」 같은 기간은 빼고, future면 요일만 적은 말(다가오는 요일)과 한참 지난 달·일(내년)을 저장과 같게 맞춥니다.
+ * 돌려줌: [{ index, length, ymd, explicit, warning }] (글 순서). primary는 저장에 쓰는 날짜입니다.
+ */
+export function readDateSpans(text, { now = new Date(), future = false } = {}) {
+    const raw = String(text || '');
+    const today = seoulYmd(now);
+    let dates = [];
+    try { dates = findDates(raw, now); } catch { dates = []; }
+    dates = dates.filter((span) => realDate(raw, span));
+    if (future) {
+        for (const extra of extraDates(raw, today, true)) {
+            if (!dates.some((span) => extra.index < span.index + span.length && span.index < extra.index + extra.length)) dates.push(extra);
+        }
+    }
+    dates.sort((a, b) => a.index - b.index);
+    const spans = dates.map((span) => ({ ...span, ymd: future ? rollPast(raw, span, today) : span.ymd }));
+    const primary = spans.find((item) => item.explicit) || spans[0] || null;
+    return { spans, primary };
+}
+
+/**
  * 쨈 한 줄에서 날짜·시각을 읽고 본문에서 그 낱말을 뺍니다.
  * date: detectDate와 같이 숫자 날짜를 말보다 먼저 둡니다.
  * stripDate: true면 날짜 낱말을 어디서든 빼고(할 일·일정 제목), 'lead'면 맨 앞에 있을 때만 뺍니다(기록·메모 본문 보존).
  * future: 할 일·일정처럼 앞일을 적는 줄. 요일은 다가오는 날, 한참 지난 달·일은 내년으로 봅니다.
  */
-export function readJjaemPaste(text, { now = new Date(), stripTime = true, stripDate = true, future = false } = {}) {
+export function readJjaemPaste(text, { now = new Date(), stripTime = true, stripDate = true, future = false, ampmFlip = [] } = {}) {
     const raw = String(text || '').trim();
     const today = seoulYmd(now);
     let dates = [];
@@ -288,7 +310,13 @@ export function readJjaemPaste(text, { now = new Date(), stripTime = true, strip
     const dateSpans = dropDate
         ? [{ index: primary.index, length: primary.length + particleLen(raw, primary.index + primary.length), ymd: date }]
         : [];
-    const timeSpans = findTimeSpans(raw);
+    const flipSet = new Set(ampmFlip);
+    const timeSpans = findTimeSpans(raw).map((span) => {
+        const id = `t${span.index}`;
+        if (!flipSet.has(id)) return span;
+        const [h, mi] = span.time.split(':').map(Number);
+        return { ...span, time: `${pad((h + 12) % 24)}:${pad(mi)}` };
+    });
     const time = timeSpans[0]?.time || '';
     const endTime = timeSpans[0]?.endTime || '';
     const ask = timeSpans[0]?.ask || '';

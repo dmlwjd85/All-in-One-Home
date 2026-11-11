@@ -440,7 +440,8 @@ const quick = src('src/ui/QuickBar.jsx');
 check(quick.includes('resolveTimePhrase(text, timeContext(data, now)') && quick.includes('quick-ask low-card'), '빠른 입력 시간구·노란 카드 연결 없음');
 check(/if \(pre\.time\) return null;/.test(quick), '시계 시각이 시간구보다 먼저가 아님');
 const msgSheet = src('src/ui/MsgSheet.jsx');
-check(msgSheet.includes('applyTimePhrases(parsed.items, timeContext(data))'), '메시지 붙여넣기 시간구 연결 없음');
+/* 실시간 칩(#76)을 맞춘 뒤 시간구를 채워도 같은 연결입니다(chipped = 칩 맞춘 parsed.items). */
+check(/applyTimePhrases\((?:parsed\.items|chipped), timeContext\(data\)\)/.test(msgSheet) && (!msgSheet.includes('applyTimePhrases(chipped') || msgSheet.includes(': parsed.items;')), '메시지 붙여넣기 시간구 연결 없음');
 const ctxSrc = src('src/ui/timeContext.js');
 check(!/patchPeriodLocal|setItem|writeJson/.test(ctxSrc), '기준값 읽기가 저장을 씀');
 check(!/SUGGEST|08:30|16:30/.test(ctxSrc), '기준값에 추천값을 섞음');

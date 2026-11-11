@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { parseNote } from '../lib/parse.js';
+import { readJjaemPaste } from '../lib/jjaemPaste.js';
 import { isSensitiveText, SENSITIVE_HINT } from '../lib/sensitive.js';
 import { saveQuick } from '../lib/db.js';
 import { joinedRecords } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Area, Btn, KINDS, SpreadHint, TAGS } from './bits.jsx';
 import { recentStudents } from './capture.js';
+import { chipSave, readEventChips } from '../lib/dateChips.js';
+import { seoulYmd } from '../lib/date.js';
+import { allStarts } from '../lib/periodLocal.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 export function QuickSheet({ initial, onClose }) {
     const { data, clock, showToast } = useUi();
@@ -15,6 +20,8 @@ export function QuickSheet({ initial, onClose }) {
     const [pad, setPad] = useState(false);
     const [neis, setNeis] = useState(kind === '관찰' || kind === '칭찬');
     const [tags, setTags] = useState(TAGS[kind]?.[0] ? [TAGS[kind][0]] : []);
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const box = useRef(null);
     const parsed = useMemo(() => parseNote(text), [text]);
     const chosenNo = parsed.studentNo || no;
@@ -29,7 +36,18 @@ export function QuickSheet({ initial, onClose }) {
     }, [kind]);
 
     async function save() {
-        const result = await saveQuick({ kind, text, no: chosenNo, tags, neis }, new Date());
+        /* 칩 = 저장값(평점관 r4 P2-1): 날짜 칩을 뺐으면 글의 「내일」로 돌아가지 않고 오늘에 넣고, 제목은 칩 미리보기 그대로입니다. */
+        const chipped = chipKinds ? chipSave(chipRead, chipOff, seoulYmd(new Date()), ampmFlip) : null;
+        const chipTime = chipped ? (chipped.time || (chipped.timeOff ? '' : undefined)) : undefined;
+        const result = await saveQuick({
+            kind,
+            text,
+            ...(kind === '일정' && chipped ? { ...(chipped.title ? { title: chipped.title, raw: chipped.raw } : {}), date: chipped.date || undefined, time: chipTime, period: chipped.period || 0 } : {}),
+            ...(kind === '할 일' && chipped ? { ...(chipped.title ? { title: chipped.title } : {}), due: chipped.date || undefined, time: chipTime } : {}),
+            no: chosenNo,
+            tags,
+            neis,
+        }, new Date());
         if (!result.ok) {
             showToast(result.message, false);
             return;
@@ -46,6 +64,9 @@ export function QuickSheet({ initial, onClose }) {
     }
 
     const needsStudent = ['관찰', '상담', '보호자', '칭찬'].includes(kind);
+    const chipKinds = kind === '일정' || kind === '할 일';
+    const chipRead = chipKinds ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip, future: true }) : null;
+
 
     return (
         <div className="sheet-back" onClick={onClose}>
@@ -76,7 +97,15 @@ export function QuickSheet({ initial, onClose }) {
                     </>
                 )}
                 <SpreadHint />
-                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={onKey} />
+                <Area ref={box} rows={4} aria-label="내용" placeholder="여기에 발라 두세요" value={text} onChange={(event) => { const next = event.target.value; setText(next); if (!next.trim()) { setChipOff([]); setAmpmFlip([]); } }} onKeyDown={onKey} />
+                <LiveEventChips
+                    title={chipRead ? (readJjaemPaste(text.trim(), { now: new Date(), stripTime: true, future: true }).body || text.trim()).replace(/\s+/g, ' ').trim() : null}
+                    chipRead={chipRead}
+                    chipOff={chipOff}
+                    ampmFlip={ampmFlip}
+                    onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                    onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {(TAGS[kind] || []).map((tag) => (
                         <Btn key={tag} className={tags.includes(tag) ? 'chip on' : 'chip'} onClick={() => setTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag])}>#{tag}</Btn>

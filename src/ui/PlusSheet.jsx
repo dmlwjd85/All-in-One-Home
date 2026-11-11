@@ -9,6 +9,8 @@ import { FREQUENT_ACTION_IDS, MORE_ACTIONS, PLUS_ACTIONS } from './actions.js';
 import { CAPTURE_KINDS, captureDrafts, recentStudents } from './capture.js';
 import { ClayMark } from './ClayMark.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
+import { applyLiveChips, readEventChips } from '../lib/dateChips.js';
+import { LiveEventChips } from './LiveEventChips.jsx';
 
 const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 const ATTEND_STATUS = ['출석', '결석', '지각', '조퇴', '결과'];
@@ -73,10 +75,22 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     const [items, setItems] = useState([]);
     const [savedRecord, setSavedRecord] = useState(false);
     const [savedNote, setSavedNote] = useState('');
+    const [chipOff, setChipOff] = useState([]);
+    const [ampmFlip, setAmpmFlip] = useState([]);
     const box = useRef(null);
     const speech = useSpeechDictation(text, setText);
     const recent = useMemo(() => recentStudents(data.students, joinedRecords(data)), [data]);
     const periods = allStarts(data.profile.periodStarts);
+    /* 칩과 저장 목록을 같은 함수로 읽어, 칩 아래 '저장될 제목·저장값'이 미리보기와 같게 합니다. */
+    function readDrafts(now) {
+        const chip = readEventChips(text, { now, periods, off: chipOff, ampmFlip });
+        let drafts = captureDrafts(text, { now, periods, students: data.students, selectedNo });
+        /* 한 줄로 읽힌 글에만, 사용자가 칩에서 직접 고친 것(빼기·오전↔오후)만 맞춥니다. 제목·기간은 파서 값을 그대로 둡니다. */
+        if (drafts.length === 1) drafts = applyLiveChips(drafts, chip, { off: chipOff, ampmFlip });
+        return { chip, drafts };
+    }
+    const live = phase === 'write' && text.trim() ? readDrafts(new Date()) : null;
+    const chipRead = live ? live.chip : null;
     const keptCount = items.filter((item) => item.include !== false).length;
 
     /* 빠른 입력의 '메시지·회의록 붙여넣기'로 열면 더보기를 펼친 채 그 칸을 보여 줍니다(키보드가 칸을 가리지 않게 입력칸은 비워 둠). */
@@ -92,12 +106,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
 
     function preview() {
         speech.stop();
-        const drafts = captureDrafts(text, {
-            now: new Date(),
-            periods,
-            students: data.students,
-            selectedNo,
-        });
+        const { drafts } = readDrafts(new Date());
         if (!drafts.length) {
             showToast('한 줄만 적어도 남길 수 있어요.');
             return;
@@ -240,7 +249,11 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                 aria-label="기록"
                                 placeholder="여기에 발라 두세요"
                                 value={text}
-                                onChange={(event) => speech.onEdit(event.target.value)}
+                                onChange={(event) => {
+                                    const next = event.target.value;
+                                    speech.onEdit(next);
+                                    if (!next.trim()) { setChipOff([]); setAmpmFlip([]); }
+                                }}
                                 onKeyDown={(event) => {
                                     if (event.key === 'Enter' && !event.shiftKey) {
                                         event.preventDefault();
@@ -260,6 +273,14 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                 </Btn>
                             )}
                         </div>
+                        <LiveEventChips
+                            chipRead={chipRead}
+                            saved={live?.drafts}
+                            chipOff={chipOff}
+                            ampmFlip={ampmFlip}
+                            onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                            onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
+                        />
                         {speech.available && speech.note && <p className="muted mic-note" role="status">{speech.note}</p>}
                         {speech.needConfirm && <Btn className="chip block" style={{ marginTop: 8 }} onClick={speech.confirm}>알고 시작할게요</Btn>}
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
