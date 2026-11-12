@@ -47,6 +47,7 @@
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
     "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs",
+    "check:name-link": "node scripts/check-name-link.mjs",
     "check:tabbar": "node scripts/check-tabbar.mjs",
     "check:ui-a": "node scripts/check-ui-a.mjs",
     "check:side-hotkey": "node scripts/check-side-hotkey.mjs",
