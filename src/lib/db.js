@@ -18,6 +18,7 @@ import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, W
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
+import { clearAllTextDrafts, clearTextDraft, memoryStore, readTextDraft, writeTextDraft } from './textDraft.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 import { mergeLinks, readLinks } from './eduLinks.js';
 
@@ -1663,6 +1664,24 @@ function readAttendDraft() {
         return d;
     } catch { return null; }
 }
+/*
+ * 알림장·하루 메모의 쓰던 글 임시본(textDraft.js). 출결 임시본과 같이 localStorage에 동기로 남기고, 계정마다 따로 봅니다.
+ * 공용 컴퓨터 모드에서는 이 기기에 글을 남기지 않도록 메모리에만 둡니다(앱을 닫으면 사라집니다).
+ */
+const textDraftMemory = memoryStore();
+function textDraftStore() {
+    if (memoryOnly || state.profile?.sharedPc) return textDraftMemory;
+    try { return globalThis.localStorage || textDraftMemory; } catch { return textDraftMemory; }
+}
+export function keepTextDraft(key, text, base = '') {
+    return writeTextDraft(key, { text, base }, { store: textDraftStore(), owner: draftOwner() });
+}
+export function takeTextDraft(key) {
+    return readTextDraft(key, { store: textDraftStore(), owner: draftOwner() });
+}
+export function dropTextDraft(key) {
+    clearTextDraft(key, { store: textDraftStore() });
+}
 /** 남은 임시본을 출결에 되살립니다. 다른 계정에서 적던 것은 버립니다. */
 export async function applyAttendDraft() {
     const d = readAttendDraft();
@@ -1942,6 +1961,8 @@ export async function patchProfile(patch, { wipe = false } = {}) {
         } catch {
             /* 지우기를 고른 경우에만 이 컴퓨터에 기록을 남기지 않습니다. */
         }
+        /* 쓰던 알림장·하루 메모 임시본도 이 컴퓨터에서 지웁니다. */
+        try { clearAllTextDrafts({ store: globalThis.localStorage }); } catch { /* 없어도 됩니다. */ }
     }
     if (patch.sharedPc === false) memoryOnly = false;
     /* 공용 컴퓨터 모드를 켜면 로그인을 이 탭에만 두고, 끄면 다시 브라우저에 남깁니다(이미 로그인해 있어도). */
@@ -2734,6 +2755,9 @@ export async function clearAll() {
         /* 이미 메모리만 쓰는 경우입니다. */
     }
     inboxDropped = new Set();
+    /* 쓰던 알림장·하루 메모 임시본도 함께 비웁니다(다시 열었을 때 지운 글이 되살아나지 않게). */
+    try { clearAllTextDrafts({ store: globalThis.localStorage }); } catch { /* 없어도 됩니다. */ }
+    clearAllTextDrafts({ store: textDraftMemory });
 }
 
 export async function saveTip(tip) {

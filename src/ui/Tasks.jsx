@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dueLabel, eventClock, startOfWeekMon } from '../lib/date.js';
 import { readTodoLine } from '../lib/parse.js';
-import { dropInbox, joined, joinedRecords, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage } from '../lib/db.js';
+import { dropInbox, dropTextDraft, joined, joinedRecords, keepTextDraft, promoteInbox, receiveOne, removeItem, saveTextItem, storageIssueMessage, takeTextDraft } from '../lib/db.js';
+import { startText, textDraftKey } from '../lib/textDraft.js';
 import { sortTodos } from '../lib/todoAchieve.js';
 import { toggleTodoFx } from './doneFx.js';
 import { GoalMeter, PriMark, PriPicks, SortToggle, useTodoSort } from './todoUi.jsx';
@@ -245,7 +246,10 @@ export function Notice() {
     // 그 날 행이 둘(비운 클라우드 행 + 이 기기 민감 행)이면 글이 있는 행을 먼저 보여 줍니다. 저장 위치 고르기와 같은 함수예요.
     const current = pickNotice(notices, date);
     const dbText = current?.text || '';
-    const [text, setText] = useState(dbText);
+    // 저장하지 않고 다른 날로 갔다가 돌아오면, 이 기기에 남겨 둔 쓰던 글을 되살립니다.
+    const draftKey = textDraftKey('notice', date);
+    const [opened] = useState(() => startText(takeTextDraft(draftKey), dbText));
+    const [text, setText] = useState(opened.text);
     const [synced, setSynced] = useState(dbText);
     const [saving, setSaving] = useState(false);
     // 쓰던 글을 남긴 채 되돌렸을 때 입력칸 위에 보여 줄 되돌린 글
@@ -259,6 +263,41 @@ export function Notice() {
         liveNotice.current = { date, text, synced, showRestored: setRestored };
     });
     useEffect(() => () => { liveNotice.current = null; }, []);
+
+    // 쓰던 글 임시 저장(출결 사유 시트와 같은 방식): 입력하면 0.3초 뒤, 앱을 숨기거나 화면을 떠날 때는 바로 이 기기에 남깁니다.
+    // 저장한 글과 같아지면 임시본은 지웁니다. '저장'을 눌러야 알림장이 됩니다.
+    const draftLive = useRef({ text, dbText });
+    draftLive.current = { text, dbText };
+    function keepDraft() {
+        keepTextDraft(draftKey, draftLive.current.text, draftLive.current.dbText);
+    }
+    useEffect(() => {
+        const timer = setTimeout(keepDraft, 300);
+        return () => clearTimeout(timer);
+    }, [text, dbText]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        // 앱 전체 처리보다 먼저 돌도록 capture로 겁니다. localStorage라 앱이 닫히는 순간에도 바로 남습니다.
+        const onHide = () => { if (document.visibilityState === 'hidden') keepDraft(); };
+        document.addEventListener('visibilitychange', onHide, true);
+        window.addEventListener('pagehide', keepDraft, true);
+        return () => {
+            document.removeEventListener('visibilitychange', onHide, true);
+            window.removeEventListener('pagehide', keepDraft, true);
+            keepDraft();
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (opened.restored) showToast('저장하지 않은 알림장 글을 불러왔어요. 저장을 눌러야 남아요.');
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const unsaved = Boolean(text.trim()) && text !== dbText;
+    // 다른 날로 갈 때: 쓰던 글은 지우지 않고 이 기기에 임시로 남긴 뒤 옮깁니다.
+    function moveTo(hash) {
+        const kept = unsaved;
+        keepDraft();
+        go(hash);
+        if (kept) showToast('쓰던 알림장은 이 기기에 임시로 남겨 두었어요. 그 날로 돌아오면 다시 보여요.');
+    }
 
     useEffect(() => {
         // DB 글이 바뀌면(되돌리기·다른 기기) 입력칸이 예전 DB 글 그대로이거나 비어 있을(공백만 포함) 때만 새 글로 채웁니다.
@@ -301,15 +340,17 @@ export function Notice() {
         }
         const result = await saveNotice(date, next);
         if (result?.storageFailed) { showToast(noticeFailMessage(result, '저장하지', '쓰던 글은 그대로 있어요.')); return; }
+        // 저장한 글 기준으로 임시본을 다시 봅니다. 저장하는 동안 더 쓴 글이 없으면 임시본은 지워집니다.
+        keepTextDraft(draftKey, draftLive.current.text, next);
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '알림장을 저장했어요.', true);
     }
 
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Btn className="icon-btn" aria-label="이전 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, -1)}`); }}>‹</Btn>
+                <Btn className="icon-btn" aria-label="이전 날" onClick={() => moveTo(`#/notice/${addDaysYmd(date, -1)}`)}>‹</Btn>
                 <strong>{date === addDaysYmd(clock.ymd, 1) ? '내일' : date}</strong>
-                <Btn className="icon-btn" aria-label="다음 날" onClick={() => { setText(''); go(`#/notice/${addDaysYmd(date, 1)}`); }}>›</Btn>
+                <Btn className="icon-btn" aria-label="다음 날" onClick={() => moveTo(`#/notice/${addDaysYmd(date, 1)}`)}>›</Btn>
             </div>
             {restored && restored === dbText && text.trim() && text !== dbText && (
                 <div className="glass" role="group" aria-label="되돌린 글" style={{ marginTop: 12, padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -321,6 +362,17 @@ export function Notice() {
                 </div>
             )}
             <textarea className="field" rows={8} aria-label="알림장" style={{ marginTop: 12 }} value={text} onChange={(event) => setText(event.target.value)} placeholder="내일 알림장을 적어 주세요" />
+            {unsaved && (
+                <p className="muted" data-role="notice-unsaved" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '6px 0 0', fontSize: 13 }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>아직 저장하지 않은 글이에요. 다른 날로 가도 이 기기에 임시로 남아요.</span>
+                    <Btn className="chip" onClick={() => {
+                        if (!window.confirm('쓰던 글을 버리고 저장해 둔 글로 되돌릴까요?')) return;
+                        dropTextDraft(draftKey);
+                        setText(dbText);
+                        setRestored('');
+                    }}>쓰던 글 버리기</Btn>
+                </p>
+            )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <Btn className="chip" onClick={() => {
                     if (!events.length) { showToast('그 날 일정이 없어요.'); return; }
@@ -339,7 +391,7 @@ export function Notice() {
             </div>
             <h3>지난 알림장</h3>
             {others.slice(0, 8).map((row) => (
-                <Btn key={row.id} block className="glass" style={{ marginBottom: 8, padding: 12, textAlign: 'left' }} onClick={() => go(`#/notice/${row.date}`)}>
+                <Btn key={row.id} block className="glass" style={{ marginBottom: 8, padding: 12, textAlign: 'left' }} onClick={() => moveTo(`#/notice/${row.date}`)}>
                     <strong>{row.date}</strong>
                     <span className="muted" style={{ display: 'block' }}>{row.text}</span>
                 </Btn>
