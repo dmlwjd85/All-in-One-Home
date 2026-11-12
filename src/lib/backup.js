@@ -1,6 +1,9 @@
 import { isValidYmd } from './date.js';
 import { isSensitiveText } from './sensitive.js';
 import { LEGACY_LISTS } from './migrate.js';
+import { cleanAcademic } from './academic.js';
+import { mergeGoals, normalizeGoals } from './todoAchieve.js';
+import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype']);
@@ -63,12 +66,25 @@ export function validateNewBackup(data) {
         if (data[key] != null && !Array.isArray(data[key])) errors.push(`${key} 목록이 이상해요.`);
     }
     (data.students || []).forEach((row) => {
-        if (!plain(row) || !(row.no >= 1 && row.no <= 50) || typeof row.name !== 'string' || row.name.length > 20) {
+        if (!plain(row) || !(row.no >= 1 && row.no <= 99) || typeof row.name !== 'string' || row.name.length > 20) {
             errors.push('학생 이름이나 번호가 범위를 벗어났어요.');
         }
     });
     (data.records || []).forEach((row, index) => checkRecord(row, errors, index));
-    (data.local?.records || []).forEach((row, index) => checkRecord(row, errors, index));
+    if (data.local != null && !plain(data.local)) errors.push('이 기기 전용 자료 모양이 이상해요.');
+    for (const key of LOCAL_LISTS) {
+        if (data.local?.[key] != null && !Array.isArray(data.local[key])) errors.push(`이 기기 전용 ${key} 목록이 이상해요.`);
+    }
+    (Array.isArray(data.local?.records) ? data.local.records : []).forEach((row, index) => checkRecord(row, errors, index));
+    /* 새 판에서 더한 칸(학사일정·고친 날·마감한 날·목표·교시 시각). 예전 판 파일에는 없으므로 있을 때만 봅니다. */
+    const profile = data.profile;
+    if (profile != null && !plain(profile)) errors.push('학급 설정 모양이 이상해요.');
+    for (const key of ['ttEdited', 'checkedDates']) {
+        if (profile?.[key] != null && (!Array.isArray(profile[key]) || profile[key].length > 2000)) errors.push(`${key} 목록이 이상해요.`);
+    }
+    if (profile?.academic != null && !plain(profile.academic)) errors.push('학사일정 모양이 이상해요.');
+    if (data.goals != null && !plain(data.goals)) errors.push('목표 모양이 이상해요.');
+    if (data.periodLocal != null && !plain(data.periodLocal)) errors.push('교시 설정 모양이 이상해요.');
     return { ok: errors.length === 0, errors: errors.slice(0, 8), data: errors.length ? null : data };
 }
 
@@ -115,7 +131,10 @@ function copyBackup(backup) {
     }
 }
 
-export function buildExport(state, { includeLocal = false, at } = {}) {
+/** 이 기기에만 두는 목록. 백업의 local 안에 들어갑니다(backup은 따로). */
+export const LOCAL_LISTS = ['records', 'notes', 'events', 'todos', 'notices', 'contacts', 'pages'];
+
+export function buildExport(state, { includeLocal = false, at, periodLocal } = {}) {
     const profile = state.profile || {};
     const data = {
         format: 'ssug-gyomu',
@@ -126,6 +145,10 @@ export function buildExport(state, { includeLocal = false, at } = {}) {
             schoolYear: profile.schoolYear,
             classSize: profile.classSize,
             periodStarts: copyData(profile.periodStarts),
+            /* 학사일정, 날짜별로 고친 시간표 날, 출결 마감한 날. 예전 판 백업에는 없어서, 없으면 복원할 때 지금 값을 둡니다. */
+            academic: copyData(profile.academic || {}),
+            ttEdited: copyData(profile.ttEdited || []),
+            checkedDates: copyData(profile.checkedDates || []),
         },
         students: copyData(state.students),
         attendance: copyData(state.attendance),
@@ -139,7 +162,12 @@ export function buildExport(state, { includeLocal = false, at } = {}) {
         inbox: copyData(inboxExportRows(state, includeLocal)),
         /* 업데이트 전 수정 보관함(PR #66): 다른 기기의 나중 수정에 밀린 이 기기 값. 백업에도 남깁니다. */
         keptLegacy: copyData(state.keptLegacy || []),
+        /* 할 일 하루 목표와 날짜별 달성 기록. */
+        goals: copyData(normalizeGoals(state.goals)),
     };
+    /* 교시 수·길이·9·10교시·출퇴근 시각(이 기기 저장소 값). 고친 시각(syncAt·syncAts)은 기기마다 달라 넣지 않습니다. */
+    const period = cleanPeriodLocal(periodLocal);
+    if (period) data.periodLocal = period;
     if (includeLocal) {
         const source = state.local || {};
         const previous = source.backup;
@@ -151,6 +179,137 @@ export function buildExport(state, { includeLocal = false, at } = {}) {
         data.local = local;
     }
     return data;
+}
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_NAMES = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+
+/** 백업의 교시 설정에서 아는 칸만 모양을 보고 꺼냅니다. 쓸 칸이 없으면 null. */
+export function cleanPeriodLocal(value) {
+    if (!plain(value)) return null;
+    const out = {};
+    if (typeof value.level === 'string' && LEVEL_LENGTH[value.level]) out.level = value.level;
+    const count = Number(value.count);
+    if (Number.isInteger(count) && count >= 1 && count <= MAX_PERIODS) out.count = count;
+    if (Array.isArray(value.lengths)) out.lengths = value.lengths.slice(0, MAX_PERIODS).map((n) => (Number.isFinite(Number(n)) && n !== null && n !== '' ? Number(n) : null));
+    if (Array.isArray(value.extraStarts)) out.extraStarts = value.extraStarts.slice(0, 2).map((v) => (isHm(v) ? v : ''));
+    if (Array.isArray(value.locks)) out.locks = [...new Set(value.locks.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= MAX_PERIODS))].sort((a, b) => a - b);
+    if (Array.isArray(value.cellLocks)) out.cellLocks = [...new Set(value.cellLocks.filter((v) => typeof v === 'string' && /^[a-z]{3}-\d{1,2}$/.test(v)))];
+    for (const key of ['workStart', 'workEnd']) if (value[key] === '' || isHm(value[key])) out[key] = value[key];
+    if (plain(value.extra)) {
+        const extra = {};
+        for (const [day, row] of Object.entries(value.extra)) {
+            if (!DAY_NAMES.has(day) || !plain(row)) continue;
+            const clean = {};
+            for (const [k, v] of Object.entries(row)) if (/^[ps](9|10)$/.test(k) && typeof v === 'string' && v.length <= 40) clean[k] = v;
+            if (Object.keys(clean).length) extra[day] = clean;
+        }
+        out.extra = extra;
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+function dayList(list) {
+    return Array.isArray(list) ? list.filter((v) => typeof v === 'string' && DAY_RE.test(v)) : null;
+}
+
+/**
+ * 백업 파일의 학급 설정 가운데 새 판에서 더한 칸(학년도·학사일정·고친 날·마감한 날)과 목표를 지금 값에 넣습니다.
+ * 파일에 없는 칸(예전 판 백업)은 지금 값을 그대로 둡니다. 합치기는 날짜 목록을 합치고, 바꾸기는 파일 값으로 바꿉니다.
+ * profile과 goals를 고친 새 값으로 돌려줍니다(받은 값은 바꾸지 않습니다).
+ */
+export function incomingSettings(current, data, mode) {
+    const profile = { ...(current?.profile || {}) };
+    let goals = current?.goals;
+    const file = plain(data?.profile) ? data.profile : {};
+    const year = Number(file.schoolYear);
+    const yearOk = (value) => Number.isInteger(Number(value)) && Number(value) >= 2020 && Number(value) <= 2099;
+    /* 학년도: 바꾸기는 파일 값으로, 합치기는 지금 값이 비어 있을 때만 넣습니다(지난해 백업을 합쳐도 올해 학년도가 바뀌지 않게). */
+    if (yearOk(year) && (mode === 'replace' || !yearOk(profile.schoolYear))) profile.schoolYear = year;
+    if (plain(file.academic)) {
+        profile.academic = cleanAcademic(mode === 'replace' ? file.academic : { ...(profile.academic || {}), ...file.academic });
+    }
+    for (const key of ['ttEdited', 'checkedDates']) {
+        const list = dayList(file[key]);
+        if (!list) continue;
+        const next = mode === 'replace' ? list : [...(Array.isArray(profile[key]) ? profile[key] : []), ...list];
+        profile[key] = [...new Set(next)].sort();
+    }
+    if (plain(data?.goals)) goals = mode === 'replace' ? normalizeGoals(data.goals) : mergeGoals(goals, data.goals);
+    return { profile, goals };
+}
+
+/** 교시 시작 시각: 바꾸기는 파일 값, 합치기는 지금 값이 기본값 그대로(손대지 않음)일 때만 파일 값입니다. */
+export function incomingPeriodStarts(profile, file, mode) {
+    if (!Array.isArray(file) || !file.length) return null;
+    if (mode === 'replace') return file;
+    const now = Array.isArray(profile?.periodStarts) ? profile.periodStarts : [];
+    const touched = Number(profile?.settingsAts?.periodStarts) > 0;
+    const plainDefault = !now.length || (!touched && JSON.stringify(now) === JSON.stringify(DEFAULT_PERIODS));
+    return plainDefault ? file : null;
+}
+
+/**
+ * 합치기에서 교시 설정(이 기기 저장소 값)을 지금 값이 비어 있는 칸에만 넣을 묶음을 돌려줍니다. 넣을 것이 없으면 null.
+ *  - 교시 수·학교급·9·10교시 시작: 이 기기에서 한 번도 고친 적 없고(고친 시각 없음) 기본값 그대로일 때만
+ *  - 수업 길이·잠금·칸 잠금: 지금 목록이 비었을 때만 / 출퇴근 시각: 지금 칸이 비었을 때만
+ *  - 9·10교시 과목: 지금 비어 있는 요일·칸만
+ * 바꾸기는 이 함수를 쓰지 않고 파일 값(cleanPeriodLocal)으로 바꿉니다.
+ */
+export function fillPeriodLocal(current, incoming) {
+    if (!plain(incoming)) return null;
+    const now = plain(current) ? current : {};
+    const touched = Number(now.syncAt) > 0 || Number(now.syncAts?.period) > 0;
+    const out = {};
+    if ('level' in incoming && !touched && (now.level || '초') === '초') out.level = incoming.level;
+    if ('count' in incoming && !touched && (Number(now.count) || 6) === 6) out.count = incoming.count;
+    if ('extraStarts' in incoming && !touched && JSON.stringify(now.extraStarts || EXTRA_PERIODS) === JSON.stringify(EXTRA_PERIODS)) out.extraStarts = incoming.extraStarts;
+    for (const key of ['lengths', 'locks', 'cellLocks']) {
+        const mine = Array.isArray(now[key]) ? now[key].filter((v) => v !== null && v !== '') : [];
+        if (key in incoming && !mine.length) out[key] = incoming[key];
+    }
+    for (const key of ['workStart', 'workEnd']) if (incoming[key] && !now[key]) out[key] = incoming[key];
+    if (plain(incoming.extra)) {
+        const mine = plain(now.extra) ? now.extra : {};
+        const extra = {};
+        let added = false;
+        for (const [day, row] of Object.entries(mine)) if (plain(row)) extra[day] = { ...row };
+        for (const [day, row] of Object.entries(incoming.extra)) {
+            for (const [slot, name] of Object.entries(row || {})) {
+                if (String(extra[day]?.[slot] || '').trim()) continue;
+                extra[day] = { ...(extra[day] || {}), [slot]: name };
+                added = true;
+            }
+        }
+        if (added) out.extra = extra;
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+function localRows(list) {
+    return Array.isArray(list) ? list.filter((row) => plain(row) && (typeof row.id === 'string' || typeof row.id === 'number')) : [];
+}
+
+/**
+ * 이 기기 전용 자료(local)를 백업에서 되살립니다. 기록뿐 아니라 할 일·일정·메모·알림장·연락처·쪽도 함께입니다.
+ * extraRecords는 파일의 일반 기록 가운데 민감해서 이 기기로 옮길 기록입니다.
+ * 파일에 이 기기 전용 자료가 없으면(이 기기 자료를 빼고 내보낸 파일·예전 판) 바꾸기에서도 지금 이 기기 자료를 지우지 않습니다.
+ */
+export function incomingLocal(current, data, mode, extraRecords = []) {
+    const base = plain(current) ? current : {};
+    const out = { ...base };
+    const file = plain(data?.local) ? data.local : null;
+    const merge = (now, incoming) => {
+        const map = new Map((Array.isArray(now) ? now : []).map((item) => [item.id, item]));
+        for (const item of incoming) map.set(item.id, item);
+        return [...map.values()];
+    };
+    for (const key of LOCAL_LISTS) {
+        const incoming = [...(file ? localRows(file[key]) : []), ...(key === 'records' ? localRows(extraRecords) : [])];
+        if (file && mode === 'replace') out[key] = merge([], incoming);
+        else out[key] = merge(base[key], incoming);
+    }
+    return out;
 }
 
 export function splitSensitive(records) {

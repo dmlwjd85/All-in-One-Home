@@ -7,6 +7,11 @@ import { ClayMark } from './ClayMark.jsx';
 import { seoulParts, seoulYmd } from '../lib/date.js';
 import { htmlEscape } from '../lib/neisExport.js';
 import { DateChip } from './DateChip.jsx';
+import { groupMates } from '../lib/nameLink.js';
+import { LOG_KINDS, LOG_PERIODS, filterLog, schoolYearOf, sortLog, studentLogText } from '../lib/studentLog.js';
+import { termRange } from '../lib/semester.js';
+import { RecordExport } from './ClassExport.jsx';
+import { RosterPaste } from './RosterPaste.jsx';
 
 /** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
 function recordHm(row, fallback) {
@@ -15,7 +20,7 @@ function recordHm(row, fallback) {
 }
 
 export function Students() {
-    const { data, clock, go, openQuick } = useUi();
+    const { data, clock, go, openQuick, showToast } = useUi();
     const [q, setQ] = useState('');
     const records = joinedRecords(data);
     const month = clock.ymd.slice(0, 7);
@@ -27,6 +32,18 @@ export function Students() {
                 <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
+            {!data.students.length && (
+                <section className="glass" data-empty-roster="1" style={{ padding: 14, marginBottom: 12 }}>
+                    <h2 className="title-font" style={{ marginTop: 0, fontSize: 20 }}>명단이 아직 없어요</h2>
+                    <p className="muted" style={{ marginTop: 0 }}>엑셀·한글 표·나이스 화면에서 번호와 이름을 복사해 붙여 넣으면 한 번에 들어가요.</p>
+                    <RosterPaste data={data} showToast={showToast} />
+                </section>
+            )}
+            {(data.students.length > 0 || joinedRecords(data).length > 0) && (
+                <div style={{ margin: '0 0 12px' }}>
+                    <RecordExport data={data} showToast={showToast} />
+                </div>
+            )}
             <div className="student-roster-grid">
                 {rows.map((student) => {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
@@ -38,7 +55,7 @@ export function Students() {
                         </Btn>
                     );
                 })}
-                {!rows.length && <p className="muted">명단에 없는 이름이에요. 설정에서 명단을 붙여 넣을 수 있어요.</p>}
+                {!rows.length && data.students.length > 0 && <p className="muted">명단에 없는 이름이에요. 설정에서 명단을 붙여 넣을 수 있어요.</p>}
             </div>
         </div>
     );
@@ -48,10 +65,17 @@ export function Student() {
     const { data, clock, route, openQuick, showToast } = useUi();
     const student = data.students.find((row) => row.no === route.params.no);
     const [tab, setTab] = useState('전체');
+    /* 모아 보기: 기간, 날짜 차례(new 최근부터 · old 오래된 것부터), 복사할 기록 고르기. */
+    const [period, setPeriod] = useState('all');
+    const [order, setOrder] = useState('new');
+    const [chosen, setChosen] = useState(() => new Set());
     const [text, setText] = useState('');
     const [editingId, setEditingId] = useState('');
     const [draft, setDraft] = useState('');
     const editFieldRef = useRef(null);
+    /* 한 줄 기록 저장 중에 Enter를 또 눌러도 한 번만 저장합니다. */
+    const lineBusy = useRef(false);
+    const [lineSaving, setLineSaving] = useState(false);
     useEffect(() => {
         if (!editingId) return;
         const node = editFieldRef.current;
@@ -60,8 +84,21 @@ export function Student() {
         const end = node.value.length;
         try { node.setSelectionRange(end, end); } catch { /* 일부 환경은 선택 구간을 막습니다 */ }
     }, [editingId]);
-    const records = joinedRecords(data).filter((row) => row.sid === student?.id).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at || '').localeCompare(String(a.at || '')));
-    const filtered = records.filter((row) => tab === '전체' || (tab === '관찰' && (row.kind === '관찰' || row.kind === '칭찬')) || row.kind === tab);
+    const allRecords = joinedRecords(data);
+    const records = sortLog(allRecords.filter((row) => row.sid === student?.id), 'new');
+    /* 2학기 시작일은 학사일정(설정·일정 글자)에서 읽고, 없으면 기본값입니다. */
+    let secondStart = '';
+    try { secondStart = termRange('second', schoolYearOf(clock.ymd), data.events).from; } catch { secondStart = ''; }
+    const filtered = sortLog(filterLog(records, { kind: tab, period, today: clock.ymd, secondStart }), order);
+    const periodLabel = LOG_PERIODS.find((item) => item.id === period)?.label || '';
+    const pickedRows = filtered.filter((row) => chosen.has(row.id));
+    /** 묶음 기록(한 기록에 여러 학생)의 다른 학생 이름. */
+    /* 지난 명단 학생도 이름으로 찾고 '(지난 명단)'을 붙입니다. */
+    const matesOf = (row) => groupMates(row, allRecords).map((sid) => {
+        const mate = (data.allStudents || data.students).find((item) => item.id === sid);
+        if (!mate?.name) return '';
+        return mate.active === false ? `${mate.name}(지난 명단)` : mate.name;
+    }).filter(Boolean);
     if (!student) return <p>이 번호는 명단에 없어요. 설정에서 넣어 주세요.</p>;
     const stats = [
         ['기록', records.length],
@@ -69,6 +106,31 @@ export function Student() {
         ['칭찬', records.filter((row) => row.kind === '칭찬').length],
         ['나이스 옮김', records.filter((row) => row.neis && !row.neisMoved).length],
     ];
+
+    async function saveLine() {
+        if (lineBusy.current) return;
+        const sent = text;
+        if (!sent.trim()) { showToast('한 줄만 적어도 남길 수 있어요.'); return; }
+        lineBusy.current = true;
+        setLineSaving(true);
+        try {
+            const result = await saveQuick({ kind: '관찰', text: sent, no: student.no, tags: ['학습'], neis: true });
+            if (result?.ok) {
+                /* 저장하는 동안 더 적은 글이 있으면 지우지 않습니다. */
+                setText((now) => (now === sent ? '' : now));
+                showToast(result.message, true);
+                return;
+            }
+            showToast(result?.storageFailed
+                ? `${result.message || '기록을 저장하지 못했어요.'} 쓰던 글은 그대로 있어요.`
+                : (result?.message || '기록을 남기지 못했어요. 쓰던 글은 그대로 있어요.'));
+        } catch {
+            showToast('기록을 남기지 못했어요. 쓰던 글은 그대로 있어요.');
+        } finally {
+            lineBusy.current = false;
+            setLineSaving(false);
+        }
+    }
 
     function focusEditButton(id) {
         requestAnimationFrame(() => {
@@ -97,6 +159,32 @@ export function Student() {
         setDraft('');
         showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '기록을 고쳤어요.', true);
         focusEditButton(row.id);
+    }
+
+    function toggleChosen(id) {
+        setChosen((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    /** 행발·누가기록용: 고른 기록(없으면 지금 보이는 기록)을 날짜와 함께 한 덩어리로 복사합니다. 자물쇠 기록은 골랐을 때만 넣습니다. */
+    async function copyLog() {
+        const base = pickedRows.length ? pickedRows : filtered.filter((row) => !row.localOnly);
+        const skipped = pickedRows.length ? 0 : filtered.length - base.length;
+        if (!base.length) {
+            showToast(skipped ? '자물쇠 기록만 있어요. 넣으려면 기록을 골라 주세요.' : '복사할 기록이 없어요.');
+            return;
+        }
+        const body = studentLogText(student, base, { periodLabel: period === 'all' ? '' : periodLabel, kindLabel: tab, mates: matesOf });
+        try {
+            await navigator.clipboard.writeText(body);
+            showToast(`${student.name} 기록 ${base.length}개를 날짜순으로 복사했어요.${skipped ? ` 자물쇠 기록 ${skipped}개는 뺐어요. 넣으려면 골라 주세요.` : ''}`);
+        } catch {
+            showToast('복사하지 못했어요. 글을 길게 눌러 선택해 주세요.');
+        }
     }
 
     async function removeRecord(row) {
@@ -131,17 +219,21 @@ export function Student() {
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {stats.map(([label, value]) => <span key={label} className="chip">{label} {value}</span>)}
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {['전체', '관찰', '상담', '보호자'].map((item) => (
-                    <Btn key={item} className={tab === item ? 'chip on' : 'chip'} onClick={() => setTab(item)}>{item}</Btn>
+            <div style={{ marginTop: 8 }}>
+                <RecordExport data={data} sid={student.id} showToast={showToast} />
+            </div>
+            <div role="group" aria-label="기록 종류" style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                {LOG_KINDS.map((item) => (
+                    <Btn key={item} className={tab === item ? 'chip on' : 'chip'} aria-pressed={tab === item ? 'true' : 'false'} onClick={() => setTab(item)}>{item}</Btn>
                 ))}
             </div>
             <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
-                <input className="field" placeholder={`${givenName(student.name)} 이야기 발라 두기`} aria-label="이 학생 기록" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={async (event) => {
-                    if (event.key === 'Enter') {
-                        const result = await saveQuick({ kind: '관찰', text, no: student.no, tags: ['학습'], neis: true });
-                        if (result.ok) { setText(''); showToast(result.message, true); }
-                    }
+                <input className="field" placeholder={`${givenName(student.name)} 이야기 발라 두기`} aria-label="이 학생 기록" aria-busy={lineSaving} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    /* 한글 조합 중 Enter(마지막 글자 확정)는 저장하지 않습니다. 빠른 입력·할 일 고치기와 같은 방식이에요. */
+                    if (event.nativeEvent?.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    saveLine();
                 }} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     {['관찰', '상담', '칭찬', '보호자'].map((kind) => (
@@ -149,6 +241,17 @@ export function Student() {
                     ))}
                 </div>
             </div>
+            <div role="group" aria-label="기록 기간" data-log-period="1" style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {LOG_PERIODS.map((item) => (
+                    <Btn key={item.id} className={period === item.id ? 'chip on' : 'chip'} aria-pressed={period === item.id ? 'true' : 'false'} onClick={() => setPeriod(item.id)}>{item.label}</Btn>
+                ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Btn className="chip" data-log-order={order} onClick={() => setOrder((value) => (value === 'new' ? 'old' : 'new'))}>{order === 'new' ? '최근 것부터' : '오래된 것부터'}</Btn>
+                <Btn className="primary-btn fit-btn" data-log-copy="1" onClick={copyLog}>{pickedRows.length ? `고른 ${pickedRows.length}개 복사` : '이 학생 기록 복사'}</Btn>
+                {pickedRows.length > 0 && <Btn className="chip" onClick={() => setChosen(new Set())}>고르기 풀기</Btn>}
+            </div>
+            <p className="muted" style={{ margin: '6px 0 0', fontSize: 13 }}>보이는 기록 {filtered.length}개. 기록을 고르면 고른 것만, 안 고르면 보이는 기록을 날짜순으로 복사해요. 행발 쓸 때 붙여 넣으세요.</p>
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {filtered.map((row) => (
                     <article key={row.id} className="solid-card" style={{ padding: 12, background: row.kind === '상담' ? 'var(--k-counsel)' : row.kind === '보호자' ? 'var(--k-parent)' : row.kind === '칭찬' ? 'var(--k-praise)' : 'var(--k-observe)', color: 'var(--ink)' }}>
@@ -188,6 +291,7 @@ export function Student() {
                         ) : (
                             <>
                                 <p style={{ marginBottom: 0 }}>{row.text}</p>
+                                {matesOf(row).length > 0 && <p className="muted" style={{ marginBottom: 0 }} data-role="record-mates">함께: {matesOf(row).join(', ')}</p>}
                                 {row.localOnly && <p style={{ marginBottom: 0 }}>🔒 이 내용은 이 기기에만 있어요.</p>}
                                 {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
                                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -197,6 +301,12 @@ export function Student() {
                                         onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}
                                     >수정</Btn>
                                     <Btn className="chip" onClick={() => removeRecord(row)}>삭제</Btn>
+                                    <Btn
+                                        className={chosen.has(row.id) ? 'chip on' : 'chip'}
+                                        aria-pressed={chosen.has(row.id) ? 'true' : 'false'}
+                                        data-pick-for={row.id}
+                                        onClick={() => toggleChosen(row.id)}
+                                    >{chosen.has(row.id) ? '✓ 복사에 넣음' : '복사에 넣기'}</Btn>
                                 </div>
                             </>
                         )}
@@ -216,6 +326,8 @@ export function Student() {
 
 export function Neis() {
     const { data, showToast } = useUi();
+    /* 지난 명단 학생의 기록도 이름으로 보이게, 아이디로 찾을 때는 지난 명단까지 봅니다. */
+    const everyone = data.allStudents || data.students;
     const records = joinedRecords(data).filter((row) => row.neis && !row.neisMoved && !row.localOnly);
     const groups = useMemo(() => {
         const map = new Map();
@@ -232,7 +344,7 @@ export function Neis() {
     const [picked, setPicked] = useState(() => groups[0]?.[0] || '');
     const activeSid = groups.some(([sid]) => sid === picked) ? picked : (groups[0]?.[0] || '');
     const activeRows = groups.find(([sid]) => sid === activeSid)?.[1] || [];
-    const activeStudent = data.students.find((item) => item.id === activeSid);
+    const activeStudent = everyone.find((item) => item.id === activeSid);
     const xlsxRef = useRef(null);
     useEffect(() => {
         /* 엑셀 만드는 코드를 화면이 열릴 때 미리 불러 둡니다(첫 화면 묶음에는 넣지 않음). */
@@ -243,7 +355,7 @@ export function Neis() {
 
     async function copyAll() {
         const lines = groups.map(([sid, rows]) => {
-            const student = data.students.find((item) => item.id === sid);
+            const student = everyone.find((item) => item.id === sid);
             const head = student ? `${student.no} ${student.name}` : '학생 미정';
             return `${head}\n${rows.map((row) => `- (${row.date}) ${row.text}`).join('\n')}`;
         }).join('\n\n');
@@ -264,7 +376,7 @@ export function Neis() {
         try {
             /* 미리 불러 둔 엑셀 코드가 있으면 기다리지 않아, 누른 손짓이 끊기지 않습니다(아이폰 공유·내려받기). */
             const xlsx = xlsxRef.current || await import('../lib/neisXlsx.js');
-            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, data.students));
+            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, everyone));
             file = new File([bytes], `나이스모아_${seoulYmd()}.xlsx`, { type: xlsx.NEIS_XLSX_TYPE });
         } catch {
             showToast('엑셀 파일을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.');
@@ -300,7 +412,7 @@ export function Neis() {
             return;
         }
         const rowsHtml = groups.map(([sid, rows]) => {
-            const student = data.students.find((item) => item.id === sid);
+            const student = everyone.find((item) => item.id === sid);
             const head = student ? `${student.no} ${student.name}` : '학생 미정';
             const body = rows.map((row) => {
                 const text = htmlEscape(row.text || '').replace(/\n/g, '<br>');
@@ -344,7 +456,7 @@ export function Neis() {
                 <div className="neis-split" data-neis-split="1" style={{ marginTop: 12 }}>
                     <nav className="neis-list" aria-label="나이스 학생 목록">
                         {groups.map(([sid, rows]) => {
-                            const student = data.students.find((item) => item.id === sid);
+                            const student = everyone.find((item) => item.id === sid);
                             const label = student ? `${student.no} ${student.name}` : '학생을 아직 안 골랐어요';
                             return (
                                 <Btn

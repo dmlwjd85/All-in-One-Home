@@ -1,6 +1,7 @@
 import { findDates } from '../lib/parse.js';
 import { isDurationDayTail } from '../lib/jjaemPaste.js';
 import { actionStem, classifyEnding, findTimePhrases } from '../lib/timePhrase.js';
+import { findStudentNames, linkedSids } from '../lib/nameLink.js';
 
 /** 분류 강조는 글이 잠깐 멈춘 뒤에만 바꿉니다. */
 export const SUGGEST_WAIT = 150;
@@ -61,7 +62,8 @@ function namedStudents(text, students) {
 export function suggestKind(text, students) {
     const raw = String(text || '').trim();
     if (!raw) return '';
-    if (namedStudents(raw, students).length) return '관찰';
+    /* 성 뺀 이름('가나가', '하윤이랑')도 자동으로 연결되는 이름이면 관찰입니다. 낱말과 겹치는 이름은 강조하지 않습니다. */
+    if (namedStudents(raw, students).length || findStudentNames(raw, students).some((hit) => hit.auto)) return '관찰';
     /* 어미로 먼저 거릅니다: 이미 한 일은 메모, 취소·안 해도 되는 일은 추천하지 않습니다. */
     const ending = classifyEnding(raw);
     if (ending === 'done') return '메모';
@@ -97,4 +99,22 @@ export function quickSaveDate(kind, text, fallback, now = new Date()) {
         if (hit?.ymd) return hit.ymd;
     }
     return fallback;
+}
+
+/**
+ * 빠른 입력에서 연결할 학생 번호들. 칩으로 정한 값(choice)이 먼저이고, 그다음 자동 연결입니다.
+ * 예전 규칙(고른 이름 후보, 이름을 다 적은 학생 하나)도 그대로 살립니다. 다만 칩으로 끈 학생은 넣지 않습니다.
+ */
+export function linkedNosFor(text, students, choice = {}, picked = null) {
+    const found = findStudentNames(text, students);
+    const sids = linkedSids(found, choice);
+    if (picked?.id && choice[picked.id] !== false && !sids.includes(picked.id)) sids.push(picked.id);
+    for (const [sid, on] of Object.entries(choice || {})) if (on === true && !sids.includes(sid)) sids.push(sid);
+    const nos = sids.map((sid) => Number((students || []).find((row) => row.id === sid)?.no) || 0).filter(Boolean);
+    if (!nos.length) {
+        const old = studentNoFor(text, students, picked);
+        const oldRow = (students || []).find((row) => Number(row.no) === old);
+        if (old && !(oldRow && choice[oldRow.id] === false)) nos.push(old);
+    }
+    return nos;
 }

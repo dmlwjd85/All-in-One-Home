@@ -6,6 +6,7 @@
 import { heldTodoTime, settleHoldWithRemote } from './todoTimeHold.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, fingerprint, printDigest, rowMark, unchangedSincePush } from './cloud.js';
 import { toCloudRow } from './cloudShape.js';
+import { isSensitiveText } from './sensitive.js';
 
 /* 되돌리기·다른 기기 삭제를 견줄 묶음 */
 export const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices', 'attendance'];
@@ -66,9 +67,13 @@ export function clippedCopy(mine, theirs) {
 
 /* 받아 온 값으로 바꿉니다. 클라우드에 없는 칸(다른 기기에서 비운 칸)은 이 기기에서도 비웁니다. */
 const OPTIONAL_FROM_CLOUD = { notes: ['title', 'attendees'], todos: ['time', 'pri', 'doneOn', 'doneHm'] };
+/* 이 기기에만 두는 민감 메모 칸. 클라우드에는 이 칸을 비워 올리므로, 받아 온 빈 칸으로 이 기기 메모를 덮지 않습니다. */
+const LOCAL_SENSITIVE_FIELD = { attendance: 'note', students: 'memo' };
 export function takeRemote(cloudName, row, theirs) {
     const next = { ...row, ...theirs };
     for (const key of OPTIONAL_FROM_CLOUD[cloudName] || []) if (!(key in theirs)) delete next[key];
+    const localField = LOCAL_SENSITIVE_FIELD[cloudName];
+    if (localField && !theirs?.[localField] && isSensitiveText(row?.[localField])) next[localField] = row[localField];
     // 예전 규칙이 시각을 거절해 시각 없이 올린 할 일: 내용이 그대로면 이 기기 시각을 지킵니다(PR #62 검수 1번).
     if (cloudName === 'todos' && row?.time) { const kept = heldTodoTime(row.id, theirs); if (kept) next.time = kept; }
     // 다른 기기가 시각을 넣었거나 고치거나 끝낸 쪽이 이겼으면 지킴 기록은 버립니다(PR #62 r2 1번).

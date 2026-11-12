@@ -40,8 +40,11 @@ check(isSensitiveText('알레르기 없는 간식'), '민감 낱말을 놓쳤습
 check(isSensitiveText('건강 특이') && isSensitiveText('보건실 메모'), '건강·보건을 민감으로 보지 않습니다.');
 check(!isSensitiveText('발표를 끝까지 했어요'), '평범한 기록을 민감으로 봤습니다.');
 const rulesText = readFileSync(`${root}/firestore.rules`, 'utf8');
-const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
-check(rulesText.includes(safeLine), '규칙의 safeText가 앱 민감 낱말과 다릅니다.');
+/* 규칙의 safeText 본문을 꺼내 앱(sensitive.js)이 만든 본문과 글자 그대로 견줍니다. 연락처·주소 꼴도 함께 견줍니다. */
+const safeMatch = rulesText.match(/function safeText\(v\) \{ return !v\.matches\('([^']*)'\); \}/);
+check(safeMatch && safeMatch[1] === rulesSafeTextBody(), '규칙의 safeText가 앱 민감 낱말·연락처·주소 꼴과 다릅니다.');
+check(isSensitiveText('어머니 010-1234-5678') && isSensitiveText('101동 1203호'), '보호자 연락처·주소를 민감으로 보지 않습니다.');
+check(isSensitiveText('', ['건강검진']), '건강검진 태그를 민감으로 보지 않습니다.');
 
 const period = periodStatus('08:42', DEFAULT_PERIODS, ['국어', '수학']);
 check(period.minutes === 18 && period.text.includes('국어') && period.text.includes('18분'), `1교시까지 18분이 아닙니다: ${period.text}`);
@@ -541,7 +544,7 @@ check(studentsSrc.includes('seoulYmd()') && !studentsSrc.includes("toISOString()
 check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력</Btn>'), '출력 머리나 단추 문구가 빠졌습니다.');
 check(studentsSrc.includes('htmlEscape(head)') && studentsSrc.includes('htmlEscape(row.date') && studentsSrc.includes('htmlEscape(row.kind') && studentsSrc.includes('htmlEscape((row.tags') && studentsSrc.includes("htmlEscape(row.text"), '출력 HTML에서 htmlEscape 호출이 빠졌습니다.');
 check(studentsSrc.includes("import('../lib/neisXlsx.js')")
-    && studentsSrc.includes('neisXlsxBytes(xlsx.neisRows(groups, data.students))')
+    && studentsSrc.includes('neisXlsxBytes(xlsx.neisRows(groups, everyone))')
     && studentsSrc.includes('나이스모아_${seoulYmd()}.xlsx')
     && !studentsSrc.includes('.csv'), '나이스 내려받기가 엑셀 파일(.xlsx)이 아닙니다.');
 check(studentsSrc.includes("event.key === 'Escape'") && studentsSrc.includes('cancelEdit'), '기록 수정 Esc 취소가 없습니다.');
@@ -700,7 +703,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v82'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v83'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

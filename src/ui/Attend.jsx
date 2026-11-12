@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
 import { clearAttendDraft, flushCloudNow, joined, markChecked, setAttendance, writeAttendDraft } from '../lib/db.js';
+import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
+import { AttendExport } from './ClassExport.jsx';
 
 const REASONS = ['질병', '미인정', '출석인정', '기타'];
 
 export function Attend() {
-    const { data, clock, route, go } = useUi();
+    const { data, clock, route, go, showToast } = useUi();
     const date = route.params.date || clock.ymd;
     const month = route.params.span === 'month';
     function attendHash(ymd, span) {
@@ -42,7 +44,7 @@ export function Attend() {
     }
 
     function openRecord(student) {
-        if (student?.no >= 1 && student?.no <= 50) {
+        if (student?.no >= 1 && student?.no <= 99) {
             go(`#/students/${student.no}`, { state: { appFrom: 'attend' } });
             return;
         }
@@ -51,10 +53,15 @@ export function Attend() {
     }
 
     const visibleStudents = data.students.filter(shown);
+    /* 지난 명단 학생(전출 등)의 출결도 이름으로 보이게, 아이디로 찾을 때는 지난 명단까지 봅니다. */
+    const everyone = data.allStudents || data.students;
+    const findStudent = (sid) => everyone.find((item) => item.id === sid);
     const shownMarks = marks.filter((row) => {
-        const student = data.students.find((item) => item.id === row.sid);
+        const student = findStudent(row.sid);
         return student && shown(student);
     });
+    const ym = date.slice(0, 7);
+    const pastStudents = everyone.filter((student) => student.active === false && data.attendance.some((row) => row.sid === student.id && row.date.startsWith(ym)) && shown(student));
 
     return (
         <div>
@@ -76,7 +83,7 @@ export function Attend() {
                 <Btn className={month ? 'chip' : 'chip on'} onClick={() => go(attendHash(date, ''), { replace: true })}>오늘</Btn>
                 <Btn className={month ? 'chip on' : 'chip'} onClick={() => go(attendHash(date, 'month'), { replace: true })}>이번 달</Btn>
             </div>
-            {month ? <MonthTable students={visibleStudents} attendance={data.attendance} ym={date.slice(0, 7)} onOpen={openRecord} emptyHint={data.students.length ? '이 상태인 친구가 없어요.' : '명단이 없으면 월 출결을 만들 수 없어요.'} /> : (
+            {month ? <MonthTable students={visibleStudents} pastStudents={pastStudents} attendance={data.attendance} ym={ym} onOpen={openRecord} emptyHint={data.students.length ? '이 상태인 친구가 없어요.' : '명단이 없으면 월 출결을 만들 수 없어요.'} /> : (
                 <div className="attend-layout" style={{ marginTop: 12 }}>
                     <div>
                         <div className="cell-grid wide">
@@ -91,10 +98,10 @@ export function Attend() {
                         {!shownMarks.length && !filter && <p className="muted">표시한 친구가 없어요. 모두 출석으로 보면 돼요.</p>}
                         {filter && !shownMarks.length && filter !== '출석' && <p className="muted">이 상태인 친구가 없어요.</p>}
                         {shownMarks.map((row) => {
-                            const student = data.students.find((item) => item.id === row.sid);
+                            const student = findStudent(row.sid);
                             return (
                                 <Btn key={row.id} block className="chip" style={{ marginBottom: 8, justifyContent: 'flex-start', background: statusBg(row.status), color: 'var(--ink)' }} onClick={() => setReasonFor(student)}>
-                                    {student?.no} {student?.name} {row.status} {row.reason} {row.note}
+                                    {student?.no} {student?.name}{student?.active === false ? '(지난 명단)' : ''} {row.status} {row.reason} {row.note}
                                 </Btn>
                             );
                         })}
@@ -102,6 +109,7 @@ export function Attend() {
                     </aside>
                 </div>
             )}
+            <AttendExport data={data} date={date} showToast={showToast} />
             {reasonFor && <ReasonSheet student={reasonFor} mark={byId.get(reasonFor.id)} date={date} onClose={() => setReasonFor(null)} />}
         </div>
     );
@@ -273,6 +281,8 @@ export function ReasonSheet({ student, mark, date, onClose }) {
                 {step === 'reason' && (
                     <>
                         <input className="field" aria-label="메모" placeholder="메모가 있으면 먼저 적고 사유를 누르세요" value={note} onChange={(event) => setNote(event.target.value)} />
+                        {/* 민감한 메모(건강·연락처 등)는 출결만 올리고 메모는 이 기기에 둡니다(cloudShape toAttendance). */}
+                        {isSensitiveText(note) && <p className="muted" style={{ margin: '6px 0 0' }}>🔒 {MEMO_LOCAL_HINT}</p>}
                         <Btn className={paper ? 'chip on' : 'chip'} style={{ margin: '8px 0' }} onClick={() => setPaper((value) => !value)}>{paper ? '서류 받음' : '서류 아직'}</Btn>
                         <ChoiceGrid label="사유" options={REASONS.map((item) => ({ id: item, label: item }))} onPick={chooseReason} />
                     </>
@@ -287,20 +297,29 @@ export function ReasonSheet({ student, mark, date, onClose }) {
     );
 }
 
-function MonthTable({ students, attendance, ym, onOpen, emptyHint }) {
-    const rows = students.map((student) => {
-        const marks = attendance.filter((row) => row.sid === student.id && row.date.startsWith(ym));
-        return { student, marks };
-    });
+/**
+ * 이번 달 출결. 지금 반 학생 모두, 그리고 이 달에 출결이 있는 지난 명단 학생(전출 등)을 '(지난 명단)'을 붙여 뒤에 둡니다.
+ * 지난 명단 학생은 같은 번호의 지금 학생 화면으로 잘못 가지 않도록 누르지 않는 줄로 둡니다.
+ */
+function MonthTable({ students, pastStudents = [], attendance, ym, onOpen, emptyHint }) {
+    const marksOf = (student) => attendance.filter((row) => row.sid === student.id && row.date.startsWith(ym));
+    const summary = (marks) => (marks.length ? marks.map((row) => `${Number(row.date.slice(8))}일 ${row.status}`).join(', ') : '결석·지각 없음');
+    const line = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '10px 12px', minHeight: 44, textAlign: 'left' };
     return (
         <div style={{ display: 'grid', gap: 8, marginTop: 12, minWidth: 0 }}>
-            {rows.map(({ student, marks }) => (
-                <Btn key={student.id} block className="solid-card" onClick={() => onOpen(student)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '10px 12px', minHeight: 44, textAlign: 'left' }}>
+            {students.map((student) => (
+                <Btn key={student.id} block className="solid-card" onClick={() => onOpen(student)} style={line}>
                     <strong style={{ flex: '0 0 auto' }}>{student.no} {student.name}</strong>
-                    <span className="muted" style={{ minWidth: 0, textAlign: 'right' }}>{marks.length ? marks.map((row) => `${Number(row.date.slice(8))}일 ${row.status}`).join(', ') : '결석·지각 없음'}</span>
+                    <span className="muted" style={{ minWidth: 0, textAlign: 'right' }}>{summary(marksOf(student))}</span>
                 </Btn>
             ))}
-            {!students.length && <p style={{ margin: 0 }}>{emptyHint}</p>}
+            {pastStudents.map((student) => (
+                <div key={student.id} className="solid-card" data-past-student="1" style={line}>
+                    <strong style={{ flex: '0 0 auto' }}>{student.no} {student.name}(지난 명단)</strong>
+                    <span className="muted" style={{ minWidth: 0, textAlign: 'right' }}>{summary(marksOf(student))}</span>
+                </div>
+            ))}
+            {!students.length && !pastStudents.length && <p style={{ margin: 0 }}>{emptyHint}</p>}
         </div>
     );
 }

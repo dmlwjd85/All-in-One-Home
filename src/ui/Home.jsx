@@ -49,7 +49,8 @@ export function Home() {
     const [editTodo, setEditTodo] = useState(null);
     const marks = data.attendance.filter((row) => row.date === clock.ymd);
     const checked = data.profile.checkedDates.includes(clock.ymd);
-    const count = data.profile.classSize || data.students.length;
+    /* 지금 명단 인원이 먼저입니다(클라우드 프로필의 반 인원은 50명까지만 올라감). */
+    const count = data.students.length || data.profile.classSize;
     const todos = joined(data, 'todos');
     const left = todos.filter((row) => !row.done).length;
     /* 홈 안내 한 줄(PR #60): 날짜마다 돌고, 출결 전·할 일·시간대·요일에 맞춰 고릅니다. */

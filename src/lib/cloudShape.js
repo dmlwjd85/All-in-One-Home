@@ -34,7 +34,8 @@ export function toCloudProfile(state) {
         displayName: String(state.auth?.name || '').slice(0, 40),
         className: String(profile.className || '').slice(0, 30),
         schoolYear: Number(profile.schoolYear) || 2026,
-        classSize: Number(profile.classSize || state.students?.length || 0),
+        /* 규칙은 60명까지 받습니다. 그보다 많으면 60으로 줄여 올려, 프로필 전체가 거절되지 않게 합니다(실제 인원은 이 기기 명단이 기준). */
+        classSize: Math.min(60, Math.max(0, Number(profile.classSize || state.students?.length || 0) || 0)),
         theme: ['system', 'light', 'dark'].includes(profile.theme) ? profile.theme : 'system',
         migrationVersion: 1,
     };
@@ -55,10 +56,37 @@ export function toCloudRow(collection, row) {
     if (!row || row.source === 'demo') return null;
     // 학생 메모만 민감하면 이름·번호는 올리고 메모만 빼 둡니다.
     if (collection === 'students') return toStudent(row);
+    // 출결도 같습니다. 메모만 민감하면 날짜·상태는 올리고 메모 칸은 클라우드에서 지웁니다(옛 메모가 남지 않게).
+    if (collection === 'attendance') return toAttendance(row);
     if (isSensitiveText(row.text, row.tags) || isSensitiveText(row.title) || isSensitiveText(row.note) || isSensitiveText(row.memo) || isSensitiveText(row.raw) || isSensitiveText(row.attendees)) {
         return null;
     }
-    if (collection === 'attendance') return toAttendance(row);
+    const shaped = shapeRow(collection, row);
+    // 마지막으로 올릴 모양 그대로 한 번 더 봅니다. 잘라 낸 글·정리함 안내(warning)처럼 위에서 안 본 칸도 규칙 safeText 에 걸리기 전에 막습니다.
+    // 시간표는 1~8교시 과목('보건' 수업)을 그대로 올리고 9·10교시만 칸마다 거르므로(toTable) 여기서 보지 않습니다.
+    if (collection === 'timetable') return shaped;
+    return shaped && bodyLeaks(shaped.body) ? null : shaped;
+}
+
+/* 예전 규칙으로 클라우드에 올라갔을 수 있는 글 묶음(기록·일정·할 일·메모·알림장). */
+export const SWEEP_COLLECTIONS = ['records', 'events', 'todos', 'notes', 'notices'];
+
+/**
+ * 모양은 클라우드에 맞는데 지금 기준으로 민감해서 올리지 않는 줄인지 봅니다.
+ * 예전 규칙으로 올라간 뒤 민감 낱말·꼴이 늘어난 줄을 찾을 때 씁니다(모양이 틀려 못 올리는 줄은 빼고).
+ */
+export function blockedAsSensitive(collection, row) {
+    if (!row || row.source === 'demo' || !SWEEP_COLLECTIONS.includes(collection)) return false;
+    if (!shapeRow(collection, row)) return false;
+    return !toCloudRow(collection, row);
+}
+
+/** 민감 여부와 상관없이 이 줄의 클라우드 문서 id(알림장은 날짜). 지울 때 씁니다. */
+export function cloudRowId(collection, row) {
+    return row ? shapeRow(collection, row)?.id || '' : '';
+}
+
+function shapeRow(collection, row) {
     if (collection === 'records') return toRecord(row);
     if (collection === 'events') return toEvent(row);
     if (collection === 'todos') return toTodo(row);
@@ -70,15 +98,32 @@ export function toCloudRow(collection, row) {
     return null;
 }
 
+/** 올릴 문서의 글 칸·태그 가운데 하나라도 민감하면 참입니다(한 단계만 봅니다). */
+function bodyLeaks(body) {
+    return Object.values(body || {}).some((value) => {
+        if (typeof value === 'string') return isSensitiveText(value);
+        if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return isSensitiveText('', value);
+        return false;
+    });
+}
+
+/** 메모 칸: 전체 글과 잘라 올릴 글이 둘 다 민감하지 않을 때만 올립니다. */
+function safeMemo(value, max) {
+    if (!value) return '';
+    const cut = String(value).slice(0, max);
+    return isSensitiveText(value) || isSensitiveText(cut) ? '' : cut;
+}
+
 function toStudent(row) {
     const id = cloudDocId(row.id);
-    if (!id || !(row.no >= 1 && row.no <= 50) || !String(row.name || '').trim()) return null;
+    if (!id || !(row.no >= 1 && row.no <= 99) || !String(row.name || '').trim()) return null;
     const body = { no: Number(row.no), name: String(row.name).trim().slice(0, 20), active: row.active !== false };
     if (SEX_TO[row.sex]) body.sex = SEX_TO[row.sex];
     if (/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(row.birthday || '')) body.birthday = row.birthday;
     const clear = [];
-    if (row.memo && !isSensitiveText(row.memo)) body.memo = String(row.memo).slice(0, 200);
-    else if (isSensitiveText(row.memo)) clear.push('memo');
+    const memo = safeMemo(row.memo, 200);
+    if (memo) body.memo = memo;
+    else if (row.memo) clear.push('memo');
     return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
@@ -106,7 +151,9 @@ function toAttendance(row) {
     if (row.period >= 1 && row.period <= 8) body.period = Number(row.period);
     else clear.push('period');
     if (typeof row.paper === 'boolean') body.paper = row.paper;
-    if (row.note) body.note = String(row.note).slice(0, 100);
+    /* 민감한 메모(건강·연락처 등)는 이 기기 줄에만 두고, 클라우드에는 메모 없이 올려 예전 메모도 지웁니다. 잘라 낸 100자만 보지 않고 전체를 봅니다. */
+    const note = safeMemo(row.note, 100);
+    if (note) body.note = note;
     else clear.push('note');
     return { id, body, stamps: lwwStamps(row), clear, ...editAtOf(row) };
 }

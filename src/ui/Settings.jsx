@@ -7,7 +7,9 @@ import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
 import { kbThemeId, loadKbThemeCss, setKbTheme } from './kbtheme.js';
-import { fillSlotsFromText, RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
+import { RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
+import { RosterPaste, RosterPreview, quietSave } from './RosterPaste.jsx';
+import { MAX_STUDENTS, readRosterText } from '../lib/roster.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
 import { planRecordWipe } from '../lib/gcalCore.js';
@@ -443,7 +445,7 @@ export function Settings() {
                     if (!file) return;
                     const text = await file.text();
                     const result = await importText(text, importMode);
-                    showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
+                    showToast(result.ok ? (result.message ? `기록을 가져왔어요. ${result.message}` : '기록을 가져왔어요.') : (result.errors || []).join(' '));
                 }} />
                 <KeptLegacy data={data} showToast={showToast} />
                 <h3>로그인</h3>
@@ -580,25 +582,35 @@ function StoreGuideSection() {
 export function RosterSettings() {
     const { data, showToast } = useUi();
     const [names, setNames] = useState(() => slotsFromStudents(data.students));
-    const [paste, setPaste] = useState('');
+    const [slotRead, setSlotRead] = useState(null);
+    const [slotKey, setSlotKey] = useState(0);
+    function leave() {
+        if (history.state?.rosterFrom === 'settings') history.back();
+        else location.replace('#/settings');
+    }
     return (
         <section className="glass" style={{ padding: 14 }}>
             <h2 className="title-font" style={{ marginTop: 0 }}>명단</h2>
-            <p className="muted">1번부터 32번까지 칸이 열려 있어요. 있는 이름은 그 번호에 채워 두었습니다.</p>
-            <RosterSlots names={names} onChange={setNames} />
-            <textarea className="field" style={{ marginTop: 8 }} rows={3} aria-label="명단 붙여 넣기" placeholder={'한 줄에 한 명. 빈 칸은 그대로 둡니다.\n12 이하은'} value={paste} onChange={(event) => setPaste(event.target.value)} />
-            <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => {
-                const filled = fillSlotsFromText(names, paste);
-                setNames(filled.names);
-                showToast(filled.errors?.[0] || '번호 칸에 채웠어요.');
-            }}>칸에 채우기</Btn>
+            <h3 style={{ margin: '0 0 4px' }}>명렬 붙여넣기</h3>
+            <p className="muted" style={{ marginTop: 0 }}>엑셀·한글 표·나이스 화면에서 복사한 명단을 그대로 붙여 넣으세요. 번호가 없으면 차례로 매기고, 남학생 1번·여학생 51번처럼 띄운 번호도 그대로 써요. {MAX_STUDENTS}명까지 받아요.</p>
+            <RosterPaste data={data} showToast={showToast} onSaved={leave} />
+            <h3 style={{ margin: '16px 0 4px' }}>칸에서 고치기</h3>
+            <p className="muted" style={{ marginTop: 0 }}>1번부터 32번까지 칸이 열려 있어요. 있는 이름은 그 번호에 채워 두었습니다.</p>
+            <RosterSlots names={names} onChange={(next) => { setNames(next); setSlotRead(null); }} />
             <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
-                const parsed = await replaceRoster(rosterTextFromSlots(names));
+                const read = readRosterText(rosterTextFromSlots(names));
+                /* 이름이 바뀌거나 빠지는 학생이 있으면 '이렇게 넣을게요'를 먼저 보여 줍니다. 그대로이거나 새로 넣기만 하면 바로 저장합니다. */
+                if (!quietSave(data, read)) {
+                    setSlotKey((n) => n + 1);
+                    setSlotRead(read);
+                    return;
+                }
+                const parsed = await replaceRoster(read.rows.map(({ no, name, sex }) => ({ no, name, sex })));
                 if (parsed?.storageFailed) return;
-                showToast(parsed.errors?.[0] || '명단을 저장했어요.');
-                if (history.state?.rosterFrom === 'settings') history.back();
-                else location.replace('#/settings');
+                showToast('명단을 저장했어요.');
+                leave();
             }}>명단 저장</Btn>
+            {slotRead && <RosterPreview key={slotKey} data={data} read={slotRead} showToast={showToast} onCancel={() => setSlotRead(null)} onSaved={leave} />}
         </section>
     );
 }

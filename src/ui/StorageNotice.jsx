@@ -7,7 +7,7 @@ import { Btn } from './bits.jsx';
 
 /* 문구 근거(과장 금지):
    ① 이 기기 저장: src/lib/db.js createVault('ssug-gyomu') — 로그인 전에는 클라우드로 보내지 않습니다.
-   ② 민감 낱말: src/lib/sensitive.js SENSITIVE_WORDS, src/lib/cloudShape.js toCloudRow(민감하면 null, 학생 메모는 비움),
+   ② 민감 낱말: src/lib/sensitive.js SENSITIVE_WORDS·CONTACT_PATTERNS(연락처·주소), src/lib/cloudShape.js toCloudRow(민감하면 null, 학생·출결 메모는 비움),
       민감 기록은 createVault('ssug-gyomu-local').
    ③ 로그인: src/lib/cloud.js users/{uid} 아래 명단·출결·기록·일정·할 일·메모·알림장, firestore.rules isOwner(uid).
    ④ 공용 컴퓨터: src/ui/Start.jsx·Settings.jsx — 로그인이 이 탭에만 남고 탭을 닫으면 로그아웃. */
