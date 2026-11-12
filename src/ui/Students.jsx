@@ -52,6 +52,9 @@ export function Student() {
     const [editingId, setEditingId] = useState('');
     const [draft, setDraft] = useState('');
     const editFieldRef = useRef(null);
+    /* 한 줄 기록 저장 중에 Enter를 또 눌러도 한 번만 저장합니다. */
+    const lineBusy = useRef(false);
+    const [lineSaving, setLineSaving] = useState(false);
     useEffect(() => {
         if (!editingId) return;
         const node = editFieldRef.current;
@@ -69,6 +72,31 @@ export function Student() {
         ['칭찬', records.filter((row) => row.kind === '칭찬').length],
         ['나이스 옮김', records.filter((row) => row.neis && !row.neisMoved).length],
     ];
+
+    async function saveLine() {
+        if (lineBusy.current) return;
+        const sent = text;
+        if (!sent.trim()) { showToast('한 줄만 적어도 남길 수 있어요.'); return; }
+        lineBusy.current = true;
+        setLineSaving(true);
+        try {
+            const result = await saveQuick({ kind: '관찰', text: sent, no: student.no, tags: ['학습'], neis: true });
+            if (result?.ok) {
+                /* 저장하는 동안 더 적은 글이 있으면 지우지 않습니다. */
+                setText((now) => (now === sent ? '' : now));
+                showToast(result.message, true);
+                return;
+            }
+            showToast(result?.storageFailed
+                ? `${result.message || '기록을 저장하지 못했어요.'} 쓰던 글은 그대로 있어요.`
+                : (result?.message || '기록을 남기지 못했어요. 쓰던 글은 그대로 있어요.'));
+        } catch {
+            showToast('기록을 남기지 못했어요. 쓰던 글은 그대로 있어요.');
+        } finally {
+            lineBusy.current = false;
+            setLineSaving(false);
+        }
+    }
 
     function focusEditButton(id) {
         requestAnimationFrame(() => {
@@ -137,11 +165,12 @@ export function Student() {
                 ))}
             </div>
             <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
-                <input className="field" placeholder={`${givenName(student.name)} 이야기 발라 두기`} aria-label="이 학생 기록" value={text} onChange={(event) => setText(event.target.value)} onKeyDown={async (event) => {
-                    if (event.key === 'Enter') {
-                        const result = await saveQuick({ kind: '관찰', text, no: student.no, tags: ['학습'], neis: true });
-                        if (result.ok) { setText(''); showToast(result.message, true); }
-                    }
+                <input className="field" placeholder={`${givenName(student.name)} 이야기 발라 두기`} aria-label="이 학생 기록" aria-busy={lineSaving} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    /* 한글 조합 중 Enter(마지막 글자 확정)는 저장하지 않습니다. 빠른 입력·할 일 고치기와 같은 방식이에요. */
+                    if (event.nativeEvent?.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    saveLine();
                 }} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     {['관찰', '상담', '칭찬', '보호자'].map((kind) => (
