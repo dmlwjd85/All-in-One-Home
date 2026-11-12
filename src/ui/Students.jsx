@@ -5,7 +5,7 @@ import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { seoulParts, seoulYmd } from '../lib/date.js';
-import { csvEscape, htmlEscape } from '../lib/neisExport.js';
+import { htmlEscape } from '../lib/neisExport.js';
 import { DateChip } from './DateChip.jsx';
 
 /** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
@@ -214,26 +214,6 @@ export function Student() {
     );
 }
 
-function neisCsv(groups, students) {
-    const lines = [['번호', '이름', '날짜', '종류', '태그', '내용'].map(csvEscape).join(',')];
-    groups.forEach(([sid, rows]) => {
-        const student = students.find((item) => item.id === sid);
-        const no = student?.no ?? '';
-        const name = student?.name || '학생 미정';
-        rows.forEach((row) => {
-            lines.push([
-                no,
-                name,
-                row.date || '',
-                row.kind || '',
-                (row.tags || []).join(' · '),
-                row.text || '',
-            ].map(csvEscape).join(','));
-        });
-    });
-    return `\uFEFF${lines.join('\n')}`;
-}
-
 export function Neis() {
     const { data, showToast } = useUi();
     const records = joinedRecords(data).filter((row) => row.neis && !row.neisMoved && !row.localOnly);
@@ -253,6 +233,13 @@ export function Neis() {
     const activeSid = groups.some(([sid]) => sid === picked) ? picked : (groups[0]?.[0] || '');
     const activeRows = groups.find(([sid]) => sid === activeSid)?.[1] || [];
     const activeStudent = data.students.find((item) => item.id === activeSid);
+    const xlsxRef = useRef(null);
+    useEffect(() => {
+        /* 엑셀 만드는 코드를 화면이 열릴 때 미리 불러 둡니다(첫 화면 묶음에는 넣지 않음). */
+        let alive = true;
+        import('../lib/neisXlsx.js').then((mod) => { if (alive) xlsxRef.current = mod; }).catch(() => {});
+        return () => { alive = false; };
+    }, []);
 
     async function copyAll() {
         const lines = groups.map(([sid, rows]) => {
@@ -268,23 +255,43 @@ export function Neis() {
         }
     }
 
-    function downloadCsv() {
+    async function downloadXlsx() {
         if (!groups.length) {
             showToast('내려받을 기록이 없어요.');
             return;
         }
-        const body = neisCsv(groups, data.students);
-        const blob = new Blob([body], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
+        let file;
+        try {
+            /* 미리 불러 둔 엑셀 코드가 있으면 기다리지 않아, 누른 손짓이 끊기지 않습니다(아이폰 공유·내려받기). */
+            const xlsx = xlsxRef.current || await import('../lib/neisXlsx.js');
+            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, data.students));
+            file = new File([bytes], `나이스모아_${seoulYmd()}.xlsx`, { type: xlsx.NEIS_XLSX_TYPE });
+        } catch {
+            showToast('엑셀 파일을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.');
+            return;
+        }
+        /* 휴대폰(아이폰 홈 화면 앱 등)은 내려받기가 막힐 수 있어 공유 창으로 파일을 넘깁니다. 컴퓨터는 바로 내려받습니다. */
+        const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (mobile && navigator.canShare?.({ files: [file] })) {
+            try {
+                await navigator.share({ files: [file], title: file.name });
+                showToast('엑셀 파일(.xlsx)을 넘겼어요. 「파일에 저장」을 고르면 이 기기에 남아요.');
+                return;
+            } catch (error) {
+                if (error?.name === 'AbortError') return;
+                /* 공유가 안 되면 아래에서 내려받기로 이어 갑니다. */
+            }
+        }
+        const url = URL.createObjectURL(file);
         const link = document.createElement('a');
-        const stamp = seoulYmd();
         link.href = url;
-        link.download = `나이스모아_${stamp}.csv`;
+        link.download = file.name;
         document.body.appendChild(link);
         link.click();
         link.remove();
-        URL.revokeObjectURL(url);
-        showToast('엑셀에서 열 수 있는 표를 이 기기에만 내려받았어요.');
+        /* 휴대폰은 파일을 늦게 읽기도 해서, 주소는 1분 뒤에 풉니다. */
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        showToast('엑셀 파일(.xlsx)을 이 기기에만 내려받았어요.');
     }
 
     function printTable() {
@@ -326,10 +333,10 @@ export function Neis() {
 
     return (
         <div>
-            <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」는 엑셀에서 열 수 있는 표(.csv)로 이 기기에만 받습니다.</p>
+            <p>나이스에 옮기려고 표시해 둔 기록만 모았어요. 복사한 뒤, 옮겼으면 표시해 주세요. 「내려받기」를 누르면 엑셀 파일(.xlsx)로 이 기기에만 받아요.</p>
             <div className="neis-tools" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Btn className="primary-btn fit-btn" onClick={copyAll}>전체 복사</Btn>
-                <Btn className="chip" onClick={downloadCsv}>내려받기</Btn>
+                <Btn className="chip" onClick={downloadXlsx}>내려받기</Btn>
                 <Btn className="chip" onClick={printTable}>출력</Btn>
             </div>
             {!groups.length && <p className="muted">옮길 기록이 없어요. 관찰을 남길 때 ‘나이스에 옮길 것’이 켜져 있어요.</p>}

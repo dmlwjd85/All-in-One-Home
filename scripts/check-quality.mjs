@@ -540,10 +540,10 @@ check(/async function removeRecord\([\s\S]*?if\s*\(\s*!window\.confirm\('이 기
 check(studentsSrc.includes('seoulYmd()') && !studentsSrc.includes("toISOString().slice(0, 10)"), '나이스 파일 이름이 한국 날짜가 아닙니다.');
 check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력</Btn>'), '출력 머리나 단추 문구가 빠졌습니다.');
 check(studentsSrc.includes('htmlEscape(head)') && studentsSrc.includes('htmlEscape(row.date') && studentsSrc.includes('htmlEscape(row.kind') && studentsSrc.includes('htmlEscape((row.tags') && studentsSrc.includes("htmlEscape(row.text"), '출력 HTML에서 htmlEscape 호출이 빠졌습니다.');
-check(studentsSrc.includes("['번호', '이름', '날짜', '종류', '태그', '내용'].map(csvEscape)")
-    && (studentsSrc.match(/\.map\(csvEscape\)/g) || []).length >= 2
-    && studentsSrc.includes("map(csvEscape).join(',')];")
-    && studentsSrc.includes("map(csvEscape).join(','));"), 'CSV에서 csvEscape를 머리·행에 모두 쓰지 않습니다.');
+check(studentsSrc.includes("import('../lib/neisXlsx.js')")
+    && studentsSrc.includes('neisXlsxBytes(xlsx.neisRows(groups, data.students))')
+    && studentsSrc.includes('나이스모아_${seoulYmd()}.xlsx')
+    && !studentsSrc.includes('.csv'), '나이스 내려받기가 엑셀 파일(.xlsx)이 아닙니다.');
 check(studentsSrc.includes("event.key === 'Escape'") && studentsSrc.includes('cancelEdit'), '기록 수정 Esc 취소가 없습니다.');
 check(studentsSrc.includes('event.ctrlKey || event.metaKey') && studentsSrc.includes("event.key === 'Enter'"), '기록 수정 Ctrl+Enter 저장이 없습니다.');
 check(studentsSrc.includes('focusEditButton') && studentsSrc.includes('data-edit-for')
@@ -700,7 +700,7 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v79'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v80'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

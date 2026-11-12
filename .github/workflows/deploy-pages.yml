@@ -93,6 +93,7 @@ jobs:
           CHROME_PATH=/usr/bin/google-chrome npm run check:g1
           CHROME_PATH=/usr/bin/google-chrome npm run check:nice-datechip-browser
           CHROME_PATH=/usr/bin/google-chrome npm run check:minutes-edit-top
+          CHROME_PATH=/usr/bin/google-chrome npm run check:neis-xlsx
       - name: 브라우저에서 넘침과 버튼 크기 확인
         env:
           VITE_BASE: ./
