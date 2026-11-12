@@ -1,5 +1,5 @@
 /**
- * 나이스 모아 보기 「내려받기」용 엑셀 파일(.xlsx)을 만듭니다.
+ * 나이스 모아 보기 「내려받기」용 엑셀 파일(.xlsx)을 만듭니다. 출결·기록 내려받기(classXlsx.js)도 이 묶는 코드를 같이 씁니다.
  * 바깥 라이브러리 없이 엑셀 파일 구조(OOXML)를 압축하지 않은 zip으로 묶습니다.
  * - 모든 칸은 글자 칸으로 써서, '='·'+'로 시작해도 수식으로 바뀌지 않습니다.
  * - 머리글 줄은 굵게, 내용 칸은 칸 안에서 줄이 바뀌고, 열 너비를 미리 맞춰 둡니다.
@@ -20,8 +20,16 @@ function xmlText(value) {
         .replace(/"/g, '&quot;');
 }
 
+/** 0 → A, 25 → Z, 26 → AA (학기 출결표는 날짜 열이 100개를 넘습니다). */
 function colName(index) {
-    return String.fromCharCode(65 + index);
+    let n = index + 1;
+    let out = '';
+    while (n > 0) {
+        const r = (n - 1) % 26;
+        out = String.fromCharCode(65 + r) + out;
+        n = Math.floor((n - 1) / 26);
+    }
+    return out;
 }
 
 /** 학생별 기록 묶음을 머리글 + 행 목록(모두 글자)으로 바꿉니다. */
@@ -45,7 +53,13 @@ export function neisRows(groups, students) {
     return rows;
 }
 
-function sheetXml(rows, strings) {
+/**
+ * 시트 하나. opts.widths: 열 너비, opts.freezeCols: 왼쪽에 고정할 열 수(번호·이름).
+ * 숫자(number)로 넘긴 칸만 숫자 칸이 됩니다. 글자로 넘긴 칸은 번호 열(첫 열)의 순수한 숫자 말고는 모두 글자 칸입니다.
+ */
+function sheetXml(rows, strings, opts = {}) {
+    const widths = opts.widths || WIDTHS;
+    const freezeCols = Number(opts.freezeCols) || 0;
     const index = new Map();
     const sst = (text) => {
         if (!index.has(text)) {
@@ -59,19 +73,24 @@ function sheetXml(rows, strings) {
         const xml = cells.map((cell, c) => {
             const text = String(cell ?? '');
             if (!text) return `<c r="${colName(c)}${r + 1}" s="${style}"/>`;
+            if (r > 0 && typeof cell === 'number' && Number.isFinite(cell)) return `<c r="${colName(c)}${r + 1}" s="${style}"><v>${cell}</v></c>`;
             /* 번호 칸의 순수한 숫자만 숫자로 둡니다(정렬용). 나머지는 모두 글자 칸입니다. */
             if (r > 0 && c === 0 && /^\d{1,4}$/.test(text)) return `<c r="${colName(c)}${r + 1}" s="${style}"><v>${Number(text)}</v></c>`;
             return `<c r="${colName(c)}${r + 1}" s="${style}" t="s"><v>${sst(text)}</v></c>`;
         }).join('');
         return `<row r="${r + 1}">${xml}</row>`;
     }).join('');
-    const cols = WIDTHS.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
-    const last = `${colName(NEIS_HEAD.length - 1)}${Math.max(rows.length, 1)}`;
+    const span = Math.max(1, widths.length, ...rows.map((row) => row.length));
+    const cols = Array.from({ length: span }, (_, i) => `<col min="${i + 1}" max="${i + 1}" width="${widths[i] ?? widths[widths.length - 1] ?? 10}" customWidth="1"/>`).join('');
+    const last = `${colName(span - 1)}${Math.max(rows.length, 1)}`;
+    const pane = freezeCols > 0
+        ? `<pane xSplit="${freezeCols}" ySplit="1" topLeftCell="${colName(freezeCols)}2" activePane="bottomRight" state="frozen"/>`
+        : '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
         + '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>'
         + `<dimension ref="A1:${last}"/>`
-        + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+        + `<sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews>`
         + '<sheetFormatPr defaultRowHeight="16.5"/>'
         + `<cols>${cols}</cols>`
         + `<sheetData>${body}</sheetData>`
@@ -102,34 +121,53 @@ const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
     + '</styleSheet>';
 
-function workbookXml() {
+/** 시트 이름: 엑셀이 받지 않는 글자([]:*?/\\)를 빼고 31자까지, 겹치면 뒤에 번호를 붙입니다. */
+function sheetNames(names) {
+    const used = new Set();
+    return names.map((raw, i) => {
+        const base = String(raw || `시트${i + 1}`).replace(/[[\]:*?/\\]/g, ' ').replace(/^'+|'+$/g, '').trim().slice(0, 31) || `시트${i + 1}`;
+        let name = base;
+        for (let n = 2; used.has(name.toLowerCase()); n += 1) name = `${base.slice(0, 28)} ${n}`;
+        used.add(name.toLowerCase());
+        return name;
+    });
+}
+
+function workbookXml(names = ['나이스 모아 보기']) {
+    const sheets = sheetNames(names).map((name, i) => `<sheet name="${xmlText(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        + '<sheets><sheet name="나이스 모아 보기" sheetId="1" r:id="rId1"/></sheets>'
+        + `<sheets>${sheets}</sheets>`
         + '</workbook>';
 }
 
-const CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-    + '<Default Extension="xml" ContentType="application/xml"/>'
-    + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-    + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-    + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
-    + '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
-    + '</Types>';
+function contentTypes(count = 1) {
+    const sheets = Array.from({ length: count }, (_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + sheets
+        + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        + '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+        + '</Types>';
+}
 
 const ROOT_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
     + '</Relationships>';
 
-const BOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-    + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
-    + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>'
-    + '</Relationships>';
+function bookRels(count = 1) {
+    const sheets = Array.from({ length: count }, (_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('');
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + sheets
+        + `<Relationship Id="rId${count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+        + `<Relationship Id="rId${count + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>`
+        + '</Relationships>';
+}
 
 let crcTable = null;
 function crc32(bytes) {
@@ -204,15 +242,24 @@ function zipStore(files) {
 
 /** 행 목록(첫 줄은 머리글)으로 .xlsx 바이트를 만듭니다. */
 export function neisXlsxBytes(rows) {
+    return xlsxBookBytes([{ name: '나이스 모아 보기', rows }]);
+}
+
+/**
+ * 시트 여러 개로 .xlsx 바이트를 만듭니다.
+ * sheets: [{ name, rows(첫 줄은 머리글), widths?, freezeCols? }]
+ */
+export function xlsxBookBytes(sheets) {
+    const list = (sheets || []).length ? sheets : [{ name: '시트1', rows: [[]] }];
     const strings = [];
-    const sheet = sheetXml(rows, strings);
+    const xmls = list.map((sheet) => sheetXml(sheet.rows || [], strings, sheet));
     return zipStore([
-        ['[Content_Types].xml', CONTENT_TYPES],
+        ['[Content_Types].xml', contentTypes(list.length)],
         ['_rels/.rels', ROOT_RELS],
-        ['xl/workbook.xml', workbookXml()],
-        ['xl/_rels/workbook.xml.rels', BOOK_RELS],
+        ['xl/workbook.xml', workbookXml(list.map((sheet) => sheet.name))],
+        ['xl/_rels/workbook.xml.rels', bookRels(list.length)],
         ['xl/styles.xml', STYLES],
         ['xl/sharedStrings.xml', sharedXml(strings)],
-        ['xl/worksheets/sheet1.xml', sheet],
+        ...xmls.map((xml, i) => [`xl/worksheets/sheet${i + 1}.xml`, xml]),
     ]);
 }
