@@ -42,7 +42,7 @@ export function Attend() {
     }
 
     function openRecord(student) {
-        if (student?.no >= 1 && student?.no <= 50) {
+        if (student?.no >= 1 && student?.no <= 99) {
             go(`#/students/${student.no}`, { state: { appFrom: 'attend' } });
             return;
         }

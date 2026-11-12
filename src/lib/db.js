@@ -16,7 +16,7 @@ import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
-import { parseRoster } from './roster.js';
+import { isActiveStudent, parseRoster, planRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 import { mergeLinks, readLinks } from './eduLinks.js';
@@ -1397,7 +1397,8 @@ export async function saveQuick(input, now = new Date()) {
         : (paste.time || '');
     let message = '남겼어요.';
     const failed = await update((draft) => {
-        const student = draft.students.find((row) => row.no === Number(no));
+        /* 지난 명단 학생(active: false)과 번호가 겹쳐도 지금 반 학생에게 붙입니다. */
+        const student = draft.students.find((row) => row.no === Number(no) && isActiveStudent(row));
         const sid = student?.id || '';
         const kind = input.kind || '메모';
         const base = { source: 'app', at: now.toISOString() };
@@ -1957,26 +1958,26 @@ let persistenceHook = null;
 /** 검사용: 로그인 보관 방식을 바꾸는 함수를 가짜로 바꿉니다. */
 export function usePersistenceForTest(fn = null) { persistenceHook = fn; }
 
-export async function replaceRoster(text) {
-    const parsed = parseRoster(text);
+/**
+ * 명단을 바꿉니다. text(붙여 넣은 글) 또는 [{ no, name, sex }] 를 받습니다.
+ * 같은 번호·같은 이름이면 그 학생 그대로, 이름이 다르면 새 학생(새 아이디, 메모·생일 없음)입니다.
+ * keep 에 든 번호는 이름만 고친 같은 학생으로 봅니다. 빠진 학생은 지우지 않고 지난 명단으로 남깁니다(기록·출결도 그대로).
+ */
+export async function replaceRoster(input, { keep = [] } = {}) {
+    const parsed = Array.isArray(input)
+        ? { students: input.map((row) => ({ no: Number(row.no), name: String(row.name || '').trim().slice(0, 20), sex: row.sex || '' })).filter((row) => row.no >= 1 && row.name), errors: [] }
+        : parseRoster(input);
     if (!parsed.students.length && parsed.errors.length) return parsed;
+    let changes = [];
     const failed = await update((draft) => {
-        const old = new Map(draft.students.map((row) => [row.no, row]));
-        draft.students = parsed.students.map((row) => ({
-            id: old.get(row.no)?.id || `s${row.no}`,
-            no: row.no,
-            name: row.name,
-            sex: row.sex || old.get(row.no)?.sex || '',
-            birthday: old.get(row.no)?.birthday || '',
-            active: true,
-            memo: old.get(row.no)?.memo || '',
-            source: old.get(row.no)?.source || 'app',
-        }));
+        const plan = planRoster(draft.students, parsed.students, { keep });
+        changes = plan.changes;
+        draft.students = plan.students;
         draft.profile.classSize = parsed.students.length;
         return draft;
     });
     if (failed?.storageFailed) return failed;
-    return parsed;
+    return { ...parsed, changes };
 }
 
 export async function setTimetable(day, period, subject, specialist) {
