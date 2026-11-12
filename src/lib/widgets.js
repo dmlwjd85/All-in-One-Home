@@ -8,17 +8,35 @@ export const WIDGET_MODE_KEY = 'ssug-gyomu-widget-mode';
 export const WIDGET_SIZES = ['s', 'm', 'l'];
 export const SIZE_LABEL = { s: '작게', m: '넓게', l: '크게' };
 
-/** 고를 수 있는 위젯. size 는 처음 크기입니다. */
+/** 고를 수 있는 위젯. size 는 처음 크기, icon 은 꾸미기에서 보이는 그림 글자, hint 는 한 줄 설명입니다. */
 export const WIDGETS = [
-    { id: 'weather', label: '날씨', size: 's' },
-    { id: 'day', label: '하루', size: 'm' },
-    { id: 'todo', label: '할 일', size: 's' },
-    { id: 'week', label: '한 주', size: 'm' },
-    { id: 'notice', label: '알림장', size: 's' },
-    { id: 'events', label: '일정', size: 's' },
-    { id: 'month', label: '한 달', size: 'm' },
-    { id: 'year', label: '일 년', size: 'm' },
+    { id: 'day', label: '하루', size: 'm', icon: '☀️', hint: '오늘 날짜·시간표·일정·출결' },
+    { id: 'weather', label: '날씨', size: 's', icon: '⛅', hint: '지금 기온과 사흘 예보' },
+    { id: 'todo', label: '할 일', size: 's', icon: '✅', hint: '남은 할 일, 눌러서 끝내기' },
+    { id: 'notice', label: '알림장', size: 's', icon: '📢', hint: '오늘·내일 알림장' },
+    { id: 'month', label: '한 달', size: 'l', icon: '🗓️', hint: '날짜 칸마다 일정 제목' },
+    { id: 'week', label: '한 주', size: 'm', icon: '📆', hint: '요일마다 시각과 일정' },
+    { id: 'events', label: '다가오는 일정', size: 's', icon: '⏳', hint: 'D-day 순서' },
+    { id: 'year', label: '일 년', size: 'm', icon: '🧭', hint: '달마다 큰 일정' },
 ];
+
+/** 크기 단추를 누를 때마다 작게 → 넓게 → 크게 → 작게 */
+export function nextSize(size) {
+    const i = WIDGET_SIZES.indexOf(size);
+    return WIDGET_SIZES[(i + 1) % WIDGET_SIZES.length];
+}
+
+/** 끌어다 놓기: from 위젯을 to 위젯 자리로 옮깁니다(사이 위젯은 한 칸씩 밀림). */
+export function dropWidget(layout, fromId, toId) {
+    const list = cleanLayout(layout);
+    const from = list.findIndex((w) => w.id === fromId);
+    const to = list.findIndex((w) => w.id === toId);
+    if (from < 0 || to < 0 || from === to) return list;
+    const next = [...list];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+}
 
 const KNOWN = new Map(WIDGETS.map((w) => [w.id, w]));
 
@@ -42,14 +60,17 @@ export function cleanLayout(raw) {
     return out;
 }
 
-/** 한 칸 위(-1)나 아래(+1)로 옮깁니다. 끝에서는 그대로입니다. */
+/** 보이는 위젯 사이에서 한 칸 앞(-1)이나 뒤(+1)로 옮깁니다. 숨긴 위젯은 건너뜁니다. 끝에서는 그대로입니다. */
 export function moveWidget(layout, id, delta) {
     const list = cleanLayout(layout);
-    const from = list.findIndex((w) => w.id === id);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= list.length) return list;
+    const shown = list.filter((w) => w.on);
+    const at = shown.findIndex((w) => w.id === id);
+    const other = shown[at + delta];
+    if (at < 0 || !other) return list;
     const next = [...list];
-    [next[from], next[to]] = [next[to], next[from]];
+    const a = next.findIndex((w) => w.id === id);
+    const b = next.findIndex((w) => w.id === other.id);
+    [next[a], next[b]] = [next[b], next[a]];
     return next;
 }
 
@@ -139,4 +160,29 @@ export function eventsByMonth(rows, year) {
 export function noticesNear(rows, today, tomorrow) {
     const pick = (ymd) => (rows || []).find((row) => row?.date === ymd && String(row.text || '').trim()) || null;
     return { today: pick(today), tomorrow: pick(tomorrow) };
+}
+
+/** 날짜 → 그날 걸친 일정(시각 순, 시각 없는 것 먼저 아니라 뒤). 달력 칸에 제목을 쓰려고 씁니다. */
+export function eventsByDay(rows, days) {
+    const out = new Map(days.map((d) => [d, []]));
+    for (const row of rows || []) {
+        if (!row?.date) continue;
+        for (const d of days) if (eventOn(row, d)) out.get(d).push(row);
+    }
+    const key = (r) => (/^\d{2}:\d{2}$/.test(String(r.time || '')) ? r.time : '99:99');
+    for (const list of out.values()) list.sort((a, b) => key(a).localeCompare(key(b)) || String(a.title || '').localeCompare(String(b.title || '')));
+    return out;
+}
+
+/** 달마다 일정 제목 n개(시작한 날 순)와 전체 수. 일 년 위젯에 씁니다. */
+export function titlesByMonth(rows, year, n = 2) {
+    const months = Array.from({ length: 12 }, () => []);
+    for (const row of rows || []) {
+        if (!row?.date || Number(row.date.slice(0, 4)) !== Number(year)) continue;
+        months[Number(row.date.slice(5, 7)) - 1].push(row);
+    }
+    return months.map((list) => {
+        list.sort((a, b) => a.date.localeCompare(b.date));
+        return { count: list.length, top: list.slice(0, n) };
+    });
 }

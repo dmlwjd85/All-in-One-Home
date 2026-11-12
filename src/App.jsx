@@ -759,7 +759,7 @@ export default function App() {
                         )}
                         <div className="top-tools">
                             {route.name === 'today' && wideScreen && (
-                                <Btn className={showBoard ? 'icon-btn is-on' : 'icon-btn'} aria-label={showBoard ? '기본 화면으로' : '위젯 화면으로'} aria-pressed={showBoard ? 'true' : 'false'} data-role="widget-toggle" onClick={() => setBoardOn(writeWidgetMode(!showBoard))}><IconWidgets /></Btn>
+                                <Btn className={showBoard ? 'chip on top-widget-toggle' : 'chip top-widget-toggle'} aria-label={showBoard ? '기본 화면으로 보기' : '위젯 화면으로 보기'} aria-pressed={showBoard ? 'true' : 'false'} data-role="widget-toggle" onClick={() => setBoardOn(writeWidgetMode(!showBoard))}><IconWidgets /><span>{showBoard ? '기본 화면' : '위젯 화면'}</span></Btn>
                             )}
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
                             <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {

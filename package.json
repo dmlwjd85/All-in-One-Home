@@ -69,7 +69,8 @@
     "check:neis-xlsx": "node scripts/check-neis-xlsx.mjs",
     "check:roster": "node scripts/check-roster.mjs",
     "check:class-xlsx": "node scripts/check-class-xlsx.mjs",
-    "check:widgets": "node scripts/check-widgets.mjs"
+    "check:widgets": "node scripts/check-widgets.mjs",
+    "check:widgets-browser": "node scripts/check-widgets-browser.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

@@ -35,35 +35,78 @@
 .wb-todo { justify-content: flex-start; min-height: 44px; padding: 0 10px; border-radius: 12px; text-align: left; min-width: 0; }
 .wb-todo > span { min-width: 0; }
 
+/* 일정 한 줄(달력 칸·한 주) */
+.wb-ev-chip {
+    display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; line-height: 18px; padding: 0 5px; border-radius: 6px; text-align: left;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink);
+}
+.wb-ev-chip.is-google { background: color-mix(in srgb, var(--ink-sub) 16%, transparent); }
+.wb-ev-chip.is-google::before { content: 'G '; font-weight: 800; color: var(--ink-sub); }
+.wb-ev-time { font-weight: 800; color: var(--accent); margin-right: 4px; }
+.wb-ev-more { font-size: 11px; color: var(--ink-sub); text-align: left; }
+.wb-holi { font-size: 11px; font-weight: 700; color: #C0392B; text-align: left; }
+.is-rest, .wb-month-d.is-rest .wb-month-num { color: #C0392B; }
+:root[data-theme="dark"] .wb-holi, :root[data-theme="dark"] .is-rest, :root[data-theme="dark"] .wb-month-d.is-rest .wb-month-num { color: #F08A7E; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wb-holi, :root:not([data-theme="light"]) .is-rest, :root:not([data-theme="light"]) .wb-month-d.is-rest .wb-month-num { color: #F08A7E; } }
+
 /* 한 주 */
 .wb-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; flex: 1; }
 .wb-week-day {
-    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
-    min-height: 96px; padding: 8px 6px; border-radius: 12px; box-shadow: var(--neo-inset); text-align: left; min-width: 0;
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 3px;
+    min-height: 110px; padding: 8px 6px; border-radius: 12px; box-shadow: var(--neo-inset); text-align: left; min-width: 0;
 }
 .wb-week-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
 .wb-week-label { font-size: 13px; }
+/* 한 주 칸은 좁아서 시각을 윗줄에 두고 제목은 두 줄까지 보여 줍니다. */
+.wb-week:not(.is-rows) .wb-ev-chip { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; padding: 2px 5px; line-height: 16px; overflow-wrap: anywhere; }
+.wb-week:not(.is-rows) .wb-ev-time { display: block; margin: 0; }
+.wb-week:not(.is-rows) .wb-ev-chip.is-google::before { content: 'G'; display: block; }
 .wb-week-label b { color: var(--accent); }
-.wb-week-ev { font-size: 12px; }
+.wb-week-label.is-rest b { color: inherit; }
+.wb-week.is-rows { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.wb-week.is-rows .wb-week-day { min-height: 44px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; }
+.wb-week.is-rows .wb-week-label { flex: none; width: 44px; }
+.wb-week.is-rows .wb-ev-chip { flex: 1 1 120px; }
 
-/* 한 달 */
-.wb-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+/* 한 달: 칸마다 날짜 + 일정 제목 */
+.wb-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto; gap: 3px; flex: 1; grid-auto-rows: minmax(64px, 1fr); align-content: start; }
 .wb-month-w { text-align: center; font-size: 12px; color: var(--ink-sub); line-height: 22px; }
-.wb-month-d { min-height: 44px; border-radius: 10px; font-size: 14px; position: relative; padding: 0; justify-content: center; }
-.wb-month-d.is-out { color: var(--ink-hint); }
-.wb-month-d.is-today { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); font-weight: 800; }
-.wb-month-d.has-ev::after {
-    content: ''; position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px;
-    border-radius: 50%; background: var(--accent);
+.wb-month > .wb-month-w { grid-row: 1; }
+.wb-month-d {
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px;
+    min-height: 64px; padding: 4px 3px; border-radius: 8px; font-size: 13px; min-width: 0; overflow: hidden;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 60%, transparent);
 }
+.wb-month-num { font-weight: 700; text-align: left; padding-left: 2px; line-height: 18px; }
+.wb-month-d.is-out { opacity: .45; }
+.wb-month-d.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.wb-month-d.is-today .wb-month-num { color: var(--accent); }
+.wb-month.is-small { grid-auto-rows: auto; flex: none; gap: 2px; }
+.wb-month.is-small .wb-month-d { min-height: 44px; align-items: center; justify-content: center; box-shadow: none; position: relative; }
+.wb-month.is-small .wb-month-num { padding: 0; }
+.wb-month.is-small .wb-month-d.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.wb-month.is-small .wb-month-d.has-ev::after {
+    content: ''; position: absolute; left: 50%; bottom: 5px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--accent);
+}
+.wb-l .wb-month { grid-auto-rows: minmax(84px, auto); }
 
 /* 일 년 */
-.wb-progress { height: 10px; border-radius: 999px; box-shadow: var(--neo-inset); overflow: hidden; }
+.wb-progress { height: 10px; border-radius: 999px; box-shadow: var(--neo-inset); overflow: hidden; flex: none; }
 .wb-progress > span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
 .wb-year { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.wb-year-m { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border-radius: 12px; box-shadow: var(--neo-raise-sm); font-size: 13px; }
+.wb-year-m {
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px;
+    min-height: 72px; padding: 6px; border-radius: 12px; box-shadow: var(--neo-raise-sm); font-size: 12px; min-width: 0; text-align: left;
+}
+.wb-year-name { font-size: 13px; }
+.wb-year-ev { font-size: 11px; line-height: 16px; }
 .wb-year-m.is-past { opacity: .6; }
-.wb-year-m.is-now { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); }
+.wb-year-m.is-now { box-shadow: inset 0 0 0 2px var(--accent); }
+.wb-year-m.is-now .wb-year-name { color: var(--accent); }
+.wb-year.is-small { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wb-year.is-small .wb-year-m { min-height: 44px; align-items: center; justify-content: center; }
+.wb-l .wb-year { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
 /* 일정 */
 .wb-ev { display: flex; gap: 8px; align-items: center; min-width: 0; }
@@ -80,12 +123,35 @@
 .wb-weather-set { display: flex; flex-direction: column; gap: 8px; }
 .wb-weather-set > .chip { align-self: flex-start; }
 
-/* 꾸미기 */
-.wb-edit { padding: 14px; }
-.wb-edit-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.wb-edit-done { padding: 0 20px; }
-.wb-edit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.wb-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.wb-edit-name { min-width: 72px; }
-.wb-edit-sizes { display: inline-flex; gap: 6px; }
-.wb-edit-move { display: inline-flex; gap: 4px; margin-left: auto; }
+/* 위젯 머리 */
+.wb-head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+
+/* 처음 안내 */
+.wb-hint { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.wb-hint > span { flex: 1; min-width: 0; }
+
+/* 꾸미기: 판 위에서 바로 */
+.wb-bar-note { margin: 0 auto 0 0; font-weight: 700; align-self: center; }
+.wb-done { padding: 0 28px; min-height: 44px; }
+.wb-edit-btn { font-weight: 800; }
+.wb.is-editing .wb-card { outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; cursor: grab; }
+.wb.is-editing .wb-body { opacity: .55; pointer-events: none; user-select: none; }
+.wb-card.is-dragging { opacity: .4; }
+.wb-card.is-over { outline: 3px solid var(--accent) !important; }
+.wb-grip { font-size: 18px; color: var(--ink-sub); cursor: grab; line-height: 1; }
+.wb-edit-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wb-tool { min-width: 44px; min-height: 44px; padding: 0 10px; border-radius: 12px; background: var(--bg); box-shadow: var(--neo-raise-sm); font-weight: 800; justify-content: center; }
+.wb-tool[disabled] { opacity: .35; }
+.wb-tool-size { padding: 0 14px; }
+.wb-tool-hide { margin-left: auto; color: #C0392B; }
+.wb-tray { padding: 12px 14px; border-radius: 16px; box-shadow: var(--neo-inset); display: flex; flex-direction: column; gap: 8px; }
+.wb-tray-title { margin: 0; }
+.wb-tray-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.wb-tray-item { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; border-radius: 14px; background: var(--bg); box-shadow: var(--neo-raise-sm); text-align: left; justify-content: flex-start; }
+.wb-tray-icon { font-size: 24px; flex: none; }
+.wb-tray-text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
+.wb-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px; }
+
+/* 오늘 화면 위쪽 전환 단추(넓은 화면) */
+.top-widget-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; white-space: nowrap; }
+.wb-weather-set .field { width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; }

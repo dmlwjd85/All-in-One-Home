@@ -184,6 +184,7 @@ jobs:
               npm run check:seal
               npm run check:quickbar
               npm run check:academic
+              CHROME_PATH=/usr/bin/google-chrome npm run check:widgets-browser
           - part: 시계 10월
             run: |
               for day in 2026-10-23 2026-10-24 2026-10-25; do

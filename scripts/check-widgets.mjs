@@ -7,7 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import {
-    WIDGETS, cleanLayout, defaultLayout, eventOn, eventsByMonth, moveWidget, noticesNear, readWidgetLayout, readWidgetMode,
+    WIDGETS, cleanLayout, defaultLayout, dropWidget, eventOn, eventsByDay, nextSize, titlesByMonth, eventsByMonth, moveWidget, noticesNear, readWidgetLayout, readWidgetMode,
     setWidgetSize, shownWidgets, toggleWidget, upcomingEvents, writeWidgetLayout, writeWidgetMode, yearProgress,
 } from '../src/lib/widgets.js';
 import { findPlace, forecastUrl, knownPlace, loadWeather, readPlace, shapeForecast, weatherText, writePlace, WEATHER_TTL_MS } from '../src/lib/weather.js';
@@ -23,13 +23,21 @@ const memory = () => { const map = new Map(); return { map, getItem: (k) => (map
     check(defaultLayout().every((w) => w.on), '처음에는 모든 위젯이 켜져 있어야 합니다.');
     check(cleanLayout('깨짐').length === WIDGETS.length && cleanLayout(null).length === WIDGETS.length, '깨진 배치를 기본값으로 돌리지 않습니다.');
     const odd = cleanLayout([{ id: 'month', on: true, size: 'zz' }, { id: 'month', on: false }, { id: '없는것' }, { id: 'todo', on: false, size: 'l' }]);
-    check(odd[0].id === 'month' && odd[0].size === 'm' && odd[1].id === 'todo' && odd[1].on === false && odd[1].size === 'l', `저장된 배치 고치기가 이상합니다: ${JSON.stringify(odd.slice(0, 2))}`);
+    check(odd[0].id === 'month' && odd[0].size === WIDGETS.find((w) => w.id === 'month').size && odd[1].id === 'todo' && odd[1].on === false && odd[1].size === 'l', `저장된 배치 고치기가 이상합니다: ${JSON.stringify(odd.slice(0, 2))}`);
     check(odd.length === WIDGETS.length && odd.slice(2).every((w) => w.on === false), '새로 생긴 위젯은 꺼진 채로 뒤에 붙어야 합니다.');
     const base = defaultLayout();
     const up = moveWidget(base, base[1].id, -1);
     check(up[0].id === base[1].id && up[1].id === base[0].id, '위로 옮기기가 안 됩니다.');
     check(moveWidget(base, base[0].id, -1)[0].id === base[0].id, '맨 위에서 더 올리면 그대로여야 합니다.');
     check(moveWidget(base, base.at(-1).id, 1).at(-1).id === base.at(-1).id, '맨 아래에서 더 내리면 그대로여야 합니다.');
+    check(WIDGETS.find((w) => w.id === 'month').size === 'l', '한 달 위젯은 처음부터 크게(일정 제목이 보이게) 둡니다.');
+    check(WIDGETS.every((w) => w.icon && w.hint), '꾸미기에 보일 그림 글자나 설명이 없는 위젯이 있습니다.');
+    check(nextSize('s') === 'm' && nextSize('m') === 'l' && nextSize('l') === 's', '크기 단추 순서가 작게→넓게→크게→작게가 아닙니다.');
+    const dropped = dropWidget(base, base[4].id, base[1].id).map((w) => w.id);
+    check(dropped[1] === base[4].id && dropped[2] === base[1].id && dropped.length === base.length, `끌어다 놓기 순서가 이상합니다: ${dropped}`);
+    check(dropWidget(base, 'day', '없는것').map((w) => w.id).join() === base.map((w) => w.id).join(), '없는 자리에 놓으면 그대로여야 합니다.');
+    const skip = moveWidget(toggleWidget(base, base[1].id, false), base[0].id, 1).map((w) => w.id);
+    check(skip[2] === base[0].id && skip[0] === base[2].id, `옮기기가 숨긴 위젯을 건너뛰지 않습니다: ${skip}`);
     check(setWidgetSize(base, 'todo', 'l').find((w) => w.id === 'todo').size === 'l', '크기 바꾸기가 안 됩니다.');
     check(setWidgetSize(base, 'todo', 'xl').find((w) => w.id === 'todo').size === WIDGETS.find((w) => w.id === 'todo').size, '없는 크기를 받아들입니다.');
     const off = toggleWidget(base, 'year');
@@ -66,6 +74,10 @@ const memory = () => { const map = new Map(); return { map, getItem: (k) => (map
     check(yearProgress('2028-12-31').day === 366 && yearProgress('2028-12-31').left === 0, '윤년 마지막 날 계산이 이상합니다.');
     const months = eventsByMonth([...rows, { date: '2025-11-03' }, { date: '' }], 2026);
     check(months[10] === 5 && months.reduce((a, b) => a + b, 0) === 5, `달별 일정 수가 이상합니다: ${months}`);
+    const byDay = eventsByDay([...rows, { id: 'f', date: '2026-11-12', title: '종일' }], ['2026-11-12', '2026-11-13', '2026-11-14']);
+    check(byDay.get('2026-11-12').map((r) => r.id).join() === 'c,b,e,f' && byDay.get('2026-11-13').map((r) => r.id).join() === 'e' && byDay.get('2026-11-14').length === 0, `달력 칸 일정 순서가 이상합니다: ${byDay.get('2026-11-12').map((r) => r.id)}`);
+    const titled = titlesByMonth(rows, 2026, 2);
+    check(titled[10].count === 5 && titled[10].top.map((r) => r.id).join() === 'd,e' && titled[0].count === 0, '일 년 위젯 달별 제목이 이상합니다.');
     const near = noticesNear([{ date: '2026-11-12', text: '  ' }, { date: '2026-11-13', text: '체육복' }], '2026-11-12', '2026-11-13');
     check(near.today === null && near.tomorrow?.text === '체육복', '빈 알림장을 오늘 알림장으로 보여 줍니다.');
 }
