@@ -11,7 +11,7 @@ import { parseNote, stripTokens } from './parse.js';
 import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
-import { buildExport, cleanPeriodLocal, downloadJson, incomingLocal, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
+import { buildExport, cleanPeriodLocal, downloadJson, fillPeriodLocal, incomingLocal, incomingPeriodStarts, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { blockedAsSensitive, cloudRowId, fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, SWEEP_COLLECTIONS, toCloudRow, WORK_KEYS } from './cloudShape.js';
@@ -2087,14 +2087,46 @@ function keptFromFile(list) {
         .map((k) => ({ kind: k.kind, id: String(k.id), at: Number(k.at) || 0, row: structuredClone(k.row), ...(typeof k.copy === 'string' ? { copy: k.copy } : {}) }));
 }
 
-function applyIncoming(draft, data, sensitive, mode) {
+/**
+ * 합치기에서 학생을 아이디로 합칩니다. 이 기기에 있던 학생은 이 기기의 active 값(지금 반인지 지난 명단인지)을 지킵니다.
+ * 합친 결과에 같은 번호의 지금 반 학생이 둘 이상이면 뒤에 들어온 쪽을 지난 명단(active: false)으로 두고, 그 수를 돌려줍니다.
+ */
+export function mergeStudents(current, incoming) {
+    const map = new Map((current || []).map((item) => [item.id, item]));
+    for (const item of incoming || []) {
+        const mine = map.get(item?.id);
+        if (mine) map.set(item.id, { ...item, active: mine.active !== false });
+        else map.set(item?.id, item);
+    }
+    const list = [...map.values()];
+    const seen = new Set();
+    let parked = 0;
+    const students = list.map((row) => {
+        if (!isActiveStudent(row)) return row;
+        const no = Number(row.no) || 0;
+        if (!seen.has(no)) {
+            seen.add(no);
+            return row;
+        }
+        parked += 1;
+        return { ...row, active: false };
+    });
+    return { students, parked };
+}
+
+function applyIncoming(draft, data, sensitive, mode, info = {}) {
     const merge = (current, incoming) => {
         if (mode === 'replace') return incoming || [];
         const map = new Map((current || []).map((item) => [item.id, item]));
         for (const item of incoming || []) map.set(item.id, item);
         return [...map.values()];
     };
-    draft.students = merge(draft.students, data.students);
+    if (mode === 'replace') draft.students = data.students || [];
+    else {
+        const merged = mergeStudents(draft.students, data.students);
+        draft.students = merged.students;
+        info.parked = merged.parked;
+    }
     draft.attendance = merge(draft.attendance, data.attendance);
     draft.records = merge(draft.records, sensitive.cloud);
     draft.events = merge(draft.events, data.events);
@@ -2117,16 +2149,19 @@ function applyIncoming(draft, data, sensitive, mode) {
         draft.keptLegacy = [...byKey.values()].sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0)).slice(-KEPT_MAX);
     }
     draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
-    if (data.profile?.className) draft.profile.className = data.profile.className;
-    if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
-    /* 학년도·학사일정·고친 날·마감한 날·목표: 파일에 있을 때만 넣습니다(예전 판 백업은 지금 값을 둡니다). */
+    /* 학급 이름·교시 시작 시각: 바꾸기는 파일 값, 합치기는 지금 값이 비어 있을 때만 넣습니다(지금 설정을 덮지 않게). */
+    if (data.profile?.className && (mode === 'replace' || !String(draft.profile.className || '').trim())) draft.profile.className = data.profile.className;
+    const starts = incomingPeriodStarts(draft.profile, data.profile?.periodStarts, mode);
+    if (starts) draft.profile.periodStarts = starts;
+    /* 학년도·학사일정·고친 날·마감한 날·목표: 파일에 있을 때만 넣습니다(예전 판 백업은 지금 값을 둡니다). 학년도는 합치기에서 비어 있을 때만. */
     const settings = incomingSettings(draft, data, mode);
     draft.profile = settings.profile;
     if (settings.goals !== undefined) draft.goals = settings.goals;
     /* 이 기기 전용 자료는 기록만이 아니라 할 일·일정·메모·알림장·연락처·쪽까지 되살립니다. */
     draft.local = { ...incomingLocal(draft.local, data, mode, sensitive.local), backup: draft.local?.backup ?? null };
     draft.profile.started = true;
-    draft.profile.classSize = draft.students.length || draft.profile.classSize;
+    /* 반 인원은 지금 반 학생만 셉니다(지난 명단 학생 빼고). */
+    draft.profile.classSize = draft.students.filter(isActiveStudent).length || draft.profile.classSize;
     return draft;
 }
 
@@ -2154,20 +2189,31 @@ export async function importText(text, mode, hooks = {}) {
     /* G1: 백업에 든 바로가기는 이 브라우저 목록에 모자란 것만 더합니다(바꾸기에서도 지우지 않음). */
     try { if (Array.isArray(data.bookmarks)) mergeLinks(readLinks(), data.bookmarks); } catch { /* 바로가기는 건너뜁니다. */ }
     const sensitive = splitSensitive(data.records || []);
-    /* 교시 설정(이 기기 저장소)은 기록이 다 들어간 뒤에 넣습니다. 지금 고친 것으로 찍혀 다른 기기에도 퍼집니다. */
+    /* 교시 설정(이 기기 저장소)은 기록이 다 들어간 뒤에 넣습니다. 지금 고친 것으로 찍혀 다른 기기에도 퍼집니다.
+       바꾸기는 파일 값으로 바꾸고, 합치기는 지금 값이 비어 있는 칸에만 넣습니다(지금 설정을 덮지 않게). */
     const period = cleanPeriodLocal(data.periodLocal);
-    const applyPeriod = () => { if (period) { try { patchPeriodLocal(period); } catch { /* 교시 설정만 건너뜁니다. */ } } };
+    const applyPeriod = (patch) => { if (patch) { try { patchPeriodLocal(patch); } catch { /* 교시 설정만 건너뜁니다. */ } } };
+    const readPeriod = () => { try { return readPeriodLocal(); } catch { return null; } };
     if (mode !== 'replace') {
-        const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode));
+        const info = {};
+        const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode, info));
         if (failed?.storageFailed) return { ok: false, errors: [failed.message] };
-        applyPeriod();
-        return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
+        applyPeriod(fillPeriodLocal(readPeriod(), period));
+        const parked = Number(info.parked) || 0;
+        return {
+            ok: true,
+            kind: 'ssug-gyomu',
+            localOnly: sensitive.local.length,
+            parked,
+            ...(parked ? { message: `같은 번호 학생이 겹쳐 ${parked}명은 지난 명단으로 두었어요. 설정의 명단에서 확인해 주세요.` } : {}),
+        };
     }
     let previous;
     try {
         previous = structuredClone(state);
         const exportedAt = new Date().toISOString();
-        const payload = buildExport(state, { includeLocal: true, at: exportedAt });
+        /* 바꾸기 전 안전 백업에는 교시 설정(이 기기 저장소 값)도 넣어, 되돌릴 때 함께 살아나게 합니다. */
+        const payload = buildExport(state, { includeLocal: true, at: exportedAt, periodLocal: readPeriod() });
         JSON.stringify(payload);
         downloadJson(`쨈 교무수첩-바꾸기전-${seoulYmd()}.json`, payload);
         await hooks.onPhase?.('prepared');
@@ -2181,7 +2227,7 @@ export async function importText(text, mode, hooks = {}) {
         mirrorTheme(state.profile.theme);
         emit();
         await persist();
-        applyPeriod();
+        applyPeriod(period);
         flushCloud().catch(() => {});
         await hooks.onPhase?.('applied');
     } catch (error) {

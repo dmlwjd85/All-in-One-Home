@@ -164,6 +164,68 @@ check(now.local.todos.some((r) => r.id === 'lt1') && now.local.todos.some((r) =>
 check(JSON.stringify(now.profile.checkedDates) === '["2026-11-01","2026-11-11","2026-11-12"]', `합치기가 마감한 날을 합치지 않았습니다: ${JSON.stringify(now.profile.checkedDates)}`);
 check(now.goals.n === 3 && now.goals.days['2026-11-11']?.c === 5, '합치기가 목표를 늦게 고친 쪽 기준으로 합치지 않았습니다.');
 
+/* 바꾸기 전 안전 백업에는 교시 설정도 들어갑니다. */
+check(now.local.backup?.payload?.periodLocal?.count === 7 && now.local.backup?.payload?.periodLocal?.extra?.mon?.p9 === '방과후', `바꾸기 전 안전 백업에 교시 설정이 없습니다: ${JSON.stringify(now.local.backup?.payload?.periodLocal)}`);
+
+/* 합치기는 학년도·교시 설정을 덮지 않고, 비어 있을 때만 넣습니다. 바꾸기는 파일 값으로 바꿉니다. */
+{
+    const other = JSON.parse(fullText);
+    other.profile.schoolYear = 2025;
+    other.profile.className = '5학년 1반';
+    other.periodLocal = { level: '초', count: 5, lengths: [40], extraStarts: ['16:00', '16:50'], locks: [], cellLocks: [], workStart: '08:10', workEnd: '16:30', extra: { mon: { p9: '다른 과목', p10: '보충' } } };
+    await db.update((d) => { d.profile.schoolYear = 2026; d.profile.className = '6학년 3반'; return d; });
+    result = await db.importText(JSON.stringify(other), 'merge');
+    check(result.ok, '합치기(설정 다른 파일)가 실패했습니다.');
+    const p1 = readPeriodLocal();
+    check(db.snapshot().profile.schoolYear === 2026, `합치기가 학년도를 바꿨습니다: ${db.snapshot().profile.schoolYear}`);
+    check(db.snapshot().profile.className === '6학년 3반', `합치기가 학급 이름을 바꿨습니다: ${db.snapshot().profile.className}`);
+    check(p1.count === 7 && p1.level === '중' && p1.workStart === '08:30' && p1.extra.mon.p9 === '방과후' && JSON.stringify(p1.lengths) === '[45,45]', `합치기가 교시 설정을 덮었습니다: ${JSON.stringify(p1)}`);
+    check(p1.extra.mon.p10 === '보충', `합치기가 비어 있던 10교시 과목을 넣지 않았습니다: ${JSON.stringify(p1.extra)}`);
+    /* 이 기기 교시 설정이 비어 있으면 합치기도 넣습니다. */
+    store.delete(PERIOD_LOCAL_KEY);
+    result = await db.importText(JSON.stringify(other), 'merge');
+    const p2 = readPeriodLocal();
+    check(p2.count === 5 && p2.workStart === '08:10' && p2.extra.mon.p9 === '다른 과목' && JSON.stringify(p2.lengths) === '[40]', `비어 있던 교시 설정을 합치기가 넣지 않았습니다: ${JSON.stringify(p2)}`);
+    check(backup.fillPeriodLocal({ count: 6, level: '초', syncAt: 9, syncAts: { period: 9 } }, { count: 5 }) === null, '이 기기에서 고친 교시 수(기본값과 같아도)를 합치기가 덮습니다.');
+    /* 바꾸기는 파일 값으로 */
+    store.set(PERIOD_LOCAL_KEY, JSON.stringify({ level: '중', count: 7, workStart: '08:30', syncAt: 5, syncAts: { period: 5, extra: 5, work: 5 } }));
+    result = await db.importText(JSON.stringify(other), 'replace');
+    const p3 = readPeriodLocal();
+    check(result.ok && db.snapshot().profile.schoolYear === 2025 && p3.count === 5 && p3.workStart === '08:10', `바꾸기가 파일 설정으로 바꾸지 않았습니다: ${db.snapshot().profile.schoolYear} ${JSON.stringify(p3)}`);
+    check(db.snapshot().local.backup?.payload?.periodLocal?.count === 7, '바꾸기 전 안전 백업에 바꾸기 전 교시 설정이 없습니다.');
+    check(backup.incomingSettings({ profile: { schoolYear: 2026 } }, { profile: { schoolYear: 2025 } }, 'merge').profile.schoolYear === 2026, '합치기 학년도(순수 함수)');
+    check(backup.incomingSettings({ profile: {} }, { profile: { schoolYear: 2025 } }, 'merge').profile.schoolYear === 2025, '비어 있던 학년도를 합치기가 넣지 않습니다.');
+}
+
+/* 합치기: 학생은 이 기기의 active 값을 지키고, 같은 번호 지금 반 학생이 겹치면 뒤에 들어온 쪽을 지난 명단으로 둡니다. */
+{
+    await db.update((d) => {
+        d.students = [
+            { id: 's1', no: 1, name: '김하늘', active: true },
+            { id: 's2', no: 2, name: '이하은', active: false },
+            { id: 's2-new', no: 2, name: '박새봄', active: true },
+        ];
+        d.profile.classSize = 2;
+        return d;
+    });
+    const file = JSON.parse(fullText);
+    file.students = [
+        { id: 's1', no: 1, name: '김하늘', active: true },
+        { id: 's2', no: 2, name: '이하은', active: true, memo: '파일 메모' },
+        { id: 's3', no: 3, name: '정다온', active: true },
+        { id: 's9', no: 1, name: '최겹침', active: true },
+    ];
+    result = await db.importText(JSON.stringify(file), 'merge');
+    const list = db.snapshot().students;
+    const by = Object.fromEntries(list.map((r) => [r.id, r]));
+    check(by.s2?.active === false && by.s2?.memo === '파일 메모', `합치기가 지난 명단 학생을 다시 지금 반으로 만들었습니다: ${JSON.stringify(by.s2)}`);
+    check(by['s2-new']?.active === true && by.s3?.active === true && by.s1?.active === true, `지금 반 학생이 빠졌습니다: ${JSON.stringify(list)}`);
+    check(by.s9?.active === false && result.parked === 1 && /지난 명단/.test(result.message || ''), `같은 번호 지금 반 학생이 둘입니다: ${JSON.stringify(by.s9)} ${result.message}`);
+    const activeNos = list.filter((r) => r.active !== false).map((r) => r.no);
+    check(new Set(activeNos).size === activeNos.length, `같은 번호 지금 반 학생이 남았습니다: ${activeNos}`);
+    check(db.snapshot().profile.classSize === 3, `반 인원이 지난 명단 학생까지 셉니다: ${db.snapshot().profile.classSize}`);
+}
+
 /* 아주 예전 교무수첩 백업(notebookFields)도 그대로 받습니다. */
 const legacy = backup.validateBackupText(JSON.stringify({ exportedAt: '2024-03-01', notebookFields: { 3: { a: 'b' } } }));
 check(legacy.ok && legacy.kind === 'legacy', '예전 교무수첩 백업 형식을 더는 받지 않습니다.');

@@ -445,7 +445,7 @@ export function Settings() {
                     if (!file) return;
                     const text = await file.text();
                     const result = await importText(text, importMode);
-                    showToast(result.ok ? '기록을 가져왔어요.' : (result.errors || []).join(' '));
+                    showToast(result.ok ? (result.message ? `기록을 가져왔어요. ${result.message}` : '기록을 가져왔어요.') : (result.errors || []).join(' '));
                 }} />
                 <KeptLegacy data={data} showToast={showToast} />
                 <h3>로그인</h3>

@@ -3,7 +3,7 @@ import { isSensitiveText } from './sensitive.js';
 import { LEGACY_LISTS } from './migrate.js';
 import { cleanAcademic } from './academic.js';
 import { mergeGoals, normalizeGoals } from './todoAchieve.js';
-import { LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
+import { DEFAULT_PERIODS, EXTRA_PERIODS, LEVEL_LENGTH, MAX_PERIODS, isHm } from './period.js';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype']);
@@ -223,7 +223,9 @@ export function incomingSettings(current, data, mode) {
     let goals = current?.goals;
     const file = plain(data?.profile) ? data.profile : {};
     const year = Number(file.schoolYear);
-    if (Number.isInteger(year) && year >= 2020 && year <= 2099) profile.schoolYear = year;
+    const yearOk = (value) => Number.isInteger(Number(value)) && Number(value) >= 2020 && Number(value) <= 2099;
+    /* 학년도: 바꾸기는 파일 값으로, 합치기는 지금 값이 비어 있을 때만 넣습니다(지난해 백업을 합쳐도 올해 학년도가 바뀌지 않게). */
+    if (yearOk(year) && (mode === 'replace' || !yearOk(profile.schoolYear))) profile.schoolYear = year;
     if (plain(file.academic)) {
         profile.academic = cleanAcademic(mode === 'replace' ? file.academic : { ...(profile.academic || {}), ...file.academic });
     }
@@ -235,6 +237,53 @@ export function incomingSettings(current, data, mode) {
     }
     if (plain(data?.goals)) goals = mode === 'replace' ? normalizeGoals(data.goals) : mergeGoals(goals, data.goals);
     return { profile, goals };
+}
+
+/** 교시 시작 시각: 바꾸기는 파일 값, 합치기는 지금 값이 기본값 그대로(손대지 않음)일 때만 파일 값입니다. */
+export function incomingPeriodStarts(profile, file, mode) {
+    if (!Array.isArray(file) || !file.length) return null;
+    if (mode === 'replace') return file;
+    const now = Array.isArray(profile?.periodStarts) ? profile.periodStarts : [];
+    const touched = Number(profile?.settingsAts?.periodStarts) > 0;
+    const plainDefault = !now.length || (!touched && JSON.stringify(now) === JSON.stringify(DEFAULT_PERIODS));
+    return plainDefault ? file : null;
+}
+
+/**
+ * 합치기에서 교시 설정(이 기기 저장소 값)을 지금 값이 비어 있는 칸에만 넣을 묶음을 돌려줍니다. 넣을 것이 없으면 null.
+ *  - 교시 수·학교급·9·10교시 시작: 이 기기에서 한 번도 고친 적 없고(고친 시각 없음) 기본값 그대로일 때만
+ *  - 수업 길이·잠금·칸 잠금: 지금 목록이 비었을 때만 / 출퇴근 시각: 지금 칸이 비었을 때만
+ *  - 9·10교시 과목: 지금 비어 있는 요일·칸만
+ * 바꾸기는 이 함수를 쓰지 않고 파일 값(cleanPeriodLocal)으로 바꿉니다.
+ */
+export function fillPeriodLocal(current, incoming) {
+    if (!plain(incoming)) return null;
+    const now = plain(current) ? current : {};
+    const touched = Number(now.syncAt) > 0 || Number(now.syncAts?.period) > 0;
+    const out = {};
+    if ('level' in incoming && !touched && (now.level || '초') === '초') out.level = incoming.level;
+    if ('count' in incoming && !touched && (Number(now.count) || 6) === 6) out.count = incoming.count;
+    if ('extraStarts' in incoming && !touched && JSON.stringify(now.extraStarts || EXTRA_PERIODS) === JSON.stringify(EXTRA_PERIODS)) out.extraStarts = incoming.extraStarts;
+    for (const key of ['lengths', 'locks', 'cellLocks']) {
+        const mine = Array.isArray(now[key]) ? now[key].filter((v) => v !== null && v !== '') : [];
+        if (key in incoming && !mine.length) out[key] = incoming[key];
+    }
+    for (const key of ['workStart', 'workEnd']) if (incoming[key] && !now[key]) out[key] = incoming[key];
+    if (plain(incoming.extra)) {
+        const mine = plain(now.extra) ? now.extra : {};
+        const extra = {};
+        let added = false;
+        for (const [day, row] of Object.entries(mine)) if (plain(row)) extra[day] = { ...row };
+        for (const [day, row] of Object.entries(incoming.extra)) {
+            for (const [slot, name] of Object.entries(row || {})) {
+                if (String(extra[day]?.[slot] || '').trim()) continue;
+                extra[day] = { ...(extra[day] || {}), [slot]: name };
+                added = true;
+            }
+        }
+        if (added) out.extra = extra;
+    }
+    return Object.keys(out).length ? out : null;
 }
 
 function localRows(list) {
