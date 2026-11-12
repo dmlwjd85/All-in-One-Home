@@ -17,6 +17,7 @@
     "check:hits": "node scripts/check-hit-targets.mjs",
     "check:storage": "node scripts/check-storage-paths.mjs",
     "check:quality": "node scripts/check-quality.mjs",
+    "check:sensitive": "node scripts/check-sensitive.mjs",
     "check:msg": "node scripts/check-msg.mjs",
     "check:speech": "node scripts/check-speech.mjs",
     "check:keyfeel": "node scripts/check-keyfeel.mjs",
