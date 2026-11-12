@@ -17,6 +17,7 @@ import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint,
 import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
+import { groupRecordId, newGroupId } from './nameLink.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 import { mergeLinks, readLinks } from './eduLinks.js';
@@ -1377,6 +1378,18 @@ function relocate(draft, bucket, row, local, from) {
     return draft;
 }
 
+/** 번호 목록 → 명단의 학생(겹치지 않게, 들어온 차례). 명단에 없는 번호는 뺍니다. */
+function manyStudents(students, nos) {
+    const out = [];
+    for (const value of nos) {
+        const no = Number(value) || 0;
+        if (!no) continue;
+        const one = (students || []).find((row) => row.no === no);
+        if (one && !out.includes(one)) out.push(one);
+    }
+    return out.slice(0, 40);
+}
+
 export async function saveQuick(input, now = new Date()) {
     const text = String(input.text || '').trim();
     if (!text) return { ok: false, message: '한 줄만 적어도 남길 수 있어요.' };
@@ -1416,8 +1429,20 @@ export async function saveQuick(input, now = new Date()) {
                 neis: input.neis != null ? Boolean(input.neis) : kind === '관찰' || kind === '칭찬',
             };
             if (input.follow || (kind === '상담' && parsed.detectedDate && text.includes('다시'))) row.follow = input.follow || parsed.detectedDate;
-            put(local ? draft.local.records : draft.records, row);
-            message = student ? `${student.name} 기록에 넣었어요.` : '기록에 넣었어요.';
+            /* 여러 학생(input.nos): 학생마다 같은 기록을 하나씩 두고 아이디 앞부분(묶음)을 같게 합니다. 클라우드 칸은 그대로입니다. */
+            const many = Array.isArray(input.nos) ? manyStudents(draft.students, [input.no, ...input.nos, parsed.studentNo]) : [];
+            if (many.length >= 2) {
+                const group = newGroupId(now.getTime());
+                many.forEach((one, index) => {
+                    put(local ? draft.local.records : draft.records, { ...row, id: groupRecordId(group, index), sid: one.id });
+                });
+                message = `${many.map((one) => one.name).join(', ')} 기록에 하나씩 넣었어요.`;
+            } else {
+                if (many.length === 1) row.sid = many[0].id;
+                put(local ? draft.local.records : draft.records, row);
+                const named = many[0] || student;
+                message = named ? `${named.name} 기록에 넣었어요.` : '기록에 넣었어요.';
+            }
         } else if (kind === '할 일') {
             const titleSrc = String(input.title || body).trim();
             /* 「밤 12시」는 오늘 00:00(이미 지남)이 아니라 다음 날 00:00(오늘 밤)으로 둡니다. */
