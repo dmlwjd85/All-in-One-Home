@@ -58,6 +58,7 @@
     "check:input-e": "node scripts/check-input-e.mjs && node scripts/mutate-input-e.mjs",
     "check:input-e-browser": "node scripts/check-input-e-browser.mjs",
     "check:g1": "node scripts/check-g1.mjs",
+    "check:keep-text": "node scripts/check-keep-text.mjs",
     "check:keptpaths": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-kept-paths.mjs\"",
     "check:lwwmix": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-lww-mix.mjs\"",
     "check:nice-datechip": "node scripts/check-nice-datechip.mjs && node scripts/mutate-r4-chip.mjs",
