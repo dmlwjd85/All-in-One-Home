@@ -109,7 +109,10 @@ export function Day() {
                 {todos.map((row) => (
                     <div key={row.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                         <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
-                        <Btn className="chip" onClick={() => removeItem('todos', row.id).then(() => showToast('할 일을 지웠어요.'))}>지우기</Btn>
+                        <Btn className="chip" onClick={async () => {
+                            const failed = await removeItem('todos', row.id);
+                            if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
+                        }}>지우기</Btn>
                     </div>
                 ))}
                 {!todos.length && <p className="muted">이 날로 발라 둔 할 일이 없어요.</p>}

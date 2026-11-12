@@ -173,7 +173,11 @@ export function Tasks() {
             {notes.map((row) => (
                 <article key={row.id} className="solid-card" style={{ padding: 12, marginBottom: 8 }}>
                     <p style={{ marginTop: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.pinned ? '📌 ' : ''}{row.text}</p>
-                    <Btn className="chip" onClick={() => removeItem('notes', row.id)}>지우기</Btn>
+                    <Btn className="chip" aria-label="메모 지우기" onClick={async () => {
+                        // 할 일 지우기와 같이 바로 지우고, 알림의 '되돌리기'로 되살릴 수 있어요.
+                        const failed = await removeItem('notes', row.id);
+                        if (!failed?.storageFailed) showToast('메모를 지웠어요.', true);
+                    }}>지우기</Btn>
                 </article>
             ))}
             <p className="minutes-link-row">
