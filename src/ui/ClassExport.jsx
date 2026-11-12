@@ -55,7 +55,8 @@ function allStudentsOf(data) {
 /** 기록 엑셀: sid 가 있으면 그 학생 한 명, 없으면 반 전체. */
 export function RecordExport({ data, sid = '', showToast }) {
     const xlsx = useClassXlsx();
-    const [withLocal, setWithLocal] = useState(true);
+    /* 이 기기에만 둔 민감 기록은 기본으로 빼고, 넣을 때만 직접 고릅니다(파일이 밖으로 나가므로). */
+    const [withLocal, setWithLocal] = useState(false);
     const records = joinedRecords(data).filter((row) => !sid || row.sid === sid);
     const localCount = records.filter((row) => row.localOnly).length;
     const student = sid ? allStudentsOf(data).find((row) => row.id === sid) : null;
@@ -125,6 +126,8 @@ function schoolYearOf(data, ymd) {
 export function AttendExport({ data, date, showToast }) {
     const xlsx = useClassXlsx();
     const [span, setSpan] = useState('month');
+    /* 기록 엑셀과 같게: 이 기기에만 두는 민감한 출결 메모는 기본으로 빼고, 넣을 때만 고릅니다. */
+    const [withLocal, setWithLocal] = useState(false);
     const events = joined(data, 'events');
     const year = schoolYearOf(data, date);
     const ym = date.slice(0, 7);
@@ -141,7 +144,7 @@ export function AttendExport({ data, date, showToast }) {
         }
         let made;
         try {
-            made = mod.attendSheets({ students: allStudentsOf(data), attendance: data.attendance || [], from: range.from, to: range.to, days: schoolDays(range.from, range.to, events) });
+            made = mod.attendSheets({ students: allStudentsOf(data), attendance: data.attendance || [], from: range.from, to: range.to, days: schoolDays(range.from, range.to, events), includeLocal: withLocal });
         } catch {
             showToast(MAKE_FAIL);
             return;
@@ -163,8 +166,16 @@ export function AttendExport({ data, date, showToast }) {
                 ))}
             </div>
             <p className="muted" style={{ margin: '8px 0' }}>{label} · {range.from.slice(5).replace('-', '/')}~{range.to.slice(5).replace('-', '/')} · 학생×날짜 표, 학생별 결석·지각·조퇴·결과 합계, 서류 받음·아직이 들어가요.</p>
-            <Btn className="primary-btn fit-btn" data-export-btn="attend" onClick={run}>출결 엑셀 받기</Btn>
-            {localCount > 0 && <p className="muted" data-export-local style={{ margin: '6px 0 0' }}>🔒 이 기기에만 두는 민감한 출결 메모 {localCount}건도 엑셀 파일에 들어가요.</p>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Btn className="primary-btn fit-btn" data-export-btn="attend" onClick={run}>출결 엑셀 받기</Btn>
+                {localCount > 0 && (
+                    <Btn className={withLocal ? 'chip on' : 'chip'} aria-pressed={withLocal} onClick={() => setWithLocal((v) => !v)}>
+                        {withLocal ? '🔒 이 기기 전용 메모 넣음' : '🔒 이 기기 전용 메모 뺌'}
+                    </Btn>
+                )}
+            </div>
+            {localCount > 0 && withLocal && <p className="muted" data-export-local style={{ margin: '6px 0 0' }}>이 기기에만 두는 민감한 출결 메모 {localCount}건도 엑셀 파일에 들어가요. 파일을 보낼 때 조심해 주세요.</p>}
+            {localCount > 0 && !withLocal && <p className="muted" style={{ margin: '6px 0 0' }}>이 기기에만 두는 민감한 출결 메모 {localCount}건은 엑셀 파일에 넣지 않아요.</p>}
             {xlsx.failed && <p role="alert" style={{ margin: '6px 0 0' }}>{LOAD_FAIL}</p>}
         </section>
     );

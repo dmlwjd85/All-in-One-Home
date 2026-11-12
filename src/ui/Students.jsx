@@ -93,7 +93,12 @@ export function Student() {
     const periodLabel = LOG_PERIODS.find((item) => item.id === period)?.label || '';
     const pickedRows = filtered.filter((row) => chosen.has(row.id));
     /** 묶음 기록(한 기록에 여러 학생)의 다른 학생 이름. */
-    const matesOf = (row) => groupMates(row, allRecords).map((sid) => data.students.find((item) => item.id === sid)?.name).filter(Boolean);
+    /* 지난 명단 학생도 이름으로 찾고 '(지난 명단)'을 붙입니다. */
+    const matesOf = (row) => groupMates(row, allRecords).map((sid) => {
+        const mate = (data.allStudents || data.students).find((item) => item.id === sid);
+        if (!mate?.name) return '';
+        return mate.active === false ? `${mate.name}(지난 명단)` : mate.name;
+    }).filter(Boolean);
     if (!student) return <p>이 번호는 명단에 없어요. 설정에서 넣어 주세요.</p>;
     const stats = [
         ['기록', records.length],

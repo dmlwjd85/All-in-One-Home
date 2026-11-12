@@ -5,6 +5,7 @@
  * 3) 기록: 반 전체(번호·날짜순, 학생별 건수)와 학생 한 명, 나이스 옮김 표시, 이 기기에만 둔 기록 수.
  * 4) 나이스 모아 보기 파일은 예전과 같은 모양(시트 하나, 이름 '나이스 모아 보기')인지.
  */
+import { readFileSync } from 'node:fs';
 import { inflateRawSync } from 'node:zlib';
 import { attendSheets, dayLabel, recordSheets, sheetBytes } from '../src/lib/classXlsx.js';
 import { neisRows, neisXlsxBytes } from '../src/lib/neisXlsx.js';
@@ -109,6 +110,15 @@ check(days.length === 21 && !days.includes('2026-11-07'), `11월 수업일: ${da
 const att = attendSheets({ students, attendance, from: '2026-11-01', to: '2026-11-30', days });
 check(att.count === 5, `11월 출결 표시 수: ${att.count}`);
 check(att.localCount === 1, `이 기기에만 둔 출결 메모 수: ${att.localCount}`);
+{
+    /* 이 기기 전용 메모를 빼면 '출결 목록' 메모 칸이 비고, 평범한 메모는 그대로입니다. */
+    const hidden = attendSheets({ students, attendance, from: '2026-11-01', to: '2026-11-30', days, includeLocal: false });
+    const listRows = hidden.sheets.find((s) => s.name === '출결 목록').rows;
+    check(!listRows.some((r) => r.includes('보건실 다녀옴')) && listRows.some((r) => r.includes('=HYPERLINK("x")')), `민감 메모 빼기: ${JSON.stringify(listRows.map((r) => r.at(-1)))}`);
+    check(att.sheets.find((s) => s.name === '출결 목록').rows.some((r) => r.includes('보건실 다녀옴')), '민감 메모 넣기를 골라도 빠졌습니다.');
+    const ui = readFileSync('src/ui/ClassExport.jsx', 'utf8');
+    check((ui.match(/const \[withLocal, setWithLocal\] = useState\(false\)/g) || []).length === 2 && ui.includes('includeLocal: withLocal })'), '엑셀 화면의 이 기기 전용 자료 기본값이 \'뺌\'이 아니거나 출결 엑셀이 선택을 따르지 않습니다.');
+}
 check(att.days === 22, `날짜 열 수(수업일 21 + 토요일 표시 1): ${att.days}`);
 {
     const book = readBook(sheetBytes(att.sheets));

@@ -201,6 +201,9 @@ check(quickBar.includes('findStudentNames(live, students)') && quickBar.includes
 const flow = readFileSync('src/ui/FlowSheet.jsx', 'utf8');
 check(flow.includes('findStudentNames(text, data.students)') && flow.includes('nos: others'), '학생 기록 입력에 이름 칩');
 const studentsJsx = readFileSync('src/ui/Students.jsx', 'utf8');
+check(/const matesOf = [^\n]*\n\s*const mate = \(data\.allStudents \|\| data\.students\)\.find/.test(studentsJsx) && studentsJsx.includes('(지난 명단)'), "함께: 이름을 지난 명단 학생까지 찾고 '(지난 명단)'을 붙이지 않습니다.");
+const attendJsx = readFileSync('src/ui/Attend.jsx', 'utf8');
+check(attendJsx.includes('pastStudents={pastStudents}') && attendJsx.includes('(지난 명단)') && attendJsx.includes('const everyone = data.allStudents || data.students;'), '출결 월표·사유 목록이 지난 명단 학생 이름을 찾지 않습니다.');
 check(studentsJsx.includes('LOG_PERIODS.map') && studentsJsx.includes('studentLogText(') && studentsJsx.includes('이 학생 기록 복사'), '학생 화면 모아 보기·복사');
 check(readFileSync('firestore.rules', 'utf8').includes("d().keys().hasOnly(['date', 'kind', 'sid', 'text', 'tags', 'neis', 'follow', 'minutes', 'source', 'createdAt', 'updatedAt'])"), '기록 규칙 그대로');
 

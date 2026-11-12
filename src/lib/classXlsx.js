@@ -40,9 +40,10 @@ function markText(row) {
  * 출결 표.
  * students: 지난 명단까지 모두. 지금 반 학생은 모두 넣고, 지난 명단 학생은 기간 안에 출결이 있을 때만 넣습니다.
  * days: 열로 쓸 날짜(수업일). 기간 안에 표시가 있는 날은 수업일이 아니어도 더합니다.
+ * includeLocal: 이 기기에만 두는 민감한 출결 메모(건강·연락처 등)를 '출결 목록' 시트 메모 칸에 넣을지. 빼면 그 칸을 비웁니다.
  * 돌려주는 값: { sheets, count(표시 수), localCount(이 기기에만 둔 메모가 든 표시 수) }
  */
-export function attendSheets({ students = [], attendance = [], from, to, days = [] }) {
+export function attendSheets({ students = [], attendance = [], from, to, days = [], includeLocal = true }) {
     const inRange = (attendance || []).filter((row) => row?.date >= from && row?.date <= to && ATTEND_STATUSES.includes(row.status));
     const marked = new Set(inRange.map((row) => row.sid));
     const people = (students || []).filter((s) => s.active !== false || marked.has(s.id)).sort(byNo);
@@ -64,10 +65,11 @@ export function attendSheets({ students = [], attendance = [], from, to, days = 
         sum.push([no, label(s), ...ATTEND_STATUSES.map((st) => count(st)), ...ATTEND_STATUSES.flatMap((st) => ATTEND_REASONS.map((r) => count(st, r))), paperYes, mine.length - paperYes]);
     }
     const byId = new Map(people.map((s) => [s.id, s]));
+    const noteText = (note) => (!note ? '' : (!includeLocal && isSensitiveText(note) ? '' : note));
     const list = [['날짜', '요일', '번호', '이름', '상태', '사유', '교시', '서류', '메모']];
     [...inRange].sort((a, b) => String(a.date).localeCompare(String(b.date)) || byNo(byId.get(a.sid), byId.get(b.sid))).forEach((row) => {
         const s = byId.get(row.sid);
-        list.push([row.date, weekday(row.date), s?.no == null || s?.no === '' ? '' : String(s.no), label(s || { unknown: true }), row.status, row.reason || '', row.period ? `${row.period}교시` : '', row.paper ? '받음' : '아직', row.note || '']);
+        list.push([row.date, weekday(row.date), s?.no == null || s?.no === '' ? '' : String(s.no), label(s || { unknown: true }), row.status, row.reason || '', row.period ? `${row.period}교시` : '', row.paper ? '받음' : '아직', noteText(row.note)]);
     });
     return {
         sheets: [
