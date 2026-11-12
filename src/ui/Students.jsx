@@ -7,6 +7,8 @@ import { ClayMark } from './ClayMark.jsx';
 import { seoulParts, seoulYmd } from '../lib/date.js';
 import { htmlEscape } from '../lib/neisExport.js';
 import { DateChip } from './DateChip.jsx';
+import { RecordExport } from './ClassExport.jsx';
+import { RosterPaste } from './RosterPaste.jsx';
 
 /** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
 function recordHm(row, fallback) {
@@ -15,7 +17,7 @@ function recordHm(row, fallback) {
 }
 
 export function Students() {
-    const { data, clock, go, openQuick } = useUi();
+    const { data, clock, go, openQuick, showToast } = useUi();
     const [q, setQ] = useState('');
     const records = joinedRecords(data);
     const month = clock.ymd.slice(0, 7);
@@ -27,6 +29,18 @@ export function Students() {
                 <Btn className="chip" onClick={() => go('#/students/neis')}>나이스 모아 보기</Btn>
                 <Btn className="chip on" onClick={() => openQuick('관찰')}>기록 남기기</Btn>
             </div>
+            {!data.students.length && (
+                <section className="glass" data-empty-roster="1" style={{ padding: 14, marginBottom: 12 }}>
+                    <h2 className="title-font" style={{ marginTop: 0, fontSize: 20 }}>명단이 아직 없어요</h2>
+                    <p className="muted" style={{ marginTop: 0 }}>엑셀·한글 표·나이스 화면에서 번호와 이름을 복사해 붙여 넣으면 한 번에 들어가요.</p>
+                    <RosterPaste data={data} showToast={showToast} />
+                </section>
+            )}
+            {(data.students.length > 0 || joinedRecords(data).length > 0) && (
+                <div style={{ margin: '0 0 12px' }}>
+                    <RecordExport data={data} showToast={showToast} />
+                </div>
+            )}
             <div className="student-roster-grid">
                 {rows.map((student) => {
                     const mine = records.filter((row) => row.sid === student.id && row.date.startsWith(month));
@@ -38,7 +52,7 @@ export function Students() {
                         </Btn>
                     );
                 })}
-                {!rows.length && <p className="muted">명단에 없는 이름이에요. 설정에서 명단을 붙여 넣을 수 있어요.</p>}
+                {!rows.length && data.students.length > 0 && <p className="muted">명단에 없는 이름이에요. 설정에서 명단을 붙여 넣을 수 있어요.</p>}
             </div>
         </div>
     );
@@ -131,6 +145,9 @@ export function Student() {
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {stats.map(([label, value]) => <span key={label} className="chip">{label} {value}</span>)}
             </div>
+            <div style={{ marginTop: 8 }}>
+                <RecordExport data={data} sid={student.id} showToast={showToast} />
+            </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {['전체', '관찰', '상담', '보호자'].map((item) => (
                     <Btn key={item} className={tab === item ? 'chip on' : 'chip'} onClick={() => setTab(item)}>{item}</Btn>
@@ -216,6 +233,8 @@ export function Student() {
 
 export function Neis() {
     const { data, showToast } = useUi();
+    /* 지난 명단 학생의 기록도 이름으로 보이게, 아이디로 찾을 때는 지난 명단까지 봅니다. */
+    const everyone = data.allStudents || data.students;
     const records = joinedRecords(data).filter((row) => row.neis && !row.neisMoved && !row.localOnly);
     const groups = useMemo(() => {
         const map = new Map();
@@ -232,7 +251,7 @@ export function Neis() {
     const [picked, setPicked] = useState(() => groups[0]?.[0] || '');
     const activeSid = groups.some(([sid]) => sid === picked) ? picked : (groups[0]?.[0] || '');
     const activeRows = groups.find(([sid]) => sid === activeSid)?.[1] || [];
-    const activeStudent = data.students.find((item) => item.id === activeSid);
+    const activeStudent = everyone.find((item) => item.id === activeSid);
     const xlsxRef = useRef(null);
     useEffect(() => {
         /* 엑셀 만드는 코드를 화면이 열릴 때 미리 불러 둡니다(첫 화면 묶음에는 넣지 않음). */
@@ -243,7 +262,7 @@ export function Neis() {
 
     async function copyAll() {
         const lines = groups.map(([sid, rows]) => {
-            const student = data.students.find((item) => item.id === sid);
+            const student = everyone.find((item) => item.id === sid);
             const head = student ? `${student.no} ${student.name}` : '학생 미정';
             return `${head}\n${rows.map((row) => `- (${row.date}) ${row.text}`).join('\n')}`;
         }).join('\n\n');
@@ -264,7 +283,7 @@ export function Neis() {
         try {
             /* 미리 불러 둔 엑셀 코드가 있으면 기다리지 않아, 누른 손짓이 끊기지 않습니다(아이폰 공유·내려받기). */
             const xlsx = xlsxRef.current || await import('../lib/neisXlsx.js');
-            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, data.students));
+            const bytes = xlsx.neisXlsxBytes(xlsx.neisRows(groups, everyone));
             file = new File([bytes], `나이스모아_${seoulYmd()}.xlsx`, { type: xlsx.NEIS_XLSX_TYPE });
         } catch {
             showToast('엑셀 파일을 만들지 못했어요. 잠시 뒤 다시 눌러 주세요.');
@@ -300,7 +319,7 @@ export function Neis() {
             return;
         }
         const rowsHtml = groups.map(([sid, rows]) => {
-            const student = data.students.find((item) => item.id === sid);
+            const student = everyone.find((item) => item.id === sid);
             const head = student ? `${student.no} ${student.name}` : '학생 미정';
             const body = rows.map((row) => {
                 const text = htmlEscape(row.text || '').replace(/\n/g, '<br>');
@@ -344,7 +363,7 @@ export function Neis() {
                 <div className="neis-split" data-neis-split="1" style={{ marginTop: 12 }}>
                     <nav className="neis-list" aria-label="나이스 학생 목록">
                         {groups.map(([sid, rows]) => {
-                            const student = data.students.find((item) => item.id === sid);
+                            const student = everyone.find((item) => item.id === sid);
                             const label = student ? `${student.no} ${student.name}` : '학생을 아직 안 골랐어요';
                             return (
                                 <Btn
