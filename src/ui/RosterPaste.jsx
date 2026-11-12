@@ -5,6 +5,7 @@ import { Btn } from './bits.jsx';
 
 const KIND_LABEL = {
     same: '그대로',
+    moved: '번호만 바뀜',
     renamed: '이름만 고침',
     new: '새로',
     changed: '새 학생',
@@ -40,6 +41,7 @@ export function RosterPreview({ data, read, onCancel, onSaved, showToast }) {
     const changes = plan.changes.filter((c) => c.kind !== 'gone');
     const gone = plan.changes.filter((c) => c.kind === 'gone');
     const changed = changes.filter((c) => c.kind === 'changed');
+    const moved = changes.filter((c) => c.kind === 'moved');
     const dupRows = read.rows.filter((row) => row.dup);
     const overCloud = rows.some((row) => row.no > CLOUD_MAX_NO);
     const nos = rows.map((row) => row.no);
@@ -72,6 +74,7 @@ export function RosterPreview({ data, read, onCancel, onSaved, showToast }) {
                     ))}
                 </ul>
             )}
+            {moved.length > 0 && <p style={{ margin: '0 0 8px' }}>번호만 바뀐 학생 {moved.length}명은 같은 학생으로 보고 기록·출결·메모를 그대로 이어 가요.</p>}
             {changed.length > 0 && <p style={{ margin: '0 0 8px' }}>같은 번호라도 이름이 다르면 새 학생으로 넣어요. 그 번호의 예전 기록·출결·메모는 이어지지 않고, 예전 학생 이름으로 남아요. 이름만 고친 거라면 그 줄에서 ‘같은 학생’을 눌러 주세요.</p>}
             <div role="table" aria-label="넣을 명단" style={{ display: 'grid', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
                 {dupRows.map((row) => (
@@ -88,7 +91,7 @@ export function RosterPreview({ data, read, onCancel, onSaved, showToast }) {
                         <div key={`row-${c.no}`} role="row" className="roster-preview-row" data-kind={c.kind} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', minHeight: 32 }}>
                             <strong className="num" style={{ minWidth: 32 }}>{c.no}</strong>
                             <span style={{ flex: '1 1 120px', minWidth: 0, overflowWrap: 'anywhere' }}>{c.name}{row?.sex ? ` · ${row.sex}` : ''}</span>
-                            <span className="muted">{c.kind === 'changed' ? (kept ? `이름만 고침(예전 ${c.before})` : `새 학생 · 예전 ${c.before}`) : KIND_LABEL[c.kind]}</span>
+                            <span className="muted">{c.kind === 'changed' ? (kept ? `이름만 고침(예전 ${c.before})` : `새 학생 · 예전 ${c.before}`) : c.kind === 'moved' ? `번호만 바뀜(예전 ${c.from}번)` : KIND_LABEL[c.kind]}</span>
                             {c.kind === 'changed' && (
                                 <Btn className={kept ? 'chip on' : 'chip'} aria-pressed={kept} aria-label={`${c.no}번 ${c.name}은 ${c.before}와 같은 학생`} onClick={() => setKeep((prev) => { const next = new Set(prev); if (next.has(c.no)) next.delete(c.no); else next.add(c.no); return next; })}>같은 학생</Btn>
                             )}

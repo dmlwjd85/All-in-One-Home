@@ -134,6 +134,36 @@ const lastYear = [
     check(kept.students.length === 3, '이름만 고쳤는데 지난 학생이 생겼습니다.');
 }
 {
+    /* 번호만 바뀜: 2번이 전학 가서 3번 박마바가 2번으로 당겨짐 → 아이디·메모 이어 감, 이다라는 지난 명단으로 */
+    const plan = planRoster(lastYear, [{ no: 1, name: '김가나' }, { no: 2, name: '박마바' }], { makeId });
+    const now = activeStudents(plan.students);
+    check(now.map((r) => `${r.no}:${r.id}`).join() === '1:s1,2:s3', `번호만 바뀐 학생 아이디: ${now.map((r) => `${r.no}:${r.id}`)}`);
+    check(plan.changes.some((c) => c.kind === 'moved' && c.no === 2 && c.from === 3 && c.name === '박마바'), `번호만 바뀜 표시: ${JSON.stringify(plan.changes)}`);
+    check(!plan.changes.some((c) => c.kind === 'changed'), '번호만 바뀐 학생을 같은 번호 다른 학생으로 물었습니다.');
+    check(plan.students.some((r) => r.id === 's2' && r.active === false && r.memo === '발표 잘함'), '빠진 2번이 지난 명단으로 남지 않았습니다.');
+    check(plan.students.length === 3, `학생 수: ${plan.students.length}`);
+    /* 메모 이어 감 */
+    const moved = planRoster(lastYear, [{ no: 1, name: '이다라' }, { no: 2, name: '김가나' }, { no: 3, name: '박마바' }], { makeId });
+    const byNo = Object.fromEntries(activeStudents(moved.students).map((r) => [r.no, r]));
+    check(byNo[1]?.id === 's2' && byNo[1]?.memo === '발표 잘함' && byNo[2]?.id === 's1' && byNo[2]?.memo === '수학 좋아함', `다시 정렬: ${JSON.stringify(byNo)}`);
+    check(moved.changes.filter((c) => c.kind === 'moved').length === 2 && moved.students.length === 3, '다시 정렬했는데 지난 학생이 생겼습니다.');
+    check(suggestKeep(moved.changes).length === 0, '번호만 바뀐 명단에 이어 가기를 골라 두었습니다.');
+    /* 같은 이름이 둘 이상이면 묻기(예전처럼 새 학생) */
+    const twins = [...lastYear, { id: 's4', no: 4, name: '박마바', sex: '', birthday: '', active: true, memo: '', source: 'app' }];
+    const ask = planRoster(twins, [{ no: 1, name: '김가나' }, { no: 2, name: '박마바' }], { makeId });
+    check(!ask.changes.some((c) => c.kind === 'moved') && ask.changes.some((c) => c.no === 2 && c.kind === 'changed'), `같은 이름 둘은 묻기: ${JSON.stringify(ask.changes)}`);
+    check(!['s3', 's4'].includes(activeStudents(ask.students).find((r) => r.no === 2)?.id), '같은 이름 둘 가운데 하나를 마음대로 골랐습니다.');
+    /* 새 명단에 같은 이름이 둘이어도 묻기 */
+    const askIn = planRoster(lastYear, [{ no: 1, name: '김가나' }, { no: 2, name: '박마바' }, { no: 5, name: '박마바' }], { makeId });
+    check(!askIn.changes.some((c) => c.kind === 'moved'), '새 명단에 같은 이름이 둘인데 이어 갔습니다.');
+    /* 같은 번호·같은 이름은 그대로(옮기지 않음) */
+    const stay = planRoster(lastYear, [{ no: 3, name: '박마바' }, { no: 4, name: '김가나' }], { makeId });
+    check(stay.changes.some((c) => c.no === 3 && c.kind === 'same') && stay.changes.some((c) => c.no === 4 && c.kind === 'moved' && c.from === 1), `그대로·옮김 섞임: ${JSON.stringify(stay.changes)}`);
+    /* 옮겨 간 학생의 예전 번호에 새 학생이 오면 '같은 학생' 묻기 없이 새 학생 */
+    const fill = planRoster(lastYear, [{ no: 1, name: '김가나' }, { no: 2, name: '박마바' }, { no: 3, name: '정하늘' }], { makeId });
+    check(fill.changes.some((c) => c.no === 3 && c.kind === 'new') && fill.changes.some((c) => c.no === 2 && c.kind === 'moved'), `빈 번호 채움: ${JSON.stringify(fill.changes)}`);
+}
+{
     /* 처음 명단: s번호 */
     const plan = planRoster([], [{ no: 1, name: '김가나' }, { no: 51, name: '이다라' }]);
     check(plan.students.map((r) => r.id).join() === 's1,s51', `처음 아이디: ${plan.students.map((r) => r.id)}`);
@@ -175,6 +205,12 @@ const lastYear = [
     await saveQuick({ text: '새 3번 첫 기록', kind: '관찰', no: 3, date: '2026-11-12' });
     const fresh = snapshot().records.find((row) => row.text.includes('새 3번'));
     check(fresh?.sid === now[2].id, `새 기록이 지난 명단 학생에게 붙었습니다: ${fresh?.sid}`);
+    /* 전출로 번호를 당기면(4명 → 3명) 같은 학생의 기록이 그대로 이어집니다. */
+    const pulled = await replaceRoster([{ no: 1, name: '김가나' }, { no: 2, name: '정하늘' }, { no: 50, name: '한여름' }]);
+    const after = activeStudents(snapshot().students);
+    check(after.find((row) => row.name === '정하늘')?.id === now[2].id && after.find((row) => row.name === '한여름')?.id === now[3].id, `번호 당김 뒤 아이디: ${after.map((row) => `${row.no}:${row.id}`)}`);
+    check(pulled.changes.filter((c) => c.kind === 'moved').length === 2, `번호 당김 표시: ${JSON.stringify(pulled.changes)}`);
+    check(snapshot().records.find((row) => row.text.includes('새 3번'))?.sid === after.find((row) => row.no === 2)?.id, '번호를 당긴 학생의 기록이 끊겼습니다.');
 }
 
 if (failures.length) {

@@ -258,42 +258,77 @@ function freshId(no, taken, makeId) {
 /**
  * 지금 학생 목록에 새 명단을 맞춥니다(순수 함수).
  * - 같은 번호·같은 이름: 아이디·메모·생일을 그대로 둡니다.
+ * - 번호만 바뀜: 다른 번호에 같은 이름의 지금 학생이 한 명뿐이고 새 명단에도 그 이름이 한 번뿐이면(전출로 번호를 당기거나 다시 정렬한 경우)
+ *   같은 학생으로 보고 아이디·메모를 이어 갑니다. 같은 이름이 둘 이상이면 누구인지 모르니 아래처럼 새 학생으로 넣고 묻습니다.
  * - 같은 번호인데 이름이 다름: 새 아이디(새 학생). 메모·생일은 물려주지 않습니다. keep 에 그 번호가 있으면 이름만 고친 같은 학생으로 봅니다.
  * - 새 명단에 없는 학생: 지우지 않고 지난 명단(active: false)으로 남깁니다. 그래야 기록·출결이 이름과 함께 남고, 클라우드에서 다시 살아나지 않습니다.
- * 돌려주는 값: { students(저장할 전체), changes: [{ no, name, before, kind }] }
- *   kind: same · renamed(이름만 고침, 이어 감) · new(새 번호) · changed(같은 번호 다른 학생) · back(지난 명단에서 다시) · gone(지난 명단으로)
+ * 돌려주는 값: { students(저장할 전체), changes: [{ no, name, before, kind, from? }] }
+ *   kind: same · moved(번호만 바뀜, 이어 감. from 은 예전 번호) · renamed(이름만 고침, 이어 감) · new(새 번호) · changed(같은 번호 다른 학생) · back(지난 명단에서 다시) · gone(지난 명단으로)
  */
 export function planRoster(current, incoming, { keep = [], makeId = null } = {}) {
     const all = (current || []).filter((row) => row && row.id != null);
     const keepSet = new Set((keep || []).map(Number));
+    const active = activeStudents(all);
     const activeByNo = new Map();
-    for (const row of activeStudents(all)) if (!activeByNo.has(Number(row.no))) activeByNo.set(Number(row.no), row);
+    for (const row of active) if (!activeByNo.has(Number(row.no))) activeByNo.set(Number(row.no), row);
     const taken = new Set(all.map((row) => String(row.id)));
     const used = new Set();
     const changes = [];
-    const next = [];
-    for (const row of [...(incoming || [])].sort((a, b) => a.no - b.no)) {
+    const rows = [...(incoming || [])].sort((a, b) => a.no - b.no);
+    const placed = new Array(rows.length).fill(null);
+    const nameKey = (name) => String(name || '').replace(/\s+/g, '');
+    const incomingNames = new Map();
+    for (const row of rows) incomingNames.set(nameKey(row.name), (incomingNames.get(nameKey(row.name)) || 0) + 1);
+    /* 1) 같은 번호·같은 이름을 먼저 묶습니다. 번호만 바뀐 학생을 찾을 때 이 학생들을 빼앗지 않게 합니다. */
+    rows.forEach((row, index) => {
         const no = Number(row.no);
         const old = activeByNo.get(no);
-        if (old && !used.has(old.id) && (sameName(old.name, row.name) || keepSet.has(no))) {
+        if (old && !used.has(old.id) && sameName(old.name, row.name)) {
             used.add(old.id);
-            next.push({ ...old, no, name: row.name, sex: row.sex || old.sex || '', active: true });
-            changes.push({ no, name: row.name, before: old.name, kind: sameName(old.name, row.name) ? 'same' : 'renamed' });
-            continue;
+            placed[index] = { ...old, no, name: row.name, sex: row.sex || old.sex || '', active: true };
+            changes.push({ no, name: row.name, before: old.name, kind: 'same' });
+        }
+    });
+    /* 2) 번호만 바뀜: 다른 번호에 같은 이름의 지금 학생이 딱 한 명이고, 새 명단에도 그 이름이 한 번뿐일 때. */
+    rows.forEach((row, index) => {
+        if (placed[index]) return;
+        const no = Number(row.no);
+        if (keepSet.has(no) || incomingNames.get(nameKey(row.name)) !== 1) return;
+        const twins = active.filter((item) => sameName(item.name, row.name));
+        if (twins.length !== 1) return;
+        const old = twins[0];
+        if (used.has(old.id) || Number(old.no) === no) return;
+        used.add(old.id);
+        placed[index] = { ...old, no, name: row.name, sex: row.sex || old.sex || '', active: true };
+        changes.push({ no, name: row.name, before: old.name, kind: 'moved', from: Number(old.no) });
+    });
+    /* 3) 나머지: 이름만 고침(keep) · 지난 명단에서 다시 · 새 학생 */
+    rows.forEach((row, index) => {
+        if (placed[index]) return;
+        const no = Number(row.no);
+        const old = activeByNo.get(no);
+        const free = old && !used.has(old.id) ? old : null;
+        if (free && keepSet.has(no)) {
+            used.add(free.id);
+            placed[index] = { ...free, no, name: row.name, sex: row.sex || free.sex || '', active: true };
+            changes.push({ no, name: row.name, before: free.name, kind: 'renamed' });
+            return;
         }
         /* 지난 명단에 같은 번호·같은 이름이 있으면 그 학생을 다시 씁니다(실수로 뺐다가 다시 넣은 경우). */
         const back = all.find((item) => !isActiveStudent(item) && !used.has(item.id) && Number(item.no) === no && sameName(item.name, row.name));
         if (back) {
             used.add(back.id);
-            next.push({ ...back, name: row.name, sex: row.sex || back.sex || '', active: true });
+            placed[index] = { ...back, name: row.name, sex: row.sex || back.sex || '', active: true };
             changes.push({ no, name: row.name, before: '', kind: 'back' });
-            continue;
+            return;
         }
         const id = freshId(no, taken, makeId);
         taken.add(id);
-        next.push({ id, no, name: row.name, sex: row.sex || '', birthday: '', active: true, memo: '', source: 'app' });
-        changes.push({ no, name: row.name, before: old ? old.name : '', kind: old ? 'changed' : 'new', typo: Boolean(old && oneEdit(old.name, row.name)) });
-    }
+        placed[index] = { id, no, name: row.name, sex: row.sex || '', birthday: '', active: true, memo: '', source: 'app' };
+        /* 그 번호의 예전 학생이 다른 번호로 옮겨 갔으면 '같은 번호 다른 학생'으로 묻지 않습니다. */
+        changes.push({ no, name: row.name, before: free ? free.name : '', kind: free ? 'changed' : 'new', typo: Boolean(free && oneEdit(free.name, row.name)) });
+    });
+    const next = placed;
     const rest = all.filter((row) => !used.has(row.id)).map((row) => {
         if (!isActiveStudent(row)) return row;
         changes.push({ no: Number(row.no), name: row.name, before: row.name, kind: 'gone' });
@@ -308,8 +343,8 @@ export function planRoster(current, incoming, { keep = [], makeId = null } = {})
  * 대부분의 이름이 그대로이고(명단 일부 고침), 글자 하나만 다를 때만 고릅니다. 새 학년도 명단처럼 거의 다 바뀌면 고르지 않습니다.
  */
 export function suggestKeep(changes) {
-    const matched = (changes || []).filter((c) => c.kind === 'same' || c.kind === 'changed' || c.kind === 'renamed');
-    const same = matched.filter((c) => c.kind === 'same').length;
+    const matched = (changes || []).filter((c) => c.kind === 'same' || c.kind === 'moved' || c.kind === 'changed' || c.kind === 'renamed');
+    const same = matched.filter((c) => c.kind === 'same' || c.kind === 'moved').length;
     if (!matched.length || same * 2 < matched.length) return [];
     return matched.filter((c) => c.kind === 'changed' && c.typo).map((c) => c.no);
 }
