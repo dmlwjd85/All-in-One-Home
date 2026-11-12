@@ -1,0 +1,91 @@
+/* 넓은 화면 '오늘' 위젯판. 크기: 작게(1칸) · 넓게(가로 2칸) · 크게(가로 2칸 × 세로 2칸) */
+.wb { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.wb-bar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.wb-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(190px, auto);
+    grid-auto-flow: row dense;
+    gap: 14px;
+}
+@media (min-width: 1280px) { .wb-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1800px) { .wb-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.wb-card { padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow: hidden; }
+.wb-s { grid-column: span 1; }
+.wb-m { grid-column: span 2; }
+.wb-l { grid-column: span 2; grid-row: span 2; }
+.wb-title { margin: 0; font-size: 14px; font-weight: 800; color: var(--ink-sub); }
+.wb-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+.wb-body > .wb-more { margin-top: auto; align-self: flex-start; }
+.wb-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wb-item { margin: 0; overflow-wrap: anywhere; }
+.wb-sub { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink-sub); }
+.wb-line { margin: 0; overflow-wrap: anywhere; }
+.wb-fine { margin: 0; font-size: 12px; }
+.clip1 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.wb-big { margin: 0; font-size: 40px; line-height: 1.1; font-weight: 800; color: var(--accent); }
+.wb-unit { font-size: 15px; margin-left: 4px; color: var(--ink-sub); }
+
+/* 하루 */
+.wb-day-head { display: flex; align-items: baseline; gap: 10px; }
+.wb-day-num { font-size: 48px; line-height: 1; color: var(--accent); }
+.wb-day-week { font-weight: 800; }
+
+/* 할 일 */
+.wb-todo { justify-content: flex-start; min-height: 44px; padding: 0 10px; border-radius: 12px; text-align: left; min-width: 0; }
+.wb-todo > span { min-width: 0; }
+
+/* 한 주 */
+.wb-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; flex: 1; }
+.wb-week-day {
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px;
+    min-height: 96px; padding: 8px 6px; border-radius: 12px; box-shadow: var(--neo-inset); text-align: left; min-width: 0;
+}
+.wb-week-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+.wb-week-label { font-size: 13px; }
+.wb-week-label b { color: var(--accent); }
+.wb-week-ev { font-size: 12px; }
+
+/* 한 달 */
+.wb-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.wb-month-w { text-align: center; font-size: 12px; color: var(--ink-sub); line-height: 22px; }
+.wb-month-d { min-height: 44px; border-radius: 10px; font-size: 14px; position: relative; padding: 0; justify-content: center; }
+.wb-month-d.is-out { color: var(--ink-hint); }
+.wb-month-d.is-today { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); font-weight: 800; }
+.wb-month-d.has-ev::after {
+    content: ''; position: absolute; left: 50%; bottom: 6px; width: 5px; height: 5px; margin-left: -2.5px;
+    border-radius: 50%; background: var(--accent);
+}
+
+/* 일 년 */
+.wb-progress { height: 10px; border-radius: 999px; box-shadow: var(--neo-inset); overflow: hidden; }
+.wb-progress > span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
+.wb-year { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.wb-year-m { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; border-radius: 12px; box-shadow: var(--neo-raise-sm); font-size: 13px; }
+.wb-year-m.is-past { opacity: .6; }
+.wb-year-m.is-now { box-shadow: inset 0 0 0 2px var(--accent); color: var(--accent); }
+
+/* 일정 */
+.wb-ev { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.wb-dday { flex: none; min-width: 44px; text-align: center; font-size: 12px; font-weight: 800; color: var(--accent); }
+
+/* 알림장 */
+.wb-notice { margin: 0 0 4px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 날씨 */
+.wb-weather-now { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wb-weather-now b { font-size: 36px; line-height: 1; }
+.wb-weather-days { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.wb-weather-day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 13px; }
+.wb-weather-set { display: flex; flex-direction: column; gap: 8px; }
+.wb-weather-set > .chip { align-self: flex-start; }
+
+/* 꾸미기 */
+.wb-edit { padding: 14px; }
+.wb-edit-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.wb-edit-done { padding: 0 20px; }
+.wb-edit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.wb-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wb-edit-name { min-width: 72px; }
+.wb-edit-sizes { display: inline-flex; gap: 6px; }
+.wb-edit-move { display: inline-flex; gap: 4px; margin-left: auto; }

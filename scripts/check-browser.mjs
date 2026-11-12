@@ -4632,6 +4632,15 @@ try {
         check(await page.$('[data-screen="minutes-editor"]') && (await page.evaluate(() => location.hash)) === '#/minutes/new', 'Enter를 누르자 회의록 쓰기 화면을 떠났습니다(저장·분류).');
         /* 날짜: 달력에서 한 번 눌러 고릅니다(드롭다운·스크롤 피커 없음). */
         check(!(await page.$('[data-screen="minutes-editor"] select')), '회의록 화면에 드롭다운(select)이 있습니다.');
+        /* 날짜 달력은 접혀 있다가 날짜 줄을 누르면 펼쳐지고, 날짜를 고르면 다시 접힙니다. */
+        const foldedAtStart = await page.evaluate(() => ({
+            grid: Boolean(document.querySelector('[data-screen="minutes-editor"] [aria-label="날짜"]')),
+            expanded: document.querySelector('[data-role="minutes-date-toggle"]')?.getAttribute('aria-expanded'),
+        }));
+        check(!foldedAtStart.grid && foldedAtStart.expanded === 'false', `회의록 날짜 달력이 처음부터 펼쳐져 있습니다: ${JSON.stringify(foldedAtStart)}`);
+        await page.click('[data-role="minutes-date-toggle"]');
+        await page.waitForSelector('[data-screen="minutes-editor"] [aria-label="날짜"]');
+        check(await page.$eval('[data-role="minutes-date-toggle"]', (el) => el.getAttribute('aria-expanded')) === 'true', '날짜 줄을 눌러도 펼친 상태(aria-expanded)가 바뀌지 않습니다.');
         const picked = await page.evaluate(() => {
             const cells = [...document.querySelectorAll('[data-screen="minutes-editor"] [aria-label="날짜"] button')].filter((el) => !el.disabled && el.innerText.trim() === '20');
             cells[0]?.click();
@@ -4639,6 +4648,7 @@ try {
         });
         check(picked >= 1, '회의록 달력에서 날짜를 누를 수 없습니다.');
         await page.waitForFunction(() => document.querySelector('[data-role="minutes-date"]')?.innerText.includes('20일'));
+        check(!(await page.$('[data-screen="minutes-editor"] [aria-label="날짜"]')), '날짜를 골라도 회의록 달력이 접히지 않습니다.');
         await page.type('#minutes-attendees', '1학년 담임');
         await delay(500);
         const draft = await page.evaluate(() => JSON.parse(localStorage.getItem('ssug-gyomu-minutes-draft') || '{}').new || null);
@@ -4743,7 +4753,13 @@ try {
                 await page.type('#minutes-text', '첫 줄\n둘째 줄\n셋째 줄');
                 await audit(page, `회의록 쓰기 ${width} ${mode}`);
                 await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-kinds button', `회의 종류 칩 ${width} ${mode}`);
+                await controlBoxes(page, '[data-role="minutes-date-toggle"]', `회의록 날짜 줄 ${width} ${mode}`);
+                await page.click('[data-role="minutes-date-toggle"]');
+                await page.waitForSelector('[data-screen="minutes-editor"] [aria-label="날짜"]');
                 await controlBoxes(page, '[data-screen="minutes-editor"] [aria-label="날짜"] button', `회의록 달력 ${width} ${mode}`);
+                /* 넓은 화면(900px 이상)에서는 본문 칸을 양옆으로도 늘릴 수 있고, 좁은 화면은 위아래만 늘립니다. */
+                const resize = await page.$eval('#minutes-text', (el) => getComputedStyle(el).resize);
+                check(resize === (width >= 900 ? 'both' : 'vertical'), `${width} 회의록 본문 크기 조절이 ${resize}입니다.`);
                 await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-save-row button', `회의록 저장 줄 ${width} ${mode}`);
                 const fields = await page.evaluate(() => ['#minutes-title', '#minutes-attendees', '#minutes-text'].map((sel) => {
                     const r = document.querySelector(sel).getBoundingClientRect();
