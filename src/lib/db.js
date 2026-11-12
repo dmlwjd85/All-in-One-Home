@@ -14,7 +14,7 @@ import { isSensitiveText } from './sensitive.js';
 import { buildExport, cleanPeriodLocal, downloadJson, incomingLocal, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
-import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
+import { blockedAsSensitive, cloudRowId, fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, SWEEP_COLLECTIONS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { isActiveStudent, parseRoster, planRoster } from './roster.js';
 import { groupRecordId, newGroupId } from './nameLink.js';
@@ -601,6 +601,82 @@ function unsureKeys() {
 /** 검사용 */
 export function stampUnsentLegacyForTest() { return stampUnsentLegacy(); }
 
+/*
+ * 예전 규칙으로 이미 클라우드에 올라간 줄 가운데 지금 기준으로 민감한 줄(본문의 전화번호·주소, '보건실' 태그 등) 정리.
+ * 지금은 toCloudRow 가 null 이라 올리지도 지우지도 않아 클라우드 사본이 남습니다. 그런 줄을 찾으면
+ *  1) 이 기기 전용(state.local)으로 옮겨 기기 저장소에 먼저 저장하고(update 가 끝까지 저장한 뒤에야 돌아옵니다),
+ *  2) 저장이 끝난 뒤에만 클라우드 문서를 삭제 대기열(forgetRow 와 같은 길)에 넣어 이번 올리기 끝에서 지웁니다. 삭제는 규칙 safeText 를 보지 않습니다.
+ * 저장에 실패하면 줄이 클라우드 칸에 그대로 남고 대기열·올린 지문(cloudHashes)도 건드리지 않아, 다음 올리기에서 다시 해 봅니다.
+ * 찾을 줄이 없으면 아무것도 하지 않으므로 여러 번 돌아도 됩니다. 다른 기기(옛 앱)가 다시 올린 줄도 받아 온 뒤 같은 길로 정리됩니다.
+ */
+function moveToLocal(draft, bucket, row) {
+    if (!draft.local) draft.local = {};
+    if (!Array.isArray(draft.local[bucket])) draft.local[bucket] = [];
+    const list = draft.local[bucket];
+    const { localOnly: _localOnlyFlag, ...stored } = row;
+    const same = list.find((item) => String(item?.id) === String(stored.id));
+    if (!same) {
+        list.unshift(stored);
+        return;
+    }
+    const plain = (item) => { const { editAt, editD, at, ...rest } = item || {}; return JSON.stringify(rest); };
+    if (plain(same) === plain(stored)) return;
+    if (bucket === 'notices') {
+        /* 알림장은 날짜마다 한 줄입니다. 이 기기 전용 알림장이 이미 있으면 글을 이어 붙여 둘 다 남깁니다. */
+        const mine = String(same.text || '');
+        const theirs = String(stored.text || '');
+        if (theirs && !mine.includes(theirs)) same.text = mine.trim() ? `${mine}\n${theirs}` : theirs;
+        return;
+    }
+    /* 같은 아이디에 다른 내용: 덮지 않고 새 아이디로 하나 더 둡니다(자료를 잃지 않게). */
+    let n = 1;
+    while (list.some((item) => String(item?.id) === `${stored.id}-m${n}`)) n += 1;
+    list.unshift({ ...stored, id: `${stored.id}-m${n}` });
+}
+
+function hasSensitiveInCloudBuckets(current) {
+    return SWEEP_COLLECTIONS.some((bucket) => (current?.[bucket] || []).some((row) => blockedAsSensitive(bucket, row)));
+}
+
+/** draft 를 고치고, 클라우드에서 지울 줄([bucket, 문서 id, 줄])을 돌려줍니다. 대기열에는 넣지 않습니다. */
+function sweepSensitiveRows(draft) {
+    const moved = [];
+    for (const bucket of SWEEP_COLLECTIONS) {
+        const rows = draft[bucket] || [];
+        if (!rows.some((row) => blockedAsSensitive(bucket, row))) continue;
+        const stay = [];
+        for (const row of rows) {
+            if (!blockedAsSensitive(bucket, row)) {
+                stay.push(row);
+                continue;
+            }
+            moveToLocal(draft, bucket, row);
+            moved.push([bucket, cloudRowId(bucket, row) || row.id, row]);
+        }
+        draft[bucket] = stay;
+    }
+    return moved;
+}
+
+async function sweepSensitiveCloud() {
+    if (!hasSensitiveInCloudBuckets(state)) return 0;
+    let moved = [];
+    const failed = await updateFromCloud((draft) => {
+        moved = sweepSensitiveRows(draft);
+        return draft;
+    });
+    if (failed?.storageFailed) return 0;
+    for (const [bucket, id, row] of moved) {
+        /* 그 사이 같은 문서 id 의 줄이 다시 클라우드 칸에 들어왔으면(받아오기) 지우지 않고 다음 정리에 맡깁니다. */
+        if ((state[bucket] || []).some((item) => String(cloudRowId(bucket, item) || item?.id) === String(id))) continue;
+        queueCloudForget(bucket, id, row);
+    }
+    return moved.length;
+}
+
+/** 검사용: 올리기 없이 민감한 줄 정리만 돌립니다. */
+export function sweepSensitiveForTest() { return sweepSensitiveCloud(); }
+
 async function flushCloudTracked() {
     if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
     /* 동기화 칩: 올리는 동안 '동기화 중', 끝나면 다 올렸는지에 따라 '동기화됨' 또는 '동기화하지 못했어요'. */
@@ -633,6 +709,8 @@ async function flushCloudOnce() {
         for (const id of retry) delete cloudHashes[`todos/${id}`];
     }
     await stampUnsentLegacy();
+    await sweepSensitiveCloud();
+    if (!state.auth?.uid) return { skipped: true };
     const sent = { ...cloudHashes };
     const held = heldTodos;
     const sending = held.size ? { ...state, todos: (state.todos || []).filter((row) => !held.has(toCloudRow('todos', row)?.id)) } : state;

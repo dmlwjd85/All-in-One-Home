@@ -5,11 +5,12 @@
  *  3) 규칙(firestore.rules)의 safeText 본문이 앱과 글자 그대로 같은지, RE2 와 뜻이 다른 문법을 쓰지 않았는지,
  *     규칙 본문을 '전체 맞춤'으로 돌렸을 때 앱보다 넓게 거절하지 않는지(앱이 올린 글을 규칙이 거절하지 않는지)
  *  4) 클라우드로 보낼 모양(toCloudRow)과 받아 올 때(takeRemote) 민감 메모가 이 기기에 남는지
+ *  5) 예전 규칙으로 클라우드에 올라간 줄이 지금 민감하면 이 기기 전용으로 옮기고 클라우드 문서를 지우는지(여러 번 돌아도 같고, 저장 실패면 그대로)
  */
 import { readFileSync } from 'node:fs';
 import { CONTACT_PATTERNS, isSensitiveText, rulesSafeTextBody, sensitiveCheckCopy } from '../src/lib/sensitive.js';
-import { toCloudRow } from '../src/lib/cloudShape.js';
-import { takeRemote } from '../src/lib/db.js';
+import { blockedAsSensitive, toCloudRow } from '../src/lib/cloudShape.js';
+import { absorbCloudForTest, flushCloud, queuedCloudKeys, resetClockForTest, snapshot, sweepSensitiveForTest, takeRemote, update, useAuthForTest, useCloudForTest, useVaultsForTest } from '../src/lib/db.js';
 
 const failures = [];
 function check(ok, message) {
@@ -140,6 +141,98 @@ check(taken.note === mine.note && taken.status === '지각', `받아 올 때 민
 check(takeRemote('attendance', { ...mine, note: '늦잠' }, theirs).note === '', '평범한 출결 메모를 다른 기기에서 비운 값을 받지 않습니다.');
 check(takeRemote('attendance', mine, { ...theirs, note: '다른 기기 메모' }).note === '다른 기기 메모', '다른 기기가 새로 적은 출결 메모를 받지 않습니다.');
 check(takeRemote('students', { id: 's6', no: 6, name: '정다은', memo: '보건실 자주 감' }, { id: 's6', no: 6, name: '정다은', memo: '' }).memo === '보건실 자주 감', '받아 올 때 민감 학생 메모가 지워졌습니다.');
+
+/* 5) 예전 규칙으로 올라간 민감한 줄 정리 */
+{
+    const vault = (fail = { on: false }) => {
+        const bag = new Map();
+        return {
+            fail,
+            async get(key) { return bag.has(key) ? structuredClone(bag.get(key)) : undefined; },
+            async set(key, value) { if (fail.on) throw Object.assign(new Error('저장 실패'), { storageFailed: true, message: '저장 실패' }); bag.set(key, structuredClone(value)); },
+            async remove(key) { bag.delete(key); },
+        };
+    };
+    const failMain = { on: false };
+    const main = vault(failMain);
+    const local = vault();
+    useVaultsForTest(main, local, vault());
+    resetClockForTest({ measured: true });
+    const removed = [];
+    const pushedIds = [];
+    useCloudForTest({
+        async push(uid, st, { hashes }) {
+            for (const bucket of ['records', 'events', 'todos', 'notes', 'notices']) for (const row of st[bucket] || []) pushedIds.push(`${bucket}/${row.id}`);
+            return { ok: true, hashes: { ...hashes }, rejected: [] };
+        },
+        async remove(uid, bucket, id, opts) { removed.push({ key: `${bucket}/${id}`, expect: opts?.expect || null }); return { ok: true }; },
+        pull: async () => null,
+    });
+    /* 로그인 전에 예전 규칙으로 받은 줄을 넣어 둡니다(이때는 정리하지 않음). */
+    useAuthForTest(null);
+    const oldCloud = {
+        records: [
+            { id: 'rOldTag', date: '2026-10-01', kind: '관찰', sid: 's1', text: '줄넘기 연습', tags: ['보건실'], source: 'app' },
+            { id: 'rPlain', date: '2026-10-01', kind: '관찰', sid: 's1', text: '발표를 끝까지 했어요', tags: ['학습'], source: 'app' },
+        ],
+        events: [{ id: 'eOld', date: '2026-10-02', title: '체험학습', kind: '학급', memo: '인솔 010-1234-5678', source: 'app' }],
+        todos: [{ id: 'tOld', title: '가정 방문 101동 1203호', done: false, due: '', source: 'app' }],
+        notes: [{ id: 'nOld', text: '협의', tags: ['회의', '민원전화'], source: 'app' }],
+        notices: [{ id: '2026-10-03', date: '2026-10-03', text: '어머니 연락처 010-9876-5432', source: 'app' }, { id: '2026-10-04', date: '2026-10-04', text: '가정통신문 제2026-123호 내기', source: 'app' }],
+    };
+    await absorbCloudForTest(oldCloud, { 'records/rOldTag': 'fp-old-upload' });
+    await update((draft) => { draft.local.notices = [{ id: '2026-10-03', date: '2026-10-03', text: '이 기기 전용 알림장' }]; return draft; });
+    const stuck = ['records', 'events', 'todos', 'notes', 'notices'].flatMap((b) => snapshot()[b].filter((row) => blockedAsSensitive(b, row)).map((row) => `${b}/${row.id}`));
+    check(stuck.length === 5, `정리 전 클라우드 칸의 민감한 줄 수: ${stuck}`);
+
+    /* 저장에 실패하면 옮기지도 지우지도 않습니다. */
+    useAuthForTest('u-sweep');
+    failMain.on = true;
+    await sweepSensitiveForTest();
+    failMain.on = false;
+    check(snapshot().records.some((row) => row.id === 'rOldTag') && !snapshot().local.records.some((row) => row.id === 'rOldTag'), '저장 실패인데 줄을 옮겼습니다.');
+    check(queuedCloudKeys().length === 0, `저장 실패인데 클라우드 삭제 대기열에 넣었습니다: ${queuedCloudKeys()}`);
+    await flushCloud();
+    /* 저장 실패 뒤 올리기에서 정리가 다시 돌고(저장 성공), 그때 지웁니다. */
+    const s1 = snapshot();
+    for (const key of stuck) {
+        const [bucket, id] = key.split('/');
+        check(!s1[bucket].some((row) => String(row.id) === id), `클라우드 칸에 민감한 줄이 남았습니다: ${key}`);
+        check(s1.local[bucket].some((row) => String(row.id) === id), `민감한 줄이 이 기기에서 사라졌습니다: ${key}`);
+        check(removed.some((r) => r.key === key), `클라우드 문서를 지우지 않았습니다: ${key}`);
+        check(!pushedIds.includes(key), `민감한 줄을 다시 올리려 했습니다: ${key}`);
+    }
+    check(removed.find((r) => r.key === 'records/rOldTag')?.expect, '이 기기가 올렸던 줄은 올린 지문으로 견주어 지워야 합니다.');
+    check(s1.records.some((row) => row.id === 'rPlain') && s1.notices.some((row) => row.id === '2026-10-04'), '평범한 줄까지 옮겼습니다.');
+    const mergedNotice = s1.local.notices.filter((row) => row.id === '2026-10-03');
+    check(mergedNotice.length === 1 && mergedNotice[0].text.includes('이 기기 전용 알림장') && mergedNotice[0].text.includes('010-9876-5432'), `같은 날 알림장을 합치지 않았습니다: ${JSON.stringify(mergedNotice)}`);
+    check(s1.local.todos.find((row) => row.id === 'tOld')?.title === '가정 방문 101동 1203호', '옮긴 할 일 내용이 바뀌었습니다.');
+    const saved = await local.get('state');
+    check(saved?.records?.some((row) => row.id === 'rOldTag') && saved?.notices?.some((row) => row.id === '2026-10-03'), '옮긴 줄이 이 기기 저장소에 저장되지 않았습니다.');
+
+    /* 여러 번 돌아도 같습니다. */
+    const count = removed.length;
+    const before = JSON.stringify(snapshot().local);
+    await sweepSensitiveForTest();
+    await flushCloud();
+    check(removed.length === count, `다시 돌렸더니 또 지웠습니다: ${removed.length - count}`);
+    check(JSON.stringify(snapshot().local) === before, '다시 돌렸더니 이 기기 전용 자료가 바뀌었습니다.');
+
+    /* 다른 기기(옛 앱)가 같은 줄을 다시 올려 받아 와도, 겹치지 않고 다시 지웁니다. */
+    await absorbCloudForTest({ records: [oldCloud.records[0]], notices: [oldCloud.notices[0]] });
+    await flushCloud();
+    const s2 = snapshot();
+    check(!s2.records.some((row) => row.id === 'rOldTag') && s2.local.records.filter((row) => String(row.id).startsWith('rOldTag')).length === 1, `다시 받은 줄이 겹쳤습니다: ${JSON.stringify(s2.local.records.map((r) => r.id))}`);
+    check(s2.local.notices.find((row) => row.id === '2026-10-03')?.text.split('010-9876-5432').length === 2, '다시 받은 알림장 글이 두 번 붙었습니다.');
+    check(removed.filter((r) => r.key === 'records/rOldTag').length === 2, '다시 받은 민감한 줄의 클라우드 문서를 지우지 않았습니다.');
+    /* 다른 기기가 내용을 고쳐 다시 올렸으면 덮지 않고 하나 더 둡니다. */
+    await absorbCloudForTest({ records: [{ ...oldCloud.records[0], text: '줄넘기 연습(고침)' }] });
+    await flushCloud();
+    const s3 = snapshot().local.records.filter((row) => String(row.id).startsWith('rOldTag'));
+    check(s3.length === 2 && s3.some((row) => row.text === '줄넘기 연습') && s3.some((row) => row.text === '줄넘기 연습(고침)'), `고친 줄을 덮었습니다: ${JSON.stringify(s3)}`);
+    useCloudForTest(null);
+    useAuthForTest(null);
+}
 
 if (failures.length) {
     console.error(failures.join('\n'));

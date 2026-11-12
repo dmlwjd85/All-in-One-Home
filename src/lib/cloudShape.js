@@ -34,7 +34,7 @@ export function toCloudProfile(state) {
         displayName: String(state.auth?.name || '').slice(0, 40),
         className: String(profile.className || '').slice(0, 30),
         schoolYear: Number(profile.schoolYear) || 2026,
-        /* 규칙은 50명까지 받습니다. 그보다 많으면 50으로 올려, 프로필 전체가 거절되지 않게 합니다(실제 인원은 이 기기 명단이 기준). */
+        /* 규칙은 60명까지 받습니다. 그보다 많으면 60으로 줄여 올려, 프로필 전체가 거절되지 않게 합니다(실제 인원은 이 기기 명단이 기준). */
         classSize: Math.min(60, Math.max(0, Number(profile.classSize || state.students?.length || 0) || 0)),
         theme: ['system', 'light', 'dark'].includes(profile.theme) ? profile.theme : 'system',
         migrationVersion: 1,
@@ -66,6 +66,24 @@ export function toCloudRow(collection, row) {
     // 시간표는 1~8교시 과목('보건' 수업)을 그대로 올리고 9·10교시만 칸마다 거르므로(toTable) 여기서 보지 않습니다.
     if (collection === 'timetable') return shaped;
     return shaped && bodyLeaks(shaped.body) ? null : shaped;
+}
+
+/* 예전 규칙으로 클라우드에 올라갔을 수 있는 글 묶음(기록·일정·할 일·메모·알림장). */
+export const SWEEP_COLLECTIONS = ['records', 'events', 'todos', 'notes', 'notices'];
+
+/**
+ * 모양은 클라우드에 맞는데 지금 기준으로 민감해서 올리지 않는 줄인지 봅니다.
+ * 예전 규칙으로 올라간 뒤 민감 낱말·꼴이 늘어난 줄을 찾을 때 씁니다(모양이 틀려 못 올리는 줄은 빼고).
+ */
+export function blockedAsSensitive(collection, row) {
+    if (!row || row.source === 'demo' || !SWEEP_COLLECTIONS.includes(collection)) return false;
+    if (!shapeRow(collection, row)) return false;
+    return !toCloudRow(collection, row);
+}
+
+/** 민감 여부와 상관없이 이 줄의 클라우드 문서 id(알림장은 날짜). 지울 때 씁니다. */
+export function cloudRowId(collection, row) {
+    return row ? shapeRow(collection, row)?.id || '' : '';
 }
 
 function shapeRow(collection, row) {
