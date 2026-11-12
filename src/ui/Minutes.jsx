@@ -148,6 +148,8 @@ function MinutesEditor({ row }) {
     const [text, setText] = useState(start.text);
     const [tags, setTags] = useState(start.tags);
     const [keptAt, setKeptAt] = useState(initial.draft ? '불러옴' : '');
+    /* 날짜 달력은 접어 두고, 날짜 줄을 누르면 펼칩니다. 날짜를 고르면 다시 접습니다. */
+    const [dateOpen, setDateOpen] = useState(false);
     const saving = useRef(false);
     const kind = tags.find((tag) => MEET_KINDS.includes(tag)) || '';
 
@@ -234,10 +236,24 @@ function MinutesEditor({ row }) {
                     <Btn key={item} className={kind === item ? 'chip on' : 'chip'} aria-pressed={kind === item ? 'true' : 'false'} onClick={() => pickKind(item)}>{item}</Btn>
                 ))}
             </div>
-            <div className="minutes-label">날짜 <strong className="minutes-date-picked" data-role="minutes-date">{dateLabel(date)}</strong></div>
-            <div className="minutes-date solid-card">
-                <DateGrid value={date} today={clock.ymd} onPick={setDate} />
-            </div>
+            <div className="minutes-label" id="minutes-date-label">날짜</div>
+            <Btn
+                className="chip minutes-date-toggle"
+                data-role="minutes-date-toggle"
+                aria-expanded={dateOpen ? 'true' : 'false'}
+                aria-controls="minutes-date-grid"
+                aria-describedby="minutes-date-label"
+                onClick={() => setDateOpen((open) => !open)}
+            >
+                <strong className="minutes-date-picked" data-role="minutes-date">{dateLabel(date)}</strong>
+                <span className="minutes-date-hint muted">{dateOpen ? '접기' : '바꾸기'}</span>
+                <span className="minutes-date-caret" aria-hidden="true">{dateOpen ? '▴' : '▾'}</span>
+            </Btn>
+            {dateOpen ? (
+                <div className="minutes-date solid-card" id="minutes-date-grid">
+                    <DateGrid value={date} today={clock.ymd} onPick={(ymd) => { setDate(ymd); setDateOpen(false); }} />
+                </div>
+            ) : null}
             <label className="minutes-label" htmlFor="minutes-attendees">참석자 <span className="muted">(선택)</span></label>
             <Field id="minutes-attendees" value={attendees} maxLength={MINUTES_ATTENDEES_MAX} placeholder="예: 1학년 담임 선생님들" onChange={(event) => setAttendees(event.target.value)} />
             <label className="minutes-label" htmlFor="minutes-text">본문 <span className="muted">(Enter는 줄바꿈이에요)</span></label>

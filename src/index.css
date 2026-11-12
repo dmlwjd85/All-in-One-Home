@@ -1482,11 +1482,18 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .minutes-confirm { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; box-shadow: var(--neo-inset); }
 .minutes-confirm p { margin: 0; font-weight: 700; }
 .minutes-label { font-weight: 700; margin-top: 6px; overflow-wrap: anywhere; }
-.minutes-date-picked { margin-left: 6px; color: var(--accent); }
+.minutes-date-picked { color: var(--accent); }
+.minutes-date-toggle { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; }
+.minutes-date-hint { font-size: 13px; font-weight: 500; }
+.minutes-date-caret { font-size: 12px; line-height: 1; }
 .minutes-date { padding: 10px; border-radius: 16px; box-shadow: var(--neo-inset); }
 @media (max-width: 420px) { .minutes-date { padding: 0; box-shadow: none; } }
 .minutes-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .minutes-text { min-height: 260px; resize: vertical; line-height: 1.7; padding: 12px 14px; font: inherit; }
+/* 넓은 화면(웹): 본문 칸을 오른쪽 아래 손잡이로 양옆으로도 늘립니다. 칸 폭보다 좁아지지는 않고, 왼쪽 메뉴(200px)와 여백을 뺀 화면 폭까지만 늘어납니다. */
+@media (min-width: 900px) {
+    .minutes-text { resize: both; min-width: 100%; max-width: calc(100vw - 200px - 48px); }
+}
 .minutes-kept { margin: 0; font-size: 13px; }
 .minutes-save { min-width: 140px; }
 .minutes-link-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

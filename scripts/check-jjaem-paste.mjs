@@ -134,7 +134,7 @@ check(readJjaemPaste('3월 2일째 지각', { now, future: true }).date === '', 
 check(readJjaemPaste('11월 15일 협의회', { now, future: true }).date === '2026-11-15', '「11월 15일」은 날짜예요');
 
 const sw = readFileSync('public/sw.js', 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v80'"), 'SW 판이 v80이 아닙니다');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v81'"), 'SW 판이 v81이 아닙니다');
 const todoUi = readFileSync('src/ui/TodoAlarm.jsx', 'utf8');
 check(todoUi.includes('todo-alarm-bell') && todoUi.includes('todo-alarm-head'), '알림 노란 카드 머리가 없습니다');
 const css = readFileSync('src/index.css', 'utf8');
