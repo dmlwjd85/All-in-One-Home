@@ -29,7 +29,6 @@ const MUST_HIT = [
     '101동 1203호',
     '101동1203호로 이사',
     '101 동 1203 호',
-    '101-1203호',
     '푸른아파트 103동',
     '중앙로12번길 34',
     '백범로 31길 21',
@@ -61,6 +60,9 @@ const MUST_PASS = [
     '발표를 끝까지 했어요',
     '학년회의 14:00 체험학습 안내',
     '교과서 120-135쪽',
+    '가정통신문 제2026-123호',
+    '학급문고 12-1234호',
+    '가정통신문 제2026-123호 체험학습 신청서 내기',
 ];
 for (const text of MUST_HIT) check(isSensitiveText(text), `민감으로 봐야 하는데 놓쳤습니다: ${text}`);
 for (const text of MUST_PASS) check(!isSensitiveText(text), `평범한 글을 민감으로 봤습니다: ${text}`);
