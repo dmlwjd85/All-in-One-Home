@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, dayKeyFromYmd, formatKoDate, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
-import { joined, joinedRecords, removeItem, saveTextItem } from '../lib/db.js';
+import { dropTextDraft, joined, joinedRecords, keepTextDraft, removeItem, saveTextItem, takeTextDraft } from '../lib/db.js';
+import { startText, textDraftKey } from '../lib/textDraft.js';
 import { toggleTodoFx } from './doneFx.js';
 import { badgeOn, normalizeGoals } from '../lib/todoAchieve.js';
 import { mergeCalendarRows, visibleGoogleEvents } from '../lib/gcalCore.js';
@@ -41,7 +42,44 @@ export function Day() {
     const notices = joined(data, 'notices').filter((row) => row.date === date && String(row.text || '').trim());
     const dayNotes = joined(data, 'notes').filter((row) => row.id === `day-${date}`);
     const dayNote = dayNotes.find((row) => row.localOnly) || dayNotes[0];
-    const [memo, setMemo] = useState(dayNote?.text || '');
+    const savedMemo = dayNote?.text || '';
+    // 하루 메모는 '저장'을 눌러야 남습니다. 그 전에 다른 날로 가거나 앱을 닫아도 쓰던 글은 이 기기에 임시로 두고, 다시 열면 되살립니다.
+    const draftKey = textDraftKey('day', date);
+    const [opened] = useState(() => startText(takeTextDraft(draftKey), savedMemo));
+    const [memo, setMemo] = useState(opened.text);
+    const memoUnsaved = Boolean(memo.trim()) && memo.trim() !== savedMemo.trim();
+    const memoLive = useRef({ memo, savedMemo });
+    memoLive.current = { memo, savedMemo };
+    // 저장할 때 앞뒤 빈칸을 떼므로, 빈칸만 다른 글은 저장한 글과 같게 봅니다.
+    function keepMemo(base = memoLive.current.savedMemo) {
+        const now = memoLive.current.memo;
+        keepTextDraft(draftKey, now.trim() === base.trim() ? base : now, base);
+    }
+    useEffect(() => {
+        const timer = setTimeout(() => keepMemo(), 300);
+        return () => clearTimeout(timer);
+    }, [memo, savedMemo]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        // 출결 사유 시트처럼 앱을 숨기거나 닫을 때 capture로 먼저, 동기로 남깁니다. 화면을 떠날 때(다른 날·다른 화면)도 한 번 더 남깁니다.
+        const onHide = () => { if (document.visibilityState === 'hidden') keepMemo(); };
+        const onLeave = () => keepMemo();
+        document.addEventListener('visibilitychange', onHide, true);
+        window.addEventListener('pagehide', onLeave, true);
+        return () => {
+            document.removeEventListener('visibilitychange', onHide, true);
+            window.removeEventListener('pagehide', onLeave, true);
+            keepMemo();
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (opened.restored) showToast('저장하지 않은 하루 메모를 불러왔어요. 저장을 눌러야 남아요.');
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    function moveDay(step) {
+        const kept = memoUnsaved;
+        keepMemo();
+        go(`#/day/${addDaysYmd(date, step)}`, { state: { appFrom: history.state?.appFrom || 'day' } });
+        if (kept) showToast('쓰던 하루 메모는 이 기기에 임시로 남겨 두었어요. 그 날로 돌아오면 다시 보여요.');
+    }
     const rest = restInfo(date, joined(data, 'events'));
     const dayKey = dayKeyFromYmd(date);
     const local = withUsedCount(data.timetable, usePeriodLocal());
@@ -55,9 +93,9 @@ export function Day() {
     return (
         <div style={{ display: 'grid', gap: 12 }}>
             <div className="week-nav">
-                <Btn className="icon-btn" aria-label="이전 날" onClick={() => go(`#/day/${addDaysYmd(date, -1)}`, { state: { appFrom: history.state?.appFrom || 'day' } })}>‹</Btn>
+                <Btn className="icon-btn" aria-label="이전 날" onClick={() => moveDay(-1)}>‹</Btn>
                 <strong className="title-font">{formatKoDate(date, { today: clock.ymd })}</strong>
-                <Btn className="icon-btn" aria-label="다음 날" onClick={() => go(`#/day/${addDaysYmd(date, 1)}`, { state: { appFrom: history.state?.appFrom || 'day' } })}>›</Btn>
+                <Btn className="icon-btn" aria-label="다음 날" onClick={() => moveDay(1)}>›</Btn>
             </div>
             <p className="muted" style={{ margin: 0 }}>이 날의 할 일, 일정, 시간표, 출결, 상담을 한곳에 모았어요. 나이스에 넣기 전에 여기서 확인하고 바로 고쳐요.</p>
             {rest.off && <p className="day-rest-mark" style={{ margin: 0 }}>{rest.label === '휴일' ? '휴일이에요.' : `휴일 · ${rest.label}`}</p>}
@@ -71,7 +109,10 @@ export function Day() {
                 {todos.map((row) => (
                     <div key={row.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                         <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
-                        <Btn className="chip" onClick={() => removeItem('todos', row.id).then(() => showToast('할 일을 지웠어요.'))}>지우기</Btn>
+                        <Btn className="chip" onClick={async () => {
+                            const failed = await removeItem('todos', row.id);
+                            if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
+                        }}>지우기</Btn>
                     </div>
                 ))}
                 {!todos.length && <p className="muted">이 날로 발라 둔 할 일이 없어요.</p>}
@@ -129,6 +170,16 @@ export function Day() {
                 {!notices.length && <p className="muted">이 날 알림장은 아직 없어요.</p>}
                 <Btn className="chip" onClick={() => go(`#/notice/${date}`)}>알림장 고치기</Btn>
                 <textarea className="field" style={{ marginTop: 8 }} rows={3} aria-label="하루 메모" placeholder="나이스에 넣기 전에 남겨 둘 말" value={memo} onChange={(event) => setMemo(event.target.value)} />
+                {memoUnsaved && (
+                    <p className="muted" data-role="day-memo-unsaved" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '6px 0 0', fontSize: 13 }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>아직 저장하지 않은 메모예요. 다른 날로 가도 이 기기에 임시로 남아요.</span>
+                        <Btn className="chip" onClick={() => {
+                            if (!window.confirm('쓰던 메모를 버리고 저장해 둔 메모로 되돌릴까요?')) return;
+                            dropTextDraft(draftKey);
+                            setMemo(savedMemo);
+                        }}>쓰던 메모 버리기</Btn>
+                    </p>
+                )}
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
                     const text = memo.trim();
                     if (!text) {
@@ -143,6 +194,8 @@ export function Day() {
                     }
                     const result = await saveTextItem('notes', { id: `day-${date}`, text, date, pinned: false, source: 'app' }, { from: dayNote ? (dayNote.localOnly ? 'local' : 'cloud') : undefined });
                     if (result?.storageFailed) return;
+                    // 저장한 글 기준으로 임시본을 다시 봅니다. 저장하는 동안 더 쓴 글이 없으면 임시본은 지워집니다.
+                    keepMemo(text);
                     showToast(result.sensitive ? '이 내용은 이 기기에만 남겨 둘게요.' : '하루 메모를 남겼어요.', true);
                 }}>하루 메모 저장</Btn>
             </section>

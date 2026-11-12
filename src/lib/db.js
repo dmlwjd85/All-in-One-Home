@@ -11,13 +11,14 @@ import { parseNote, stripTokens } from './parse.js';
 import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
-import { buildExport, downloadJson, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
+import { buildExport, cleanPeriodLocal, downloadJson, incomingLocal, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, deleteUserDoc, fingerprint, measureServerClock, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos } from './cloud.js';
 import { fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
 import { parseRoster } from './roster.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
+import { clearAllTextDrafts, clearTextDraft, memoryStore, readTextDraft, writeTextDraft } from './textDraft.js';
 import { allDoneToday, doneCount, isPri, mergeGoals, normalizeGoals, priOf, sameGoals, settleGoalDay, cleanGoalN, DEFAULT_GOAL } from './todoAchieve.js';
 import { mergeLinks, readLinks } from './eduLinks.js';
 
@@ -1667,6 +1668,24 @@ function readAttendDraft() {
         return d;
     } catch { return null; }
 }
+/*
+ * 알림장·하루 메모의 쓰던 글 임시본(textDraft.js). 출결 임시본과 같이 localStorage에 동기로 남기고, 계정마다 따로 봅니다.
+ * 공용 컴퓨터 모드에서는 이 기기에 글을 남기지 않도록 메모리에만 둡니다(앱을 닫으면 사라집니다).
+ */
+const textDraftMemory = memoryStore();
+function textDraftStore() {
+    if (memoryOnly || state.profile?.sharedPc) return textDraftMemory;
+    try { return globalThis.localStorage || textDraftMemory; } catch { return textDraftMemory; }
+}
+export function keepTextDraft(key, text, base = '') {
+    return writeTextDraft(key, { text, base }, { store: textDraftStore(), owner: draftOwner() });
+}
+export function takeTextDraft(key) {
+    return readTextDraft(key, { store: textDraftStore(), owner: draftOwner() });
+}
+export function dropTextDraft(key) {
+    clearTextDraft(key, { store: textDraftStore() });
+}
 /** 남은 임시본을 출결에 되살립니다. 다른 계정에서 적던 것은 버립니다. */
 export async function applyAttendDraft() {
     const d = readAttendDraft();
@@ -1946,6 +1965,8 @@ export async function patchProfile(patch, { wipe = false } = {}) {
         } catch {
             /* 지우기를 고른 경우에만 이 컴퓨터에 기록을 남기지 않습니다. */
         }
+        /* 쓰던 알림장·하루 메모 임시본도 이 컴퓨터에서 지웁니다. */
+        try { clearAllTextDrafts({ store: globalThis.localStorage }); } catch { /* 없어도 됩니다. */ }
     }
     if (patch.sharedPc === false) memoryOnly = false;
     /* 공용 컴퓨터 모드를 켜면 로그인을 이 탭에만 두고, 끄면 다시 브라우저에 남깁니다(이미 로그인해 있어도). */
@@ -2134,7 +2155,10 @@ export async function forgetLegacyImports() {
 }
 
 export function exportFile(includeLocal) {
-    const data = buildExport(state, { includeLocal, at: new Date().toISOString() });
+    /* 교시 수·길이·9·10교시·출퇴근 시각은 이 기기 저장소에 있어서 따로 읽어 넣습니다. */
+    let periodLocal = null;
+    try { periodLocal = readPeriodLocal(); } catch { /* 없어도 백업은 됩니다. */ }
+    const data = buildExport(state, { includeLocal, at: new Date().toISOString(), periodLocal });
     /* G1: 교육 사이트 바로가기(이름·주소만)도 함께 넣습니다. */
     try { data.bookmarks = readLinks(); } catch { /* 없어도 백업은 됩니다. */ }
     downloadJson(`쨈 교무수첩-${seoulYmd()}.json`, data);
@@ -2188,7 +2212,12 @@ function applyIncoming(draft, data, sensitive, mode) {
     draft.timetable = mode === 'replace' ? (data.timetable || {}) : { ...draft.timetable, ...(data.timetable || {}) };
     if (data.profile?.className) draft.profile.className = data.profile.className;
     if (data.profile?.periodStarts) draft.profile.periodStarts = data.profile.periodStarts;
-    draft.local.records = merge(draft.local.records, [...(data.local?.records || []), ...sensitive.local]);
+    /* 학년도·학사일정·고친 날·마감한 날·목표: 파일에 있을 때만 넣습니다(예전 판 백업은 지금 값을 둡니다). */
+    const settings = incomingSettings(draft, data, mode);
+    draft.profile = settings.profile;
+    if (settings.goals !== undefined) draft.goals = settings.goals;
+    /* 이 기기 전용 자료는 기록만이 아니라 할 일·일정·메모·알림장·연락처·쪽까지 되살립니다. */
+    draft.local = { ...incomingLocal(draft.local, data, mode, sensitive.local), backup: draft.local?.backup ?? null };
     draft.profile.started = true;
     draft.profile.classSize = draft.students.length || draft.profile.classSize;
     return draft;
@@ -2218,9 +2247,13 @@ export async function importText(text, mode, hooks = {}) {
     /* G1: 백업에 든 바로가기는 이 브라우저 목록에 모자란 것만 더합니다(바꾸기에서도 지우지 않음). */
     try { if (Array.isArray(data.bookmarks)) mergeLinks(readLinks(), data.bookmarks); } catch { /* 바로가기는 건너뜁니다. */ }
     const sensitive = splitSensitive(data.records || []);
+    /* 교시 설정(이 기기 저장소)은 기록이 다 들어간 뒤에 넣습니다. 지금 고친 것으로 찍혀 다른 기기에도 퍼집니다. */
+    const period = cleanPeriodLocal(data.periodLocal);
+    const applyPeriod = () => { if (period) { try { patchPeriodLocal(period); } catch { /* 교시 설정만 건너뜁니다. */ } } };
     if (mode !== 'replace') {
         const failed = await update((draft) => applyIncoming(draft, data, sensitive, mode));
         if (failed?.storageFailed) return { ok: false, errors: [failed.message] };
+        applyPeriod();
         return { ok: true, kind: 'ssug-gyomu', localOnly: sensitive.local.length };
     }
     let previous;
@@ -2234,11 +2267,14 @@ export async function importText(text, mode, hooks = {}) {
         const next = structuredClone(state);
         next.local.backup = { exportedAt, payload };
         applyIncoming(next, data, sensitive, 'replace');
+        /* update()를 거치지 않으므로, 바뀐 설정 칸(교시 시작·고친 날·학사일정)의 고친 시각을 여기서 찍습니다. */
+        bumpSettingAts(next.profile, previous.profile);
         await hooks.onPhase?.('ready', next);
         state = next;
         mirrorTheme(state.profile.theme);
         emit();
         await persist();
+        applyPeriod();
         flushCloud().catch(() => {});
         await hooks.onPhase?.('applied');
     } catch (error) {
@@ -2738,6 +2774,9 @@ export async function clearAll() {
         /* 이미 메모리만 쓰는 경우입니다. */
     }
     inboxDropped = new Set();
+    /* 쓰던 알림장·하루 메모 임시본도 함께 비웁니다(다시 열었을 때 지운 글이 되살아나지 않게). */
+    try { clearAllTextDrafts({ store: globalThis.localStorage }); } catch { /* 없어도 됩니다. */ }
+    clearAllTextDrafts({ store: textDraftMemory });
 }
 
 export async function saveTip(tip) {
