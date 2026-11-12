@@ -1183,13 +1183,16 @@ function relocate(draft, bucket, row, local, from) {
     return draft;
 }
 
-/** 번호 목록 → 명단의 학생(겹치지 않게, 들어온 차례). 명단에 없는 번호는 뺍니다. */
+/**
+ * 번호 목록 → 지금 반 학생(겹치지 않게, 들어온 차례). 명단에 없는 번호는 뺍니다.
+ * 지난 명단 학생(active: false)은 같은 번호라도 고르지 않습니다. 다른 기기에서 명단을 바꾸면 배열 앞쪽에 지난 학생이 올 수 있습니다.
+ */
 function manyStudents(students, nos) {
     const out = [];
     for (const value of nos) {
         const no = Number(value) || 0;
         if (!no) continue;
-        const one = (students || []).find((row) => row.no === no);
+        const one = (students || []).find((row) => Number(row.no) === no && isActiveStudent(row));
         if (one && !out.includes(one)) out.push(one);
     }
     return out.slice(0, 40);

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { findStudentNames, linkedSids, givenOf, hasBatchim, groupOfId, groupRecordId, newGroupId, groupMates } from '../src/lib/nameLink.js';
 import { filterLog, periodBounds, schoolYearOf, sortLog, studentLogText } from '../src/lib/studentLog.js';
 import { linkedNosFor, suggestKind } from '../src/ui/quickMatch.js';
-import { finishSetup, saveQuick, snapshot, useVaultsForTest } from '../src/lib/db.js';
+import { finishSetup, saveQuick, snapshot, update, useVaultsForTest } from '../src/lib/db.js';
 
 let bad = 0;
 let count = 0;
@@ -140,6 +140,22 @@ const onlyOne = await saveQuick({ kind: '상담', text: '하윤이 상담', no: 
 check(onlyOne.message === '이하윤 기록에 넣었어요.' && !groupOfId(snapshot().records.find((r) => r.text === '하윤이 상담')?.id), `겹친 번호·없는 번호: ${onlyOne.message}`);
 const sens = await saveQuick({ kind: '관찰', text: '가나랑 하윤이 알레르기 확인', no: 1, nos: [1, 2] }, now);
 check(sens.ok && snapshot().local.records.filter((r) => r.text.includes('알레르기')).length === 2 && !snapshot().records.some((r) => r.text.includes('알레르기')), '민감한 묶음 기록은 둘 다 이 기기에만');
+
+/* 다른 기기에서 명단을 바꾼 뒤 배열 앞쪽에 지난 명단 학생이 오는 경우: 같은 번호라도 지금 반 학생에게만 붙입니다. */
+await update((draft) => {
+    const old = draft.students.find((r) => r.id === 's2');
+    const rest = draft.students.filter((r) => r.id !== 's2');
+    draft.students = [rest[0], { ...old, active: false }, ...rest.slice(1), { id: 's2-new1', no: 2, name: '박민지', sex: '', birthday: '', active: true, memo: '', source: 'app' }];
+    return draft;
+});
+const movedOne = await saveQuick({ kind: '관찰', text: '민지 발표 잘함', no: 0, nos: [2] }, now);
+const movedRow = snapshot().records.find((r) => r.text === '민지 발표 잘함');
+check(movedRow?.sid === 's2-new1' && movedOne.message === '박민지 기록에 넣었어요.', `한 명 묶음은 지금 반 학생: ${movedRow?.sid} ${movedOne.message}`);
+const movedTwo = await saveQuick({ kind: '관찰', text: '가나랑 민지 청소', no: 1, nos: [1, 2] }, now);
+const movedPair = snapshot().records.filter((r) => r.text === '가나랑 민지 청소').map((r) => r.sid).sort().join();
+check(movedPair === 's1,s2-new1' && movedTwo.message === '김가나, 박민지 기록에 하나씩 넣었어요.', `여러 명 묶음은 지금 반 학생: ${movedPair} ${movedTwo.message}`);
+const movedNo = await saveQuick({ kind: '관찰', text: '@2 줄넘기', no: 0 }, now);
+check(snapshot().records.find((r) => r.text.includes('줄넘기'))?.sid === 's2-new1', `번호 하나도 지금 반 학생: ${movedNo.message}`);
 
 /* 클라우드 모양: sid 하나짜리 기록 그대로 */
 const { toCloudRow } = await import('../src/lib/cloudShape.js');
