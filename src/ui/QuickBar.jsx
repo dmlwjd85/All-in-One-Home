@@ -11,14 +11,15 @@ import { timeContext } from './timeContext.js';
 import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
+import { findStudentNames, whyLabel } from '../lib/nameLink.js';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
     SPEECH_LOCAL,
     SUGGEST_WAIT,
+    linkedNosFor,
     nameCandidates,
     quickSaveDate,
-    studentNoFor,
     suggestKind,
 } from './quickMatch.js';
 
@@ -28,6 +29,8 @@ const MEET_CHIP = '회의';
 const SPEECH_NOTE = 'ssug-gyomu-speech-notice';
 /** 저장이 안 됐을 때. 적던 글은 입력칸에 되돌려 둡니다. */
 const KEPT_NOTE = '적던 글은 쨈 버튼을 다시 누르면 그대로 있어요.';
+/** 학생과 이어지는 분류. 이때만 연결한 학생을 기록에 붙입니다. */
+const RECORD_KINDS = ['관찰', '상담', '칭찬', '보호자'];
 
 export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const { showToast, data, openPlus, go } = useUi();
@@ -46,6 +49,8 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const [ask, setAsk] = useState(null);
     const [chipOff, setChipOff] = useState([]);
     const [ampmFlip, setAmpmFlip] = useState([]);
+    /* 본문 속 이름 칩을 눌러 정한 연결. { [학생 id]: true(연결) | false(해제) }. 누르지 않은 칩은 자동 규칙을 따릅니다. */
+    const [linkChoice, setLinkChoice] = useState({});
 
     useEffect(() => {
         const node = barRef.current;
@@ -72,6 +77,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             setHint('');
             setChipOff([]);
             setAmpmFlip([]);
+            setLinkChoice({});
             return undefined;
         }
         const timer = setTimeout(() => setHint(suggestKind(live, students)), SUGGEST_WAIT);
@@ -170,8 +176,9 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         const date = phrase?.date || saved?.date || (used === '일정'
             ? (paste.date || quickSaveDate(used, text, dateYmd, now))
             : (paste.date || dateYmd));
-        const no = studentNoFor(text, students, picked.current);
+        const nos = RECORD_KINDS.includes(used) ? linkedNosFor(text, students, linkChoice, picked.current) : [];
         const pickedBefore = picked.current;
+        const choiceBefore = linkChoice;
         if (inputRef.current) inputRef.current.value = '';
         composing.current = null;
         picked.current = null;
@@ -179,11 +186,14 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         setHint('');
         setChipOff([]);
         setAmpmFlip([]);
+        setLinkChoice({});
         try { hearing.current?.abort(); } catch { /* 이미 끝났습니다. */ }
         setListening(false);
         onClose();
         const body = { kind: used, text, date };
-        if (no) body.no = no;
+        /* 한 명이면 예전처럼 no, 둘 이상이면 nos로 넘겨 학생마다 기록을 하나씩 만듭니다. */
+        if (nos.length) body.no = nos[0];
+        if (nos.length > 1) body.nos = nos;
         if (used === '할 일') body.due = date;
         if (saved?.title) {
             body.title = saved.title;
@@ -200,6 +210,7 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             if (input && !input.value) {
                 input.value = text;
                 picked.current = pickedBefore;
+                setLinkChoice(choiceBefore);
                 setLive(text);
             }
             showToast(`${message} ${KEPT_NOTE}`);
@@ -263,8 +274,16 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         input.value = next;
         composing.current = null;
         picked.current = student;
+        /* 후보에서 고른 학생은 바로 연결합니다(같은 이름이 둘이어도 고른 쪽만). */
+        if (student.id) setLinkChoice((prev) => ({ ...prev, [student.id]: true }));
         setLive(next);
         input.focus();
+    }
+
+    /** 이름 칩 한 번 누르기: 연결 ↔ 해제. */
+    function toggleLink(hit, on, event) {
+        event?.preventDefault();
+        setLinkChoice((prev) => ({ ...prev, [hit.sid]: !on }));
     }
 
     function onMic() {
@@ -339,6 +358,14 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     }
 
     const candidates = nameCandidates(live, students);
+    /* 본문에 나온 학생(성 포함·성 뺀 이름·'하윤이가' 같은 호칭). 칩을 눌러 연결을 정합니다. */
+    const linkHits = live.trim() ? findStudentNames(live, students) : [];
+    for (const [sid, on] of Object.entries(linkChoice)) {
+        if (on !== true || linkHits.some((hit) => hit.sid === sid)) continue;
+        const row = students.find((item) => item.id === sid);
+        if (row) linkHits.push({ sid, no: row.no, name: row.name, label: row.name, auto: false, why: '' });
+    }
+    const linkOn = (hit) => linkChoice[hit.sid] === true || (linkChoice[hit.sid] !== false && hit.auto);
     const periods = allStarts(data?.profile?.periodStarts);
     /* 칩은 엔터로 저장될 분류(추천 칩·지난번 분류)와 같은 규칙으로 읽습니다. 할 일·일정은 다가오는 날로 봅니다. */
     const liveKind = hint || lastKind.current || '메모';
@@ -393,6 +420,28 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                             onClick={(event) => pickStudent(student, event)}
                         >{student.name}</Btn>
                     ))}
+                </div>
+            )}
+            {linkHits.length > 0 && (
+                <div className="quick-names quick-links" role="group" aria-label="연결할 학생" data-quick-links="1">
+                    <span className="quick-links-label muted">연결</span>
+                    {linkHits.map((hit) => {
+                        const on = linkOn(hit);
+                        const why = on ? '' : whyLabel(hit.why);
+                        return (
+                            <Btn
+                                key={hit.sid}
+                                className={on ? 'chip on quick-link' : 'chip quick-link'}
+                                aria-pressed={on ? 'true' : 'false'}
+                                aria-label={`${hit.label} ${on ? '연결됨, 누르면 해제' : '연결 안 됨, 누르면 연결'}${why ? ` (${why})` : ''}`}
+                                data-link-sid={hit.sid}
+                                data-link-auto={hit.auto ? '1' : '0'}
+                                onPointerDown={(event) => event.preventDefault()}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={(event) => toggleLink(hit, on, event)}
+                            >{on ? '✓ ' : '+ '}{hit.label}{why ? <span className="quick-link-why"> · {why}</span> : null}</Btn>
+                        );
+                    })}
                 </div>
             )}
             <div className="quick-row">
