@@ -5,11 +5,12 @@ import { clearAttendDraft, flushCloudNow, joined, markChecked, setAttendance, wr
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
+import { AttendExport } from './ClassExport.jsx';
 
 const REASONS = ['질병', '미인정', '출석인정', '기타'];
 
 export function Attend() {
-    const { data, clock, route, go } = useUi();
+    const { data, clock, route, go, showToast } = useUi();
     const date = route.params.date || clock.ymd;
     const month = route.params.span === 'month';
     function attendHash(ymd, span) {
@@ -102,6 +103,7 @@ export function Attend() {
                     </aside>
                 </div>
             )}
+            <AttendExport data={data} date={date} showToast={showToast} />
             {reasonFor && <ReasonSheet student={reasonFor} mark={byId.get(reasonFor.id)} date={date} onClose={() => setReasonFor(null)} />}
         </div>
     );
