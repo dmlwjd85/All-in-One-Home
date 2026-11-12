@@ -78,7 +78,7 @@ service cloud.firestore {
     }
     function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,40}$'); }
     // 민감 낱말 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 같아야 합니다.
-    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식).*'); }
+    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|알러지|건강|보건|진단서|정신과|우울|아토피|천식|뇌전증|당뇨|자해|자살|학대|방임|가정폭력|성폭력|성폭행|성추행|성희롱|기초수급|수급자|차상위|한부모|조손|이혼|특수교육대상|분리 ?급식|정서[ ·ㆍ]?행동).*'); }
     // ── 기기 설정(settings/device) 검사 ──
     // 글자 목록: 모두 글자이고(join 이 아니면 거절) 각 칸이 형식에 맞고 개수가 max 이하
     // full: 쉼표로 이은 전체에 맞출 정규식(글자 그대로 적어 계산을 줄입니다).
