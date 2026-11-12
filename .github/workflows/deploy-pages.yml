@@ -69,6 +69,7 @@ jobs:
           npm run check:jjaem-paste
           npm run check:todoachieve
           npm run check:input-e
+          npm run check:widgets
 
   # 2) Firestore 에뮬레이터 검사. 서로 다른 러너에서 하나씩 돌려 기다리는 시간을 겹칩니다.
   emulator:

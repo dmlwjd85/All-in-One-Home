@@ -63,7 +63,8 @@
     "check:nice-datechip": "node scripts/check-nice-datechip.mjs && node scripts/mutate-r4-chip.mjs",
     "check:nice-datechip-browser": "node scripts/check-nice-datechip-browser.mjs",
     "check:minutes-edit-top": "node scripts/check-minutes-edit-top.mjs",
-    "check:neis-xlsx": "node scripts/check-neis-xlsx.mjs"
+    "check:neis-xlsx": "node scripts/check-neis-xlsx.mjs",
+    "check:widgets": "node scripts/check-widgets.mjs"
   },
   "dependencies": {
     "firebase": "^11.6.0",

@@ -12,7 +12,7 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, Motto, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, IconWidgets, Motto, Symbol } from './ui/bits.jsx';
 import { playFoilPop } from './ui/sealBurst.js';
 import { bloomQuickBar, guardCupBurst, playCupGhost, resetQuickLayer } from './ui/cupBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
@@ -28,6 +28,8 @@ import { MENU, menuSelected, menuTarget } from './ui/menu.js';
 import { JjaemJar, TabBar } from './ui/TabBar.jsx';
 import { ClayMark } from './ui/ClayMark.jsx';
 import { Home } from './ui/Home.jsx';
+import { WidgetBoard } from './ui/WidgetBoard.jsx';
+import { readWidgetMode, writeWidgetMode } from './lib/widgets.js';
 import { SideLinks } from './ui/EduLinks.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { TodoAlarm } from './ui/TodoAlarm.jsx';
@@ -49,6 +51,17 @@ export default function App() {
     const [data, setData] = useState(null);
     const [hash, setHash] = useState(() => location.hash || '#/today');
     const [clock, setClock] = useState(() => seoulParts());
+    /* 넓은 화면(900px 이상) '오늘'을 위젯판으로 볼지. 이 기기에만 기억합니다. 휴대폰은 늘 기본 화면입니다. */
+    const [wideScreen, setWideScreen] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 900px)').matches);
+    const [boardOn, setBoardOn] = useState(() => readWidgetMode());
+    useEffect(() => {
+        if (typeof window.matchMedia !== 'function') return undefined;
+        const list = window.matchMedia('(min-width: 900px)');
+        const onChange = () => setWideScreen(list.matches);
+        onChange();
+        list.addEventListener?.('change', onChange);
+        return () => list.removeEventListener?.('change', onChange);
+    }, []);
     const [toast, setToast] = useState(null);
     const [plus, setPlus] = useState(false);
     const [quickOpen, setQuickOpen] = useState(false);
@@ -651,7 +664,8 @@ export default function App() {
     const tip = showSoundTip ? { id: 'key-sound', text: '누를 때 소리가 나요', sound: true } : dailyTip;
     const todayRest = restInfo(clock.ymd, joined(data, 'events'));
 
-    let screen = <Home />;
+    const showBoard = wideScreen && boardOn;
+    let screen = showBoard ? <WidgetBoard onLeave={() => setBoardOn(writeWidgetMode(false))} /> : <Home />;
     if (route.name === 'attend') screen = <Attend />;
     if (route.name === 'students') screen = <Students />;
     if (route.name === 'student') screen = <Student />;
@@ -742,6 +756,9 @@ export default function App() {
                             </div>
                         )}
                         <div className="top-tools">
+                            {route.name === 'today' && wideScreen && (
+                                <Btn className={showBoard ? 'icon-btn is-on' : 'icon-btn'} aria-label={showBoard ? '기본 화면으로' : '위젯 화면으로'} aria-pressed={showBoard ? 'true' : 'false'} data-role="widget-toggle" onClick={() => setBoardOn(writeWidgetMode(!showBoard))}><IconWidgets /></Btn>
+                            )}
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
                             <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
                                 const next = dark ? 'light' : 'dark';
