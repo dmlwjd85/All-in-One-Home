@@ -77,8 +77,11 @@ service cloud.firestore {
         );
     }
     function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,40}$'); }
-    // 민감 낱말 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 같아야 합니다.
-    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식).*'); }
+    // 민감 낱말·보호자 연락처·주소 2차 차단. 본문은 src/lib/sensitive.js 의 rulesSafeTextBody()와 글자 그대로 같아야 합니다.
+    // 연락처·주소 꼴은 앱(자바스크립트)과 RE2 뜻이 같은 문법만 씁니다(역슬래시 없이 [0-9]). 고칠 때는 sensitive.js 를 먼저 고치고 이 줄을 다시 만듭니다.
+    function safeText(v) { return !v.matches('(?s).*(학교폭력|학폭|민원|투약|복약|알레르기|건강|보건|분리 ?급식|(^|[^0-9])01[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9]|$)|(^|[^0-9])0[0-9]{1,2}-[0-9]{3,4}-[0-9]{4}([^0-9]|$)|[0-9]{1,4} ?동 ?[0-9]{1,4} ?호|[0-9]{2,4}-[0-9]{3,4} ?호|(아파트|빌라|맨션|오피스텔) ?[0-9]{1,4} ?동|로 ?[0-9]{1,4}번?길|[0-9]{1,5}(-[0-9]{1,5})? ?번지).*'); }
+    // 태그는 띄어 이어 붙여 본문과 같은 safeText 로 봅니다('건강검진', '보건실' 태그). tagsOk 가 먼저 리스트·글자인지 보므로, 아니면 join 전에 거절됩니다.
+    function tagsSafe(t) { return tagsOk(t) && safeText(t.join(' ')); }
     // ── 기기 설정(settings/device) 검사 ──
     // 글자 목록: 모두 글자이고(join 이 아니면 거절) 각 칸이 형식에 맞고 개수가 max 이하
     // full: 쉼표로 이은 전체에 맞출 정규식(글자 그대로 적어 계산을 줄입니다).
@@ -240,7 +243,7 @@ service cloud.firestore {
           && ymd(d().date) && d().kind in ['observe', 'counsel', 'parent', 'praise']
           && (!('sid' in d()) || id(d().sid))
           && str(d().text, 1, 2000) && safeText(d().text)
-          && (!('tags' in d()) || tagsOk(d().tags))
+          && (!('tags' in d()) || tagsSafe(d().tags))
           && optBool('neis') && (!('follow' in d()) || ymd(d().follow))
           && optInt('minutes', 0, 600)
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
@@ -321,7 +324,7 @@ service cloud.firestore {
           && str(d().text, 1, 20000) && safeText(d().text)
           && optStr('title', 60) && (!('title' in d()) || safeText(d().title))
           && optStr('attendees', 200) && (!('attendees' in d()) || safeText(d().attendees))
-          && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsOk(d().tags))
+          && (!('date' in d()) || ymd(d().date)) && (!('tags' in d()) || tagsSafe(d().tags))
           && optBool('pinned')
           && (!('source' in d()) || d().source in ['app', 'legacy', 'file'])
           && optTs('createdAt') && optTs('updatedAt') && optTs('hlc') && lwwOk('notes', nid);

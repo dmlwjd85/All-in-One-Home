@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { addDaysYmd, formatKoDate } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
 import { clearAttendDraft, flushCloudNow, joined, markChecked, setAttendance, writeAttendDraft } from '../lib/db.js';
+import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { useUi } from './context.jsx';
 import { Btn, statusBg, statusColor } from './bits.jsx';
 import { ChoiceGrid, PeriodRow } from './pickers.jsx';
@@ -273,6 +274,8 @@ export function ReasonSheet({ student, mark, date, onClose }) {
                 {step === 'reason' && (
                     <>
                         <input className="field" aria-label="메모" placeholder="메모가 있으면 먼저 적고 사유를 누르세요" value={note} onChange={(event) => setNote(event.target.value)} />
+                        {/* 민감한 메모(건강·연락처 등)는 출결만 올리고 메모는 이 기기에 둡니다(cloudShape toAttendance). */}
+                        {isSensitiveText(note) && <p className="muted" style={{ margin: '6px 0 0' }}>🔒 {MEMO_LOCAL_HINT}</p>}
                         <Btn className={paper ? 'chip on' : 'chip'} style={{ margin: '8px 0' }} onClick={() => setPaper((value) => !value)}>{paper ? '서류 받음' : '서류 아직'}</Btn>
                         <ChoiceGrid label="사유" options={REASONS.map((item) => ({ id: item, label: item }))} onPick={chooseReason} />
                     </>

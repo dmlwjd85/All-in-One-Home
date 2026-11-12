@@ -1,4 +1,4 @@
-/** 에뮬레이터에서 건강·보건이 든 글이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
+/** 에뮬레이터에서 건강·보건·보호자 연락처·주소가 든 글(태그 포함)이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -27,9 +27,10 @@ function rulesWithoutEventEndTime(source) {
     const end = source.indexOf('match /todos/{tid}');
     return source.slice(0, start) + stripped + source.slice(end);
 }
-const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
-if (!rules.includes(safeLine)) {
-    console.error('규칙의 safeText가 앱 민감 낱말과 다릅니다.');
+/* 규칙의 safeText 본문을 꺼내 앱(sensitive.js)이 만든 본문과 글자 그대로 견줍니다. 연락처·주소 꼴도 함께 견줍니다. */
+const safeMatch = rules.match(/function safeText\(v\) \{ return !v\.matches\('([^']*)'\); \}/);
+if (!safeMatch || safeMatch[1] !== rulesSafeTextBody()) {
+    console.error('규칙의 safeText가 앱 민감 낱말·연락처·주소 꼴(src/lib/sensitive.js rulesSafeTextBody)과 다릅니다.');
     process.exit(1);
 }
 
@@ -340,6 +341,41 @@ try {
     await expectAllow('평범한 기록', () => setDoc(doc(db, 'users/teacher-a/records/r3'), {
         date: '2026-10-19', kind: 'observe', text: '발표를 끝까지 했어요', source: 'app',
     }));
+    // 보호자 연락처·주소와 태그(RE2 쪽에서도 앱과 같은 뜻인지)
+    await expectDeny('기록 휴대폰 번호', () => setDoc(doc(db, 'users/teacher-a/records/rc1'), {
+        date: '2026-10-19', kind: 'parent', text: '어머니 010-1234-5678', source: 'app',
+    }));
+    await expectDeny('기록 붙여 쓴 휴대폰 번호', () => setDoc(doc(db, 'users/teacher-a/records/rc2'), {
+        date: '2026-10-19', kind: 'parent', text: '01012345678로 연락', source: 'app',
+    }));
+    await expectDeny('출결 메모 일반 전화', () => setDoc(doc(db, 'users/teacher-a/attendance/2026-10-19_s3'), {
+        date: '2026-10-19', sid: 's3', status: 'absent', note: '집 02-123-4567',
+    }));
+    await expectAllow('출결 메모 시각', () => setDoc(doc(db, 'users/teacher-a/attendance/2026-10-19_s4'), {
+        date: '2026-10-19', sid: 's4', status: 'late', note: '09:10 도착, 1교시 뒤',
+    }));
+    await expectDeny('학생 메모 동·호', () => setDoc(doc(db, 'users/teacher-a/students/s6'), { no: 6, name: '정다은', memo: '101동 1203호' }));
+    await expectDeny('기록 도로명 주소', () => setDoc(doc(db, 'users/teacher-a/records/rc3'), {
+        date: '2026-10-19', kind: 'parent', text: '중앙로12번길 34 이사', source: 'app',
+    }));
+    await expectAllow('기록 날짜·교시·점수', () => setDoc(doc(db, 'users/teacher-a/records/rc4'), {
+        date: '2026-10-19', kind: 'observe', text: '2026-10-19 3교시 수학 85점, 3동 견학', source: 'app',
+    }));
+    await expectDeny('기록 태그 건강검진', () => setDoc(doc(db, 'users/teacher-a/records/rc5'), {
+        date: '2026-10-19', kind: 'observe', text: '줄넘기 연습', tags: ['건강검진'], source: 'app',
+    }));
+    await expectDeny('회의록 태그 민원전화', () => setDoc(doc(db, 'users/teacher-a/notes/notetag01'), {
+        text: '협의 안건', tags: ['회의', '민원전화'], source: 'app',
+    }));
+    await expectAllow('기록 평범한 태그', () => setDoc(doc(db, 'users/teacher-a/records/rc6'), {
+        date: '2026-10-19', kind: 'observe', text: '줄넘기 연습', tags: ['체육', '칭찬'], source: 'app',
+    }));
+    await expectDeny('기록 태그가 리스트 아님', () => setDoc(doc(db, 'users/teacher-a/records/rc7'), {
+        date: '2026-10-19', kind: 'observe', text: '줄넘기 연습', tags: '체육', source: 'app',
+    }));
+    await expectDeny('기록 태그에 숫자', () => setDoc(doc(db, 'users/teacher-a/records/rc8'), {
+        date: '2026-10-19', kind: 'observe', text: '줄넘기 연습', tags: ['체육', 3], source: 'app',
+    }));
     const inboxRow = toCloudRow('inbox', {
         id: 'msgabcdef12',
         kind: '할 일',
@@ -561,4 +597,4 @@ if (failures.length) {
     console.error(failures.join('\n'));
     process.exit(1);
 }
-console.log('에뮬레이터에서 건강·보건 쓰기를 거절했고, 같은 계정의 빈 저장소에 14:00–16:00이 남았습니다.');
+console.log('에뮬레이터에서 건강·보건·연락처·주소 쓰기를 거절했고, 같은 계정의 빈 저장소에 14:00–16:00이 남았습니다.');

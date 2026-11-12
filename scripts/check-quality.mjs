@@ -40,8 +40,11 @@ check(isSensitiveText('알레르기 없는 간식'), '민감 낱말을 놓쳤습
 check(isSensitiveText('건강 특이') && isSensitiveText('보건실 메모'), '건강·보건을 민감으로 보지 않습니다.');
 check(!isSensitiveText('발표를 끝까지 했어요'), '평범한 기록을 민감으로 봤습니다.');
 const rulesText = readFileSync(`${root}/firestore.rules`, 'utf8');
-const safeLine = `function safeText(v) { return !v.matches('${rulesSafeTextBody()}'); }`;
-check(rulesText.includes(safeLine), '규칙의 safeText가 앱 민감 낱말과 다릅니다.');
+/* 규칙의 safeText 본문을 꺼내 앱(sensitive.js)이 만든 본문과 글자 그대로 견줍니다. 연락처·주소 꼴도 함께 견줍니다. */
+const safeMatch = rulesText.match(/function safeText\(v\) \{ return !v\.matches\('([^']*)'\); \}/);
+check(safeMatch && safeMatch[1] === rulesSafeTextBody(), '규칙의 safeText가 앱 민감 낱말·연락처·주소 꼴과 다릅니다.');
+check(isSensitiveText('어머니 010-1234-5678') && isSensitiveText('101동 1203호'), '보호자 연락처·주소를 민감으로 보지 않습니다.');
+check(isSensitiveText('', ['건강검진']), '건강검진 태그를 민감으로 보지 않습니다.');
 
 const period = periodStatus('08:42', DEFAULT_PERIODS, ['국어', '수학']);
 check(period.minutes === 18 && period.text.includes('국어') && period.text.includes('18분'), `1교시까지 18분이 아닙니다: ${period.text}`);
