@@ -66,7 +66,7 @@ export function validateNewBackup(data) {
         if (data[key] != null && !Array.isArray(data[key])) errors.push(`${key} 목록이 이상해요.`);
     }
     (data.students || []).forEach((row) => {
-        if (!plain(row) || !(row.no >= 1 && row.no <= 50) || typeof row.name !== 'string' || row.name.length > 20) {
+        if (!plain(row) || !(row.no >= 1 && row.no <= 99) || typeof row.name !== 'string' || row.name.length > 20) {
             errors.push('학생 이름이나 번호가 범위를 벗어났어요.');
         }
     });

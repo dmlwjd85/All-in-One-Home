@@ -332,6 +332,9 @@ try {
     await expectDeny('학생 메모 건강', () => setDoc(doc(db, 'users/teacher-a/students/s3'), { no: 3, name: '박서준', memo: '건강 특이' }));
     await expectDeny('학생 메모 보건', () => setDoc(doc(db, 'users/teacher-a/students/s5'), { no: 5, name: '강민우', memo: '보건실' }));
     await expectAllow('학생 메모 반장', () => setDoc(doc(db, 'users/teacher-a/students/s4'), { no: 4, name: '윤채원', memo: '반장' }));
+    await expectAllow('학생 51번(남녀 나눈 번호)', () => setDoc(doc(db, 'users/teacher-a/students/s51'), { no: 51, name: '서하린' }));
+    await expectAllow('학생 99번', () => setDoc(doc(db, 'users/teacher-a/students/s99'), { no: 99, name: '문도윤' }));
+    await expectDeny('학생 100번', () => setDoc(doc(db, 'users/teacher-a/students/s100'), { no: 100, name: '문서윤' }));
     await expectDeny('기록 건강', () => setDoc(doc(db, 'users/teacher-a/records/r1'), {
         date: '2026-10-19', kind: 'observe', text: '건강 특이', source: 'app',
     }));

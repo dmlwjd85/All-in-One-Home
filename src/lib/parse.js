@@ -390,7 +390,8 @@ export function parseNote(text, now = new Date()) {
     const tags = [...raw.matchAll(/#([0-9A-Za-z가-힣_]{1,12})/g)].map((m) => m[1]).slice(0, 10);
     const at = raw.match(/@(\d{1,2})/);
     const studentNo = at ? Number(at[1]) : null;
-    const safeNo = studentNo >= 1 && studentNo <= 50 ? studentNo : null;
+    /* 명단 번호는 99번까지(여학생 51번처럼 띄운 번호). */
+    const safeNo = studentNo >= 1 && studentNo <= 99 ? studentNo : null;
     return {
         tags,
         studentNo: safeNo,

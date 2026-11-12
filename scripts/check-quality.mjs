@@ -544,7 +544,7 @@ check(studentsSrc.includes('seoulYmd()') && !studentsSrc.includes("toISOString()
 check(studentsSrc.includes('쨈 교무수첩') && studentsSrc.includes('>출력</Btn>'), '출력 머리나 단추 문구가 빠졌습니다.');
 check(studentsSrc.includes('htmlEscape(head)') && studentsSrc.includes('htmlEscape(row.date') && studentsSrc.includes('htmlEscape(row.kind') && studentsSrc.includes('htmlEscape((row.tags') && studentsSrc.includes("htmlEscape(row.text"), '출력 HTML에서 htmlEscape 호출이 빠졌습니다.');
 check(studentsSrc.includes("import('../lib/neisXlsx.js')")
-    && studentsSrc.includes('neisXlsxBytes(xlsx.neisRows(groups, data.students))')
+    && studentsSrc.includes('neisXlsxBytes(xlsx.neisRows(groups, everyone))')
     && studentsSrc.includes('나이스모아_${seoulYmd()}.xlsx')
     && !studentsSrc.includes('.csv'), '나이스 내려받기가 엑셀 파일(.xlsx)이 아닙니다.');
 check(studentsSrc.includes("event.key === 'Escape'") && studentsSrc.includes('cancelEdit'), '기록 수정 Esc 취소가 없습니다.');

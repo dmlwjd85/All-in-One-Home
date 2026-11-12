@@ -122,9 +122,10 @@ export function resolveHash(raw, today) {
     if (notice && isValidYmd(notice[1])) return pack('notice', { date: notice[1] }, `#/notice/${notice[1]}`, incoming);
 
     const student = path.match(/^\/students\/(\d{1,2})$/);
+    /* 남학생 1번·여학생 51번처럼 띄운 번호도 받습니다(명단은 99번까지). */
     if (student) {
         const no = Number(student[1]);
-        if (no >= 1 && no <= 50) return pack('student', { no }, `#/students/${no}`, incoming);
+        if (no >= 1 && no <= 99) return pack('student', { no }, `#/students/${no}`, incoming);
         return pack('students', {}, '#/students', incoming, { notice: '그 번호는 명단에 없어요.' });
     }
 
@@ -132,7 +133,7 @@ export function resolveHash(raw, today) {
     if (cards) {
         if (!cards[1]) return pack('students', {}, '#/students', incoming);
         const no = Number(cards[1]);
-        if (no >= 1 && no <= 50) return pack('student', { no }, `#/students/${no}`, incoming);
+        if (no >= 1 && no <= 99) return pack('student', { no }, `#/students/${no}`, incoming);
         return pack('students', {}, '#/students', incoming, { notice: '그 번호는 명단에 없어요.' });
     }
 

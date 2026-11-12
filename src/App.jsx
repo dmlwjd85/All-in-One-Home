@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { rosterView } from './lib/roster.js';
 import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { useGcal } from './ui/useGcal.js';
@@ -135,8 +136,9 @@ export default function App() {
         boot(location.search).then(async () => {
             if (!alive) return;
             setClock(seoulParts());
-            setData(snapshot());
-            stop = subscribe(setData);
+            /* 화면에는 지금 반 학생만 students 로 넘기고, 지난 명단 학생은 allStudents 에 둡니다. */
+            setData(rosterView(snapshot()));
+            stop = subscribe((next) => setData(rosterView(next)));
             stopGcal = startGcalBridge();
             try {
                 unsub = await watchAuth((user) => setAuth(user), { memoryOnly: Boolean(snapshot().profile.sharedPc) }) || (() => {});

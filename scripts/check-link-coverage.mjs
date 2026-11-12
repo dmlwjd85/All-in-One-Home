@@ -47,9 +47,11 @@ if (!resolveHash('#/write', today).openQuick) failures.push('쓰기 주소에서
 if (!resolveHash('#p496', today).openQuick) failures.push('496쪽에서 콕, 적이 열리지 않습니다.');
 const unknown = resolveHash('#/없는화면', today);
 if (!unknown.notice) failures.push('없는 주소 안내가 없습니다.');
-if (resolveHash('#/students/99', today).notice === '' && resolveHash('#/students/99', today).name === 'student') {
+/* 명단 번호는 99번까지 받습니다(여학생 51번처럼 띄운 번호). 그 밖의 번호는 학생 화면으로 들어가지 않아야 합니다. */
+if (resolveHash('#/students/100', today).notice === '' && resolveHash('#/students/100', today).name === 'student') {
     failures.push('없는 번호가 학생 화면으로 들어갑니다.');
 }
+if (resolveHash('#/students/51', today).name !== 'student') failures.push('51번 학생 주소가 학생 화면으로 이어지지 않습니다.');
 
 const hashes = new Set();
 let fileLinks = 0;

@@ -34,7 +34,8 @@ export function toCloudProfile(state) {
         displayName: String(state.auth?.name || '').slice(0, 40),
         className: String(profile.className || '').slice(0, 30),
         schoolYear: Number(profile.schoolYear) || 2026,
-        classSize: Number(profile.classSize || state.students?.length || 0),
+        /* 규칙은 50명까지 받습니다. 그보다 많으면 50으로 올려, 프로필 전체가 거절되지 않게 합니다(실제 인원은 이 기기 명단이 기준). */
+        classSize: Math.min(60, Math.max(0, Number(profile.classSize || state.students?.length || 0) || 0)),
         theme: ['system', 'light', 'dark'].includes(profile.theme) ? profile.theme : 'system',
         migrationVersion: 1,
     };
@@ -97,7 +98,7 @@ function safeMemo(value, max) {
 
 function toStudent(row) {
     const id = cloudDocId(row.id);
-    if (!id || !(row.no >= 1 && row.no <= 50) || !String(row.name || '').trim()) return null;
+    if (!id || !(row.no >= 1 && row.no <= 99) || !String(row.name || '').trim()) return null;
     const body = { no: Number(row.no), name: String(row.name).trim().slice(0, 20), active: row.active !== false };
     if (SEX_TO[row.sex]) body.sex = SEX_TO[row.sex];
     if (/^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(row.birthday || '')) body.birthday = row.birthday;
