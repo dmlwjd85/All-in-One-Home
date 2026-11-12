@@ -7,6 +7,9 @@ import { ClayMark } from './ClayMark.jsx';
 import { seoulParts, seoulYmd } from '../lib/date.js';
 import { htmlEscape } from '../lib/neisExport.js';
 import { DateChip } from './DateChip.jsx';
+import { groupMates } from '../lib/nameLink.js';
+import { LOG_KINDS, LOG_PERIODS, filterLog, schoolYearOf, sortLog, studentLogText } from '../lib/studentLog.js';
+import { termRange } from '../lib/semester.js';
 
 /** 오늘 기록 칩 옆 시각. 남긴 때(at)가 있으면 그 시각, 없으면 지금 시각입니다. */
 function recordHm(row, fallback) {
@@ -48,6 +51,10 @@ export function Student() {
     const { data, clock, route, openQuick, showToast } = useUi();
     const student = data.students.find((row) => row.no === route.params.no);
     const [tab, setTab] = useState('전체');
+    /* 모아 보기: 기간, 날짜 차례(new 최근부터 · old 오래된 것부터), 복사할 기록 고르기. */
+    const [period, setPeriod] = useState('all');
+    const [order, setOrder] = useState('new');
+    const [chosen, setChosen] = useState(() => new Set());
     const [text, setText] = useState('');
     const [editingId, setEditingId] = useState('');
     const [draft, setDraft] = useState('');
@@ -63,8 +70,16 @@ export function Student() {
         const end = node.value.length;
         try { node.setSelectionRange(end, end); } catch { /* 일부 환경은 선택 구간을 막습니다 */ }
     }, [editingId]);
-    const records = joinedRecords(data).filter((row) => row.sid === student?.id).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at || '').localeCompare(String(a.at || '')));
-    const filtered = records.filter((row) => tab === '전체' || (tab === '관찰' && (row.kind === '관찰' || row.kind === '칭찬')) || row.kind === tab);
+    const allRecords = joinedRecords(data);
+    const records = sortLog(allRecords.filter((row) => row.sid === student?.id), 'new');
+    /* 2학기 시작일은 학사일정(설정·일정 글자)에서 읽고, 없으면 기본값입니다. */
+    let secondStart = '';
+    try { secondStart = termRange('second', schoolYearOf(clock.ymd), data.events).from; } catch { secondStart = ''; }
+    const filtered = sortLog(filterLog(records, { kind: tab, period, today: clock.ymd, secondStart }), order);
+    const periodLabel = LOG_PERIODS.find((item) => item.id === period)?.label || '';
+    const pickedRows = filtered.filter((row) => chosen.has(row.id));
+    /** 묶음 기록(한 기록에 여러 학생)의 다른 학생 이름. */
+    const matesOf = (row) => groupMates(row, allRecords).map((sid) => data.students.find((item) => item.id === sid)?.name).filter(Boolean);
     if (!student) return <p>이 번호는 명단에 없어요. 설정에서 넣어 주세요.</p>;
     const stats = [
         ['기록', records.length],
@@ -127,6 +142,32 @@ export function Student() {
         focusEditButton(row.id);
     }
 
+    function toggleChosen(id) {
+        setChosen((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    /** 행발·누가기록용: 고른 기록(없으면 지금 보이는 기록)을 날짜와 함께 한 덩어리로 복사합니다. 자물쇠 기록은 골랐을 때만 넣습니다. */
+    async function copyLog() {
+        const base = pickedRows.length ? pickedRows : filtered.filter((row) => !row.localOnly);
+        const skipped = pickedRows.length ? 0 : filtered.length - base.length;
+        if (!base.length) {
+            showToast(skipped ? '자물쇠 기록만 있어요. 넣으려면 기록을 골라 주세요.' : '복사할 기록이 없어요.');
+            return;
+        }
+        const body = studentLogText(student, base, { periodLabel: period === 'all' ? '' : periodLabel, kindLabel: tab, mates: matesOf });
+        try {
+            await navigator.clipboard.writeText(body);
+            showToast(`${student.name} 기록 ${base.length}개를 날짜순으로 복사했어요.${skipped ? ` 자물쇠 기록 ${skipped}개는 뺐어요. 넣으려면 골라 주세요.` : ''}`);
+        } catch {
+            showToast('복사하지 못했어요. 글을 길게 눌러 선택해 주세요.');
+        }
+    }
+
     async function removeRecord(row) {
         if (!window.confirm('이 기록을 지울까요?')) return;
         const failed = await removeItem('records', row.id);
@@ -159,9 +200,9 @@ export function Student() {
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                 {stats.map(([label, value]) => <span key={label} className="chip">{label} {value}</span>)}
             </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {['전체', '관찰', '상담', '보호자'].map((item) => (
-                    <Btn key={item} className={tab === item ? 'chip on' : 'chip'} onClick={() => setTab(item)}>{item}</Btn>
+            <div role="group" aria-label="기록 종류" style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                {LOG_KINDS.map((item) => (
+                    <Btn key={item} className={tab === item ? 'chip on' : 'chip'} aria-pressed={tab === item ? 'true' : 'false'} onClick={() => setTab(item)}>{item}</Btn>
                 ))}
             </div>
             <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
@@ -178,6 +219,17 @@ export function Student() {
                     ))}
                 </div>
             </div>
+            <div role="group" aria-label="기록 기간" data-log-period="1" style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                {LOG_PERIODS.map((item) => (
+                    <Btn key={item.id} className={period === item.id ? 'chip on' : 'chip'} aria-pressed={period === item.id ? 'true' : 'false'} onClick={() => setPeriod(item.id)}>{item.label}</Btn>
+                ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Btn className="chip" data-log-order={order} onClick={() => setOrder((value) => (value === 'new' ? 'old' : 'new'))}>{order === 'new' ? '최근 것부터' : '오래된 것부터'}</Btn>
+                <Btn className="primary-btn fit-btn" data-log-copy="1" onClick={copyLog}>{pickedRows.length ? `고른 ${pickedRows.length}개 복사` : '이 학생 기록 복사'}</Btn>
+                {pickedRows.length > 0 && <Btn className="chip" onClick={() => setChosen(new Set())}>고르기 풀기</Btn>}
+            </div>
+            <p className="muted" style={{ margin: '6px 0 0', fontSize: 13 }}>보이는 기록 {filtered.length}개. 기록을 고르면 고른 것만, 안 고르면 보이는 기록을 날짜순으로 복사해요. 행발 쓸 때 붙여 넣으세요.</p>
             <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {filtered.map((row) => (
                     <article key={row.id} className="solid-card" style={{ padding: 12, background: row.kind === '상담' ? 'var(--k-counsel)' : row.kind === '보호자' ? 'var(--k-parent)' : row.kind === '칭찬' ? 'var(--k-praise)' : 'var(--k-observe)', color: 'var(--ink)' }}>
@@ -217,6 +269,7 @@ export function Student() {
                         ) : (
                             <>
                                 <p style={{ marginBottom: 0 }}>{row.text}</p>
+                                {matesOf(row).length > 0 && <p className="muted" style={{ marginBottom: 0 }} data-role="record-mates">함께: {matesOf(row).join(', ')}</p>}
                                 {row.localOnly && <p style={{ marginBottom: 0 }}>🔒 이 내용은 이 기기에만 있어요.</p>}
                                 {row.neis && <p style={{ marginBottom: 0 }}>나이스에 옮길 것</p>}
                                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -226,6 +279,12 @@ export function Student() {
                                         onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}
                                     >수정</Btn>
                                     <Btn className="chip" onClick={() => removeRecord(row)}>삭제</Btn>
+                                    <Btn
+                                        className={chosen.has(row.id) ? 'chip on' : 'chip'}
+                                        aria-pressed={chosen.has(row.id) ? 'true' : 'false'}
+                                        data-pick-for={row.id}
+                                        onClick={() => toggleChosen(row.id)}
+                                    >{chosen.has(row.id) ? '✓ 복사에 넣음' : '복사에 넣기'}</Btn>
                                 </div>
                             </>
                         )}

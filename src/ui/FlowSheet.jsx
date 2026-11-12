@@ -8,6 +8,7 @@ import { ChoiceGrid, DateGrid, NumberGrid, PeriodRow, TimeChips } from './picker
 import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
+import { findStudentNames, linkedSids, whyLabel } from '../lib/nameLink.js';
 
 const EVENT_OPTIONS = [
     { id: '학급', label: '학급' },
@@ -41,12 +42,19 @@ export function FlowSheet({ flow, onClose }) {
     const [ampmFlip, setAmpmFlip] = useState([]);
     const [tags, setTags] = useState(() => (TAGS[flow.kind]?.[0] ? [TAGS[flow.kind][0]] : []));
     const [neis, setNeis] = useState(flow.kind === '관찰' || flow.kind === '칭찬' || !flow.kind);
+    /* 본문에 나온 다른 학생 연결. { [학생 id]: true | false }. 이미 고른 학생(no)은 늘 연결돼 있습니다. */
+    const [linkChoice, setLinkChoice] = useState({});
     const name = steps[step] || 'text';
     const kind = flow.kind || '메모';
     const student = data.students.find((row) => row.no === Number(no));
     const needsStudent = ['관찰', '상담', '칭찬', '보호자'].includes(kind);
     /* 일정·할 일: 입력 중 날짜·시각 칩을 바로 아래에 보여 줍니다(시안 A). */
     const chipKinds = kind === '일정' || kind === '할 일';
+    /* 학생 기록이면 본문에서 다른 학생 이름을 찾아 칩으로 보여 줍니다. 고른 학생은 빼고 봅니다. */
+    const linkHits = needsStudent && flow.id !== 'minutes' && text.trim()
+        ? findStudentNames(text, data.students).filter((hit) => hit.sid !== student?.id)
+        : [];
+    const linkOn = (hit) => linkChoice[hit.sid] === true || (linkChoice[hit.sid] !== false && hit.auto);
     const chipRead = chipKinds && flow.id !== 'minutes' ? readEventChips(text, { now: new Date(), periods: allStarts(data.profile?.periodStarts), off: chipOff, ampmFlip, future: true }) : null;
 
     useEffect(() => {
@@ -82,12 +90,17 @@ export function FlowSheet({ flow, onClose }) {
         const saved = chipSave(chipRead, chipOff, date || clock.ymd, ampmFlip);
         /* 회의 흐름은 칩이 곧 파서라, 칩을 건드리지 않았으면 칩이 읽은 값을 그대로 씁니다. */
         const chipped = saved ? { ...saved, title: saved.title || chipRead.title } : (chipRead && chipRead.changed ? chipRead : null);
+        /* 함께 연결한 학생이 있으면 nos로 넘겨 학생마다 같은 기록을 하나씩 만듭니다. */
+        const others = linkedSids(linkHits, linkChoice)
+            .map((sid) => data.students.find((row) => row.id === sid)?.no)
+            .filter((value) => value && value !== Number(no));
         const result = await saveQuick({
             kind,
             text: body,
             ...(kind === '일정' ? { title: chipped ? chipped.title : body, raw: chipped ? chipped.raw : '' } : {}),
             ...(kind === '할 일' && chipped ? { title: chipped.title || body, raw: chipped.raw } : {}),
             no,
+            ...(needsStudent && others.length ? { nos: others } : {}),
             tags,
             neis: needsStudent ? neis : undefined,
             date: kind === '일정' ? ((chipped && chipped.date) || date || clock.ymd) : (date || undefined),
@@ -160,6 +173,24 @@ export function FlowSheet({ flow, onClose }) {
                             onToggleOff={(id) => setChipOff((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
                             onToggleAmpm={(id) => setAmpmFlip((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]))}
                         />
+                        {linkHits.length > 0 && (
+                            <div className="link-chips" role="group" aria-label="함께 연결할 학생" data-flow-links="1">
+                                <span className="muted" style={{ fontSize: 13 }}>함께</span>
+                                {linkHits.map((hit) => {
+                                    const on = linkOn(hit);
+                                    const why = on ? '' : whyLabel(hit.why);
+                                    return (
+                                        <Btn
+                                            key={hit.sid}
+                                            className={on ? 'chip on' : 'chip'}
+                                            aria-pressed={on ? 'true' : 'false'}
+                                            data-link-sid={hit.sid}
+                                            onClick={() => setLinkChoice((prev) => ({ ...prev, [hit.sid]: !on }))}
+                                        >{on ? '✓ ' : '+ '}{hit.label}{why ? <span className="quick-link-why"> · {why}</span> : null}</Btn>
+                                    );
+                                })}
+                            </div>
+                        )}
                         {(TAGS[kind] || []).length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                                 {TAGS[kind].map((tag) => (
