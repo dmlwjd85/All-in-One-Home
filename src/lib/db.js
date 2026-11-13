@@ -371,6 +371,8 @@ function updateFromCloud(recipe) {
 }
 
 export async function update(recipe, { undoable = false } = {}) {
+    /* 일부 받기에서 합친 것인지(뒤이은 올리기가 칩 시각을 바꾸지 않게). await 전에 봅니다. */
+    const quiet = fromCloud > 0 && partialAbsorb > 0;
     const previous = structuredClone(state);
     if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
@@ -387,6 +389,7 @@ export async function update(recipe, { undoable = false } = {}) {
         tellStorageIssue(message);
         return { storageFailed: true, message };
     }
+    if (quiet) quietFlushes += 1;
     flushCloud().catch(() => {});
     return null;
 }
@@ -678,17 +681,23 @@ async function sweepSensitiveCloud() {
 /** 검사용: 올리기 없이 민감한 줄 정리만 돌립니다. */
 export function sweepSensitiveForTest() { return sweepSensitiveCloud(); }
 
+/* 일부 받기(감시 알림)로 합친 뒤 이어지는 올리기 수. 이 올리기는 칩의 '마지막 동기화' 시각을 바꾸지 않습니다. */
+let quietFlushes = 0;
+let partialAbsorb = 0;
 async function flushCloudTracked() {
+    const stamp = quietFlushes > 0 ? (quietFlushes -= 1, false) : true;
     if (!state.auth?.uid || !cloudApi.available()) return { skipped: true };
     /* 동기화 칩: 올리는 동안 '동기화 중', 끝나면 다 올렸는지에 따라 '동기화됨' 또는 '동기화하지 못했어요'. */
     syncBegin();
     let result = null;
     try {
-        result = await flushCloudOnce();
+        /* 잰 뒤 기기 시계가 바뀌었거나 거절이 있었으면 올리기 전에 서버 시각을 다시 잽니다(틀린 보정값으로 notAhead·LWW에 걸리지 않게). */
+        if (clockOk && clockStale(state.auth.uid)) await syncServerClock(state.auth.uid);
+        result = state.auth?.uid ? await flushCloudOnce() : { skipped: true };
         return result;
     } finally {
         if (!result || result.skipped) syncEnd({ skipped: Boolean(result?.skipped), ok: false });
-        else syncEnd({ ok: pushedAll(result), pending: result.pending });
+        else syncEnd({ ok: pushedAll(result), pending: result.pending, stamp });
         syncQueued(queuedCloudKeys().length);
     }
 }
@@ -725,6 +734,8 @@ async function flushCloudOnce() {
     }
     /* 서버 시각을 재기 전(editD만 있음)에 고친 줄은 hlc 문서에 거절돼도 재기 뒤 다시 올라가므로 알리지 않습니다(PR #66 r3 P2-2). */
     if (Array.isArray(result?.rejected)) { const waiting = unsureKeys(); tellRejected(result.rejected.filter((key) => !waiting.has(key))); }
+    /* 거절·진 줄은 서버 시각 보정이 틀려서일 수 있습니다(기기 시계가 바뀜). 진 줄은 곧 받기(force)에서, 거절은 다음 받기에서 다시 잽니다. */
+    if ((result?.rejected || []).length || (result?.lost || []).length) markClockDoubt();
     /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
     if ((result?.lost || []).length) setTimeout(() => { refreshFromCloud({ force: true }).catch(() => {}); }, 0);
     await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
@@ -2342,7 +2353,8 @@ async function connectCloud(uid, opts = {}) {
         ok = await connectCloudBody(uid, opts);
         return ok;
     } finally {
-        syncEnd({ ok, pull: true, pending: ok ? 0 : undefined });
+        /* 일부 받기는 '마지막 동기화' 시각을 바꾸지 않습니다(칩이 다른 컬렉션까지 방금 맞춘 것처럼 보이지 않게). */
+        syncEnd({ ok, pull: true, pending: ok ? 0 : undefined, ...(opts.only ? { stamp: false } : {}) });
     }
 }
 
@@ -2351,13 +2363,16 @@ async function connectCloud(uid, opts = {}) {
  * 일부 받기는 읽지 않은 컬렉션의 목록·ids를 두지 않으므로 그 컬렉션 줄은 지우지도 바꾸지도 않습니다(cloud.js blankPull).
  * '마지막 동기화' 시각(지운 표시 보관 기간 판단에도 씀)은 전체 받기에서만 바꿉니다.
  */
-async function connectCloudBody(uid, { only = null } = {}) {
+async function connectCloudBody(uid, { only = null, force = false } = {}) {
     await checkDraftAgainstCloud(uid);
-    /* 서버 시각은 접속(로그인·계정 연결)마다 한 번 잽니다. 못 쟀으면(clockOk 아님) 예전처럼 받을 때마다 다시 재고, 1분마다 다시 재기도 그대로 돕니다. */
-    if (clockStale(uid)) await syncServerClock(uid);
+    /* 서버 시각은 접속(로그인·계정 연결)마다 한 번 잽니다. 기기 시계가 바뀌었거나(clockStale), 직접 맞추기(force)면 다시 잽니다.
+       못 쟀으면(clockOk 아님) 예전처럼 받을 때마다 다시 재고, 1분마다 다시 재기도 그대로 돕니다. */
+    if (force || clockStale(uid)) await syncServerClock(uid);
     sweepOldTombs(uid);
-    const pushed = await flushCloud().catch(() => null);
     const full = !only;
+    /* 일부 받기(감시 알림)는 먼저 올리지 않습니다. 이 기기 변경은 고칠 때마다 따로 올라가고, 못 올린 줄은 합치기가 지킵니다(해시가 다르면 이 기기 값).
+       그래서 일부 받기의 성공은 받기만 보고, 칩의 '마지막 동기화'는 바꾸지 않습니다(connectCloud stamp: false). */
+    const pushed = full ? await flushCloud().catch(() => null) : { ok: true };
     const from = serverNow();
     const seen = { ...cloudHashes };
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc, ...(only ? { only } : {}) });
@@ -2366,26 +2381,53 @@ async function connectCloudBody(uid, { only = null } = {}) {
     const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.goal || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
     if (!hasRemote) {
         /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
-        await updateFromCloud((draft) => pruneOnly(draft, remote, seen));
+        await absorbQuietly(full, (draft) => pruneOnly(draft, remote, seen));
         const ok = pushedAll(pushed) && remote.fresh !== false;
         if (ok && full) markSynced(uid);
         return ok;
     }
-    await updateFromCloud((draft) => absorbCloud(draft, remote, seen));
+    await absorbQuietly(full, (draft) => absorbCloud(draft, remote, seen));
     /* 올리기가 다 끝나고 서버에서 받아 왔어야 '동기화됨'입니다. 못 올린 게 있거나 캐시에서 온 옛 목록이면 시각을 바꾸지 않습니다(PR #52 검수 4번, 10/31 제보). */
     const ok = pushedAll(pushed) && remote.fresh !== false;
     if (ok && full) markSynced(uid);
     return ok;
 }
 
+/* 일부 받기에서 합칠 때는 뒤이은 올리기가 칩 시각을 바꾸지 않게 표시합니다. */
+async function absorbQuietly(full, recipe) {
+    if (full) return updateFromCloud(recipe);
+    partialAbsorb += 1;
+    try { return await updateFromCloud(recipe); } finally { partialAbsorb -= 1; }
+}
+
 /*
  * 서버 시각을 다시 잴지. 예전에는 받을 때마다(5분마다) 계정 문서에 쓰고 읽었습니다.
- * 이제 접속마다 한 번만 재고, 켜 둔 채 오래 지나면(CLOCK_REFRESH_MS, 기기 시계가 맞춰졌을 수 있음) 한 번 더 잽니다.
+ * 이제 접속마다 한 번 재고, 다음 때만 다시 잽니다.
+ *  - 기기 시계가 바뀜: 잰 뒤 기기 시계(Date.now)가 흐른 양과 단조 시계(performance.now)가 흐른 양이 30초 넘게 어긋남
+ *    (윈도 시간 동기화·CMOS 보정·직접 변경. 노트북 잠자기도 여기에 걸려 한 번 더 잴 수 있음).
+ *  - 켜 둔 채 오래 지남(CLOCK_REFRESH_MS).
+ *  - 직접 맞추기(force 받기), 쓰기 거절·진 줄이 나옴(markClockDoubt: 보정값이 틀려 notAhead·LWW에 걸렸을 수 있음).
  */
 export const CLOCK_REFRESH_MS = 12 * 3600 * 1000;
-let clockFor = { uid: '', at: 0 };
+export const CLOCK_DRIFT_MS = 30 * 1000;
+let monoNow = () => (globalThis.performance?.now ? globalThis.performance.now() : Date.now());
+/** 검사용: 단조 시계를 바꿔 끼웁니다(가짜 시간으로 몇 시간을 돌릴 때 기기 시계와 함께 흐르게). */
+export function useMonoClockForTest(fn = null) { monoNow = fn || (() => (globalThis.performance?.now ? globalThis.performance.now() : Date.now())); }
+let clockFor = { uid: '', dev: 0, mono: 0, doubt: false };
 function clockStale(uid) {
-    return !clockOk || clockFor.uid !== uid || Math.abs(syncNow() - clockFor.at) >= CLOCK_REFRESH_MS;
+    if (!clockOk || clockFor.uid !== uid || clockFor.doubt) return true;
+    const mono = monoNow() - clockFor.mono;
+    const dev = deviceNow() - clockFor.dev;
+    return Math.abs(dev - mono) > CLOCK_DRIFT_MS || mono >= CLOCK_REFRESH_MS || mono < 0;
+}
+/* 쓰기가 거절되거나 진 줄이 나오면 다음 받기에서 서버 시각을 다시 잽니다(10분에 한 번까지: 늘 거절되는 줄이 있어도 재기가 몰리지 않게). */
+let clockDoubtAt = -Infinity;
+function markClockDoubt() {
+    const now = monoNow();
+    if (now - clockDoubtAt < 10 * 60 * 1000 && now >= clockDoubtAt) return false;
+    clockDoubtAt = now;
+    clockFor = { ...clockFor, doubt: true };
+    return true;
 }
 
 /* 서버 시각과 이 기기 시계의 차이를 잽니다(로그인·다시 맞추기 때). 못 재면 마지막으로 잰 값을 그대로 씁니다. */
@@ -2393,7 +2435,7 @@ async function syncServerClock(uid) {
     if (!cloudApi.clock) return;
     try {
         const offset = await cloudApi.clock(uid, { memoryOnly: memoryOnly || state.profile.sharedPc, now: () => deviceNow() });
-        if (setClockOffset(offset)) { clockFor = { uid, at: syncNow() }; stopClockRetry(); await settleUnsureEdits(); return true; }
+        if (setClockOffset(offset)) { clockFor = { uid, dev: deviceNow(), mono: monoNow(), doubt: false }; stopClockRetry(); await settleUnsureEdits(); return true; }
     } catch { /* 아래에서 다시 잽니다. */ }
     startClockRetry(uid);
     return false;
@@ -2639,9 +2681,9 @@ export async function pullFromCloudNow() {
  * 전체 받기를 하는 때(fullPullDue):
  *  - 로그인·앱 시작(첫 연결), 동기화 칩 직접 누르기(force), 올리기에서 진 줄(lost)이 나왔을 때: 늘.
  *  - 날짜가 바뀐 뒤 처음(하루 한 번, 감시로 못 잡는 지운 줄 확인), 오프라인에서 돌아왔을 때(online): 1분 간격 안에서 늘.
- *  - 감시가 살아 있을 때 앱으로 돌아오면(return: 페이지가 실제로 숨겨졌다가 다시 보임): 숨어 있던 시간이 30분 이상이거나
- *    마지막 전체 받기 뒤 30분이 지났을 때만. 휴대폰처럼 오래 숨었다가 돌아오면 그동안 감시가 끊겼을 수 있어 받습니다.
- *    숨겨지지 않은 채 창 focus 만 바뀐 것(focus: 교무실 PC에서 다른 프로그램을 보다 돌아옴)과 5분 타이머(timer)로는 받지 않습니다.
+ *  - 감시가 살아 있을 때 앱으로 돌아오면(return: 페이지가 실제로 숨겨졌다가 다시 보임): 숨어 있던 시간이 30분 이상일 때만 바로 받습니다.
+ *    휴대폰처럼 오래 숨었다가 돌아오면 그동안 감시가 끊겼을 수 있어 받습니다. 같은 창의 다른 탭(나이스 등)에 잠깐 다녀온 것,
+ *    숨겨지지 않은 채 창 focus 만 바뀐 것(focus), 5분 타이머(timer)로는 받지 않습니다(아래 안전망만).
  *  - 안전망: 감시가 살아 있어도 마지막 전체 받기 뒤 2시간이 지나면 다음 돌아옴·타이머에서 한 번 받습니다.
  *    감시가 못 잡는 변경(오래 오프라인이던 기기가 늦게 올린 옛 고친 시각, updatedAt 없이 쓴 옛 판, 묘비 없는 지움)을 위해서입니다.
  *  - 감시가 없거나 죽었으면(옛 규칙 거절, 오프라인, 검사의 가짜 클라우드): 돌아옴·창 focus·타이머 모두 마지막 전체 받기 뒤 15분마다.
@@ -2660,7 +2702,8 @@ export function fullPullDue(reason, { now = 0, lastFull = 0, lastTry = 0, today 
     const since = now - lastFull;
     if (since < 0) return true;
     if (!watchLive) return since >= PULL_RULES.fallbackMs;
-    if (reason === 'return') return since >= PULL_RULES.staleMs || Number(hiddenMs) >= PULL_RULES.staleMs || since >= PULL_RULES.safetyMs;
+    /* 감시가 살아 있으면 짧게 숨었다 돌아온 것(같은 창의 다른 탭에 다녀옴)은 창 focus 와 같이 2시간 안전망만 봅니다. */
+    if (reason === 'return') return Number(hiddenMs) >= PULL_RULES.staleMs || since >= PULL_RULES.safetyMs;
     if (reason === 'timer') return since >= PULL_RULES.safetyMs;
     return false;
 }
@@ -2684,14 +2727,17 @@ export function lastFullPullForTest() { return { ...lastFullPull }; }
  * 받기 사이는 3초 이상 두고, 1분 안에 다섯 번 받았으면 20초로 늘려 다른 기기에서 연달아 고칠 때 받기가 몰리지 않게 합니다.
  * 받으면 알림 예약도 새 시각으로 다시 봅니다.
  */
-export const WATCH_TIMING = { first: 800, gap: 3000, burstGap: 20000, burst: 5, burstWindow: 60 * 1000, retry: 15 * 60 * 1000 };
+export const WATCH_TIMING = { first: 800, gap: 3000, burstGap: 20000, burst: 5, burstWindow: 60 * 1000, retry: 15 * 60 * 1000, tombRetry: 5000 };
 let watchTiming = { ...WATCH_TIMING };
 /** 검사용: 감시 묶기 시간을 줄입니다. */
 export function useWatchTimingForTest(timing = null) { watchTiming = timing ? { ...WATCH_TIMING, ...timing } : { ...WATCH_TIMING }; }
 /* 감시 시작점: 마지막 전체 받기를 시작한 서버 시각보다 10분 앞. 기기가 고친 시각을 찍는 묶음은 하루 더 앞까지 봅니다(늦게 올린 오프라인 수정). */
 const WATCH_LOOKBACK_MS = 10 * 60 * 1000;
 const WATCH_LATE_MS = 24 * 3600 * 1000;
-const blankWatch = () => ({ uid: '', stop: null, timer: 0, last: -Infinity, recent: [], pending: [], live: false, error: '', serverAt: 0, startedAt: 0 });
+const blankWatch = () => ({ uid: '', stop: null, timer: 0, last: -Infinity, recent: [], pending: [], live: false, error: '', serverAt: 0, startedAt: 0, day: '', since: 0 });
+/* 감시 시작점이 고정이라 오래 켜 두면 결과 목록이 커지고, 30분 넘게 끊겼다 이으면 그 목록을 다시 읽은 것으로 셉니다.
+   날짜가 바뀐 뒤나 감시를 켠 지 6시간이 지난 뒤의 전체 받기에서, 그 받기를 시작한 때를 새 시작점으로 감시를 다시 켭니다. */
+export const WATCH_RENEW_MS = 6 * 3600 * 1000;
 let todoWatch = blankWatch();
 const watchNow = () => (globalThis.performance?.now ? globalThis.performance.now() : Date.now());
 function stopTodoWatch() {
@@ -2703,14 +2749,14 @@ export function todoWatchForTest(on) { stopTodoWatch(); return on ? startTodoWat
 /** 감시가 살아 있는지: 모든 리스너가 붙어 오류 없이 서버 결과를 받고 있습니다. */
 export function watchLive() { return Boolean(todoWatch.uid && todoWatch.stop && todoWatch.live && !todoWatch.error); }
 /** 검사용: 감시 상태. */
-export function watchStateForTest() { const { uid, live, error, serverAt, startedAt, pending } = todoWatch; return { uid, live, error, serverAt, startedAt, pending: pending.length, alive: watchLive() }; }
+export function watchStateForTest() { const { uid, live, error, serverAt, startedAt, pending, since, day } = todoWatch; return { uid, live, error, serverAt, startedAt, since, day, pending: pending.length, alive: watchLive() }; }
 
 /*
  * 감시 알림에서 받을 컬렉션을 고릅니다(순수 함수). 이 기기가 올리거나 받은 값과 같으면(해시 같음) 받지 않습니다.
  * 이 기기가 막 올린 문서가 서버 시각을 달고 되돌아오는 경우가 여기서 걸러집니다.
  *  - 지워진 문서(removed): 이 기기가 아직 클라우드에 있다고 아는 줄(해시 있음)일 때만. 이 기기에서 지운 줄은 해시를 먼저 지웁니다.
  *  - 묘비: 그 줄이 이 기기에 있을 때만 그 컬렉션을 받습니다.
- *  - 설정 문서: 셀 수 없는 문서(device)는 늘, 나머지는 올린 값과 다를 때만.
+ *  - 설정 문서: 올린 값과 다를 때만(device는 실제로 쓴 문서 모양 'settings/device#doc'과 견줌).
  * 받을 것이 없으면 null, 알림 모양을 모르면(옛 감시) 'all'(전체 받기).
  */
 export function watchPullNames(changes, { hashes = {}, has = () => false } = {}) {
@@ -2718,7 +2764,7 @@ export function watchPullNames(changes, { hashes = {}, has = () => false } = {})
     const names = new Set();
     for (const c of changes) {
         if (!c || typeof c !== 'object' || !c.name) return 'all';
-        if (c.name === 'settings') { if (!c.mark || hashes[`settings/${c.id}`] !== c.mark) names.add('settings'); continue; }
+        if (c.name === 'settings') { if (!c.mark || hashes[c.id === 'device' ? 'settings/device#doc' : `settings/${c.id}`] !== c.mark) names.add('settings'); continue; }
         if (c.name === 'tombs') { if (!c.removed && c.of && (hashes[`${c.of}/${c.rowId}`] || has(c.of, c.rowId))) names.add(c.of); continue; }
         const key = `${c.name}/${c.id}`;
         if (c.removed) { if (hashes[key]) names.add(c.name); continue; }
@@ -2732,12 +2778,22 @@ function hasLocalRow(cloudName, id) {
     const local = LOCAL_OF[cloudName];
     return Boolean(local) && (state[local] || []).some((row) => String(row?.id) === String(id));
 }
+/* 묘비로 받은 뒤에도 그 줄이 남아 있고, 묘비 시각이 그 줄 고친 시각보다 늦은지(모르면 남은 것만으로) */
+function tombStillHere(change) {
+    const local = LOCAL_OF[change.of];
+    const row = local ? (state[local] || []).find((r) => String(r?.id) === String(change.rowId)) : null;
+    if (!row) return false;
+    const at = Number(change.at);
+    const mine = Number(row.editAt);
+    return !(Number.isFinite(at) && Number.isFinite(mine) && mine > 0 && mine >= at);
+}
 
 async function startTodoWatch(uid) {
     if (!cloudApi.watch || state.auth?.uid !== uid || todoWatch.uid === uid) return;
     stopTodoWatch();
     todoWatch.uid = uid;
     todoWatch.startedAt = syncNow();
+    todoWatch.day = seoulYmd(new Date(serverNow()));
     const fire = async () => {
         todoWatch.timer = 0;
         if (state.auth?.uid !== uid || todoWatch.uid !== uid) return;
@@ -2757,7 +2813,17 @@ async function startTodoWatch(uid) {
         todoWatch.last = watchNow();
         /* 설정 문서만 받는 것(문서 4개)은 몰림 셈에 넣지 않습니다. 이 기기가 올린 설정이 되돌아온 알림 때문에 할 일 받기가 늦어지지 않게 합니다. */
         if (names === 'all' || names.some((name) => name !== 'settings')) todoWatch.recent.push(todoWatch.last);
-        refreshFromCloud(names === 'all' ? { force: true } : { only: names }).catch(() => {});
+        const run = refreshFromCloud(names === 'all' ? { force: true } : { only: names });
+        /* 옛 판은 묘비를 먼저 쓰고 문서는 나중에 지웁니다. 묘비 알림으로 받았는데 그 줄이 아직 남아 있고 묘비가 더 늦으면
+           몇 초 뒤 그 컬렉션을 한 번 더 받습니다(한 번만). 그 문서가 감시 범위 밖 옛 문서면 지움 알림이 오지 않기 때문입니다. */
+        const tombs = names === 'all' ? [] : changes.filter((c) => c?.name === 'tombs' && !c.removed && c.of && c.rowId);
+        if (tombs.length) {
+            run.then(() => {
+                const again = [...new Set(tombs.filter((c) => tombStillHere(c)).map((c) => c.of))];
+                if (!again.length || todoWatch.uid !== uid) return;
+                setTimeout(() => { if (todoWatch.uid === uid) refreshFromCloud({ only: again }).catch(() => {}); }, watchTiming.tombRetry);
+            }).catch(() => {});
+        } else run.catch(() => {});
     };
     const onChange = (changes) => {
         if (todoWatch.uid !== uid) return;
@@ -2772,6 +2838,7 @@ async function startTodoWatch(uid) {
         if (status.live) { todoWatch.serverAt = syncNow(); watchRetries = 0; }
     };
     const since = (lastFullPull.uid === uid && lastFullPull.from > 0 ? lastFullPull.from : serverNow()) - WATCH_LOOKBACK_MS;
+    todoWatch.since = since;
     let stop = null;
     try { stop = await cloudApi.watch(uid, onChange, { memoryOnly: state.profile?.sharedPc, since, lateSince: since - WATCH_LATE_MS, initial: true, onStatus }); } catch { stop = null; }
     if (todoWatch.uid !== uid) { try { stop?.(); } catch { /* 꺼짐 */ } return; }
@@ -2789,6 +2856,15 @@ function retryDeadWatch(uid) {
     startTodoWatch(uid).catch(() => {});
 }
 
+/* 전체 받기가 서버에서 다 받았고(before 뒤 새 기록), 날짜가 바뀌었거나 감시가 오래됐으면 새 시작점으로 감시를 다시 켭니다.
+   새 감시는 이번 전체 받기를 시작한 때 10분 앞부터 보므로 그 사이 변경을 놓치지 않습니다. */
+function renewWatch(uid, before) {
+    if (lastFullPull.uid !== uid || lastFullPull.at === before || todoWatch.uid !== uid || !todoWatch.stop) return;
+    if (todoWatch.day === lastFullPull.day && Math.abs(syncNow() - todoWatch.startedAt) < WATCH_RENEW_MS) return;
+    stopTodoWatch();
+    startTodoWatch(uid).catch(() => {});
+}
+
 /**
  * 다른 기기에서 고친 것을 받아 옵니다.
  *  - force: 늘 전체 받기(동기화 칩, 진 줄).
@@ -2799,6 +2875,8 @@ function retryDeadWatch(uid) {
 export async function refreshFromCloud({ force = false, only = null, reason = 'return', hiddenMs = 0 } = {}) {
     const uid = state.auth?.uid;
     if (!uid || !cloudApi.available() || connectTask?.uid !== uid) return { skipped: true };
+    /* 잰 뒤 기기 시계가 바뀌었으면(30초 넘게 어긋남) 받지 않더라도 서버 시각은 다시 잽니다(5분 타이머·돌아옴마다 봄). */
+    if (clockOk && clockStale(uid)) await syncServerClock(uid);
     const now = syncNow();
     const parts = Array.isArray(only) && only.length ? only : null;
     if (!parts && !force) {
@@ -2818,7 +2896,9 @@ export async function refreshFromCloud({ force = false, only = null, reason = 'r
     if (!parts) lastRefresh = now;
     try {
         await connectTask.promise;
-        await connectCloud(uid, parts ? { only: parts } : {});
+        const before = lastFullPull.at;
+        await connectCloud(uid, parts ? { only: parts } : { force });
+        if (!parts) renewWatch(uid, before);
         return parts ? { ok: true, only: parts } : { ok: true };
     } catch {
         return { ok: false };
@@ -2866,7 +2946,7 @@ export async function setAuth(auth) {
     if (!switching) adoptTabAccount(next.uid);
     if (connectTask?.uid === next.uid) return connectTask.promise;
     /* 새 접속: 서버 시각을 한 번 다시 잽니다(받을 때마다 재지는 않음). */
-    clockFor = { uid: '', at: 0 };
+    clockFor = { uid: '', dev: 0, mono: 0, doubt: false };
     const promise = connectCloud(next.uid).catch(() => false);
     connectTask = { uid: next.uid, promise };
     promise.then((ok) => {

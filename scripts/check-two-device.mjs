@@ -450,10 +450,8 @@ for (const [label, next] of [['12:30으로 변경', '12:30'], ['지움', ''], ['
     prevTime = next;
 }
 await on('A', (db) => db.todoWatchForTest(false));
-/* 시계를 제자리로 돌린 뒤 서버 시각 차이를 다시 잽니다(뒤 검사가 10분 어긋난 보정값을 쓰지 않게).
-   받기는 이제 접속마다 한 번만 재므로(check:sync-cost), 다시 재기를 직접 부릅니다. */
+/* 시계를 제자리로 돌린 뒤 서버 시각 차이를 다시 잽니다(뒤 검사가 10분 어긋난 보정값을 쓰지 않게). */
 await sync('A');
-await on('A', (db) => db.retryServerClockForTest());
 watching.A = false;
 
 /* 묘비 정리: 30일 넘은 묘비만 지웁니다. */

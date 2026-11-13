@@ -237,10 +237,12 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                 /* 통째로 덮지 않습니다: 클라우드 문서를 읽어 칸마다 더 늦게 고친 쪽을 남긴 뒤 씁니다.
                    다른 기기가 먼저 고친 칸은 그대로 두고, 다음 받기에서 이 기기로 들어옵니다. */
                 const ref = doc(ready.db, 'users', uid, 'settings', 'device');
+                let written = null;
                 const write = (legacy) => firestore.runTransaction(ready.db, async (tx) => {
                     const snap = await tx.get(ref);
                     const merged = mergeSettings(settings.body, snap.exists() ? fromCloudSettings(snap.data()) : null);
-                    tx.set(ref, await stamp(firestore, legacy ? legacySettingsBody(merged) : merged, settings.stamps));
+                    written = legacy ? legacySettingsBody(merged) : merged;
+                    tx.set(ref, await stamp(firestore, written, settings.stamps));
                 });
                 /* 출퇴근 칸 시각(ats.work)을 모르는 예전 규칙이면 거절됩니다. 그때는 예전 모양으로 한 번 더 올립니다. */
                 try { await write(false); } catch (error) {
@@ -248,6 +250,8 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
                     await write(true);
                 }
                 nextHashes['settings/device'] = mark;
+                /* 실제로 쓴 문서 모양. 감시가 이 기기 쓰기가 되돌아온 것을 알아보고 다시 받지 않게 합니다. */
+                if (written) nextHashes['settings/device#doc'] = canonicalMark(written);
             } catch (error) {
                 /* 설정 문서를 모르는 옛 규칙의 거절은 다른 기록을 막지 않습니다. 그 밖의 실패는 다시 올립니다. */
                 if (classifyWriteError(error) === 'pending') pending += 1;
@@ -571,8 +575,19 @@ export const WATCH_LATE = ['todos', 'events', 'attendance', 'notes', 'timetable'
 /** 실시간으로 볼 설정 문서(settings/…). */
 export const WATCH_SETTINGS = ['device', 'leave', 'tabbar', 'goal'];
 
+/** 칸 순서와 서버 시각(updatedAt)에 상관없는 표시. 설정 문서(device)를 올린 모양 그대로 되돌아왔는지 볼 때 씁니다. */
+export function canonicalMark(body) {
+    const sort = (v) => {
+        if (Array.isArray(v)) return v.map(sort);
+        if (v && typeof v === 'object') return Object.fromEntries(Object.keys(v).filter((k) => k !== 'updatedAt').sort().map((k) => [k, sort(v[k])]));
+        return v;
+    };
+    return `c:${JSON.stringify(sort(body))}`;
+}
+
 /** 설정 문서를 올리기와 같은 방식으로 센 표시. 이 기기가 막 올린 값이 되돌아온 것인지 가려낼 때 씁니다. 셀 수 없으면 null. */
 export function settingsMark(id, data) {
+    if (id === 'device') return data && typeof data === 'object' ? canonicalMark(data) : null;
     if (id === 'leave') { const leave = cleanLeave(data); return leave ? fingerprint(leave) : null; }
     if (id === 'tabbar') { const tabbar = cleanTabbar(data); return tabbar ? fingerprint(tabbar) : null; }
     if (id === 'goal') { const goal = toGoalDoc(fromGoalDoc(data)); return goal ? fingerprint(goal) : null; }
@@ -584,7 +599,7 @@ export function watchChange(name, id, data, removed = false) {
     const docId = String(id);
     if (name === 'tombs') {
         const tomb = tombFromDoc(docId, data);
-        return tomb ? { name, id: docId, of: tomb.name, rowId: tomb.id, removed } : null;
+        return tomb ? { name, id: docId, of: tomb.name, rowId: tomb.id, at: tomb.at, removed } : null;
     }
     if (removed) return { name, id: docId, removed: true };
     const row = name === 'timetable' ? { id: docId, ...(fromCloudRow('timetable', docId, data) || {}) } : fromCloudRow(name, docId, data);
@@ -616,10 +631,11 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
         return onSnapshot(target, { includeMetadataChanges: true }, (snap) => {
             const fromServer = snap.metadata.fromCache === false;
             if (slot.live !== fromServer) { slot.live = fromServer; report(); } else if (fromServer) report();
-            if (!fromServer) return;
-            const first = !slot.seen;
-            slot.seen = true;
-            handle(snap, first);
+            /* 첫 서버 결과 전의 캐시 결과(이 기기 저장소에 남은 옛 목록)는 보지 않습니다. 그 뒤 끊긴 동안의 캐시 결과는 handle이 모아 둡니다. */
+            if (!fromServer && !slot.seen) return;
+            const first = fromServer && !slot.seen;
+            if (fromServer) slot.seen = true;
+            handle(snap, first, fromServer);
         }, (error) => {
             /* 오류로 끝난 리스너는 다시 붙지 않습니다. 앱은 감시가 죽은 것으로 보고 예전처럼 주기적으로 받습니다. */
             slot.live = false;
@@ -632,7 +648,9 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
         const recent = Timestamp.fromMillis(Number.isFinite(since) ? since : Date.now() - 10 * 60 * 1000);
         const late = Number.isFinite(lateSince) ? Timestamp.fromMillis(Math.min(lateSince, recent.toMillis())) : recent;
         for (const [name, field] of WATCH_RECENT) {
-            offs.push(listen(query(collection(ready.db, 'users', uid, name), where(field, '>', WATCH_LATE.includes(name) ? late : recent)), (snap, first) => {
+            /* 끊긴 동안(캐시 결과)에 실린 변경은 버리지 않고 모아 두었다가, 서버 결과로 돌아올 때 함께 알립니다. */
+            let held = [];
+            offs.push(listen(query(collection(ready.db, 'users', uid, name), where(field, '>', WATCH_LATE.includes(name) ? late : recent)), (snap, first, fromServer) => {
                 if (first && !initial) return;
                 const out = [];
                 for (const change of snap.docChanges()) {
@@ -640,17 +658,22 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
                     const line = watchChange(name, change.doc.id, change.doc.data(), change.type === 'removed');
                     if (line) out.push(line);
                 }
-                if (out.length) onChange(out);
+                if (!fromServer) { held.push(...out); return; }
+                const all = held.length ? [...held, ...out] : out;
+                held = [];
+                if (all.length) onChange(all);
             }));
         }
         /* 설정 문서: 첫 결과는 받기와 같으므로 건너뛰고, 내용이 바뀐 때만 알립니다(연결 상태만 바뀐 결과는 건너뜀). */
         for (const id of WATCH_SETTINGS) {
             let last = null;
-            offs.push(listen(doc(ready.db, 'users', uid, 'settings', id), (snap, first) => {
-                if (snap.metadata.hasPendingWrites) return;
+            offs.push(listen(doc(ready.db, 'users', uid, 'settings', id), (snap, first, fromServer) => {
+                if (!fromServer) return;
                 const data = snap.exists() ? snap.data() : null;
                 const text = JSON.stringify(data);
+                /* 첫 결과는 이 기기 쓰기가 남아 있어도(hasPendingWrites) 기준으로 삼습니다. 쓰기가 되돌아오면 표시(mark)로 걸러집니다. */
                 if (first) { last = text; return; }
+                if (snap.metadata.hasPendingWrites) return;
                 if (text === last) return;
                 last = text;
                 onChange([{ name: 'settings', id, mark: data ? settingsMark(id, data) : null, removed: !data }]);
@@ -725,7 +748,11 @@ export async function guardedDelete({ get, del }, name, id, opts = {}) {
         if (keepCloudDoc(name, id, data, opts)) return { ok: true, kept: true };
     }
     /* 할 일은 지운 시각을 묘비로 남깁니다. 오프라인에서 그보다 먼저 고친 기기가 나중에 올려도 되살아나지 않게 합니다(검수 3번).
-       묘비를 못 쓰면(옛 규칙) 예전처럼 지우기만 합니다. */
+       묘비와 지우기는 한 번에(batch) 씁니다. 따로 쓰면 묘비 알림을 받은 다른 기기가 아직 남은 문서를 받아 지우지 못합니다.
+       묘비를 못 쓰면(옛 규칙 거절) 예전처럼 묘비를 시도한 뒤 지우기만 합니다. */
+    if (opts.tomb && opts.together) {
+        try { await opts.together(); return { ok: true }; } catch (error) { if (!denied(error)) throw error; }
+    }
     if (opts.tomb) { try { await opts.tomb(); } catch { /* 옛 규칙 */ } }
     await del();
     return { ok: true };
@@ -736,16 +763,20 @@ export async function deleteUserDoc(uid, name, id, { memoryOnly = false, notAfte
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return { skipped: true };
     try {
-        const { doc, deleteDoc, getDocFromServer, setDoc, Timestamp, serverTimestamp } = await import('firebase/firestore');
+        const { doc, deleteDoc, getDocFromServer, setDoc, writeBatch, Timestamp, serverTimestamp } = await import('firebase/firestore');
         const ref = doc(ready.db, 'users', uid, name, String(id));
         /* 지운 시각을 모르면(서버 시각을 못 잰 기기) 서버가 받은 시각으로 묘비를 남깁니다. */
-        const tomb = LWW_NAMES.includes(name)
-            ? () => timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId(name, id)), { k: name, at: !tombNow && Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() }), 5000)
+        const tombRef = doc(ready.db, 'users', uid, 'tombs', tombId(name, id));
+        const tombBody = () => ({ k: name, at: !tombNow && Number.isFinite(notAfter) && notAfter > 0 ? Timestamp.fromMillis(notAfter) : serverTimestamp() });
+        const tomb = LWW_NAMES.includes(name) ? () => timeout(setDoc(tombRef, tombBody()), 5000) : null;
+        /* 묘비 쓰기와 문서 지우기를 한 batch로: 규칙은 둘을 따로 봅니다(묘비 create, 문서 delete) */
+        const together = tomb && typeof writeBatch === 'function'
+            ? () => { const batch = writeBatch(ready.db); batch.set(tombRef, tombBody()); batch.delete(ref); return batch.commit(); }
             : null;
         return await guardedDelete({
             get: async () => { const snap = await getDocFromServer(ref); return snap.exists() ? snap.data() : null; },
             del: () => deleteDoc(ref),
-        }, name, id, { notAfter, expect, tomb, exact });
+        }, name, id, { notAfter, expect, tomb, together, exact });
     } catch {
         return { ok: false };
     }

@@ -28,13 +28,14 @@ export function syncBegin() {
 /** ok면 마지막 동기화 시각을 바꿉니다. pending은 다시 올려야 할 개수입니다. */
 /* pull: 받기까지 한 동기화(로그인·다시 맞추기). 받기에 실패했거나 캐시의 옛 목록이었으면, 뒤이은 올리기가 성공해도
    '동기화됨'으로 보이지 않게 따로 기억합니다(10/31 제보: 칩은 동기화됨인데 PC에 할 일이 1개). */
-export function syncEnd({ ok = false, pending = 0, skipped = false, pull = false, at = Date.now() } = {}) {
+/* stamp: false면 성공해도 마지막 동기화 시각은 그대로 둡니다(감시가 알린 컬렉션만 받은 일부 받기). */
+export function syncEnd({ ok = false, pending = 0, skipped = false, pull = false, stamp = true, at = Date.now() } = {}) {
     status.busy = Math.max(0, status.busy - 1);
     if (!skipped) {
         status.pending = Math.max(0, Number(pending) || 0);
         if (pull) status.pullFailed = !ok;
         status.failed = !ok || status.pullFailed;
-        if (ok && !status.pullFailed) status.lastOkAt = at;
+        if (ok && !status.pullFailed && stamp) status.lastOkAt = at;
     }
     emit();
 }
