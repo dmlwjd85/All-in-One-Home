@@ -1931,3 +1931,18 @@ button.hero-pill.home-todo-link {
 /* 회의록 저장 뒤 노란 카드(PR #64)와 할 일·일정에서 회의록으로 가는 줄 */
 .minutes-ask-list { display: flex; flex-direction: column; gap: 8px; }
 .minutes-from { margin-top: 4px; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+
+/* 회의록 확인 카드(시안 A): 왜 묻는지 배지 → 제목 → 고칠 칩 → 등록/빼기 */
+.ask-card { padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.ask-card.is-on { background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); }
+.ask-card.is-off { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); opacity: .7; }
+.ask-badge { align-self: flex-start; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.ask-title { margin: 0; font-weight: 800; font-size: 16px; overflow-wrap: anywhere; }
+.ask-meta { margin: 0; font-size: 14px; color: var(--ink-sub); }
+.ask-why { margin: 0; font-size: 14px; }
+.ask-default { color: var(--ink-sub); }
+.ask-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-cal { padding: 6px; border-radius: 14px; background: var(--bg); }
+.ask-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.ask-two > .tap { min-height: 48px; width: 100%; justify-content: center; }
+.ask-two > .tap:only-child { grid-column: 1 / -1; }

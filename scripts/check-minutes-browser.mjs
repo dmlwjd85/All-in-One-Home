@@ -184,6 +184,11 @@ try {
     await page.waitForSelector('[data-screen="minutes-ask"]', { timeout: 5000 }).catch(() => check(false, '흐린 줄의 노란 확인 카드가 뜨지 않습니다.'));
     const ask = await page.evaluate(() => ({ low: document.querySelectorAll('[data-screen="minutes-ask"] .low-card').length, text: document.body.innerText }));
     check(ask.low === 1 && ask.text.includes('보고서'), `노란 카드 수가 다릅니다: ${ask.low}`);
+    /* 시안 A: 카드마다 이유 배지와 등록·빼기, 회의록 카드에 '임시보관함' 문구 없음 */
+    const cardUi = await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-ask"] [data-ask]')].map((c) => ({
+        badge: c.querySelector('.ask-badge')?.innerText || '', yes: Boolean(c.querySelector('.ask-yes')), no: Boolean(c.querySelector('.ask-no')), inbox: c.innerText.includes('임시보관함'),
+    })));
+    check(cardUi.length >= 1 && cardUi.every((c) => c.badge && c.yes && c.no && !c.inbox), `확인 카드 모양이 다릅니다: ${JSON.stringify(cardUi)}`);
     const after = await layout(page).catch(() => null);
     await page.screenshot({ path: `${shots}/minutes-ask-390-light.png` });
     if (after) check(!after.overflow, '노란 카드 화면이 가로로 넘칩니다.');

@@ -121,7 +121,11 @@ try {
         if (await page.$('[data-screen="minutes-ask"]')) {
             const cards = await page.$$eval('[data-screen="minutes-ask"] .msg-card', (els) => els.length).catch(() => 0);
             check(cards <= 2, `${tag} 저장 뒤 확인 카드가 너무 많아요(${cards}개).`);
-            await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-ask"] button')].find((el) => el.innerText.trim() === '모두 빼고 마치기')?.click());
+            /* 날짜 없는 일정 카드뿐이면 '등록 없이 마치기' 하나만 있습니다. 등록할 것이 있으면 '모두 빼고 마치기'를 누릅니다. */
+            await page.evaluate(() => {
+                const all = [...document.querySelectorAll('[data-screen="minutes-ask"] button')];
+                (all.find((el) => el.innerText.trim() === '모두 빼고 마치기') || document.querySelector('.minutes-ask-ok'))?.click();
+            });
         }
         await page.waitForSelector(viewSel, { timeout: 5000 }).catch(() => {});
         check((await page.evaluate(() => location.hash)) === `#/minutes/${ID}`, `${tag} 저장한 뒤 같은 회의록 보기로 돌아오지 않아요.`);

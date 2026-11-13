@@ -178,7 +178,7 @@ export function minutesCandidates(text, minutesId, { now = new Date(), periods =
                         const label = `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}시${m ? ` ${m}분` : ''}`;
                         draft.low = true;
                         draft.include = false;
-                        draft.warning = [draft.warning, `「${span.word}」을 ${label}로 읽었어요. 맞으면 골라 주세요.`].filter(Boolean).join(' ');
+                        draft.warning = [draft.warning, `「${span.word}」을 ${label}${m ? '으로' : '로'} 읽었어요. 맞으면 골라 주세요.`].filter(Boolean).join(' ');
                     }
                 } else if (draft.time || notClockLine(line)) {
                     /* 장:절·점수 같은 콜론 숫자(「요한 3:16」「마 5:13」)는 시각이 아닙니다. 제목에 숫자를 되살리고 기본 선택 해제로 묻습니다. */

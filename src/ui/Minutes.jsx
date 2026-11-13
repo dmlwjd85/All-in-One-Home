@@ -12,7 +12,7 @@ import { useUi } from './context.jsx';
 import { timeContext } from './timeContext.js';
 import { Area, Btn, Field } from './bits.jsx';
 import { DateGrid } from './pickers.jsx';
-import { CaptureCard } from './PlusSheet.jsx';
+import { addDaysYmd, startOfWeekMon } from '../lib/date.js';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -25,6 +25,102 @@ function dateLabel(ymd) {
 
 function firstLine(text) {
     return String(text || '').split('\n').map((line) => line.trim()).find(Boolean) || '';
+}
+
+/* ── 회의록 저장 뒤 확인 카드(시안 A, 2026-11-14) ──
+   카드마다 왜 묻는지 한 줄, 그 자리에서 고칠 것(날짜·오전/오후·종류)만 칩으로, 그리고 '등록 / 빼기' 두 단추.
+   펼치는 편집기·학생 번호판은 두지 않습니다. 회의록 카드는 임시보관함에 가지 않고, 빼면 그냥 빠집니다. */
+const ASK_KINDS = ['일정', '할 일'];
+
+/** 왜 묻는지: 배지 글자와 한 줄 설명. 메시지 붙여넣기용 문구(임시보관함 등)는 쓰지 않습니다. */
+export function askReason(item) {
+    const warn = String(item?.warning || '');
+    const quoted = /「([^」]+)」/.exec(warn)?.[1] || '';
+    if (/읽었어요/.test(warn)) return { id: 'ampm', badge: '🕒 오전·오후 확인', text: `「${quoted}」을 ${ampmLabel(item.time)}으로 읽었어요. 맞는 쪽을 골라 주세요.` };
+    if (/시각으로 넣지 않았어요/.test(warn)) return { id: 'colon', badge: '🔢 시각이 아닐 수 있어요', text: `「${quoted}」은 시각으로 넣지 않았어요. 제목 그대로 둘지 정해 주세요.` };
+    if (/짧은 줄/.test(warn)) return { id: 'short', badge: '✏️ 할 일이 맞나요?', text: '날짜 없는 짧은 줄이에요. 할 일로 둘지 정해 주세요.' };
+    if (!item?.date) return { id: 'date', badge: '📅 날짜가 없어요', text: item?.kind === '일정' ? '일정은 날짜를 고르면 등록할 수 있어요.' : '날짜 없이도 할 일로 넣을 수 있어요.' };
+    return { id: 'other', badge: '확인해 주세요', text: '맞으면 등록, 아니면 빼 주세요.' };
+}
+
+function shortDate(ymd) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || '')) return '날짜 없음';
+    const [y, m, d] = ymd.split('-').map(Number);
+    return `${m}/${d}(${WEEK[new Date(y, m - 1, d).getDay()]})`;
+}
+
+function ampmLabel(hm) {
+    const [h, m] = String(hm || '').split(':').map(Number);
+    if (!Number.isFinite(h)) return '';
+    return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${String(m || 0).padStart(2, '0')}`;
+}
+
+function flipHalf(hm, pm) {
+    const [h, m] = String(hm || '').split(':').map(Number);
+    if (!Number.isFinite(h)) return hm;
+    const hour = pm ? (h < 12 ? h + 12 : h) : (h >= 12 ? h - 12 : h);
+    return `${String(hour).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`;
+}
+
+/** 등록할 수 있는지: 일정은 날짜가 있어야 합니다. */
+export function askReady(item) {
+    return ASK_KINDS.includes(item?.kind) && (item.kind !== '일정' || Boolean(item.date));
+}
+
+export function MinutesAskCard({ item, today, onPatch }) {
+    const [cal, setCal] = useState(false);
+    const reason = askReason(item);
+    const on = item.include !== false && askReady(item);
+    const off = item.include === false && item.decided;
+    const tomorrow = addDaysYmd(today, 1);
+    const nextMon = addDaysYmd(startOfWeekMon(today), 7);
+    const dates = [['오늘', today], ['내일', tomorrow], [`다음 주 월 ${Number(nextMon.slice(5, 7))}/${Number(nextMon.slice(8))}`, nextMon]];
+    const pickDate = (ymd) => { onPatch(item.id, { date: ymd, include: true, decided: true }); setCal(false); };
+    const cls = ['msg-card', 'ask-card', item.low && !item.decided ? 'low-card' : '', on && item.decided ? 'is-on' : '', off ? 'is-off' : ''].filter(Boolean).join(' ');
+    const pm = Number(String(item.time || '').slice(0, 2)) >= 12;
+    return (
+        <article className={cls} aria-label={`확인 카드: ${item.title}`} data-ask={item.id} data-ask-reason={reason.id}>
+            <span className="ask-badge">{off ? '✕ 뺐어요' : (on && item.decided ? '✓ 등록할게요' : reason.badge)}</span>
+            <p className="ask-title">{item.title}</p>
+            <p className="ask-meta">
+                {item.kind}{item.date ? ` · ${shortDate(item.date)}` : ''}{item.time ? ` · ${ampmLabel(item.time)}` : ''}
+            </p>
+            {!off && <p className="ask-why">{reason.text}{!item.decided ? <span className="ask-default"> 그대로 두면 {on ? '등록돼요' : '빠져요'}.</span> : null}</p>}
+            {!off && (
+                <>
+                    <div className="ask-chips" role="group" aria-label="종류">
+                        {ASK_KINDS.map((kind) => (
+                            <Btn key={kind} className={item.kind === kind ? 'chip on' : 'chip'} aria-pressed={item.kind === kind ? 'true' : 'false'} onClick={() => onPatch(item.id, { kind, decided: true })}>{kind}</Btn>
+                        ))}
+                    </div>
+                    {reason.id === 'ampm' && item.time ? (
+                        <div className="ask-chips" role="group" aria-label="오전 오후">
+                            <Btn className={!pm ? 'chip on' : 'chip'} aria-pressed={!pm ? 'true' : 'false'} onClick={() => onPatch(item.id, { time: flipHalf(item.time, false), include: true, decided: true })}>{ampmLabel(flipHalf(item.time, false))}</Btn>
+                            <Btn className={pm ? 'chip on' : 'chip'} aria-pressed={pm ? 'true' : 'false'} onClick={() => onPatch(item.id, { time: flipHalf(item.time, true), include: true, decided: true })}>{ampmLabel(flipHalf(item.time, true))}</Btn>
+                        </div>
+                    ) : null}
+                    {reason.id === 'date' || item.kind === '일정' || item.date ? (
+                        <div className="ask-chips" role="group" aria-label="날짜">
+                            {dates.map(([label, ymd]) => (
+                                <Btn key={label} className={item.date === ymd ? 'chip on' : 'chip'} aria-pressed={item.date === ymd ? 'true' : 'false'} onClick={() => pickDate(ymd)}>{label}</Btn>
+                            ))}
+                            <Btn className={cal ? 'chip on' : 'chip'} aria-expanded={cal ? 'true' : 'false'} onClick={() => setCal((v) => !v)}>📅 달력</Btn>
+                            {item.kind === '할 일' && item.date ? <Btn className="chip" onClick={() => onPatch(item.id, { date: '', decided: true })}>날짜 없이</Btn> : null}
+                        </div>
+                    ) : null}
+                    {cal ? <div className="ask-cal"><DateGrid value={item.date} today={today} onPick={pickDate} /></div> : null}
+                </>
+            )}
+            <div className="ask-two">
+                <Btn
+                    className={on && item.decided ? 'chip on ask-yes' : 'primary-btn ask-yes'}
+                    aria-pressed={on && item.decided ? 'true' : 'false'}
+                    onClick={() => (askReady(item) ? onPatch(item.id, { include: true, decided: true }) : setCal(true))}
+                >{off ? '다시 넣기' : (on && item.decided ? '✓ 등록' : (askReady(item) ? '등록' : '날짜 고르고 등록'))}</Btn>
+                {!off ? <Btn className="chip ask-no" onClick={() => onPatch(item.id, { include: false, decided: true })}>빼기</Btn> : null}
+            </div>
+        </article>
+    );
 }
 
 /** 회의록 화면. 목록 · 보기 · 새로 쓰기 · 고치기. 본문 Enter는 줄바꿈만 하고, 저장은 저장 버튼으로만 합니다. */
@@ -246,21 +342,15 @@ function MinutesEditor({ row }) {
         go(`#/minutes/${next.id}`, { replace: true });
     }
 
-    function patchAsk(id, partial, keepLow = false) {
-        setAsking((prev) => prev && ({
-            ...prev,
-            items: prev.items.map((item) => {
-                if (item.id !== id) return item;
-                const changed = { ...item, ...partial };
-                if (!keepLow) { changed.low = false; changed.warning = ''; }
-                return changed;
-            }),
-        }));
+    /* 카드 하나를 고칩니다. 왜 묻는지(warning)는 남겨 두고, 사용자가 정했는지는 decided 로 봅니다. */
+    function patchAsk(id, partial) {
+        setAsking((prev) => prev && ({ ...prev, items: prev.items.map((item) => (item.id === id ? { ...item, ...partial } : item)) }));
     }
 
     async function finishAsk(registerAll) {
         if (!asking) return;
-        const chosen = registerAll ? asking.items.filter((item) => item.include !== false && ['일정', '할 일'].includes(item.kind)) : [];
+        /* 날짜 없는 일정은 등록하지 않습니다(카드에서 '날짜 고르고 등록'으로 안내). */
+        const chosen = registerAll ? asking.items.filter((item) => item.include !== false && askReady(item)).map(({ decided, ...rest }) => rest) : [];
         /* 고른 카드는 등록하고, 뺀 카드는 기억하고 다른 기기에도 알립니다(오프라인이면 대기열에 두었다가 다시 씀). */
         const put = await finishMinutesAsk(asking.id, asking.items, chosen);
         if (put?.storageFailed) return;
@@ -281,19 +371,19 @@ function MinutesEditor({ row }) {
     }
 
     if (asking) {
-        const n = asking.items.filter((item) => item.include !== false).length;
+        const n = asking.items.filter((item) => item.include !== false && askReady(item)).length;
         return (
             <div className="minutes minutes-editor minutes-ask" data-screen="minutes-ask">
                 <h2 className="title-font minutes-view-title">이것도 등록할까요?</h2>
-                <p className="muted" style={{ margin: 0 }}>회의록은 저장했어요. 노란 카드는 한 번만 확인해 주세요. 칩을 누르면 바로 바뀌고, 아니면 ‘빼기’를 누르세요.</p>
+                <p className="muted" style={{ margin: 0 }}>회의록은 저장했어요. 아래 {asking.items.length}줄만 정해 주세요. 빼면 그냥 빠지고, 다시 묻지 않아요.</p>
                 <div className="minutes-ask-list">
                     {asking.items.map((item) => (
-                        <CaptureCard key={item.id} item={item} students={data.students || []} today={clock.ymd} onPatch={patchAsk} />
+                        <MinutesAskCard key={item.id} item={item} today={clock.ymd} onPatch={patchAsk} />
                     ))}
                 </div>
                 <div className="minutes-actions minutes-save-row">
-                    <Btn className="primary-btn minutes-ask-ok" onClick={() => finishAsk(true)}>{n ? `${n}개 등록` : '등록 없이 마치기'}</Btn>
-                    <Btn className="chip" onClick={() => finishAsk(false)}>모두 빼고 마치기</Btn>
+                    <Btn className="primary-btn minutes-ask-ok" onClick={() => finishAsk(true)}>{n ? `${n}개 등록하고 마치기` : '등록 없이 마치기'}</Btn>
+                    {n ? <Btn className="chip" onClick={() => finishAsk(false)}>모두 빼고 마치기</Btn> : null}
                 </div>
             </div>
         );
