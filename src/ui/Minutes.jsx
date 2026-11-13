@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { joined, removeItem, saveTextItem } from '../lib/db.js';
+import { finishMinutesAsk, joined, registerMinutes, removeItem, saveTextItem } from '../lib/db.js';
+import { allStarts } from '../lib/periodLocal.js';
+import { forgetMinutesLinks, setMinutesPending } from '../lib/minutesExtract.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import {
     MINUTES_ATTENDEES_MAX, MINUTES_TAG, MINUTES_TEXT_MAX, MINUTES_TITLE_MAX,
@@ -7,8 +9,10 @@ import {
     readMinutesDraft, writeMinutesDraft,
 } from '../lib/minutes.js';
 import { useUi } from './context.jsx';
+import { timeContext } from './timeContext.js';
 import { Area, Btn, Field } from './bits.jsx';
 import { DateGrid } from './pickers.jsx';
+import { CaptureCard } from './PlusSheet.jsx';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -94,6 +98,8 @@ function MinutesView({ row }) {
         const failed = await removeItem('notes', row.id);
         if (failed?.storageFailed) return;
         writeMinutesDraft(row.id, null);
+        forgetMinutesLinks(row.id);
+        setMinutesPending(row.id, null);
         showToast('회의록을 지웠어요.', true);
         go('#/minutes');
     }
@@ -128,7 +134,9 @@ function MinutesView({ row }) {
 }
 
 function MinutesEditor({ row }) {
-    const { clock, go, showToast } = useUi();
+    const { clock, data, go, showToast } = useUi();
+    /* 저장 뒤 흐린 줄(노란 카드)을 한 번 묻는 동안의 후보 목록 */
+    const [asking, setAsking] = useState(null);
     const key = row ? row.id : 'new';
     const initial = useMemo(() => {
         const base = {
@@ -209,8 +217,53 @@ function MinutesEditor({ row }) {
             return;
         }
         writeMinutesDraft(key, null);
-        showToast(result?.sensitive || minutesSensitive(draft) ? '민감할 수 있는 낱말이 있어 이 기기에만 남겼어요.' : '회의록을 저장했어요.', true);
+        const saidSensitive = result?.sensitive || minutesSensitive(draft);
+        /* 본문에서 일정·할 일을 찾아 등록합니다(PR #64). 분명한 줄은 바로, 흐린 줄은 노란 카드로 한 번 묻습니다.
+           다른 기기에서 지운·정한 항목은 되살리지 않고, 오프라인이면 등록을 미뤘다가 연결되면 확인 뒤 등록합니다(registerMinutes). */
+        const found = await registerMinutes({
+            id: next.id, title: next.title, date: next.date, text: next.text,
+            prev: row ? { text: row.text || '', date: row.date || '' } : null,
+            periods: allStarts(data.profile?.periodStarts),
+            /* '퇴근 전까지' 같은 시간구는 쨈 빠른 입력과 같은 기준으로 시각을 채웁니다. */
+            timeCtx: (() => { try { return timeContext(data); } catch { return null; } })(),
+        });
+        if (found?.storageFailed) {
+            saving.current = false;
+            return;
+        }
+        let note = saidSensitive ? '민감할 수 있는 낱말이 있어 이 기기에만 남겼어요.' : '회의록을 저장했어요.';
+        if (found.count) note = `${note} 일정·할 일 ${found.count}개를 바로 등록했어요.`;
+        if (found.deferred) note = `${note} 연결이 안 돼 일정·할 일 ${found.deferred}개는 연결되면 확인하고 등록할게요.`;
+        if (found.tidied) note = `${note} 고친 줄의 옛 항목 ${found.tidied}개를 정리했어요.`;
+        showToast(note, true);
+        if (found.ask.length) {
+            setAsking({ id: next.id, items: found.ask });
+            return;
+        }
         go(`#/minutes/${next.id}`, { replace: true });
+    }
+
+    function patchAsk(id, partial, keepLow = false) {
+        setAsking((prev) => prev && ({
+            ...prev,
+            items: prev.items.map((item) => {
+                if (item.id !== id) return item;
+                const changed = { ...item, ...partial };
+                if (!keepLow) { changed.low = false; changed.warning = ''; }
+                return changed;
+            }),
+        }));
+    }
+
+    async function finishAsk(registerAll) {
+        if (!asking) return;
+        const chosen = registerAll ? asking.items.filter((item) => item.include !== false && ['일정', '할 일'].includes(item.kind)) : [];
+        /* 고른 카드는 등록하고, 뺀 카드는 기억하고 다른 기기에도 알립니다(오프라인이면 대기열에 두었다가 다시 씀). */
+        const put = await finishMinutesAsk(asking.id, asking.items, chosen);
+        if (put?.storageFailed) return;
+        if (chosen.length) showToast(put?.ok ? put.message : (put?.message || '등록하지 못했어요.'), Boolean(put?.ok));
+        else showToast('확인 카드는 등록하지 않았어요.');
+        go(`#/minutes/${asking.id}`, { replace: true });
     }
 
     function cancel() {
@@ -222,6 +275,25 @@ function MinutesEditor({ row }) {
         saving.current = true;
         showToast('쓰던 내용을 지웠어요.');
         cancel();
+    }
+
+    if (asking) {
+        const n = asking.items.filter((item) => item.include !== false).length;
+        return (
+            <div className="minutes minutes-editor minutes-ask" data-screen="minutes-ask">
+                <h2 className="title-font minutes-view-title">이것도 등록할까요?</h2>
+                <p className="muted" style={{ margin: 0 }}>회의록은 저장했어요. 노란 카드는 한 번만 확인해 주세요. 칩을 누르면 바로 바뀌고, 아니면 ‘빼기’를 누르세요.</p>
+                <div className="minutes-ask-list">
+                    {asking.items.map((item) => (
+                        <CaptureCard key={item.id} item={item} students={data.students || []} today={clock.ymd} onPatch={patchAsk} />
+                    ))}
+                </div>
+                <div className="minutes-actions minutes-save-row">
+                    <Btn className="primary-btn minutes-ask-ok" onClick={() => finishAsk(true)}>{n ? `${n}개 등록` : '등록 없이 마치기'}</Btn>
+                    <Btn className="chip" onClick={() => finishAsk(false)}>모두 빼고 마치기</Btn>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -256,8 +328,8 @@ function MinutesEditor({ row }) {
             ) : null}
             <label className="minutes-label" htmlFor="minutes-attendees">참석자 <span className="muted">(선택)</span></label>
             <Field id="minutes-attendees" value={attendees} maxLength={MINUTES_ATTENDEES_MAX} placeholder="예: 1학년 담임 선생님들" onChange={(event) => setAttendees(event.target.value)} />
-            <label className="minutes-label" htmlFor="minutes-text">본문 <span className="muted">(Enter는 줄바꿈이에요)</span></label>
-            <Area id="minutes-text" className="field minutes-text" rows={12} value={text} maxLength={MINUTES_TEXT_MAX} enterKeyHint="enter" placeholder={'안건\n- \n결정한 것\n- \n할 일\n- '} onChange={(event) => setText(event.target.value)} />
+            <label className="minutes-label" htmlFor="minutes-text">본문 <span className="muted">(Enter는 줄바꿈 · 날짜가 있는 할 일·일정은 저장할 때 바로 등록돼요)</span></label>
+            <Area id="minutes-text" className="field minutes-text" rows={12} value={text} maxLength={MINUTES_TEXT_MAX} enterKeyHint="enter" placeholder={'안건\n- \n결정한 것\n- \n할 일\n- 11/20까지 보고서 제출'} onChange={(event) => setText(event.target.value)} />
             <p className="minutes-kept muted" aria-live="polite" data-role="minutes-kept">
                 {keptAt === '불러옴' ? '쓰던 내용을 불러왔어요. 저장을 눌러야 회의록이 돼요.' : keptAt ? `${keptAt} 이 기기에 임시 저장했어요. 저장을 눌러야 회의록이 돼요.` : '쓰는 동안 이 기기에 임시로 저장해 둬요.'}
                 {' '}<span>{text.length.toLocaleString()} / {MINUTES_TEXT_MAX.toLocaleString()}자</span>

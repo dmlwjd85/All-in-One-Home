@@ -33,7 +33,7 @@ function flipHm(hm) {
 const WRITTEN_AMPM = /^(?:오전|오후|아침|저녁|밤|새벽|낮)/;
 
 /** 앞말 없이 적은 1~11시(「3시」「8:30」「세 시」)만 오전·오후를 고칠 수 있게 둡니다. 「03:00」「15시」「정오」는 정해진 시각입니다. */
-function isAmbiguousWord(word) {
+export function isAmbiguousWord(word) {
     const w = String(word || '').trim();
     if (!w || WRITTEN_AMPM.test(w) || /^(?:정오|자정)/.test(w)) return false;
     const num = /^(\d{1,2})/.exec(w);

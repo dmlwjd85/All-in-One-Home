@@ -486,13 +486,90 @@ export async function sweepTombs(uid, now, { memoryOnly = false, keep = TOMB_KEE
     if (!uid || !Number.isFinite(now) || !syncAvailable()) return 0;
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return 0;
-    const { collection, deleteDoc, doc, getDocsFromServer, limit, orderBy, query, where, Timestamp } = await import('firebase/firestore');
+    const { collection, deleteDoc, doc, getDocsFromServer, limit, orderBy, query, startAfter, where, Timestamp } = await import('firebase/firestore');
     try {
-        const old = await timeout(getDocsFromServer(query(collection(ready.db, 'users', uid, 'tombs'), where('at', '<', Timestamp.fromMillis(now - keep)), orderBy('at'), limit(max))), 10000);
+        const base = [collection(ready.db, 'users', uid, 'tombs'), where('at', '<', Timestamp.fromMillis(now - keep)), orderBy('at')];
         let n = 0;
-        for (const item of old.docs) { await deleteDoc(doc(ready.db, 'users', uid, 'tombs', item.id)); n += 1; }
+        let last = null;
+        /* 회의록 등록 묘비는 남기므로, 한 쪽이 그것뿐이어도 다음 쪽을 봅니다(쪽 수 제한). */
+        for (let page = 0; page < TOMB_SWEEP_PAGES && n < max; page += 1) {
+            const old = await timeout(getDocsFromServer(query(...base, ...(last ? [startAfter(last)] : []), limit(max))), 10000);
+            for (const item of old.docs) {
+                if (durableTomb(item.id)) continue;
+                await deleteDoc(doc(ready.db, 'users', uid, 'tombs', item.id));
+                n += 1;
+                if (n >= max) break;
+            }
+            if (old.docs.length < max) break;
+            last = old.docs[old.docs.length - 1];
+        }
         return n;
     } catch { return 0; }
+}
+/*
+ * 평점관 r4 P2-3: 회의록에서 등록했다가 지웠거나 등록하지 않기로 한 할 일·일정(id가 mt-로 시작)의 묘비는 30일이 지나도 지우지 않습니다.
+ * 이 묘비가 사라지면 새 기기에서 같은 회의록을 다시 저장할 때 지운 할 일이 되살아납니다(이 기기의 기억은 localStorage에만 있음).
+ * 회의록 한 편의 줄 수만큼만 생기고(한 번에 30개 제한), 문서 한 개가 작아 쌓여도 부담이 적습니다. 규칙(firestore.rules)은 그대로입니다.
+ */
+export const DURABLE_TOMB = /^(?:todos|events)-mt-/;
+export function durableTomb(id) {
+    return DURABLE_TOMB.test(String(id || ''));
+}
+const TOMB_SWEEP_PAGES = 10;
+/**
+ * 회의록에서 '등록하지 않기로 정한' 할 일·일정 id 를 묘비로 남겨, 다른 기기에서 같은 회의록을 다시 저장해도
+ * 또 묻거나 만들지 않게 합니다. 이미 있는 묘비 규칙(tombs/todos-{id})을 그대로 씁니다. 실제로 만든 할 일 id 에는 쓰지 않습니다.
+ */
+export async function writeTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return [];
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return [];
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    const done = [];
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) { done.push(id); continue; }
+        try { await timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: serverTimestamp() }), 5000); done.push(id); } catch { /* 대기열에 남겨 다시 씁니다. */ }
+    }
+    /* 쓴 id 목록. 못 쓴 것은 부른 쪽이 대기열에 남깁니다(PR #64 r2 3번). */
+    return done;
+}
+/**
+ * 회의록 등록 후보가 클라우드에 이미 있거나(다른 기기가 등록) 지운 기록(할 일·일정 묘비)이 있는지 서버에서 바로 봅니다.
+ * { [id]: true|false }. 서버에 닿지 못하면 null(모름) — 부른 쪽은 등록을 미룹니다(PR #64 r2 1번).
+ */
+export async function peekMinutes(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return null;
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return null;
+    const { doc, getDocFromServer } = await import('firebase/firestore');
+    const out = {};
+    try {
+        for (const id of ids) {
+            const refs = [['todos', String(id)], ['events', String(id)], ['tombs', tombId('todos', id)], ['tombs', tombId('events', id)]];
+            const snaps = await timeout(Promise.all(refs.map(([c, d]) => getDocFromServer(doc(ready.db, 'users', uid, c, d)))), 8000);
+            out[id] = snaps.some((snap) => snap.exists());
+        }
+    } catch {
+        return null;
+    }
+    return out;
+}
+/** 회의록 고친 줄을 되돌렸을 때(PR #64 r3 F1): 이 기기가 정리하며 남긴 할 일·일정 묘비를 지웁니다. 지운(또는 원래 없던) id 목록. */
+export async function clearTombs(uid, ids = [], { memoryOnly = false } = {}) {
+    if (!uid || !ids.length || !syncAvailable()) return [];
+    const ready = await loadFirebase({ memoryOnly });
+    if (!ready) return [];
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    const done = [];
+    for (const id of ids) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) continue;
+        try {
+            const names = String(id).startsWith('mt-') ? ['todos', 'events'] : ['todos'];
+            await timeout(Promise.all(names.map((n) => deleteDoc(doc(ready.db, 'users', uid, 'tombs', tombId(n, id))))), 5000);
+            done.push(id);
+        } catch { /* 못 지우면 다음 저장에서 다시 */ }
+    }
+    return done;
 }
 export function tombId(name, id) { return `${name}-${id}`; }
 export function tombFromDoc(docId, data) {

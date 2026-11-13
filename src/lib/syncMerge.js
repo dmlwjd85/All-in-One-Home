@@ -1,11 +1,13 @@
 /*
  * 기기끼리 합치기(받아 온 값과 이 기기 값 견주기)에 쓰는 순수 함수들.
  * db.js 에서 떼어 냈습니다. 모듈 상태(state·해시·시계)를 읽거나 바꾸지 않고, 넘겨받은 값만 다룹니다.
+ * 하나 예외: 다른 기기가 지운 회의록 할 일·일정 id 는 noteMinutesGone 으로 이 기기(localStorage)에 적어 둡니다.
  * db.js 가 예전 이름 그대로 다시 내보내므로 바깥에서는 db.js 에서 가져와도 됩니다.
  */
 import { heldTodoTime, settleHoldWithRemote } from './todoTimeHold.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, fingerprint, printDigest, rowMark, unchangedSincePush } from './cloud.js';
 import { toCloudRow } from './cloudShape.js';
+import { noteMinutesGone } from './minutesExtract.js';
 import { isSensitiveText } from './sensitive.js';
 
 /* 되돌리기·다른 기기 삭제를 견줄 묶음 */
@@ -163,6 +165,8 @@ export function pruneDeletedElsewhere(draft, remote, hashes) {
                 if (!LWW_NAMES.includes(cloudName) || !remoteIsLater(row, remote?.tombs?.[cloudName]?.[String(shaped.id)])) return true;
             }
             if (hashes) delete hashes[`${cloudName}/${shaped.id}`];
+            /* 다른 기기가 지운 회의록 항목은 이 기기에 기억해 두어, 묘비가 정리된 뒤 같은 회의록을 다시 저장해도 되살리지 않습니다(PR #64). */
+            if (localName === 'todos' || localName === 'events') noteMinutesGone([String(shaped.id)]);
             return false;
         });
     }

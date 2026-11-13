@@ -72,7 +72,10 @@
     "check:roster": "node scripts/check-roster.mjs",
     "check:class-xlsx": "node scripts/check-class-xlsx.mjs",
     "check:widgets": "node scripts/check-widgets.mjs",
-    "check:widgets-browser": "node scripts/check-widgets-browser.mjs"
+    "check:widgets-browser": "node scripts/check-widgets-browser.mjs",
+    "check:minutes": "node scripts/check-minutes.mjs",
+    "check:minutesbrowser": "node scripts/check-minutes-browser.mjs",
+    "check:minutestwodev": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-minutes-twodev.mjs\""
   },
   "dependencies": {
     "firebase": "^11.6.0",

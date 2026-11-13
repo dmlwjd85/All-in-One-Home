@@ -336,7 +336,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     );
 }
 
-function CaptureCard({ item, students, today, onPatch }) {
+export function CaptureCard({ item, students, today, onPatch }) {
     const [open, setOpen] = useState(false);
     const needsStudent = ['학생기록', '상담', '출결'].includes(item.kind);
     return (

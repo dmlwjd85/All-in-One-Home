@@ -1925,3 +1925,7 @@ button.hero-pill.home-todo-link {
     font-size: 12px;
     opacity: 0.85;
 }
+
+/* 회의록 저장 뒤 노란 카드(PR #64)와 할 일·일정에서 회의록으로 가는 줄 */
+.minutes-ask-list { display: flex; flex-direction: column; gap: 8px; }
+.minutes-from { margin-top: 4px; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }

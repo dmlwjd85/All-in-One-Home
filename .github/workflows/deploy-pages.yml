@@ -64,6 +64,7 @@ jobs:
           npm run check:sync-cost
           npm run check:sync-watch
           npm run check:locknote
+          npm run check:minutes
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
@@ -104,6 +105,7 @@ jobs:
           - npm run check:keptpaths
           - npm run check:tabbarsync
           - npm run check:goalsync
+          - npm run check:minutestwodev
     steps:
       - uses: actions/checkout@v4
         with:
@@ -179,6 +181,7 @@ jobs:
               CHROME_PATH=/usr/bin/google-chrome npm run check:input-e-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:g1
               CHROME_PATH=/usr/bin/google-chrome npm run check:nice-datechip-browser
+              CHROME_PATH=/usr/bin/google-chrome npm run check:minutesbrowser
               CHROME_PATH=/usr/bin/google-chrome npm run check:minutes-edit-top
               CHROME_PATH=/usr/bin/google-chrome npm run check:neis-xlsx
           - part: 넘침과 버튼 크기
