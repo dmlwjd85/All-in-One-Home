@@ -27,6 +27,10 @@ if (!chrome) { console.error('브라우저가 없습니다.'); process.exit(1); 
     const winter = off.find((row) => row.id === 'acad-winter-after-2026');
     check(winter?.title === '겨울방학' && winter.date === '2027-02-11' && winter.end === '2027-02-28', `종업식 뒤 겨울방학이 틀립니다: ${JSON.stringify(winter)}`);
     check(!academicOffEvents({ 2026: { firstEnd: '2026-07-21', secondStart: '2026-07-22' } }).some((row) => row.id === 'acad-summer-2026'), '하루도 없는 여름방학이 생깁니다.');
+    const withWinter = academicOffEvents({ 2026: { ...academic['2026'], winterStart: '2026-12-31', winterBack: '2027-02-02' } });
+    const mid = withWinter.find((row) => row.id === 'acad-winter-mid-2026');
+    check(mid?.title === '겨울방학' && mid.date === '2027-01-01' && mid.end === '2027-02-01', `겨울 방학식~개학 사이 겨울방학이 틀립니다: ${JSON.stringify(mid)}`);
+    check(withWinter.find((row) => row.id === 'acad-winter-after-2026')?.title === '봄방학', '겨울방학이 따로 있는데 종업식 뒤를 봄방학으로 부르지 않습니다.');
     const marks = [{ date: '2026-03-02', title: '개학식' }, { date: '2026-07-24', title: '여름방학식' }, { date: '2026-08-14', title: '2학기 개학' }];
     const first = termRange('first', 2026, marks, academic);
     const second = termRange('second', 2026, marks, academic);
@@ -92,11 +96,26 @@ try {
     check(state.on === 'firstEnd' && state.title.includes('7'), `개학일을 누른 뒤 방학식 칸·7월로 넘어가지 않았습니다: ${JSON.stringify(state)}`);
     await tap(page, '[data-ymd="2026-07-21"]');
     await tap(page, '[data-ymd="2026-08-18"]');
+    /* 2학기 개학 다음은 겨울 방학식(12월) → 겨울 개학일 → 종업식 순서로 넘어갑니다. */
+    state = await page.evaluate(() => ({ on: document.querySelector('.acad-field.on')?.dataset.acadField, title: document.querySelector('.acad-month strong')?.textContent }));
+    check(state.on === 'winterStart' && state.title.includes('12'), `2학기 개학일 뒤 겨울 방학식 칸·12월로 넘어가지 않았습니다: ${JSON.stringify(state)}`);
+    await tap(page, '[data-ymd="2026-12-31"]');
+    check(await page.$eval('.acad-field.on', (el) => el.dataset.acadField) === 'winterBack', '겨울 방학식 뒤 겨울 개학일 칸으로 넘어가지 않았습니다.');
+    for (let i = 0; i < 6; i += 1) {
+        if (await page.$('[data-ymd="2027-02-02"]')) break;
+        await tap(page, '.acad-nav[aria-label="다음 달"]');
+    }
+    await tap(page, '[data-ymd="2027-02-02"]');
+    check(await page.$eval('.acad-field.on', (el) => el.dataset.acadField) === 'secondEnd', '겨울 개학일 뒤 종업식 칸으로 넘어가지 않았습니다.');
     for (let i = 0; i < 6; i += 1) {
         if (await page.$('[data-ymd="2027-02-10"]')) break;
         await tap(page, '.acad-nav[aria-label="다음 달"]');
     }
     await tap(page, '[data-ymd="2027-02-10"]');
+    const winterNote = await page.$eval('[data-acad-winter]', (el) => el.textContent).catch(() => '');
+    check(winterNote.includes('12/31') && winterNote.includes('2/2') && winterNote.includes('겨울방학') && winterNote.includes('봄방학'), `겨울방학 안내 줄이 없습니다: ${winterNote}`);
+    const tileText = await page.$$eval('[data-acad-field]', (els) => els.map((el) => el.dataset.acadField + ':' + el.innerText.replace(/\s+/g, ' ')));
+    check(tileText.some((t) => t.startsWith('winterStart:') && t.includes('겨울 방학식') && t.includes('12/31')) && tileText.some((t) => t.startsWith('winterBack:') && t.includes('겨울 개학일') && t.includes('2/2')), `겨울 방학식·개학일 칸이 없습니다: ${tileText}`);
     await tap(page, '[data-acad-field="offDays"]');
     for (let i = 0; i < 12; i += 1) {
         if (await page.$('[data-ymd="2026-05-04"]')) break;

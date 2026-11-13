@@ -153,16 +153,21 @@ async function settingsSuite(env) {
     const light = toCloudSettings({ profile: { settingsAt: 1767225600000 } }, {}).body;
     /* 실제로 쓸 수 있는 가장 큰 설정도 규칙 계산 한도(1000) 안에서 통과해야 합니다. */
     const days = (y, n) => Array.from({ length: n }, (_, i) => `${y}-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + Math.floor(i / 12)).padStart(2, '0')}`);
-    const fullYear = (y) => ({ firstStart: `${y}-03-02`, firstEnd: `${y}-07-21`, secondStart: `${y}-08-18`, secondEnd: `${y + 1}-02-10`, offDays: days(y, 40) });
+    const fullYear = (y) => ({ firstStart: `${y}-03-02`, firstEnd: `${y}-07-21`, secondStart: `${y}-08-18`, winterStart: `${y}-12-31`, winterBack: `${y + 1}-02-02`, secondEnd: `${y + 1}-02-10`, offDays: days(y, 40) });
     const biggest = toCloudSettings({ profile: {
         settingsAt: 1767225600000, ttEdited: days(2026, 400).map((d, i) => d.replace('2026', String(2024 + (i % 4)))).filter((v, i, l) => l.indexOf(v) === i),
         periodStarts: SETTINGS_PROFILE.periodStarts,
         academic: { 2025: fullYear(2025), 2026: fullYear(2026), 2027: fullYear(2027), 2028: fullYear(2028) },
     } }, { ...SETTINGS_LOCAL, count: 10, lengths: Array(10).fill(45), locks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], cellLocks: ['mon', 'tue', 'wed', 'thu', 'fri'].flatMap((d) => Array.from({ length: 10 }, (_, i) => `${d}-${i + 1}`)),
         extra: Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri'].map((d) => [d, { p9: '방과후 영어', p10: '보충 수학', s9: '3-1', s10: '3-2' }])) }).body;
+    if (biggest.academic['2026']?.winterBack !== '2027-02-02') out.push('가장 큰 설정에 겨울 방학식·개학일이 빠졌습니다.');
     if (Object.keys(biggest.academic).length !== 4 || biggest.periodLocal.cellLocks.split(',').length !== 50) out.push('가장 큰 설정 모양을 만들지 못했습니다.');
     await allow('가장 큰 설정', () => setDoc(ref(phone), biggest));
     await allow('가벼운 설정', () => setDoc(ref(phone), light));
+    await deny('겨울 개학일에 날짜 아닌 글자', () => setDoc(ref(phone), { ...light, academic: { 2026: { winterBack: '학생 상담' } } }));
+    await deny('겨울 방학식에 숫자', () => setDoc(ref(phone), { ...light, academic: { 2026: { winterStart: 20261231 } } }));
+    await deny('학사일정 모르는 칸', () => setDoc(ref(phone), { ...light, academic: { 2026: { springStart: '2027-02-11' } } }));
+    await allow('겨울 방학식·개학일만 있는 학년도', () => setDoc(ref(phone), { ...light, academic: { 2026: { winterStart: '2026-12-31', winterBack: '2027-02-02' } } }));
     await deny('학사일정 5개 학년도', () => setDoc(ref(phone), { ...light, academic: { 2024: {}, 2025: {}, 2026: {}, 2027: {}, 2028: {} } }));
     /* 이스케이프: '|'·'=' 가 든 과목명이 그대로 왕복되고, 크기 한도(1000)를 넘으면 거절됩니다. */
     const esc = toCloudSettings({ profile: SETTINGS_PROFILE }, { ...SETTINGS_LOCAL, extra: { mon: { p9: 'A|B반' }, tue: { p10: '1=1반' }, wed: { s9: '100%' } } }).body;

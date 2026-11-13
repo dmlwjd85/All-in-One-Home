@@ -506,6 +506,10 @@ export function localSettingAts(profile = {}, local = {}) {
     };
 }
 
+/* 학사일정 날짜 칸. 겨울 방학식·겨울 개학(winterStart·winterBack)은 v85 규칙부터 받습니다. */
+const ACADEMIC_KEYS = ['firstStart', 'firstEnd', 'secondStart', 'winterStart', 'winterBack', 'secondEnd'];
+const WINTER_KEYS = ['winterStart', 'winterBack'];
+
 function cleanSettingAcademic(academic = {}) {
     const out = {};
     const years = Object.keys(academic || {}).filter((year) => ACADEMIC_YEAR.test(year)).sort().slice(-4);
@@ -513,7 +517,7 @@ function cleanSettingAcademic(academic = {}) {
         const row = academic[year];
         if (!row || typeof row !== 'object') continue;
         const clean = {};
-        for (const key of ['firstStart', 'firstEnd', 'secondStart', 'secondEnd']) if (YMD.test(row[key] || '')) clean[key] = row[key];
+        for (const key of ACADEMIC_KEYS) if (YMD.test(row[key] || '')) clean[key] = row[key];
         const off = (row.offDays || []).filter((v) => YMD.test(v)).slice(0, 40);
         if (off.length) clean.offDays = off;
         if (Object.keys(clean).length) out[year] = clean;
@@ -606,7 +610,14 @@ export function mergeSettings(mine, theirs) {
 export function legacySettingsBody(body) {
     const { work = 0, ...ats } = body.ats || {};
     ats.period = Math.max(ats.period || 0, work || 0);
-    return { ...body, ats, at: Math.max(...Object.values(ats)) };
+    /* 예전 규칙은 겨울 방학식·겨울 개학 칸을 모릅니다. 그 두 칸만 빼고 올립니다(이 기기에는 남습니다). */
+    const academic = {};
+    for (const [year, row] of Object.entries(body.academic || {})) {
+        const rest = { ...row };
+        for (const key of WINTER_KEYS) delete rest[key];
+        if (Object.keys(rest).length) academic[year] = rest;
+    }
+    return { ...body, academic, ats, at: Math.max(...Object.values(ats)) };
 }
 
 /** 오늘 조퇴 시각 문서(settings/leave) 모양 { d, t, at }. 이 기기 값(leaveState: date·hm)도 받습니다. 한 번도 정하지 않았으면 null. */

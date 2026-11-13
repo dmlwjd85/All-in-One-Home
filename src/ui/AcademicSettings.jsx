@@ -5,7 +5,7 @@ import { monthCells, monthTitle } from '../lib/date.js';
 import { Btn } from './bits.jsx';
 
 const FIELDS = [...ACADEMIC_FIELDS, OFF_FIELD];
-const MARK = { firstStart: '개학', firstEnd: '방학식', secondStart: '개학', secondEnd: '종업', offDays: '휴업' };
+const MARK = { firstStart: '개학', firstEnd: '방학식', secondStart: '개학', winterStart: '방학식', winterBack: '개학', secondEnd: '종업', offDays: '휴업' };
 const WEEK = ['월', '화', '수', '목', '금', '토', '일'];
 
 function shiftYm(ym, n) {
@@ -49,7 +49,7 @@ export function AcademicSettings({ data, showToast }) {
         const next = ACADEMIC_FIELDS[index + 1];
         if (next && !row[next.id]) {
             setField(next.id);
-            setYm({ firstEnd: `${year}-07`, secondStart: `${year}-08`, secondEnd: `${year + 1}-02` }[next.id]);
+            setYm({ firstEnd: `${year}-07`, secondStart: `${year}-08`, winterStart: `${year}-12`, winterBack: `${year + 1}-01`, secondEnd: `${year + 1}-02` }[next.id]);
         }
     }
 
@@ -64,11 +64,14 @@ export function AcademicSettings({ data, showToast }) {
     for (const item of ACADEMIC_FIELDS) if (row[item.id]) marks[row[item.id]] = item.id;
     for (const day of row.offDays || []) marks[day] = 'offDays';
     const summer = row.firstEnd && row.secondStart ? `${short(row.firstEnd)} 방학식 뒤부터 ${short(row.secondStart)} 개학 전까지 여름방학` : '';
+    const winter = row.winterStart && row.winterBack
+        ? `${short(row.winterStart)} 방학식 뒤부터 ${short(row.winterBack)} 개학 전까지 겨울방학${row.secondEnd ? `, ${short(row.secondEnd)} 종업식 뒤는 봄방학` : ''}`
+        : (row.secondEnd ? `${short(row.secondEnd)} 종업식 뒤부터 겨울방학(겨울 방학식·개학이 따로 있으면 두 칸을 넣어 주세요)` : '');
 
     return (
         <section className="glass academic" style={{ padding: 14 }} aria-label="학사일정" data-screen="academic">
             <h2 className="title-font" style={{ marginTop: 0 }}>학사일정 ({year}학년도)</h2>
-            <p className="muted" style={{ marginTop: 0 }}>학교마다 개학·방학 날이 달라요. 넣을 칸을 고른 뒤 달력에서 날짜를 한 번 누르세요. 다시 누르면 지워져요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>학교마다 개학·방학 날이 달라요. 넣을 칸을 고른 뒤 달력에서 날짜를 한 번 누르세요. 다시 누르면 지워져요. 겨울방학 뒤 2월에 다시 나오지 않는 학교는 겨울 방학식·겨울 개학일을 비우고 종업식만 넣으세요.</p>
             <div className="acad-fields" role="group" aria-label="넣을 날">
                 {FIELDS.map((item) => (
                     <Btn
@@ -113,6 +116,7 @@ export function AcademicSettings({ data, showToast }) {
                 })}
             </div>
             {summer && <p className="muted" style={{ margin: '8px 0 0' }}>{summer}으로 봐요.</p>}
+            {winter && <p className="muted" style={{ margin: '4px 0 0' }} data-acad-winter="1">{winter}으로 봐요.</p>}
             {problem && <p className="acad-problem" role="alert">{problem}</p>}
             <Btn className="primary-btn block" style={{ marginTop: 8 }} data-acad-save="1" disabled={!dirty} onClick={save}>{dirty ? '학사일정 저장' : '저장됨'}</Btn>
         </section>

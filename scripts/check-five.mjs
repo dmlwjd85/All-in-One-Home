@@ -4,7 +4,7 @@ import { detailRows } from '../src/lib/detail.js';
 import { planTermFill, schoolDays, tableForDate, tableForDateWithLocal, termDays, termRange } from '../src/lib/semester.js';
 import { academicOffEvents, academicProblem, cleanAcademic, setAcademicSource } from '../src/lib/academic.js';
 import { restInfo } from '../src/lib/daymark.js';
-import { fromCloudSettings, toCloudSettings } from '../src/lib/cloudShape.js';
+import { fromCloudSettings, legacySettingsBody, toCloudSettings } from '../src/lib/cloudShape.js';
 import { joinSummary, recentSummary } from '../src/lib/foldSummary.js';
 import { isTap, tapHandlers, TAP_SLOP } from '../src/ui/tapGuard.js';
 
@@ -136,6 +136,22 @@ check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
     const yearDays = termDays('year', 2026, []);
     check(yearDays[0] === '2026-03-03' && !yearDays.includes('2026-05-04') && !yearDays.includes('2026-08-03') && yearDays.includes('2026-08-18') && yearDays[yearDays.length - 1] === '2027-02-10', '1년 수업일에 학사일정이 반영되지 않았습니다.');
     setAcademicSource({});
+    /* 겨울 방학식·겨울 개학(2월 등교가 있는 학교): 그 사이는 겨울방학, 종업식 뒤는 봄방학 */
+    const winterYear = cleanAcademic({ 2026: { ...academic['2026'], winterStart: '2026-12-31', winterBack: '2027-02-02' } });
+    check(winterYear['2026'].winterStart === '2026-12-31' && winterYear['2026'].winterBack === '2027-02-02', `겨울 방학식·개학일을 버립니다: ${JSON.stringify(winterYear)}`);
+    const wOffs = academicOffEvents(winterYear);
+    check(wOffs.some((row) => row.title === '겨울방학' && row.date === '2027-01-01' && row.end === '2027-02-01'), `겨울 방학식~개학 사이 겨울방학이 없습니다: ${JSON.stringify(wOffs)}`);
+    check(wOffs.some((row) => row.title === '봄방학' && row.date === '2027-02-11') && !wOffs.some((row) => row.title === '겨울방학' && row.date === '2027-02-11'), '겨울방학이 따로 있는데 종업식 뒤를 겨울방학이라 부릅니다.');
+    setAcademicSource(winterYear);
+    check(restInfo('2027-01-15', []).off && restInfo('2027-01-15', []).label === '겨울방학', '겨울방학 날이 휴일 표시에 없습니다.');
+    check(!restInfo('2027-02-02', []).off && !restInfo('2026-12-31', []).off, '겨울 개학일이나 겨울 방학식 날이 휴일로 나옵니다.');
+    const winterDays = termDays('year', 2026, []);
+    check(!winterDays.includes('2027-01-15') && winterDays.includes('2027-02-03') && winterDays.includes('2026-12-31'), '1년 수업일에 겨울방학이 빠지지 않았습니다.');
+    setAcademicSource({});
+    check(academicProblem({ ...academic['2026'], winterStart: '2026-12-31' }).includes('겨울 개학일'), '겨울 방학식만 넣어도 막지 않습니다.');
+    check(academicProblem({ ...academic['2026'], winterBack: '2027-02-02' }).includes('겨울 방학식'), '겨울 개학일만 넣어도 막지 않습니다.');
+    check(academicProblem({ ...academic['2026'], winterStart: '2026-12-31', winterBack: '2027-02-20' }).includes('뒤여야'), '겨울 개학일이 종업식보다 늦어도 막지 않습니다.');
+    check(academicProblem(winterYear['2026']) === '', '겨울 방학식·개학이 있는 바른 학사일정을 막습니다.');
     check(academicProblem({ firstStart: '2026-07-01', firstEnd: '2026-03-01' }).includes('뒤여야'), '날짜 순서가 거꾸로여도 막지 않습니다.');
     check(academicProblem(academic['2026']) === '', '바른 학사일정을 막습니다.');
     const ac = readFileSync('src/ui/AcademicSettings.jsx', 'utf8');
@@ -153,6 +169,15 @@ check(!/<select/.test(ui), '드롭다운이 들어갔습니다.');
     const back = fromCloudSettings(JSON.parse(JSON.stringify(body)));
     check(back?.at === 9 && back.periodLocal.count === 7 && back.academic['2026'].firstStart === '2026-03-03', '받은 설정을 되살리지 못했습니다.');
     check(fromCloudSettings({}) === null, '빈 설정 문서를 받아들였습니다.');
+    /* 겨울 방학식·개학일: 새 규칙에는 그대로 올라가고 돌아옵니다. 예전 규칙용 모양에서는 그 두 칸만 빠집니다. */
+    const winterBody = toCloudSettings({ profile: { settingsAt: 5, academic: { 2026: { firstStart: '2026-03-03', winterStart: '2026-12-31', winterBack: '2027-02-02', secondEnd: '2027-02-10' } } } }, {}).body;
+    check(winterBody.academic['2026'].winterStart === '2026-12-31' && winterBody.academic['2026'].winterBack === '2027-02-02', `겨울 방학식·개학일이 클라우드 모양에서 빠집니다: ${JSON.stringify(winterBody.academic)}`);
+    const winterBack = fromCloudSettings(JSON.parse(JSON.stringify(winterBody)));
+    check(winterBack.academic['2026'].winterBack === '2027-02-02', '받은 설정에서 겨울 개학일이 사라집니다.');
+    const oldShape = legacySettingsBody(winterBody);
+    check(oldShape.academic['2026'].firstStart === '2026-03-03' && oldShape.academic['2026'].secondEnd === '2027-02-10' && !('winterStart' in oldShape.academic['2026']) && !('winterBack' in oldShape.academic['2026']), `예전 규칙용 모양에 겨울 칸이 남거나 다른 칸이 빠집니다: ${JSON.stringify(oldShape.academic)}`);
+    check(winterBody.academic['2026'].winterStart === '2026-12-31', '예전 규칙용 모양을 만들면서 원래 모양을 바꿉니다.');
+    check(Object.keys(legacySettingsBody({ ...winterBody, academic: { 2027: { winterStart: '2027-12-31', winterBack: '2028-02-01' } } }).academic).length === 0, '겨울 칸만 있던 학년도가 빈 칸으로 올라갑니다.');
     const sensitive = toCloudSettings({ profile: {} }, { extra: { mon: { p9: '민준 학폭 상담' } } }).body;
     check(sensitive.periodLocal.extra === '', '민감한 9교시 글이 올라갑니다.');
 }
@@ -165,7 +190,7 @@ check(recentSummary({ title: '', text: '' }) === '아직 기록이 없어요' &&
 check(joinSummary(['a', null, '']) === 'a', '빈 조각을 빼지 않습니다.');
 
 /* 캐시 판 */
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v84"), '서비스 워커가 v84이 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v85"), '서비스 워커가 v85이 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');

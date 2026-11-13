@@ -113,6 +113,14 @@ await conflict('events', 'pv2', 'B', 'A', 'title', 'PC 먼저', '폰 나중', 'A
 const ev2 = await getDoc(doc(admin(), 'users', UID, 'events', 'pv2'));
 check(rowOf('A', 'events', 'pv2')?.title === '폰 나중' && rowOf('B', 'events', 'pv2')?.title === '폰 나중' && ev2.data()?.title === '폰 나중', `P2: 옛 규칙에서 먼저 고친 일정이 나중 값을 덮었습니다: 폰 ${rowOf('A', 'events', 'pv2')?.title} / PC ${rowOf('B', 'events', 'pv2')?.title} / 클라우드 ${ev2.data()?.title}`);
 
+/* 겨울 방학식·겨울 개학(SW v85 칸): 옛 규칙은 모르는 칸이라, 그 두 칸만 빼고 나머지 학사일정·설정은 올라가야 합니다. 이 기기에는 남습니다. */
+await on('A', (db) => db.saveAcademicYear(2026, { firstStart: '2026-03-03', secondStart: '2026-08-18', winterStart: '2026-12-31', winterBack: '2027-02-02', secondEnd: '2027-02-10' }));
+await flush('A');
+const acadCloud = (await getDoc(doc(admin(), 'users', UID, 'settings', 'device'))).data()?.academic?.['2026'] || {};
+check(acadCloud.firstStart === '2026-03-03' && acadCloud.secondEnd === '2027-02-10' && !('winterStart' in acadCloud) && !('winterBack' in acadCloud), `옛 규칙에서 학사일정이 올라가지 않거나 겨울 칸까지 보내다 막혔습니다: ${JSON.stringify(acadCloud)}`);
+cur = 'A';
+check(devices.A.db.snapshot().profile.academic?.['2026']?.winterStart === '2026-12-31', '옛 규칙에서 겨울 방학식이 이 기기에서도 사라졌습니다.');
+
 await env.cleanup();
 rmSync(new URL('.lwwold/', root), { recursive: true, force: true });
 if (failures.length) {
