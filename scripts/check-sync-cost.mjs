@@ -1,7 +1,8 @@
 /**
  * 동기화 비용 검사(패키지 없이): 가짜 클라우드로 받기 횟수와 컬렉션별 읽은 문서 수를 셉니다.
  * 1,000명 검수에서 교무실 PC를 하루 종일 켜 두면 5분마다 전체 받기로 교사 1명이 하루 약 15만 읽기를 쓴다는 지적을 막습니다.
- *  - 책상 PC 8시간(감시 살아 있음, 창 다시 보기 30번): 전체 받기가 시작 1번 + 30분 제한 안의 복귀 정도로 줄어듭니다.
+ *  - 책상 PC 8시간(감시 살아 있음, 숨김 없이 창 focus 30번): 창 focus 로는 받지 않고, 시작 1번 + 2시간 안전망만 받습니다.
+ *  - 같은 8시간에 페이지를 숨겼다가 다시 보기 30번: 30분 제한 안의 돌아옴만 받습니다.
  *  - 감시가 없으면(옛 규칙·가짜 클라우드) 15분마다 받기로 돌아가고, 감시가 죽으면(오류) 다시 주기 받기로 돌아갑니다.
  *  - 날짜가 바뀌면 한 번 받고, 오프라인에서 돌아오면 30분 안이라도 받습니다.
  *  - 감시 알림이 연달아 와도 받기가 묶이고, 바뀐 컬렉션만 받습니다. 이 기기가 아는 값(해시 같음)이면 받지 않습니다.
@@ -146,9 +147,13 @@ async function login(at, mode) {
 {
     const { fullPullDue: due, PULL_RULES: R } = db;
     const base = { now: 10 * 3600 * 1000, lastFull: 10 * 3600 * 1000 - 5 * MIN, lastTry: 10 * 3600 * 1000 - 5 * MIN, today: '2026-11-13', lastFullDay: '2026-11-13' };
-    check(R.staleMs === 30 * MIN && R.fallbackMs === 15 * MIN && R.minGapMs === MIN, `받기 간격 상수가 다릅니다: ${JSON.stringify(R)}`);
+    check(R.staleMs === 30 * MIN && R.fallbackMs === 15 * MIN && R.minGapMs === MIN && R.safetyMs === 120 * MIN, `받기 간격 상수가 다릅니다: ${JSON.stringify(R)}`);
     check(due('start', base) && due('force', base) && due('lost', base), '시작·직접 누르기·진 줄에서 전체 받기를 하지 않습니다.');
-    check(!due('timer', { ...base, watchLive: true, now: base.now + 3 * 3600 * 1000 }), '감시가 살아 있는데 타이머로 전체 받기를 합니다.');
+    check(!due('timer', { ...base, watchLive: true, now: base.lastFull + 119 * MIN }), '감시가 살아 있는데 2시간 안에 타이머로 전체 받기를 합니다.');
+    check(due('timer', { ...base, watchLive: true, now: base.lastFull + 120 * MIN }) && due('return', { ...base, watchLive: true, now: base.lastFull + 120 * MIN }), '감시가 살아 있어도 2시간 안전망으로 받아야 합니다.');
+    check(!due('focus', { ...base, watchLive: true, now: base.lastFull + 90 * MIN }), '감시가 살아 있는데 창 focus 만으로 전체 받기를 합니다.');
+    check(due('focus', { ...base, now: base.lastFull + 15 * MIN }), '감시가 없을 때 창 focus 를 세지 않습니다.');
+    check(due('return', { ...base, watchLive: true, hiddenMs: 31 * MIN }), '30분 넘게 숨었다가 돌아왔는데 받지 않습니다.');
     check(!due('return', { ...base, watchLive: true }), '감시가 살아 있는데 5분 만에 돌아와도 전체 받기를 합니다.');
     check(due('return', { ...base, watchLive: true, now: base.lastFull + 31 * MIN }), '감시가 살아 있어도 30분 넘게 지나 돌아오면 받아야 합니다.');
     check(due('timer', { ...base, now: base.lastFull + 15 * MIN }) && !due('timer', { ...base, now: base.lastFull + 14 * MIN }), '감시가 없을 때 15분마다 받지 않습니다.');
@@ -163,32 +168,37 @@ seedStore();
 
 /* ── 1) 책상 PC 8시간, 감시 살아 있음, 창 다시 보기 30번 ── */
 const T0 = Date.parse('2026-11-13T08:00:00+09:00');
-async function desk(mode, { breakAt = 0 } = {}) {
+async function desk(mode, { breakAt = 0, back = 'focus' } = {}) {
     await login(T0, mode);
     for (let m = 1; m <= 480; m += 1) {
         T = T0 + m * MIN;
         if (breakAt && m === breakAt) { watchMode = 'error'; feed?.opts?.onStatus?.({ live: false, error: 'permission-denied', at: T }); }
         if (m % 5 === 0) await db.refreshFromCloud({ reason: 'timer' });
-        if (m % 16 === 0) await db.refreshFromCloud({ reason: 'return' });
+        if (m % 16 === 0) await db.refreshFromCloud(back === 'focus' ? { reason: 'focus' } : { reason: 'return', hiddenMs: 2 * MIN });
     }
     await settle();
     return { full: pulls.full, part: pulls.part, reads, by: { ...readsBy }, clock: clockCalls };
 }
 const live = await desk('live');
 check(db.watchStateForTest().alive, '가짜 감시가 살아 있다고 알렸는데 db가 모릅니다.');
-check(live.full <= 17 && live.full >= 2, `감시가 살아 있는 책상 PC 8시간 전체 받기 수가 다릅니다(시작 1 + 30분 복귀 정도): ${live.full}`);
-check(live.reads < 30000, `감시가 살아 있는 책상 PC 8시간 읽기가 많습니다: ${live.reads}`);
+/* 시작 1번 + 2시간 안전망(2·4·6·8시간) 4번 */
+check(live.full === 5, `감시가 살아 있는 책상 PC 8시간(창 focus 만) 전체 받기 수가 다릅니다(시작 1 + 2시간 안전망 4): ${live.full}`);
+check(live.reads < 8000, `감시가 살아 있는 책상 PC 8시간 읽기가 많습니다: ${live.reads}`);
 check(live.clock === 1, `서버 시각을 접속마다 한 번만 재지 않습니다: ${live.clock}번`);
+/* ── 1b) 같은 8시간, 페이지를 숨겼다가(2분) 다시 보기 30번: 30분 제한 안의 돌아옴만 받습니다 ── */
+const hidden = await desk('live', { back: 'return' });
+check(hidden.full >= 14 && hidden.full <= 17, `숨었다가 돌아옴 30번의 전체 받기 수가 다릅니다(시작 1 + 30분 제한 돌아옴): ${hidden.full}`);
 
 /* ── 2) 감시 없음(옛 규칙·끊김): 15분마다 받기로 돌아갑니다 ── */
 const dead = await desk('dead');
+/* 감시가 없으면 창 focus 도 셉니다(타이머와 함께 15분마다). */
 check(dead.full >= 30 && dead.full <= 34, `감시가 없을 때 15분마다 받기로 돌아가지 않습니다: ${dead.full}`);
 
 /* ── 3) 감시가 중간에 죽으면(오류) 다시 주기 받기, 감시도 다시 켜 봅니다 ── */
 const callsBefore = watchCalls;
 const broken = await desk('live', { breakAt: 240 });
-/* 앞 4시간은 살아 있을 때와 같고(30분 복귀), 뒤 4시간은 15분마다입니다(약 8번 → 16번). */
-check(broken.full >= live.full + 6, `감시가 죽은 뒤 주기 받기로 돌아가지 않습니다: 살아 있을 때 ${live.full} / 죽은 뒤 ${broken.full}`);
+/* 앞 4시간은 살아 있을 때와 같고(2시간 안전망), 뒤 4시간은 15분마다입니다(약 2번 → 16번). */
+check(broken.full >= live.full + 12, `감시가 죽은 뒤 주기 받기로 돌아가지 않습니다: 살아 있을 때 ${live.full} / 죽은 뒤 ${broken.full}`);
 const restarts = watchCalls - callsBefore - 1;
 check(restarts >= 1 && restarts <= 6, `죽은 감시를 다시 켜 보는 횟수가 다릅니다(늘려 가며 다시 켬): ${restarts}`);
 
@@ -287,7 +297,8 @@ db.useWatchTimingForTest();
 
 await db.setAuth(null);
 const fmt = (r) => `전체 ${r.full}번 + 일부 ${r.part}번, 읽기 ${r.reads.toLocaleString('en-US')}`;
-console.log(`책상 PC 8시간(감시 살아 있음): ${fmt(live)}`);
+console.log(`책상 PC 8시간(감시 살아 있음, 창 focus 30번): ${fmt(live)}`);
+console.log(`책상 PC 8시간(감시 살아 있음, 숨김 뒤 돌아옴 30번): ${fmt(hidden)}`);
 console.log(`책상 PC 8시간(감시 없음): ${fmt(dead)}`);
 console.log(`책상 PC 8시간(4시간 뒤 감시 죽음): ${fmt(broken)}`);
 if (failures.length) {

@@ -88,26 +88,35 @@ export default function App() {
 
     useEffect(() => { applyStoredFont(); migrateFxLevel(); }, []);
     // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다.
-    // 실시간 감시가 살아 있으면 돌아올 때는 30분에 한 번, 타이머로는 받지 않습니다. 언제 받을지는 db.js 의 fullPullDue가 정합니다.
+    // 실시간 감시가 살아 있으면 숨었다가 다시 보일 때만 30분에 한 번 받고, 창 focus 만으로는 받지 않습니다. 언제 받을지는 db.js 의 fullPullDue가 정합니다.
     useEffect(() => {
         const pull = (reason) => () => { if (document.visibilityState === 'visible') refreshFromCloud({ reason }).catch(() => {}); };
-        const again = pull('return');
+        /* 페이지가 실제로 숨겨졌다가 다시 보였는지와 숨어 있던 시간(휴대폰을 오래 덮어 둔 때)을 셉니다. */
+        let hiddenAt = document.visibilityState === 'hidden' ? Date.now() : 0;
+        const again = () => {
+            if (document.visibilityState === 'hidden') { if (!hiddenAt) hiddenAt = Date.now(); return; }
+            if (!hiddenAt) return;
+            const hiddenMs = Math.max(0, Date.now() - hiddenAt);
+            hiddenAt = 0;
+            refreshFromCloud({ reason: 'return', hiddenMs }).catch(() => {});
+        };
+        const focus = pull('focus');
         const back = pull('online');
         /* 앱을 닫거나 숨기면 남은 변경을 바로 올립니다. 휴대폰은 숨긴 뒤 곧 멈추므로 기다리지 않습니다. */
         const leave = () => { if (document.visibilityState === 'hidden') flushCloud().catch(() => {}); };
         document.addEventListener('visibilitychange', again);
         document.addEventListener('visibilitychange', leave);
         window.addEventListener('pagehide', leave);
-        window.addEventListener('focus', again);
+        window.addEventListener('focus', focus);
         window.addEventListener('online', back);
-        /* 화면을 켜 둔 채면 5분마다 받을지 봅니다(감시가 없을 때 15분마다, 날짜가 바뀌면 한 번). */
+        /* 화면을 켜 둔 채면 5분마다 받을지 봅니다(감시가 없을 때 15분마다, 감시가 있어도 2시간 안전망, 날짜가 바뀌면 한 번). */
         const tick = window.setInterval(pull('timer'), 5 * 60 * 1000);
         return () => {
             window.clearInterval(tick);
             document.removeEventListener('visibilitychange', again);
             document.removeEventListener('visibilitychange', leave);
             window.removeEventListener('pagehide', leave);
-            window.removeEventListener('focus', again);
+            window.removeEventListener('focus', focus);
             window.removeEventListener('online', back);
         };
     }, []);

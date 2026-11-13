@@ -2639,15 +2639,18 @@ export async function pullFromCloudNow() {
  * 전체 받기를 하는 때(fullPullDue):
  *  - 로그인·앱 시작(첫 연결), 동기화 칩 직접 누르기(force), 올리기에서 진 줄(lost)이 나왔을 때: 늘.
  *  - 날짜가 바뀐 뒤 처음(하루 한 번, 감시로 못 잡는 지운 줄 확인), 오프라인에서 돌아왔을 때(online): 1분 간격 안에서 늘.
- *  - 감시가 살아 있을 때 앱으로 돌아오면(return): 마지막 전체 받기 뒤 30분이 지났을 때만. 5분 타이머(timer)로는 받지 않습니다.
- *    휴대폰처럼 오래 숨었다가 돌아오면 감시가 그동안 끊겼을 수 있는데, 숨은 시간만큼 마지막 전체 받기도 오래되므로 이 규칙으로 받습니다.
- *  - 감시가 없거나 죽었으면(옛 규칙 거절, 오프라인, 검사의 가짜 클라우드): 돌아올 때·타이머 모두 마지막 전체 받기 뒤 15분마다.
+ *  - 감시가 살아 있을 때 앱으로 돌아오면(return: 페이지가 실제로 숨겨졌다가 다시 보임): 숨어 있던 시간이 30분 이상이거나
+ *    마지막 전체 받기 뒤 30분이 지났을 때만. 휴대폰처럼 오래 숨었다가 돌아오면 그동안 감시가 끊겼을 수 있어 받습니다.
+ *    숨겨지지 않은 채 창 focus 만 바뀐 것(focus: 교무실 PC에서 다른 프로그램을 보다 돌아옴)과 5분 타이머(timer)로는 받지 않습니다.
+ *  - 안전망: 감시가 살아 있어도 마지막 전체 받기 뒤 2시간이 지나면 다음 돌아옴·타이머에서 한 번 받습니다.
+ *    감시가 못 잡는 변경(오래 오프라인이던 기기가 늦게 올린 옛 고친 시각, updatedAt 없이 쓴 옛 판, 묘비 없는 지움)을 위해서입니다.
+ *  - 감시가 없거나 죽었으면(옛 규칙 거절, 오프라인, 검사의 가짜 클라우드): 돌아옴·창 focus·타이머 모두 마지막 전체 받기 뒤 15분마다.
  * 감시가 알린 변경은 바뀐 컬렉션만 받습니다(refreshFromCloud({ only })).
  */
-export const PULL_RULES = { minGapMs: 60 * 1000, staleMs: 30 * 60 * 1000, fallbackMs: 15 * 60 * 1000 };
+export const PULL_RULES = { minGapMs: 60 * 1000, staleMs: 30 * 60 * 1000, fallbackMs: 15 * 60 * 1000, safetyMs: 2 * 3600 * 1000 };
 
-/** 지금 전체 받기를 할지 정합니다(순수 함수). reason: start·force·lost·online·return·timer. */
-export function fullPullDue(reason, { now = 0, lastFull = 0, lastTry = 0, today = '', lastFullDay = '', watchLive = false } = {}) {
+/** 지금 전체 받기를 할지 정합니다(순수 함수). reason: start·force·lost·online·return·focus·timer. hiddenMs: return 때 숨어 있던 시간. */
+export function fullPullDue(reason, { now = 0, lastFull = 0, lastTry = 0, today = '', lastFullDay = '', watchLive = false, hiddenMs = 0 } = {}) {
     if (reason === 'start' || reason === 'force' || reason === 'lost') return true;
     if (now - lastTry < PULL_RULES.minGapMs && now >= lastTry) return false;
     if (!(lastFull > 0)) return true;
@@ -2657,7 +2660,8 @@ export function fullPullDue(reason, { now = 0, lastFull = 0, lastTry = 0, today 
     const since = now - lastFull;
     if (since < 0) return true;
     if (!watchLive) return since >= PULL_RULES.fallbackMs;
-    if (reason === 'return') return since >= PULL_RULES.staleMs;
+    if (reason === 'return') return since >= PULL_RULES.staleMs || Number(hiddenMs) >= PULL_RULES.staleMs || since >= PULL_RULES.safetyMs;
+    if (reason === 'timer') return since >= PULL_RULES.safetyMs;
     return false;
 }
 
@@ -2789,15 +2793,16 @@ function retryDeadWatch(uid) {
  * 다른 기기에서 고친 것을 받아 옵니다.
  *  - force: 늘 전체 받기(동기화 칩, 진 줄).
  *  - only: 그 컬렉션만 받기(감시 알림). 간격은 감시가 따로 둡니다.
- *  - reason: 'return'(앱으로 돌아옴·창 다시 봄), 'online'(오프라인에서 돌아옴), 'timer'(5분 타이머). fullPullDue가 받을지 정합니다.
+ *  - reason: 'return'(숨었다가 다시 보임, hiddenMs = 숨어 있던 시간), 'focus'(숨김 없이 창 focus 만 바뀜), 'online'(오프라인에서 돌아옴),
+ *    'timer'(5분 타이머). fullPullDue가 받을지 정합니다.
  */
-export async function refreshFromCloud({ force = false, only = null, reason = 'return' } = {}) {
+export async function refreshFromCloud({ force = false, only = null, reason = 'return', hiddenMs = 0 } = {}) {
     const uid = state.auth?.uid;
     if (!uid || !cloudApi.available() || connectTask?.uid !== uid) return { skipped: true };
     const now = syncNow();
     const parts = Array.isArray(only) && only.length ? only : null;
     if (!parts && !force) {
-        if (reason === 'timer' || reason === 'return') retryDeadWatch(uid);
+        if (reason === 'timer' || reason === 'return' || reason === 'focus') retryDeadWatch(uid);
         const mine = lastFullPull.uid === uid;
         const due = fullPullDue(reason, {
             now,
@@ -2806,6 +2811,7 @@ export async function refreshFromCloud({ force = false, only = null, reason = 'r
             lastFullDay: mine ? lastFullPull.day : '',
             today: seoulYmd(new Date(serverNow())),
             watchLive: watchLive(),
+            hiddenMs,
         });
         if (!due) return { skipped: true };
     }
