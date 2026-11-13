@@ -86,8 +86,10 @@ service cloud.firestore {
     // 글자 목록: 모두 글자이고(join 이 아니면 거절) 각 칸이 형식에 맞고 개수가 max 이하
     // full: 쉼표로 이은 전체에 맞출 정규식(글자 그대로 적어 계산을 줄입니다).
     // w: 한 칸 글자 수(날짜 10, 시각 5). 이은 길이가 n*(w+1)-1 이면 한 칸에 쉼표로 여러 값을 숨기지 못합니다.
+    // n(개수)은 한 번만 셉니다(규칙 계산 한도 1000을 아낍니다). 목록이 아니면 l is list 에서 거절됩니다.
     function joinedOk(l, max, full, w) {
-      return l is list && l.size() <= max && (l.size() == 0 || joinedStrOk(l.join(','), l.size(), full, w));
+      let n = l.size();
+      return l is list && n <= max && (n == 0 || joinedStrOk(l.join(','), n, full, w));
     }
     function joinedStrOk(j, n, full, w) { return j.size() == n * (w + 1) - 1 && j.matches(full); }
     // 칸 잠금은 'mon-3,tue-10' 처럼 쉼표로 이은 글자 하나(50칸까지).
@@ -131,12 +133,14 @@ service cloud.firestore {
         && [r.get('firstStart', ''), r.get('firstEnd', ''), r.get('secondStart', ''), r.get('winterStart', ''), r.get('winterBack', ''), r.get('secondEnd', '')].join('|').matches('^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?[|](20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))?$')
         && joinedOk(r.get('offDays', []), 40, '^(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))(,(20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])))*$', 10);
     }
-    // 학년도는 4개까지라 앞에서부터 네 칸만 봅니다(반복문 대신).
-    function acadAt(a, i) { return a.size() <= i || acadKeyOk(a, a.keys()[i]); }
+    // 학년도는 4개까지라 앞에서부터 네 칸만 봅니다(반복문 대신). 학년도 목록·개수는 한 번만 셉니다(규칙 계산 한도 1000).
+    // 겨울 방학식·개학 두 칸(SW v85)을 더하면서 한도에 닿아, 같은 계산을 되풀이하던 acadAt 를 풀어 썼습니다.
     function acadKeyOk(a, y) { return y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk(a[y]); }
     function academicOk(a) {
-      return a is map && a.size() <= 4
-        && acadAt(a, 0) && acadAt(a, 1) && acadAt(a, 2) && acadAt(a, 3);
+      let ks = a.keys();
+      let n = ks.size();
+      return a is map && n <= 4
+        && (n <= 0 || acadKeyOk(a, ks[0])) && (n <= 1 || acadKeyOk(a, ks[1])) && (n <= 2 || acadKeyOk(a, ks[2])) && (n <= 3 || acadKeyOk(a, ks[3]));
     }
     // 앱은 늘 모든 칸을 함께 올립니다. 칸을 모두 요구하면 'in' 검사가 줄어 규칙 계산 한도(1000) 안에 듭니다.
     function settingsOk(v) {
