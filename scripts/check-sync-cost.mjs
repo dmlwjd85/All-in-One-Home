@@ -70,6 +70,7 @@ let watchCalls = 0;
 let watchMode = 'live';
 let feed = null;
 let rejectOnce = false;
+let clockOffline = false;
 const count = (name, n) => { const k = Math.max(1, n); reads += k; readsBy[name] = (readsBy[name] || 0) + k; };
 function resetCounts() { reads = 0; for (const k of Object.keys(readsBy)) delete readsBy[k]; pulls = { full: 0, part: 0, scopes: [] }; clockCalls = 0; }
 
@@ -117,7 +118,7 @@ const fake = {
     async remove(uid, name, id) { store[name]?.delete(String(id)); return { ok: true }; },
     peek: null,
     /* 서버 시각은 T, 기기 시계는 T + devSkew */
-    async clock(uid, { now = () => T } = {}) { clockCalls += 1; return T - now(); },
+    async clock(uid, { now = () => T } = {}) { clockCalls += 1; return clockOffline ? null : T - now(); },
     sweep: null,
     async watch(uid, onChange, opts = {}) {
         watchCalls += 1;
@@ -237,6 +238,48 @@ check(hidden.full === 5, `다른 탭에 2분 다녀오기 30번의 전체 받기
     check(clockCalls === 4, `쓰기 거절 뒤 서버 시각을 다시 재지 않았습니다: ${clockCalls}`);
     devSkew = 0;
     await db.removeItem('todos', 'clk1');
+}
+
+/* ── 1f) 잠자기에서 깨어나 시계가 어긋났는데 오프라인: 재기가 실패하면 의심 상태로 두고 1분 간격 다시 재기만 돌립니다 ──
+   올리기·받기마다 다시 재면 계정 문서 쓰기가 5초씩 기다려 올리기 줄이 늦어지고, 오프라인 대기열에 쌓였다가 한꺼번에 나갑니다. */
+{
+    const RETRY = 40;
+    db.useClockRetryForTest(RETRY);
+    await login(T0, 'live');
+    devSkew = 60 * MIN;
+    clockOffline = true;
+    const c0 = clockCalls;
+    const started = Date.now();
+    for (let i = 0; i < 20; i += 1) await db.flushCloud();
+    for (let m = 1; m <= 6; m += 1) { T += 5 * MIN; await db.refreshFromCloud({ reason: 'timer' }); }
+    const tries = clockCalls - c0;
+    const allowed = 2 + Math.floor((Date.now() - started) / RETRY);
+    check(tries >= 1 && tries <= allowed && db.clockStateForTest().suspect && db.clockStateForTest().retrying, `오프라인에서 재기가 실패한 뒤에도 올리기·받기마다 다시 잽니다: ${tries}번(허용 ${allowed}), ${JSON.stringify(db.clockStateForTest())}`);
+    clockOffline = false;
+    const c1 = clockCalls;
+    await db.refreshFromCloud({ reason: 'online' });
+    check(clockCalls === c1 + 1 && !db.clockStateForTest().suspect && Math.abs(db.serverNow() - T) < 1000, `온라인으로 돌아와 한 번 재고 의심을 풀지 않았습니다: ${clockCalls - c1}번, ${JSON.stringify(db.clockStateForTest())}`);
+    for (let i = 0; i < 3; i += 1) await db.flushCloud();
+    await wait(RETRY * 4);
+    check(clockCalls === c1 + 1 && !db.clockStateForTest().retrying, `다시 잰 뒤에도 재기가 멈추지 않습니다: ${clockCalls - c1}번`);
+    /* 의심 상태에서 칩을 누르면(force) 한 번만 잽니다. */
+    devSkew = 0;
+    T += 5 * MIN;
+    const c2 = clockCalls;
+    await db.refreshFromCloud({ force: true });
+    check(clockCalls === c2 + 1, `직접 맞추기에서 서버 시각을 두 번 쟀습니다: ${clockCalls - c2}번`);
+    db.useClockRetryForTest();
+}
+/* 같은 줄의 거절이 이어지면 다시 재기 간격을 1시간으로 늘립니다. */
+{
+    db.markClockDoubt(['todos/x']);
+    T += 11 * MIN;
+    const again10 = db.markClockDoubt(['todos/y']);
+    T += 11 * MIN;
+    const same10 = db.markClockDoubt(['todos/y']);
+    T += 50 * MIN;
+    const same60 = db.markClockDoubt(['todos/y']);
+    check(again10 && !same10 && same60, `같은 거절이 이어질 때 재기 간격을 늘리지 않습니다: ${again10}/${same10}/${same60}`);
 }
 
 /* ── 2) 감시 없음(옛 규칙·끊김): 15분마다 받기로 돌아갑니다 ── */

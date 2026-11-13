@@ -692,7 +692,7 @@ async function flushCloudTracked() {
     let result = null;
     try {
         /* 잰 뒤 기기 시계가 바뀌었거나 거절이 있었으면 올리기 전에 서버 시각을 다시 잽니다(틀린 보정값으로 notAhead·LWW에 걸리지 않게). */
-        if (clockOk && clockStale(state.auth.uid)) await syncServerClock(state.auth.uid);
+        if (clockNeeds(state.auth.uid, { inPush: true })) await syncServerClock(state.auth.uid);
         result = state.auth?.uid ? await flushCloudOnce() : { skipped: true };
         return result;
     } finally {
@@ -735,7 +735,7 @@ async function flushCloudOnce() {
     /* 서버 시각을 재기 전(editD만 있음)에 고친 줄은 hlc 문서에 거절돼도 재기 뒤 다시 올라가므로 알리지 않습니다(PR #66 r3 P2-2). */
     if (Array.isArray(result?.rejected)) { const waiting = unsureKeys(); tellRejected(result.rejected.filter((key) => !waiting.has(key))); }
     /* 거절·진 줄은 서버 시각 보정이 틀려서일 수 있습니다(기기 시계가 바뀜). 진 줄은 곧 받기(force)에서, 거절은 다음 받기에서 다시 잽니다. */
-    if ((result?.rejected || []).length || (result?.lost || []).length) markClockDoubt();
+    if ((result?.rejected || []).length || (result?.lost || []).length) markClockDoubt(result.rejected || []);
     /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
     if ((result?.lost || []).length) setTimeout(() => { refreshFromCloud({ force: true }).catch(() => {}); }, 0);
     await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
@@ -2363,11 +2363,12 @@ async function connectCloud(uid, opts = {}) {
  * 일부 받기는 읽지 않은 컬렉션의 목록·ids를 두지 않으므로 그 컬렉션 줄은 지우지도 바꾸지도 않습니다(cloud.js blankPull).
  * '마지막 동기화' 시각(지운 표시 보관 기간 판단에도 씀)은 전체 받기에서만 바꿉니다.
  */
-async function connectCloudBody(uid, { only = null, force = false } = {}) {
+async function connectCloudBody(uid, { only = null, force = false, clockDone = false } = {}) {
     await checkDraftAgainstCloud(uid);
     /* 서버 시각은 접속(로그인·계정 연결)마다 한 번 잽니다. 기기 시계가 바뀌었거나(clockStale), 직접 맞추기(force)면 다시 잽니다.
        못 쟀으면(clockOk 아님) 예전처럼 받을 때마다 다시 재고, 1분마다 다시 재기도 그대로 돕니다. */
-    if (force || clockStale(uid)) await syncServerClock(uid);
+    /* 재기가 실패해 '의심' 상태면 1분 간격 다시 재기(startClockRetry)에 맡기고 여기서는 재지 않습니다. 직접 맞추기는 한 번 잽니다. */
+    if (!clockDone && (force || (!clockSuspect && clockStale(uid)))) await syncServerClock(uid);
     sweepOldTombs(uid);
     const full = !only;
     /* 일부 받기(감시 알림)는 먼저 올리지 않습니다. 이 기기 변경은 고칠 때마다 따로 올라가고, 못 올린 줄은 합치기가 지킵니다(해시가 다르면 이 기기 값).
@@ -2420,23 +2421,42 @@ function clockStale(uid) {
     const dev = deviceNow() - clockFor.dev;
     return Math.abs(dev - mono) > CLOCK_DRIFT_MS || mono >= CLOCK_REFRESH_MS || mono < 0;
 }
-/* 쓰기가 거절되거나 진 줄이 나오면 다음 받기에서 서버 시각을 다시 잽니다(10분에 한 번까지: 늘 거절되는 줄이 있어도 재기가 몰리지 않게). */
-let clockDoubtAt = -Infinity;
-function markClockDoubt() {
+/*
+ * 시계가 바뀐 것을 알아챘거나 거절 뒤 다시 재다 실패하면(오프라인 등) '의심' 상태로 둡니다. 그동안은 올리기·받기에서 다시 재지 않고
+ * 1분 간격 다시 재기(startClockRetry)만 돕니다. 재기마다 계정 문서 쓰기가 5초 제한까지 기다려 올리기 줄이 늦어지고,
+ * 끝나지 않은 쓰기가 오프라인 대기열에 쌓였다가 한꺼번에 나가지 않게 합니다. 재기가 성공하면 풉니다.
+ */
+let clockSuspect = false;
+/** 올리기·받기 경로에서 지금 다시 잴지(잰 적이 있고 의심 상태가 아니며 시계가 바뀌었거나 거절이 있었음). 오프라인이면 올리기 안에서는 재지 않습니다. */
+function clockNeeds(uid, { inPush = false } = {}) {
+    if (!clockOk || clockSuspect) return false;
+    if (inPush && globalThis.navigator?.onLine === false) return false;
+    return clockStale(uid);
+}
+/* 쓰기가 거절되거나 진 줄이 나오면 다음 받기에서 서버 시각을 다시 잽니다. 10분에 한 번까지이고,
+   같은 줄의 거절이 이어지면(늘 거절되는 줄) 1시간에 한 번까지로 늘립니다. */
+let clockDoubt = { at: -Infinity, sig: '' };
+export function markClockDoubt(rejected = []) {
     const now = monoNow();
-    if (now - clockDoubtAt < 10 * 60 * 1000 && now >= clockDoubtAt) return false;
-    clockDoubtAt = now;
+    const sig = [...rejected].map(String).sort().join(',');
+    const gap = sig && sig === clockDoubt.sig ? 60 * 60 * 1000 : 10 * 60 * 1000;
+    if (now - clockDoubt.at < gap && now >= clockDoubt.at) return false;
+    clockDoubt = { at: now, sig };
     clockFor = { ...clockFor, doubt: true };
     return true;
 }
+/** 검사용: 의심 상태·다시 재기 상태. */
+export function clockStateForTest() { return { ok: clockOk, suspect: clockSuspect, retrying: Boolean(clockRetry), doubt: clockFor.doubt }; }
 
 /* 서버 시각과 이 기기 시계의 차이를 잽니다(로그인·다시 맞추기 때). 못 재면 마지막으로 잰 값을 그대로 씁니다. */
 async function syncServerClock(uid) {
     if (!cloudApi.clock) return;
     try {
         const offset = await cloudApi.clock(uid, { memoryOnly: memoryOnly || state.profile.sharedPc, now: () => deviceNow() });
-        if (setClockOffset(offset)) { clockFor = { uid, dev: deviceNow(), mono: monoNow(), doubt: false }; stopClockRetry(); await settleUnsureEdits(); return true; }
+        if (setClockOffset(offset)) { clockFor = { uid, dev: deviceNow(), mono: monoNow(), doubt: false }; clockSuspect = false; stopClockRetry(); await settleUnsureEdits(); return true; }
     } catch { /* 아래에서 다시 잽니다. */ }
+    /* 잰 적이 있는데 다시 재기가 실패: 의심 상태로 두고 1분 간격 다시 재기만 돌립니다. */
+    if (clockOk) clockSuspect = true;
     startClockRetry(uid);
     return false;
 }
@@ -2450,13 +2470,16 @@ function sweepOldTombs(uid) {
 /* 못 쟀으면 1분마다 다시 잽니다. 재면 보류한 할 일을 올립니다. */
 export const CLOCK_RETRY_MS = 60 * 1000;
 let clockRetry = null;
+let clockRetryMs = CLOCK_RETRY_MS;
+/** 검사용: 다시 재기 간격을 줄입니다. */
+export function useClockRetryForTest(ms = null) { clockRetryMs = ms || CLOCK_RETRY_MS; }
 function stopClockRetry() { if (clockRetry) { clearInterval(clockRetry); clockRetry = null; } }
 function startClockRetry(uid) {
-    if (clockRetry || clockOk || typeof setInterval !== 'function') return;
+    if (clockRetry || (clockOk && !clockSuspect) || typeof setInterval !== 'function') return;
     clockRetry = setInterval(async () => {
-        if (clockOk || state.auth?.uid !== uid) { stopClockRetry(); return; }
+        if ((clockOk && !clockSuspect) || state.auth?.uid !== uid) { stopClockRetry(); return; }
         if (await syncServerClock(uid)) flushCloud().catch(() => {});
-    }, CLOCK_RETRY_MS);
+    }, clockRetryMs);
     clockRetry?.unref?.();
 }
 /** 검사용: 다시 재기를 바로 한 번 돌립니다. */
@@ -2876,7 +2899,9 @@ export async function refreshFromCloud({ force = false, only = null, reason = 'r
     const uid = state.auth?.uid;
     if (!uid || !cloudApi.available() || connectTask?.uid !== uid) return { skipped: true };
     /* 잰 뒤 기기 시계가 바뀌었으면(30초 넘게 어긋남) 받지 않더라도 서버 시각은 다시 잽니다(5분 타이머·돌아옴마다 봄). */
-    if (clockOk && clockStale(uid)) await syncServerClock(uid);
+    let clockDone = false;
+    /* 오프라인에서 돌아오면 의심 상태라도 한 번 바로 잽니다(1분 간격 다시 재기를 기다리지 않게). */
+    if (clockNeeds(uid) || (reason === 'online' && clockSuspect && !force && !only)) { await syncServerClock(uid); clockDone = true; }
     const now = syncNow();
     const parts = Array.isArray(only) && only.length ? only : null;
     if (!parts && !force) {
@@ -2897,7 +2922,7 @@ export async function refreshFromCloud({ force = false, only = null, reason = 'r
     try {
         await connectTask.promise;
         const before = lastFullPull.at;
-        await connectCloud(uid, parts ? { only: parts } : { force });
+        await connectCloud(uid, parts ? { only: parts, clockDone } : { force, clockDone });
         if (!parts) renewWatch(uid, before);
         return parts ? { ok: true, only: parts } : { ok: true };
     } catch {
@@ -2947,6 +2972,7 @@ export async function setAuth(auth) {
     if (connectTask?.uid === next.uid) return connectTask.promise;
     /* 새 접속: 서버 시각을 한 번 다시 잽니다(받을 때마다 재지는 않음). */
     clockFor = { uid: '', dev: 0, mono: 0, doubt: false };
+    clockSuspect = false;
     const promise = connectCloud(next.uid).catch(() => false);
     connectTask = { uid: next.uid, promise };
     promise.then((ok) => {
