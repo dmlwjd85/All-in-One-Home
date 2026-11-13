@@ -116,6 +116,13 @@ try {
         /* 옛 데모 회의록은 제목 칸이 비어 있을 수 있어, 비었을 때만 제목을 적습니다(저장 조건). */
         if (!(await page.$eval('#minutes-title', (el) => el.value.trim()))) await page.type('#minutes-title', '학년회의');
         await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-editor"] button')].find((el) => el.innerText.trim() === '저장')?.click());
+        /* 저장 뒤 본문의 흐린 줄(데모 「14:00 …」 날짜 없음)은 노란 카드로 한 번 묻습니다(PR #64). 빼고 마치면 보기로 돌아옵니다. */
+        await page.waitForFunction((sel) => document.querySelector(sel) || document.querySelector('[data-screen="minutes-ask"]'), { timeout: 5000 }, viewSel).catch(() => {});
+        if (await page.$('[data-screen="minutes-ask"]')) {
+            const cards = await page.$$eval('[data-screen="minutes-ask"] .msg-card', (els) => els.length).catch(() => 0);
+            check(cards <= 2, `${tag} 저장 뒤 확인 카드가 너무 많아요(${cards}개).`);
+            await page.evaluate(() => [...document.querySelectorAll('[data-screen="minutes-ask"] button')].find((el) => el.innerText.trim() === '모두 빼고 마치기')?.click());
+        }
         await page.waitForSelector(viewSel, { timeout: 5000 }).catch(() => {});
         check((await page.evaluate(() => location.hash)) === `#/minutes/${ID}`, `${tag} 저장한 뒤 같은 회의록 보기로 돌아오지 않아요.`);
         const body = await page.$eval('[data-role="minutes-body"]', (el) => el.textContent).catch(() => '');
