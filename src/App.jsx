@@ -87,25 +87,28 @@ export default function App() {
     const toastTimer = useRef(0);
 
     useEffect(() => { applyStoredFont(); migrateFxLevel(); }, []);
-    // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다. 1분에 한 번까지만.
+    // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다.
+    // 실시간 감시가 살아 있으면 돌아올 때는 30분에 한 번, 타이머로는 받지 않습니다. 언제 받을지는 db.js 의 fullPullDue가 정합니다.
     useEffect(() => {
-        const again = () => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); };
+        const pull = (reason) => () => { if (document.visibilityState === 'visible') refreshFromCloud({ reason }).catch(() => {}); };
+        const again = pull('return');
+        const back = pull('online');
         /* 앱을 닫거나 숨기면 남은 변경을 바로 올립니다. 휴대폰은 숨긴 뒤 곧 멈추므로 기다리지 않습니다. */
         const leave = () => { if (document.visibilityState === 'hidden') flushCloud().catch(() => {}); };
         document.addEventListener('visibilitychange', again);
         document.addEventListener('visibilitychange', leave);
         window.addEventListener('pagehide', leave);
         window.addEventListener('focus', again);
-        window.addEventListener('online', again);
-        /* 화면을 켜 둔 채 다른 기기에서 고쳐도 5분마다 받아 옵니다. */
-        const tick = window.setInterval(() => { if (document.visibilityState === 'visible') refreshFromCloud().catch(() => {}); }, 5 * 60 * 1000);
+        window.addEventListener('online', back);
+        /* 화면을 켜 둔 채면 5분마다 받을지 봅니다(감시가 없을 때 15분마다, 날짜가 바뀌면 한 번). */
+        const tick = window.setInterval(pull('timer'), 5 * 60 * 1000);
         return () => {
             window.clearInterval(tick);
             document.removeEventListener('visibilitychange', again);
             document.removeEventListener('visibilitychange', leave);
             window.removeEventListener('pagehide', leave);
             window.removeEventListener('focus', again);
-            window.removeEventListener('online', again);
+            window.removeEventListener('online', back);
         };
     }, []);
     useEffect(() => guardCupBurst(), []);
