@@ -1072,6 +1072,10 @@ try {
         /* + → '회의록 작성'은 이제 Enter로 저장되던 흐름 대신 회의록 쓰기 화면을 엽니다. 회의 종류는 그 화면의 칩으로 고릅니다. */
         await clickPlus(page, '회의록 작성');
         await page.waitForSelector('[data-screen="minutes-editor"]');
+        /* 회의 종류는 접혀 있다가 누르면 칩이 펼쳐집니다. */
+        check(!(await page.$('.minutes-kinds')), '회의 종류 칩이 처음부터 펼쳐져 있습니다.');
+        await page.click('[data-role="minutes-kind-toggle"]');
+        await page.waitForSelector('.minutes-kinds button');
         const meetLabels = await page.evaluate(() => [...document.querySelectorAll('.minutes-kinds button')].map((el) => el.innerText.trim()));
         for (const label of ['학년회의', '교직원회의', '교과협의회', '학부모회의', '연수']) {
             if (!meetLabels.includes(label)) failures.push(`회의 종류에 ${label}이 없습니다.`);
@@ -4752,7 +4756,11 @@ try {
                 await page.type('#minutes-title', '교과 협의회 — 아주 긴 제목이 들어가도 줄이 넘치지 않는지 봅니다');
                 await page.type('#minutes-text', '첫 줄\n둘째 줄\n셋째 줄');
                 await audit(page, `회의록 쓰기 ${width} ${mode}`);
+                await controlBoxes(page, '[data-role="minutes-kind-toggle"]', `회의 종류 줄 ${width} ${mode}`);
+                await page.click('[data-role="minutes-kind-toggle"]');
+                await page.waitForSelector('[data-screen="minutes-editor"] .minutes-kinds button');
                 await controlBoxes(page, '[data-screen="minutes-editor"] .minutes-kinds button', `회의 종류 칩 ${width} ${mode}`);
+                await page.click('[data-role="minutes-kind-toggle"]');
                 await controlBoxes(page, '[data-role="minutes-date-toggle"]', `회의록 날짜 줄 ${width} ${mode}`);
                 await page.click('[data-role="minutes-date-toggle"]');
                 await page.waitForSelector('[data-screen="minutes-editor"] [aria-label="날짜"]');

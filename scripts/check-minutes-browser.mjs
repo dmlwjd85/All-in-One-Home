@@ -56,12 +56,23 @@ async function probe(base) {
     await p1.click('[data-role="minutes-date-toggle"]');
     const cal = await p1.waitForSelector('#minutes-date-grid .cal-grid', { timeout: 2000 }).then(() => true, () => false);
     if (!cal) bad.push('날짜 줄을 눌러도 달력이 펼쳐지지 않습니다.');
+    await p1.click('[data-role="minutes-kind-toggle"]');
+    const kinds = await p1.waitForSelector('#minutes-kind-list button', { timeout: 2000 }).then(() => true, () => false);
+    if (!kinds) bad.push('회의 종류 줄을 눌러도 칩이 펼쳐지지 않습니다.');
+    else {
+        await p1.click('#minutes-kind-list button');
+        await delay(100);
+        const after = await p1.evaluate(() => ({ open: Boolean(document.querySelector('#minutes-kind-list')), kind: document.querySelector('[data-role="minutes-kind"]')?.innerText || '' }));
+        if (after.open || after.kind === '고르지 않음') bad.push(`회의 종류를 골라도 접히지 않거나 들어가지 않습니다: ${JSON.stringify(after)}`);
+    }
     await p1.close();
     return bad;
 }
 const UI_MUT = [
     ['U1 Enter 가로채기', '<Area id="minutes-text"', '<Area id="minutes-text" onKeyDown={(event) => { if (event.key === \'Enter\') event.preventDefault(); }}'],
     ['U2 달력 펼치기 없음', 'onClick={() => setDateOpen((open) => !open)}', 'onClick={() => {}}'],
+    ['U3 회의 종류 펼치기 없음', 'onClick={() => setKindOpen((open) => !open)}', 'onClick={() => {}}'],
+    ['U4 회의 종류 골라도 안 접힘', '        setKindOpen(false);\n', ''],
 ];
 /* 변이 사본을 저장소 안 임시 폴더에 빌드해 미리보기로 띄웁니다(node_modules 는 위쪽에서 찾음). */
 async function mutantOrigin(k, from, to) {
@@ -125,9 +136,9 @@ try {
             check(!got.overflow, `${tag}: 가로로 넘칩니다.`);
             check(!got.small.length, `${tag}: 작거나 밖으로 나간 단추 ${got.small.join(', ')}`);
             check(!got.overlaps.length, `${tag}: 겹침 ${got.overlaps.join(', ')}`);
-            /* 넓은 화면은 본문 칸이 첫 화면 안에서 시작합니다. 폰은 제목·종류·날짜·참석자 아래라 조금 내려야 보입니다
-               (칸 순서를 지금 그대로 두기로 해서, 폰에서는 이 조건을 보지 않습니다. 2026-11-14). */
-            if (width >= 900) check(got.areaTop < got.vh - 80, `${tag}: 본문 칸이 첫 화면 밖(${got.areaTop}px / ${got.vh})에서 시작합니다.`);
+            /* 회의 종류·날짜를 접어 두어, 폰에서도 본문 칸이 첫 화면 안에서 시작합니다(2026-11-14 2번안). */
+            check(got.areaTop < got.vh - (width >= 900 ? 80 : 20), `${tag}: 본문 칸이 첫 화면 밖(${got.areaTop}px / ${got.vh})에서 시작합니다.`);
+            check(!(await page.$('.minutes-kinds')), `${tag}: 회의 종류 칩이 처음부터 펼쳐져 있습니다.`);
             if (width === 390 || width === 1920) await page.screenshot({ path: `${shots}/minutes-${width}-${mode}.png` });
             /* 날짜: 접혀 있다가 누르면 펼치고, 고르면 다시 접힙니다. */
             check(!(await page.$('#minutes-date-grid')), `${tag}: 날짜 달력이 처음부터 펼쳐져 있습니다.`);

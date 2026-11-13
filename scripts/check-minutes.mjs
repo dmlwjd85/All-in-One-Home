@@ -152,6 +152,7 @@ function uiChecks(ui, css) {
     /* 날짜는 접어 둔 달력(누르면 펼치고, 고르면 접힘). 팝업·2단 배치는 넣지 않기로 했습니다(2026-11-14, PR #64 1번안). */
     ok(/data-role="minutes-date-toggle"/.test(ui) && /aria-expanded=\{dateOpen/.test(ui) && /<DateGrid value=\{date\}[^\n]*setDateOpen\(false\)/.test(ui), '날짜 달력이 접혔다 펼쳐지지 않습니다.');
     ok(/registerMinutes\(\{/.test(ui) && /finishMinutesAsk\(asking\.id/.test(ui) && /CaptureCard/.test(ui), '회의록 화면이 저장 흐름(registerMinutes·finishMinutesAsk)을 쓰지 않습니다.');
+    ok(/data-role="minutes-kind-toggle"/.test(ui) && /aria-expanded=\{kindOpen/.test(ui) && /setKindOpen\(false\)/.test(ui), '회의 종류 칩이 접혔다 펼쳐지지 않습니다.');
     ok(/data-screen="minutes-ask"/.test(ui) && /모두 빼고 마치기/.test(ui), '노란 카드 확인 화면이 없습니다.');
     ok(/\.minutes-date-toggle \{[^}]*min-height: 44px/.test(css), '날짜 단추가 44px 보다 작습니다.');
     return bad;
@@ -168,7 +169,7 @@ const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
 if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(detail)) failures.push('일정·할 일 자세히에 원래 회의록 단추가 없습니다.');
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
 const sw = readFileSync('public/sw.js', 'utf8');
-if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v87'")) failures.push('서비스 워커가 v87이 아닙니다.');
+if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v88'")) failures.push('서비스 워커가 v88이 아닙니다.');
 
 /* 변이: 일부러 망가뜨린 코드를 이 검사가 잡는지 봅니다. */
 const LIB = readFileSync('src/lib/minutesExtract.js', 'utf8');

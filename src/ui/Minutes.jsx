@@ -158,6 +158,8 @@ function MinutesEditor({ row }) {
     const [keptAt, setKeptAt] = useState(initial.draft ? '불러옴' : '');
     /* 날짜 달력은 접어 두고, 날짜 줄을 누르면 펼칩니다. 날짜를 고르면 다시 접습니다. */
     const [dateOpen, setDateOpen] = useState(false);
+    /* 회의 종류 칩도 접어 두어, 폰에서 본문 칸이 첫 화면 안에서 시작하게 합니다. 고르면 다시 접힙니다(2026-11-14). */
+    const [kindOpen, setKindOpen] = useState(false);
     const saving = useRef(false);
     const kind = tags.find((tag) => MEET_KINDS.includes(tag)) || '';
 
@@ -199,6 +201,7 @@ function MinutesEditor({ row }) {
         const on = kind === next;
         setTags(on ? others : [next, ...others]);
         if (!on && !title.trim()) setTitle(next);
+        setKindOpen(false);
     }
 
     async function save() {
@@ -303,11 +306,25 @@ function MinutesEditor({ row }) {
             <label className="minutes-label" htmlFor="minutes-title">회의 제목</label>
             <Field id="minutes-title" value={title} maxLength={MINUTES_TITLE_MAX} placeholder="예: 10월 학년 협의회" onChange={(event) => setTitle(event.target.value)} />
             <div className="minutes-label" id="minutes-kind-label">회의 종류 <span className="muted">(골라도 되고 안 골라도 돼요)</span></div>
-            <div className="minutes-kinds" role="group" aria-labelledby="minutes-kind-label">
-                {MEET_KINDS.map((item) => (
-                    <Btn key={item} className={kind === item ? 'chip on' : 'chip'} aria-pressed={kind === item ? 'true' : 'false'} onClick={() => pickKind(item)}>{item}</Btn>
-                ))}
-            </div>
+            <Btn
+                className="chip minutes-date-toggle minutes-kind-toggle"
+                data-role="minutes-kind-toggle"
+                aria-expanded={kindOpen ? 'true' : 'false'}
+                aria-controls="minutes-kind-list"
+                aria-describedby="minutes-kind-label"
+                onClick={() => setKindOpen((open) => !open)}
+            >
+                <strong className={kind ? 'minutes-date-picked' : 'muted'} data-role="minutes-kind">{kind || '고르지 않음'}</strong>
+                <span className="minutes-date-hint muted">{kindOpen ? '접기' : (kind ? '바꾸기' : '고르기')}</span>
+                <span className="minutes-date-caret" aria-hidden="true">{kindOpen ? '▴' : '▾'}</span>
+            </Btn>
+            {kindOpen ? (
+                <div className="minutes-kinds" id="minutes-kind-list" role="group" aria-labelledby="minutes-kind-label">
+                    {MEET_KINDS.map((item) => (
+                        <Btn key={item} className={kind === item ? 'chip on' : 'chip'} aria-pressed={kind === item ? 'true' : 'false'} onClick={() => pickKind(item)}>{item}</Btn>
+                    ))}
+                </div>
+            ) : null}
             <div className="minutes-label" id="minutes-date-label">날짜</div>
             <Btn
                 className="chip minutes-date-toggle"
