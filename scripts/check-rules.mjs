@@ -311,6 +311,7 @@ const RULE_MUTANTS = [
     ['출퇴근 칸 시각 받지 않기', "'academic', 'work'])", "'academic'])"],
     ['academic 크기 빼기', "a is map && n <= 4", 'a is map'],
     ['학사일정 겨울 칸 날짜 검사 빼기', "r.get('winterStart', ''), r.get('winterBack', ''), ", ''],
+    ['재량휴업일 개수 상한 빼기', "{0,39})?$')", "*)?$')"],
     ['학사일정 칸 이름 제한 빼기', "&& r.keys().hasOnly(['firstStart', 'firstEnd', 'secondStart', 'winterStart', 'winterBack', 'secondEnd', 'offDays'])", ''],
     ['academic 값 검사 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk(a[y]);", "y.matches('^20(2[4-9]|3[0-5])$');"],
     ['academic 연도 이름 빼기', "y.matches('^20(2[4-9]|3[0-5])$') && acadYearOk", 'acadYearOk'],
