@@ -1493,6 +1493,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .minutes-date-caret { font-size: 12px; line-height: 1; }
 .minutes-date { padding: 10px; border-radius: 16px; box-shadow: var(--neo-inset); }
 @media (max-width: 420px) { .minutes-date { padding: 0; box-shadow: none; } }
+/* 320px 폰: 칸 사이를 1px로 줄여 날짜 칸이 40px 아래로 내려가지 않게 합니다. */
+@media (max-width: 340px) { .minutes-date .cal-grid { gap: 1px; } }
 .minutes-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
 .minutes-text { min-height: 260px; resize: vertical; line-height: 1.7; padding: 12px 14px; font: inherit; }
 /* 넓은 화면(웹): 본문 칸을 오른쪽 아래 손잡이로 양옆으로도 늘립니다. 칸 폭보다 좁아지지는 않고, 왼쪽 메뉴(200px)와 여백을 뺀 화면 폭까지만 늘어납니다. */

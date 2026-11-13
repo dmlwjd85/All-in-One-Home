@@ -241,11 +241,11 @@ try {
     const MUT = [
         ['D1', { file: 'cloud.js', from: 'out[id] = snaps.some((snap) => snap.exists());', to: 'out[id] = snaps.slice(0, 2).some((snap) => snap.exists());' }, ['D1', 'OFF']],
         ['D2', { file: 'cloud.js', from: "await timeout(setDoc(doc(ready.db, 'users', uid, 'tombs', tombId('todos', id)), { k: 'todos', at: serverTimestamp() }), 5000);", to: '' }, ['DECL']],
-        ['E1', { file: 'cloud.js', from: 'const tomb = LWW_NAMES.includes(name)\n', to: "const tomb = (LWW_NAMES.includes(name) && name !== 'events')\n" }, ['EV']],
+        ['E1', { file: 'cloud.js', from: 'const tomb = LWW_NAMES.includes(name) ?', to: "const tomb = (LWW_NAMES.includes(name) && name !== 'events') ?" }, ['EV']],
         ['O1', { file: 'db.js', from: "if (!out || typeof out !== 'object') return { known: new Set(), sure: false };", to: "if (!out || typeof out !== 'object') return { known: new Set(), sure: true };" }, ['OFF']],
         ['Q1', { file: 'db.js', from: '    queueMinutesTombs(ids);\n    return flushMinutesTombs();', to: '    return Promise.resolve(cloudApi.tomb(state.auth.uid, ids)).then((d) => d.length).catch(() => 0);' }, ['DECLOFF']],
         /* G1: 이 기기의 지움 기억(보조)을 끄고, 회의록 묘비 보존(주 장치, X1)도 끈 상태에서 EXP가 되살아나는지 봅니다. */
-        ['G1', { file: 'db.js', from: "            if (localName === 'todos' || localName === 'events') noteMinutesGone([String(shaped.id)]);\n", to: '', more: [{ file: 'cloud.js', from: '                if (durableTomb(item.id)) continue;\n', to: '' }] }, ['D1', 'EXP']],
+        ['G1', { file: 'syncMerge.js', from: "            if (localName === 'todos' || localName === 'events') noteMinutesGone([String(shaped.id)]);\n", to: '', more: [{ file: 'cloud.js', from: '                if (durableTomb(item.id)) continue;\n', to: '' }] }, ['D1', 'EXP']],
         ['E2', { file: 'cloud.js', from: ", ['tombs', tombId('events', id)]];", to: '];' }, ['EVPRE']],
         ['R1', { file: 'db.js', from: '    for (const item of items) if (mine.has(item.id)) check.known.delete(item.id);', to: '' }, ['REV']],
         ['R3', { file: 'db.js', from: "unnoteMinutesGone([item.id]);\n        if (!failed?.storageFailed) { n += 1; noteMinutesTidied([item.id]); }", to: "unnoteMinutesGone([item.id]);\n        if (!failed?.storageFailed) n += 1;" }, ['REV']],
