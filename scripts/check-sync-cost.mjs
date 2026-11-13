@@ -7,7 +7,9 @@
  *  - 날짜가 바뀌면 한 번 받고, 오프라인에서 돌아오면 30분 안이라도 받습니다.
  *  - 감시 알림이 연달아 와도 받기가 묶이고, 바뀐 컬렉션만 받습니다. 이 기기가 아는 값(해시 같음)이면 받지 않습니다.
  *  - 일부 컬렉션만 받을 때 읽지 않은 컬렉션의 줄은 지워지지 않습니다(전체 받기에서만 지운 줄을 지움).
- *  - 서버 시각은 접속마다 한 번만 잽니다.
+ *  - 서버 시각은 접속마다 한 번만 재고, 기기 시계가 바뀌거나(단조 시계와 30초 넘게 어긋남)·직접 맞추기·쓰기 거절 뒤에는 다시 잽니다.
+ *  - 감시 시작점은 마지막 전체 받기보다 10분(기기 시각 묶음은 하루 더) 앞이고, 날짜가 바뀐 전체 받기 뒤 새 시작점으로 다시 켭니다.
+ *  - 일부 받기는 '마지막 전체 받기'·'마지막 동기화'·칩 시각을 바꾸지 않습니다. 묘비 알림만 와도 그 컬렉션을 받습니다.
  */
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); };
@@ -19,6 +21,7 @@ globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), se
 const cloud = await import('../src/lib/cloud.js');
 const shape = await import('../src/lib/cloudShape.js');
 const db = await import('../src/lib/db.js');
+const { syncStatus } = await import('../src/lib/syncStatus.js');
 const { CLOUD_COLLECTIONS, LWW_NAMES, blankPull, pullScope, rowMark, watchChange } = cloud;
 
 /* ── 가짜 클라우드: 교사 1명 문서 1,500개 ── */
@@ -66,6 +69,7 @@ let clockCalls = 0;
 let watchCalls = 0;
 let watchMode = 'live';
 let feed = null;
+let rejectOnce = false;
 const count = (name, n) => { const k = Math.max(1, n); reads += k; readsBy[name] = (readsBy[name] || 0) + k; };
 function resetCounts() { reads = 0; for (const k of Object.keys(readsBy)) delete readsBy[k]; pulls = { full: 0, part: 0, scopes: [] }; clockCalls = 0; }
 
@@ -83,7 +87,9 @@ const fake = {
                 next[m.key] = m.mark;
             }
         }
-        return { ok: true, pending: 0, hashes: next, rejected: [], lost: [] };
+        const rejected = rejectOnce ? ['todos/none'] : [];
+        rejectOnce = false;
+        return { ok: true, pending: 0, hashes: next, rejected, lost: [] };
     },
     async pull(uid, { only = null } = {}) {
         const scope = pullScope(only);
@@ -110,7 +116,8 @@ const fake = {
     },
     async remove(uid, name, id) { store[name]?.delete(String(id)); return { ok: true }; },
     peek: null,
-    async clock() { clockCalls += 1; return 0; },
+    /* 서버 시각은 T, 기기 시계는 T + devSkew */
+    async clock(uid, { now = () => T } = {}) { clockCalls += 1; return T - now(); },
     sweep: null,
     async watch(uid, onChange, opts = {}) {
         watchCalls += 1;
@@ -128,8 +135,11 @@ db.useCloudForTest(fake);
 await db.boot('');
 
 let T = Date.parse('2026-11-13T08:00:00+09:00');
-db.useSyncClockForTest(() => T);
-db.useDeviceClockForTest(() => T);
+let devSkew = 0;
+db.useSyncClockForTest(() => T + devSkew);
+db.useDeviceClockForTest(() => T + devSkew);
+/* 단조 시계는 기기 시계를 바꿔도 그대로 흐릅니다. */
+db.useMonoClockForTest(() => T);
 const UID = 'cost1';
 const MIN = 60 * 1000;
 const settle = async () => { for (let i = 0; i < 5; i += 1) await wait(0); };
@@ -155,7 +165,7 @@ async function login(at, mode) {
     check(due('focus', { ...base, now: base.lastFull + 15 * MIN }), '감시가 없을 때 창 focus 를 세지 않습니다.');
     check(due('return', { ...base, watchLive: true, hiddenMs: 31 * MIN }), '30분 넘게 숨었다가 돌아왔는데 받지 않습니다.');
     check(!due('return', { ...base, watchLive: true }), '감시가 살아 있는데 5분 만에 돌아와도 전체 받기를 합니다.');
-    check(due('return', { ...base, watchLive: true, now: base.lastFull + 31 * MIN }), '감시가 살아 있어도 30분 넘게 지나 돌아오면 받아야 합니다.');
+    check(!due('return', { ...base, watchLive: true, now: base.lastFull + 90 * MIN, hiddenMs: 2 * MIN }), '감시가 살아 있는데 다른 탭에 잠깐(2분) 다녀온 것으로 받습니다(2시간 안전망만 봐야 함).');
     check(due('timer', { ...base, now: base.lastFull + 15 * MIN }) && !due('timer', { ...base, now: base.lastFull + 14 * MIN }), '감시가 없을 때 15분마다 받지 않습니다.');
     check(due('online', { ...base, watchLive: true, now: base.lastFull + 2 * MIN }), '오프라인에서 돌아오면 30분 안이라도 받아야 합니다.');
     check(!due('online', { ...base, watchLive: true, now: base.lastTry + 30 * 1000 }), '1분 안에 다시 전체 받기를 합니다.');
@@ -187,7 +197,47 @@ check(live.reads < 8000, `감시가 살아 있는 책상 PC 8시간 읽기가 �
 check(live.clock === 1, `서버 시각을 접속마다 한 번만 재지 않습니다: ${live.clock}번`);
 /* ── 1b) 같은 8시간, 페이지를 숨겼다가(2분) 다시 보기 30번: 30분 제한 안의 돌아옴만 받습니다 ── */
 const hidden = await desk('live', { back: 'return' });
-check(hidden.full >= 14 && hidden.full <= 17, `숨었다가 돌아옴 30번의 전체 받기 수가 다릅니다(시작 1 + 30분 제한 돌아옴): ${hidden.full}`);
+check(hidden.full === 5, `다른 탭에 2분 다녀오기 30번의 전체 받기 수가 다릅니다(시작 1 + 2시간 안전망 4): ${hidden.full}`);
+/* ── 1c) 30분 넘게 숨었다 돌아오면(휴대폰) 바로 받습니다 ── */
+{
+    await login(T0, 'live');
+    T = T0 + 40 * MIN;
+    await db.refreshFromCloud({ reason: 'return', hiddenMs: 35 * MIN });
+    check(pulls.full === 2, `30분 넘게 숨었다 돌아왔는데 받지 않았습니다: ${pulls.full}`);
+}
+
+/* ── 1d) 감시 시작점: 마지막 전체 받기를 시작한 때보다 10분 앞, 기기 시각 묶음은 하루 더 앞 ── */
+{
+    await login(T0, 'live');
+    const from = db.lastFullPullForTest().from;
+    check(from === T0 && feed?.opts?.since === from - 10 * MIN && feed.opts.lateSince === from - 10 * MIN - 24 * 60 * MIN && feed.opts.initial === true, `감시 시작점이 다릅니다: from ${from}, since ${feed?.opts?.since}, lateSince ${feed?.opts?.lateSince}`);
+}
+
+/* ── 1e) 서버 시각: 기기 시계가 바뀌면 받기가 없어도 다시 재고, 직접 맞추기·쓰기 거절 뒤에도 다시 잽니다 ── */
+{
+    await login(T0, 'live');
+    check(clockCalls === 1 && Math.abs(db.serverNow() - T) < 1000, `로그인 때 서버 시각을 재지 않았습니다: ${clockCalls}`);
+    T += 10 * MIN;
+    await db.refreshFromCloud({ reason: 'timer' });
+    check(clockCalls === 1, `기기 시계가 그대로인데 다시 쟀습니다: ${clockCalls}`);
+    devSkew = 30 * MIN;
+    T += 5 * MIN;
+    await db.refreshFromCloud({ reason: 'timer' });
+    check(clockCalls === 2 && Math.abs(db.serverNow() - T) < 1000, `기기 시계가 30분 바뀌었는데 다시 재지 않았습니다: ${clockCalls}번, 차이 ${(db.serverNow() - T) / MIN}분`);
+    T += 5 * MIN;
+    await db.refreshFromCloud({ reason: 'timer' });
+    check(clockCalls === 2, `다시 잰 뒤에도 또 쟀습니다: ${clockCalls}`);
+    await db.refreshFromCloud({ force: true });
+    check(clockCalls === 3, `직접 맞추기(force)에서 다시 재지 않았습니다: ${clockCalls}`);
+    rejectOnce = true;
+    await db.saveTextItem('todos', { id: 'clk1', title: '거절될 할 일', done: false, source: 'app' });
+    await db.flushCloud();
+    T += 5 * MIN;
+    await db.refreshFromCloud({ reason: 'timer' });
+    check(clockCalls === 4, `쓰기 거절 뒤 서버 시각을 다시 재지 않았습니다: ${clockCalls}`);
+    devSkew = 0;
+    await db.removeItem('todos', 'clk1');
+}
 
 /* ── 2) 감시 없음(옛 규칙·끊김): 15분마다 받기로 돌아갑니다 ── */
 const dead = await desk('dead');
@@ -214,6 +264,9 @@ check(restarts >= 1 && restarts <= 6, `죽은 감시를 다시 켜 보는 횟수
     T = Date.parse('2026-11-14T00:10:00+09:00');
     await db.refreshFromCloud({ reason: 'timer' });
     check(before === 1 && after === 2 && pulls.full === 2, `날짜가 바뀔 때 한 번만 받지 않습니다: ${before} → ${after} → ${pulls.full}`);
+    /* 날짜가 바뀐 전체 받기 뒤에는 감시를 새 시작점으로 다시 켭니다(결과 목록이 계속 커지지 않게). */
+    const st = db.watchStateForTest();
+    check(st.day === '2026-11-14' && st.since === Date.parse('2026-11-14T00:05:00+09:00') - 10 * MIN, `날짜가 바뀐 뒤 감시를 새 시작점으로 다시 켜지 않았습니다: ${JSON.stringify(st)}`);
 }
 
 /* ── 5) 오프라인에서 돌아오면 30분 안이라도 받습니다(1분 간격 안에서는 한 번) ── */
@@ -230,6 +283,11 @@ check(restarts >= 1 && restarts <= 6, `죽은 감시를 다시 켜 보는 횟수
 db.useWatchTimingForTest({ first: 5, gap: 40, burstGap: 400, burst: 3, burstWindow: 5000 });
 {
     await login(T0, 'live');
+    T += 3 * MIN;
+    const fullBefore = db.lastFullPullForTest().at;
+    const syncedBefore = db.lastSyncAt();
+    const chipBefore = syncStatus().lastOkAt;
+    await wait(5);
     const mine = db.snapshot().todos.find((r) => r.id === 't1');
     const echo = rowMark('todos', mine);
     feed.onChange([
@@ -246,6 +304,9 @@ db.useWatchTimingForTest({ first: 5, gap: 40, burstGap: 400, burst: 3, burstWind
     check(pulls.part >= 1 && pulls.part <= 5, `연달아 온 알림 12개가 묶이지 않았습니다: 일부 받기 ${pulls.part}번`);
     check(pulls.scopes.every((s) => s === 'todos,tombs'), `바뀐 컬렉션만 받지 않았습니다: ${pulls.scopes.join(' / ')}`);
     check(readsBy.records === SIZES.records && readsBy.todos === SIZES.todos * (1 + pulls.part), `일부 받기가 다른 컬렉션을 읽었습니다: ${JSON.stringify(readsBy)}`);
+    check(db.lastFullPullForTest().at === fullBefore, '일부 받기를 전체 받기로 적었습니다(30분·2시간 규칙이 틀어짐).');
+    check(db.lastSyncAt() === syncedBefore, '일부 받기가 마지막 동기화 시각(묘비 보관 기간 판단)을 바꿨습니다.');
+    check(syncStatus().lastOkAt === chipBefore, '일부 받기가 동기화 칩의 마지막 동기화 시각을 바꿨습니다.');
     /* 설정 문서 알림은 설정 문서만 받습니다. */
     const partBefore = pulls.part;
     feed.onChange([{ name: 'settings', id: 'device', mark: null }]);
@@ -278,6 +339,23 @@ db.useWatchTimingForTest({ first: 5, gap: 40, burstGap: 400, burst: 3, burstWind
     feed.onChange([{ name: 'records', id: 'r5', removed: true }]);
     await wait(150);
     check(pulls.scopes.at(-1) === 'records' && !has('records', 'r5') && has('notices', dayOf(3)), `지운 기록 알림이 기록만 받아 지우지 않았습니다: ${pulls.scopes.at(-1)} r5=${has('records', 'r5')}`);
+    /* 묘비 알림만 와도 그 컬렉션을 받아 지웁니다. */
+    store.todos.delete('t7');
+    store.tombs.set('todos-t7', { name: 'todos', id: 't7', at: 5000 });
+    const before7 = pulls.part;
+    feed.onChange([{ name: 'tombs', id: 'todos-t7', of: 'todos', rowId: 't7', at: 5000 }]);
+    await wait(150);
+    check(pulls.part === before7 + 1 && !has('todos', 't7'), `묘비 알림만으로 할 일을 지우지 않았습니다: 받기 ${pulls.part - before7}번, t7=${has('todos', 't7')}`);
+    /* 옛 판처럼 묘비를 먼저 쓰고 문서는 나중에 지우면, 몇 초 뒤 한 번 더 받아 지웁니다(한 번만). */
+    db.useWatchTimingForTest({ first: 5, gap: 5, burstGap: 5, burst: 99, burstWindow: 5000, tombRetry: 60 });
+    store.tombs.set('todos-t8', { name: 'todos', id: 't8', at: 5000 });
+    const before8 = pulls.part;
+    feed.onChange([{ name: 'tombs', id: 'todos-t8', of: 'todos', rowId: 't8', at: 5000 }]);
+    await wait(30);
+    check(has('todos', 't8'), '검사 준비: 문서가 남은 동안 t8이 지워졌습니다.');
+    store.todos.delete('t8');
+    await wait(200);
+    check(!has('todos', 't8') && pulls.part === before8 + 2, `묘비 뒤 늦게 지운 문서를 한 번 더 받아 지우지 않았습니다: 받기 ${pulls.part - before8}번, t8=${has('todos', 't8')}`);
     /* 전체 받기에서는 알림이 없던 알림장 삭제도 지웁니다. */
     await db.refreshFromCloud({ force: true });
     check(!has('notices', dayOf(3)), '전체 받기가 다른 기기에서 지운 알림장을 지우지 않았습니다.');

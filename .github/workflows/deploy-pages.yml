@@ -62,6 +62,7 @@ jobs:
           npm run check:five
           npm run check:sync
           npm run check:sync-cost
+          npm run check:sync-watch
           npm run check:locknote
           npm run check:hlc
           npm run check:alarm
