@@ -184,7 +184,7 @@ const mapVault = () => { const map = new Map(); return { map, get: async (k) => 
     const app = readFileSync('src/App.jsx', 'utf8');
     check((app.match(/<SyncChip /g) || []).length === 1 && /has-sync/.test(app), '머리줄에 동기화 칩이 한 곳에 있지 않습니다.');
     const db = readFileSync('src/lib/db.js', 'utf8');
-    check(/async function flushCloudTracked[\s\S]*?syncBegin\(\)[\s\S]*?syncEnd/.test(db) && /flushChain\.then\(flushCloudTracked, flushCloudTracked\)/.test(db) && /async function connectCloud\(uid\)[\s\S]*?syncBegin\(\)/.test(db), 'db.js 동기화가 칩에 알리지 않습니다.');
+    check(/async function flushCloudTracked[\s\S]*?syncBegin\(\)[\s\S]*?syncEnd/.test(db) && /flushChain\.then\(flushCloudTracked, flushCloudTracked\)/.test(db) && /async function connectCloud\(uid(, opts = \{\})?\)[\s\S]*?syncBegin\(\)/.test(db), 'db.js 동기화가 칩에 알리지 않습니다.');
     const css = readFileSync('src/styles/sync.css', 'utf8');
     check(!/#[0-9a-fA-F]{3,8}\b/.test(css), 'sync.css에 토큰이 아닌 색이 있습니다.');
     check(!/<select|scroll-snap/.test(start + readFileSync('src/ui/SyncChip.jsx', 'utf8')), '드롭다운이나 스크롤 피커가 있습니다.');
