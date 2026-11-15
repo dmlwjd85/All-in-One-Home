@@ -20,6 +20,7 @@ import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
+import { MealCard } from './MealCard.jsx';
 import { pickHomeTip } from '../lib/homeTips.js';
 import { StorageNotice } from './StorageNotice.jsx';
 import { HomeLinks } from './EduLinks.jsx';
@@ -187,6 +188,7 @@ export function Home() {
             </section>
 
             {!lead && timeCard}
+            <MealCard notes={joined(data, 'notes')} today={clock.ymd} hidden={todayRest.off} />
 
             <FoldCard id="todo" className="home-todo" title={`오늘 할 일${todos.length ? ` ${todos.length}` : ``}`} summary={sumTodo} action={<Btn onClick={() => go('#/todo')} style={{ color: 'var(--accent)', fontWeight: 800 }}>모두 보기</Btn>}>
                 <div className="fold-hide" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

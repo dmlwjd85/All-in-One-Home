@@ -22,6 +22,7 @@ import { keptLabel, keptNow, keptValue } from '../lib/keptLabel.js';
 import { CONFIRM_PHRASE, deleteLegacyPublic, legacyCloudReady, listLegacyPublic } from '../lib/legacyPublic.js';
 import { clearPeriodLocal } from '../lib/periodLocal.js';
 import { AcademicSettings } from './AcademicSettings.jsx';
+import { mealCodesShown, setMealCodesShown } from '../lib/mealPaste.js';
 import { DefaultTimetable } from './DefaultTimetable.jsx';
 import { TimetableSettings } from './TimetableSettings.jsx';
 import { useUi } from './context.jsx';
@@ -138,6 +139,17 @@ const SETTINGS_SECS = [
     { id: 'account', icon: '☁️', label: '계정·백업' },
 ];
 
+function MealCodeSetting() {
+    const [on, setOn] = useState(() => mealCodesShown(globalThis.localStorage));
+    return (
+        <section className="glass" style={{ padding: 14 }} data-meal-codes="1">
+            <h2 className="title-font" style={{ marginTop: 0 }}>급식 번호</h2>
+            <p className="muted" style={{ marginTop: 0 }}>메뉴 뒤 번호는 기본적으로 숨깁니다. 켜면 오늘 급식과 일정에 작게 보여요.</p>
+            <Btn className={on ? 'chip on' : 'chip'} aria-pressed={on} onClick={() => { const next = !on; setOn(next); setMealCodesShown(next, globalThis.localStorage); }}>{on ? '번호 보이는 중' : '번호 보이기'}</Btn>
+        </section>
+    );
+}
+
 export function Settings() {
     const { data, showToast, go, openHotkeyHelp, route } = useUi();
     const sec = route?.params?.sec || '';
@@ -210,6 +222,7 @@ export function Settings() {
             <DefaultTimetable data={data} />
 
             <AcademicSettings data={data} showToast={showToast} />
+            <MealCodeSetting />
             </>)}
 
             {sec === 'screen' && (<>

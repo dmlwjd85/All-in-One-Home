@@ -9,6 +9,8 @@ import { cleanAcademic, setAcademicSource } from './academic.js';
 import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
 import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
+import { eventId, sameEvent } from './calGrid.js';
+import { encodeMeals, mealNoteId, MEAL_TAG } from './mealPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, cleanPeriodLocal, downloadJson, fillPeriodLocal, incomingLocal, incomingPeriodStarts, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
@@ -1677,6 +1679,68 @@ export async function saveParsed(items, now = new Date()) {
     let message = parts.join(' ');
     if (sensitiveCount) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
     return { ok: true, message, count, skipped, held: heldCount, sensitiveCount };
+}
+
+/** 달력 표에서 고른 일정. 같은 날·같은 제목은 건너뜁니다. 민감 낱말은 이 기기에만 둡니다. */
+export async function saveCalendarEvents(items, now = new Date()) {
+    const list = (items || []).filter((item) => item && item.include !== false && String(item.title || '').trim() && item.date);
+    if (!list.length) return { ok: false, message: '등록할 일정이 없어요.', count: 0, skipped: 0 };
+    let count = 0;
+    let skipped = 0;
+    let local = 0;
+    const failed = await update((draft) => {
+        const have = [];
+        for (const row of [...(draft.events || []), ...(draft.local?.events || [])]) have.push(row);
+        for (const item of list) {
+            const title = String(item.title).trim().slice(0, 60);
+            const id = eventId(item.date, title);
+            if (have.some((row) => row.id === id || sameEvent(row, { date: item.date, title }))) {
+                skipped += 1;
+                continue;
+            }
+            const bits = [item.memo, item.place && !String(item.memo || '').includes(item.place) ? `장소 ${item.place}` : '', item.person && !String(item.memo || '').includes(item.person) ? `담당 ${item.person}` : ''];
+            const memo = bits.filter(Boolean).join(' · ').slice(0, 300);
+            const blob = `${title} ${memo}`;
+            const sensitive = isSensitiveText(blob);
+            if (sensitive) local += 1;
+            const kind = ['학급', '학교', '휴일', '내 일정'].includes(item.eventKind) ? item.eventKind : '학교';
+            const row = { source: 'app', at: now.toISOString(), id, date: item.date, title, kind, memo };
+            if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time || '')) row.time = item.time;
+            if (/^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || '') && item.endTime > row.time) row.endTime = item.endTime;
+            if (item.end && item.end > item.date) row.end = item.end;
+            put(sensitive ? draft.local.events : draft.events, row);
+            have.push(row);
+            count += 1;
+        }
+        return draft;
+    }, { undoable: true });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
+    if (!count) return { ok: false, message: skipped ? '같은 날 같은 제목은 이미 있어서 건너뛰었어요.' : '등록할 일정이 없어요.', count: 0, skipped };
+    let message = `${count}개 일정에 넣었어요.`;
+    if (skipped) message += ` 겹친 ${skipped}개는 건너뛰었어요.`;
+    if (local) message = `민감한 낱말이 있는 ${local}개는 이 기기에만 남겨 둘게요. ${message}`;
+    return { ok: true, message, count, skipped, local };
+}
+
+/** 한 달 급식. 기존 메모(notes)에 meal-YYYYMM 으로 둡니다. */
+export async function saveMealMonth(year, month, days) {
+    const text = encodeMeals(days);
+    if (!text.trim()) return { ok: false, message: '저장할 메뉴가 없어요.' };
+    const y = Number(year);
+    const m = Number(month);
+    const row = {
+        id: mealNoteId(y, m),
+        title: `${y}년 ${m}월 급식`.slice(0, 60),
+        text,
+        date: `${y}-${String(m).padStart(2, '0')}-01`,
+        tags: [MEAL_TAG],
+        pinned: false,
+        source: 'app',
+    };
+    const saved = await saveTextItem('notes', row);
+    if (saved?.storageFailed) return { ok: false, storageFailed: true, message: saved.message };
+    const message = saved?.sensitive ? '이 급식표는 민감한 낱말이 있어 이 기기에만 남겨 둘게요.' : `${y}년 ${m}월 급식을 저장했어요.`;
+    return { ok: true, message, sensitive: Boolean(saved?.sensitive) };
 }
 
 export async function dropInbox(id) {

@@ -12,6 +12,8 @@ import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
 import { findStudentNames, whyLabel } from '../lib/nameLink.js';
+import { readPasteSchedule } from '../lib/teamsPaste.js';
+import { setPasteSeed } from './pasteSeed.js';
 import {
     SPEECH_CLOUD,
     SPEECH_FALLBACK,
@@ -150,6 +152,20 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             return;
         }
         const usedKind = kind || lastKind.current || '메모';
+        if (!override && usedKind !== '관찰' && usedKind !== '메모') {
+            const read = readPasteSchedule(text, { now: new Date(), periods: allStarts(data?.profile?.periodStarts) });
+            if (read.mode === 'calendar' || read.mode === 'list' || read.items.length > 1) {
+                lastKind.current = usedKind;
+                setAsk({ kind: usedKind, res: { missing: 'many' } });
+                return;
+            }
+            if (read.items[0]?.ask) {
+                const item = read.items[0];
+                lastKind.current = '일정';
+                setAsk({ kind: '일정', res: { missing: 'weekday', warning: item.warning, date: item.date, time: item.time || '', title: item.title, endTime: item.endTime || '' } });
+                return;
+            }
+        }
         const phrase = override || phraseFor(usedKind, text);
         if (phrase?.ask) {
             lastKind.current = usedKind;
@@ -195,10 +211,12 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
         if (nos.length) body.no = nos[0];
         if (nos.length > 1) body.nos = nos;
         if (used === '할 일') body.due = date;
-        if (saved?.title) {
+        if (override?.title) body.title = override.title;
+        else if (saved?.title) {
             body.title = saved.title;
             if (used === '일정' && saved.raw !== saved.title) body.raw = saved.raw;
         }
+        if (override?.endTime) body.endTime = override.endTime;
         /* 시간구로 정한 시각(빈 값이면 '시각 없이')을 넘깁니다. 노란 카드에서 고른 값도 여기로 옵니다. */
         if (phrase && typeof phrase.time === 'string') body.time = phrase.time;
         /* 그 밖에는 칩에 보이는 시각이 곧 저장값입니다(시안 A). 시각 칩을 눌러 뺐으면 시각 없이 넣습니다. */
@@ -469,7 +487,20 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             {ask && (
                 <div className="quick-ask low-card" role="group" aria-label="시각 확인" data-quick-ask={ask.res.missing || 'late'}>
                     <p className="quick-ask-text">{phraseAskText(ask.res)}</p>
+                    {ask.res.missing === 'weekday' && (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            <input className="field" aria-label="제목" value={ask.res.title || ''} onChange={(event) => setAsk((prev) => ({ ...prev, res: { ...prev.res, title: event.target.value } }))} />
+                            <input className="field" aria-label="날짜" value={ask.res.date || ''} onChange={(event) => setAsk((prev) => ({ ...prev, res: { ...prev.res, date: event.target.value } }))} />
+                            <input className="field" aria-label="시각" value={ask.res.time || ''} onChange={(event) => setAsk((prev) => ({ ...prev, res: { ...prev.res, time: event.target.value } }))} />
+                        </div>
+                    )}
                     <div className="quick-ask-chips">
+                        {ask.res.missing === 'weekday' && (
+                            <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: ask.res.time, date: ask.res.date, title: ask.res.title, endTime: ask.res.endTime })}>이대로 넣기</Btn>
+                        )}
+                        {ask.res.missing === 'many' && (
+                            <Btn className="chip" onMouseDown={(event) => event.preventDefault()} onClick={() => { setPasteSeed(readText()); setAsk(null); onClose(); openPlus?.({ more: true }); }}>나눠서 확인</Btn>
+                        )}
                         {(ask.res.choices || []).map((hm) => (
                             <Btn key={hm} className="chip" data-choice={hm} onMouseDown={(event) => event.preventDefault()} onClick={() => save(ask.kind, { time: hm, date: ask.res.date })}>
                                 {hm.startsWith('12') ? '낮' : '밤'} 12시{hm.slice(3) === '00' ? '' : ` ${Number(hm.slice(3))}분`} 알림

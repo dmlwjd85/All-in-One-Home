@@ -50,6 +50,7 @@
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
     "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs",
+    "check:paste": "node scripts/check-paste.mjs",
     "check:name-link": "node scripts/check-name-link.mjs",
     "check:tabbar": "node scripts/check-tabbar.mjs",
     "check:ui-a": "node scripts/check-ui-a.mjs",
@@ -81,7 +82,8 @@
     "firebase": "^11.6.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

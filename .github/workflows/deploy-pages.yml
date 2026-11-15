@@ -70,6 +70,7 @@ jobs:
           npm run check:datechip
           npm run check:nice-datechip
           npm run check:jjaem-paste
+          npm run check:paste
           npm run check:todoachieve
           npm run check:input-e
           npm run check:widgets
