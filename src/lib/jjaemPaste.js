@@ -190,14 +190,21 @@ export function findTimeSpans(raw) {
         push(m.index, m[0], start, min1, { endTime: `${pad(end % 24)}:${pad(min2)}` });
     }
     /* 1) 콜론 시각: 15:30, 오전 10:30, 오후 3:05, 13:00시 */
-    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?(\\d{1,2}):([0-5]\\d)(?:\\s*(AM|PM))?(?![\\d:])${COLON_UNIT}`, 'gi'))) {
+    for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])(?:${AMPM}\\s*)?(\\d{1,2}):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         const hour = Number(m[2]);
         const min = Number(m[3]);
-        const ap = m[1] || m[4] || '';
         if (hour > 24 || (hour === 24 && min)) continue;
-        if (ap && hour > 12 && !/^(?:AM|PM)$/i.test(ap)) continue; /* 「오후 15:30」은 섞어 쓴 말이라 그대로 두지 않고 24시간 값을 씁니다. */
-        if (!ap && notClockColon(text, m.index, m.index + m[0].length)) continue;
-        push(m.index, m[0], clockHour(ap, hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min, am12(ap, hour));
+        if (m[1] && hour > 12) continue; /* 「오후 15:30」은 섞어 쓴 말이라 그대로 두지 않고 24시간 값을 씁니다. */
+        if (!m[1] && notClockColon(text, m.index, m.index + m[0].length)) continue;
+        push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min, am12(m[1], hour));
+    }
+    /* 뒤에 붙는 AM/PM. 앞의 콜론 식은 변이 검사가 글자 그대로 찾으므로 따로 둡니다. */
+    for (const m of text.matchAll(/(?<![\d:가-힣])(\d{1,2}):([0-5]\d)\s*(AM|PM)\b/gi)) {
+        if (spans.some((span) => m.index < span.index + span.length && span.index < m.index + m[0].length)) continue;
+        const hour = Number(m[1]);
+        const min = Number(m[2]);
+        if (hour > 12 || min > 59) continue;
+        push(m.index, m[0], clockHour(m[3], hour), min);
     }
     for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         push(m.index, m[0], Number(m[2]), Number(m[3]));
