@@ -1,5 +1,7 @@
 node_modules
 *.traineddata
+# 글자 인식 프로그램은 빌드할 때 node_modules 에서 옮깁니다(vite.config.js). 한국어 자료(.gz)만 저장소에 둡니다.
+public/ocr/*.js
 dist
 .DS_Store
 *.log

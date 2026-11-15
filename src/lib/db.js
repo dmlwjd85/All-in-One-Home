@@ -10,14 +10,14 @@ import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
 import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
 import { eventId, sameEvent } from './calGrid.js';
-import { encodeMeals, mealNoteId, MEAL_TAG } from './mealPaste.js';
+import { decodeMeals, encodeMeals, mealNoteId, MEAL_TAG } from './mealPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
 import { buildExport, cleanPeriodLocal, downloadJson, fillPeriodLocal, incomingLocal, incomingPeriodStarts, incomingSettings, splitSensitive, validateBackupText, oldBackupToBag } from './backup.js';
 import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, clearTombs, deleteUserDoc, fingerprint, measureServerClock, peekMinutes, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos, writeTombs } from './cloud.js';
 import { blockedAsSensitive, cloudRowId, fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, SWEEP_COLLECTIONS, toCloudRow, WORK_KEYS } from './cloudShape.js';
-import { addDaysYmd, dayKeyFromYmd, seoulParts, seoulYmd } from './date.js';
+import { addDaysYmd, dayKeyFromYmd, isValidYmd, seoulParts, seoulYmd } from './date.js';
 import { isActiveStudent, parseRoster, planRoster } from './roster.js';
 import { groupRecordId, newGroupId } from './nameLink.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
@@ -1723,24 +1723,52 @@ export async function saveCalendarEvents(items, now = new Date()) {
 }
 
 /** 한 달 급식. 기존 메모(notes)에 meal-YYYYMM 으로 둡니다. */
+/**
+ * 급식을 달마다 메모 한 장('meal-YYYYMM')에 둡니다.
+ * 이미 넣어 둔 날은 지우지 않고, 이번에 읽은 날짜만 바꿉니다(주간 급식표를 주마다 올려도 앞 주가 남습니다).
+ * 달이 넘어가는 표(11월 30일 ~ 12월 4일)는 날짜의 달에 맞춰 두 장으로 나눕니다.
+ */
 export async function saveMealMonth(year, month, days) {
-    const text = encodeMeals(days);
-    if (!text.trim()) return { ok: false, message: '저장할 메뉴가 없어요.' };
-    const y = Number(year);
-    const m = Number(month);
-    const row = {
-        id: mealNoteId(y, m),
-        title: `${y}년 ${m}월 급식`.slice(0, 60),
-        text,
-        date: `${y}-${String(m).padStart(2, '0')}-01`,
-        tags: [MEAL_TAG],
-        pinned: false,
-        source: 'app',
-    };
-    const saved = await saveTextItem('notes', row);
-    if (saved?.storageFailed) return { ok: false, storageFailed: true, message: saved.message };
-    const message = saved?.sensitive ? '이 급식표는 민감한 낱말이 있어 이 기기에만 남겨 둘게요.' : `${y}년 ${m}월 급식을 저장했어요.`;
-    return { ok: true, message, sensitive: Boolean(saved?.sensitive) };
+    const byMonth = new Map();
+    for (const day of days || []) {
+        if (!isValidYmd(day?.date) || !day.items?.length) continue;
+        const key = day.date.slice(0, 7);
+        if (!byMonth.has(key)) byMonth.set(key, []);
+        byMonth.get(key).push(day);
+    }
+    if (!byMonth.size) return { ok: false, message: '저장할 메뉴가 없어요.' };
+    const existing = [...(state.notes || []), ...(state.local?.notes || [])];
+    let sensitive = false;
+    let count = 0;
+    for (const [key, list] of [...byMonth].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const y = Number(key.slice(0, 4));
+        const m = Number(key.slice(5, 7));
+        const id = mealNoteId(y, m);
+        const merged = new Map();
+        for (const row of existing) {
+            if (row?.id !== id) continue;
+            for (const day of decodeMeals(row.text)) merged.set(day.date, day);
+        }
+        for (const day of list) merged.set(day.date, day);
+        const text = encodeMeals([...merged.values()]);
+        if (!text.trim()) continue;
+        const saved = await saveTextItem('notes', {
+            id,
+            title: `${y}년 ${m}월 급식`.slice(0, 60),
+            text,
+            date: `${key}-01`,
+            tags: [MEAL_TAG],
+            pinned: false,
+            source: 'app',
+        });
+        if (saved?.storageFailed) return { ok: false, storageFailed: true, message: saved.message };
+        sensitive = sensitive || Boolean(saved?.sensitive);
+        count += list.length;
+    }
+    if (!count) return { ok: false, message: '저장할 메뉴가 없어요.' };
+    const months = [...byMonth.keys()].sort().map((key) => `${Number(key.slice(5, 7))}월`).join('·');
+    const message = sensitive ? '이 급식표는 민감한 낱말이 있어 이 기기에만 남겨 둘게요.' : `${months} 급식 ${count}일치를 저장했어요.`;
+    return { ok: true, message, sensitive, count };
 }
 
 export async function dropInbox(id) {

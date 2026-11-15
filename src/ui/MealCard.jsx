@@ -55,3 +55,29 @@ export function MealLine({ notes, date, showCodes }) {
         </p>
     );
 }
+
+/** 하루 화면의 급식 칸. 그날 메뉴를 한 줄씩 보여 줍니다. 메뉴가 없는 날은 칸을 두지 않습니다. */
+export function MealDay({ notes, date }) {
+    const day = mealsFromNotes(notes)[date];
+    const [showCodes, setShowCodes] = useState(() => mealCodesShown(globalThis.localStorage));
+    useEffect(() => {
+        const sync = () => setShowCodes(mealCodesShown(globalThis.localStorage));
+        window.addEventListener('ssug-meal-codes', sync);
+        return () => window.removeEventListener('ssug-meal-codes', sync);
+    }, []);
+    if (!day?.items?.length) return null;
+    return (
+        <section className="glass" data-meal={date} style={{ padding: 14 }}>
+            <h2 className="title-font" style={{ marginTop: 0 }}>급식</h2>
+            <ul className="meal-menu" style={{ margin: 0, paddingLeft: 18 }}>
+                {day.items.map((item, index) => (
+                    <li key={`${index}-${item.name}`} style={{ overflowWrap: 'anywhere' }}>
+                        {item.name}
+                        {showCodes && item.codes ? <span className="meal-code">{item.codes}</span> : null}
+                    </li>
+                ))}
+            </ul>
+            {day.kcal ? <p className="muted" style={{ margin: '6px 0 0' }}>{day.kcal} kcal</p> : null}
+        </section>
+    );
+}

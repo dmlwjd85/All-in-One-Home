@@ -18,11 +18,12 @@ function lengthsOf() {
     return local.lengths || [];
 }
 
-function readAny(text, { today, year, month, periods, lengths }) {
+function readAny(text, { today, year, month, periods, lengths, meal = false, fix = false }) {
     const now = new Date(`${today}T09:00:00+09:00`);
-    if (looksLikeMealTable(text)) {
-        const meal = parseMealTable(text, { today, year, month, now });
-        return { kind: 'meal', year: meal.year || year, month: meal.month || month, days: meal.days || [], items: [] };
+    /* meal: 급식표로 읽으라고 고른 경우(번호가 없는 급식표도 읽습니다). fix: 사진에서 읽은 글이라 닮은 글자를 바로잡습니다. */
+    if (meal || looksLikeMealTable(text)) {
+        const found = parseMealTable(text, { today, year, month, now, fix });
+        if (meal || found.days?.length) return { kind: 'meal', year: found.year || year, month: found.month || month, days: found.days || [], items: [] };
     }
     const schedule = readPasteSchedule(text, { now, periods, lengths, year, month });
     if (schedule.mode === 'calendar') {
@@ -44,12 +45,14 @@ function markClipped(items, clipped) {
     });
 }
 
-export function GridPaste({ text, image, onBack }) {
+export function GridPaste({ text, image, mode = '', onBack }) {
     const { data, clock, showToast } = useUi();
     const fileRef = useRef(null);
     const periods = periodsOf(data);
     const lengths = lengthsOf();
-    const first = useMemo(() => readAny(text, { today: clock.ymd, year: 0, month: 0, periods, lengths }), [text, clock.ymd, periods, lengths]);
+    const [asMeal, setAsMeal] = useState(mode === 'meal');
+    const [fromImage, setFromImage] = useState(false);
+    const first = useMemo(() => readAny(text, { today: clock.ymd, year: 0, month: 0, periods, lengths, meal: mode === 'meal' }), [text, clock.ymd, periods, lengths, mode]);
     const [year, setYear] = useState(first.year || Number(clock.ymd.slice(0, 4)));
     const [month, setMonth] = useState(first.month || Number(clock.ymd.slice(5, 7)));
     const [kind, setKind] = useState(first.kind);
@@ -58,16 +61,18 @@ export function GridPaste({ text, image, onBack }) {
     const [school, setSchool] = useState(true);
     const [busy, setBusy] = useState('');
     const [source, setSource] = useState(text);
+    const [weak, setWeak] = useState(false);
     useEffect(() => { if (image) onFile(image); }, [image]);
 
-    function applyRead(nextText, clipped = []) {
-        const read = readAny(nextText, { today: clock.ymd, year: 0, month: 0, periods, lengths });
+    function applyRead(nextText, clipped = [], { meal = asMeal, fix = fromImage } = {}) {
+        const read = readAny(nextText, { today: clock.ymd, year: 0, month: 0, periods, lengths, meal, fix });
         setSource(nextText);
         setKind(read.kind);
         setYear(read.year || year);
         setMonth(read.month || month);
         setItems(markClipped(read.items, clipped));
         setDays(read.days);
+        return read;
     }
 
     function moveMonth(delta) {
@@ -83,17 +88,27 @@ export function GridPaste({ text, image, onBack }) {
 
     async function onFile(file) {
         if (!file) return;
-        setBusy('표의 글자를 읽고 있어요. 처음에는 언어 자료를 한 번 받습니다.');
+        setBusy('사진을 열고 있어요.');
         try {
-            const found = await readImageTable(file);
-            applyRead(found.text, found.clipped);
-            if (found.weak) showToast('칸 선을 잘 못 찾았어요. 읽은 글을 확인해 주세요.');
+            const found = await readImageTable(file, (message) => setBusy(message));
+            setFromImage(true);
+            setWeak(Boolean(found.weak));
+            const read = applyRead(found.text, found.clipped, { fix: true });
+            if (read.kind === 'meal' && read.days.length) showToast(`급식 ${read.days.length}일치를 읽었어요. 틀린 글자만 고쳐 주세요.`);
+            else if (read.kind === 'meal') showToast('날짜를 찾지 못했어요. 표 전체가 반듯하게 나온 사진으로 다시 해 주세요.');
+            else if (found.weak) showToast('칸 선을 잘 못 찾았어요. 읽은 글을 확인해 주세요.');
             else showToast('표에서 글자를 읽었어요. 맞는지만 봐 주세요.');
         } catch {
-            showToast('이 사진에서 글자를 읽지 못했어요. 글을 붙여 넣어 주세요.');
+            showToast('이 사진을 읽지 못했어요. 화면 갈무리(PNG·JPG)로 다시 해 보거나 글을 붙여 넣어 주세요.');
         } finally {
             setBusy('');
         }
+    }
+
+    function toggleMeal() {
+        const next = !asMeal;
+        setAsMeal(next);
+        applyRead(source, [], { meal: next });
     }
 
     async function save() {
@@ -115,28 +130,35 @@ export function GridPaste({ text, image, onBack }) {
 
     return (
         <div data-screen="grid-paste">
-            <p className="muted" style={{ marginTop: 0 }}>읽은 날짜·시각·제목을 고친 뒤 넣을 것만 남겨 주세요. 해와 달은 표에 없으면 요일로 짐작한 값이에요.</p>
+            <p className="muted" style={{ marginTop: 0 }}>{kind === 'meal'
+                ? '읽은 날짜와 메뉴를 확인하고 틀린 글자만 고쳐 주세요. 달이 다르면 아래에서 바꿀 수 있어요.'
+                : '읽은 날짜·시각·제목을 고친 뒤 넣을 것만 남겨 주세요. 해와 달은 표에 없으면 요일로 짐작한 값이에요.'}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <Btn className="chip" onClick={() => moveMonth(-1)}>이전 달</Btn>
                 <strong>{year}년 {month}월</strong>
                 <Btn className="chip" onClick={() => moveMonth(1)}>다음 달</Btn>
             </div>
-            <textarea className="field" style={{ marginTop: 8 }} aria-label="표 글" rows={4} value={source} onChange={(event) => setSource(event.target.value)} />
-            <Btn className="chip" style={{ marginTop: 8 }} onClick={() => applyRead(source)}>다시 읽기</Btn>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <Btn className="chip" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>{asMeal ? '급식표 사진 고르기' : '표 사진 고르기'}</Btn>
+                <Btn className={asMeal ? 'chip on' : 'chip'} aria-pressed={asMeal} onClick={toggleMeal}>{asMeal ? '✓ 급식표로 읽기' : '급식표로 읽기'}</Btn>
+                <input ref={fileRef} type="file" accept="image/*" aria-label="표 이미지" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
+            </div>
+            {busy && <p className="low-card" role="status" style={{ padding: 10 }}>{busy}</p>}
+            {weak && !busy && <p className="low-card" style={{ padding: 10 }}>표의 칸 선을 찾지 못해 짐작으로 나눴어요. 표 전체가 반듯하게 나온 화면 갈무리가 가장 잘 읽힙니다.</p>}
+            <details style={{ marginTop: 8 }}>
+                <summary className="muted" style={{ minHeight: 44, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>읽은 글 직접 고치기</summary>
+                <textarea className="field" style={{ marginTop: 8 }} aria-label="표 글" rows={4} value={source} onChange={(event) => setSource(event.target.value)} />
+                <Btn className="chip" style={{ marginTop: 8 }} onClick={() => applyRead(source)}>다시 읽기</Btn>
+            </details>
             {kind !== 'meal' && (
                 <Btn className={school ? 'chip on' : 'chip'} style={{ marginTop: 8 }} aria-pressed={school} onClick={() => setSchool((value) => !value)}>
                     {school ? '✓ 학교 일정(학사)으로 등록' : '학급 일정으로 등록'}
                 </Btn>
             )}
-            {busy && <p className="low-card" role="status" style={{ padding: 10 }}>{busy}</p>}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                <Btn className="chip" onClick={() => fileRef.current?.click()}>표 이미지</Btn>
-                <input ref={fileRef} type="file" accept="image/*" aria-label="표 이미지" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
-            </div>
             {kind === 'meal' ? (
                 <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                     {mealLocal && <p className="low-card" style={{ padding: 10, margin: 0 }}>민감한 낱말이 있어 이 기기에만 남깁니다.</p>}
-                    {!days.length && <p className="muted">날짜별 메뉴를 아직 못 나눴어요. 표를 다시 붙여 넣어 주세요.</p>}
+                    {!days.length && !busy && <p className="muted">아직 읽은 메뉴가 없어요. 급식표 사진을 고르거나, 표를 복사해 '읽은 글 직접 고치기'에 붙여 넣어 주세요.</p>}
                     {days.map((day) => (
                         <article key={day.date} className={day.clipped ? 'msg-card low-card' : 'msg-card'} data-meal-day={day.date}>
                             <p style={{ margin: '0 0 6px', fontWeight: 800 }}>{Number(day.date.slice(5, 7))}월 {Number(day.date.slice(8, 10))}일{day.clipped ? ' · 글자가 잘렸을 수 있음' : ''}</p>
@@ -147,9 +169,14 @@ export function GridPaste({ text, image, onBack }) {
                                 });
                                 setDays((prev) => prev.map((row) => (row.date === day.date ? { ...row, items: itemsNext } : row)));
                             }} />
+                            {day.items.some((item) => item.read) && (
+                                <p className="muted" data-meal-fixed style={{ margin: '6px 0 0', overflowWrap: 'anywhere' }}>
+                                    흐리게 읽혀 고친 이름: {day.items.filter((item) => item.read).map((item) => `${item.read} → ${item.name}`).join(', ')}
+                                </p>
+                            )}
                         </article>
                     ))}
-                    <Btn className="primary-btn block" onClick={save} disabled={!days.length}>급식 저장</Btn>
+                    <Btn className="primary-btn block" onClick={save} disabled={!days.length || Boolean(busy)}>{days.length ? `급식 ${days.length}일치 저장` : '급식 저장'}</Btn>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
@@ -175,7 +202,7 @@ export function GridPaste({ text, image, onBack }) {
                 </div>
             )}
             <Btn className="chip block" style={{ marginTop: 8 }} onClick={onBack}>돌아가기</Btn>
-            <p className="muted" style={{ overflowWrap: 'anywhere' }}>{kind === 'meal' ? '급식은 메모와 같은 길로 다른 기기와 맞춥니다.' : `읽은 글 ${source.trim().split('\n').length}줄`}</p>
+            <p className="muted" style={{ overflowWrap: 'anywhere' }}>{kind === 'meal' ? '저장하면 오늘·하루·한 주 화면에 그날 급식이 보입니다. 사진은 저장하지 않고 이 기기 안에서만 읽습니다.' : `읽은 글 ${source.trim().split('\n').length}줄`}</p>
         </div>
     );
 }

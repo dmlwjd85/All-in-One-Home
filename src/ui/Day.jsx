@@ -14,7 +14,7 @@ import { EventLine } from './EventLine.jsx';
 import { isLocked, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { DayTimetable } from './DayTimetable.jsx';
-import { MealLine } from './MealCard.jsx';
+import { MealDay } from './MealCard.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
@@ -125,8 +125,9 @@ export function Day() {
                 {events.map((row) => <EventLine key={row.id} row={row} showToast={showToast} />)}
                 {!events.length && <p className="muted">이 날 일정은 없어요.</p>}
                 <Btn className="chip" onClick={() => openFlow({ id: 'quick', kind: '일정', date })}>일정 적기</Btn>
-                <MealLine notes={joined(data, 'notes')} date={date} />
             </section>
+
+            <MealDay notes={joined(data, 'notes')} date={date} />
 
             <section className="glass" style={{ padding: 14 }}>
                 <h2 className="title-font" style={{ marginTop: 0 }}>시간표</h2>

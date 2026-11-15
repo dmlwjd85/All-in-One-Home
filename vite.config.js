@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -54,11 +54,36 @@ function precacheFromBuild() {
     };
 }
 
+/**
+ * 글자 인식(급식표·일정표 사진 읽기)에 쓰는 프로그램 파일을 public/ocr/ 로 옮겨 앱과 같은 주소에서 받게 합니다.
+ * 다른 회사 서버(CDN)에서 받지 않으므로 학교 망에서 막혀도 되고, 받은 코드가 바뀔 걱정도 없습니다.
+ * 한국어 자료(kor.traineddata.gz)는 저장소에 들어 있고, 여기서는 설치된 꾸러미의 작업자·코어만 옮깁니다.
+ */
+export const OCR_FILES = [
+    ['node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js'],
+    ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js'],
+    ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'],
+];
+
+function copyOcrFiles() {
+    return {
+        name: 'copy-ocr-files',
+        buildStart() {
+            mkdirSync(resolve('public/ocr'), { recursive: true });
+            for (const [from, to] of OCR_FILES) {
+                const src = resolve(from);
+                if (!existsSync(src)) throw new Error(`글자 인식 파일이 없습니다: ${from} (npm install 을 먼저 해 주세요)`);
+                copyFileSync(src, resolve('public/ocr', to));
+            }
+        },
+    };
+}
+
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const base = env.VITE_BASE || './';
     return {
-        plugins: [react(), precacheFromBuild()],
+        plugins: [copyOcrFiles(), react(), precacheFromBuild()],
         base,
         build: {
             manifest: true,

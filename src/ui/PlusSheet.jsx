@@ -74,6 +74,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     const [phase, setPhase] = useState('write');
     const [text, setText] = useState(() => takePasteSeed());
     const [image, setImage] = useState(null);
+    const [gridMode, setGridMode] = useState('');
+    const mealFile = useRef(null);
     const [selectedNo, setSelectedNo] = useState(0);
     const [more, setMore] = useState(startMore);
     const moreGrid = useRef(null);
@@ -111,6 +113,16 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
 
     function openGrid() {
         speech.stop();
+        setGridMode('');
+        setPhase('grid');
+    }
+
+    /* 급식표 사진: 사진을 고르면 바로 급식표로 읽습니다(알레르기 번호가 없는 표도). */
+    function openMealPhoto(file) {
+        if (!file) return;
+        speech.stop();
+        setImage(file);
+        setGridMode('meal');
         setPhase('grid');
     }
 
@@ -267,7 +279,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '발라 둔 자리에 넣었어요.')}</p>
                     </div>
                 ) : (
-                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : phase === 'grid' ? '표에서 읽은 일정' : '무엇을 발라 둘까요?'}</h2>
+                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : phase === 'grid' ? (gridMode === 'meal' ? '급식표 읽기' : '표에서 읽은 일정') : '무엇을 발라 둘까요?'}</h2>
                 )}
                 {phase === 'write' && (
                     <>
@@ -316,6 +328,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                             <Btn className="chip" onClick={paste}>붙여넣기</Btn>
                             <Btn className="chip" onClick={openGrid}>달력·급식 표</Btn>
+                            <Btn className="chip" onClick={() => mealFile.current?.click()}>급식표 사진</Btn>
+                            <input ref={mealFile} type="file" accept="image/*" aria-label="급식표 사진" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
                         </div>
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={preview}>다음</Btn>
                         {recent.length > 0 && (
@@ -351,7 +365,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                     </>
                 )}
                 {phase === 'grid' && (
-                    <GridPaste text={text} image={image} onBack={() => setPhase('write')} />
+                    <GridPaste text={text} image={image} mode={gridMode} onBack={() => { setImage(null); setGridMode(''); setPhase('write'); }} />
                 )}
                 {phase === 'preview' && (
                     <>
