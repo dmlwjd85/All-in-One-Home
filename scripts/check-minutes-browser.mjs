@@ -192,7 +192,17 @@ try {
     const after = await layout(page).catch(() => null);
     await page.screenshot({ path: `${shots}/minutes-ask-390-light.png` });
     if (after) check(!after.overflow, '노란 카드 화면이 가로로 넘칩니다.');
-    await page.click('.minutes-ask-ok');
+    /* 등록을 누르면 카드가 한 줄 요약으로 아래에 내려가고, 마치기 단추가 스크롤 없이 보입니다. */
+    await page.$eval('[data-screen="minutes-ask"] [data-ask] .ask-yes', (el) => el.click());
+    await delay(300);
+    const folded = await page.evaluate(() => {
+        const okBtn = document.querySelector('.minutes-ask-ok')?.getBoundingClientRect();
+        const row = document.querySelector('[data-ask-done]');
+        return { cards: document.querySelectorAll('[data-screen="minutes-ask"] [data-ask]').length, state: row?.dataset.askState || '', rowH: Math.round(row?.getBoundingClientRect().height || 0), edit: Math.round(row?.querySelector('.ask-done-edit')?.getBoundingClientRect().height || 0), okInView: Boolean(okBtn && okBtn.top >= 0 && okBtn.bottom <= window.innerHeight) };
+    });
+    check(folded.cards === 0 && folded.state === 'on' && folded.rowH > 0 && folded.rowH <= 80 && folded.edit >= 44 && folded.okInView, `정한 카드가 한 줄 요약으로 내려가지 않거나 마치기 단추가 가려집니다: ${JSON.stringify(folded)}`);
+    await page.screenshot({ path: `${shots}/minutes-ask-done-390-light.png` });
+    await page.$eval('.minutes-ask-ok', (el) => el.click());
     await page.waitForSelector('[data-screen="minutes-view"]', { timeout: 5000 }).catch(() => check(false, '확인 뒤 회의록 보기로 가지 않습니다.'));
     const minutesId = await page.evaluate(() => location.hash.split('/')[2]);
     await page.evaluate(() => { location.hash = '#/todo'; });

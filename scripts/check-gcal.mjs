@@ -661,7 +661,7 @@ const buildJob = workflow.split('deploy:')[0];
 check(live.includes(`createVault('${GCAL_VAULT}')`), '캘린더 저장 키가 없습니다.');
 check(!live.includes('client_secret') && !ui.includes('client_secret'), '클라이언트 시크릿을 쓰고 있습니다.');
 check(db.includes("createVault('ssug-gyomu')") && db.includes("createVault('ssug-gyomu-local')") && !db.includes('ssug-gyomu-gcal'), '기존 저장 키를 건드렸습니다.');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v89'"), '서비스 워커가 v89이 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v90'"), '서비스 워커가 v90이 아닙니다.');
 check(!ui.includes('<select') && !ui.includes('checkbox'), '연동 방식이 드롭다운이거나 체크박스입니다.');
 check(ui.includes('구글 일정 보기만') && ui.includes('만든 일정도 구글에 넣기') && ui.includes('준비 중'), '연동 버튼 문구가 없습니다.');
 check(ui.includes('한꺼번에 올리기') && ui.includes('앞으로 만든 것만') && ui.includes('GCAL_MODE_HINT'), '올리기 확인이나 방식 안내가 없습니다.');
@@ -676,6 +676,7 @@ check(!schedule.includes('gcal-error') && !schedule.includes('lastError'), '일�
 check(read('src/App.jsx').includes('<GcalDot gcal={gcalSnap} />') && read('src/App.jsx').includes("aria-label={gcalDot ?"), '설정 단추에 작은 점 배지가 없습니다.');
 check(/async function loadGis\(\)[\s\S]{0,400}await prepareCalendarScript\(\)/.test(live), '무음 갱신 전에 GIS 스크립트를 불러오지 않습니다.');
 check(ui.includes('scrollIntoView') && ui.includes('needsDot'), '점이 있을 때 설정을 열어도 캘린더 칸으로 내려가지 않습니다.');
+check(/data-role="settings-why"/.test(read('src/ui/Settings.jsx')) && /go\('#\/settings\/calendar'/.test(read('src/ui/Settings.jsx')) && /data-gcal-dot="menu"/.test(read('src/ui/Settings.jsx')), '설정 첫 화면에 점의 까닭과 가는 길 안내가 없습니다.');
 check(/\.dot-badge\s*\{[^}]*width:\s*8px/.test(read('src/index.css')) && /\.primary-btn[^{]*\{[^}]*min-height:\s*(4[4-9]|[5-9]\d)px/.test(read('src/index.css')), '점 배지 8px 또는 44px 단추 규칙이 없습니다.');
 check(!read('src/ui/Home.jsx').includes('lastError'), '오늘 화면에 캘린더 경고가 있습니다.');
 check(workflow.includes('npm run check:gcal'), '배포 워크플로가 캘린더 검사를 돌리지 않습니다.');

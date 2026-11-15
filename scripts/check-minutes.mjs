@@ -155,6 +155,8 @@ function uiChecks(ui, css) {
     ok(/data-role="minutes-kind-toggle"/.test(ui) && /aria-expanded=\{kindOpen/.test(ui) && /setKindOpen\(false\)/.test(ui), '회의 종류 칩이 접혔다 펼쳐지지 않습니다.');
     ok(/data-screen="minutes-ask"/.test(ui) && /모두 빼고 마치기/.test(ui), '노란 카드 확인 화면이 없습니다.');
     /* 확인 카드(시안 A): 카드마다 등록·빼기, 왜 묻는지 배지, 날짜 없는 일정은 등록하지 않음, 메시지용 '임시보관함' 문구 없음 */
+    ok(/export function MinutesAskDone/.test(ui) && /data-ask-done=\{item\.id\}/.test(ui) && /filter\(\(item\) => !item\.decided\)/.test(ui) && /className="ask-done-list"/.test(ui), '정한 카드를 한 줄 요약으로 아래에 모으지 않습니다.');
+    ok(/onPatch\(item\.id, \{ decided: false \}\)/.test(ui) && /scrollIntoView/.test(ui), "요약 줄의 '고치기'나 위로 올리기가 없습니다.");
     ok(/className="chip ask-no".*>빼기<\/Btn>/.test(ui) && /askReason\(item\)/.test(ui) && /export function askReady/.test(ui), '확인 카드에 등록·빼기나 이유 배지가 없습니다.');
     ok(/item\.kind !== '일정' \|\| Boolean\(item\.date\)/.test(ui) && /filter\(\(item\) => item\.include !== false && askReady\(item\)\)/.test(ui), '날짜 없는 일정을 등록합니다.');
     ok(!/임시보관함/.test(ui.slice(ui.indexOf('function MinutesAskCard'), ui.indexOf('/** 회의록 화면.'))), '회의록 확인 카드에 임시보관함 문구가 있습니다(회의록 카드는 보관함에 가지 않음).');
@@ -173,7 +175,7 @@ const tasks = readFileSync('src/ui/Tasks.jsx', 'utf8');
 if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(detail)) failures.push('일정·할 일 자세히에 원래 회의록 단추가 없습니다.');
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
 const sw = readFileSync('public/sw.js', 'utf8');
-if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v89'")) failures.push('서비스 워커가 v89이 아닙니다.');
+if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v90'")) failures.push('서비스 워커가 v90이 아닙니다.');
 
 /* 변이: 일부러 망가뜨린 코드를 이 검사가 잡는지 봅니다. */
 const LIB = readFileSync('src/lib/minutesExtract.js', 'utf8');

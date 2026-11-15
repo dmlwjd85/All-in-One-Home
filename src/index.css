@@ -1233,7 +1233,10 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
     line-height: 22px;
 }
 .gcal-renew .primary-btn { min-height: 44px; }
-.top-tools .icon-btn { position: relative; }
+.top-tools .icon-btn, .settings-key { position: relative; }
+.settings-why { display: grid; gap: 10px; padding: 14px; border-radius: 18px; border: 2px solid var(--st-early); background: var(--surface); }
+.settings-why p { margin: 0; line-height: 1.5; }
+.settings-why .primary-btn { min-height: 44px; }
 .dot-badge {
     position: absolute;
     top: 8px;
@@ -1934,8 +1937,6 @@ button.hero-pill.home-todo-link {
 
 /* 회의록 확인 카드(시안 A): 왜 묻는지 배지 → 제목 → 고칠 칩 → 등록/빼기 */
 .ask-card { padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.ask-card.is-on { background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); }
-.ask-card.is-off { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); opacity: .7; }
 .ask-badge { align-self: flex-start; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 70%, transparent); }
 .ask-title { margin: 0; font-weight: 800; font-size: 16px; overflow-wrap: anywhere; }
 .ask-meta { margin: 0; font-size: 14px; color: var(--ink-sub); }
@@ -1946,3 +1947,16 @@ button.hero-pill.home-todo-link {
 .ask-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .ask-two > .tap { min-height: 48px; width: 100%; justify-content: center; }
 .ask-two > .tap:only-child { grid-column: 1 / -1; }
+/* 정한 카드: 한 줄 요약으로 맨 아래 */
+.ask-done-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ask-done { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 6px 4px 12px; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.ask-done.is-on { box-shadow: inset 0 0 0 2px var(--accent); }
+.ask-done.is-off .ask-done-text { opacity: .65; }
+.ask-done-mark { flex: none; width: 20px; text-align: center; font-weight: 900; color: var(--accent); }
+.ask-done.is-off .ask-done-mark { color: var(--ink-sub); }
+.ask-done-text { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; color: var(--ink-sub); }
+.ask-done-text b { font-size: 15px; color: var(--ink); }
+.ask-done-text .clip1 { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-done-edit { flex: none; min-height: 44px; padding: 0 12px; }
+.ask-all-done { margin: 0; font-weight: 800; }
+.minutes-ask { scroll-margin-top: 12px; }

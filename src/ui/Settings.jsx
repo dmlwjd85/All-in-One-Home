@@ -12,7 +12,7 @@ import { RosterPaste, RosterPreview, quietSave } from './RosterPaste.jsx';
 import { MAX_STUDENTS, readRosterText } from '../lib/roster.js';
 import titles from '../data/legacyTitles.json';
 import { applyLegacy, clearAll, downloadOriginal, exportFile, forgetLegacyImports, importText, loadDemo, patchProfile, previewLegacy, replaceRoster } from '../lib/db.js';
-import { planRecordWipe } from '../lib/gcalCore.js';
+import { planRecordWipe, gcalNeedsDot, GCAL_DOT_LABEL } from '../lib/gcalCore.js';
 import { disconnectGcal, forgetGcalLocal, settleGcalQueue } from '../lib/gcalLive.js';
 import { useGcal } from './useGcal.js';
 import { GcalSettings } from './GcalSettings.jsx';
@@ -175,10 +175,17 @@ export function Settings() {
 
     return (
         <div style={{ display: 'grid', gap: 12 }}>
+            {/* 설정 단추의 점을 보고 들어온 사람이 길을 잃지 않게, 점의 까닭과 가는 길을 맨 위에 적습니다. */}
+            {!sec && gcalNeedsDot(gcal) && (
+                <div className="settings-why" role="status" data-role="settings-why">
+                    <p><b>설정에 점이 뜬 까닭</b><br />구글 캘린더 연결이 쉬고 있어요. 다시 연결하면 점이 사라져요. 적어 둔 일정은 그대로예요.</p>
+                    <Btn className="primary-btn block" data-role="settings-why-go" onClick={() => go('#/settings/calendar', { state: { appFrom: 'settings' } })}>다시 연결하러 가기</Btn>
+                </div>
+            )}
             {!sec && (
                 <nav className="settings-menu" aria-label="설정 항목">
                     {SETTINGS_SECS.map((row) => (
-                        <Btn key={row.id} className="key-btn settings-key" data-sec={row.id} onClick={() => go(`#/settings/${row.id}`, { state: { appFrom: 'settings' } })}><span aria-hidden="true">{row.icon}</span> {row.label}</Btn>
+                        <Btn key={row.id} className="key-btn settings-key" data-sec={row.id} aria-label={row.id === 'calendar' && gcalNeedsDot(gcal) ? `${row.label}, ${GCAL_DOT_LABEL}` : undefined} onClick={() => go(`#/settings/${row.id}`, { state: { appFrom: 'settings' } })}><span aria-hidden="true">{row.icon}</span> {row.label}{row.id === 'calendar' && gcalNeedsDot(gcal) ? <span className="dot-badge" aria-hidden="true" data-gcal-dot="menu" /> : null}</Btn>
                     ))}
                     <Btn className="key-btn settings-key" data-sec="roster" onClick={() => go('#/settings/roster', { state: { rosterFrom: 'settings' } })}><span aria-hidden="true">👥</span> 학생 명단</Btn>
                 </nav>
