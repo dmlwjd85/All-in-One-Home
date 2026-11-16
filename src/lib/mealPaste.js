@@ -140,11 +140,22 @@ function cellMenu(cell) {
 export function looksLikeMealTable(text) {
     const src = String(text || '');
     if (looksLikeCalGrid(src)) return false;
-    const weeks = groupWeeks(parseTable(keepTableEdges(src)));
-    if (!weeks.length) return false;
+    const rows = parseTable(keepTableEdges(src));
+    const weeks = groupWeeks(rows);
     const codes = src.match(/\d{1,2}(?:\.\d{1,2}){2,}/g) || [];
-    const menus = weeks.some((week) => (week.body || []).some((cell) => /[가-힣]{2,}/.test(cell) && !/학년회의|연수|생기부/.test(cell)));
-    return codes.length >= 1 && menus;
+    if (weeks.length) {
+        const menus = weeks.some((week) => (week.body || []).some((cell) => /[가-힣]{2,}/.test(cell) && !/학년회의|연수|생기부/.test(cell)));
+        if (codes.length >= 1 && menus) return true;
+    }
+    /*
+     * 날짜 줄에 행사 이름이 붙은 표('2 생일축하의 날')나 사진에서 읽은 표는 숫자만 있는 머리 줄이 없습니다.
+     * 칸 모양으로 날짜별로 나눠 보고, 이틀 넘게 메뉴가 나오며 알레르기 번호가 여럿이거나 메뉴 이름 대부분이 아는 낱말이면 급식표로 봅니다.
+     */
+    const loose = mealFromCells(rows, {});
+    const items = loose.days.flatMap((day) => day.items);
+    if (loose.days.length < 2 || items.length < 6) return false;
+    const known = items.filter((item) => isKnownMenu(item.name)).length;
+    return codes.length >= 3 || known >= items.length * 0.5;
 }
 
 function pushDay(days, date, menu, extra = {}) {

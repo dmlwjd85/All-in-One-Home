@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { prepareTable } from '../src/lib/tableImage.js';
 import { cellsToTable } from '../src/lib/gridDetect.js';
-import { parseMealTable } from '../src/lib/mealPaste.js';
+import { looksLikeMealTable, parseMealTable } from '../src/lib/mealPaste.js';
 import { fixMenuName } from '../src/lib/hangulFix.js';
 
 let bad = 0;
@@ -88,6 +88,8 @@ const photo = JSON.parse(readFileSync(fixture('meal-photo-cells.json'), 'utf8'))
 const minimum = { normal: 112, rotated: 108, jpeg40: 110 };
 for (const [tag, cells] of Object.entries(photo.cells)) {
     const text = cellsToTable(cells.map((row) => row.map((value) => ({ text: value }))));
+    /* '달력·급식 표'로 사진을 넣어도(급식표로 읽기를 안 골라도) 급식표로 알아봐야 합니다. */
+    check(looksLikeMealTable(text), `${tag} 사진 글을 급식표로 못 알아봄`);
     const got = parseMealTable(text, { today: '2026-11-16', now: new Date('2026-11-16T09:00:00+09:00'), fix: true });
     check(got.year === 2026 && got.month === 11, `${tag} 연월 ${got.year}-${got.month}`);
     const map = Object.fromEntries(got.days.map((day) => [day.date, day]));
@@ -112,6 +114,8 @@ for (const [tag, cells] of Object.entries(photo.cells)) {
     check(wrongCodes.length === 0, `${tag} 알레르기 번호 틀림 ${wrongCodes.join(' | ')}`);
     console.log(`  사진 글(${tag}): 날짜 ${got.days.length}/${dates.length}, 메뉴 ${hit}/${total}`);
 }
+
+check(!looksLikeMealTable(readFileSync(fixture('sample-calendar.tsv'), 'utf8')), '학교 달력 표를 급식표로 봄');
 
 /* 3. 닮은 글자 바로잡기 */
 for (const [from, to] of [['짝두기', '깍두기'], ['새우묶음밥', '새우볶음밥'], ['머묵국', '어묵국'], ['종각김치', '총각김치'], ['흑미발', '흑미밥'], ['보쌍김치', '보쌈김치'], ['사인머스켓', '샤인머스캣']]) {
