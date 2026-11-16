@@ -381,8 +381,8 @@ export async function update(recipe, { undoable = false } = {}) {
     /* 일부 받기에서 합친 것인지(뒤이은 올리기가 칩 시각을 바꾸지 않게). await 전에 봅니다. */
     const quiet = fromCloud > 0 && partialAbsorb > 0;
     const previous = structuredClone(state);
-    if (undoable) undoStack = [...undoStack.slice(-4), previous];
     const next = recipe(structuredClone(state)) || state;
+    if (undoable) undoStack = [...undoStack.slice(-4), { state: previous, touch: homeworkUndoTouch(previous, next) }];
     if (next !== previous && next?.profile) bumpSettingAts(next.profile, previous.profile);
     if (!fromCloud && next !== previous) stampTodoEdits(previous, next);
     state = next;
@@ -708,7 +708,7 @@ async function flushCloudTracked() {
             ok: pushedAll(result),
             pending: result.pending,
             stamp,
-            homeworkLocal: (result.rejected || []).some((key) => String(key).startsWith('homework/')),
+            homeworkLocal: homeworkOnlyLocal(result),
         });
         syncQueued(queuedCloudKeys().length);
     }
@@ -753,6 +753,8 @@ async function flushCloudOnce() {
     const otherRejected = (result?.rejected || []).filter((key) => !String(key).startsWith('homework/'));
     /* 서버 시각을 재기 전(editD만 있음)에 고친 줄은 hlc 문서에 거절돼도 재기 뒤 다시 올라가므로 알리지 않습니다(PR #66 r3 P2-2). */
     if (otherRejected.length) { const waiting = unsureKeys(); tellRejected(otherRejected.filter((key) => !waiting.has(key))); }
+    const hwRejected = (result?.rejected || []).filter((key) => String(key).startsWith('homework/'));
+    if (hwRejected.length && (result?.homeworkConfirmed || []).length) tellHomeworkSkipped(hwRejected);
     /* 거절·진 줄은 서버 시각 보정이 틀려서일 수 있습니다(기기 시계가 바뀜). 진 줄은 곧 받기(force)에서, 거절은 다음 받기에서 다시 잽니다. */
     if (otherRejected.length || (result?.lost || []).length) markClockDoubt(otherRejected);
     /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
@@ -1115,62 +1117,96 @@ function absorbCloud(draft, remote, seen = null) {
     return draft;
 }
 
-/** 되돌리기는 예전 시각을 그대로 두면 클라우드의 더 나중 시각에 밀립니다. 바뀐 칸만 지금 시각으로 다시 씁니다. */
-function restampHomeworkUndo(current, prev) {
-    const now = homeworkStamp();
-    const restamp = (curList = [], prevList = []) => {
-        const cur = new Map((curList || []).map((row) => [row?.id, row]));
-        const kept = new Set();
-        const next = (prevList || []).map((row) => {
-            kept.add(row?.id);
-            const was = cur.get(row?.id);
-            if (!was) return { ...row, metaAt: now, gone: 0, editAt: now };
-            const checks = { ...(row.checks || {}) };
-            let checksChanged = false;
-            const sids = new Set([...Object.keys(was.checks || {}), ...Object.keys(checks)]);
-            for (const sid of sids) {
-                const beforeOn = was.checks?.[sid]?.on ? 1 : 0;
-                const afterOn = checks[sid]?.on ? 1 : 0;
-                if (beforeOn !== afterOn) {
-                    checks[sid] = { at: now, on: afterOn };
-                    checksChanged = true;
-                }
-            }
-            const metaChanged = String(was.title || '') !== String(row.title || '')
-                || String(was.date || '') !== String(row.date || '')
-                || (was.roster || []).join('\n') !== (row.roster || []).join('\n')
-                || Number(was.gone || 0) !== Number(row.gone || 0);
-            if (!checksChanged && !metaChanged) return row;
-            const undoingDelete = Number(was.gone) > 0 && !(Number(row.gone) > 0);
-            return { ...row, checks, metaAt: metaChanged ? now : row.metaAt, gone: undoingDelete ? 0 : (Number(row.gone) || 0), editAt: now };
-        });
-        for (const row of curList || []) {
-            if (!row?.id || kept.has(row.id)) continue;
-            next.push({ ...row, gone: now, editAt: now });
+function homeworkRows(bag) {
+    return [...(bag?.homework || []), ...(bag?.local?.homework || [])].filter((row) => row?.id);
+}
+
+/** 그 동작이 직접 바꾼 칸만 적습니다. 나중에 다른 기기에서 들어온 칸은 여기에 없습니다. */
+function homeworkUndoTouch(prev, next) {
+    const before = new Map(homeworkRows(prev).map((row) => [row.id, row]));
+    const after = new Map(homeworkRows(next).map((row) => [row.id, row]));
+    const touches = [];
+    for (const [id, row] of after) {
+        const old = before.get(id);
+        if (!old) { touches.push({ id, added: true }); continue; }
+        const checks = [];
+        const sids = new Set([...Object.keys(old.checks || {}), ...Object.keys(row.checks || {})]);
+        for (const sid of sids) {
+            if ((old.checks?.[sid]?.on ? 1 : 0) !== (row.checks?.[sid]?.on ? 1 : 0)) checks.push(sid);
         }
-        return next;
-    };
+        const touch = { id, checks };
+        if (String(old.title || '') !== String(row.title || '')) touch.title = true;
+        if (String(old.date || '') !== String(row.date || '')) touch.date = true;
+        if ((old.roster || []).join('\n') !== (row.roster || []).join('\n')) {
+            const prevSet = new Set(old.roster || []);
+            const nextSet = new Set(row.roster || []);
+            touch.rosterAdd = [...nextSet].filter((sid) => !prevSet.has(sid));
+            touch.rosterDel = [...prevSet].filter((sid) => !nextSet.has(sid));
+        }
+        if (Number(old.gone || 0) !== Number(row.gone || 0)) touch.gone = true;
+        if (checks.length || touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) touches.push(touch);
+    }
+    for (const id of before.keys()) if (!after.has(id)) touches.push({ id, removed: true });
+    return touches;
+}
+
+function applyHomeworkUndo(currentList = [], prevList = [], touches = [], now) {
+    const prevMap = new Map((prevList || []).map((row) => [row?.id, row]));
+    const out = (currentList || []).map((row) => ({ ...row, checks: { ...(row.checks || {}) }, roster: [...(row.roster || [])] }));
+    const outMap = new Map(out.map((row) => [row.id, row]));
+    for (const touch of touches || []) {
+        const prevRow = prevMap.get(touch.id);
+        const cur = outMap.get(touch.id);
+        if (touch.added) {
+            if (cur) { cur.gone = now; cur.editAt = now; }
+            continue;
+        }
+        if (touch.removed && prevRow && !cur) {
+            const back = { ...prevRow, metaAt: now, gone: 0, editAt: now };
+            out.push(back);
+            outMap.set(touch.id, back);
+            continue;
+        }
+        if (!cur) continue;
+        for (const sid of touch.checks || []) cur.checks[sid] = { at: now, on: prevRow?.checks?.[sid]?.on ? 1 : 0 };
+        if (touch.title && prevRow) cur.title = prevRow.title;
+        if (touch.date && prevRow) cur.date = prevRow.date;
+        if (touch.rosterAdd || touch.rosterDel) {
+            const drop = new Set(touch.rosterAdd || []);
+            cur.roster = [...(cur.roster || []).filter((sid) => !drop.has(sid)), ...(touch.rosterDel || [])];
+        }
+        if (touch.gone) cur.gone = prevRow && Number(prevRow.gone) > 0 ? Number(prevRow.gone) : 0;
+        if (touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) cur.metaAt = now;
+        if ((touch.checks || []).length || touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) cur.editAt = now;
+    }
+    return out;
+}
+
+function restampHomeworkUndo(current, prev, touches) {
+    const now = homeworkStamp();
     return {
         ...prev,
-        homework: restamp(current.homework, prev.homework),
+        homework: applyHomeworkUndo(current.homework, prev.homework, touches, now),
         local: {
             ...(prev.local || {}),
-            homework: restamp(current.local?.homework, prev.local?.homework),
+            homework: applyHomeworkUndo(current.local?.homework, prev.local?.homework, touches, now),
         },
     };
 }
 
 export async function undo() {
-    const prev = undoStack.pop();
-    if (!prev) return false;
+    const entry = undoStack.pop();
+    if (!entry) return false;
+    const prev = entry.state || entry;
+    const touches = entry.touch || [];
     const current = state;
-    state = restampHomeworkUndo(current, prev);
+    state = restampHomeworkUndo(current, prev, touches);
     mirrorTheme(state.profile.theme);
     emit();
     try {
         await persist();
     } catch (error) {
-        undoStack.push(prev);
+        undoStack.push(entry);
         state = current;
         mirrorTheme(state.profile.theme);
         emit();
@@ -2270,6 +2306,20 @@ function releaseHomeworkSources(ids) {
     };
 }
 
+function homeworkOnlyLocal(result) {
+    const bad = (result?.rejected || []).filter((key) => String(key).startsWith('homework/'));
+    return bad.length > 0 && !(result?.homeworkConfirmed || []).length;
+}
+
+let toldHomeworkSkip = '';
+function tellHomeworkSkipped(keys) {
+    const mark = [...keys].sort().join('|');
+    if (mark === toldHomeworkSkip) return;
+    toldHomeworkSkip = mark;
+    const names = keys.map((key) => String(key).replace(/^homework\//, '')).slice(0, 3).join(', ');
+    tellStorageIssue(`과제 ${names}은 클라우드가 받지 않아 이 기기에만 두었어요. 다른 과제는 올라갔어요.`);
+}
+
 function homeworkStamp() {
     const at = editClock();
     return at > 0 ? at : Date.now();
@@ -3334,7 +3384,7 @@ export function useWatchTimingForTest(timing = null) { watchTiming = timing ? { 
 /* 감시 시작점: 마지막 전체 받기를 시작한 서버 시각보다 10분 앞. 기기가 고친 시각을 찍는 묶음은 하루 더 앞까지 봅니다(늦게 올린 오프라인 수정). */
 const WATCH_LOOKBACK_MS = 10 * 60 * 1000;
 const WATCH_LATE_MS = 24 * 3600 * 1000;
-const blankWatch = () => ({ uid: '', stop: null, timer: 0, last: -Infinity, recent: [], pending: [], live: false, error: '', serverAt: 0, startedAt: 0, day: '', since: 0 });
+const blankWatch = () => ({ uid: '', stop: null, timer: 0, last: -Infinity, recent: [], pending: [], live: false, error: '', homeworkSkipped: false, serverAt: 0, startedAt: 0, day: '', since: 0 });
 /* 감시 시작점이 고정이라 오래 켜 두면 결과 목록이 커지고, 30분 넘게 끊겼다 이으면 그 목록을 다시 읽은 것으로 셉니다.
    날짜가 바뀐 뒤나 감시를 켠 지 6시간이 지난 뒤의 전체 받기에서, 그 받기를 시작한 때를 새 시작점으로 감시를 다시 켭니다. */
 export const WATCH_RENEW_MS = 6 * 3600 * 1000;
@@ -3349,7 +3399,11 @@ export function todoWatchForTest(on) { stopTodoWatch(); return on ? startTodoWat
 /** 감시가 살아 있는지: 모든 리스너가 붙어 오류 없이 서버 결과를 받고 있습니다. */
 export function watchLive() { return Boolean(todoWatch.uid && todoWatch.stop && todoWatch.live && !todoWatch.error); }
 /** 검사용: 감시 상태. */
-export function watchStateForTest() { const { uid, live, error, serverAt, startedAt, pending, since, day } = todoWatch; return { uid, live, error, serverAt, startedAt, since, day, pending: pending.length, alive: watchLive() }; }
+export function watchStateForTest() { const { uid, live, error, homeworkSkipped, serverAt, startedAt, pending, since, day } = todoWatch; return { uid, live, error, homeworkSkipped, serverAt, startedAt, since, day, pending: pending.length, alive: watchLive() }; }
+export function watchRetryDue(watch = todoWatch, now = syncNow()) {
+    if (!watch.error && !watch.homeworkSkipped) return false;
+    return Math.abs(now - watch.startedAt) >= watchTiming.retry * 2 ** Math.min(watchRetries, 4);
+}
 
 /*
  * 감시 알림에서 받을 컬렉션을 고릅니다(순수 함수). 이 기기가 올리거나 받은 값과 같으면(해시 같음) 받지 않습니다.
@@ -3435,7 +3489,8 @@ async function startTodoWatch(uid) {
         if (todoWatch.uid !== uid || !status) return;
         todoWatch.live = Boolean(status.live);
         todoWatch.error = String(status.error || '');
-        if (status.live) { todoWatch.serverAt = syncNow(); watchRetries = 0; }
+        if ('homeworkSkipped' in status) todoWatch.homeworkSkipped = Boolean(status.homeworkSkipped);
+        if (status.live && !todoWatch.homeworkSkipped) { todoWatch.serverAt = syncNow(); watchRetries = 0; }
     };
     const since = (lastFullPull.uid === uid && lastFullPull.from > 0 ? lastFullPull.from : serverNow()) - WATCH_LOOKBACK_MS;
     todoWatch.since = since;
@@ -3449,7 +3504,7 @@ async function startTodoWatch(uid) {
    켤 때마다 최근 문서를 읽으므로, 옛 규칙처럼 늘 거절되는 감시를 자꾸 켜지 않게 합니다. 새 감시는 마지막 전체 받기 시점부터 봅니다. */
 let watchRetries = 0;
 function retryDeadWatch(uid) {
-    if (!cloudApi.watch || todoWatch.uid !== uid || !todoWatch.error) return;
+    if (!cloudApi.watch || todoWatch.uid !== uid || (!todoWatch.error && !todoWatch.homeworkSkipped)) return;
     if (Math.abs(syncNow() - todoWatch.startedAt) < watchTiming.retry * 2 ** Math.min(watchRetries, 4)) return;
     watchRetries += 1;
     stopTodoWatch();

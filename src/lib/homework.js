@@ -305,38 +305,47 @@ export function foldLegacyIntoHomework(cloudNotes = [], localNotes = [], homewor
         ...(localNotes || []).map((row) => ({ row, local: true })),
     ];
     const removed = [];
+    const mergedNoteIds = new Set();
     const extras = new Map();
     for (const item of tagged) {
         if (!isHomeworkCheck(item.row)) continue;
-        removed.push(item.row);
         const assign = String(item.row.title || '');
         const sid = String(item.row.text || '').trim();
         if (!assign || !sid) continue;
         const bag = extras.get(assign) || [];
-        bag.push({ sid, at: Number(item.row.editAt) || 0, on: 1 });
+        bag.push({ sid, at: Number(item.row.editAt) || 0, on: 1, noteId: item.row.id });
         extras.set(assign, bag);
     }
     const cloud = [];
     const local = [];
     const nextHomework = (homework || []).map((row) => ({ ...row, checks: { ...(row.checks || {}) }, roster: [...(row.roster || [])] }));
     const nextLocal = (localHomework || []).map((row) => ({ ...row, checks: { ...(row.checks || {}) }, roster: [...(row.roster || [])] }));
-    let changed = removed.length > 0;
+    let changed = false;
+    const takeExtras = (id, checks) => {
+        for (const extra of extras.get(id) || []) {
+            const prev = checks[extra.sid];
+            if (!prev || extra.at >= Number(prev.at)) checks[extra.sid] = { at: extra.at, on: 1 };
+            if (extra.noteId) mergedNoteIds.add(extra.noteId);
+        }
+        extras.delete(id);
+    };
     for (const item of tagged) {
         if (isHomeworkCheck(item.row)) continue;
         if (!isLegacyHomeworkNote(item.row)) {
             (item.local ? local : cloud).push(item.row);
             continue;
         }
-        removed.push(item.row);
-        changed = true;
         const pack = readHomeworkPack(item.row);
         const bucket = item.local ? nextLocal : nextHomework;
-        const existing = bucket.find((row) => row.id === item.row.id) || nextHomework.find((row) => row.id === item.row.id) || nextLocal.find((row) => row.id === item.row.id);
-        if (!pack && existing) {
-            extras.delete(item.row.id);
+        /* 본문을 읽지 못하면 그 노트는 지우지 않습니다. 제출 노트는 아래서 과제에 들어간 것만 지웁니다. */
+        if (!pack) {
+            (item.local ? local : cloud).push(item.row);
             continue;
         }
-        const base = pack ? {
+        removed.push(item.row);
+        mergedNoteIds.add(item.row.id);
+        changed = true;
+        const base = {
             id: item.row.id,
             title: item.row.title || '',
             date: item.row.date || '',
@@ -346,33 +355,23 @@ export function foldLegacyIntoHomework(cloudNotes = [], localNotes = [], homewor
             checks: pack.checks,
             gone: 0,
             editAt: Number(item.row.editAt) || 0,
-        } : {
-            id: item.row.id,
-            title: item.row.title || '',
-            date: item.row.date || '',
-            made: Number(item.row.editAt) || 0,
-            metaAt: Number(item.row.editAt) || 0,
-            roster: [],
-            checks: {},
-            gone: 0,
-            editAt: Number(item.row.editAt) || 0,
         };
-        for (const extra of extras.get(item.row.id) || []) {
-            const prev = base.checks[extra.sid];
-            if (!prev || extra.at >= Number(prev.at)) base.checks[extra.sid] = { at: extra.at, on: 1 };
-        }
-        extras.delete(item.row.id);
+        takeExtras(item.row.id, base.checks);
         putHomework(bucket, base);
     }
     for (const [id, bag] of extras) {
         const row = nextHomework.find((item) => item.id === id) || nextLocal.find((item) => item.id === id);
         if (!row || (Number(row.gone) > 0 && bag.every((extra) => extra.at <= Number(row.gone)))) continue;
-        for (const extra of bag) {
-            const prev = row.checks[extra.sid];
-            if (!prev || extra.at >= Number(prev.at)) row.checks[extra.sid] = { at: extra.at, on: 1 };
-        }
+        takeExtras(id, row.checks);
         if (Number(row.gone) > 0 && Number(row.metaAt) > Number(row.gone)) row.gone = 0;
         changed = true;
+    }
+    for (const item of tagged) {
+        if (!isHomeworkCheck(item.row)) continue;
+        if (mergedNoteIds.has(item.row.id)) {
+            removed.push(item.row);
+            changed = true;
+        } else (item.local ? local : cloud).push(item.row);
     }
     return { cloud, local, removed, homework: nextHomework, localHomework: nextLocal, changed };
 }

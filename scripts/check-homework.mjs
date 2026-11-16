@@ -15,6 +15,7 @@ import {
     toggleHomeworkSubmit, undo, useAuthForTest, useVaultsForTest,
 } from '../src/lib/db.js';
 import { homeworkWatchOnError } from '../src/lib/cloud.js';
+import { useWatchTimingForTest, watchRetryDue } from '../src/lib/db.js';
 import { chipState, resetSyncStatusForTest, syncEnd } from '../src/lib/syncStatus.js';
 
 const failures = [];
@@ -45,15 +46,20 @@ check(memoList.length === 1, '옛 메모 목록에 과제가 남습니다.');
 check(!minutesList([{ ...legacyHw }, { id: 'meet-1', tags: ['회의'], text: '본문', title: '회의', date: '2026-11-01' }]).some((row) => row.id === 'hw-read1'), '새 판 회의록 목록에 과제가 섞입니다.');
 
 const broken = foldLegacyIntoHomework(
-    [{ id: 'hw-read1', title: '고친 제목', text: '선생님이 지운 본문', tags: ['회의'], date: '2026-11-16', editAt: 80 }],
+    [
+        { id: 'hw-read1', title: '고친 제목', text: '선생님이 지운 본문', tags: ['회의'], date: '2026-11-16', editAt: 80 },
+        { id: 'hx-hw-read1-s5', title: 'hw-read1', text: 's5', tags: ['제출'], editAt: 90 },
+    ],
     [],
     [moved],
     [],
 );
-check(broken.cloud.length === 0 && broken.homework[0].checks.s1.on === 1 && broken.homework[0].checks.s2.on === 1, '망가진 본문이 제출을 지웁니다.');
+check(broken.cloud.some((row) => row.text === '선생님이 지운 본문'), '본문을 못 읽은 과제 노트를 지웁니다.');
+check(broken.homework[0].checks.s1.on === 1 && broken.homework[0].checks.s5.on === 1, '확인 전 제출 노트 s5를 버렸습니다.');
+check(broken.removed.some((row) => row.id === 'hx-hw-read1-s5') && !broken.removed.some((row) => row.text === '선생님이 지운 본문'), '들어간 제출만 지울 목록에 두지 않습니다.');
 
 const orphan = foldLegacyIntoHomework([legacyCheck], [], [], []);
-check(orphan.homework.length === 0 && orphan.cloud.length === 0, '지운 과제의 제출 조각으로 과제를 만듭니다.');
+check(orphan.homework.length === 0 && orphan.cloud.some((row) => row.id === legacyCheck.id) && !orphan.removed.length, '확인되지 않은 제출 노트를 지웁니다.');
 
 const base = newHomework({ id: 'hw-live', title: '독서록', date: '2026-11-16', roster: ['s1', 's2', 's3'], made: 100 });
 base.checks = { s1: { at: 110, on: 1 } };
@@ -124,6 +130,10 @@ const back = snapshot().homework.find((row) => row.id === 'hw-undo');
 check(!Number(back?.gone) && back.metaAt > removed.gone, '지우기 되돌리기가 새 시각으로 풀리지 않습니다.');
 check(mergeHomework(back, removed).gone === 0, '지운 클라우드 시각이 되돌리기를 이깁니다.');
 check(homeworkWatchOnError({ code: 'permission-denied' }) === 'skip' && homeworkWatchOnError({ code: 'unavailable' }) === 'retry', '오프라인 오류에도 과제 감시를 끕니다.');
+useWatchTimingForTest({ retry: 1000 });
+check(watchRetryDue({ error: '', homeworkSkipped: true, startedAt: Date.now() - 5000 }, Date.now()), '규칙이 바뀌기 전 탭이 감시를 다시 켜지 않습니다.');
+check(!watchRetryDue({ error: '', homeworkSkipped: false, startedAt: 0 }, Date.now()), '정상 감시를 다시 켭니다.');
+useWatchTimingForTest(null);
 check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css), '추가 버튼 글자가 세로 가운데가 아닙니다.');
 
 resetSyncStatusForTest();

@@ -1,7 +1,7 @@
 /** 과제 동기화: 옛 규칙이면 원본 노트를 남기고, 계정을 바꾸면 과제가 새 계정으로 올라가지 않으며, 과제만 받아도 합칩니다. */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 
 const failures = [];
 const check = (ok, msg) => { if (!ok) failures.push(msg); };
@@ -101,6 +101,42 @@ try {
     await db.setAuth({ uid: 'teacher-a' });
     await wait(200);
     check((db.snapshot().homework || []).some((row) => row.id === 'hw-acct'), '원래 계정으로 돌아오니 과제가 없습니다.');
+
+    const markCheck = async (id, sid) => {
+        const ref = doc(fsA, 'users', 'teacher-a', 'homework', id);
+        await updateDoc(ref, { [`checks.${sid}`]: `1~${Date.now()}`, updatedAt: serverTimestamp() });
+        const pulledNow = await cloud.pullUserData('teacher-a');
+        await db.absorbCloudForTest(pulledNow, {});
+        return ref;
+    };
+    await db.addHomework('되돌리기', '2026-11-16', 'hw-u4', ['s1', 's2']);
+    await db.toggleHomeworkSubmit('hw-u4', 's1');
+    await db.flushCloud();
+    await markCheck('hw-u4', 's2');
+    await db.undo();
+    await db.flushCloud();
+    const u4 = (await getDoc(doc(fsA, 'users', 'teacher-a', 'homework', 'hw-u4'))).data()?.checks || {};
+    check(String(u4.s2 || '').startsWith('1~') && !String(u4.s1 || '').startsWith('1~'), `되돌리기가 다른 기기 체크 s2를 지웠습니다: ${JSON.stringify(u4)}`);
+
+    await db.addHomework('예전이름', '2026-11-16', 'hw-u5', ['s3', 's4']);
+    await db.renameHomework('hw-u5', '새이름');
+    await db.flushCloud();
+    await markCheck('hw-u5', 's3');
+    await markCheck('hw-u5', 's4');
+    await db.undo();
+    await db.flushCloud();
+    const u5doc = (await getDoc(doc(fsA, 'users', 'teacher-a', 'homework', 'hw-u5'))).data() || {};
+    check(u5doc.title === '예전이름' && String(u5doc.checks?.s3 || '').startsWith('1~') && String(u5doc.checks?.s4 || '').startsWith('1~'), `이름 되돌리기가 s3·s4를 지웠습니다: ${JSON.stringify(u5doc.checks)} ${u5doc.title}`);
+
+    await db.addHomework('지울과제', '2026-11-16', 'hw-u2', ['s3']);
+    await db.flushCloud();
+    await db.removeHomework('hw-u2');
+    await db.flushCloud();
+    await markCheck('hw-u2', 's3');
+    await db.undo();
+    await db.flushCloud();
+    const u2 = (await getDoc(doc(fsA, 'users', 'teacher-a', 'homework', 'hw-u2'))).data() || {};
+    check(!Number(u2.gone) && String(u2.checks?.s3 || '').startsWith('1~'), `삭제 되돌리기가 s3를 껐습니다: ${JSON.stringify(u2.checks)} gone=${u2.gone}`);
 
     const fsC = env.authenticatedContext('teacher-c').firestore();
     wire(fsC);

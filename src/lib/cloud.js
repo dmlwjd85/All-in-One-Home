@@ -778,10 +778,11 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
     if (!ready) return () => {};
     const { collection, doc, getDocs, limit, onSnapshot, query, where, Timestamp } = await import('firebase/firestore');
     const slots = [];
+    let homeworkSkipped = false;
     const report = () => {
         if (typeof onStatus !== 'function') return;
         const error = slots.find((slot) => slot.error)?.error || '';
-        try { onStatus({ live: !error && slots.length > 0 && slots.every((slot) => slot.live), error, at: Date.now() }); } catch { /* 알림 실패는 감시를 멈추지 않습니다. */ }
+        try { onStatus({ live: !error && slots.length > 0 && slots.every((slot) => slot.live), error, homeworkSkipped, at: Date.now() }); } catch { /* 알림 실패는 감시를 멈추지 않습니다. */ }
     };
     /* 메타데이터 변화도 받아(읽기 비용 없음) 서버와 이어져 있는지(fromCache)를 압니다. */
     const listen = (target, handle) => {
@@ -809,7 +810,8 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
         /* 옛 규칙은 과제 컬렉션을 모릅니다. 그 감시를 켜면 거절이 듣기 흐름을 끊고 앱이 죽습니다. 읽기가 될 때만 봅니다. */
         let watchNames = WATCH_RECENT;
         const allowed = await homeworkWatchAllowed(ready, uid, recent);
-        if (allowed === 'skip') watchNames = WATCH_RECENT.filter(([name]) => name !== 'homework');
+        homeworkSkipped = allowed === 'skip';
+        if (homeworkSkipped) watchNames = WATCH_RECENT.filter(([name]) => name !== 'homework');
         for (const [name, field] of watchNames) {
             /* 끊긴 동안(캐시 결과)에 실린 변경은 버리지 않고 모아 두었다가, 서버 결과로 돌아올 때 함께 알립니다. */
             let held = [];
