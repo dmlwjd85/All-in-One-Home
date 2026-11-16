@@ -5,7 +5,7 @@
  */
 import { isValidYmd, seoulYmd } from './date.js';
 import { findDates } from './parse.js';
-import { groupWeeks, inferYearMonth, isHeaderRow, parseTable, weekSlots, ymdFrom } from './monthGrid.js';
+import { groupWeeks, inferYearMonth, keepTableEdges, parseTable, titledMonth, weekSlots, weekStartOf, ymdFrom } from './monthGrid.js';
 import { looksLikeCalGrid } from './calGrid.js';
 import { fixMenuName, isKnownMenu } from './hangulFix.js';
 
@@ -56,7 +56,7 @@ function tidyLine(line) {
 function dishLine(line) {
     let text = tidyLine(line);
     if (!text || /^메모\s*[:：]?$/.test(text)) return null;
-    const kcalOnly = text.match(/^(\d{2,4})(?:\.\d+)?\s*kcal$/i) || text.match(/^(?:열량|에너지)\s*[:：]?\s*(\d{2,4})(?:\.\d+)?(?:\s*kcal)?$/i);
+    const kcalOnly = text.match(/^(\d{2,4}(?:\.\d)?)(?:\.\d+)?\s*k?cal$/i) || text.match(/^(?:열량|에너지)\s*[:：]?\s*(\d{2,4}(?:\.\d)?)(?:\.\d+)?(?:\s*kcal)?$/i);
     if (kcalOnly) return { kcal: kcalOnly[1] };
     const origin = text.match(/^원산지\s*[:：]?\s*(.+)$/);
     if (origin) return { origin: origin[1].trim() };
@@ -84,7 +84,7 @@ function dishLine(line) {
     /* 이름 뒤에 떨어진 한 글자(칸 선·얼룩을 글자로 읽은 것): 앞부분이 아는 메뉴이고 그 글자는 낱말이 아니면 뺍니다. */
     const tail = text.match(/^(.+[가-힣])\s([가-힣])$/);
     if (tail && isKnownMenu(tail[1]) && !isKnownMenu(tail[2])) text = tail[1];
-    if (!/[가-힣]/.test(text) || LABEL.test(text.replace(/\s+/g, ''))) return null;
+    if (!/[가-힣]/.test(text) || LABEL.test(text.replace(/\s+/g, '')) || /재량휴업|급식\s*없|휴업일|공휴일/.test(text.replace(/\s+/g, ''))) return null;
     /* 알레르기 번호는 1~22 안의 수만 둡니다(얼룩이 0으로 읽힌 것 등은 뺍니다). */
     codes = codes.split('.').filter((n) => Number(n) >= 1 && Number(n) <= 22).join('.');
     return { name: text.slice(0, 40), codes };
@@ -140,8 +140,11 @@ function cellMenu(cell) {
 export function looksLikeMealTable(text) {
     const src = String(text || '');
     if (looksLikeCalGrid(src)) return false;
-    const codes = src.match(/\d(?:\.\d+){1,}/g) || [];
-    return codes.length >= 3;
+    const weeks = groupWeeks(parseTable(keepTableEdges(src)));
+    if (!weeks.length) return false;
+    const codes = src.match(/\d{1,2}(?:\.\d{1,2}){2,}/g) || [];
+    const menus = weeks.some((week) => (week.body || []).some((cell) => /[가-힣]{2,}/.test(cell) && !/학년회의|연수|생기부/.test(cell)));
+    return codes.length >= 1 && menus;
 }
 
 function pushDay(days, date, menu, extra = {}) {
@@ -413,19 +416,20 @@ export function mealFromCells(rows, { today = '2026-11-15', year = 0, month = 0,
  * fix: 사진에서 읽은 글이라 닮은 글자로 잘못 읽은 메뉴 이름을 바로잡습니다(바꾼 것은 read 에 원래 글을 남깁니다).
  */
 export function parseMealTable(text, { today = '2026-11-15', year = 0, month = 0, now = new Date(), fix = false } = {}) {
-    const src = String(text || '').trim();
+    const src = keepTableEdges(text);
     const rows = parseTable(src);
     const base = today || seoulYmd(now);
     const tries = [];
 
     const weeks = groupWeeks(rows);
     if (weeks.length && weeks.some((week) => (week.body || []).some((cell) => cellMenu(cell).items.length))) {
-        const inferred = inferYearMonth(weeks, base);
-        const y = year || inferred?.year || Number(String(base).slice(0, 4));
-        const m = month || inferred?.month || Number(String(base).slice(5, 7));
+        const hint = titledMonth(src);
+        const inferred = inferYearMonth(weeks, base, { weekStart: weekStartOf(rows), monthHint: hint.month, yearHint: hint.year });
+        const y = year || inferred?.year || hint.year || Number(String(base).slice(0, 4));
+        const m = month || inferred?.month || hint.month || Number(String(base).slice(5, 7));
         const days = [];
         for (const week of weeks) {
-            weekSlots(week.header).forEach((slot, col) => {
+            weekSlots(week.header, { firstWeek: Boolean(week.firstWeek) }).forEach((slot, col) => {
                 if (!slot.day) return;
                 pushDay(days, ymdFrom(y, m, slot.day, slot.offset), cellMenu(week.body?.[col] || ''), { offset: slot.offset });
             });
@@ -438,7 +442,7 @@ export function parseMealTable(text, { today = '2026-11-15', year = 0, month = 0
 
     const lineDays = [];
     for (const block of src.split(/\n(?=\s*(?:\d{4}\s*년|\d{1,2}\s*월|\d{1,2}\s*[./]\s*\d{1,2}))/)) {
-        const hit = findDates(block, now)[0];
+        const hit = findDates(block, now).find((item) => !/\d(?:\.\d+){2,}/.test(block.slice(Math.max(0, item.index - 1), item.index + 12)));
         if (hit) pushDay(lineDays, hit.ymd, cellMenu(block));
     }
     if (lineDays.length) {
@@ -479,7 +483,8 @@ export function encodeMeals(days) {
             const codes = String(item.codes || '').replace(/[^\d.]/g, '');
             lines.push(codes ? `${name}|${codes}` : name);
         }
-        if (day.kcal) lines.push(`kcal ${String(day.kcal).replace(/\D/g, '').slice(0, 4)}`);
+        const kcal = String(day.kcal || '').match(/\d{2,4}(?:\.\d)?/);
+        if (kcal) lines.push(`kcal ${kcal[0]}`);
         if (day.origin) lines.push(`origin ${scrubWords(day.origin).slice(0, 80)}`);
     }
     return lines.join('\n').slice(0, 20000);
@@ -497,7 +502,7 @@ export function decodeMeals(text) {
             continue;
         }
         if (!cur) continue;
-        if (/^kcal\s+(\d+)/.test(trimmed)) { cur.kcal = trimmed.match(/^kcal\s+(\d+)/)[1]; continue; }
+        if (/^kcal\s+(\d+(?:\.\d)?)/.test(trimmed)) { cur.kcal = trimmed.match(/^kcal\s+(\d+(?:\.\d)?)/)[1]; continue; }
         if (/^origin\s+/.test(trimmed)) { cur.origin = trimmed.replace(/^origin\s+/, ''); continue; }
         const [name, codes] = trimmed.split('|');
         if (scrubWords(name)) cur.items.push({ name: scrubWords(name), codes: codes || '' });

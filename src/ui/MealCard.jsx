@@ -31,8 +31,8 @@ export function MealCard({ notes, today, hidden }) {
             </div>
             {day?.items?.length ? (
                 <ul className="meal-menu" style={{ margin: '8px 0 0', paddingLeft: 18 }}>
-                    {day.items.map((item) => (
-                        <li key={`${item.name}-${item.codes}`} style={{ overflowWrap: 'anywhere' }}>
+                    {day.items.map((item, index) => (
+                        <li key={`${day.date}-${index}`} style={{ overflowWrap: 'anywhere' }}>
                             {item.name}
                             {showCodes && item.codes ? <span className="meal-code">{item.codes}</span> : null}
                         </li>

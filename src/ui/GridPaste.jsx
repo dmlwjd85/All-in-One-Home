@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { normalizeCalendarItem } from '../lib/calWhen.js';
 import { saveCalendarEvents, saveMealMonth } from '../lib/db.js';
 import { parseCalGrid, shiftCalEvents } from '../lib/calGrid.js';
 import { encodeMeals, looksLikeMealTable, parseMealTable, shiftMealDays } from '../lib/mealPaste.js';
@@ -100,8 +101,11 @@ export function GridPaste({ text, image, mode = '', onBack }) {
             else if (read.kind === 'meal') showToast('날짜를 찾지 못했어요. 표 전체가 반듯하게 나온 사진으로 다시 해 주세요.');
             else if (found.weak) showToast('칸 선을 잘 못 찾았어요. 읽은 글을 확인해 주세요.');
             else showToast('표에서 글자를 읽었어요. 맞는지만 봐 주세요.');
-        } catch {
-            showToast('이 사진을 읽지 못했어요. 화면 갈무리(PNG·JPG)로 다시 해 보거나 글을 붙여 넣어 주세요.');
+        } catch (error) {
+            const offline = /fetch|network|Failed to fetch|언어|NetworkError/i.test(String(error?.message || error || ''));
+            showToast(offline
+                ? '글자 읽는 자료를 받지 못했어요. 인터넷에 연결한 뒤 다시 하거나, 표를 글자로 붙여 넣어 주세요.'
+                : '이 사진을 읽지 못했어요. 화면 갈무리(PNG·JPG)로 다시 해 보거나 글을 붙여 넣어 주세요.');
         } finally {
             setBusy('');
         }
@@ -126,7 +130,7 @@ export function GridPaste({ text, image, mode = '', onBack }) {
         if (result.ok) onBack();
     }
 
-    const kept = items.filter((item) => item.include !== false).length;
+    const kept = items.filter((item) => item.include !== false && normalizeCalendarItem(item).ok).length;
     const leak = encodeMeals(days);
     const mealLocal = kind === 'meal' && isSensitiveText(leak);
 
@@ -146,7 +150,7 @@ export function GridPaste({ text, image, mode = '', onBack }) {
                 <input ref={fileRef} type="file" accept="image/*" aria-label="표 이미지" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
             </div>
             {busy && <p className="low-card" role="status" style={{ padding: 10 }}>{busy}</p>}
-            {weak && !busy && <p className="low-card" style={{ padding: 10 }}>표의 칸 선을 찾지 못해 짐작으로 나눴어요. 표 전체가 반듯하게 나온 화면 갈무리가 가장 잘 읽힙니다.</p>}
+            {weak && !busy && <p className="low-card" role="status" style={{ padding: 10 }}>글자 인식이 약할 수 있어요. 아래 날짜와 제목·메뉴를 직접 고쳐 주세요. 표 전체가 반듯하게 나온 화면 갈무리가 가장 잘 읽히고, 자료를 못 받으면 표를 글자로 붙여 넣으면 됩니다.</p>}
             {small && !weak && !busy && <p className="low-card" style={{ padding: 10 }}>사진 속 글자가 작아 틀린 글자가 많을 수 있어요. 표를 화면에 가득 차게 가까이 찍으면 더 잘 읽힙니다.</p>}
             {fromImage && kind === 'meal' && days.length > 0 && !busy && <p className="muted" style={{ margin: '8px 0 0' }}>사진에서 읽은 알레르기 번호는 저장 전에 한 번 꼭 확인해 주세요. 메뉴판과 다르면 그 칸에서 바로 고칠 수 있어요.</p>}
             <details style={{ marginTop: 8 }}>
@@ -185,16 +189,16 @@ export function GridPaste({ text, image, mode = '', onBack }) {
             ) : (
                 <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                     {!items.length && <p className="muted">일정을 아직 못 나눴어요. 표나 팀즈 글을 붙여 넣어 주세요.</p>}
-                    {items.map((item) => (
-                        <article key={item.id || `${item.date}-${item.title}`} className={item.warning ? 'msg-card low-card' : 'msg-card'} data-cal-item={item.date}>
+                    {items.map((item, index) => (
+                        <article key={`${item.date}-${index}`} className={item.warning || normalizeCalendarItem(item).error ? 'msg-card low-card' : 'msg-card'} data-cal-item={item.date}>
                             <Btn className={item.include === false ? 'chip' : 'chip on'} aria-pressed={item.include !== false} onClick={() => setItems((prev) => prev.map((row) => (row === item ? { ...row, include: row.include === false } : row)))}>
                                 {item.include === false ? '빼 둠' : '✓ 넣기'}
                             </Btn>
-                            {item.warning && <p style={{ fontWeight: 800, margin: '8px 0 0' }}>{item.warning}</p>}
+                            {(item.warning || normalizeCalendarItem(item).error) && <p style={{ fontWeight: 800, margin: '8px 0 0' }}>{[item.warning, normalizeCalendarItem(item).error].filter(Boolean).join(' ')}</p>}
                             <input className="field" style={{ marginTop: 8 }} aria-label="제목" value={item.title} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, title: event.target.value } : row)))} />
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                                 <input className="field" style={{ flex: '1 1 140px', minWidth: 0 }} aria-label="날짜" value={item.date || ''} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, date: event.target.value } : row)))} />
-                                <input className="field" style={{ flex: '1 1 88px', minWidth: 0 }} aria-label="시작 시각" placeholder="시작" value={item.time || ''} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, time: event.target.value, allDay: !event.target.value } : row)))} />
+                                <input className="field" style={{ flex: '1 1 88px', minWidth: 0 }} aria-label="시작 시각" placeholder="시작" value={item.time || ''} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, time: event.target.value } : row)))} />
                                 <input className="field" style={{ flex: '1 1 88px', minWidth: 0 }} aria-label="끝나는 시각" placeholder="끝" value={item.endTime || ''} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, endTime: event.target.value } : row)))} />
                             </div>
                             <input className="field" style={{ marginTop: 8 }} aria-label="장소" placeholder="장소" value={item.place || ''} onChange={(event) => setItems((prev) => prev.map((row) => (row === item ? { ...row, place: event.target.value } : row)))} />

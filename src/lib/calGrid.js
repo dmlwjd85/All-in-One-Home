@@ -4,7 +4,7 @@
  * 원문자(①~⑳, ㉑~㉓)는 날짜로 보지 않고 글에 남깁니다.
  */
 import { DEFAULT_PERIODS } from './period.js';
-import { applyMonth, groupWeeks, inferYearMonth, parseTable, weekSlots, ymdFrom } from './monthGrid.js';
+import { applyMonth, groupWeeks, inferYearMonth, keepTableEdges, parseTable, titledMonth, weekSlots, weekStartOf, ymdFrom } from './monthGrid.js';
 
 const PLACE_RE = /(?:교실|운동장|체육관|강당|분교|교육|연수원|[실관원청장소초대집])$/;
 const ROLE = /^(?:학교장|교감|교장|부장|학년부장)$/;
@@ -104,6 +104,19 @@ export function findClocks(text) {
     const src = String(text || '');
     const found = [];
     const taken = (at, len) => found.some((row) => at < row.index + row.length && row.index < at + len);
+    const enHour = (hourRaw, minuteRaw, ap) => {
+        let hour = Number(hourRaw);
+        const mark = String(ap || '').toUpperCase();
+        if (mark === 'PM' && hour < 12) hour += 12;
+        if (mark === 'AM' && hour === 12) hour = 0;
+        return hm(hour, Number(minuteRaw));
+    };
+    for (const match of src.matchAll(/(\d{1,2}):([0-5]\d)\s*(AM|PM)\s*[-~～–—]\s*(\d{1,2}):([0-5]\d)\s*(AM|PM)/gi)) {
+        const start = enHour(match[1], match[2], match[3]);
+        const end = enHour(match[4], match[5], match[6]);
+        if (!start) continue;
+        found.push({ index: match.index, length: match[0].length, start, end: end && end > start ? end : '', approx: false, open: false });
+    }
     const rangeRe = new RegExp(`${CLOCK}\\s*[~～\\-–—]\\s*${CLOCK}`, 'gi');
     for (const match of src.matchAll(rangeRe)) {
         const start = side(match[1], match[2], match[3], match[4], /반/.test(match[0].slice(0, match[0].search(/[~～\-–—]/))));
@@ -352,13 +365,16 @@ export function looksLikeCalGrid(text) {
  * events 의 day·offset 은 해·달을 바꿀 때 날짜를 다시 매기는 칸 정보입니다.
  */
 export function parseCalGrid(text, { today = '2026-11-15', year = 0, month = 0, periods = DEFAULT_PERIODS, lengths = [] } = {}) {
-    const weeks = groupWeeks(parseTable(text));
-    const inferred = inferYearMonth(weeks, today);
-    const y = year || inferred?.year || Number(String(today).slice(0, 4));
-    const m = month || inferred?.month || Number(String(today).slice(5, 7));
+    const src = keepTableEdges(text);
+    const rows = parseTable(src);
+    const weeks = groupWeeks(rows);
+    const hint = titledMonth(src);
+    const inferred = inferYearMonth(weeks, today, { weekStart: weekStartOf(rows), monthHint: month || hint.month, yearHint: year || hint.year });
+    const y = year || inferred?.year || hint.year || Number(String(today).slice(0, 4));
+    const m = month || inferred?.month || hint.month || Number(String(today).slice(5, 7));
     const events = [];
     for (const week of weeks) {
-        const slots = applyMonth(weekSlots(week.header), y, m);
+        const slots = applyMonth(weekSlots(week.header, { firstWeek: Boolean(week.firstWeek) }), y, m);
         for (const slot of slots) {
             if (!slot.date) continue;
             const cell = week.body?.[slot.col] || '';

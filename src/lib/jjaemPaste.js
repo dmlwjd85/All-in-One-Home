@@ -198,13 +198,22 @@ export function findTimeSpans(raw) {
         if (!m[1] && notClockColon(text, m.index, m.index + m[0].length)) continue;
         push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min, am12(m[1], hour));
     }
-    /* 뒤에 붙는 AM/PM. 앞의 콜론 식은 변이 검사가 글자 그대로 찾으므로 따로 둡니다. */
+    /* 뒤에 붙는 AM/PM. 앞의 콜론 식은 변이 검사가 글자 그대로 찾으므로, 겹친 짧은 시각을 이 식으로 바꿉니다. */
     for (const m of text.matchAll(/(?<![\d:가-힣])(\d{1,2}):([0-5]\d)\s*(AM|PM)\b/gi)) {
-        if (spans.some((span) => m.index < span.index + span.length && span.index < m.index + m[0].length)) continue;
         const hour = Number(m[1]);
         const min = Number(m[2]);
         if (hour > 12 || min > 59) continue;
+        for (let i = spans.length - 1; i >= 0; i -= 1) {
+            const span = spans[i];
+            if (m.index <= span.index && span.index + span.length <= m.index + m[0].length) spans.splice(i, 1);
+        }
         push(m.index, m[0], clockHour(m[3], hour), min);
+    }
+    for (const m of text.matchAll(/(?<![\d:가-힣.])(\d{1,2})\s*(AM|PM)\b/gi)) {
+        const hour = Number(m[1]);
+        if (hour < 1 || hour > 12) continue;
+        if (spans.some((span) => m.index < span.index + span.length && span.index < m.index + m[0].length)) continue;
+        push(m.index, m[0], clockHour(m[2], hour), 0);
     }
     for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         push(m.index, m[0], Number(m[2]), Number(m[3]));

@@ -10,6 +10,7 @@ import { buildDemo } from './demo.js';
 import { parseNote, stripTokens } from './parse.js';
 import { alarmTimeLabel, readJjaemPaste } from './jjaemPaste.js';
 import { eventId, sameEvent } from './calGrid.js';
+import { normalizeCalendarItem } from './calWhen.js';
 import { decodeMeals, encodeMeals, mealNoteId, MEAL_TAG } from './mealPaste.js';
 import { isTodoTime } from './todoAlarm.js';
 import { isSensitiveText } from './sensitive.js';
@@ -1683,8 +1684,16 @@ export async function saveParsed(items, now = new Date()) {
 
 /** 달력 표에서 고른 일정. 같은 날·같은 제목은 건너뜁니다. 민감 낱말은 이 기기에만 둡니다. */
 export async function saveCalendarEvents(items, now = new Date()) {
-    const list = (items || []).filter((item) => item && item.include !== false && String(item.title || '').trim() && item.date);
-    if (!list.length) return { ok: false, message: '등록할 일정이 없어요.', count: 0, skipped: 0 };
+    const chosen = (items || []).filter((item) => item && item.include !== false && String(item.title || '').trim());
+    if (!chosen.length) return { ok: false, message: '등록할 일정이 없어요.', count: 0, skipped: 0, rejected: 0 };
+    const list = [];
+    let rejected = 0;
+    for (const item of chosen) {
+        const when = normalizeCalendarItem(item, now);
+        if (!when.ok) { rejected += 1; continue; }
+        list.push({ ...item, date: when.date, end: when.end, time: when.time, endTime: when.endTime });
+    }
+    if (!list.length) return { ok: false, message: '날짜가 이상한 일정은 넣지 않았어요.', count: 0, skipped: 0, rejected };
     let count = 0;
     let skipped = 0;
     let local = 0;
@@ -1715,11 +1724,12 @@ export async function saveCalendarEvents(items, now = new Date()) {
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message, count: 0, skipped };
-    if (!count) return { ok: false, message: skipped ? '같은 날 같은 제목은 이미 있어서 건너뛰었어요.' : '등록할 일정이 없어요.', count: 0, skipped };
+    if (!count) return { ok: false, message: skipped ? '같은 날 같은 제목은 이미 있어서 건너뛰었어요.' : '등록할 일정이 없어요.', count: 0, skipped, rejected };
     let message = `${count}개 일정에 넣었어요.`;
     if (skipped) message += ` 겹친 ${skipped}개는 건너뛰었어요.`;
+    if (rejected) message += ` 날짜가 이상한 ${rejected}개는 넣지 않았어요.`;
     if (local) message = `민감한 낱말이 있는 ${local}개는 이 기기에만 남겨 둘게요. ${message}`;
-    return { ok: true, message, count, skipped, local };
+    return { ok: true, message, count, skipped, local, rejected };
 }
 
 /** 한 달 급식. 기존 메모(notes)에 meal-YYYYMM 으로 둡니다. */

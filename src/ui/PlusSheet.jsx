@@ -14,6 +14,7 @@ import { LiveEventChips } from './LiveEventChips.jsx';
 import { GridPaste } from './GridPaste.jsx';
 import { takePasteSeed } from './pasteSeed.js';
 import { looksLikeMealTable } from '../lib/mealPaste.js';
+import { htmlTableToTsv, keepTableEdges } from '../lib/monthGrid.js';
 import { looksLikeScheduleList, looksLikeTeams, readPasteSchedule } from '../lib/teamsPaste.js';
 
 const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
@@ -129,7 +130,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     function preview() {
         speech.stop();
         const now = new Date();
-        if (looksLikeMealTable(text) || looksLikeTeams(text) || looksLikeScheduleList(text, now) || readPasteSchedule(text, { now }).mode === 'calendar') {
+        const read = readPasteSchedule(text, { now });
+        if (looksLikeMealTable(text) || looksLikeTeams(text) || looksLikeScheduleList(text, now) || read.mode === 'calendar' || read.mode === 'teams') {
             openGrid();
             return;
         }
@@ -160,7 +162,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
             showToast(clipboardHint(clip.reason));
             return;
         }
-        setText((prev) => (prev.trim() ? `${prev.trim()}\n${clip.text.trim()}` : clip.text.trim()));
+        const next = keepTableEdges(clip.text);
+        setText((prev) => (prev.trim() ? `${keepTableEdges(prev)}\n${next}` : next));
         box.current?.focus();
     }
 
@@ -265,9 +268,17 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                 onClick={(event) => event.stopPropagation()}
                 onPaste={(event) => {
                     const file = [...(event.clipboardData?.files || [])].find((item) => String(item.type || '').startsWith('image/'));
-                    if (!file) return;
+                    if (file) {
+                        event.preventDefault();
+                        setImage(file);
+                        setPhase('grid');
+                        return;
+                    }
+                    const html = event.clipboardData?.getData('text/html') || '';
+                    const table = htmlTableToTsv(html);
+                    if (!table) return;
                     event.preventDefault();
-                    setImage(file);
+                    setText(keepTableEdges(table));
                     setPhase('grid');
                 }}
             >

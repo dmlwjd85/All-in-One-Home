@@ -13,6 +13,21 @@
  */
 import { MEAL_WORDS } from './mealWords.js';
 
+/** 글자 인식이 한글을 한 글자씩 띄우면 그 토큰만 다시 붙입니다. '김치 찌개'처럼 이미 붙은 낱말은 그대로 둡니다. */
+export function joinHangulSpaces(text) {
+    return String(text || '').split('\n').map((line) => {
+        const out = [];
+        let buf = '';
+        const flush = () => { if (buf) { out.push(buf); buf = ''; } };
+        for (const token of line.split(/\s+/)) {
+            if (/^[가-힣]$/.test(token)) buf += token;
+            else { flush(); if (token) out.push(token); }
+        }
+        flush();
+        return out.join(' ');
+    }).join('\n');
+}
+
 const BASE = 0xac00;
 
 /** 한글 한 글자를 [초성, 중성, 종성] 번호로. 한글 음절이 아니면 null. */

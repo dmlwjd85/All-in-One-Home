@@ -50,7 +50,7 @@
     "check:swreload": "node scripts/check-swreload.mjs",
     "check:datechip": "node scripts/check-datechip.mjs",
     "check:jjaem-paste": "node scripts/check-jjaem-paste.mjs",
-    "check:paste": "node scripts/check-paste.mjs",
+    "check:paste": "node scripts/check-paste.mjs && node scripts/mutate-paste.mjs",
     "check:meal-image": "node scripts/check-meal-image.mjs",
     "check:meal-ocr-browser": "node scripts/check-meal-ocr-browser.mjs",
     "check:name-link": "node scripts/check-name-link.mjs",

@@ -12,6 +12,7 @@
  * 다른 회사 서버에 기대지 않고, 한 번 받은 뒤에는 인터넷이 없어도 읽습니다.
  */
 import { cellsToTable, clusterTable } from '../lib/gridDetect.js';
+import { joinHangulSpaces } from '../lib/hangulFix.js';
 import { placeLines, prepareTable } from '../lib/tableImage.js';
 
 const MAX_SIDE = 2600;
@@ -32,7 +33,7 @@ export function loadOcrWorker() {
             logger: (message) => { try { listener?.(message); } catch { /* 진행 표시가 실패해도 읽기는 이어갑니다. */ } },
         })).catch((error) => {
             workerPromise = null; /* 받다가 끊겼으면 다음에 다시 받습니다. */
-            throw error;
+            throw new Error(`언어 자료를 받지 못했어요. ${error?.message || ''}`.trim());
         });
     }
     return workerPromise;
@@ -79,7 +80,7 @@ function stripCanvas(strip) {
 function linesOf(data) {
     const lines = data?.lines || (data?.blocks || []).flatMap((block) => (block.paragraphs || []).flatMap((para) => para.lines || []));
     return (lines || []).map((line) => ({
-        text: String(line.text || '').trim(),
+        text: joinHangulSpaces(String(line.text || '').trim()),
         y0: line.bbox?.y0 ?? 0,
         y1: line.bbox?.y1 ?? 0,
         conf: line.confidence,
@@ -121,7 +122,7 @@ export async function readImageTable(file, onProgress = () => {}) {
         onProgress('칸 선이 잘 안 보여 통째로 읽고 있어요.');
         await worker.setParameters({ tessedit_pageseg_mode: '3' });
         const { data } = await worker.recognize(canvas);
-        return { text: clusterTable(wordsOf(data)) || String(data?.text || ''), cells: [], clipped: [], weak: true, doubt: 0 };
+        return { text: joinHangulSpaces(clusterTable(wordsOf(data)) || String(data?.text || '')), cells: [], clipped: [], weak: true, doubt: 0 };
     }
     await worker.setParameters({ tessedit_pageseg_mode: '6' });
     let doubt = 0;
