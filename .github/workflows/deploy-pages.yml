@@ -65,6 +65,7 @@ jobs:
           npm run check:sync-watch
           npm run check:locknote
           npm run check:minutes
+          npm run check:homework
           npm run check:hlc
           npm run check:alarm
           npm run check:datechip
@@ -103,6 +104,7 @@ jobs:
           - npm run check:leavesync
           - npm run check:lwwsync
           - npm run check:lwwprev
+          - npm run check:homework-cloud
           - npm run check:lwwmix
           - npm run check:keptpaths
           - npm run check:tabbarsync
@@ -193,6 +195,8 @@ jobs:
               npm run check:academic
               CHROME_PATH=/usr/bin/google-chrome npm run check:widgets-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:meal-ocr-browser
+              CHROME_PATH=/usr/bin/google-chrome npm run check:homework-browser
+              CHROME_PATH=/usr/bin/google-chrome npm run check:homework-old
           - part: 시계 10월
             run: |
               for day in 2026-10-23 2026-10-24 2026-10-25; do

@@ -1,7 +1,7 @@
 /** 에뮬레이터에서 건강·보건·보호자 연락처·주소가 든 글(태그 포함)이 거절되는지, 끝 시각이 두 기기에 남는지 확인합니다. 비밀 값은 쓰지 않습니다. */
 import { readFileSync } from 'node:fs';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { eventBodyWithoutEndTime, fromCloudRow, fromCloudSettings, toCloudRow, toCloudSettings } from '../src/lib/cloudShape.js';
 import { eventClock } from '../src/lib/date.js';
 import { rulesSafeTextBody } from '../src/lib/sensitive.js';
@@ -598,6 +598,25 @@ try {
             await expectAllow(`할 일 time ${ok}`, () => setDoc(todoDoc(n), body(ok)));
         }
         await expectAllow('time 없는 할 일', () => setDoc(todoDoc('none'), { title: '시각 없는 할 일', done: false, source: 'app' }));
+    }
+    /* 과제 체크는 노트와 다른 컬렉션입니다. 학생 한 명의 칸만 고쳐도 다른 학생 칸은 남습니다. */
+    {
+        const ref = doc(db, 'users/teacher-a/homework/hw-rule1');
+        const body = {
+            title: '독서록', date: '2026-11-16', made: 10, metaAt: 10, gone: 0,
+            roster: ['s1', 's2'], checks: { s1: '1~10' }, updatedAt: serverTimestamp(),
+        };
+        await expectAllow('과제 문서', () => setDoc(ref, body));
+        await expectAllow('과제 학생 칸만 고치기', () => updateDoc(ref, { 'checks.s2': '1~20', updatedAt: serverTimestamp() }));
+        const saved = (await getDoc(ref)).data() || {};
+        if (saved.checks?.s1 !== '1~10' || saved.checks?.s2 !== '1~20') failures.push(`과제 칸 갱신이 다른 학생을 지웠습니다: ${JSON.stringify(saved.checks)}`);
+        await expectDeny('과제 본문에 민감 낱말', () => setDoc(doc(db, 'users/teacher-a/homework/hw-rule2'), { ...body, title: '건강 기록', updatedAt: serverTimestamp() }));
+        await expectDeny('과제 제출 형식', () => updateDoc(ref, { 'checks.s3': '제출', updatedAt: serverTimestamp() }));
+        await expectDeny('과제 제출 줄바꿈', () => updateDoc(ref, { 'checks.s4': '1~1\n1~2', updatedAt: serverTimestamp() }));
+        await expectDeny('과제 명단 줄바꿈', () => updateDoc(ref, { roster: ['s1\ns2'], updatedAt: serverTimestamp() }));
+        await expectDeny('과제 추가 칸', () => updateDoc(ref, { note: '메모', updatedAt: serverTimestamp() }));
+        const other = testEnv.authenticatedContext('teacher-b').firestore();
+        await expectDeny('다른 사람 과제', () => getDoc(doc(other, 'users/teacher-a/homework/hw-rule1')));
     }
 } finally {
     await testEnv.cleanup();

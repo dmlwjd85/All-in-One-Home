@@ -16,6 +16,7 @@ import { LockNote } from './SyncChip.jsx';
 import { isClipped } from '../lib/detail.js';
 import { isMinutes, minutesList, minutesTitle } from '../lib/minutes.js';
 import { isMealNote } from '../lib/mealPaste.js';
+import { isHomeworkNote } from '../lib/homework.js';
 import { minutesOf } from '../lib/minutesExtract.js';
 import { chipSave, readEventChips } from '../lib/dateChips.js';
 import { allStarts } from '../lib/periodLocal.js';
@@ -34,8 +35,8 @@ export function Tasks() {
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
     const allNotes = joined(data, 'notes');
-    const notes = allNotes.filter((row) => !isMinutes(row) && !isMealNote(row));
-    const meetings = allNotes.length - notes.length;
+    const notes = allNotes.filter((row) => !isMinutes(row) && !isMealNote(row) && !isHomeworkNote(row));
+    const meetings = allNotes.filter((row) => isMinutes(row) && !isHomeworkNote(row)).length;
     const follows = joinedRecords(data).filter((row) => row.follow);
     const start = startOfWeekMon(clock.ymd);
     const end = addDaysYmd(start, 6);

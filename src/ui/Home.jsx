@@ -133,9 +133,12 @@ export function Home() {
             <section className="hero home-hero">
                 {todayRest.off ? (
                     <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>오늘은 수업이 없어요</span>
-                            <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
+                        <div className="hero-head">
+                            <span className="hero-kicker">오늘은 수업이 없어요</span>
+                            <div className="hero-actions">
+                                <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
+                                <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>
+                            </div>
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
                         {/* 주말·휴일에는 설명 대신 쉬는 날 팁을 같은 자리에 보여 줍니다(카드 높이는 예전과 같게). */}
@@ -147,9 +150,12 @@ export function Home() {
                     </>
                 ) : (
                     <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
-                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>⏰ {period.text}</span>
-                            <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
+                        <div className="hero-head">
+                            <span className="hero-kicker">⏰ {period.text}</span>
+                            <div className="hero-actions">
+                                <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
+                                <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>
+                            </div>
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

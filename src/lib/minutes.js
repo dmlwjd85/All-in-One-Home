@@ -1,6 +1,7 @@
 /** 회의록. 따로 버킷을 만들지 않고 기존 'notes'(메모)에 '회의' 태그로 둡니다.
     #38 쨈 흐름(FlowSheet)이 남긴 'meet-…' 메모도 그대로 회의록으로 보입니다(옮기기·지우기 없음). */
 import { isSensitiveText } from './sensitive.js';
+import { isHomework } from './homework.js';
 
 export const MINUTES_TAG = '회의';
 export const MINUTES_TITLE_MAX = 60;
@@ -24,7 +25,7 @@ export function minutesTitle(row) {
 }
 
 export function minutesList(rows) {
-    return (rows || []).filter(isMinutes).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.id).localeCompare(String(a.id)));
+    return (rows || []).filter((row) => isMinutes(row) && !isHomework(row)).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.id).localeCompare(String(a.id)));
 }
 
 /** 저장할 메모 한 줄. 옛 회의록을 고치면 id·태그(회의 종류)는 그대로 둡니다. */

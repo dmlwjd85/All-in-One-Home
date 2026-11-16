@@ -529,7 +529,7 @@ const missingTable = resolveHash('#/schedule/table/2026-13-01', '2026-10-26');
 check(missingTable.params.view === '시간표' && missingTable.params.date === '2026-10-26' && missingTable.replace === '#/schedule/table/2026-10-26' && missingTable.notice.includes('달력에 없어요'), '잘못된 시간표 날짜가 주 보기로 풀립니다.');
 
 /** PR #68: 메뉴 순서·CSV·삭제 확인·월간 제목·단축키 간격을 지키는 검사. */
-check(MENU.map((row) => row[0]).join('|') === '오늘|출결|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
+check(MENU.map((row) => row[0]).join('|') === '오늘|출결|과제 체크|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
 check(csvEscape('=1+1') === "'=1+1" && csvEscape('+CMD') === "'+CMD" && csvEscape('@A1') === "'@A1", 'CSV 수식 앞 글자에 따옴표를 붙이지 않습니다.');
 check(csvEscape('+2') === '+2' && csvEscape('+82') === '+82' && csvEscape('+82-10-1234-5678') === '+82-10-1234-5678', '전화·국번처럼 +숫자에도 CSV 따옴표를 붙입니다.');
 check(csvEscape('-5') === '-5' && csvEscape('- 글머리') === '- 글머리', '정상 음수·글머리에도 CSV 따옴표를 붙입니다.');
@@ -599,7 +599,7 @@ check(/const \{ localOnly: _localOnlyFlag, \.\.\.stored \} = row;/.test(dbSrc)
     && !/put\([^,]+,\s*\{\s*\.\.\.row,\s*source:\s*row\.source/.test(dbSrc), '저장 시 localOnly 표시를 걷지 않습니다.');
 const hotkeysSrc = readFileSync(`${root}/src/ui/hotkeys.js`, 'utf8');
 const moveLabels = [...hotkeysSrc.matchAll(/\{ id: '[^']+', label: '([^']+)', group: '이동'/g)].map((m) => m[1]);
-check(moveLabels.join('|') === '오늘|출결|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `단축키 이동 순서가 메뉴와 다릅니다: ${moveLabels.join('|')}`);
+check(moveLabels.join('|') === '오늘|출결|과제 체크|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `단축키 이동 순서가 메뉴와 다릅니다: ${moveLabels.join('|')}`);
 const tasksSrc = readFileSync(`${root}/src/ui/Tasks.jsx`, 'utf8');
 check(/showToast\(result\.ok \? '확정했어요\.'[\s\S]*?,\s*Boolean\(result\.ok\)\)/.test(tasksSrc) || tasksSrc.includes("showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'), Boolean(result.ok))"), '임시보관함 확정 토스트에 되돌리기가 없습니다.');
 
@@ -703,7 +703,8 @@ for (const value of settingsWords) {
     if (jargon) failures.push(`설정 글에 어려운 말 “${jargon[0]}”이 있습니다. ${value.trim().slice(0, 40)}`);
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v93'"), '캐시 판이 올라가지 않았습니다.');
+
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v94'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

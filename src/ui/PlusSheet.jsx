@@ -21,6 +21,7 @@ const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 const ATTEND_STATUS = ['출석', '결석', '지각', '조퇴', '결과'];
 const SHORT_LABEL = {
     attend: '출결',
+    homework: '과제 체크',
     'quick:상담': '상담',
     'quick:할 일': '할 일',
     'quick:일정': '일정',

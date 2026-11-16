@@ -142,7 +142,10 @@ export function Day() {
                     <p key={row.id} style={{ marginTop: 0 }}>{studentOf(row.sid)} {row.status}{row.reason ? ` · ${row.reason}` : ''}{row.note ? ` · ${row.note}` : ''}</p>
                 ))}
                 {!marks.length && <p className="muted">결석·지각·조퇴로 적어 둔 친구가 없어요. 모두 출석으로 보면 돼요.</p>}
-                <Btn className="chip" onClick={() => go(`#/attend/${date}`)}>출결 고치기</Btn>
+                <div className="hw-inline-actions">
+                    <Btn className="chip" onClick={() => go(`#/attend/${date}`)}>출결 고치기</Btn>
+                    <Btn className="chip" onClick={() => go('#/homework')}>과제 체크</Btn>
+                </div>
             </section>
 
             <section className="glass" style={{ padding: 14 }}>

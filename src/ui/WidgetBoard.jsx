@@ -72,7 +72,10 @@ function DayWidget({ data, today, events }) {
                 {todays.slice(0, 3).map((row) => <p key={row.id} className="wb-item clip1">📅 {eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}</p>)}
                 {!todays.length && <p className="wb-item muted">오늘 일정은 없어요</p>}
             </div>
-            <Btn className="chip wb-more" onClick={() => go(`#/attend/${today}`)}>{checked ? `출결 ${marks ? `${marks}명 표시` : '모두 출석'}` : '출결 하기'}</Btn>
+            <div className="wb-actions">
+                <Btn className="chip wb-more" onClick={() => go(`#/attend/${today}`)}>{checked ? `출결 ${marks ? `${marks}명 표시` : '모두 출석'}` : '출결 하기'}</Btn>
+                <Btn className="chip wb-more" onClick={() => go('#/homework')}>과제 체크</Btn>
+            </div>
         </>
     );
 }

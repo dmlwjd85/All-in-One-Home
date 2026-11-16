@@ -37,6 +37,7 @@ import { TodoAlarm } from './ui/TodoAlarm.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
 import { MsgSheet } from './ui/MsgSheet.jsx';
 import { Attend } from './ui/Attend.jsx';
+import { Homework } from './ui/Homework.jsx';
 import { Neis, Student, Students } from './ui/Students.jsx';
 import { Schedule } from './ui/Schedule.jsx';
 import { Notice, Tasks } from './ui/Tasks.jsx';
@@ -352,6 +353,8 @@ export default function App() {
                 ? '#/settings'
                 : route.name === 'student'
                     ? '#/students'
+                    : route.name === 'homework' && route.params.id
+                        ? '#/homework'
                     : route.name === 'minutes' && route.params.mode !== 'list'
                         ? (route.params.mode === 'edit' && route.params.id ? `#/minutes/${route.params.id}` : '#/minutes')
                     : route.name === 'legacy'
@@ -421,6 +424,7 @@ export default function App() {
         const href = {
             today: '#/today',
             attend: `#/attend/${ymd}`,
+            homework: '#/homework',
             schedule: '#/schedule',
             todo: '#/todo',
             minutesList: '#/minutes',
@@ -681,6 +685,7 @@ export default function App() {
     const showBoard = wideScreen && boardOn;
     let screen = showBoard ? <WidgetBoard onLeave={() => setBoardOn(writeWidgetMode(false))} /> : <Home />;
     if (route.name === 'attend') screen = <Attend />;
+    if (route.name === 'homework') screen = <Homework />;
     if (route.name === 'students') screen = <Students />;
     if (route.name === 'student') screen = <Student />;
     if (route.name === 'neis') screen = <Neis />;
@@ -696,6 +701,7 @@ export default function App() {
     const titles = {
         today: [clock.label, `${data.profile.className || '학급을 아직 안 적었어요'} · ${clock.clock}`],
         attend: ['출결', `${data.profile.className || '우리 반'} · ${data.students.length || data.profile.classSize || 0}명`],
+        homework: ['과제 체크', '제출한 친구를 눌러 표시해요'],
         students: ['학생 기록', data.profile.className || '번호순으로 볼 수 있어요'],
         student: ['학생', data.profile.className || ''],
         neis: ['나이스 모아 보기', '복사해서 옮긴 뒤 표시해 두세요'],
@@ -753,8 +759,8 @@ export default function App() {
                     {!cloudReady() && <p className="muted cloud-note">아직 클라우드 연결 전이에요. 이 기기에는 저장돼요.</p>}
                     {!online && cloudReady() && <p className="solid-card" style={{ padding: 12 }} role="status">인터넷이 끊겼어요. 적은 건 이 기기에 저장해 두고, 연결되면 선생님 자리에 올릴게요.</p>}
                     {data.profile.sharedPc && <p className="muted" style={{ marginTop: 0 }}>공용 컴퓨터 모드예요. 30분 동안 가만히 있으면 화면을 잠급니다.</p>}
-                    <header className={`topbar${cloudReady() ? ' has-sync' : ''}${(['student', 'legacy', 'day', 'roster'].includes(route.name) || (route.name === 'settings' && route.params.sec)) ? ' has-back' : ''}`}>
-                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster' || (route.name === 'settings' && route.params.sec)) && (
+                    <header className={`topbar${cloudReady() ? ' has-sync' : ''}${(['student', 'legacy', 'day', 'roster'].includes(route.name) || (route.name === 'homework' && route.params.id) || (route.name === 'settings' && route.params.sec)) ? ' has-back' : ''}`}>
+                        {(route.name === 'student' || route.name === 'legacy' || route.name === 'day' || route.name === 'roster' || (route.name === 'homework' && route.params.id) || (route.name === 'settings' && route.params.sec)) && (
                             <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
                         {route.name === 'today' ? (
@@ -824,6 +830,10 @@ export default function App() {
                             if (!action) return;
                             if (action.id === 'attend') {
                                 go(`#/attend/${clock.ymd}`);
+                                return;
+                            }
+                            if (action.id === 'homework') {
+                                go('#/homework');
                                 return;
                             }
                             if (action.id === 'message') {
