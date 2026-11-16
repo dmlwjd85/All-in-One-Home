@@ -339,7 +339,31 @@ export function foldLegacyIntoHomework(cloudNotes = [], localNotes = [], homewor
         const bucket = item.local ? nextLocal : nextHomework;
         /* 본문을 읽지 못하면 그 노트는 지우지 않습니다. 제출 노트는 아래서 과제에 들어간 것만 지웁니다. */
         if (!pack) {
-            (item.local ? local : cloud).push(item.row);
+            const tags = Array.isArray(item.row.tags) ? item.row.tags : [];
+            const preview = String(item.row.text || '') === LEGACY_TEXT || tags.includes('과제');
+            const existing = bucket.find((row) => row.id === item.row.id) || nextHomework.find((row) => row.id === item.row.id) || nextLocal.find((row) => row.id === item.row.id);
+            /* 본문을 읽지 못한 노트는 지우지 않습니다. 미리보기 판의 '과제' 본문은 새 기기에서도 바로 과제로 만듭니다. */
+            if (!preview || existing) {
+                (item.local ? local : cloud).push(item.row);
+                continue;
+            }
+            const at = Number(item.row.editAt) || 0;
+            const base = {
+                id: item.row.id,
+                title: item.row.title || '',
+                date: item.row.date || '',
+                made: at,
+                metaAt: at,
+                roster: [],
+                checks: {},
+                gone: 0,
+                editAt: at,
+            };
+            takeExtras(item.row.id, base.checks);
+            putHomework(bucket, base);
+            removed.push(item.row);
+            mergedNoteIds.add(item.row.id);
+            changed = true;
             continue;
         }
         removed.push(item.row);

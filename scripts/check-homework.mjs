@@ -11,8 +11,8 @@ import {
 } from '../src/lib/homework.js';
 import { buildExport } from '../src/lib/backup.js';
 import {
-    addHomework, addHomeworkStudent, importText, removeHomework, resetClockForTest, snapshot, submitAllHomework,
-    toggleHomeworkSubmit, undo, update, useAuthForTest, useVaultsForTest,
+    absorbCloudForTest, addHomework, addHomeworkStudent, importText, pushSettledForTest, removeHomework, resetClockForTest, setHomeworkDate, snapshot, submitAllHomework,
+    subscribeStorageIssue, toggleHomeworkSubmit, undo, update, useAuthForTest, useVaultsForTest,
 } from '../src/lib/db.js';
 import { homeworkWatchOnError } from '../src/lib/cloud.js';
 import { useWatchTimingForTest, watchRetryDue } from '../src/lib/db.js';
@@ -60,6 +60,11 @@ check(broken.removed.some((row) => row.id === 'hx-hw-read1-s5') && !broken.remov
 
 const orphan = foldLegacyIntoHomework([legacyCheck], [], [], []);
 check(orphan.homework.length === 0 && orphan.cloud.some((row) => row.id === legacyCheck.id) && !orphan.removed.length, '확인되지 않은 제출 노트를 지웁니다.');
+const previewFold = foldLegacyIntoHomework([
+    { id: 'hw-prev', title: '미리보기 과제', date: '2026-11-16', text: '과제', tags: ['과제'], editAt: 40 },
+    { id: 'hx-hw-prev-s1', title: 'hw-prev', text: 's1', tags: ['제출'], editAt: 41 },
+], [], [], []);
+check(previewFold.homework.some((row) => row.id === 'hw-prev' && row.title === '미리보기 과제' && row.checks?.s1?.on === 1), `미리보기 판 과제가 바로 안 보입니다: ${JSON.stringify(previewFold.homework)}`);
 
 const base = newHomework({ id: 'hw-live', title: '독서록', date: '2026-11-16', roster: ['s1', 's2', 's3'], made: 100 });
 base.checks = { s1: { at: 110, on: 1 } };
@@ -136,6 +141,22 @@ await update((draft) => {
 await undo();
 const allRow = snapshot().homework.find((row) => row.id === 'hw-all');
 check(allRow?.checks?.s7?.on === 1 && allRow.checks.s7.at === allAt + 50 && allRow.checks.s1.on === 0, `모두 제출 되돌리기가 나중 체크 s7을 지웁니다: ${JSON.stringify(allRow?.checks)}`);
+await addHomework('날짜 과제', '2026-11-16', 'hw-date', ['s1']);
+await setHomeworkDate('hw-date', '2026-11-20');
+const dated = snapshot().homework.find((row) => row.id === 'hw-date');
+await update((draft) => {
+    const row = draft.homework.find((item) => item.id === 'hw-date');
+    row.title = '다른 이름';
+    row.metaAt = Number(dated.metaAt) + 50;
+    return draft;
+});
+const notices = [];
+const stopNotice = subscribeStorageIssue((message) => notices.push(message));
+await undo();
+stopNotice();
+const datedAfter = snapshot().homework.find((row) => row.id === 'hw-date');
+check(datedAfter?.date === '2026-11-20' && datedAfter.title === '다른 이름', `다른 기기 이름 변경 뒤 날짜 되돌리기가 이름을 덮습니다: ${datedAfter?.date} ${datedAfter?.title}`);
+check(notices.includes('다른 기기에서 고쳐서 되돌리지 않았어요'), `날짜 되돌리기를 건너뛰어도 알림이 없습니다: ${notices.join('|')}`);
 await addHomework('되돌릴 과제', '2026-11-16', 'hw-undo', ['s1', 's2']);
 await toggleHomeworkSubmit('hw-undo', 's1');
 const stamped = snapshot().homework.find((row) => row.id === 'hw-undo');
@@ -155,10 +176,28 @@ check(watchRetryDue({ error: '', homeworkSkipped: true, startedAt: Date.now() - 
 check(!watchRetryDue({ error: '', homeworkSkipped: false, startedAt: 0 }, Date.now()), '정상 감시를 다시 켭니다.');
 useWatchTimingForTest(null);
 check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css) && /\.tap\.primary-btn\.block[^{]*\{[^}]*justify-content:\s*center/.test(css), '추가 버튼 글자가 가운데가 아닙니다.');
+check(/\.hw-date-toggle \{[^}]*padding:\s*8px 14px/.test(css), '마감일 바꾸기 글자가 위 테두리에 붙습니다.');
+const tasks = readFileSync(new URL('../src/ui/Tasks.jsx', import.meta.url), 'utf8');
+check(/!isMealNote\(row\) && !isHomeworkNote\(row\)/.test(tasks), '메모 수에서 급식 노트나 과제 노트를 빼지 않습니다.');
+await absorbCloudForTest({
+    notes: [
+        { id: 'hw-first', title: '첫 받기', date: '2026-11-16', text: '과제', tags: ['과제'], editAt: 50 },
+        { id: 'hx-hw-first-s2', title: 'hw-first', text: 's2', tags: ['제출'], editAt: 51 },
+    ],
+    ids: { notes: ['hw-first', 'hx-hw-first-s2'] },
+}, {});
+const firstSeen = snapshot().homework.find((row) => row.id === 'hw-first');
+check(firstSeen?.title === '첫 받기' && firstSeen.checks?.s2?.on === 1, `새 기기 첫 받기에 미리보기 과제가 안 보입니다: ${JSON.stringify(firstSeen)}`);
 
 resetSyncStatusForTest();
 syncEnd({ ok: false, homeworkLocal: true });
 check(chipState({ cloudReady: true, signedIn: true, online: true })?.label === '과제는 아직 이 기기에만 있어요', '거절된 과제가 동기화됨으로 보입니다.');
+resetSyncStatusForTest();
+syncEnd({ ok: pushSettledForTest({ ok: true, pending: 0, rejected: ['homework/hw-bad'] }), pending: 0, homeworkLocal: false });
+check(chipState({ cloudReady: true, signedIn: true, online: true })?.label === '동기화됨', '과제 하나만 거절돼도 동기화하지 못했어요로 남습니다.');
+resetSyncStatusForTest();
+syncEnd({ ok: pushSettledForTest({ ok: true, pending: 0, rejected: ['notes/n1'] }), pending: 0, homeworkLocal: false });
+check(chipState({ cloudReady: true, signedIn: true, online: true })?.label === '동기화하지 못했어요', '다른 기록 거절을 동기화됨으로 봅니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));

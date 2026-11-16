@@ -705,7 +705,7 @@ async function flushCloudTracked() {
     } finally {
         if (!result || result.skipped) syncEnd({ skipped: Boolean(result?.skipped), ok: false });
         else syncEnd({
-            ok: pushedAll(result),
+            ok: pushedAll(result, { ignoreHomeworkRejects: true }),
             pending: result.pending,
             stamp,
             homeworkLocal: homeworkOnlyLocal(result),
@@ -1155,6 +1155,7 @@ function applyHomeworkUndo(currentList = [], prevList = [], touches = [], now) {
     const prevMap = new Map((prevList || []).map((row) => [row?.id, row]));
     const out = (currentList || []).map((row) => ({ ...row, checks: { ...(row.checks || {}) }, roster: [...(row.roster || [])] }));
     const outMap = new Map(out.map((row) => [row.id, row]));
+    let skippedMeta = false;
     for (const touch of touches || []) {
         const prevRow = prevMap.get(touch.id);
         const cur = outMap.get(touch.id);
@@ -1179,6 +1180,7 @@ function applyHomeworkUndo(currentList = [], prevList = [], touches = [], now) {
             edited = true;
         }
         const metaLater = (touch.title || touch.date || touch.rosterAdd || touch.rosterDel) && Number(cur.metaAt) > Number(touch.metaAt || 0);
+        if (metaLater) skippedMeta = true;
         if (!metaLater) {
             if (touch.title && prevRow) { cur.title = prevRow.title; edited = true; }
             if (touch.date && prevRow) { cur.date = prevRow.date; edited = true; }
@@ -1196,17 +1198,22 @@ function applyHomeworkUndo(currentList = [], prevList = [], touches = [], now) {
         }
         if (edited) cur.editAt = now;
     }
-    return out;
+    return { rows: out, skippedMeta };
 }
 
 function restampHomeworkUndo(current, prev, touches) {
     const now = homeworkStamp();
+    const cloud = applyHomeworkUndo(current.homework, prev.homework, touches, now);
+    const local = applyHomeworkUndo(current.local?.homework, prev.local?.homework, touches, now);
     return {
-        ...prev,
-        homework: applyHomeworkUndo(current.homework, prev.homework, touches, now),
-        local: {
-            ...(prev.local || {}),
-            homework: applyHomeworkUndo(current.local?.homework, prev.local?.homework, touches, now),
+        skippedMeta: cloud.skippedMeta || local.skippedMeta,
+        state: {
+            ...prev,
+            homework: cloud.rows,
+            local: {
+                ...(prev.local || {}),
+                homework: local.rows,
+            },
         },
     };
 }
@@ -1217,7 +1224,8 @@ export async function undo() {
     const prev = entry.state || entry;
     const touches = entry.touch || [];
     const current = state;
-    state = restampHomeworkUndo(current, prev, touches);
+    const undone = restampHomeworkUndo(current, prev, touches);
+    state = undone.state;
     mirrorTheme(state.profile.theme);
     emit();
     try {
@@ -1236,6 +1244,7 @@ export async function undo() {
             if (row?.id && !kept.has(row.id)) queueCloudForget(bucket, row.id, row);
         }
     }
+    if (undone.skippedMeta) tellStorageIssue('다른 기기에서 고쳐서 되돌리지 않았어요');
     await flushCloud().catch(() => {});
     return true;
 }
@@ -3251,8 +3260,13 @@ async function reconcileDirtyTodos(uid) {
     if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
 }
 
-function pushedAll(result) {
-    return Boolean(result) && !result.skipped && !result.pending && result.ok !== false && !(result.rejected || []).length;
+export function pushSettledForTest(result) {
+    return pushedAll(result, { ignoreHomeworkRejects: true });
+}
+
+function pushedAll(result, { ignoreHomeworkRejects = false } = {}) {
+    const rejected = (result?.rejected || []).filter((key) => !(ignoreHomeworkRejects && String(key).startsWith('homework/')));
+    return Boolean(result) && !result.skipped && !result.pending && result.ok !== false && !rejected.length;
 }
 
 const LAST_SYNC_KEY = 'ssug-gyomu-last-sync';
