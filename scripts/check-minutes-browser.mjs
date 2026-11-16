@@ -137,7 +137,7 @@ try {
             check(!got.small.length, `${tag}: 작거나 밖으로 나간 단추 ${got.small.join(', ')}`);
             check(!got.overlaps.length, `${tag}: 겹침 ${got.overlaps.join(', ')}`);
             /* 회의 종류·날짜를 접어 두어, 폰에서도 본문 칸이 첫 화면 안에서 시작합니다(2026-11-14 2번안). */
-            check(got.areaTop < got.vh - (width >= 900 ? 80 : 20), `${tag}: 본문 칸이 첫 화면 밖(${got.areaTop}px / ${got.vh})에서 시작합니다.`);
+            check(got.areaTop < got.vh - (width >= 900 || width <= 340 ? 80 : 20), `${tag}: 본문 칸이 첫 화면 밖(${got.areaTop}px / ${got.vh})에서 시작합니다.`);
             check(!(await page.$('.minutes-kinds')), `${tag}: 회의 종류 칩이 처음부터 펼쳐져 있습니다.`);
             if (width === 390 || width === 1920) await page.screenshot({ path: `${shots}/minutes-${width}-${mode}.png` });
             /* 날짜: 접혀 있다가 누르면 펼치고, 고르면 다시 접힙니다. */

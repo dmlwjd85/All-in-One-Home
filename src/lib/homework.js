@@ -140,13 +140,6 @@ export function homeworkFromDoc(id, data = {}) {
     };
 }
 
-function activityOf(row, checks) {
-    return Math.max(
-        Number(row?.metaAt) || 0,
-        ...Object.values(checks || {}).map((item) => Number(item?.at) || 0),
-    );
-}
-
 /** 제목·마감일은 나중에 고친 쪽, 명단은 양쪽을 합치고, 제출은 학생마다 나중에 고친 쪽. */
 export function mergeHomework(local, remote) {
     if (!local) return remote ? { ...remote } : null;
@@ -162,7 +155,6 @@ export function mergeHomework(local, remote) {
     const meta = useRemote ? remote : local;
     const madeCandidates = [Number(local.made) || 0, Number(remote.made) || 0].filter((value) => value > 0);
     const gone = Math.max(Number(local.gone) || 0, Number(remote.gone) || 0);
-    const activity = Math.max(activityOf(local, checks), activityOf(remote, checks));
     return {
         id: local.id || remote.id,
         title: String(meta.title || local.title || remote.title || '').trim().slice(0, HW_TITLE_MAX),
@@ -171,7 +163,8 @@ export function mergeHomework(local, remote) {
         metaAt: Math.max(Number(local.metaAt) || 0, Number(remote.metaAt) || 0),
         roster: [...new Set([...(local.roster || []), ...(remote.roster || [])].map(String).filter(Boolean))],
         checks,
-        gone: gone > 0 && gone >= activity ? gone : 0,
+        /* 체크만으로는 되살리지 않습니다. 이름·마감일·되돌리기처럼 metaAt 이 지운 시각보다 뒤일 때만 살아납니다. */
+        gone: gone > 0 && gone >= Math.max(Number(local.metaAt) || 0, Number(remote.metaAt) || 0) ? gone : 0,
         editAt: Math.max(Number(local.editAt) || 0, Number(remote.editAt) || 0),
     };
 }
@@ -378,7 +371,7 @@ export function foldLegacyIntoHomework(cloudNotes = [], localNotes = [], homewor
             const prev = row.checks[extra.sid];
             if (!prev || extra.at >= Number(prev.at)) row.checks[extra.sid] = { at: extra.at, on: 1 };
         }
-        if (Number(row.gone) > 0 && activityOf(row, row.checks) > Number(row.gone)) row.gone = 0;
+        if (Number(row.gone) > 0 && Number(row.metaAt) > Number(row.gone)) row.gone = 0;
         changed = true;
     }
     return { cloud, local, removed, homework: nextHomework, localHomework: nextLocal, changed };

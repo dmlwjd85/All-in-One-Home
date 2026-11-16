@@ -704,7 +704,12 @@ async function flushCloudTracked() {
         return result;
     } finally {
         if (!result || result.skipped) syncEnd({ skipped: Boolean(result?.skipped), ok: false });
-        else syncEnd({ ok: pushedAll(result), pending: result.pending, stamp });
+        else syncEnd({
+            ok: pushedAll(result),
+            pending: result.pending,
+            stamp,
+            homeworkLocal: (result.rejected || []).some((key) => String(key).startsWith('homework/')),
+        });
         syncQueued(queuedCloudKeys().length);
     }
 }
@@ -739,10 +744,17 @@ async function flushCloudOnce() {
         cloudHashes = mergePushedHashes(sent, cloudHashes, result.hashes);
         if (!memoryOnly) mainVault.set('cloudHashes', cloudHashes).catch(() => {});
     }
+    if (result?.homeworkConfirmed?.length) {
+        releaseHomeworkSources(result.homeworkConfirmed);
+        emit();
+        await persist().catch(() => {});
+    }
+    /* 과제 거절은 칩에 '이 기기에만'으로 보여 주고, 다른 기록 거절 문구와 섞지 않습니다. */
+    const otherRejected = (result?.rejected || []).filter((key) => !String(key).startsWith('homework/'));
     /* 서버 시각을 재기 전(editD만 있음)에 고친 줄은 hlc 문서에 거절돼도 재기 뒤 다시 올라가므로 알리지 않습니다(PR #66 r3 P2-2). */
-    if (Array.isArray(result?.rejected)) { const waiting = unsureKeys(); tellRejected(result.rejected.filter((key) => !waiting.has(key))); }
+    if (otherRejected.length) { const waiting = unsureKeys(); tellRejected(otherRejected.filter((key) => !waiting.has(key))); }
     /* 거절·진 줄은 서버 시각 보정이 틀려서일 수 있습니다(기기 시계가 바뀜). 진 줄은 곧 받기(force)에서, 거절은 다음 받기에서 다시 잽니다. */
-    if ((result?.rejected || []).length || (result?.lost || []).length) markClockDoubt(result.rejected || []);
+    if (otherRejected.length || (result?.lost || []).length) markClockDoubt(otherRejected);
     /* 다른 기기가 더 나중에 고친 줄: 곧바로 받아 와 그쪽 값으로 맞춥니다. */
     if ((result?.lost || []).length) setTimeout(() => { refreshFromCloud({ force: true }).catch(() => {}); }, 0);
     await forgetQueuedCloud(cloudApi.remove || deleteUserDoc);
@@ -1103,11 +1115,56 @@ function absorbCloud(draft, remote, seen = null) {
     return draft;
 }
 
+/** 되돌리기는 예전 시각을 그대로 두면 클라우드의 더 나중 시각에 밀립니다. 바뀐 칸만 지금 시각으로 다시 씁니다. */
+function restampHomeworkUndo(current, prev) {
+    const now = homeworkStamp();
+    const restamp = (curList = [], prevList = []) => {
+        const cur = new Map((curList || []).map((row) => [row?.id, row]));
+        const kept = new Set();
+        const next = (prevList || []).map((row) => {
+            kept.add(row?.id);
+            const was = cur.get(row?.id);
+            if (!was) return { ...row, metaAt: now, gone: 0, editAt: now };
+            const checks = { ...(row.checks || {}) };
+            let checksChanged = false;
+            const sids = new Set([...Object.keys(was.checks || {}), ...Object.keys(checks)]);
+            for (const sid of sids) {
+                const beforeOn = was.checks?.[sid]?.on ? 1 : 0;
+                const afterOn = checks[sid]?.on ? 1 : 0;
+                if (beforeOn !== afterOn) {
+                    checks[sid] = { at: now, on: afterOn };
+                    checksChanged = true;
+                }
+            }
+            const metaChanged = String(was.title || '') !== String(row.title || '')
+                || String(was.date || '') !== String(row.date || '')
+                || (was.roster || []).join('\n') !== (row.roster || []).join('\n')
+                || Number(was.gone || 0) !== Number(row.gone || 0);
+            if (!checksChanged && !metaChanged) return row;
+            const undoingDelete = Number(was.gone) > 0 && !(Number(row.gone) > 0);
+            return { ...row, checks, metaAt: metaChanged ? now : row.metaAt, gone: undoingDelete ? 0 : (Number(row.gone) || 0), editAt: now };
+        });
+        for (const row of curList || []) {
+            if (!row?.id || kept.has(row.id)) continue;
+            next.push({ ...row, gone: now, editAt: now });
+        }
+        return next;
+    };
+    return {
+        ...prev,
+        homework: restamp(current.homework, prev.homework),
+        local: {
+            ...(prev.local || {}),
+            homework: restamp(current.local?.homework, prev.local?.homework),
+        },
+    };
+}
+
 export async function undo() {
     const prev = undoStack.pop();
     if (!prev) return false;
     const current = state;
-    state = prev;
+    state = restampHomeworkUndo(current, prev);
     mirrorTheme(state.profile.theme);
     emit();
     try {
@@ -2127,7 +2184,9 @@ function mergeHomeworkBucket(local = [], remote = []) {
     const byId = new Map((local || []).filter((row) => row?.id).map((row) => [row.id, row]));
     for (const row of remote || []) {
         if (!row?.id) continue;
-        byId.set(row.id, byId.has(row.id) ? mergeHomework(byId.get(row.id), row) : row);
+        const mine = byId.get(row.id);
+        const merged = mine ? mergeHomework(mine, row) : row;
+        byId.set(row.id, mine?.sourceNotes ? { ...merged, sourceNotes: mine.sourceNotes } : merged);
     }
     return [...byId.values()];
 }
@@ -2148,16 +2207,67 @@ function writeHomework(draft, row, local) {
     relocate(draft, 'homework', row, local, from);
 }
 
+function homeworkIdOfLegacy(note) {
+    if (isHomeworkCheck(note)) return String(note.title || '');
+    if (isLegacyHomeworkNote(note)) return String(note.id || '');
+    return '';
+}
+
+function attachSourceNotes(rows, hold) {
+    return (rows || []).map((row) => {
+        const extra = hold.get(row.id);
+        if (!extra?.length) return row;
+        const seen = new Set((row.sourceNotes || []).map((note) => note.id));
+        const sourceNotes = [...(row.sourceNotes || [])];
+        for (const note of extra) if (note?.id && !seen.has(note.id)) sourceNotes.push(note);
+        return { ...row, sourceNotes };
+    });
+}
+
 function applyHomeworkFold(draft) {
     if (!Array.isArray(draft.homework)) draft.homework = [];
     if (draft.local && !Array.isArray(draft.local.homework)) draft.local.homework = [];
     const folded = foldLegacyIntoHomework(draft.notes, draft.local?.notes, draft.homework, draft.local?.homework);
     if (!folded.changed) return;
-    for (const row of folded.removed) forgetRow('notes', row);
+    /* 원본 노트는 과제 문서가 서버에 올라간 뒤에만 지웁니다. 그 전에는 이 기기에 적어 두고 클라우드 노트는 그대로 둡니다. */
+    const hold = new Map();
+    for (const note of folded.removed) {
+        const id = homeworkIdOfLegacy(note);
+        if (!id) continue;
+        const bag = hold.get(id) || [];
+        bag.push(note);
+        hold.set(id, bag);
+    }
     draft.notes = folded.cloud;
     if (draft.local) draft.local.notes = folded.local;
-    draft.homework = folded.homework;
-    if (draft.local) draft.local.homework = folded.localHomework;
+    draft.homework = attachSourceNotes(folded.homework, hold);
+    if (draft.local) draft.local.homework = attachSourceNotes(folded.localHomework, hold);
+}
+
+/** 서버가 과제 쓰기를 받아들인 문서의 옛 노트만 지웁니다. */
+function releaseHomeworkSources(ids) {
+    const want = new Set(ids || []);
+    if (!want.size) return;
+    const drop = new Set();
+    const strip = (row) => {
+        if (!want.has(row?.id) || !(row.sourceNotes || []).length) return row;
+        for (const note of row.sourceNotes) {
+            if (note?.id) drop.add(note.id);
+            forgetRow('notes', note);
+        }
+        const { sourceNotes, ...rest } = row;
+        return rest;
+    };
+    state = {
+        ...state,
+        homework: (state.homework || []).map(strip),
+        notes: (state.notes || []).filter((note) => !drop.has(note?.id)),
+        local: state.local ? {
+            ...state.local,
+            homework: (state.local.homework || []).map(strip),
+            notes: (state.local.notes || []).filter((note) => !drop.has(note?.id)),
+        } : state.local,
+    };
 }
 
 function homeworkStamp() {
@@ -2603,6 +2713,8 @@ function applyIncoming(draft, data, sensitive, mode, info = {}) {
     draft.events = merge(draft.events, data.events);
     draft.todos = merge(draft.todos, data.todos);
     draft.notes = merge(draft.notes, data.notes);
+    /* 예전 백업에는 과제가 없습니다. 키가 없을 때는 지금 과제를 지우지 않습니다. */
+    if (Array.isArray(data.homework)) draft.homework = merge(draft.homework, data.homework);
     draft.notices = merge(draft.notices, data.notices);
     if (Array.isArray(data.inbox)) draft.inbox = merge(draft.inbox, data.inbox);
     dropRegisteredInbox(draft);
@@ -2710,7 +2822,7 @@ export async function importText(text, mode, hooks = {}) {
 }
 
 /* 계정마다 따로 두는 자료. 기기 설정(테마·공용 PC 등)은 기기 것이라 그대로 둡니다. */
-const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox', 'goals', 'keptLegacy'];
+const ACCOUNT_PARTS = ['students', 'attendance', 'records', 'events', 'todos', 'notes', 'notices', 'timetable', 'legacyPages', 'inbox', 'goals', 'keptLegacy', 'homework'];
 const ACCOUNT_PROFILE = ['className', 'schoolYear', 'classSize', 'periodStarts', 'ttEdited', 'academic', 'settingsAts', 'settingsAt', 'checkedDates'];
 const accountKey = (uid) => `account:${uid}`;
 
@@ -2839,10 +2951,15 @@ async function connectCloudBody(uid, { only = null, force = false, clockDone = f
     const remote = await cloudApi.pull(uid, { memoryOnly: memoryOnly || state.profile.sharedPc, ...(only ? { only } : {}) });
     if (!remote) return false;
     if (full && remote.fresh !== false && state.auth?.uid === uid) noteFullPull(uid, from);
-    const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.goal || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length;
+    const hasRemote = remote.settings || remote.leave || remote.tabbar || remote.goal || remote.profile?.className || ['students', 'records', 'inbox', 'todos', 'events', 'attendance', 'notes', 'notices'].some((name) => (remote[name] || []).length) || Object.keys(remote.timetable || {}).length || (remote.homework || []).length;
     if (!hasRemote) {
-        /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번). */
-        await absorbQuietly(full, (draft) => pruneOnly(draft, remote, seen));
+        /* 클라우드가 비었어도(다른 기기에서 마지막 줄까지 지움) 올린 그대로인 줄은 지웁니다(PR #52 2차 검수 1번).
+           과제만 받은 경우(다른 기록은 없음)도 여기서 합칩니다. 과제 목록이 없으면 건드리지 않습니다. */
+        await absorbQuietly(full, (draft) => {
+            pruneOnly(draft, remote, seen);
+            if (Array.isArray(remote.homework)) draft.homework = mergeHomeworkBucket(draft.homework, remote.homework);
+            return draft;
+        });
         const ok = pushedAll(pushed) && remote.fresh !== false;
         if (ok && full) markSynced(uid);
         return ok;

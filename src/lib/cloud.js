@@ -137,36 +137,66 @@ export function syncAvailable() {
 let writesSent = 0;
 export function cloudWritesForTest() { return writesSent; }
 
-/** 과제 문서. 클라우드에 있는 제출과 학생별로 합친 뒤, 바뀐 칸만 고칩니다. */
+/** 과제 감시를 켤지. 규칙 거절만 끄고, 오프라인 같은 오류는 다시 시도한 뒤에도 감시를 켜 둡니다. */
+export function homeworkWatchOnError(error) {
+    return String(error?.code || '').includes('permission-denied') ? 'skip' : 'retry';
+}
+
+export async function homeworkWatchAllowed(ready, uid, recent) {
+    const { collection, getDocs, limit, query, where } = await import('firebase/firestore');
+    const read = () => getDocs(query(collection(ready.db, 'users', uid, 'homework'), where('updatedAt', '>', recent), limit(1)));
+    try {
+        await read();
+        return 'watch';
+    } catch (error) {
+        if (homeworkWatchOnError(error) === 'skip') return 'skip';
+        try { await read(); return 'watch'; } catch (again) {
+            return homeworkWatchOnError(again) === 'skip' ? 'skip' : 'watch';
+        }
+    }
+}
+
+/** 과제 문서. 클라우드에 있는 제출과 학생별로 합친 뒤, 바뀐 칸만 고칩니다.
+    서버가 쓰기를 받아들인 문서만 confirmed 에 넣습니다. 옛 규칙의 거절은 rejected 로 돌려줍니다. */
 async function pushHomework(ready, firestore, uid, rows, nextHashes, count) {
     const { doc, serverTimestamp } = await import('firebase/firestore');
+    const confirmed = [];
+    const rejected = [];
     for (const row of rows || []) {
         if (!row?.id) continue;
         const mark = fingerprint({
             title: row.title, date: row.date, made: row.made, metaAt: row.metaAt, gone: row.gone || 0,
             roster: row.roster || [], checks: row.checks || {},
         });
-        if (nextHashes[`homework/${row.id}`] === mark) continue;
+        if (nextHashes[`homework/${row.id}`] === mark && !(row.sourceNotes || []).length) {
+            confirmed.push(row.id);
+            continue;
+        }
         try {
             const ref = doc(ready.db, 'users', uid, 'homework', row.id);
-            let wrote = false;
+            let accepted = false;
             await firestore.runTransaction(ready.db, async (tx) => {
                 const snap = await tx.get(ref);
                 const remote = snap.exists() ? homeworkFromDoc(row.id, snap.data()) : null;
                 const merged = mergeHomework(row, remote);
                 const patch = homeworkPatch(remote, merged);
-                if (!patch) return;
+                if (!patch) { accepted = true; return; }
                 patch.updatedAt = serverTimestamp();
-                wrote = true;
+                accepted = true;
                 if (snap.exists()) tx.update(ref, patch);
                 else tx.set(ref, patch);
             });
-            if (wrote) nextHashes[`homework/${row.id}`] = mark;
+            if (accepted) {
+                nextHashes[`homework/${row.id}`] = mark;
+                confirmed.push(row.id);
+            }
         } catch (error) {
-            /* 옛 규칙이 과제 컬렉션을 모르면 거절됩니다. 이 기기에 남기고 다른 기록은 계속 올립니다. */
-            if (classifyWriteError(error) === 'pending') count('pending');
+            /* 옛 규칙이 과제 컬렉션을 모르면 거절됩니다. 원본 노트는 지우지 않고, 다른 기록은 계속 올립니다. */
+            if (classifyWriteError(error) === 'rejected') rejected.push(`homework/${row.id}`);
+            else count('pending');
         }
     }
+    return { confirmed, rejected };
 }
 
 export async function pushUserData(uid, state, { memoryOnly = false, hashes = {} } = {}) {
@@ -389,15 +419,16 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             await write(cloudName, shaped.id, shaped);
         }
     }
-    await pushHomework(ready, firestore, uid, state.homework || [], nextHashes, (kind) => {
+    const homeworkPush = await pushHomework(ready, firestore, uid, state.homework || [], nextHashes, (kind) => {
         if (kind === 'pending') pending += 1;
     });
+    rejected.push(...homeworkPush.rejected);
     for (const [id, value] of Object.entries(state.timetable || {})) {
         const shaped = toCloudRow('timetable', { id, ...value });
         if (!shaped) continue;
         await write('timetable', shaped.id, shaped);
     }
-    return { ok: pending === 0, hashes: nextHashes, pending, rejected, lost };
+    return { ok: pending === 0, hashes: nextHashes, pending, rejected, lost, homeworkConfirmed: homeworkPush.confirmed };
 }
 
 /*
@@ -777,11 +808,8 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
         const late = Number.isFinite(lateSince) ? Timestamp.fromMillis(Math.min(lateSince, recent.toMillis())) : recent;
         /* 옛 규칙은 과제 컬렉션을 모릅니다. 그 감시를 켜면 거절이 듣기 흐름을 끊고 앱이 죽습니다. 읽기가 될 때만 봅니다. */
         let watchNames = WATCH_RECENT;
-        try {
-            await getDocs(query(collection(ready.db, 'users', uid, 'homework'), where('updatedAt', '>', recent), limit(1)));
-        } catch {
-            watchNames = WATCH_RECENT.filter(([name]) => name !== 'homework');
-        }
+        const allowed = await homeworkWatchAllowed(ready, uid, recent);
+        if (allowed === 'skip') watchNames = WATCH_RECENT.filter(([name]) => name !== 'homework');
         for (const [name, field] of watchNames) {
             /* 끊긴 동안(캐시 결과)에 실린 변경은 버리지 않고 모아 두었다가, 서버 결과로 돌아올 때 함께 알립니다. */
             let held = [];

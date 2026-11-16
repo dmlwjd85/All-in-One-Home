@@ -1447,9 +1447,10 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 @media (max-width: 899px) { .minutes { gap: 6px; } }
 /* 320px 새로 쓰기: 본문 칸이 첫 화면 끝에 붙지 않게 제목·이름표 여백을 줄입니다. */
 @media (max-width: 420px) {
-    .minutes { gap: 4px; }
+    .minutes { gap: 0; }
     .minutes-label { margin-top: 0; }
-    .minutes-view-title { margin: 0; font-size: 20px; line-height: 26px; }
+    .minutes-view-title { margin: 0; font-size: 18px; line-height: 24px; }
+    .minutes-hint-long { display: none; }
 }
 .minutes-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .minutes-actions > .primary-btn { padding: 0 20px; }
@@ -1683,7 +1684,7 @@ button.hero-pill.home-todo-link {
 
 /* ───────── 선생님 시안 A(11/6): 버튼은 글자 길이만큼, 명단은 격자, 설정은 항목 버튼 ───────── */
 /* 화면 끝까지 늘어나던 단독 버튼을 글자 길이만큼으로 줄입니다. 저장 같은 주 버튼은 오른쪽, 보조 버튼은 왼쪽에 둡니다. 누르는 영역은 44px 이상 그대로예요. */
-.tap.primary-btn.block, .primary-btn.fit-btn { display: flex; width: fit-content; max-width: 100%; min-width: 88px; padding: 0 22px; margin-left: auto; }
+.tap.primary-btn.block, .primary-btn.fit-btn { display: flex; align-items: center; width: fit-content; max-width: 100%; min-width: 88px; padding: 0 22px; margin-left: auto; }
 .tap.chip.block { display: flex; width: fit-content; max-width: 100%; padding: 0 18px; margin-right: auto; }
 /* 학생 기록 명단: 한 줄 4칸(넓은 화면도 4칸, 300px 이하는 3칸). 칸마다 번호·이름과 이번 달 기록 수를 두 줄로 보여 줍니다. */
 .student-roster-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -1975,13 +1976,13 @@ button.hero-pill.home-todo-link {
 /* 과제 체크. 글자 크기를 키워도 줄바꿈되고, 어두운 화면은 기존 색을 그대로 씁니다. */
 /* 출결 바로 옆. 두 줄로 쌓으면 쉬는 날 시간표가 하단 탭에 가립니다. */
 .hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
-.hero-head .hero-kicker { display: block; min-width: min(100%, 6.5em); flex: 1 1 6.5em; max-width: 100%; min-height: 36px; height: auto; padding: 6px 10px; font-weight: 800; white-space: normal; overflow-wrap: anywhere; }
+.hero-head .hero-kicker { display: block; min-width: min(100%, 12em); flex: 1 1 12em; max-width: 100%; min-height: 36px; height: auto; padding: 4px 10px; font-weight: 800; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
 .hero-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
 .hero-actions .hero-action { width: auto; flex: 0 1 auto; max-width: 100%; height: auto; white-space: normal; line-height: 1.2; padding: 6px 8px; }
 @media (max-width: 480px) {
-    .home-hero { padding: 8px 12px; }
+    .home-hero { padding: 6px 10px; }
     .home-hero .hero-head { gap: 4px; }
-    .home-hero .title-font { margin: 2px 0 4px !important; }
+    .home-hero .title-font { margin: 0 0 2px !important; font-size: 22px !important; line-height: 28px !important; }
     .home-grid { gap: 8px; }
 }
 .hw-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -9,10 +9,13 @@ import {
     homeworkProgress, homeworkProgressLabel, homeworkTitle, isHomeworkNote, mergeHomework, newHomework,
     pastHomework, visibleHomework,
 } from '../src/lib/homework.js';
+import { buildExport } from '../src/lib/backup.js';
 import {
-    addHomework, addHomeworkStudent, removeHomework, resetClockForTest, snapshot, submitAllHomework,
-    toggleHomeworkSubmit, useAuthForTest, useVaultsForTest,
+    addHomework, addHomeworkStudent, importText, removeHomework, resetClockForTest, snapshot, submitAllHomework,
+    toggleHomeworkSubmit, undo, useAuthForTest, useVaultsForTest,
 } from '../src/lib/db.js';
+import { homeworkWatchOnError } from '../src/lib/cloud.js';
+import { chipState, resetSyncStatusForTest, syncEnd } from '../src/lib/syncStatus.js';
 
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -63,7 +66,9 @@ const deleted = { ...merged, gone: 200 };
 const olderCheck = mergeHomework(deleted, { ...deleted, gone: 0, checks: { ...deleted.checks, s9: { at: 150, on: 1 } } });
 check(olderCheck.gone === 200, '지운 시각보다 이른 체크로 과제가 되살아납니다.');
 const newerCheck = mergeHomework(deleted, { ...deleted, gone: 0, checks: { ...deleted.checks, s9: { at: 250, on: 1 } } });
-check(newerCheck.gone === 0 && newerCheck.checks.s1.on === 1 && newerCheck.checks.s9.on === 1, '더 늦은 체크가 다른 학생 제출을 잃습니다.');
+check(newerCheck.gone === 200 && newerCheck.checks.s1.on === 1, '지운 뒤의 체크만으로 과제가 되살아납니다.');
+const restored = mergeHomework(deleted, { ...deleted, gone: 0, metaAt: 300 });
+check(restored.gone === 0, '이름을 되돌린 과제가 지운 채로 남습니다.');
 const cloudRow = homeworkFromDoc('hw-live', { title: '독서록', date: '2026-11-16', made: 100, metaAt: 100, gone: 0, roster: ['s1'], checks: { s1: '1~110' } });
 check(cloudRow.checks.s1.on === 1 && cloudRow.roster[0] === 's1', '클라우드 문서를 읽지 못합니다.');
 
@@ -92,10 +97,38 @@ const ui = readFileSync(new URL('../src/ui/Homework.jsx', import.meta.url), 'utf
 const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
 check(ui.includes('명단에 추가') && ui.includes('onClick') && ui.includes('마감일'), '화면 문구·클릭이 빠졌습니다.');
-check(css.includes('grid-template-columns: repeat(auto-fill') && /\.hero-actions \{[^}]*flex-wrap:\s*wrap/.test(css) && /\.hero-kicker \{[^}]*min-width:\s*min\(100%, 6\.5em\)/.test(css), '홈 버튼 줄바꿈이나 안내 최소 너비가 없습니다.');
+check(css.includes('grid-template-columns: repeat(auto-fill') && /\.hero-actions \{[^}]*flex-wrap:\s*wrap/.test(css) && /\.hero-kicker \{[^}]*min-width:\s*min\(100%, 12em\)/.test(css), '홈 버튼 줄바꿈이나 안내 최소 너비가 없습니다.');
 check(rules.includes('match /homework/{hid}') && rules.includes("match /notes/{nid}") && !rules.includes("allow read, write: if true"), '과제 규칙이 없거나 기존 규칙을 느슨하게 열었습니다.');
 check(isTap({ x: 0, y: 0 }, { x: 1, y: 1 }, { scrolled: true }) === false, '스크롤을 탭으로 봅니다.');
 check(homeworkTitle(gone) === '독서록', '지운 과제의 제목이 없습니다.');
+
+const exported = buildExport(snapshot(), { at: '2026-11-16T00:00:00.000Z' });
+check(exported.homework?.some((row) => row.id === 'hw-new') && !JSON.stringify(exported).includes('sourceNotes'), '백업에 과제가 없거나 원본 노트가 섞입니다.');
+const oldBackup = { ...exported };
+delete oldBackup.homework;
+const kept = await importText(JSON.stringify(oldBackup), 'replace');
+check(kept.ok && snapshot().homework.some((row) => row.id === 'hw-new'), `예전 백업이 과제를 지웁니다: ${JSON.stringify(kept)}`);
+const brought = await importText(JSON.stringify({ ...exported, homework: [{ id: 'hw-back', title: '복원과제', date: '2026-11-20', made: 9, metaAt: 9, roster: ['s1'], checks: { s1: { at: 9, on: 1 } }, gone: 0 }] }), 'replace');
+check(brought.ok && snapshot().homework.some((row) => row.title === '복원과제'), '백업을 되돌리면 과제가 돌아오지 않습니다.');
+await addHomework('되돌릴 과제', '2026-11-16', 'hw-undo', ['s1', 's2']);
+await toggleHomeworkSubmit('hw-undo', 's1');
+const stamped = snapshot().homework.find((row) => row.id === 'hw-undo');
+await undo();
+const undone = snapshot().homework.find((row) => row.id === 'hw-undo');
+check(undone?.checks?.s1?.on === 0 && undone.checks.s1.at > stamped.checks.s1.at, '되돌리기가 체크를 새 시각으로 끄지 않습니다.');
+check(mergeHomework(undone, stamped).checks.s1.on === 0, '되돌린 체크가 클라우드의 더 나중 시각에 밀립니다.');
+await removeHomework('hw-undo');
+const removed = snapshot().homework.find((row) => row.id === 'hw-undo');
+await undo();
+const back = snapshot().homework.find((row) => row.id === 'hw-undo');
+check(!Number(back?.gone) && back.metaAt > removed.gone, '지우기 되돌리기가 새 시각으로 풀리지 않습니다.');
+check(mergeHomework(back, removed).gone === 0, '지운 클라우드 시각이 되돌리기를 이깁니다.');
+check(homeworkWatchOnError({ code: 'permission-denied' }) === 'skip' && homeworkWatchOnError({ code: 'unavailable' }) === 'retry', '오프라인 오류에도 과제 감시를 끕니다.');
+check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css), '추가 버튼 글자가 세로 가운데가 아닙니다.');
+
+resetSyncStatusForTest();
+syncEnd({ ok: false, homeworkLocal: true });
+check(chipState({ cloudReady: true, signedIn: true, online: true })?.label === '과제는 아직 이 기기에만 있어요', '거절된 과제가 동기화됨으로 보입니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));

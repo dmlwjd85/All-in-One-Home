@@ -612,6 +612,8 @@ try {
         if (saved.checks?.s1 !== '1~10' || saved.checks?.s2 !== '1~20') failures.push(`과제 칸 갱신이 다른 학생을 지웠습니다: ${JSON.stringify(saved.checks)}`);
         await expectDeny('과제 본문에 민감 낱말', () => setDoc(doc(db, 'users/teacher-a/homework/hw-rule2'), { ...body, title: '건강 기록', updatedAt: serverTimestamp() }));
         await expectDeny('과제 제출 형식', () => updateDoc(ref, { 'checks.s3': '제출', updatedAt: serverTimestamp() }));
+        await expectDeny('과제 제출 줄바꿈', () => updateDoc(ref, { 'checks.s4': '1~1\n1~2', updatedAt: serverTimestamp() }));
+        await expectDeny('과제 명단 줄바꿈', () => updateDoc(ref, { roster: ['s1\ns2'], updatedAt: serverTimestamp() }));
         await expectDeny('과제 추가 칸', () => updateDoc(ref, { note: '메모', updatedAt: serverTimestamp() }));
         const other = testEnv.authenticatedContext('teacher-b').firestore();
         await expectDeny('다른 사람 과제', () => getDoc(doc(other, 'users/teacher-a/homework/hw-rule1')));

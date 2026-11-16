@@ -132,7 +132,7 @@ function copyBackup(backup) {
 }
 
 /** 이 기기에만 두는 목록. 백업의 local 안에 들어갑니다(backup은 따로). */
-export const LOCAL_LISTS = ['records', 'notes', 'events', 'todos', 'notices', 'contacts', 'pages'];
+export const LOCAL_LISTS = ['records', 'notes', 'events', 'todos', 'notices', 'contacts', 'pages', 'homework'];
 
 export function buildExport(state, { includeLocal = false, at, periodLocal } = {}) {
     const profile = state.profile || {};
@@ -156,6 +156,8 @@ export function buildExport(state, { includeLocal = false, at, periodLocal } = {
         events: copyData(state.events),
         todos: copyData(state.todos),
         notes: copyData(state.notes),
+        /* 과제 체크. 예전 백업에는 이 키가 없고, 복원할 때 없으면 지금 과제를 지우지 않습니다. */
+        homework: copyData((state.homework || []).map(({ sourceNotes, ...row }) => row)),
         notices: copyData(state.notices),
         timetable: copyData(state.timetable),
         legacy: copyData(state.legacyPages),
@@ -305,6 +307,11 @@ export function incomingLocal(current, data, mode, extraRecords = []) {
         return [...map.values()];
     };
     for (const key of LOCAL_LISTS) {
+        /* 예전 백업의 이 기기 자료에는 과제가 없습니다. 없다고 지금 이 기기 과제를 지우지 않습니다. */
+        if (key === 'homework' && (!file || !Array.isArray(file.homework))) {
+            out.homework = Array.isArray(base.homework) ? base.homework : [];
+            continue;
+        }
         const incoming = [...(file ? localRows(file[key]) : []), ...(key === 'records' ? localRows(extraRecords) : [])];
         if (file && mode === 'replace') out[key] = merge([], incoming);
         else out[key] = merge(base[key], incoming);

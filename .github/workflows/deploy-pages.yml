@@ -104,6 +104,7 @@ jobs:
           - npm run check:leavesync
           - npm run check:lwwsync
           - npm run check:lwwprev
+          - npm run check:homework-cloud
           - npm run check:lwwmix
           - npm run check:keptpaths
           - npm run check:tabbarsync

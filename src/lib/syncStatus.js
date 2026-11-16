@@ -3,7 +3,7 @@
  * db.js가 올리기·받아오기를 시작하고 끝낼 때 알려 주고, 칩은 구독해서 글만 바꿉니다.
  */
 
-let status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false };
+let status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false, homeworkLocal: false };
 const listeners = new Set();
 
 function emit() {
@@ -29,13 +29,14 @@ export function syncBegin() {
 /* pull: 받기까지 한 동기화(로그인·다시 맞추기). 받기에 실패했거나 캐시의 옛 목록이었으면, 뒤이은 올리기가 성공해도
    '동기화됨'으로 보이지 않게 따로 기억합니다(10/31 제보: 칩은 동기화됨인데 PC에 할 일이 1개). */
 /* stamp: false면 성공해도 마지막 동기화 시각은 그대로 둡니다(감시가 알린 컬렉션만 받은 일부 받기). */
-export function syncEnd({ ok = false, pending = 0, skipped = false, pull = false, stamp = true, at = Date.now() } = {}) {
+export function syncEnd({ ok = false, pending = 0, skipped = false, pull = false, stamp = true, at = Date.now(), homeworkLocal = null } = {}) {
     status.busy = Math.max(0, status.busy - 1);
     if (!skipped) {
         status.pending = Math.max(0, Number(pending) || 0);
         if (pull) status.pullFailed = !ok;
         status.failed = !ok || status.pullFailed;
-        if (ok && !status.pullFailed && stamp) status.lastOkAt = at;
+        if (homeworkLocal === true || homeworkLocal === false) status.homeworkLocal = homeworkLocal;
+        if (ok && !status.pullFailed && !status.homeworkLocal && stamp) status.lastOkAt = at;
     }
     emit();
 }
@@ -63,7 +64,7 @@ export function syncSeen(at) {
 
 /** 검사용: 처음 상태로 돌립니다. */
 export function resetSyncStatusForTest() {
-    status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false };
+    status = { busy: 0, pending: 0, queued: 0, lastOkAt: 0, failed: false, pullFailed: false, authKnown: false, homeworkLocal: false };
     emit();
 }
 
@@ -110,6 +111,14 @@ export function chipState({ cloudReady = false, signedIn = false, online = true,
             kind: 'login',
             label: '로그인이 필요해요',
             hint: '설정에서 구글로 로그인하면 폰과 컴퓨터에서 같은 기록을 볼 수 있어요.',
+        };
+    }
+    if (s.homeworkLocal && s.busy === 0) {
+        return {
+            kind: 'error',
+            label: '과제는 아직 이 기기에만 있어요',
+            hint: '다른 기기에는 아직 안 올라갔어요. 이 기기에 남겨 두었고, 나중에 다시 올릴게요.',
+            retry: true,
         };
     }
     if (s.failed && s.busy === 0) {

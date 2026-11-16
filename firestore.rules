@@ -202,13 +202,18 @@ service cloud.firestore {
     // 제출 값은 '1~시각' 또는 '0~시각'. 명단은 학생 id만. 지운 시각(gone)이 체크보다 나중이면 앱이 지운 쪽으로 둡니다.
     function rosterOk(r) {
       return r is list && r.size() <= 80
-        && (r.size() == 0 || r.join('\n').matches('^[A-Za-z0-9_-]{1,40}(\n[A-Za-z0-9_-]{1,40})*$'));
+        && (r.size() == 0 || (
+          r.join('\n').matches('^[A-Za-z0-9_-]{1,40}(\n[A-Za-z0-9_-]{1,40})*$')
+          && r.join('\n').split('\n').size() == r.size()
+        ));
     }
     function checksOk(m) {
       return m is map && m.size() <= 80
         && (m.size() == 0 || (
           m.keys().join('\n').matches('^[A-Za-z0-9_-]{1,40}(\n[A-Za-z0-9_-]{1,40})*$')
+          && m.keys().join('\n').split('\n').size() == m.size()
           && m.values().join('\n').matches('^[01]~[0-9]{1,13}(\n[01]~[0-9]{1,13})*$')
+          && m.values().join('\n').split('\n').size() == m.size()
         ));
     }
     function homeworkOk(v) {
