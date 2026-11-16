@@ -90,6 +90,10 @@ export function GridPaste({ text, image, mode = '', onBack }) {
 
     async function onFile(file) {
         if (!file) return;
+        /* 읽기 전에 이전 표의 메뉴·일정을 비웁니다. 글자를 읽는 동안 아까 등록한 표가 칸에 남지 않게 합니다. */
+        setDays([]);
+        setItems([]);
+        setKind(asMeal ? 'meal' : 'empty');
         setBusy('사진을 열고 있어요.');
         try {
             const found = await readImageTable(file, (message) => setBusy(message));

@@ -1246,7 +1246,7 @@ export async function undo() {
     }
     if (undone.skippedMeta) tellStorageIssue('다른 기기에서 고쳐서 되돌리지 않았어요');
     await flushCloud().catch(() => {});
-    return true;
+    return undone.skippedMeta ? 'notice' : true;
 }
 
 export function legacyAvailable() {
@@ -3048,13 +3048,14 @@ async function connectCloudBody(uid, { only = null, force = false, clockDone = f
             if (Array.isArray(remote.homework)) draft.homework = mergeHomeworkBucket(draft.homework, remote.homework);
             return draft;
         });
-        const ok = pushedAll(pushed) && remote.fresh !== false;
+        const ok = pushedAll(pushed, { ignoreHomeworkRejects: true }) && remote.fresh !== false;
         if (ok && full) markSynced(uid);
         return ok;
     }
     await absorbQuietly(full, (draft) => absorbCloud(draft, remote, seen));
-    /* 올리기가 다 끝나고 서버에서 받아 왔어야 '동기화됨'입니다. 못 올린 게 있거나 캐시에서 온 옛 목록이면 시각을 바꾸지 않습니다(PR #52 검수 4번, 10/31 제보). */
-    const ok = pushedAll(pushed) && remote.fresh !== false;
+    /* 올리기가 다 끝나고 서버에서 받아 왔어야 '동기화됨'입니다. 못 올린 게 있거나 캐시에서 온 옛 목록이면 시각을 바꾸지 않습니다(PR #52 검수 4번, 10/31 제보).
+       과제 문서 하나만 규칙이 거절해도 받기 전체는 실패한 것으로 보지 않습니다. */
+    const ok = pushedAll(pushed, { ignoreHomeworkRejects: true }) && remote.fresh !== false;
     if (ok && full) markSynced(uid);
     return ok;
 }

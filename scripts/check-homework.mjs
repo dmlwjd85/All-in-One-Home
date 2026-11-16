@@ -17,6 +17,7 @@ import {
 import { homeworkWatchOnError } from '../src/lib/cloud.js';
 import { useWatchTimingForTest, watchRetryDue } from '../src/lib/db.js';
 import { chipState, resetSyncStatusForTest, syncEnd } from '../src/lib/syncStatus.js';
+import { finishUndoToast } from '../src/ui/undoToast.js';
 
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -152,11 +153,11 @@ await update((draft) => {
 });
 const notices = [];
 const stopNotice = subscribeStorageIssue((message) => notices.push(message));
-await undo();
+const skippedUndo = await undo();
 stopNotice();
 const datedAfter = snapshot().homework.find((row) => row.id === 'hw-date');
 check(datedAfter?.date === '2026-11-20' && datedAfter.title === '다른 이름', `다른 기기 이름 변경 뒤 날짜 되돌리기가 이름을 덮습니다: ${datedAfter?.date} ${datedAfter?.title}`);
-check(notices.includes('다른 기기에서 고쳐서 되돌리지 않았어요'), `날짜 되돌리기를 건너뛰어도 알림이 없습니다: ${notices.join('|')}`);
+check(skippedUndo === 'notice' && notices.includes('다른 기기에서 고쳐서 되돌리지 않았어요'), `날짜 되돌리기를 건너뛰어도 알림이 없습니다: ${skippedUndo} ${notices.join('|')}`);
 await addHomework('되돌릴 과제', '2026-11-16', 'hw-undo', ['s1', 's2']);
 await toggleHomeworkSubmit('hw-undo', 's1');
 const stamped = snapshot().homework.find((row) => row.id === 'hw-undo');
@@ -177,6 +178,16 @@ check(!watchRetryDue({ error: '', homeworkSkipped: false, startedAt: 0 }, Date.n
 useWatchTimingForTest(null);
 check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css) && /\.tap\.primary-btn\.block[^{]*\{[^}]*justify-content:\s*center/.test(css), '추가 버튼 글자가 가운데가 아닙니다.');
 check(/\.hw-date-toggle \{[^}]*padding:\s*8px 14px/.test(css), '마감일 바꾸기 글자가 위 테두리에 붙습니다.');
+const appSrc = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+const dbSrc = readFileSync(new URL('../src/lib/db.js', import.meta.url), 'utf8');
+check(appSrc.includes('finishUndoToast(ok, () => setToast(null))'), '되돌리기 안내를 바로 닫습니다.');
+let cleared = false;
+finishUndoToast('notice', () => { cleared = true; });
+check(!cleared, '건너뛴 되돌리기 안내를 닫습니다.');
+finishUndoToast(true, () => { cleared = true; });
+check(cleared, '적용된 되돌리기 알림을 닫지 않습니다.');
+const receiveOks = dbSrc.match(/pushedAll\(pushed, \{ ignoreHomeworkRejects: true \}\)/g) || [];
+check(receiveOks.length >= 2, '받기 경로가 과제 하나 거절을 동기화 실패로 봅니다.');
 const tasks = readFileSync(new URL('../src/ui/Tasks.jsx', import.meta.url), 'utf8');
 check(/!isMealNote\(row\) && !isHomeworkNote\(row\)/.test(tasks), '메모 수에서 급식 노트나 과제 노트를 빼지 않습니다.');
 await absorbCloudForTest({

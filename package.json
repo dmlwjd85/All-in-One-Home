@@ -79,6 +79,7 @@
     "check:minutes": "node scripts/check-minutes.mjs",
     "check:homework": "node scripts/check-homework.mjs",
     "check:homework-browser": "node scripts/check-homework-browser.mjs",
+    "check:homework-undo-browser": "node scripts/check-homework-undo-browser.mjs",
     "check:homework-old": "node scripts/check-homework-old.mjs",
     "check:homework-cloud": "npx --yes firebase-tools@13.29.1 emulators:exec --only firestore --project demo-ssug-rules \"node scripts/check-homework-cloud.mjs\"",
     "check:minutesbrowser": "node scripts/check-minutes-browser.mjs",

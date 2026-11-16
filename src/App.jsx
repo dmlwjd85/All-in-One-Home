@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { rosterView } from './lib/roster.js';
 import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
+import { finishUndoToast } from './ui/undoToast.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
 import { useGcal } from './ui/useGcal.js';
 import { GcalDot } from './ui/GcalSettings.jsx';
@@ -857,7 +858,7 @@ export default function App() {
                     <div className={`toast${toast.action?.passThrough ? ' toast-notice' : ''}`} role="status">
                         {toast.undoable ? <ClayMark size={44} /> : null}
                         <span>{toast.message}</span>
-                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => { if (ok) setToast(null); }); }}>되돌리기</Btn>}
+                        {toast.undoable && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => { undo().then((ok) => finishUndoToast(ok, () => setToast(null))); }}>되돌리기</Btn>}
                         {toast.action && <Btn style={{ color: 'var(--toast-action)', fontWeight: 800 }} onClick={() => toast.action.onClick?.()}>{toast.action.label}</Btn>}
                     </div>
                 )}

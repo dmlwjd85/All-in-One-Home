@@ -219,6 +219,9 @@ check(dish?.date === '2026-11-16' && dish.items.some((item) => item.name === '�
 check(joinHangulSpaces('현 미 밥 보리밥') === '현미밥 보리밥', '띄어 읽은 한글');
 const ocrSrc = readFileSync(new URL('../src/ui/tableOcr.js', import.meta.url), 'utf8');
 check(ocrSrc.includes('recognize(canvas)') && ocrSrc.includes('recognize(stripCanvas') && !ocrSrc.includes('recognize(bitmap)'), '표 사진은 캔버스로 읽습니다');
+const gridPaste = readFileSync(new URL('../src/ui/GridPaste.jsx', import.meta.url), 'utf8');
+const onFile = gridPaste.slice(gridPaste.indexOf('async function onFile'), gridPaste.indexOf('function toggleMeal'));
+check(onFile.includes('setDays([])') && onFile.indexOf('setDays([])') < onFile.indexOf('readImageTable'), '급식표 사진을 읽기 전에 이전 메뉴를 비우지 않습니다.');
 
 if (bad) {
     console.error(`붙여넣기 검사 실패 ${bad}`);
