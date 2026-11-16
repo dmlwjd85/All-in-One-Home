@@ -149,6 +149,20 @@ try {
     const allChecks = (await getDoc(allRef)).data()?.checks || {};
     check(String(allChecks.s7 || '').startsWith('1~') && String(allChecks.s1 || '').startsWith('0~'), `모두 제출 되돌리기가 다른 기기 s7을 지웠습니다: ${JSON.stringify(allChecks)}`);
 
+    await db.addHomework('정상과제', '2026-11-16', 'hw-ok', ['s1']);
+    await db.update((draft) => {
+        draft.homework.push({
+            id: 'hw-bad', title: '거절과제', date: '2026-11-16', made: 1, metaAt: 1, gone: 0,
+            roster: ['s1'], checks: { '김 학생': { at: 1, on: 1 } }, editAt: 1,
+        });
+        return draft;
+    });
+    await db.flushCloud();
+    await db.refreshFromCloud({ force: true });
+    for (let i = 0; i < 30 && syncStatus().busy; i += 1) await wait(50);
+    const again = chipState({ cloudReady: true, signedIn: true, online: true, status: syncStatus() });
+    check(again?.label === '동기화됨', `과제 하나 거절 뒤 받기가 칩을 멈춥니다: ${again?.label} ${JSON.stringify(syncStatus())}`);
+
     const fsC = env.authenticatedContext('teacher-c').firestore();
     wire(fsC);
     await db.setAuth({ uid: 'teacher-c' });
