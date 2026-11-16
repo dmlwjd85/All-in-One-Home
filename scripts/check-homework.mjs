@@ -1,19 +1,17 @@
-/** 과제 체크: 과제마다 메모 하나, 옛 메모 목록에는 안 보이고, 학생별로 나중에 고친 쪽이 이깁니다. */
+/** 과제 체크: 노트와 다른 컬렉션, 학생별 칸 합치기, 옛 hw-/hx- 를 옮긴 뒤 노트에서 지움. */
 import { readFileSync } from 'node:fs';
 import { MENU, menuSelected } from '../src/ui/menu.js';
 import { resolveHash } from '../src/lib/routes.js';
 import { isMinutes, minutesList } from '../src/lib/minutes.js';
 import { isTap } from '../src/ui/tapGuard.js';
-import { fingerprint } from '../src/lib/cloud.js';
-import { fromCloudRow, toCloudRow } from '../src/lib/cloudShape.js';
 import {
-    assignmentNote, foldHomeworkLists, homeworkAssignments, homeworkBody, homeworkOverdue, homeworkProgress,
-    homeworkProgressLabel, isHomework, isHomeworkCheck, isHomeworkNote, mergeHomeworkRows, pastHomework,
-    readHomeworkPack, visibleHomework,
+    foldLegacyIntoHomework, homeworkAssignments, homeworkFromDoc, homeworkOverdue, homeworkPatch,
+    homeworkProgress, homeworkProgressLabel, homeworkTitle, isHomeworkNote, mergeHomework, newHomework,
+    pastHomework, visibleHomework,
 } from '../src/lib/homework.js';
 import {
-    absorbCloudForTest, addHomework, queuedCloudKeys, removeHomework, resetClockForTest, setHomeworkDate,
-    snapshot, submitAllHomework, toggleHomeworkSubmit, useAuthForTest, useVaultsForTest,
+    addHomework, addHomeworkStudent, removeHomework, resetClockForTest, snapshot, submitAllHomework,
+    toggleHomeworkSubmit, useAuthForTest, useVaultsForTest,
 } from '../src/lib/db.js';
 
 const failures = [];
@@ -22,8 +20,7 @@ const vault = () => {
     const map = new Map();
     return { get: async (key) => map.get(key), set: async (key, value) => { map.set(key, value); }, remove: async (key) => { map.delete(key); }, map };
 };
-const mainVault = vault();
-useVaultsForTest(mainVault, vault(), vault());
+useVaultsForTest(vault(), vault(), vault());
 resetClockForTest({ measured: true });
 useAuthForTest('teacher-hw');
 
@@ -33,82 +30,72 @@ check(menuSelected('homework', '#/homework') && resolveHash('#/homework/hw-read1
 const actions = readFileSync(new URL('../src/ui/actions.js', import.meta.url), 'utf8');
 check(/FREQUENT_ACTION_IDS = \['attend', 'homework'/.test(actions), '쨈 메뉴에서 과제 체크가 출결 다음이 아닙니다.');
 
-const row = assignmentNote({ id: 'hw-read1', title: '독서록', date: '2026-11-16', roster: ['s1', 's2', 's3'], made: 100 });
-const shaped = toCloudRow('notes', row);
-check(shaped?.body?.tags?.includes('회의') && shaped.body.tags.includes('과제') && shaped.body.text.includes('@@HW1'), `과제 문서 모양이 아닙니다: ${JSON.stringify(shaped?.body)}`);
-const back = fromCloudRow('notes', shaped.id, shaped.body);
-check(isHomework(back) && isMinutes(back) && !isHomeworkNote({ id: 'note-1', text: '과제', tags: [] }), '받아 온 과제를 알아보지 못하거나 일반 메모로 봅니다.');
-check(!minutesList([back, { id: 'meet-1', tags: ['회의'], text: '본문', title: '회의', date: '2026-11-01' }]).some((item) => item.id === 'hw-read1'), '과제 문서가 회의록 목록에 섞입니다.');
-check(minutesList([{ id: 'note-1', text: '그냥 메모', tags: [], title: '' }]).length === 0, '일반 메모를 회의록으로 봅니다.');
-
-/* 옛 메모 목록은 회의 태그를 빼므로, 학생 id 조각이 카드로 보이지 않습니다. */
+const legacyHw = { id: 'hw-read1', title: '독서록', text: '과제 체크 기록이에요. 과제 체크 화면에서 봐요.\n@@HW1\n{"v":1,"made":40,"metaAt":40,"roster":["s1","s2","s3"],"checks":{"s2":{"at":30,"on":1}}}', date: '2026-11-16', tags: ['회의', '과제'], pinned: false, source: 'app', editAt: 40 };
 const legacyCheck = { id: 'hx-hw-read1-s1', title: 'hw-read1', text: 's1', tags: ['제출'], pinned: false, source: 'app', editAt: 50 };
-const legacyHw = { id: 'hw-read1', title: '독서록', text: '과제', date: '2026-11-16', tags: ['과제'], pinned: false, source: 'app', editAt: 40 };
-check(!isMinutes(legacyCheck) && isHomeworkCheck(legacyCheck), '옛 제출 메모를 회의록으로 잘못 봅니다.');
-const folded = foldHomeworkLists([legacyHw, legacyCheck], []);
-check(folded.removed.some((item) => item.id === legacyCheck.id) && !folded.cloud.some(isHomeworkCheck), '옛 제출 메모를 빼지 않습니다.');
-const packed = readHomeworkPack(folded.cloud[0]);
-check(packed?.checks?.s1?.on === 1 && folded.cloud[0].tags.includes('회의'), `옛 제출이 과제 문서에 들어가지 않습니다: ${JSON.stringify(packed)}`);
-const orphan = foldHomeworkLists([legacyCheck], []);
-check(orphan.removed.length === 1 && orphan.cloud.length === 0, '지운 과제의 제출 메모를 되살립니다.');
-const again = foldHomeworkLists(folded.cloud, []);
-check(!again.changed, '이미 옮긴 과제 문서를 매번 다시 고칩니다.');
+const folded = foldLegacyIntoHomework([legacyHw, legacyCheck, { id: 'note-9', text: '준비물', tags: [], pinned: true, source: 'app' }], [], [], []);
+check(folded.cloud.length === 1 && folded.cloud[0].id === 'note-9', '과제를 옮긴 뒤 일반 메모가 빠집니다.');
+check(folded.removed.some((row) => row.id === legacyCheck.id) && folded.removed.some((row) => row.id === 'hw-read1'), '옛 hw-/hx- 를 노트에서 빼지 않습니다.');
+const moved = folded.homework[0];
+check(moved?.checks?.s1?.on === 1 && moved?.checks?.s2?.on === 1 && !moved.tags && !String(moved.text || '').includes('회의'), `옮긴 과제에 제출이 없거나 회의 태그가 남습니다: ${JSON.stringify(moved)}`);
+const memoList = folded.cloud.filter((row) => !isMinutes(row) && !isHomeworkNote(row));
+check(memoList.length === 1, '옛 메모 목록에 과제가 남습니다.');
+check(!minutesList([{ ...legacyHw }, { id: 'meet-1', tags: ['회의'], text: '본문', title: '회의', date: '2026-11-01' }]).some((row) => row.id === 'hw-read1'), '새 판 회의록 목록에 과제가 섞입니다.');
 
-const memoList = [folded.cloud[0], { id: 'note-9', text: '준비물', tags: [], pinned: true, source: 'app' }].filter((item) => !isMinutes(item) && !isHomeworkNote(item));
-check(memoList.length === 1 && memoList[0].id === 'note-9', '옛 메모 목록에 과제 기록이 남습니다.');
+const broken = foldLegacyIntoHomework(
+    [{ id: 'hw-read1', title: '고친 제목', text: '선생님이 지운 본문', tags: ['회의'], date: '2026-11-16', editAt: 80 }],
+    [],
+    [moved],
+    [],
+);
+check(broken.cloud.length === 0 && broken.homework[0].checks.s1.on === 1 && broken.homework[0].checks.s2.on === 1, '망가진 본문이 제출을 지웁니다.');
+
+const orphan = foldLegacyIntoHomework([legacyCheck], [], [], []);
+check(orphan.homework.length === 0 && orphan.cloud.length === 0, '지운 과제의 제출 조각으로 과제를 만듭니다.');
+
+const base = newHomework({ id: 'hw-live', title: '독서록', date: '2026-11-16', roster: ['s1', 's2', 's3'], made: 100 });
+base.checks = { s1: { at: 110, on: 1 } };
+const remoteOnly = { ...base, checks: { s2: { at: 120, on: 1 } }, editAt: 120 };
+const merged = mergeHomework(base, remoteOnly);
+check(merged.checks.s1.on === 1 && merged.checks.s2.on === 1, '학생별 합치기가 한쪽 체크를 지웁니다.');
+const patch = homeworkPatch(base, merged);
+check(patch && patch['checks.s2'] === '1~120' && !patch.checks, `제출 맵 전체를 덮어씁니다: ${JSON.stringify(patch)}`);
+const deleted = { ...merged, gone: 200 };
+const olderCheck = mergeHomework(deleted, { ...deleted, gone: 0, checks: { ...deleted.checks, s9: { at: 150, on: 1 } } });
+check(olderCheck.gone === 200, '지운 시각보다 이른 체크로 과제가 되살아납니다.');
+const newerCheck = mergeHomework(deleted, { ...deleted, gone: 0, checks: { ...deleted.checks, s9: { at: 250, on: 1 } } });
+check(newerCheck.gone === 0 && newerCheck.checks.s1.on === 1 && newerCheck.checks.s9.on === 1, '더 늦은 체크가 다른 학생 제출을 잃습니다.');
+const cloudRow = homeworkFromDoc('hw-live', { title: '독서록', date: '2026-11-16', made: 100, metaAt: 100, gone: 0, roster: ['s1'], checks: { s1: '1~110' } });
+check(cloudRow.checks.s1.on === 1 && cloudRow.roster[0] === 's1', '클라우드 문서를 읽지 못합니다.');
 
 const added = await addHomework('독서록', '2026-11-16', 'hw-read1', ['s1', 's2', 's3']);
-check(added.ok && snapshot().notes.filter(isHomeworkCheck).length === 0, '학생마다 문서를 만듭니다.');
+check(added.ok && snapshot().notes.length === 0 && snapshot().homework.length === 1, '과제를 노트에 저장합니다.');
+check(!snapshot().homework[0].tags, '새 과제에 회의 태그를 붙입니다.');
 await toggleHomeworkSubmit('hw-read1', 's1');
 await toggleHomeworkSubmit('hw-read1', 's2');
-check(homeworkProgress(snapshot().notes[0], [{ id: 's9' }]).total === 3, '지난 과제 수를 지금 명단으로 다시 셉니다.');
-check(homeworkProgressLabel(homeworkProgress(snapshot().notes[0], [])) === '제출 2/3', '제출 수가 스냅샷과 다릅니다.');
-const first = snapshot().notes.find((item) => item.id === 'hw-read1');
+check(homeworkProgress(snapshot().homework[0], [{ id: 's9' }]).total === 3, '지난 과제 수를 지금 명단으로 다시 셉니다.');
+check(homeworkProgressLabel(homeworkProgress(snapshot().homework[0], [])) === '제출 2/3', '제출 수가 스냅샷과 다릅니다.');
 await addHomework('나중에 만든 과제', '2026-11-10', 'hw-new', ['s1']);
-check(homeworkAssignments(snapshot().notes)[0].id === 'hw-new', '새 과제가 목록 맨 위가 아닙니다.');
-check(homeworkOverdue('2026-11-10', '2026-11-16') && pastHomework(snapshot().notes, '2026-11-16').some((item) => item.id === 'hw-new'), '마감이 지난 과제를 지나간 것으로 보지 않습니다.');
-check(visibleHomework(snapshot().notes, { today: '2026-11-16' }).every((item) => item.id !== 'hw-new'), '지난 과제를 기본 목록에 펼칩니다.');
-check(visibleHomework(snapshot().notes, { today: '2026-11-16', query: '나중에' }).some((item) => item.id === 'hw-new'), '찾기로 지난 과제가 나오지 않습니다.');
-
-const localPack = readHomeworkPack(first);
-const remote = mergeHomeworkRows(first, {
-    ...first,
-    title: '다른 이름',
-    date: '2026-11-20',
-    text: homeworkBody({
-        made: localPack.made,
-        metaAt: localPack.metaAt + 5,
-        roster: ['s1', 's2', 's3'],
-        checks: { s3: { at: (localPack.checks.s1?.at || 0) + 9, on: 1 }, s1: { at: 1, on: 0 } },
-    }),
-});
-const remotePack = readHomeworkPack(remote);
-check(remote.title === '다른 이름' && remote.date === '2026-11-20' && remotePack.checks.s1.on === 1 && remotePack.checks.s3.on === 1, `학생별 합치기가 틀립니다: ${JSON.stringify(remotePack)}`);
-
-await absorbCloudForTest({
-    notes: [fromCloudRow('notes', 'hw-read1', toCloudRow('notes', remote).body)],
-    ats: { notes: { 'hw-read1': (first.editAt || 0) + 20 } },
-    ids: { notes: ['hw-read1', 'hw-new'] },
-}, { [`notes/hw-read1`]: fingerprint(toCloudRow('notes', first).body, toCloudRow('notes', first).clear || []) });
-const merged = readHomeworkPack(snapshot().notes.find((item) => item.id === 'hw-read1'));
-check(merged?.checks?.s1?.on === 1 && merged?.checks?.s2?.on === 1 && merged?.checks?.s3?.on === 1, `받아 온 뒤 학생 제출이 빠졌습니다: ${JSON.stringify(merged?.checks)}`);
-
-await setHomeworkDate('hw-read1', '2026-11-18');
-await submitAllHomework('hw-read1', ['s1', 's2', 's3']);
-check(homeworkProgress(snapshot().notes.find((item) => item.id === 'hw-read1'), []).submitted === 3, '모두 제출이 스냅샷을 채우지 않습니다.');
+check(homeworkAssignments(snapshot().homework)[0].id === 'hw-new', '새 과제가 목록 맨 위가 아닙니다.');
+check(homeworkOverdue('2026-11-10', '2026-11-16') && pastHomework(snapshot().homework, '2026-11-16').some((row) => row.id === 'hw-new'), '마감이 지난 과제를 지나간 것으로 보지 않습니다.');
+check(visibleHomework(snapshot().homework, { today: '2026-11-16' }).every((row) => row.id !== 'hw-new'), '지난 과제를 기본 목록에 펼칩니다.');
+const before = homeworkProgress(snapshot().homework.find((row) => row.id === 'hw-read1'), []);
+await addHomeworkStudent('hw-read1', 's9');
+const after = snapshot().homework.find((row) => row.id === 'hw-read1');
+check(after.roster.includes('s9') && homeworkProgress(after, []).submitted === before.submitted && homeworkProgress(after, []).total === before.total + 1, '전입생을 명단에 더하면 기존 제출 수가 바뀝니다.');
+await submitAllHomework('hw-read1', after.roster);
+check(homeworkProgress(snapshot().homework.find((row) => row.id === 'hw-read1'), []).submitted === 4, '모두 제출이 더한 학생을 채우지 않습니다.');
 await removeHomework('hw-read1');
-check(!snapshot().notes.some((item) => item.id === 'hw-read1') && queuedCloudKeys().includes('notes/hw-read1'), '지운 과제의 클라우드 문서가 안 지워집니다.');
-check(!snapshot().notes.some(isHomeworkCheck), '지운 과제 옆에 제출 조각이 남습니다.');
+const gone = snapshot().homework.find((row) => row.id === 'hw-read1');
+check(gone && Number(gone.gone) > 0 && gone.checks.s1.on === 1 && !homeworkAssignments(snapshot().homework).some((row) => row.id === 'hw-read1'), '지우기가 제출을 없애거나 목록에 남깁니다.');
 
 const ui = readFileSync(new URL('../src/ui/Homework.jsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
-check(ui.includes('onClick') && ui.includes('data-tap-guard="1"') && ui.includes('지난 과제') && ui.includes('과제 찾기') && ui.includes('마감일'), '화면 문구·클릭·찾기가 빠졌습니다.');
-check(!ui.includes('>날짜<'), '마감일을 날짜라고 부릅니다.');
-check(css.includes('grid-template-columns: repeat(auto-fill') && /\.hero-actions \.hero-action \{[^}]*width:\s*auto/.test(css) && /\.hw-date-toggle \{[^}]*[^-]width:\s*auto/.test(css), '명단 격자나 버튼 너비가 글자에 맞지 않습니다.');
-check(isTap({ x: 0, y: 0 }, { x: 1, y: 1 }, { scrolled: true }) === false, '스크롤을 탭으로 봅니다.');
-const sw = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v94'") && rules.includes('match /notes/{nid}') && !/match\s+\/homework/.test(rules), '규칙이나 캐시 판이 바뀌었습니다.');
+check(ui.includes('명단에 추가') && ui.includes('onClick') && ui.includes('마감일'), '화면 문구·클릭이 빠졌습니다.');
+check(css.includes('grid-template-columns: repeat(auto-fill') && /\.hero-actions \{[^}]*flex-wrap:\s*wrap/.test(css) && /\.hero-kicker \{[^}]*min-width:\s*min\(100%, 6\.5em\)/.test(css), '홈 버튼 줄바꿈이나 안내 최소 너비가 없습니다.');
+check(rules.includes('match /homework/{hid}') && rules.includes("match /notes/{nid}") && !rules.includes("allow read, write: if true"), '과제 규칙이 없거나 기존 규칙을 느슨하게 열었습니다.');
+check(isTap({ x: 0, y: 0 }, { x: 1, y: 1 }, { scrolled: true }) === false, '스크롤을 탭으로 봅니다.');
+check(homeworkTitle(gone) === '독서록', '지운 과제의 제목이 없습니다.');
 
 if (failures.length) {
     console.error(failures.join('\n'));

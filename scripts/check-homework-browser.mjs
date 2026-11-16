@@ -209,6 +209,69 @@ try {
     });
     check(sixth.hit && sixth.hit.height > 0 && sixth.hit.top < sixth.view && sixth.hit.bottom > 0, `360 첫 화면에서 6교시가 사라졌습니다: ${JSON.stringify(sixth)}`);
     await home.close();
+
+    async function heroFit(width, height, iso, font) {
+        const page = await browser.newPage();
+        await page.evaluateOnNewDocument((iso, font) => {
+            localStorage.setItem('ssug-gyomu-home-fold', JSON.stringify({ time: true, todo: true, event: true, recent: true }));
+            localStorage.setItem('ssug-gyomu-key-sound-notice', '1');
+            localStorage.setItem('ssug-gyomu-onboard', JSON.stringify({ notice: 'folded', auto: false, day: '', steps: {} }));
+            const fixed = new Date(iso).valueOf();
+            const Native = Date;
+            function Frozen(...args) {
+                if (!new.target) return new Native(fixed).toString();
+                if (!args.length) return new Native(fixed);
+                return new Native(...args);
+            }
+            Frozen.now = () => fixed;
+            Frozen.parse = Native.parse;
+            Frozen.UTC = Native.UTC;
+            Frozen.prototype = Native.prototype;
+            window.Date = Frozen;
+            if (font) document.documentElement.style.fontSize = font;
+        }, iso, font || '');
+        await page.setViewport({ width, height, deviceScaleFactor: 1 });
+        await page.goto(`${origin}?demo=1&at=08:42&mode=light#/today`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        if (font) await page.evaluate((size) => { document.documentElement.style.fontSize = size; }, font);
+        await page.waitForSelector('.home-hero .hero-action', { timeout: 15000 });
+        const fit = await page.evaluate(() => {
+            const hero = document.querySelector('.home-hero')?.getBoundingClientRect();
+            const kicker = document.querySelector('.hero-kicker')?.getBoundingClientRect();
+            const buttons = [...document.querySelectorAll('.hero-actions .hero-action')].map((el) => el.getBoundingClientRect());
+            const tab = document.querySelector('.tabbar')?.getBoundingClientRect();
+            const sixth = document.querySelectorAll('.period-row button')[5]?.getBoundingClientRect();
+            const rest = document.querySelector('.rest-banner')?.getBoundingClientRect();
+            const target = sixth && sixth.width > 0 ? sixth : rest;
+            const hits = (a, b) => a && b && a.width > 0 && b.width > 0 && a.right > b.left + 1 && a.left < b.right - 1 && a.bottom > b.top + 1 && a.top < b.bottom - 1;
+            return {
+                doc: document.documentElement.scrollWidth,
+                w: window.innerWidth,
+                heroRight: hero ? Math.round(hero.right) : 0,
+                heroH: hero ? Math.round(hero.height) : 0,
+                headH: document.querySelector('.hero-head') ? Math.round(document.querySelector('.hero-head').getBoundingClientRect().height) : 0,
+                kW: kicker ? Math.round(kicker.width) : 0,
+                kH: kicker ? Math.round(kicker.height) : 0,
+                buttons: buttons.length,
+                outside: buttons.some((box) => hero && (box.right > hero.right + 1 || box.left < hero.left - 1)),
+                overlap: buttons.some((box) => hits(box, kicker)),
+                covered: Boolean(target && tab && target.bottom > tab.top + 0.5 && target.top < tab.bottom && target.top < tab.top),
+            };
+        });
+        await page.close();
+        return fit;
+    }
+    const heroCases = [
+        ['320 평일', 320, 800, '2026-11-18T08:42:00+09:00', ''],
+        ['320 쉬는 날', 320, 800, '2026-10-24T08:42:00+09:00', ''],
+        ['320 글자 200%', 320, 800, '2026-10-24T08:42:00+09:00', '32px'],
+        ['195 글자 200%', 195, 700, '2026-10-24T08:42:00+09:00', '32px'],
+        ['280 평일', 280, 800, '2026-10-23T08:42:00+09:00', ''],
+    ];
+    for (const [label, width, height, iso, font] of heroCases) {
+        const fit = await heroFit(width, height, iso, font);
+        const guardTab = label.startsWith('320 평일');
+        check(fit.heroRight <= fit.w + 1 && fit.buttons === 2 && !fit.outside && !fit.overlap && fit.kW >= 64 && fit.kH > 0 && fit.kH < 140 && fit.heroH > 0 && fit.heroH <= 360 && (!guardTab || !fit.covered), `${label} 홈 카드가 깨집니다: ${JSON.stringify(fit)}`);
+    }
 } finally {
     await browser.close();
     preview.kill();

@@ -11,6 +11,7 @@ export function leaveBackoffForTest() { return { ...readLeaveBackoff() }; }
 import { cleanTabbar, tabState } from '../ui/tabSlots.js';
 import { holdTodoTime, releaseTodoTime } from './todoTimeHold.js';
 import { fromGoalDoc, mergeGoals, toGoalDoc } from './todoAchieve.js';
+import { homeworkFromDoc, homeworkPatch, mergeHomework } from './homework.js';
 
 /** 새 기록은 users/{uid} 아래에만 둡니다. 예전 공개 경로에는 쓰지 않습니다. */
 /* 항목마다 '나중에 고친 쪽이 이긴다'(고친 시각 updatedAt + 묘비)로 합치는 목록. */
@@ -135,6 +136,38 @@ export function syncAvailable() {
 /* 검사용: 이 기기가 보낸 할 일·일정 쓰기 수(PR #62 r3 3번: 예전 규칙에서 쓰기가 몰리지 않는지). */
 let writesSent = 0;
 export function cloudWritesForTest() { return writesSent; }
+
+/** 과제 문서. 클라우드에 있는 제출과 학생별로 합친 뒤, 바뀐 칸만 고칩니다. */
+async function pushHomework(ready, firestore, uid, rows, nextHashes, count) {
+    const { doc, serverTimestamp } = await import('firebase/firestore');
+    for (const row of rows || []) {
+        if (!row?.id) continue;
+        const mark = fingerprint({
+            title: row.title, date: row.date, made: row.made, metaAt: row.metaAt, gone: row.gone || 0,
+            roster: row.roster || [], checks: row.checks || {},
+        });
+        if (nextHashes[`homework/${row.id}`] === mark) continue;
+        try {
+            const ref = doc(ready.db, 'users', uid, 'homework', row.id);
+            let wrote = false;
+            await firestore.runTransaction(ready.db, async (tx) => {
+                const snap = await tx.get(ref);
+                const remote = snap.exists() ? homeworkFromDoc(row.id, snap.data()) : null;
+                const merged = mergeHomework(row, remote);
+                const patch = homeworkPatch(remote, merged);
+                if (!patch) return;
+                patch.updatedAt = serverTimestamp();
+                wrote = true;
+                if (snap.exists()) tx.update(ref, patch);
+                else tx.set(ref, patch);
+            });
+            if (wrote) nextHashes[`homework/${row.id}`] = mark;
+        } catch (error) {
+            /* 옛 규칙이 과제 컬렉션을 모르면 거절됩니다. 이 기기에 남기고 다른 기록은 계속 올립니다. */
+            if (classifyWriteError(error) === 'pending') count('pending');
+        }
+    }
+}
 
 export async function pushUserData(uid, state, { memoryOnly = false, hashes = {} } = {}) {
     if (!uid || !syncAvailable()) return { skipped: true, hashes, pending: 0 };
@@ -356,6 +389,9 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
             await write(cloudName, shaped.id, shaped);
         }
     }
+    await pushHomework(ready, firestore, uid, state.homework || [], nextHashes, (kind) => {
+        if (kind === 'pending') pending += 1;
+    });
     for (const [id, value] of Object.entries(state.timetable || {})) {
         const shaped = toCloudRow('timetable', { id, ...value });
         if (!shaped) continue;
@@ -368,7 +404,7 @@ export async function pushUserData(uid, state, { memoryOnly = false, hashes = {}
  * 받기 묶음. 전체 받기는 전부, 일부 받기(감시가 '이 컬렉션이 바뀜'을 알렸을 때)는 고른 것만 읽습니다.
  * profile = 계정 문서, settings = 설정 문서 4개(device·leave·tabbar·goal), 나머지는 컬렉션 이름입니다.
  */
-export const PULL_PARTS = ['profile', 'settings', ...COLLECTIONS.map(([, cloudName]) => cloudName), 'tombs', 'timetable'];
+export const PULL_PARTS = ['profile', 'settings', ...COLLECTIONS.map(([, cloudName]) => cloudName), 'tombs', 'timetable', 'homework'];
 
 /** 읽을 묶음. only가 없으면 전부입니다. 할 일·일정·회의록·출결을 받으면 지운 표시(묘비)도 함께 받습니다(지운 줄 판단에 씁니다). */
 export function pullScope(only = null) {
@@ -464,6 +500,21 @@ export async function pullUserData(uid, { memoryOnly = false, only = null } = {}
                 if (t) out.tombs[t.name][t.id] = t.at;
             });
         } catch { /* 옛 규칙 */ }
+    }
+    if (scope.has('homework')) {
+        try {
+            const work = await getDocs(collection(ready.db, 'users', uid, 'homework'));
+            const ids = serverIds(work);
+            out.homework = [];
+            if (ids) out.ids.homework = ids;
+            else out.fresh = false;
+            work.forEach((item) => {
+                const row = homeworkFromDoc(item.id, item.data());
+                if (row) out.homework.push(row);
+            });
+        } catch {
+            /* 과제 컬렉션을 모르는 옛 규칙이면 거절됩니다. 이 기기 과제는 그대로 둡니다. */
+        }
     }
     if (scope.has('timetable')) {
         const table = await getDocs(collection(ready.db, 'users', uid, 'timetable'));
@@ -646,7 +697,7 @@ export async function peekTodos(uid, ids = [], { memoryOnly = false } = {}) {
  */
 export const WATCH_RECENT = [
     ['todos', 'updatedAt'], ['events', 'updatedAt'], ['attendance', 'updatedAt'], ['notes', 'updatedAt'], ['timetable', 'updatedAt'], ['tombs', 'at'],
-    ['records', 'updatedAt'], ['notices', 'updatedAt'], ['students', 'updatedAt'], ['inbox', 'updatedAt'], ['legacy', 'at'],
+    ['records', 'updatedAt'], ['notices', 'updatedAt'], ['students', 'updatedAt'], ['inbox', 'updatedAt'], ['legacy', 'at'], ['homework', 'updatedAt'],
 ];
 export const WATCH_LATE = ['todos', 'events', 'attendance', 'notes', 'timetable', 'tombs'];
 /** 실시간으로 볼 설정 문서(settings/…). */

@@ -1445,6 +1445,12 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .minutes { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 760px; }
 /* 평일 맨 위 퇴근 줄이 있을 때도 본문 칸이 첫 화면에 들어오게, 폰에서만 간격을 줄입니다. */
 @media (max-width: 899px) { .minutes { gap: 6px; } }
+/* 320px 새로 쓰기: 본문 칸이 첫 화면 끝에 붙지 않게 제목·이름표 여백을 줄입니다. */
+@media (max-width: 420px) {
+    .minutes { gap: 4px; }
+    .minutes-label { margin-top: 0; }
+    .minutes-view-title { margin: 0; font-size: 20px; line-height: 26px; }
+}
 .minutes-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .minutes-actions > .primary-btn { padding: 0 20px; }
 .minutes-new { min-width: 160px; }
@@ -1968,10 +1974,16 @@ button.hero-pill.home-todo-link {
 
 /* 과제 체크. 글자 크기를 키워도 줄바꿈되고, 어두운 화면은 기존 색을 그대로 씁니다. */
 /* 출결 바로 옆. 두 줄로 쌓으면 쉬는 날 시간표가 하단 탭에 가립니다. */
-.hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; max-width: 100%; }
-.hero-head .hero-kicker { min-width: 0; flex: 1 1 auto; height: auto; white-space: normal; overflow-wrap: anywhere; }
-.hero-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 0 auto; max-width: 100%; }
-.hero-actions .hero-action { width: auto; flex: 0 0 auto; height: auto; white-space: nowrap; line-height: 1.2; padding: 8px 10px; }
+.hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.hero-head .hero-kicker { display: block; min-width: min(100%, 6.5em); flex: 1 1 6.5em; max-width: 100%; min-height: 36px; height: auto; padding: 6px 10px; font-weight: 800; white-space: normal; overflow-wrap: anywhere; }
+.hero-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.hero-actions .hero-action { width: auto; flex: 0 1 auto; max-width: 100%; height: auto; white-space: normal; line-height: 1.2; padding: 6px 8px; }
+@media (max-width: 480px) {
+    .home-hero { padding: 8px 12px; }
+    .home-hero .hero-head { gap: 4px; }
+    .home-hero .title-font { margin: 2px 0 4px !important; }
+    .home-grid { gap: 8px; }
+}
 .hw-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hw { min-width: 0; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
 .hw-lead { margin-top: 0; }

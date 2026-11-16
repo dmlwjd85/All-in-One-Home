@@ -195,6 +195,7 @@ jobs:
               CHROME_PATH=/usr/bin/google-chrome npm run check:widgets-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:meal-ocr-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:homework-browser
+              CHROME_PATH=/usr/bin/google-chrome npm run check:homework-old
           - part: 시계 10월
             run: |
               for day in 2026-10-23 2026-10-24 2026-10-25; do

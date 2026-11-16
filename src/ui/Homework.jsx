@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { formatKoDate } from '../lib/date.js';
-import { addHomework, joined, removeHomework, renameHomework, setHomeworkDate, submitAllHomework, toggleHomeworkSubmit } from '../lib/db.js';
+import { addHomework, addHomeworkStudent, joined, removeHomework, renameHomework, setHomeworkDate, submitAllHomework, toggleHomeworkSubmit } from '../lib/db.js';
 import {
     homeworkOverdue, homeworkProgress, homeworkProgressLabel, homeworkRoster, homeworkTitle,
     packOf, pastHomework, visibleHomework,
@@ -60,12 +60,12 @@ function tell(showToast, result, okText, undoable = false) {
 
 export function Homework() {
     const { data, clock, route, go, showToast } = useUi();
-    const notes = joined(data, 'notes');
+    const notes = joined(data, 'homework');
     const id = route.params.id || '';
     const everyone = data.allStudents || data.students;
     if (id) {
-        const row = notes.find((item) => item.id === id);
-        return <HomeworkDetail row={row && row.id?.startsWith('hw-') ? row : null} notes={notes} students={data.students} everyone={everyone} today={clock.ymd} go={go} showToast={showToast} />;
+        const row = notes.find((item) => item.id === id && !Number(item.gone));
+        return <HomeworkDetail row={row || null} notes={notes} students={data.students} everyone={everyone} today={clock.ymd} go={go} showToast={showToast} />;
     }
     return <HomeworkList notes={notes} students={data.students} today={clock.ymd} go={go} showToast={showToast} />;
 }
@@ -240,6 +240,28 @@ function HomeworkDetail({ row, students, everyone, today, go, showToast }) {
                 })}
             </div>
             {onlyMissing && ordered.length > 0 && !shown.length && <p className="muted">미제출한 친구가 없어요.</p>}
+            <RosterAdd row={row} students={students} showToast={showToast} />
+        </div>
+    );
+}
+
+function RosterAdd({ row, students, showToast }) {
+    const roster = new Set(packOf(row).roster);
+    const extra = (students || []).filter((student) => student?.id && !roster.has(student.id));
+    if (!extra.length) return null;
+    return (
+        <div className="hw-add-students">
+            <p className="hw-label">명단에 추가</p>
+            <p className="muted">이 과제를 만든 뒤에 들어온 친구예요. 넣기 전까지는 제출 수에 포함하지 않아요.</p>
+            <div className="hw-tools">
+                {extra.map((student) => (
+                    <Btn key={student.id} className="chip" data-role="hw-add-student" onClick={async () => {
+                        const result = await addHomeworkStudent(row.id, student.id);
+                        if (result?.ok === false) showToast(result.message || '넣지 못했어요.');
+                        else showToast(`${student.no ? `${student.no}번 ` : ''}${student.name} 명단에 추가`);
+                    }}>{student.no ? `${student.no} ` : ''}{student.name} 명단에 추가</Btn>
+                ))}
+            </div>
         </div>
     );
 }

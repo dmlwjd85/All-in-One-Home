@@ -134,7 +134,7 @@ export function Home() {
                 {todayRest.off ? (
                     <>
                         <div className="hero-head">
-                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>오늘은 수업이 없어요</span>
+                            <span className="hero-kicker">오늘은 수업이 없어요</span>
                             <div className="hero-actions">
                                 <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
                                 <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>
@@ -151,7 +151,7 @@ export function Home() {
                 ) : (
                     <>
                         <div className="hero-head">
-                            <span className="hero-kicker" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 36, padding: '0 12px', fontWeight: 800 }}>⏰ {period.text}</span>
+                            <span className="hero-kicker">⏰ {period.text}</span>
                             <div className="hero-actions">
                                 <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
                                 <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>

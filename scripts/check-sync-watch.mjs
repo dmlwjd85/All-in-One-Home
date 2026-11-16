@@ -37,7 +37,7 @@ await cloud.pullUserData('u1', { only: ['records'] });
 check(JSON.stringify(S.gets) === JSON.stringify([`${U}/records`]), `기록만 받기가 묘비까지 읽었습니다: ${S.gets}`);
 S.gets = [];
 const full = await cloud.pullUserData('u1');
-check(S.gets.length === 1 + 4 + 9 + 1 + 1, `전체 받기 읽기 수가 다릅니다: ${S.gets.length}`);
+check(S.gets.length === 1 + 4 + 9 + 1 + 1 + 1, `전체 받기 읽기 수가 다릅니다: ${S.gets.length}`);
 check(full.records.length === 1 && Array.isArray(full.ids.records) && full.profile?.className === '3반' && !full.partial && typeof full.timetable === 'object', '전체 받기 모양이 다릅니다.');
 
 /* ── 감시 ── */
@@ -46,7 +46,7 @@ const statuses = [];
 const stop = await cloud.watchTodos('u1', (c) => got.push(c), { since: 100000, lateSince: 50000, initial: true, onStatus: (s) => statuses.push(s) });
 const queries = S.listeners.filter((l) => l.target.kind === 'query');
 const docs = S.listeners.filter((l) => l.target.kind === 'doc');
-check(queries.length === 11 && docs.length === 4, `리스너 수가 다릅니다: 질의 ${queries.length} / 문서 ${docs.length}`);
+check(queries.length === 12 && docs.length === 4, `리스너 수가 다릅니다: 질의 ${queries.length} / 문서 ${docs.length}`);
 check(!S.listeners.some((l) => l.target.path === U), '계정 문서를 감시합니다(서버 시각 재기와 서로 깨우는 고리).');
 check(S.listeners.every((l) => l.opts?.includeMetadataChanges === true), '연결 상태(메타데이터)를 받지 않습니다.');
 const q = (name) => queries.find((l) => l.target.path === `${U}/${name}`);
