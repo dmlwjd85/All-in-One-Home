@@ -1442,6 +1442,8 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 
 /* 회의록 화면: 목록 · 보기 · 쓰기. 버튼은 모두 44px 이상, 드롭다운 없이 탭으로 고릅니다. */
 .minutes { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 760px; }
+/* 평일 맨 위 퇴근 줄이 있을 때도 본문 칸이 첫 화면에 들어오게, 폰에서만 간격을 줄입니다. */
+@media (max-width: 899px) { .minutes { gap: 6px; } }
 .minutes-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .minutes-actions > .primary-btn { padding: 0 20px; }
 .minutes-new { min-width: 160px; }
@@ -1964,10 +1966,11 @@ button.hero-pill.home-todo-link {
 .meal-menu { overflow-wrap: anywhere; }
 
 /* 과제 체크. 글자 크기를 키워도 줄바꿈되고, 어두운 화면은 기존 색을 그대로 씁니다. */
-.hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
-.hero-head .hero-kicker { min-width: 0; flex: 1 1 8em; height: auto; white-space: normal; }
-.hero-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; flex: 1 1 9em; max-width: 100%; }
-.hero-actions .hero-action { width: 100%; height: auto; white-space: normal; line-height: 1.35; padding: 8px 14px; }
+/* 출결 바로 옆. 두 줄로 쌓으면 쉬는 날 시간표가 하단 탭에 가립니다. */
+.hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.hero-head .hero-kicker { min-width: 0; flex: 1 1 auto; height: auto; white-space: normal; }
+.hero-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.hero-actions .hero-action { width: auto; height: auto; white-space: nowrap; line-height: 1.2; padding: 8px 10px; }
 .hw-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hw { min-width: 0; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
 .hw-lead { margin-top: 0; }
