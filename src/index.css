@@ -698,7 +698,8 @@ body:has(.toast):has(.sheet[aria-modal="true"]) .sheet[aria-modal="true"] {
 /* QA 2차 5번: 어두운 화면에서 --primary(#A73D74)는 바탕(#2A2627)과 2.5:1뿐이라, 밝은 --accent(#E08B9A, 약 6:1)로 초점 테두리를 그립니다. */
 .dark :focus-visible, .dark .field:focus { outline-color: var(--accent); }
 
-.home-grid { display: grid; gap: 12px; }
+.home-grid { display: grid; gap: 12px; min-width: 0; }
+.home-hero { min-width: 0; max-width: 100%; }
 .home-leave { padding: 14px; border-radius: var(--radius-xl); }
 .leave-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .leave-kicker { font-weight: 800; color: var(--ink-sub); }
@@ -1967,10 +1968,10 @@ button.hero-pill.home-todo-link {
 
 /* 과제 체크. 글자 크기를 키워도 줄바꿈되고, 어두운 화면은 기존 색을 그대로 씁니다. */
 /* 출결 바로 옆. 두 줄로 쌓으면 쉬는 날 시간표가 하단 탭에 가립니다. */
-.hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: nowrap; }
-.hero-head .hero-kicker { min-width: 0; flex: 1 1 auto; height: auto; white-space: normal; }
-.hero-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
-.hero-actions .hero-action { width: auto; height: auto; white-space: nowrap; line-height: 1.2; padding: 8px 10px; }
+.hero-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; max-width: 100%; }
+.hero-head .hero-kicker { min-width: 0; flex: 1 1 auto; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.hero-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 0 0 auto; max-width: 100%; }
+.hero-actions .hero-action { width: auto; flex: 0 0 auto; height: auto; white-space: nowrap; line-height: 1.2; padding: 8px 10px; }
 .hw-inline-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hw { min-width: 0; font-size: 1rem; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
 .hw-lead { margin-top: 0; }
@@ -1978,10 +1979,10 @@ button.hero-pill.home-todo-link {
 .hw-add { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .hw-add .primary-btn { width: 100%; align-self: stretch; }
 .hw-label { font-weight: 800; }
-.hw-date-toggle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: auto; white-space: normal; text-align: left; }
-.hw-date { margin-top: 8px; min-width: 0; }
-.hw-cards, .hw-students { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.hw-cards { margin-top: 12px; }
+.hw-date-toggle { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px; width: auto; max-width: 100%; align-self: flex-start; height: auto; white-space: normal; text-align: left; }
+.hw-date { margin-top: 8px; min-width: 0; max-width: 100%; }
+.hw-cards { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin-top: 12px; }
+.hw-students { display: grid; gap: 8px; min-width: 0; grid-template-columns: repeat(auto-fill, minmax(max(4.2rem, 16%), 1fr)); }
 .hw-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; height: auto; white-space: normal; }
 .hw-card-title, .hw-title, .hw-student-name { overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
 .hw-card-title { font-weight: 800; font-size: 1.05rem; }
@@ -1993,7 +1994,8 @@ button.hero-pill.home-todo-link {
 .hw-count { margin: 0; font-weight: 800; color: var(--ink); font-size: 1.05rem; }
 .hw .field { font-size: 1rem; line-height: 1.4; height: auto; }
 .hw .tap { font-size: 1rem; line-height: 1.35; height: auto; white-space: normal; }
-.hw-student { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; justify-content: flex-start; }
+.hw-student { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; width: 100%; min-width: 0; text-align: left; height: auto; white-space: normal; padding: 8px; }
+.hw-find { margin: 0 0 8px; }
 .hw-mark { flex: none; width: 1.4em; height: 1.4em; border-radius: 6px; box-shadow: var(--neo-inset); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
 .hw-student.on .hw-mark { box-shadow: var(--neo-raise-sm); color: var(--accent); }
 .hw-student-name { flex: 1 1 auto; }

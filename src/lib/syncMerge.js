@@ -9,6 +9,7 @@ import { CLOUD_COLLECTIONS, LWW_NAMES, fingerprint, printDigest, rowMark, unchan
 import { toCloudRow } from './cloudShape.js';
 import { noteMinutesGone } from './minutesExtract.js';
 import { isSensitiveText } from './sensitive.js';
+import { isHomework, mergeHomeworkRows } from './homework.js';
 
 /* 되돌리기·다른 기기 삭제를 견줄 묶음 */
 export const CLOUD_BUCKETS = ['records', 'events', 'todos', 'notes', 'notices', 'attendance'];
@@ -131,6 +132,13 @@ export function refreshShared(local = [], remote = [], cloudName, hashes, ats = 
     return local.map((row) => {
         const other = row?.id ? byId.get(String(row.id)) : null;
         if (!other) return row;
+        /* 과제 체크는 문서 하나를 통째로 덮지 않고, 학생 제출은 각자 나중에 고친 쪽을 남깁니다. */
+        if (cloudName === 'notes' && isHomework(row) && isHomework(other)) {
+            const merged = mergeHomeworkRows(row, other);
+            const remoteAt = Number(ats?.[String(row.id)]) || 0;
+            const at = Math.max(Number(row.editAt) || 0, remoteAt);
+            return at > 0 ? { ...merged, editAt: at } : merged;
+        }
         const remoteAt = LWW_NAMES.includes(cloudName) ? ats?.[String(row.id)] : undefined;
         if (!unchangedSincePush(hashes, cloudName, row)) {
             /* 할 일: 이 기기에서 고친 뒤 아직 못 올렸어도, 다른 기기가 더 늦게 고쳤으면(고친 시각 기준) 그쪽 값이 이깁니다. */

@@ -19,7 +19,7 @@ import { planMigration, readLegacyStorage } from './migrate.js';
 import { CLOUD_COLLECTIONS, LWW_NAMES, TOMB_KEEP_MS, clearTombs, deleteUserDoc, fingerprint, measureServerClock, peekMinutes, peekTodos, printDigest, pullUserData, pushUserData, rowMark, sweepTombs, syncAvailable, unchangedSincePush, watchTodos, writeTombs } from './cloud.js';
 import { blockedAsSensitive, cloudRowId, fromCloudRow, legacyWorkAt, localSettingAts, PERIOD_KEYS, SWEEP_COLLECTIONS, toCloudRow, WORK_KEYS } from './cloudShape.js';
 import { addDaysYmd, dayKeyFromYmd, isValidYmd, seoulParts, seoulYmd } from './date.js';
-import { assignmentRow, checkRow, homeworkCheckId, homeworkProblem, isHomework, isHomeworkCheck } from './homework.js';
+import { assignmentNote, foldHomeworkLists, homeworkProblem, isHomework, isHomeworkCheck, withAllSubmitted, withCheck, withMeta } from './homework.js';
 import { isActiveStudent, parseRoster, planRoster } from './roster.js';
 import { groupRecordId, newGroupId } from './nameLink.js';
 import { MINUTES_DRAFT_KEY } from './minutes.js';
@@ -1076,6 +1076,7 @@ function absorbCloud(draft, remote, seen = null) {
     draft.events = unionById(draft.events, (remote.events || []).map((row) => withRemoteAt('events', row, remote)));
     draft.todos = unionById(draft.todos, (remote.todos || []).map((row) => withRemoteAt('todos', row, remote)));
     draft.notes = unionById(draft.notes, (remote.notes || []).map((row) => withRemoteAt('notes', row, remote)));
+    applyHomeworkFold(draft);
     draft.notices = unionById(draft.notices, remote.notices);
     draft.legacyPages = unionById(draft.legacyPages, remote.legacyPages);
     draft.inbox = unionById(draft.inbox, withoutDropped(remote.inbox));
@@ -1193,6 +1194,12 @@ export async function boot(query = '') {
     if (!state.profile.started && params.get('demo') === '1' && !legacyAvailable()) {
         await loadDemo();
         return snapshot();
+    }
+    if ([...(state.notes || []), ...(state.local?.notes || [])].some((row) => isHomeworkCheck(row) || (isHomework(row) && !String(row.text || '').includes('@@HW1')))) {
+        await update((draft) => {
+            applyHomeworkFold(draft);
+            return draft;
+        });
     }
     emit();
     await applyAttendDraft();
@@ -2112,7 +2119,7 @@ export async function removeItem(bucket, id) {
     }, { undoable: true });
 }
 
-/* 과제 체크는 메모 문서입니다. 출결을 누르듯 바로 저장하고, 민감한 제목은 이 기기에만 둡니다. */
+/* 과제 체크는 회의 태그가 붙은 메모 문서 하나입니다. 제출 맵은 본문에 두고, 옛 학생별 메모는 그 안으로 옮깁니다. */
 function noteWhere(draft, id) {
     if ((draft.notes || []).some((row) => row?.id === id)) return 'cloud';
     if ((draft.local?.notes || []).some((row) => row?.id === id)) return 'local';
@@ -2136,18 +2143,32 @@ function dropHomeworkNote(draft, id) {
     if (draft.local) draft.local.notes = (draft.local.notes || []).filter((item) => item?.id !== id);
 }
 
-function homeworkBucketLocal(draft, id) {
-    const row = readNote(draft, id);
-    if (!row || !isHomework(row)) return null;
-    return noteWhere(draft, id) === 'local' || isSensitiveText(row.title);
+function applyHomeworkFold(draft) {
+    const folded = foldHomeworkLists(draft.notes, draft.local?.notes);
+    if (!folded.changed) return;
+    for (const row of folded.removed) forgetRow('notes', row);
+    draft.notes = folded.cloud;
+    if (draft.local) draft.local.notes = folded.local;
 }
 
-export async function addHomework(title, date, id) {
+function homeworkStamp() {
+    const at = editClock();
+    return at > 0 ? at : Date.now();
+}
+
+export async function addHomework(title, date, id, roster = []) {
     const problem = homeworkProblem(title, date);
     if (problem) return { ok: false, message: problem };
-    const row = assignmentRow({ id: /^hw-[A-Za-z0-9_-]{1,36}$/.test(id || '') ? id : nid('hw'), title, date });
+    const row = assignmentNote({
+        id: /^hw-[A-Za-z0-9_-]{1,36}$/.test(id || '') ? id : nid('hw'),
+        title,
+        date,
+        roster,
+        made: homeworkStamp(),
+    });
     const sensitive = isSensitiveText(row.title);
     const failed = await update((draft) => {
+        applyHomeworkFold(draft);
         writeHomeworkNote(draft, row, sensitive);
         return draft;
     }, { undoable: true });
@@ -2161,12 +2182,10 @@ export async function renameHomework(id, title) {
     const sensitive = isSensitiveText(nextTitle);
     let missing = false;
     const failed = await update((draft) => {
+        applyHomeworkFold(draft);
         const row = readNote(draft, id);
         if (!row || !isHomework(row)) { missing = true; return draft; }
-        writeHomeworkNote(draft, { ...row, title: nextTitle }, sensitive);
-        for (const check of [...(draft.notes || []), ...(draft.local?.notes || [])]) {
-            if (isHomeworkCheck(check) && check.title === id) writeHomeworkNote(draft, check, sensitive);
-        }
+        writeHomeworkNote(draft, withMeta(row, { title: nextTitle, at: homeworkStamp() }), sensitive);
         return draft;
     }, { undoable: true });
     if (missing) return { ok: false, message: '그 과제를 찾지 못했어요.' };
@@ -2175,12 +2194,14 @@ export async function renameHomework(id, title) {
 }
 
 export async function setHomeworkDate(id, date) {
-    if (!isValidYmd(date)) return { ok: false, message: '날짜를 골라 주세요.' };
+    if (!isValidYmd(date)) return { ok: false, message: '마감일을 골라 주세요.' };
     let missing = false;
     const failed = await update((draft) => {
+        applyHomeworkFold(draft);
         const row = readNote(draft, id);
         if (!row || !isHomework(row)) { missing = true; return draft; }
-        writeHomeworkNote(draft, { ...row, date }, noteWhere(draft, id) === 'local' || isSensitiveText(row.title));
+        const local = noteWhere(draft, id) === 'local' || isSensitiveText(row.title);
+        writeHomeworkNote(draft, withMeta(row, { date, at: homeworkStamp() }), local);
         return draft;
     }, { undoable: true });
     if (missing) return { ok: false, message: '그 과제를 찾지 못했어요.' };
@@ -2190,11 +2211,8 @@ export async function setHomeworkDate(id, date) {
 
 export async function removeHomework(id) {
     const failed = await update((draft) => {
-        const ids = new Set([id]);
-        for (const row of [...(draft.notes || []), ...(draft.local?.notes || [])]) {
-            if (isHomeworkCheck(row) && row.title === id) ids.add(row.id);
-        }
-        for (const noteId of ids) dropHomeworkNote(draft, noteId);
+        applyHomeworkFold(draft);
+        dropHomeworkNote(draft, id);
         return draft;
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
@@ -2204,34 +2222,43 @@ export async function removeHomework(id) {
 export async function toggleHomeworkSubmit(assignmentId, sid) {
     if (!assignmentId || !sid) return { ok: false, message: '학생을 찾지 못했어요.' };
     let missing = false;
+    let turnedOn = false;
     const failed = await update((draft) => {
-        const local = homeworkBucketLocal(draft, assignmentId);
-        if (local == null) { missing = true; return draft; }
-        const checkId = homeworkCheckId(assignmentId, sid);
-        if (readNote(draft, checkId)) dropHomeworkNote(draft, checkId);
-        else writeHomeworkNote(draft, checkRow(assignmentId, sid), local);
+        applyHomeworkFold(draft);
+        const row = readNote(draft, assignmentId);
+        if (!row || !isHomework(row)) { missing = true; return draft; }
+        const on = !readHomeworkOn(row, sid);
+        turnedOn = on;
+        const local = noteWhere(draft, assignmentId) === 'local' || isSensitiveText(row.title);
+        writeHomeworkNote(draft, withCheck(row, sid, on, homeworkStamp()), local);
         return draft;
     }, { undoable: true });
     if (missing) return { ok: false, message: '그 과제를 찾지 못했어요.' };
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
-    return { ok: true };
+    return { ok: true, on: turnedOn };
+}
+
+function readHomeworkOn(row, sid) {
+    const text = String(row?.text || '');
+    const at = text.indexOf('@@HW1');
+    if (at < 0) return false;
+    try {
+        const pack = JSON.parse(text.slice(at + '@@HW1'.length).trim());
+        return Boolean(pack?.checks?.[sid]?.on);
+    } catch {
+        return false;
+    }
 }
 
 export async function submitAllHomework(assignmentId, sids) {
     if (!assignmentId) return { ok: false, message: '그 과제를 찾지 못했어요.' };
     let missing = false;
     const failed = await update((draft) => {
-        const local = homeworkBucketLocal(draft, assignmentId);
-        if (local == null) { missing = true; return draft; }
-        const have = new Set();
-        for (const row of [...(draft.notes || []), ...(draft.local?.notes || [])]) {
-            if (isHomeworkCheck(row) && row.title === assignmentId) have.add(String(row.text || '').trim());
-        }
-        for (const sid of sids || []) {
-            if (!sid || have.has(sid)) continue;
-            writeHomeworkNote(draft, checkRow(assignmentId, sid), local);
-            have.add(sid);
-        }
+        applyHomeworkFold(draft);
+        const row = readNote(draft, assignmentId);
+        if (!row || !isHomework(row)) { missing = true; return draft; }
+        const local = noteWhere(draft, assignmentId) === 'local' || isSensitiveText(row.title);
+        writeHomeworkNote(draft, withAllSubmitted(row, sids, homeworkStamp()), local);
         return draft;
     }, { undoable: true });
     if (missing) return { ok: false, message: '그 과제를 찾지 못했어요.' };

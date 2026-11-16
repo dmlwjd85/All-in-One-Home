@@ -108,6 +108,24 @@ try {
     await phone.click('[data-hw-student="s1"]');
     await phone.waitForFunction(() => document.querySelector('[data-role="hw-count"]')?.innerText?.includes('제출 1/'));
     check(await phone.$eval('[data-hw-student="s1"]', (el) => el.getAttribute('aria-pressed') === 'true' && el.innerText.includes('제출')), '이름을 눌러도 제출로 바뀌지 않습니다.');
+    const columns = await phone.evaluate(() => {
+        const rows = new Map();
+        for (const el of document.querySelectorAll('[data-hw-student]')) {
+            const top = Math.round(el.getBoundingClientRect().top);
+            rows.set(top, (rows.get(top) || 0) + 1);
+        }
+        return Math.max(0, ...rows.values());
+    });
+    check(columns >= 3 && columns <= 6, `한 줄 학생 수가 3~6이 아닙니다: ${columns}`);
+    const dateWidth = await phone.$eval('[data-role="hw-date"]', (el) => el.getBoundingClientRect().width);
+    check(dateWidth < 280, `마감일 버튼이 너무 넓습니다: ${Math.round(dateWidth)}`);
+    const clicked = await phone.evaluate(() => {
+        const button = document.querySelector('[data-hw-student="s3"]');
+        button.click();
+        return button.getAttribute('aria-pressed');
+    });
+    await phone.waitForFunction(() => document.querySelector('[data-hw-student="s3"]')?.getAttribute('aria-pressed') === 'true');
+    check(clicked === 'false' || clicked === 'true', 'click 만으로 학생을 누르지 못합니다.');
     const scrolled = await phone.evaluate(() => {
         const button = document.querySelector('[data-hw-student="s2"]');
         const pressed = button.getAttribute('aria-pressed');
