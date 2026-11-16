@@ -65,14 +65,27 @@ export const OCR_FILES = [
     ['node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'],
 ];
 
+/** 변이 검사가 저장소 안의 임시 폴더에서 빌드해도, 위의 node_modules 를 찾습니다. */
+function findUp(rel) {
+    let dir = process.cwd();
+    for (let i = 0; i < 8; i += 1) {
+        const candidate = resolve(dir, rel);
+        if (existsSync(candidate)) return candidate;
+        const parent = resolve(dir, '..');
+        if (parent === dir) break;
+        dir = parent;
+    }
+    return '';
+}
+
 function copyOcrFiles() {
     return {
         name: 'copy-ocr-files',
         buildStart() {
             mkdirSync(resolve('public/ocr'), { recursive: true });
             for (const [from, to] of OCR_FILES) {
-                const src = resolve(from);
-                if (!existsSync(src)) throw new Error(`글자 인식 파일이 없습니다: ${from} (npm install 을 먼저 해 주세요)`);
+                const src = findUp(from);
+                if (!src) throw new Error(`글자 인식 파일이 없습니다: ${from} (npm install 을 먼저 해 주세요)`);
                 copyFileSync(src, resolve('public/ocr', to));
             }
         },

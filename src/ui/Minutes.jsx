@@ -460,7 +460,7 @@ function MinutesEditor({ row }) {
             ) : null}
             <label className="minutes-label" htmlFor="minutes-attendees">참석자 <span className="muted">(선택)</span></label>
             <Field id="minutes-attendees" value={attendees} maxLength={MINUTES_ATTENDEES_MAX} placeholder="예: 1학년 담임 선생님들" onChange={(event) => setAttendees(event.target.value)} />
-            <label className="minutes-label" htmlFor="minutes-text">본문 <span className="muted">(Enter는 줄바꿈 · 날짜가 있는 할 일·일정은 저장할 때 바로 등록돼요)</span></label>
+            <label className="minutes-label" htmlFor="minutes-text">본문 <span className="muted">(Enter는 줄바꿈)</span></label>
             <Area id="minutes-text" className="field minutes-text" rows={12} value={text} maxLength={MINUTES_TEXT_MAX} enterKeyHint="enter" placeholder={'안건\n- \n결정한 것\n- \n할 일\n- 11/20까지 보고서 제출'} onChange={(event) => setText(event.target.value)} />
             <p className="minutes-kept muted" aria-live="polite" data-role="minutes-kept">
                 {keptAt === '불러옴' ? '쓰던 내용을 불러왔어요. 저장을 눌러야 회의록이 돼요.' : keptAt ? `${keptAt} 이 기기에 임시 저장했어요. 저장을 눌러야 회의록이 돼요.` : '쓰는 동안 이 기기에 임시로 저장해 둬요.'}
