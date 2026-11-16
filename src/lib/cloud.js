@@ -745,7 +745,7 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
     if (!uid || typeof onChange !== 'function' || !syncAvailable()) return () => {};
     const ready = await loadFirebase({ memoryOnly });
     if (!ready) return () => {};
-    const { collection, doc, onSnapshot, query, where, Timestamp } = await import('firebase/firestore');
+    const { collection, doc, getDocs, limit, onSnapshot, query, where, Timestamp } = await import('firebase/firestore');
     const slots = [];
     const report = () => {
         if (typeof onStatus !== 'function') return;
@@ -775,7 +775,14 @@ export async function watchTodos(uid, onChange, { memoryOnly = false, since = nu
     try {
         const recent = Timestamp.fromMillis(Number.isFinite(since) ? since : Date.now() - 10 * 60 * 1000);
         const late = Number.isFinite(lateSince) ? Timestamp.fromMillis(Math.min(lateSince, recent.toMillis())) : recent;
-        for (const [name, field] of WATCH_RECENT) {
+        /* 옛 규칙은 과제 컬렉션을 모릅니다. 그 감시를 켜면 거절이 듣기 흐름을 끊고 앱이 죽습니다. 읽기가 될 때만 봅니다. */
+        let watchNames = WATCH_RECENT;
+        try {
+            await getDocs(query(collection(ready.db, 'users', uid, 'homework'), where('updatedAt', '>', recent), limit(1)));
+        } catch {
+            watchNames = WATCH_RECENT.filter(([name]) => name !== 'homework');
+        }
+        for (const [name, field] of watchNames) {
             /* 끊긴 동안(캐시 결과)에 실린 변경은 버리지 않고 모아 두었다가, 서버 결과로 돌아올 때 함께 알립니다. */
             let held = [];
             offs.push(listen(query(collection(ready.db, 'users', uid, name), where(field, '>', WATCH_LATE.includes(name) ? late : recent)), (snap, first, fromServer) => {

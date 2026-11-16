@@ -14,6 +14,7 @@ export const deleteField = () => ({ deleteField: true });
 export const doc = (db, ...path) => ({ kind: 'doc', path: path.join('/') });
 export const collection = (db, ...path) => ({ kind: 'col', path: path.join('/') });
 export const where = (field, op, value) => ({ field, op, value });
+export const limit = (n) => ({ limit: n });
 export const query = (col, w) => ({ kind: 'query', path: col.path, w });
 const snapDoc = (path, data) => ({ id: path.split('/').pop(), data: () => data, exists: () => data != null, metadata: { hasPendingWrites: false } });
 export async function getDoc(ref) { S.gets.push(ref.path); return snapDoc(ref.path, S.docs.get(ref.path) ?? null); }
