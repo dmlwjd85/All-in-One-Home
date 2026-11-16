@@ -11,6 +11,11 @@ import { ClayMark } from './ClayMark.jsx';
 import { useSpeechDictation } from './useSpeechDictation.js';
 import { applyLiveChips, readEventChips } from '../lib/dateChips.js';
 import { LiveEventChips } from './LiveEventChips.jsx';
+import { GridPaste } from './GridPaste.jsx';
+import { takePasteSeed } from './pasteSeed.js';
+import { looksLikeMealTable } from '../lib/mealPaste.js';
+import { htmlTableToTsv, keepTableEdges } from '../lib/monthGrid.js';
+import { looksLikeScheduleList, looksLikeTeams, readPasteSchedule } from '../lib/teamsPaste.js';
 
 const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 const ATTEND_STATUS = ['출석', '결석', '지각', '조퇴', '결과'];
@@ -68,7 +73,10 @@ function StopIcon() {
 export function PlusSheet({ onClose, onPick, startMore = false }) {
     const { data, clock, showToast } = useUi();
     const [phase, setPhase] = useState('write');
-    const [text, setText] = useState('');
+    const [text, setText] = useState(() => takePasteSeed());
+    const [image, setImage] = useState(null);
+    const [gridMode, setGridMode] = useState('');
+    const mealFile = useRef(null);
     const [selectedNo, setSelectedNo] = useState(0);
     const [more, setMore] = useState(startMore);
     const moreGrid = useRef(null);
@@ -104,9 +112,30 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
         return () => window.clearTimeout(timer);
     }, [phase, onClose]);
 
+    function openGrid() {
+        speech.stop();
+        setGridMode('');
+        setPhase('grid');
+    }
+
+    /* 급식표 사진: 사진을 고르면 바로 급식표로 읽습니다(알레르기 번호가 없는 표도). */
+    function openMealPhoto(file) {
+        if (!file) return;
+        speech.stop();
+        setImage(file);
+        setGridMode('meal');
+        setPhase('grid');
+    }
+
     function preview() {
         speech.stop();
-        const { drafts } = readDrafts(new Date());
+        const now = new Date();
+        const read = readPasteSchedule(text, { now });
+        if (looksLikeMealTable(text) || looksLikeTeams(text) || looksLikeScheduleList(text, now) || read.mode === 'calendar' || read.mode === 'teams') {
+            openGrid();
+            return;
+        }
+        const { drafts } = readDrafts(now);
         if (!drafts.length) {
             showToast('한 줄만 적어도 남길 수 있어요.');
             return;
@@ -133,7 +162,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
             showToast(clipboardHint(clip.reason));
             return;
         }
-        setText((prev) => (prev.trim() ? `${prev.trim()}\n${clip.text.trim()}` : clip.text.trim()));
+        const next = keepTableEdges(clip.text);
+        setText((prev) => (prev.trim() ? `${keepTableEdges(prev)}\n${next}` : next));
         box.current?.focus();
     }
 
@@ -228,7 +258,30 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
 
     return (
         <div className="sheet-back" onClick={onClose}>
-            <div className="sheet" role="dialog" aria-modal="true" aria-label="할 일 고르기" data-screen="plus" data-phase={phase} onClick={(event) => event.stopPropagation()}>
+            <div
+                className="sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-label="할 일 고르기"
+                data-screen="plus"
+                data-phase={phase}
+                onClick={(event) => event.stopPropagation()}
+                onPaste={(event) => {
+                    const file = [...(event.clipboardData?.files || [])].find((item) => String(item.type || '').startsWith('image/'));
+                    if (file) {
+                        event.preventDefault();
+                        setImage(file);
+                        setPhase('grid');
+                        return;
+                    }
+                    const html = event.clipboardData?.getData('text/html') || '';
+                    const table = htmlTableToTsv(html);
+                    if (!table) return;
+                    event.preventDefault();
+                    setText(keepTableEdges(table));
+                    setPhase('grid');
+                }}
+            >
                 <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--line)', margin: '8px auto 12px' }} />
                 {phase === 'done' ? (
                     <div style={{ textAlign: 'center', padding: '8px 0 12px' }}>
@@ -237,7 +290,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         <p className="muted">{savedNote || (savedRecord ? '학생 기록은 누가기록에 쌓아 두었어요.' : '발라 둔 자리에 넣었어요.')}</p>
                     </div>
                 ) : (
-                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : '무엇을 발라 둘까요?'}</h2>
+                    <h2 className="title-font" style={{ fontSize: 22, margin: '0 0 8px' }}>{phase === 'preview' ? '이렇게 넣을게요' : phase === 'grid' ? (gridMode === 'meal' ? '급식표 읽기' : '표에서 읽은 일정') : '무엇을 발라 둘까요?'}</h2>
                 )}
                 {phase === 'write' && (
                     <>
@@ -285,6 +338,9 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         {speech.needConfirm && <Btn className="chip block" style={{ marginTop: 8 }} onClick={speech.confirm}>알고 시작할게요</Btn>}
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                             <Btn className="chip" onClick={paste}>붙여넣기</Btn>
+                            <Btn className="chip" onClick={openGrid}>달력·급식 표</Btn>
+                            <Btn className="chip" onClick={() => mealFile.current?.click()}>급식표 사진</Btn>
+                            <input ref={mealFile} type="file" accept="image/*" aria-label="급식표 사진" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
                         </div>
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={preview}>다음</Btn>
                         {recent.length > 0 && (
@@ -318,6 +374,9 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         )}
                         <Btn className="chip block" style={{ marginTop: 8 }} onClick={onClose}>닫기</Btn>
                     </>
+                )}
+                {phase === 'grid' && (
+                    <GridPaste text={text} image={image} mode={gridMode} onBack={() => { setImage(null); setGridMode(''); setPhase('write'); }} />
                 )}
                 {phase === 'preview' && (
                     <>

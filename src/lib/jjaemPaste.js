@@ -5,6 +5,7 @@
  */
 import { findDates } from './parse.js';
 import { addDaysYmd, isValidYmd, seoulYmd } from './date.js';
+import { stripTeamsNoise } from './teamsPaste.js';
 
 /* 날짜·시각 낱말 바로 뒤에 붙는 조사. 뒤에 한글이 이어지면(예: 「오늘도서관」) 조사로 보지 않습니다. */
 const PARTICLE = '(?:(?:에는|에도|에서|에|엔|부터|까지는|까지|은|는|이|가|도|의|으로|로)(?![가-힣]))?';
@@ -60,15 +61,17 @@ export function jjaemDateChip(ymd, today = seoulYmd()) {
 /* 한글로 쓴 시(「세 시」「열두시」). 긴 말부터 맞춥니다. */
 const KO_HOURS = { 열한: 11, 열두: 12, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 한: 1, 두: 2, 세: 3, 네: 4, 열: 10 };
 const KO_HOUR_RE = '열한|열두|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열';
-const AMPM = '(오전|오후|아침|저녁|밤|새벽|낮)';
+const AMPM = '(오전|오후|아침|저녁|밤|새벽|낮|AM|PM|am|pm)';
 
 /** 오전·오후 같은 앞말과 학교 습관(앞말 없는 1~6시는 오후)으로 24시간 시각을 정합니다. zeroLed: 「03:00」처럼 0을 앞에 쓴 시각은 그대로 둡니다. */
 function clockHour(ap, hour, { zeroLed = false } = {}) {
     let h = hour;
-    if ((ap === '저녁' || ap === '밤') && h === 12) h = 0;
-    else if ((ap === '오후' || ap === '저녁' || ap === '밤') && h < 12) h += 12;
+    const pm = ap === '오후' || ap === '저녁' || ap === '밤' || /^pm$/i.test(ap || '');
+    const am = ap === '오전' || ap === '새벽' || /^am$/i.test(ap || '');
+    if ((ap === '저녁' || ap === '밤' || /^pm$/i.test(ap || '')) && h === 12 && ap !== '오후' && !/^pm$/i.test(ap || '')) h = 0;
+    else if (pm && h < 12) h += 12;
     else if (ap === '낮' && h >= 1 && h <= 6) h += 12;
-    else if ((ap === '오전' || ap === '새벽') && h === 12) h = 0;
+    else if (am && h === 12) h = 0;
     if (!ap && !zeroLed && h >= 1 && h <= 6) h += 12;
     if (h === 24) h = 0;
     return h;
@@ -195,6 +198,23 @@ export function findTimeSpans(raw) {
         if (!m[1] && notClockColon(text, m.index, m.index + m[0].length)) continue;
         push(m.index, m[0], clockHour(m[1], hour, { zeroLed: m[2].length === 2 && m[2][0] === '0' || hour > 12 }), min, am12(m[1], hour));
     }
+    /* 뒤에 붙는 AM/PM. 앞의 콜론 식은 변이 검사가 글자 그대로 찾으므로, 겹친 짧은 시각을 이 식으로 바꿉니다. */
+    for (const m of text.matchAll(/(?<![\d:가-힣])(\d{1,2}):([0-5]\d)\s*(AM|PM)\b/gi)) {
+        const hour = Number(m[1]);
+        const min = Number(m[2]);
+        if (hour > 12 || min > 59) continue;
+        for (let i = spans.length - 1; i >= 0; i -= 1) {
+            const span = spans[i];
+            if (m.index <= span.index && span.index + span.length <= m.index + m[0].length) spans.splice(i, 1);
+        }
+        push(m.index, m[0], clockHour(m[3], hour), min);
+    }
+    for (const m of text.matchAll(/(?<![\d:가-힣.])(\d{1,2})\s*(AM|PM)\b/gi)) {
+        const hour = Number(m[1]);
+        if (hour < 1 || hour > 12) continue;
+        if (spans.some((span) => m.index < span.index + span.length && span.index < m.index + m[0].length)) continue;
+        push(m.index, m[0], clockHour(m[2], hour), 0);
+    }
     for (const m of text.matchAll(new RegExp(`(?<![\\d:가-힣])${AMPM}\\s*(1[3-9]|2[0-3]):([0-5]\\d)(?![\\d:])${COLON_UNIT}`, 'g'))) {
         push(m.index, m[0], Number(m[2]), Number(m[3]));
     }
@@ -312,7 +332,7 @@ export function readDateSpans(text, { now = new Date(), future = false } = {}) {
  * future: 할 일·일정처럼 앞일을 적는 줄. 요일은 다가오는 날, 한참 지난 달·일은 내년으로 봅니다.
  */
 export function readJjaemPaste(text, { now = new Date(), stripTime = true, stripDate = true, future = false, ampmFlip = [] } = {}) {
-    const raw = String(text || '').trim();
+    const raw = stripTeamsNoise(String(text || '')).trim();
     const today = seoulYmd(now);
     let dates = [];
     try { dates = findDates(raw, now); } catch { dates = []; }

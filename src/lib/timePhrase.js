@@ -250,6 +250,8 @@ export function phraseAskText(res) {
     if (res.missing === 'am12') return `‘${res.word}’가 낮 12시인지 밤 12시인지 골라 주세요.`;
     if (res.missing === 'vague') return `‘${String(res.word).replace(/\s*(?:에|때|쯤)$/, '')}’은 몇 시인지 정해지지 않았어요.`;
     if (res.missing === 'timetable') return `‘${res.word}’를 정할 교시 시각이 없어요.`;
+    if (res.missing === 'weekday') return res.warning || '요일과 날짜가 달라요. 맞는 날짜를 골라 주세요.';
+    if (res.missing === 'many') return '일정이 여러 개예요. 나눠서 확인한 뒤 넣을게요.';
     if (res.late) return `‘${res.word}’(${res.basis})는 오늘 이미 지났어요.`;
     return '';
 }

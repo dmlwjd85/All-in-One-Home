@@ -16,6 +16,7 @@ import { Btn } from './bits.jsx';
 import { eulReul } from '../lib/period.js';
 import { isLocked, readPeriodLocal, tableRow, toggleCellLock, togglePeriodLock, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
+import { MealLine } from './MealCard.jsx';
 
 const DAYS = [['mon', '월'], ['tue', '화'], ['wed', '수'], ['thu', '목'], ['fri', '금']];
 
@@ -79,6 +80,7 @@ export function Schedule() {
                                     <div className="week-events">
                                         {day.rest.off && <span className="day-rest-mark week-rest">{day.rest.label === '휴일' ? '휴일' : `휴일 · ${day.rest.label}`}</span>}
                                         {day.events.map((row) => <WeekEvent key={row.id} row={row} showToast={showToast} />)}
+                                        <MealLine notes={joined(data, 'notes')} date={day.date} />
                                         {!day.events.length && !day.rest.off && <span className="muted week-empty">일정 없음</span>}
                                     </div>
                                 </div>

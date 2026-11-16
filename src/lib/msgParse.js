@@ -3,6 +3,8 @@ import { isValidYmd, seoulYmd } from './date.js';
 import { findDates, WEEK_MARK, WEEK_TAIL } from './parse.js';
 import { isSensitiveText } from './sensitive.js';
 import { DEFAULT_PERIODS } from './period.js';
+import { looksLikeCalGrid, parseCalGrid } from './calGrid.js';
+import { looksLikeScheduleList, readPasteSchedule, stripTeamsNoise } from './teamsPaste.js';
 
 export const EVENT_KINDS = ['학급', '학교', '휴일', '내 일정'];
 export const MEET_KINDS = ['학년회의', '교직원회의', '교과협의회', '학부모회의', '연수'];
@@ -90,6 +92,23 @@ function clockSpan(text) {
 function pickClock(text) {
     const range = clockSpan(text);
     if (range) return range;
+    const ampmColon = text.match(/(오전|오후|AM|PM|am|pm)\s*(\d{1,2})\s*:\s*(\d{2})(?!\d)/);
+    if (ampmColon) {
+        let hour = Number(ampmColon[2]);
+        const minute = Number(ampmColon[3]);
+        const mark = ampmColon[1].toUpperCase();
+        if ((mark === '오후' || mark === 'PM') && hour < 12) hour += 12;
+        if ((mark === '오전' || mark === 'AM') && hour === 12) hour = 0;
+        return { hm: padTime(hour, minute), assumedPm: false };
+    }
+    const colonAmpm = text.match(/(?<!\d)(\d{1,2})\s*:\s*(\d{2})\s*(AM|PM)\b/i);
+    if (colonAmpm) {
+        let hour = Number(colonAmpm[1]);
+        const minute = Number(colonAmpm[2]);
+        if (colonAmpm[3].toUpperCase() === 'PM' && hour < 12) hour += 12;
+        if (colonAmpm[3].toUpperCase() === 'AM' && hour === 12) hour = 0;
+        return { hm: padTime(hour, minute), assumedPm: false };
+    }
     const ampm = text.match(/(오전|오후)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분|\s*반)?/);
     if (ampm) {
         let hour = Number(ampm[2]);
@@ -133,10 +152,19 @@ export function detectWhen(text, periods = DEFAULT_PERIODS) {
         out.label = `${out.period}교시`;
     }
     const clock = pickClock(src);
+    const afterPeriod = src.match(/(?<!\d)(10|[1-9])\s*교시\s*(?:후|끝나고|끝난\s*(?:뒤|후))/);
     if (clock?.hm) {
         out.hm = clock.hm;
         out.hmEnd = clock.hmEnd || '';
         out.assumedPm = clock.assumedPm;
+    } else if (afterPeriod && out.period) {
+        const start = out.hm;
+        if (start) {
+            const [h, m] = start.split(':').map(Number);
+            const total = h * 60 + m + 40;
+            out.hm = `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+            out.label = `${out.period}교시 후`;
+        }
     } else if (afterSchoolIsClock(src)) {
         out.hm = '16:00';
         out.label = out.label || '방과후';
@@ -354,7 +382,7 @@ export function tidyTitle(text) {
     t = t.replace(/점심\s*시간|점심/g, ' ');
     if (afterSchoolIsClock(t)) t = t.replace(/방과\s*후(?:\s*에|\s*까지)?(?:\s*시간)?(?:에|까지)?/g, ' ');
     t = t.replace(/(?:(?<![가-힣])제\s*)?(?:10|\d)(?:\s*[,·]\s*(?:10|\d))+\s*교시/g, ' ');
-    t = t.replace(/(?:(?<![가-힣])제\s*)?(?<!\d)\d{1,2}\s*교시(?!\s*보결)(?:\s*까지)?/g, ' ');
+    t = t.replace(/(?:(?<![가-힣])제\s*)?(?<!\d)\d{1,2}\s*교시(?!\s*보결)(?:\s*까지|\s*후(?![가-힣])|\s*끝나고)?/g, ' ');
     t = t.replace(/(?:^|\s)\d{1,2}[.)](?=\s)/g, ' ');
     t = t.replace(/(?:을|를)\s*(제출|회신|작성|입력|업로드|탑재)/g, ' $1');
     t = t.replace(/알려\s*주(?:세요|십시요|시기\s*바랍니다)?/g, '회신');
@@ -3387,9 +3415,41 @@ export function confirmShapeOk(text, items, now = new Date()) {
 }
 
 /** @returns {{ items: object[] }} */
+function pasteItem(row, seq) {
+    const blob = `${row.title || ''} ${row.memo || ''} ${row.raw || ''}`;
+    return {
+        id: row.id || `msg${fnv1a32(`${row.date}|${row.title}|${seq}`)}`,
+        kind: '일정',
+        eventKind: row.eventKind || '학급',
+        title: row.title || '일정',
+        date: row.date || '',
+        end: row.end || '',
+        time: row.time || '',
+        endTime: row.endTime || '',
+        period: row.period || 0,
+        periodEnd: row.periodEnd || 0,
+        memo: row.memo || '',
+        include: row.include !== false && !row.warning,
+        low: Boolean(row.warning),
+        warning: row.warning || '',
+        sensitive: isSensitiveText(blob),
+        confidence: row.warning ? 0.45 : 0.9,
+        assumedPm: Boolean(row.assumedPm),
+        raw: String(row.raw || row.title || '').slice(0, 500),
+    };
+}
+
 export function parseSchoolMessages(text, { now = new Date(), periods = DEFAULT_PERIODS } = {}) {
-    const raw = String(text || '').trim();
+    const raw = stripTeamsNoise(String(text || '')).trim();
     if (!raw) return { items: [] };
+    if (looksLikeCalGrid(raw)) {
+        const grid = parseCalGrid(raw, { today: seoulYmd(now), periods });
+        return { items: grid.events.map(pasteItem) };
+    }
+    if (looksLikeScheduleList(raw, now)) {
+        const list = readPasteSchedule(raw, { now, periods });
+        if (list.items.length) return { items: list.items.map(pasteItem) };
+    }
     const items = [];
     const seen = new Map();
     foldChunks(attachContext(segmentsOf(raw, now))).forEach((block) => {

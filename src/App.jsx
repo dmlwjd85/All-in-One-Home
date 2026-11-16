@@ -702,7 +702,7 @@ export default function App() {
         schedule: ['일정', data.profile.className || ''],
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],
-        minutes: ['회의록', '여러 줄로 적고 저장 버튼으로 남겨요'],
+        minutes: ['회의록', '저장 버튼으로 남겨요'],
         settings: ['설정', '학급, 소리, 단축키, 계정'],
         roster: ['명단', '번호에 이름을 적어 주세요'],
         day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],

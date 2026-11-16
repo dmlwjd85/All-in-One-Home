@@ -5,6 +5,7 @@
     - 그 밖의 줄(안건, 논의 내용)은 등록하지 않습니다.
     등록 id 는 'mt-<회의록 열쇠>-<줄 해시>' 라서 같은 회의록을 다시 저장해도 같은 id 가 나와 겹쳐 들어가지 않습니다. */
 import { parseSchoolMessages } from './msgParse.js';
+import { looksLikeCalGrid } from './calGrid.js';
 import { findTimeSpans } from './jjaemPaste.js';
 import { isAmbiguousWord } from './dateChips.js';
 import { applyTimePhrases } from './timePhrase.js';
@@ -105,6 +106,37 @@ const SHORT_TASK = /^[^\n]{2,24}?(?:[가-힣]기|하자|합시다|할\s*것)$/;
  * timeCtx: 시간구('퇴근 전까지'·'수업 끝나고')를 내 퇴근·교시 시각으로 채울 때 쓰는 기준값(ui/timeContext.js). 없으면 채우지 않습니다.
  */
 export function minutesCandidates(text, minutesId, { now = new Date(), periods = DEFAULT_PERIODS, title = '', timeCtx = null } = {}) {
+    if (looksLikeCalGrid(text)) {
+        const auto = [];
+        const ask = [];
+        let parsed = { items: [] };
+        try { parsed = parseSchoolMessages(text, { now, periods }); } catch { parsed = { items: [] }; }
+        (parsed.items || []).forEach((item, n) => {
+            const draft = {
+                id: linkedId(minutesId, `${item.date}|${item.title}`, n),
+                kind: '일정',
+                title: item.title,
+                date: item.date || '',
+                end: item.end || '',
+                time: item.time || '',
+                endTime: item.endTime || '',
+                period: item.period || 0,
+                periodEnd: item.periodEnd || 0,
+                eventKind: item.eventKind || '학교',
+                memo: title ? `회의록: ${title}`.slice(0, 80) : (item.memo || '달력에서'),
+                studentNo: 0,
+                status: '',
+                recordKind: '관찰',
+                raw: item.raw || item.title,
+                include: item.include !== false,
+                low: Boolean(item.low),
+                warning: item.warning || '',
+            };
+            if (draft.low) ask.push(draft);
+            else auto.push(draft);
+        });
+        return { auto: auto.slice(0, MAX_ITEMS), ask: ask.slice(0, Math.max(0, MAX_ITEMS - auto.length)) };
+    }
     const auto = [];
     const ask = [];
     let inTodo = false;
