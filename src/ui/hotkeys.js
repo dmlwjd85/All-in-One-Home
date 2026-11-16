@@ -15,6 +15,7 @@ export const HOTKEY_ACTIONS = [
     { id: 'search', label: '찾기', group: '동작', fallback: 'f' },
     { id: 'today', label: '오늘', group: '이동', fallback: 't' },
     { id: 'attend', label: '출결', group: '이동', fallback: 'a' },
+    { id: 'homework', label: '과제 체크', group: '이동', fallback: '' },
     { id: 'schedule', label: '일정', group: '이동', fallback: 's' },
     { id: 'todo', label: '할 일·메모', group: '이동', fallback: 'd' },
     { id: 'minutesList', label: '회의록', group: '이동', fallback: 'm' },

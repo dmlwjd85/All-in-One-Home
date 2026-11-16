@@ -17,6 +17,8 @@
 .wb-title { margin: 0; font-size: 14px; font-weight: 800; color: var(--ink-sub); }
 .wb-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
 .wb-body > .wb-more { margin-top: auto; align-self: flex-start; }
+.wb-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; align-items: flex-start; }
+.wb-actions .wb-more { margin-top: 0; max-width: 100%; height: auto; white-space: normal; }
 .wb-list { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .wb-item { margin: 0; overflow-wrap: anywhere; }
 .wb-sub { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink-sub); }

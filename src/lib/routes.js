@@ -100,6 +100,11 @@ export function resolveHash(raw, today) {
     if (path === '/counsel') return pack('students', {}, '#/students', incoming);
     if (path === '/attend') return pack('attend', { date: today }, `#/attend/${today}`, incoming);
 
+    if (path === '/homework') return pack('homework', { id: '' }, '#/homework', incoming);
+    const homework = path.match(/^\/homework\/([A-Za-z0-9_-]{1,40})$/);
+    if (homework) return pack('homework', { id: homework[1] }, `#/homework/${homework[1]}`, incoming);
+    if (path.startsWith('/homework/')) return pack('homework', { id: '' }, '#/homework', incoming, { notice: '그 과제를 찾지 못했어요.' });
+
     const attendMonth = path.match(/^\/attend\/(\d{4}-\d{2}-\d{2})\/month$/);
     if (attendMonth && isValidYmd(attendMonth[1])) {
         return pack('attend', { date: attendMonth[1], span: 'month' }, `#/attend/${attendMonth[1]}/month`, incoming);

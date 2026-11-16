@@ -2,6 +2,7 @@
 export const MENU = [
     ['오늘', '#/today'],
     ['출결', '#/attend'],
+    ['과제 체크', '#/homework'],
     ['일정', '#/schedule'],
     ['할 일·메모', '#/todo'],
     ['회의록', '#/minutes'],
@@ -23,6 +24,7 @@ export function menuTarget(href, ymd) {
 export function menuSelected(routeName, href) {
     if (href === '#/today') return routeName === 'today';
     if (href === '#/attend') return routeName === 'attend';
+    if (href === '#/homework') return routeName === 'homework';
     if (href === '#/students') return routeName === 'students' || routeName === 'student';
     if (href === '#/students/neis') return routeName === 'neis';
     if (href === '#/schedule') return routeName === 'schedule' || routeName === 'day';
