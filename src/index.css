@@ -1684,7 +1684,7 @@ button.hero-pill.home-todo-link {
 
 /* ───────── 선생님 시안 A(11/6): 버튼은 글자 길이만큼, 명단은 격자, 설정은 항목 버튼 ───────── */
 /* 화면 끝까지 늘어나던 단독 버튼을 글자 길이만큼으로 줄입니다. 저장 같은 주 버튼은 오른쪽, 보조 버튼은 왼쪽에 둡니다. 누르는 영역은 44px 이상 그대로예요. */
-.tap.primary-btn.block, .primary-btn.fit-btn { display: flex; align-items: center; width: fit-content; max-width: 100%; min-width: 88px; padding: 0 22px; margin-left: auto; }
+.tap.primary-btn.block, .primary-btn.fit-btn { display: flex; align-items: center; justify-content: center; width: fit-content; max-width: 100%; min-width: 88px; padding: 0 22px; margin-left: auto; }
 .tap.chip.block { display: flex; width: fit-content; max-width: 100%; padding: 0 18px; margin-right: auto; }
 /* 학생 기록 명단: 한 줄 4칸(넓은 화면도 4칸, 300px 이하는 3칸). 칸마다 번호·이름과 이번 달 기록 수를 두 줄로 보여 줍니다. */
 .student-roster-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }

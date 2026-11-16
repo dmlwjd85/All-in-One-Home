@@ -138,6 +138,17 @@ try {
     const u2 = (await getDoc(doc(fsA, 'users', 'teacher-a', 'homework', 'hw-u2'))).data() || {};
     check(!Number(u2.gone) && String(u2.checks?.s3 || '').startsWith('1~'), `삭제 되돌리기가 s3를 껐습니다: ${JSON.stringify(u2.checks)} gone=${u2.gone}`);
 
+    await db.addHomework('모두제출', '2026-11-16', 'hw-all', ['s1', 's7']);
+    await db.submitAllHomework('hw-all', ['s1', 's7']);
+    await db.flushCloud();
+    const allRef = doc(fsA, 'users', 'teacher-a', 'homework', 'hw-all');
+    await updateDoc(allRef, { 'checks.s7': `1~${Date.now() + 5000}`, updatedAt: serverTimestamp() });
+    await db.absorbCloudForTest(await cloud.pullUserData('teacher-a'), {});
+    await db.undo();
+    await db.flushCloud();
+    const allChecks = (await getDoc(allRef)).data()?.checks || {};
+    check(String(allChecks.s7 || '').startsWith('1~') && String(allChecks.s1 || '').startsWith('0~'), `모두 제출 되돌리기가 다른 기기 s7을 지웠습니다: ${JSON.stringify(allChecks)}`);
+
     const fsC = env.authenticatedContext('teacher-c').firestore();
     wire(fsC);
     await db.setAuth({ uid: 'teacher-c' });

@@ -1132,7 +1132,7 @@ function homeworkUndoTouch(prev, next) {
         const checks = [];
         const sids = new Set([...Object.keys(old.checks || {}), ...Object.keys(row.checks || {})]);
         for (const sid of sids) {
-            if ((old.checks?.[sid]?.on ? 1 : 0) !== (row.checks?.[sid]?.on ? 1 : 0)) checks.push(sid);
+            if ((old.checks?.[sid]?.on ? 1 : 0) !== (row.checks?.[sid]?.on ? 1 : 0)) checks.push({ sid, at: Number(row.checks?.[sid]?.at) || 0 });
         }
         const touch = { id, checks };
         if (String(old.title || '') !== String(row.title || '')) touch.title = true;
@@ -1143,6 +1143,7 @@ function homeworkUndoTouch(prev, next) {
             touch.rosterAdd = [...nextSet].filter((sid) => !prevSet.has(sid));
             touch.rosterDel = [...prevSet].filter((sid) => !nextSet.has(sid));
         }
+        if (touch.title || touch.date || touch.rosterAdd || touch.rosterDel) touch.metaAt = Number(row.metaAt) || 0;
         if (Number(old.gone || 0) !== Number(row.gone || 0)) touch.gone = true;
         if (checks.length || touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) touches.push(touch);
     }
@@ -1168,16 +1169,32 @@ function applyHomeworkUndo(currentList = [], prevList = [], touches = [], now) {
             continue;
         }
         if (!cur) continue;
-        for (const sid of touch.checks || []) cur.checks[sid] = { at: now, on: prevRow?.checks?.[sid]?.on ? 1 : 0 };
-        if (touch.title && prevRow) cur.title = prevRow.title;
-        if (touch.date && prevRow) cur.date = prevRow.date;
-        if (touch.rosterAdd || touch.rosterDel) {
-            const drop = new Set(touch.rosterAdd || []);
-            cur.roster = [...(cur.roster || []).filter((sid) => !drop.has(sid)), ...(touch.rosterDel || [])];
+        let edited = false;
+        for (const item of touch.checks || []) {
+            const sid = typeof item === 'string' ? item : item?.sid;
+            if (!sid) continue;
+            /* 그 사이 다른 기기가 같은 칸을 고쳤으면 조작 때 시각과 다릅니다. 그 칸은 그대로 둡니다. */
+            if (item && typeof item === 'object' && Number(cur.checks?.[sid]?.at) !== Number(item.at || 0)) continue;
+            cur.checks[sid] = { at: now, on: prevRow?.checks?.[sid]?.on ? 1 : 0 };
+            edited = true;
         }
-        if (touch.gone) cur.gone = prevRow && Number(prevRow.gone) > 0 ? Number(prevRow.gone) : 0;
-        if (touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) cur.metaAt = now;
-        if ((touch.checks || []).length || touch.title || touch.date || touch.rosterAdd || touch.rosterDel || touch.gone) cur.editAt = now;
+        const metaLater = (touch.title || touch.date || touch.rosterAdd || touch.rosterDel) && Number(cur.metaAt) > Number(touch.metaAt || 0);
+        if (!metaLater) {
+            if (touch.title && prevRow) { cur.title = prevRow.title; edited = true; }
+            if (touch.date && prevRow) { cur.date = prevRow.date; edited = true; }
+            if (touch.rosterAdd || touch.rosterDel) {
+                const drop = new Set(touch.rosterAdd || []);
+                cur.roster = [...(cur.roster || []).filter((sid) => !drop.has(sid)), ...(touch.rosterDel || [])];
+                edited = true;
+            }
+            if (touch.title || touch.date || touch.rosterAdd || touch.rosterDel) cur.metaAt = now;
+        }
+        if (touch.gone) {
+            cur.gone = prevRow && Number(prevRow.gone) > 0 ? Number(prevRow.gone) : 0;
+            cur.metaAt = now;
+            edited = true;
+        }
+        if (edited) cur.editAt = now;
     }
     return out;
 }
@@ -2745,6 +2762,16 @@ export function mergeStudents(current, incoming) {
     return { students, parked };
 }
 
+function mergeHomeworkLists(current, incoming) {
+    const map = new Map((current || []).filter((item) => item?.id).map((item) => [item.id, item]));
+    for (const item of incoming || []) {
+        if (!item?.id) continue;
+        const prev = map.get(item.id);
+        map.set(item.id, prev ? mergeHomework(prev, item) : item);
+    }
+    return [...map.values()];
+}
+
 function applyIncoming(draft, data, sensitive, mode, info = {}) {
     const merge = (current, incoming) => {
         if (mode === 'replace') return incoming || [];
@@ -2763,8 +2790,8 @@ function applyIncoming(draft, data, sensitive, mode, info = {}) {
     draft.events = merge(draft.events, data.events);
     draft.todos = merge(draft.todos, data.todos);
     draft.notes = merge(draft.notes, data.notes);
-    /* 예전 백업에는 과제가 없습니다. 키가 없을 때는 지금 과제를 지우지 않습니다. */
-    if (Array.isArray(data.homework)) draft.homework = merge(draft.homework, data.homework);
+    /* 예전 백업에는 과제가 없습니다. 키가 없을 때는 지금 과제를 지우지 않습니다. 합치기는 같은 과제를 칸마다 합칩니다. */
+    if (Array.isArray(data.homework)) draft.homework = mode === 'replace' ? (data.homework || []) : mergeHomeworkLists(draft.homework, data.homework);
     draft.notices = merge(draft.notices, data.notices);
     if (Array.isArray(data.inbox)) draft.inbox = merge(draft.inbox, data.inbox);
     dropRegisteredInbox(draft);
@@ -2791,7 +2818,9 @@ function applyIncoming(draft, data, sensitive, mode, info = {}) {
     draft.profile = settings.profile;
     if (settings.goals !== undefined) draft.goals = settings.goals;
     /* 이 기기 전용 자료는 기록만이 아니라 할 일·일정·메모·알림장·연락처·쪽까지 되살립니다. */
+    const localHomeworkBefore = draft.local?.homework;
     draft.local = { ...incomingLocal(draft.local, data, mode, sensitive.local), backup: draft.local?.backup ?? null };
+    if (mode !== 'replace' && Array.isArray(data.local?.homework)) draft.local.homework = mergeHomeworkLists(localHomeworkBefore, data.local.homework);
     draft.profile.started = true;
     /* 반 인원은 지금 반 학생만 셉니다(지난 명단 학생 빼고). */
     draft.profile.classSize = draft.students.filter(isActiveStudent).length || draft.profile.classSize;

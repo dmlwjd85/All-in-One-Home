@@ -12,7 +12,7 @@ import {
 import { buildExport } from '../src/lib/backup.js';
 import {
     addHomework, addHomeworkStudent, importText, removeHomework, resetClockForTest, snapshot, submitAllHomework,
-    toggleHomeworkSubmit, undo, useAuthForTest, useVaultsForTest,
+    toggleHomeworkSubmit, undo, update, useAuthForTest, useVaultsForTest,
 } from '../src/lib/db.js';
 import { homeworkWatchOnError } from '../src/lib/cloud.js';
 import { useWatchTimingForTest, watchRetryDue } from '../src/lib/db.js';
@@ -116,6 +116,26 @@ const kept = await importText(JSON.stringify(oldBackup), 'replace');
 check(kept.ok && snapshot().homework.some((row) => row.id === 'hw-new'), `예전 백업이 과제를 지웁니다: ${JSON.stringify(kept)}`);
 const brought = await importText(JSON.stringify({ ...exported, homework: [{ id: 'hw-back', title: '복원과제', date: '2026-11-20', made: 9, metaAt: 9, roster: ['s1'], checks: { s1: { at: 9, on: 1 } }, gone: 0 }] }), 'replace');
 check(brought.ok && snapshot().homework.some((row) => row.title === '복원과제'), '백업을 되돌리면 과제가 돌아오지 않습니다.');
+await addHomework('합칠 과제', '2026-11-16', 'hw-cell', ['s1', 's7']);
+await toggleHomeworkSubmit('hw-cell', 's1');
+const mine = snapshot().homework.find((row) => row.id === 'hw-cell');
+const mergedFile = buildExport(snapshot(), { at: '2026-11-16T00:00:00.000Z' });
+const hwCell = mergedFile.homework.find((row) => row.id === 'hw-cell');
+hwCell.checks = { s1: { at: 1, on: 0 }, s7: { at: (mine.checks.s1.at || 0) + 50, on: 1 } };
+const cellMerge = await importText(JSON.stringify(mergedFile), 'merge');
+const keptCells = snapshot().homework.find((row) => row.id === 'hw-cell');
+check(cellMerge.ok && keptCells?.checks?.s1?.on === 1 && keptCells?.checks?.s7?.on === 1, `합치기가 같은 과제를 통째로 덮습니다: ${JSON.stringify(keptCells?.checks)}`);
+await addHomework('모두 제출', '2026-11-16', 'hw-all', ['s1', 's7']);
+await submitAllHomework('hw-all', ['s1', 's7']);
+const allAt = snapshot().homework.find((row) => row.id === 'hw-all').checks.s7.at;
+await update((draft) => {
+    const row = draft.homework.find((item) => item.id === 'hw-all');
+    row.checks.s7 = { at: allAt + 50, on: 1 };
+    return draft;
+});
+await undo();
+const allRow = snapshot().homework.find((row) => row.id === 'hw-all');
+check(allRow?.checks?.s7?.on === 1 && allRow.checks.s7.at === allAt + 50 && allRow.checks.s1.on === 0, `모두 제출 되돌리기가 나중 체크 s7을 지웁니다: ${JSON.stringify(allRow?.checks)}`);
 await addHomework('되돌릴 과제', '2026-11-16', 'hw-undo', ['s1', 's2']);
 await toggleHomeworkSubmit('hw-undo', 's1');
 const stamped = snapshot().homework.find((row) => row.id === 'hw-undo');
@@ -134,7 +154,7 @@ useWatchTimingForTest({ retry: 1000 });
 check(watchRetryDue({ error: '', homeworkSkipped: true, startedAt: Date.now() - 5000 }, Date.now()), '규칙이 바뀌기 전 탭이 감시를 다시 켜지 않습니다.');
 check(!watchRetryDue({ error: '', homeworkSkipped: false, startedAt: 0 }, Date.now()), '정상 감시를 다시 켭니다.');
 useWatchTimingForTest(null);
-check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css), '추가 버튼 글자가 세로 가운데가 아닙니다.');
+check(/\.tap\.primary-btn\.block[^{]*\{[^}]*align-items:\s*center/.test(css) && /\.tap\.primary-btn\.block[^{]*\{[^}]*justify-content:\s*center/.test(css), '추가 버튼 글자가 가운데가 아닙니다.');
 
 resetSyncStatusForTest();
 syncEnd({ ok: false, homeworkLocal: true });
