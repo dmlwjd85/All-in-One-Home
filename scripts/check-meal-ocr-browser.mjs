@@ -31,11 +31,13 @@ const files = {
 };
 for (const [path, [file]] of Object.entries(files)) if (!existsSync(file)) { console.error(`파일이 없습니다: ${path} ← ${file}`); process.exit(1); }
 const served = [];
+const missing = [];
 const server = createServer((req, res) => {
     const path = new URL(req.url, 'http://x').pathname;
     const hit = files[path];
     served.push(path);
-    if (!hit) { res.writeHead(404); res.end(); return; }
+    if (path === '/favicon.ico') { res.writeHead(204); res.end(); return; }
+    if (!hit) { missing.push(path); res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'Content-Type': hit[1] });
     res.end(readFileSync(hit[0]));
 });
@@ -81,7 +83,8 @@ try {
     }
     check(outside.length === 0, `다른 서버로 간 요청: ${outside.join(', ')}`);
     check(served.includes('/ocr/kor.traineddata.gz') && served.includes('/ocr/worker.min.js') && served.some((path) => /tesseract-core-.*lstm\.wasm\.js$/.test(path)), `./ocr/ 에서 받은 것: ${served.filter((path) => path.startsWith('/ocr/')).join(', ')}`);
-    check(errors.length === 0, `페이지 오류: ${errors.join(' | ')}`);
+    check(missing.length === 0, `없는 파일을 찾음: ${missing.join(', ')}`);
+    check(errors.filter((text) => !/Failed to load resource/.test(text)).length === 0, `페이지 오류: ${errors.join(' | ')}`);
 } finally {
     await browser.close();
     server.close();
