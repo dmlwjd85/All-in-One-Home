@@ -3675,6 +3675,8 @@ export async function clearAll() {
         /* 이미 메모리만 쓰는 경우입니다. */
     }
     inboxDropped = new Set();
+    /* 이 기기에 둔 사진도 비웁니다(클라우드에 올린 사진은 그대로). */
+    try { await (await import('./photos.js')).clearLocalPhotos(); } catch { /* 없어도 됩니다. */ }
     /* 쓰던 알림장·하루 메모 임시본도 함께 비웁니다(다시 열었을 때 지운 글이 되살아나지 않게). */
     try { clearAllTextDrafts({ store: globalThis.localStorage }); } catch { /* 없어도 됩니다. */ }
     clearAllTextDrafts({ store: textDraftMemory });

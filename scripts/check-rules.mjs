@@ -618,6 +618,30 @@ try {
         const other = testEnv.authenticatedContext('teacher-b').firestore();
         await expectDeny('다른 사람 과제', () => getDoc(doc(other, 'users/teacher-a/homework/hw-rule1')));
     }
+    /* 붙인 사진: 작은 표지(photos)와 사진 글자(photoData). */
+    {
+        const meta = doc(db, 'users/teacher-a/photos/ph-abc12345');
+        const blob = doc(db, 'users/teacher-a/photoData/ph-abc12345');
+        const ok = { owner: 'notes-meet-1762800000000', w: 1600, h: 1200, gone: false, at: serverTimestamp() };
+        const data = 'A'.repeat(2000);
+        await expectAllow('사진 글자', () => setDoc(blob, { data }));
+        await expectAllow('사진 표지', () => setDoc(meta, ok));
+        await expectAllow('학생 기록의 사진 표지', () => setDoc(doc(db, 'users/teacher-a/photos/ph-abc12346'), { ...ok, owner: 'records-r1' }));
+        await expectAllow('사진 지움 표시', () => setDoc(meta, { ...ok, gone: true }));
+        await expectAllow('사진 글자 지우기', () => deleteDoc(blob));
+        await expectDeny('사진 표지에 다른 칸', () => setDoc(meta, { ...ok, data }));
+        await expectDeny('사진 표지 주인 형식', () => setDoc(meta, { ...ok, owner: 'todos-1' }));
+        await expectDeny('사진 표지 시각을 기기가 정함', () => setDoc(meta, { ...ok, at: new Date(Date.now() + 86400000) }));
+        await expectDeny('사진 표지 크기', () => setDoc(meta, { ...ok, w: 9000 }));
+        await expectDeny('사진 id 형식', () => setDoc(doc(db, 'users/teacher-a/photos/photo1'), ok));
+        await expectDeny('너무 큰 사진 글자', () => setDoc(blob, { data: 'A'.repeat(750001) }));
+        await expectDeny('사진 글자에 다른 칸', () => setDoc(blob, { data, text: '메모' }));
+        await expectDeny('사진 글자가 글자가 아님', () => setDoc(blob, { data: 5 }));
+        const other = testEnv.authenticatedContext('teacher-b').firestore();
+        await expectDeny('다른 사람 사진 표지', () => getDoc(doc(other, 'users/teacher-a/photos/ph-abc12345')));
+        await expectDeny('다른 사람 사진 글자', () => getDoc(doc(other, 'users/teacher-a/photoData/ph-abc12346')));
+        await expectDeny('다른 사람이 사진 올리기', () => setDoc(doc(other, 'users/teacher-a/photoData/ph-abc12347'), { data }));
+    }
 } finally {
     await testEnv.cleanup();
 }

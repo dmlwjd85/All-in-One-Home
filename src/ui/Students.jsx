@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { joinedRecords, removeItem, saveQuick, saveTextItem } from '../lib/db.js';
 import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
+import { photoOwner, removeOwnerPhotos } from '../lib/photos.js';
+import { PhotoStrip, usePhotoCounts } from './PhotoStrip.jsx';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -69,6 +71,8 @@ export function Student() {
     const [period, setPeriod] = useState('all');
     const [order, setOrder] = useState('new');
     const [chosen, setChosen] = useState(() => new Set());
+    const [photoOpen, setPhotoOpen] = useState(() => new Set());
+    const photoCounts = usePhotoCounts();
     const [text, setText] = useState('');
     const [editingId, setEditingId] = useState('');
     const [draft, setDraft] = useState('');
@@ -194,6 +198,7 @@ export function Student() {
             showToast(failed.message || '기록을 지우지 못했어요. 글은 그대로 있어요.');
             return;
         }
+        removeOwnerPhotos(photoOwner('records', row.id)).catch(() => {});
         if (editingId === row.id) {
             setEditingId('');
             setDraft('');
@@ -301,6 +306,9 @@ export function Student() {
                                         onClick={() => { setEditingId(row.id); setDraft(row.text || ''); }}
                                     >수정</Btn>
                                     <Btn className="chip" onClick={() => removeRecord(row)}>삭제</Btn>
+                                    {photoOwner('records', row.id) && !photoCounts[`records-${row.id}`] && !photoOpen.has(row.id) ? (
+                                        <Btn className="chip" data-photo-for={row.id} onClick={() => setPhotoOpen((prev) => new Set(prev).add(row.id))}>📷 사진</Btn>
+                                    ) : null}
                                     <Btn
                                         className={chosen.has(row.id) ? 'chip on' : 'chip'}
                                         aria-pressed={chosen.has(row.id) ? 'true' : 'false'}
@@ -308,6 +316,9 @@ export function Student() {
                                         onClick={() => toggleChosen(row.id)}
                                     >{chosen.has(row.id) ? '✓ 복사에 넣음' : '복사에 넣기'}</Btn>
                                 </div>
+                                {photoOwner('records', row.id) && (photoCounts[`records-${row.id}`] || photoOpen.has(row.id)) ? (
+                                    <PhotoStrip owner={photoOwner('records', row.id)} localOnly={Boolean(row.localOnly)} />
+                                ) : null}
                             </>
                         )}
                     </article>

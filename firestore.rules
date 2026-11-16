@@ -433,6 +433,24 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(hid) && hid.matches('^hw-[A-Za-z0-9_-]{1,36}$') && homeworkOk(request.resource.data);
       }
+      // 회의록·학생 기록에 붙인 사진. photos = 작은 표지(어느 글의 사진인지, 지웠는지), photoData = 줄인 사진 글자(base64).
+      // 이 기기 전용(민감) 글의 사진은 앱이 올리지 않습니다. 사진 속 내용은 규칙이 볼 수 없습니다.
+      match /photos/{pid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && pid.matches('^ph-[a-z0-9]{8,30}$')
+          && d().keys().hasAll(['owner', 'w', 'h', 'gone', 'at'])
+          && d().keys().hasOnly(['owner', 'w', 'h', 'gone', 'at'])
+          && d().owner is string && d().owner.matches('^(notes|records)-[A-Za-z0-9_-]{1,80}$')
+          && d().w is int && d().w >= 1 && d().w <= 4000
+          && d().h is int && d().h >= 1 && d().h <= 4000
+          && d().gone is bool && d().at == request.time;
+      }
+      match /photoData/{pid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && pid.matches('^ph-[a-z0-9]{8,30}$')
+          && d().keys().hasOnly(['data'])
+          && d().data is string && d().data.size() >= 100 && d().data.size() <= 750000;
+      }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부
     }
     // users 밖 모든 경로: 규칙 없음 = 거부

@@ -2014,3 +2014,26 @@ button.hero-pill.home-todo-link {
 .hw-student-name { flex: 1 1 auto; }
 .hw-student-state { flex: none; font-weight: 800; }
 .hw-back { margin-bottom: 8px; }
+
+/* 붙인 사진(회의록·학생 기록) */
+.photo-strip { display: grid; gap: 8px; margin-top: 10px; min-width: 0; }
+.photo-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 96px)); gap: 8px; }
+.photo-thumb.tap { display: block; width: 100%; aspect-ratio: 1 / 1; min-height: 44px; padding: 0; border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: var(--neo-inset); }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-wait { display: grid; place-items: center; width: 100%; height: 100%; font-size: 12px; color: var(--ink-sub); padding: 4px; text-align: center; }
+.photo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.photo-add.tap { min-height: 44px; }
+.photo-add.tap:disabled { opacity: 0.5; }
+.photo-count { font-size: 13px; }
+.photo-mark { font-size: 12px; font-weight: 400; white-space: nowrap; }
+.photo-view { position: fixed; inset: 0; z-index: 1200; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: rgba(0, 0, 0, 0.88); }
+.photo-view-img { min-height: 0; overflow: auto; display: grid; place-items: center; padding: 12px; }
+.photo-view-img img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.photo-view-img p { color: #fff; margin: 0; text-align: center; }
+.photo-view-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: center; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); background: var(--bg); }
+.photo-view-bar .tap { min-height: 44px; }
+.photo-view-ask { font-weight: 700; }
+.photo-save { display: inline-flex; align-items: center; text-decoration: none; }
+.photo-view-img img { cursor: zoom-in; }
+.photo-view-img.is-zoom { display: block; }
+.photo-view-img.is-zoom img { max-width: none; max-height: none; cursor: zoom-out; }

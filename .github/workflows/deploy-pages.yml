@@ -76,6 +76,7 @@ jobs:
           npm run check:todoachieve
           npm run check:input-e
           npm run check:widgets
+          npm run check:photos
           npm run check:sensitive
           npm run check:keep-text
           npm run check:name-link

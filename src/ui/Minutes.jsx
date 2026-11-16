@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { finishMinutesAsk, joined, registerMinutes, removeItem, saveTextItem } from '../lib/db.js';
+import { photoOwner, removeOwnerPhotos } from '../lib/photos.js';
+import { PhotoStrip, usePhotoCounts } from './PhotoStrip.jsx';
 import { allStarts } from '../lib/periodLocal.js';
 import { forgetMinutesLinks, setMinutesPending } from '../lib/minutesExtract.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
@@ -156,6 +158,7 @@ function MinutesMissing() {
 }
 
 function MinutesListView({ rows }) {
+    const photoCounts = usePhotoCounts();
     const { go } = useUi();
     const draft = readMinutesDraft('new');
     return (
@@ -174,7 +177,7 @@ function MinutesListView({ rows }) {
                     {rows.map((item) => (
                         <li key={item.id} className="minutes-row">
                             <Btn className="minutes-item solid-card" data-id={item.id} onClick={() => go(`#/minutes/${item.id}`)}>
-                                <span className="minutes-item-title">{item.localOnly ? '🔒 ' : ''}{minutesTitle(item)}</span>
+                                <span className="minutes-item-title">{item.localOnly ? '🔒 ' : ''}{minutesTitle(item)}{photoCounts[`notes-${item.id}`] ? <span className="photo-mark" aria-label={`사진 ${photoCounts[`notes-${item.id}`]}장`}> 📷{photoCounts[`notes-${item.id}`]}</span> : null}</span>
                                 <span className="minutes-item-meta">{dateLabel(item.date)}{item.attendees ? ` · ${item.attendees}` : ''}</span>
                                 {firstLine(item.text) ? <span className="minutes-item-line">{firstLine(item.text)}</span> : null}
                             </Btn>
@@ -201,6 +204,7 @@ function MinutesView({ row }) {
     async function drop() {
         const failed = await removeItem('notes', row.id);
         if (failed?.storageFailed) return;
+        removeOwnerPhotos(photoOwner('notes', row.id)).catch(() => {});
         writeMinutesDraft(row.id, null);
         forgetMinutesLinks(row.id);
         setMinutesPending(row.id, null);
@@ -220,6 +224,7 @@ function MinutesView({ row }) {
             {kinds.length ? <p className="minutes-view-meta">{kinds.join(' · ')}</p> : null}
             {row.localOnly ? <p className="muted">민감할 수 있는 낱말이 있어 이 기기에만 남겨 두었어요.</p> : null}
             <div className="minutes-body solid-card" data-role="minutes-body">{row.text}</div>
+            {photoOwner('notes', row.id) ? <PhotoStrip owner={photoOwner('notes', row.id)} localOnly={Boolean(row.localOnly)} /> : null}
             {asking ? (
                 <div className="minutes-confirm" role="alertdialog" aria-label="회의록 지우기 확인">
                     <p>이 회의록을 지울까요?</p>
