@@ -62,6 +62,7 @@ export function GridPaste({ text, image, mode = '', onBack }) {
     const [busy, setBusy] = useState('');
     const [source, setSource] = useState(text);
     const [weak, setWeak] = useState(false);
+    const [small, setSmall] = useState(false);
     useEffect(() => { if (image) onFile(image); }, [image]);
 
     function applyRead(nextText, clipped = [], { meal = asMeal, fix = fromImage } = {}) {
@@ -93,6 +94,7 @@ export function GridPaste({ text, image, mode = '', onBack }) {
             const found = await readImageTable(file, (message) => setBusy(message));
             setFromImage(true);
             setWeak(Boolean(found.weak));
+            setSmall(Boolean(found.small));
             const read = applyRead(found.text, found.clipped, { fix: true });
             if (read.kind === 'meal' && read.days.length) showToast(`급식 ${read.days.length}일치를 읽었어요. 틀린 글자만 고쳐 주세요.`);
             else if (read.kind === 'meal') showToast('날짜를 찾지 못했어요. 표 전체가 반듯하게 나온 사진으로 다시 해 주세요.');
@@ -145,6 +147,8 @@ export function GridPaste({ text, image, mode = '', onBack }) {
             </div>
             {busy && <p className="low-card" role="status" style={{ padding: 10 }}>{busy}</p>}
             {weak && !busy && <p className="low-card" style={{ padding: 10 }}>표의 칸 선을 찾지 못해 짐작으로 나눴어요. 표 전체가 반듯하게 나온 화면 갈무리가 가장 잘 읽힙니다.</p>}
+            {small && !weak && !busy && <p className="low-card" style={{ padding: 10 }}>사진 속 글자가 작아 틀린 글자가 많을 수 있어요. 표를 화면에 가득 차게 가까이 찍으면 더 잘 읽힙니다.</p>}
+            {fromImage && kind === 'meal' && days.length > 0 && !busy && <p className="muted" style={{ margin: '8px 0 0' }}>사진에서 읽은 알레르기 번호는 저장 전에 한 번 꼭 확인해 주세요. 메뉴판과 다르면 그 칸에서 바로 고칠 수 있어요.</p>}
             <details style={{ marginTop: 8 }}>
                 <summary className="muted" style={{ minHeight: 44, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>읽은 글 직접 고치기</summary>
                 <textarea className="field" style={{ marginTop: 8 }} aria-label="표 글" rows={4} value={source} onChange={(event) => setSource(event.target.value)} />

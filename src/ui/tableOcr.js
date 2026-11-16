@@ -99,7 +99,8 @@ function wordsOf(data) {
 
 /**
  * 사진 파일에서 표 글(탭으로 나눈 글)을 돌려줍니다.
- * 돌려줌: { text, cells, clipped, weak, doubt } — weak 는 칸 선을 못 찾아 짐작으로 나눈 경우, doubt 는 흐리게 읽힌 줄 수.
+ * 돌려줌: { text, cells, clipped, weak, doubt, small } — weak 는 칸 선을 못 찾아 짐작으로 나눈 경우, doubt 는 흐리게 읽힌 줄 수,
+ * small 은 글자가 너무 작게 찍힌 경우입니다.
  * onProgress(글) 로 지금 무엇을 하는지 알려 줍니다.
  */
 export async function readImageTable(file, onProgress = () => {}) {
@@ -133,5 +134,6 @@ export async function readImageTable(file, onProgress = () => {}) {
         placeLines(prep.cells, strip.bands, lines);
     }
     const text = cellsToTable(prep.cells);
-    return { text, cells: prep.cells, clipped: [], weak: !text.trim(), doubt };
+    /* 글자 높이가 9점 아래면 사진이 작거나 멀리서 찍힌 것이라 잘못 읽은 글자가 많습니다. */
+    return { text, cells: prep.cells, clipped: [], weak: !text.trim(), doubt, small: Boolean(prep.glyph) && prep.glyph < 10 };
 }

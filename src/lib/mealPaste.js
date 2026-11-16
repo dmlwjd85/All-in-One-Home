@@ -7,7 +7,7 @@ import { isValidYmd, seoulYmd } from './date.js';
 import { findDates } from './parse.js';
 import { groupWeeks, inferYearMonth, isHeaderRow, parseTable, weekSlots, ymdFrom } from './monthGrid.js';
 import { looksLikeCalGrid } from './calGrid.js';
-import { fixMenuName } from './hangulFix.js';
+import { fixMenuName, isKnownMenu } from './hangulFix.js';
 
 export const MEAL_TAG = '급식';
 export const MEAL_CODE_KEY = 'ssug-gyomu-meal-codes';
@@ -31,9 +31,21 @@ const LABEL = /^(?:조식|중식|석식|아침|점심|저녁|구분|식단|식�
 const NUTRIENT = /단백질|탄수화물|지방|칼슘|철분|비타민|나트륨|영양량|에너지/;
 const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 
+/**
+ * 사진에서 읽을 때 칸 선·그림자가 글자로 잘못 읽힌 부스러기를 지웁니다(| ㅣ _ = ' 같은 것, 홀로 떨어진 자모).
+ * 붙여 넣은 글에는 이런 글자가 메뉴 안에 올 일이 거의 없어 그대로 써도 됩니다.
+ */
+export function cleanNoise(line) {
+    return String(line || '')
+        .replace(/[|｜¦ｌ_=~`'"“”‘’ㆍ•▪■□◆◇★☆：:;【】「」『』!！]/g, ' ')
+        .replace(/(^|\s)[ㄱ-ㅎㅏ-ㅣ]+(?=\s|$)/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 /** 번호 표기를 '1.2.5' 한 가지로 맞춥니다. ①②, 1,2,5, (1.2.5), 글자 인식이 붙인 괄호 조각까지. */
 function tidyLine(line) {
-    let text = scrubWords(line);
+    let text = scrubWords(cleanNoise(line));
     text = text.replace(/[①-⑳]/g, (ch) => `${CIRCLED.indexOf(ch) + 1}.`);
     text = text.replace(/[()（）\[\]{}<>]/g, ' ');
     text = text.replace(/(\d)\s*[,，、]\s*(?=\d)/g, '$1.');
@@ -67,22 +79,62 @@ function dishLine(line) {
         }
     }
     text = text.replace(/[·,，.:;|/\\-]+\s*$/g, '').replace(/^[·,，.:;|*\-]+\s*/g, '').trim();
+    /* '배추김치1(9)'처럼 번호 앞에 붙은 숫자 하나는 인쇄 표시라 이름에서 뺍니다. */
+    if (codes) text = text.replace(/(?<=[가-힣])\d$/, '').trim();
+    /* 이름 뒤에 떨어진 한 글자(칸 선·얼룩을 글자로 읽은 것): 앞부분이 아는 메뉴이고 그 글자는 낱말이 아니면 뺍니다. */
+    const tail = text.match(/^(.+[가-힣])\s([가-힣])$/);
+    if (tail && isKnownMenu(tail[1]) && !isKnownMenu(tail[2])) text = tail[1];
     if (!/[가-힣]/.test(text) || LABEL.test(text.replace(/\s+/g, ''))) return null;
+    /* 알레르기 번호는 1~22 안의 수만 둡니다(얼룩이 0으로 읽힌 것 등은 뺍니다). */
+    codes = codes.split('.').filter((n) => Number(n) >= 1 && Number(n) <= 22).join('.');
     return { name: text.slice(0, 40), codes };
+}
+
+/** 칸 글을 메뉴 줄로 다듬습니다. 괄호가 다음 줄로 넘어간 번호는 잇고, 한 줄에 두 메뉴가 붙은 것은 나눕니다. */
+function menuLines(cell) {
+    const raw = String(cell || '')
+        .replace(/\)\s*[,，]?\s*(?=[가-힣])/g, ')\n')
+        /* 닫는 괄호 뒤에 붙은 부스러기('푸딩(2) 0'). */
+        .replace(/\)[^가-힣()\n]{1,3}(?=\n|$)/g, ')')
+        .split(/\n/)
+        .map(cleanNoise)
+        .filter(Boolean);
+    const out = [];
+    for (const line of raw) {
+        const prev = out[out.length - 1];
+        const open = prev ? (prev.match(/[(（]/g) || []).length - (prev.match(/[)）]/g) || []).length : 0;
+        /* 앞 줄 괄호가 안 닫혔고 이 줄이 번호로 시작하면 이어 붙입니다('(1.2.5.6.10.' + '16.18)'). */
+        if (prev && open > 0 && /^[\d.,\s]+\)?/.test(line) && /^\d/.test(line)) out[out.length - 1] = `${prev}${/[.\d]$/.test(prev) && !prev.endsWith('.') ? '.' : ''}${line}`;
+        else out.push(line);
+    }
+    return out;
 }
 
 function cellMenu(cell) {
     const items = [];
     let kcal = '';
     let origin = '';
-    for (const line of String(cell || '').split(/\n/)) {
+    for (const line of menuLines(cell)) {
+        /* 번호만 있는 줄('(1.2.5.6)')은 바로 위 메뉴의 번호입니다. */
+        const only = tidyLine(line);
+        if (/^\d{1,2}(?:\.\d{1,2})*$/.test(only) && items.length && !items[items.length - 1].codes && /[(（]/.test(line)) {
+            items[items.length - 1].codes = only;
+            continue;
+        }
         const row = dishLine(line);
         if (!row) continue;
+        /* 칸이 좁아 이름 끝 한 글자가 다음 줄로 넘어간 것('…양념간' + '장(5.6.16)'). */
+        const last = items[items.length - 1];
+        if (row.name && last && !last.codes && /^[가-힣]$/.test(row.name) && row.codes && !/[)）]\s*$/.test(last.raw || '')) {
+            last.name = `${last.name}${row.name}`;
+            last.codes = row.codes;
+            continue;
+        }
         if (row.kcal) kcal = kcal || row.kcal;
         else if (row.origin) origin = origin || row.origin;
-        else if (row.name) items.push({ name: row.name, codes: row.codes || '' });
+        else if (row.name) items.push({ name: row.name, codes: row.codes || '', raw: line });
     }
-    return { items, kcal, origin };
+    return { items: items.map(({ raw, ...item }) => item), kcal, origin };
 }
 
 export function looksLikeMealTable(text) {
@@ -122,7 +174,19 @@ function okMonth(month) { return month >= 1 && month <= 12; }
 
 /** 한 줄이 날짜 표시이면 { month, day, wd } (없는 값은 0·-1). 아니면 null. */
 function dateToken(line, alone) {
-    const text = String(line || '').replace(/\s+/g, '');
+    const clean = cleanNoise(line);
+    /* 날짜 줄에 행사 이름이 붙은 표('2 생일축하의 날', '20 한우맛체험행사'). 칸에 그 줄만 있을 때만 봅니다. */
+    const labeled = alone && clean.match(/^(\d{1,2})\s*일?\s*([가-힣][가-힣\s.,·!]*)$/);
+    if (labeled && okDay(Number(labeled[1])) && !/[밥국탕찌개김치볶음구이무침]$/.test(labeled[2].trim())) {
+        return { month: 0, day: Number(labeled[1]), wd: -1, label: labeled[2].replace(/[.,]+$/, '').trim() };
+    }
+    /* 숫자만 둘 있는 칸('6 1'처럼 선 조각이 숫자로 읽힌 것)은 후보를 모두 두고, 옆 칸과 이어지는 쪽을 고릅니다. */
+    const nums = alone ? clean.match(/^(\d{1,2})(?:\s+(\d{1,2}))+$/) : null;
+    if (nums) {
+        const alts = clean.split(/\s+/).map(Number).filter(okDay);
+        if (alts.length) return { month: 0, day: alts[0], wd: -1, alts };
+    }
+    const text = clean.replace(/\s+/g, '');
     if (!text || text.length > 14) return null;
     let m = text.match(RE_MD_KO);
     if (m && okMonth(Number(m[1])) && okDay(Number(m[2]))) return { month: Number(m[1]), day: Number(m[2]), wd: m[3] ? WEEK.indexOf(m[3]) : -1 };
@@ -140,7 +204,7 @@ function dateToken(line, alone) {
 }
 
 function weekdayOnly(line) {
-    const m = String(line || '').replace(/\s+/g, '').match(RE_WD);
+    const m = cleanNoise(line).replace(/\s+/g, '').match(RE_WD);
     return m ? WEEK.indexOf(m[1]) : -1;
 }
 
@@ -158,6 +222,15 @@ function readCell(cell) {
         if (!token) break;
         date = token;
         used = i + 1;
+    }
+    /* 날짜 칸에 얼룩이 글자로 붙어 읽힌 것('비 30'): 짧은 한 줄에 숫자가 하나면 약한 날짜 후보로 두고, 앞뒤 주와 맞을 때만 씁니다. */
+    if (!date && wd < 0 && lines.length === 1) {
+        const clean = cleanNoise(lines[0]);
+        const nums = clean.match(/\d{1,2}/g) || [];
+        if (nums.length === 1 && clean.length <= 6 && !/\d\.\d/.test(clean) && okDay(Number(nums[0]))) {
+            date = { month: 0, day: Number(nums[0]), wd: -1, weak: true };
+            used = 1;
+        }
     }
     if (date && date.wd < 0) date.wd = wd;
     const rest = lines.slice(date || wd >= 0 ? used : 0).join('\n');
@@ -177,6 +250,57 @@ export function mealFromCells(rows, { today = '2026-11-15', year = 0, month = 0,
     const height = grid.length;
     const width = Math.max(0, ...grid.map((row) => row.length));
     const at = (r, c) => grid[r]?.[c] || null;
+    /*
+     * 주마다 날짜 줄이 있는 표에서는 날짜가 왼쪽→오른쪽 하루씩, 위→아래 이레씩 늘어납니다.
+     * 이 규칙으로 잘못 읽은 날짜를 고칩니다: 숫자 하나가 빠진 것('2' → 23), 약한 후보('비 30')는 맞을 때만 씁니다.
+     */
+    const dateRows = grid.map((row, r) => (row.some((cell) => cell?.date && !cell.date.weak && !cell.menu.items.length) ? r : -1)).filter((r) => r >= 0);
+    const predict = (r, c) => {
+        const votes = [];
+        grid[r].forEach((cell, k) => { if (k !== c && cell?.date && !cell.date.weak && !cell.date.alts) votes.push(cell.date.day + (c - k)); });
+        const i = dateRows.indexOf(r);
+        const up = i > 0 ? grid[dateRows[i - 1]]?.[c] : (dateRows.length && dateRows[dateRows.length - 1] < r ? grid[dateRows[dateRows.length - 1]]?.[c] : null);
+        if (up?.date && !up.date.weak) votes.push(up.date.day + 7);
+        const down = i >= 0 && i < dateRows.length - 1 ? grid[dateRows[i + 1]]?.[c] : null;
+        if (down?.date && !down.date.weak) votes.push(down.date.day - 7);
+        return votes.filter(okDay);
+    };
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+        if (!cell?.date || cell.menu.items.length) return;
+        const votes = predict(r, c);
+        const count = (day) => votes.filter((v) => v === day).length;
+        if (cell.date.weak) {
+            if (!count(cell.date.day)) cell.date = null;
+            else delete cell.date.weak;
+            return;
+        }
+        if (cell.date.alts || count(cell.date.day)) return;
+        const best = [...new Set(votes)].sort((a, b) => count(b) - count(a))[0];
+        if (best && count(best) >= 2 && String(best).includes(String(cell.date.day))) cell.date.day = best;
+    }));
+    /* 날짜 줄인데 숫자가 지워져 읽힌 칸: 옆 칸·앞뒤 주가 같은 날짜를 두 번 넘게 가리키면 그 날짜로 봅니다. */
+    for (const r of dateRows) {
+        grid[r].forEach((cell, c) => {
+            if (!cell || cell.date || cell.menu.items.length) return;
+            const votes = predict(r, c);
+            const best = [...new Set(votes)].sort((a, b) => votes.filter((v) => v === b).length - votes.filter((v) => v === a).length)[0];
+            if (best && votes.filter((v) => v === best).length >= 2) cell.date = { month: 0, day: best, wd: -1, guessed: true };
+        });
+    }
+    /* 숫자 후보가 둘인 날짜 칸은 옆 칸 날짜와 하루 차이로 이어지는 쪽을 고릅니다. */
+    for (const row of grid) {
+        row.forEach((cell, c) => {
+            const alts = cell?.date?.alts;
+            if (!alts || alts.length < 2) return;
+            const left = row.slice(0, c).reverse().findIndex((item) => item?.date && !item.date.alts);
+            const right = row.slice(c + 1).findIndex((item) => item?.date && !item.date.alts);
+            const want = [];
+            if (left >= 0) want.push(row[c - 1 - left].date.day + left + 1);
+            if (right >= 0) want.push(row[c + 1 + right].date.day - right - 1);
+            const pick = alts.find((day) => want.includes(day)) || alts.find((day) => predict(grid.indexOf(row), c).includes(day));
+            if (pick) cell.date.day = pick;
+        });
+    }
     const pure = (cell) => Boolean(cell?.date) && !cell.menu.items.length;
     const perRow = grid.map((row) => row.filter(pure).length);
     const perCol = Array.from({ length: width }, (_, c) => grid.filter((row) => pure(row[c])).length);
@@ -283,53 +407,57 @@ export function mealFromCells(rows, { today = '2026-11-15', year = 0, month = 0,
     return { mode: days.length ? 'meal' : 'none', year: baseYear, month: baseMonth, days };
 }
 
+/**
+ * 붙여 넣은(또는 사진에서 읽은) 급식표 글을 날짜별 메뉴로 나눕니다.
+ * 여러 읽는 방법(숫자 머리 줄 표, 칸 모양 표, 날짜로 시작하는 줄)을 모두 해 보고 메뉴를 가장 많이 찾은 쪽을 씁니다.
+ * fix: 사진에서 읽은 글이라 닮은 글자로 잘못 읽은 메뉴 이름을 바로잡습니다(바꾼 것은 read 에 원래 글을 남깁니다).
+ */
 export function parseMealTable(text, { today = '2026-11-15', year = 0, month = 0, now = new Date(), fix = false } = {}) {
     const src = String(text || '').trim();
     const rows = parseTable(src);
+    const base = today || seoulYmd(now);
+    const tries = [];
+
     const weeks = groupWeeks(rows);
-    const days = [];
     if (weeks.length && weeks.some((week) => (week.body || []).some((cell) => cellMenu(cell).items.length))) {
-        const inferred = inferYearMonth(weeks, today || seoulYmd(now));
-        const y = year || inferred?.year || Number(String(today).slice(0, 4));
-        const m = month || inferred?.month || Number(String(today).slice(5, 7));
+        const inferred = inferYearMonth(weeks, base);
+        const y = year || inferred?.year || Number(String(base).slice(0, 4));
+        const m = month || inferred?.month || Number(String(base).slice(5, 7));
+        const days = [];
         for (const week of weeks) {
-            const slots = weekSlots(week.header);
-            slots.forEach((slot, col) => {
+            weekSlots(week.header).forEach((slot, col) => {
                 if (!slot.day) return;
-                const date = ymdFrom(y, m, slot.day, slot.offset);
-                pushDay(days, date, cellMenu(week.body?.[col] || ''), { offset: slot.offset });
+                pushDay(days, ymdFrom(y, m, slot.day, slot.offset), cellMenu(week.body?.[col] || ''), { offset: slot.offset });
             });
         }
-        if (days.length) {
-            /* 사진에서 읽은 글(fix)은 닮은 글자로 잘못 읽은 이름을 바로잡습니다. */
-            if (fix) {
-                for (const day of days) {
-                    day.items = day.items.map((item) => {
-                        const fixed = fixMenuName(item.name);
-                        return fixed.fixed ? { ...item, name: fixed.name, read: fixed.from } : item;
-                    });
-                }
-            }
-            return { mode: 'meal', year: y, month: m, days };
+        if (days.length) tries.push({ mode: 'meal', year: y, month: m, days });
+    }
+
+    const loose = mealFromCells(rows, { today: base, year, month });
+    if (loose.days.length) tries.push(loose);
+
+    const lineDays = [];
+    for (const block of src.split(/\n(?=\s*(?:\d{4}\s*년|\d{1,2}\s*월|\d{1,2}\s*[./]\s*\d{1,2}))/)) {
+        const hit = findDates(block, now)[0];
+        if (hit) pushDay(lineDays, hit.ymd, cellMenu(block));
+    }
+    if (lineDays.length) {
+        const first = lineDays[0].date;
+        tries.push({ mode: 'meal', year: year || Number(first.slice(0, 4)), month: month || Number(first.slice(5, 7)), days: lineDays });
+    }
+
+    const size = (found) => found.days.reduce((sum, day) => sum + day.items.length, 0) + found.days.length * 0.5;
+    const best = tries.sort((x, y) => size(y) - size(x))[0];
+    if (!best) return { mode: 'none', year: year || 0, month: month || 0, days: [] };
+    if (fix) {
+        for (const day of best.days) {
+            day.items = day.items.map((item) => {
+                const fixed = fixMenuName(item.name);
+                return fixed.fixed ? { ...item, name: fixed.name, read: fixed.from } : item;
+            });
         }
     }
-    const blocks = src.split(/\n(?=\s*(?:\d{4}\s*년|\d{1,2}\s*월|\d{1,2}\s*[./]\s*\d{1,2}))/);
-    for (const block of blocks) {
-        const hit = findDates(block, now)[0];
-        if (!hit) continue;
-        pushDay(days, hit.ymd, cellMenu(block));
-    }
-    if (!days.length) {
-        const loose = mealFromCells(rows, { today: today || seoulYmd(now), year, month, fix });
-        if (loose.days.length) return loose;
-    }
-    const first = days[0]?.date || '';
-    return {
-        mode: days.length ? 'meal' : 'none',
-        year: year || (first ? Number(first.slice(0, 4)) : 0),
-        month: month || (first ? Number(first.slice(5, 7)) : 0),
-        days,
-    };
+    return best;
 }
 
 export function shiftMealDays(days, year, month) {

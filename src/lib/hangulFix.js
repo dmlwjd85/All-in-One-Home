@@ -37,7 +37,7 @@ function pairs(alphabet, groups) {
 }
 const CHO_NEAR = pairs(CHO, ['ㄱㄲㅋ', 'ㄷㄸㅌ', 'ㅂㅃㅍ', 'ㅁㅂ', 'ㅁㅇ', 'ㅇㅎ', 'ㅅㅆㅈㅉㅊ', 'ㄲㅉ']);
 const JUNG_NEAR = pairs(JUNG, ['ㅏㅑ', 'ㅓㅕ', 'ㅏㅣ', 'ㅓㅣ', 'ㅐㅔㅒㅖ', 'ㅏㅐ', 'ㅓㅔ', 'ㅓㅐ', 'ㅗㅛㅜㅠㅡ', 'ㅘㅙㅚ', 'ㅝㅞㅟ', 'ㅡㅢ', 'ㅣㅢ']);
-const JONG_NEAR = pairs(JONG, ['ㄱㄲㅋㄳ', 'ㅁㅇㅂ', 'ㅇㅎ', 'ㅅㅆㅈㅊ', 'ㄴㄹㄷㅌ', 'ㄹㄺㄻㄼ', 'ㄴㄵㄶ']);
+const JONG_NEAR = pairs(JONG, ['ㄱㄲㅋㄳ', 'ㅁㅇㅂ', 'ㄹㅁㅂ', 'ㅇㅎ', 'ㅅㅆㅈㅊ', 'ㄴㄹㄷㅌ', 'ㄹㄺㄻㄼ', 'ㄴㄵㄶ']);
 
 /** 두 글자가 닮은 낱자 몇 군데로 다른지. 닮지 않은 낱자가 다르면 9(다른 글자). */
 function syllableDiff(a, b) {

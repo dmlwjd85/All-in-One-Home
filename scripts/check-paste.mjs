@@ -153,6 +153,20 @@ const mealSave = await saveMealMonth(2026, 11, meal.days);
 const note = [...(snapshot().notes || []), ...(snapshot().local?.notes || [])].find(isMealNote);
 check(mealSave.ok && note && mealsFromNotes([note])['2026-11-16']?.items?.length === 4, `급식 저장 ${note?.id}`);
 
+/* 주간 급식표를 주마다 올려도 앞 주가 남고, 달이 넘어가는 주는 두 달로 나뉩니다. */
+const weekA = [{ date: '2026-11-23', items: [{ name: '차조밥', codes: '' }] }, { date: '2026-11-24', items: [{ name: '옥수수밥', codes: '' }] }];
+const weekB = [{ date: '2026-11-30', items: [{ name: '녹두밥', codes: '' }] }, { date: '2026-12-01', items: [{ name: '현미밥', codes: '' }] }];
+const savedA = await saveMealMonth(2026, 11, weekA);
+const savedB = await saveMealMonth(2026, 11, weekB);
+const mealNotes = [...(snapshot().notes || []), ...(snapshot().local?.notes || [])].filter(isMealNote);
+const mealMap = mealsFromNotes(mealNotes);
+check(savedA.ok && savedB.ok, `주간 저장 ${savedA.message} / ${savedB.message}`);
+check(mealMap['2026-11-16']?.items?.length === 4 && mealMap['2026-11-23'] && mealMap['2026-11-30'], `앞서 넣은 날이 지워짐 ${Object.keys(mealMap).join(',')}`);
+check(mealMap['2026-12-01']?.items?.[0]?.name === '현미밥' && mealNotes.some((row) => row.id === 'meal-202612'), `12월로 넘어간 날 ${mealNotes.map((row) => row.id).join(',')}`);
+const mealAgain = await saveMealMonth(2026, 11, [{ date: '2026-11-23', items: [{ name: '보리밥', codes: '' }] }]);
+const mapAgain = mealsFromNotes([...(snapshot().notes || []), ...(snapshot().local?.notes || [])].filter(isMealNote));
+check(mealAgain.ok && mapAgain['2026-11-23']?.items?.[0]?.name === '보리밥' && mapAgain['2026-11-24'], '같은 날을 다시 넣으면 그날만 바뀌어야 합니다');
+
 if (bad) {
     console.error(`붙여넣기 검사 실패 ${bad}`);
     process.exit(1);
