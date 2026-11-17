@@ -1,5 +1,6 @@
 @import './styles/tokens.css';
 @import './ui/foilCup.css';
+@import './ui/skin-cork.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -1076,6 +1077,30 @@ html.dark .desk-fab .fab-txt { color: #FF9DB0; }
 .kb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .kb-grid .choice-tile { flex-direction: column; gap: 4px; min-height: 84px; }
 .kb-swatch { display: flex; justify-content: center; gap: 4px; min-height: 14px; }
+.skin-swatch {
+    display: block;
+    width: 100%;
+    height: 36px;
+    border-radius: 8px;
+    box-shadow: inset 3px 3px 6px var(--neo-shadow), inset -3px -3px 6px var(--neo-highlight);
+    background: #E8E4DE;
+}
+.skin-swatch[data-skin-sample="cork"] {
+    background:
+        url('./ui/skin/pin-coral.svg') 10px 6px / 10px 14px no-repeat,
+        linear-gradient(180deg, rgba(236, 220, 196, .5), rgba(210, 176, 136, .25)),
+        url('./ui/skin/cork-grain.svg');
+    background-size: 10px 14px, auto, 48px 48px;
+    box-shadow: inset 0 0 0 1px #C4A882;
+}
+.dark .skin-swatch[data-skin-sample="basic"] { background: #2A2627; }
+.dark .skin-swatch[data-skin-sample="cork"] {
+    background:
+        url('./ui/skin/pin-coral.svg') 10px 6px / 10px 14px no-repeat,
+        linear-gradient(180deg, rgba(40, 32, 24, .45), rgba(18, 12, 8, .35)),
+        url('./ui/skin/cork-grain-dark.svg');
+    background-size: 10px 14px, auto, 48px 48px;
+}
 @media (min-width: 720px) {
     .kb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

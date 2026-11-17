@@ -7,6 +7,7 @@ import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
 import { kbThemeId, loadKbThemeCss, setKbTheme } from './kbtheme.js';
+import { SKIN_CHOICES, setSkin, skinId } from './skin.js';
 import { RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import { RosterPaste, RosterPreview, quietSave } from './RosterPaste.jsx';
 import { MAX_STUDENTS, readRosterText } from '../lib/roster.js';
@@ -155,6 +156,7 @@ export function Settings() {
     const sec = route?.params?.sec || '';
     const [className, setClassName] = useState(data.profile.className || '');
     const [font, setFontId] = useState(() => fontId());
+    const [skin, setSkinId] = useState(() => skinId());
     const [kbTheme, setKbThemeId] = useState(() => kbThemeId());
     /* 테마 견본 키캡을 그리려고 설정을 열 때 테마 스타일을 받아 둡니다. 첫 화면에는 들어가지 않습니다. */
     useEffect(() => { loadKbThemeCss(); }, []);
@@ -242,6 +244,17 @@ export function Settings() {
                         </Btn>
                     ))}
                 </div>
+                <p className="muted" style={{ margin: '14px 0 0' }}>화면 꾸미기</p>
+                <div className="kb-grid" role="group" aria-label="화면 꾸미기">
+                    {SKIN_CHOICES.map((item) => (
+                        <Btn key={item.id} className={skin === item.id ? 'choice-tile on' : 'choice-tile'} data-skin-pick={item.id} aria-pressed={skin === item.id} onClick={() => { setSkin(item.id); setSkinId(item.id); }}>
+                            <span className="skin-swatch" data-skin-sample={item.id} aria-hidden="true" />
+                            <span>{item.label}</span>
+                            <span style={{ fontWeight: 500, fontSize: 12 }}>{item.hint}</span>
+                        </Btn>
+                    ))}
+                </div>
+                <p className="muted">이 기기에만 저장돼요. 밝기와 키보드 테마는 그대로예요.</p>
                 <p className="muted" style={{ margin: '14px 0 0' }}>키보드 테마</p>
                 <div className="kb-grid" role="group" aria-label="키보드 테마">
                     {KB_THEMES.map((item) => (

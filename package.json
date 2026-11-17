@@ -22,6 +22,8 @@
     "check:speech": "node scripts/check-speech.mjs",
     "check:keyfeel": "node scripts/check-keyfeel.mjs",
     "check:kbtheme": "node scripts/check-kbtheme.mjs",
+    "check:skin": "node scripts/check-skin.mjs",
+    "check:skin-browser": "node scripts/check-skin-browser.mjs",
     "check:brand": "node scripts/check-brand.mjs",
     "check:icons": "node scripts/check-icons.mjs",
     "check:seal": "node scripts/check-seal.mjs",
