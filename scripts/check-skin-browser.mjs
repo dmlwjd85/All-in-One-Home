@@ -100,28 +100,37 @@ async function overlapHits(page, label) {
         }
         const hits = [];
         const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
-        const shown = (el, r) => {
-            if (r.width < 2 || r.height < 2) return false;
+        const visibleBox = (el, r) => {
+            if (r.width < 2 || r.height < 2) return null;
             const st = getComputedStyle(el);
-            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return false;
-            if (r.bottom < 1 || r.top > innerHeight - 1 || r.right < 1 || r.left > innerWidth - 1) return false;
+            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return null;
+            let box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
             let p = el;
             while (p && p !== document.body) {
                 const cs = getComputedStyle(p);
-                const oy = cs.overflowY;
-                const ox = cs.overflowX;
-                if (oy !== 'visible' || ox !== 'visible') {
+                if (cs.overflowY !== 'visible' || cs.overflowX !== 'visible') {
                     const pr = p.getBoundingClientRect();
-                    if (r.bottom <= pr.top + 1 || r.top >= pr.bottom - 1 || r.right <= pr.left + 1 || r.left >= pr.right - 1) return false;
+                    box = {
+                        left: Math.max(box.left, pr.left),
+                        top: Math.max(box.top, pr.top),
+                        right: Math.min(box.right, pr.right),
+                        bottom: Math.min(box.bottom, pr.bottom),
+                    };
                 }
                 p = p.parentElement;
             }
-            return true;
+            box.left = Math.max(box.left, 0);
+            box.top = Math.max(box.top, 0);
+            box.right = Math.min(box.right, innerWidth);
+            box.bottom = Math.min(box.bottom, innerHeight);
+            if (box.right - box.left < 2 || box.bottom - box.top < 2) return null;
+            return box;
         };
         const add = (el, name) => {
             const r = el.getBoundingClientRect();
-            if (!shown(el, r)) return;
-            hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name });
+            const box = visibleBox(el, r);
+            if (!box) return;
+            hits.push({ ...box, name });
         };
         document.querySelectorAll('button, a, input, textarea, select, [role="button"], .fuse, .tabbar, .desk-fab, .cloud-note').forEach((el) => add(el, el.getAttribute('aria-label') || el.className || el.tagName));
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
@@ -137,8 +146,9 @@ async function overlapHits(page, label) {
             range.selectNodeContents(walker.currentNode);
             const r = range.getBoundingClientRect();
             const p = walker.currentNode.parentElement;
-            if (!p || !shown(p, r)) continue;
-            hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name: walker.currentNode.nodeValue.trim().slice(0, 28) });
+            const box = p ? visibleBox(p, r) : null;
+            if (!box) continue;
+            hits.push({ ...box, name: walker.currentNode.nodeValue.trim().slice(0, 28) });
         }
         return { deco, hits };
     });
@@ -305,6 +315,25 @@ try {
         await page.close();
     }
 
+    const openJam = async (page) => {
+        await page.waitForSelector('button[aria-label="쨈 빠른 입력 열기"]');
+        await page.evaluate(() => {
+            const buttons = [...document.querySelectorAll('button[aria-label="쨈 빠른 입력 열기"]')];
+            const visible = buttons.find((el) => {
+                const r = el.getBoundingClientRect();
+                const s = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+            });
+            (visible || buttons[0])?.click();
+        });
+        await page.waitForSelector('.quick-bar.is-open', { timeout: 5000 });
+    };
+    const openMenu = async (page) => {
+        await page.waitForSelector('button[aria-label="메뉴"]');
+        await page.click('button[aria-label="메뉴"]');
+        await page.waitForSelector('.sheet[aria-label="메뉴"]', { timeout: 5000 });
+    };
+
     const scenes = [
         ['home', '#/today', async () => {}],
         ['calendar', '#/schedule', async (page) => {
@@ -314,45 +343,52 @@ try {
         ['settings', '#/settings/screen', async (page) => {
             await page.waitForSelector('[data-skin-pick="cork"]');
         }],
-        ['jam', '#/today', async (page) => {
-            await page.waitForSelector('button[aria-label="쨈 빠른 입력 열기"]');
-            await page.evaluate(() => {
-                const buttons = [...document.querySelectorAll('button[aria-label="쨈 빠른 입력 열기"]')];
-                const visible = buttons.find((el) => {
-                    const r = el.getBoundingClientRect();
-                    const s = getComputedStyle(el);
-                    return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
-                });
-                (visible || buttons[0])?.click();
-            });
-            await page.waitForSelector('.quick-bar.is-open', { timeout: 5000 });
-        }],
+        ['jam', '#/today', openJam],
     ];
+    const extraScenes = [
+        ['todo', '#/todo', async () => {}],
+        ['homework', '#/homework', async () => {}],
+        ['minutes', '#/minutes', async () => {}],
+        ['notice', '#/notice', async () => {}],
+        ['students', '#/students', async () => {}],
+        ['sheet', '#/today', openMenu],
+    ];
+
+    async function capture(name, hash, prepare, width, mode) {
+        const page = await openPage({ width, height: width >= 768 ? 900 : 844, mode, skin: 'cork', hash });
+        await prepare(page);
+        await delay(180);
+        const file = `cork-${name}-${width}-${mode}.png`;
+        await page.screenshot({ path: resolve(shots, file) });
+        const look = await page.evaluate(() => ({
+            skin: document.documentElement.getAttribute('data-skin'),
+            deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
+            before: getComputedStyle(document.querySelector('.app-bg'), '::before').content,
+        }));
+        check(look.skin === 'cork', `${file} 에 코르크가 없습니다.`);
+        check(look.deco === 'none', `${file} 장식이 클릭을 가로챕니다.`);
+        if (name === 'jam' || name === 'sheet') {
+            check(look.before === 'none' || look.before === 'normal', `${file} 팝업인데 장식이 남아 있습니다.`);
+        } else {
+            check(look.before !== 'none' && look.before !== 'normal', `${file} 떠 있는 소품이 없습니다.`);
+        }
+        await overlapHits(page, file);
+        await haloHits(page, file);
+        await page.close();
+    }
 
     for (const width of [320, 390, 768, 1280]) {
         for (const mode of ['light', 'dark']) {
             for (const [name, hash, prepare] of scenes) {
-                const page = await openPage({ width, height: width >= 768 ? 900 : 844, mode, skin: 'cork', hash });
-                await prepare(page);
-                await delay(180);
-                const file = `cork-${name}-${width}-${mode}.png`;
-                await page.screenshot({ path: resolve(shots, file) });
-                const look = await page.evaluate(() => ({
-                    skin: document.documentElement.getAttribute('data-skin'),
-                    deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
-                    before: getComputedStyle(document.querySelector('.app-bg'), '::before').content,
-                }));
-                check(look.skin === 'cork', `${file} 에 코르크가 없습니다.`);
-                check(look.deco === 'none', `${file} 장식이 클릭을 가로챕니다.`);
-                if (name === 'jam') {
-                    check(look.before === 'none' || look.before === 'normal', `${file} 쨈 팝업인데 장식이 남아 있습니다.`);
-                } else {
-                    check(look.before !== 'none' && look.before !== 'normal', `${file} 떠 있는 소품이 없습니다.`);
-                }
-                await overlapHits(page, file);
-                await haloHits(page, file);
-                await page.close();
+                await capture(name, hash, prepare, width, mode);
             }
+        }
+    }
+
+    for (const [width, mode] of [[390, 'light'], [390, 'dark'], [1280, 'light']]) {
+        for (const [name, hash, prepare] of extraScenes) {
+            if (name === 'sheet' && width >= 900) continue;
+            await capture(name, hash, prepare, width, mode);
         }
     }
 

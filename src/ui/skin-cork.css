@@ -10,8 +10,19 @@ html[data-skin="cork"] {
     --glass-border: transparent;
     --line: #D2B896;
     --ink: #2E2A2B;
-    --ink-sub: #4A3E36;
-    --ink-hint: #53463C;
+    --ink-sub: #3A2E28;
+    --ink-hint: #403530;
+    --primary: #A84838;
+    --on-primary: #FFFFFF;
+    --accent: #8A3028;
+    --glow: rgba(168, 72, 56, .28);
+    --keycap-top: #A84838;
+    --keycap-mid: #8F3A2E;
+    --keycap-bottom: #7A3026;
+    --keycap-highlight: rgba(255, 255, 255, .55);
+    --keycap-side: #6B281F;
+    --keycap-shadow: rgba(90, 58, 36, .24);
+    --toast-action: #F7C4B8;
     --brand-soft: #F6EDD8;
     --hero-ink: #2E2A2B;
     --aurora-1: #F6EDD8;
@@ -32,11 +43,11 @@ html[data-skin="cork"] {
     --k-praise: #F6EDD8;
     --k-todo: #F6EDD8;
     --rest-bg: #F3DCC8;
-    --rest-ink: #8E3158;
+    --rest-ink: #8A3028;
     --cork-tag-blue: #2F6AA8;
-    --cork-tag-coral: #C24A3A;
+    --cork-tag-coral: #A84838;
     --cork-tag-green: #2F7A3E;
-    --cork-tag-orange: #C45C12;
+    --cork-tag-orange: #A04A10;
     --cork-board: #C9A06E;
     --text-halo: #C9A06E;
 }
@@ -47,8 +58,19 @@ html.dark[data-skin="cork"] {
     --solid: #3E342C;
     --line: #5A4A3C;
     --ink: #F6F2EE;
-    --ink-sub: #D2C4B4;
-    --ink-hint: #B8A898;
+    --ink-sub: #D8C8B8;
+    --ink-hint: #C9BCB0;
+    --primary: #B04A3A;
+    --on-primary: #FFFFFF;
+    --accent: #F0A090;
+    --glow: rgba(240, 160, 144, .28);
+    --keycap-top: #C45C4A;
+    --keycap-mid: #A84838;
+    --keycap-bottom: #8A3028;
+    --keycap-highlight: rgba(255, 255, 255, .28);
+    --keycap-side: #6B281F;
+    --keycap-shadow: rgba(0, 0, 0, .5);
+    --toast-action: #F0A090;
     --brand-soft: #3E342C;
     --hero-ink: #F6F2EE;
     --aurora-1: #3E342C;
@@ -69,7 +91,7 @@ html.dark[data-skin="cork"] {
     --k-praise: #3E342C;
     --k-todo: #3E342C;
     --rest-bg: #4A342C;
-    --rest-ink: #F0A8BA;
+    --rest-ink: #F0A090;
     --cork-tag-blue: #7EB4E0;
     --cork-tag-coral: #F0A090;
     --cork-tag-green: #8FBF7A;
@@ -143,6 +165,38 @@ html[data-skin="cork"] [role="button"].solid-card {
         1px 1px 0 #E6D3B4,
         2px 3px 0 #D4C09A,
         3px 6px 10px rgba(90, 58, 36, .18);
+}
+/* 작은 칸(명단·달력 날짜·칩)에는 압정·집게를 두지 않습니다. */
+html[data-skin="cork"] button.glass,
+html[data-skin="cork"] button.solid-card,
+html[data-skin="cork"] a.glass,
+html[data-skin="cork"] a.solid-card,
+html[data-skin="cork"] [role="button"].glass,
+html[data-skin="cork"] [role="button"].solid-card,
+html[data-skin="cork"] .roster-cell,
+html[data-skin="cork"] .cal-grid .tap,
+html[data-skin="cork"] .period-picks .tap,
+html[data-skin="cork"] .num-tile,
+html[data-skin="cork"] .cell-grid .tap,
+html[data-skin="cork"] .week-event {
+    background-image: url('./skin/paper-fiber.svg');
+    background-repeat: repeat;
+    background-position: 0 0;
+    background-size: 48px 48px;
+}
+html.dark[data-skin="cork"] button.glass,
+html.dark[data-skin="cork"] button.solid-card,
+html.dark[data-skin="cork"] a.glass,
+html.dark[data-skin="cork"] a.solid-card,
+html.dark[data-skin="cork"] [role="button"].glass,
+html.dark[data-skin="cork"] [role="button"].solid-card,
+html.dark[data-skin="cork"] .roster-cell,
+html.dark[data-skin="cork"] .cal-grid .tap,
+html.dark[data-skin="cork"] .period-picks .tap,
+html.dark[data-skin="cork"] .num-tile,
+html.dark[data-skin="cork"] .cell-grid .tap,
+html.dark[data-skin="cork"] .week-event {
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .glass,
 html.dark[data-skin="cork"] .solid-card,
@@ -284,9 +338,61 @@ html[data-skin="cork"] .fold[data-fold="recent"] .fold-hide h3 {
     background: var(--cork-tag-orange);
     --text-halo: var(--cork-tag-orange);
 }
-html[data-skin="cork"] .glass:nth-of-type(4n+2) > h2.title-font { background: var(--cork-tag-coral); --text-halo: var(--cork-tag-coral); }
-html[data-skin="cork"] .glass:nth-of-type(4n+3) > h2.title-font { background: var(--cork-tag-green); --text-halo: var(--cork-tag-green); }
-html[data-skin="cork"] .glass:nth-of-type(4n+4) > h2.title-font { background: var(--cork-tag-orange); --text-halo: var(--cork-tag-orange); }
+/* 화면별 라벨 색. 시간표·일정·달력·회의록=파랑, 할 일·과제=코랄, 출결·학생=초록, 안내·설정·알림장=주황. */
+html[data-skin="cork"] [data-screen="schedule"] .fold-title,
+html[data-skin="cork"] [data-screen="schedule"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="schedule"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="schedule"] .solid-card > h2.title-font,
+html[data-skin="cork"] [data-screen="minutes"] .fold-title,
+html[data-skin="cork"] [data-screen="minutes"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="minutes"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="minutes"] h2.title-font,
+html[data-skin="cork"] [data-screen="minutes-list"] h2.title-font,
+html[data-skin="cork"] [data-screen="minutes-view"] h2.title-font,
+html[data-skin="cork"] [data-screen="minutes-editor"] h2.title-font,
+html[data-skin="cork"] [data-screen="default-tt"] h2.title-font,
+html[data-skin="cork"] [data-screen="academic"] h2.title-font {
+    background: var(--cork-tag-blue);
+    --text-halo: var(--cork-tag-blue);
+}
+html[data-skin="cork"] [data-screen="todo"] .fold-title,
+html[data-skin="cork"] [data-screen="todo"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="todo"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="todo"] h2.title-font,
+html[data-skin="cork"] [data-screen="homework"] .fold-title,
+html[data-skin="cork"] [data-screen="homework"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="homework"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="homework"] h2.title-font,
+html[data-skin="cork"] [data-screen="todo-settings"] h2.title-font,
+html[data-skin="cork"] [data-screen="todo-edit"] h2.title-font {
+    background: var(--cork-tag-coral);
+    --text-halo: var(--cork-tag-coral);
+}
+html[data-skin="cork"] [data-screen="attend"] .fold-title,
+html[data-skin="cork"] [data-screen="attend"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="attend"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="attend"] h2.title-font,
+html[data-skin="cork"] [data-screen="students"] .fold-title,
+html[data-skin="cork"] [data-screen="students"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="students"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="students"] h2.title-font {
+    background: var(--cork-tag-green);
+    --text-halo: var(--cork-tag-green);
+}
+html[data-skin="cork"] [data-screen="notice"] .fold-title,
+html[data-skin="cork"] [data-screen="notice"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="notice"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="notice"] h2.title-font,
+html[data-skin="cork"] [data-screen="settings"] .fold-title,
+html[data-skin="cork"] [data-screen="settings"] .fold-hide h3,
+html[data-skin="cork"] [data-screen="settings"] .glass > h2.title-font,
+html[data-skin="cork"] [data-screen="settings"] h2.title-font,
+html[data-skin="cork"] [data-screen="hotkeys"] h2.title-font,
+html[data-skin="cork"] [data-screen="quick-help"] h2.title-font,
+html[data-skin="cork"] [data-screen="store-guide"] h2.title-font {
+    background: var(--cork-tag-orange);
+    --text-halo: var(--cork-tag-orange);
+}
 
 /* 보호 안내는 크림 카드 그대로, 색은 작은 라벨에만 둡니다. */
 html[data-skin="cork"] .store-notice h2,
@@ -622,4 +728,248 @@ html[data-skin="cork"] .primary-btn,
 html[data-skin="cork"] .hero-action,
 html[data-skin="cork"] .add-event-fab {
     --text-halo: var(--primary);
+}
+
+/* ───────── 대표 디자인 다듬기: 입력·선택·호버·포커스·스크롤·밤 교실 ───────── */
+html[data-skin="cork"] {
+    scrollbar-width: thin;
+    scrollbar-color: #B08A62 #F6EDD8;
+}
+html.dark[data-skin="cork"] {
+    scrollbar-color: #6A5648 #2A2118;
+}
+html[data-skin="cork"] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+html[data-skin="cork"] ::-webkit-scrollbar-track {
+    background: #F6EDD8;
+}
+html[data-skin="cork"] ::-webkit-scrollbar-thumb {
+    background: #B08A62;
+    border-radius: 8px;
+    border: 2px solid #F6EDD8;
+}
+html.dark[data-skin="cork"] ::-webkit-scrollbar-track {
+    background: #2A2118;
+}
+html.dark[data-skin="cork"] ::-webkit-scrollbar-thumb {
+    background: #6A5648;
+    border-color: #2A2118;
+}
+
+html[data-skin="cork"] ::selection {
+    background: #F7C4B8;
+    color: #2E2A2B;
+}
+html.dark[data-skin="cork"] ::selection {
+    background: #8A3028;
+    color: #F6F2EE;
+}
+
+html[data-skin="cork"] :focus-visible,
+html[data-skin="cork"] .field:focus,
+html[data-skin="cork"] .tray-input:focus,
+html[data-skin="cork"] .fold-head:focus-visible,
+html[data-skin="cork"] .store-notice-head:focus-visible,
+html[data-skin="cork"] .home-links-head:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+html[data-skin="cork"] .field,
+html[data-skin="cork"] .tray-input,
+html[data-skin="cork"] .card-field .field {
+    background: #FFF8EC;
+    color: var(--ink);
+    box-shadow: inset 1px 2px 4px rgba(90, 58, 36, .14), inset 0 -1px 0 rgba(255, 252, 245, .8);
+    border-radius: 12px;
+}
+html.dark[data-skin="cork"] .field,
+html.dark[data-skin="cork"] .tray-input,
+html.dark[data-skin="cork"] .card-field .field {
+    background: #2A241E;
+    box-shadow: inset 1px 2px 4px rgba(0, 0, 0, .4), inset 0 -1px 0 rgba(255, 255, 255, .04);
+}
+html[data-skin="cork"] .field:focus,
+html[data-skin="cork"] .tray-input:focus {
+    box-shadow: inset 1px 2px 5px rgba(90, 58, 36, .18), 0 0 0 2px rgba(168, 72, 56, .28);
+}
+
+html[data-skin="cork"] .chip,
+html[data-skin="cork"] .choice-tile {
+    background-color: #FFF8EC;
+    background-image: url('./skin/paper-fiber.svg');
+    background-repeat: repeat;
+    background-size: 48px 48px;
+    color: var(--ink);
+    border-radius: 12px;
+}
+html.dark[data-skin="cork"] .chip,
+html.dark[data-skin="cork"] .choice-tile {
+    background-color: #3E342C;
+    background-image: url('./skin/paper-fiber-dark.svg');
+}
+html[data-skin="cork"] button.chip.on,
+html[data-skin="cork"] a.chip.on,
+html[data-skin="cork"] .choice-tile.on,
+html[data-skin="cork"] .side-menu .tap.chip.block.on,
+html[data-skin="cork"] .chip.on[aria-current="page"] {
+    background-color: #F3B09E;
+    background-image: none;
+    color: #8A3028;
+    box-shadow: var(--neo-inset);
+    --text-halo: #F3B09E;
+}
+html.dark[data-skin="cork"] button.chip.on,
+html.dark[data-skin="cork"] a.chip.on,
+html.dark[data-skin="cork"] .choice-tile.on,
+html.dark[data-skin="cork"] .side-menu .tap.chip.block.on,
+html.dark[data-skin="cork"] .chip.on[aria-current="page"] {
+    background-color: #5A342C;
+    color: #F0A090;
+    --text-halo: #5A342C;
+}
+
+html[data-skin="cork"] .todo-check {
+    background: #FFF8EC;
+    border-radius: 12px;
+    box-shadow: var(--neo-raise-sm);
+}
+html[data-skin="cork"] .todo-check[aria-pressed="true"] {
+    color: #A84838;
+    background: #F7C4B8;
+    box-shadow: var(--neo-inset);
+    --text-halo: #F7C4B8;
+}
+html.dark[data-skin="cork"] .todo-check {
+    background: #3E342C;
+}
+html.dark[data-skin="cork"] .todo-check[aria-pressed="true"] {
+    color: #F0A090;
+    background: #5A342C;
+    --text-halo: #5A342C;
+}
+
+html[data-skin="cork"] .chip[aria-pressed="true"]:not(.on) {
+    color: #8A3028;
+    box-shadow: var(--neo-inset);
+}
+
+@media (hover: hover) {
+    html[data-skin="cork"] .tap:hover:not(.foil-fab):not(.tab-jelly),
+    html[data-skin="cork"] .chip:hover,
+    html[data-skin="cork"] .choice-tile:hover,
+    html[data-skin="cork"] .todo-check:hover,
+    html[data-skin="cork"] .icon-btn:hover {
+        filter: brightness(1.04);
+    }
+    html[data-skin="cork"] .primary-btn:hover,
+    html[data-skin="cork"] .hero-action:hover,
+    html[data-skin="cork"] .add-event-fab:hover {
+        filter: brightness(1.06);
+    }
+}
+html[data-skin="cork"] .tap:active:not(.foil-fab):not(.add-event-fab):not(.primary-btn):not(.hero-action):not(.tab-jelly),
+html[data-skin="cork"] .chip:active,
+html[data-skin="cork"] .choice-tile:active,
+html[data-skin="cork"] .todo-check:active {
+    filter: none;
+    box-shadow: var(--neo-inset);
+}
+html[data-skin="cork"] .primary-btn:active,
+html[data-skin="cork"] .hero-action:active {
+    filter: none;
+}
+
+html[data-skin="cork"] .add-event-fab {
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: 4px 6px 14px rgba(168, 72, 56, .35);
+}
+html.dark[data-skin="cork"] .add-event-fab {
+    background: var(--primary);
+    color: var(--on-primary);
+    box-shadow: 4px 6px 14px rgba(0, 0, 0, .45);
+}
+
+html[data-skin="cork"] .toast {
+    background: #3A2E28;
+    color: #F6EDD8;
+    --text-halo: #3A2E28;
+}
+html[data-skin="cork"] .toast .tap,
+html[data-skin="cork"] .toast > button {
+    color: #F7C4B8;
+}
+html.dark[data-skin="cork"] .toast {
+    background: #F6EDD8;
+    color: #2E2A2B;
+    --text-halo: #F6EDD8;
+}
+html.dark[data-skin="cork"] .toast .tap,
+html.dark[data-skin="cork"] .toast > button {
+    color: #8A3028;
+}
+
+html[data-skin="cork"] .week-empty,
+html[data-skin="cork"] .minutes-empty,
+html[data-skin="cork"] .wb-empty,
+html[data-skin="cork"] [data-empty-roster],
+html[data-skin="cork"] [data-kept-empty],
+html[data-skin="cork"] .meal-tray.is-empty {
+    color: var(--ink-sub);
+}
+
+html[data-skin="cork"] .quick-mic.is-on {
+    outline-color: var(--accent);
+}
+
+html[data-skin="cork"] .acad-day[aria-pressed="true"] {
+    background: var(--primary);
+    color: var(--on-primary);
+    --text-halo: var(--primary);
+}
+
+html[data-skin="cork"] .hero-pill {
+    background: #FFF8EC;
+    color: var(--ink);
+    box-shadow: var(--neo-raise-sm);
+}
+html[data-skin="cork"] .home-todo-link {
+    color: #8A3028;
+}
+
+html[data-skin="cork"] .muted {
+    color: var(--ink-sub);
+}
+
+html[data-skin="cork"] .settings-key {
+    background-color: #FFF8EC;
+    background-image: url('./skin/paper-fiber.svg');
+    background-repeat: repeat;
+    background-size: 48px 48px;
+    color: var(--ink);
+}
+html.dark[data-skin="cork"] .settings-key {
+    background-color: #3E342C;
+    background-image: url('./skin/paper-fiber-dark.svg');
+}
+
+html[data-skin="cork"] .date-chip-warn {
+    background: var(--warn);
+    color: var(--ink);
+}
+
+html[data-skin="cork"] .low-card {
+    border: 0;
+}
+
+html[data-skin="cork"] .gcal-error {
+    border: 0;
+}
+
+html[data-skin="cork"] .tabbar .tab-jelly:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
 }

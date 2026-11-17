@@ -74,6 +74,11 @@ check(/star\.svg/.test(css) && /flower\.svg/.test(css) && /postit\.svg/.test(css
 check(/quick-bar\.is-open/.test(css) && /content:\s*none/.test(css), '쨈 팝업에서 장식을 가리지 않습니다.');
 check(/\.store-badge/.test(css) && /cork-tag-orange/.test(css), '보호 라벨 색이 없습니다.');
 check(!/\.store-notice h2[^{]*\{[^}]*cork-tag-orange/.test(css.replace(/\s+/g, ' ')), '보호 안내를 제목 막대로 칠합니다.');
+check(!/nth-of-type\(4n/.test(css), '라벨 색이 카드 순서로 무작정 돕니다.');
+check(/\[data-screen="todo"\]/.test(css) && /\[data-screen="attend"\]/.test(css) && /\[data-screen="notice"\]/.test(css), '화면별 라벨 색 규칙이 없습니다.');
+check(/scrollbar-color/.test(css), '스크롤바가 테마에 안 맞습니다.');
+check(/--primary:\s*#A84838/.test(css), '주 색이 코르크 코랄이 아닙니다.');
+check(/\.field:focus/.test(css) && /\.chip\.on/.test(css) && /\.todo-check/.test(css), '입력창·선택·체크 다듬기가 없습니다.');
 check(css.includes('html.dark[data-skin="cork"]'), '어두운 밤 교실 톤이 없습니다.');
 check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 그림을 씁니다.');
 
