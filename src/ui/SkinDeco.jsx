@@ -4,30 +4,12 @@ import flagFrame from './skin/bg/flag-frame.webp';
 import mottoFrame from './skin/bg/motto-frame.webp';
 import wallSpeaker from './skin/bg/wall-speaker.webp';
 import wallClock from './skin/bg/wall-clock.webp';
-import stove from './skin/props/stove.webp';
-import lunch from './skin/props/lunch.webp';
-import organ from './skin/props/organ.webp';
-import bell from './skin/props/bell.webp';
-import abacus from './skin/props/abacus.webp';
-import eraser from './skin/props/eraser.webp';
-import chalk from './skin/props/chalk.webp';
-import globe from './skin/props/globe.webp';
-import plant from './skin/props/plant.webp';
-import books from './skin/props/books.webp';
+import trayChalk from './skin/bg/tray-chalk.webp';
+import trayEraser from './skin/bg/tray-eraser.webp';
 
-const PROPS = [
+const WALL_PROPS = [
     ['speaker', wallSpeaker],
     ['clock', wallClock],
-    ['bell', bell],
-    ['books', books],
-    ['chalk', chalk],
-    ['abacus', abacus],
-    ['eraser', eraser],
-    ['stove', stove],
-    ['organ', organ],
-    ['globe', globe],
-    ['plant', plant],
-    ['lunch', lunch],
 ];
 
 /** 교실 소품. data-skin="cork" 일 때만 붙습니다. 클릭은 통과합니다. */
@@ -53,9 +35,14 @@ export function SkinDeco() {
                 <img className="skin-motto-frame" src={mottoFrame} alt="" decoding="async" />
                 <span className="skin-motto-text title-font">서로 돕고 함께 자라는 우리 반</span>
             </div>
-            {PROPS.map(([id, src]) => (
+            {WALL_PROPS.map(([id, src]) => (
                 <img key={id} className="skin-prop" data-prop={id} src={src} alt="" loading="lazy" decoding="async" />
             ))}
+            <div className="skin-tray">
+                <img className="skin-tray-chalk" src={trayChalk} alt="" decoding="async" />
+                <span className="skin-tray-mid" />
+                <img className="skin-tray-eraser" src={trayEraser} alt="" decoding="async" />
+            </div>
         </div>
     );
 }

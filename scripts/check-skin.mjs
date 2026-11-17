@@ -66,25 +66,34 @@ check(src('src/index.css').includes("import './ui/skin-cork.css'"), '코르크 �
 const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
 const selectors = [...stripped.matchAll(/(^|})\s*([^{}@][^{]*)\{/g)].map((m) => m[2].trim()).filter((sel) => sel && !sel.startsWith('@') && !sel.startsWith('}'));
 for (const sel of selectors) {
+    if (/^(from|to|\d+(\.\d+)?%)$/.test(sel.trim())) continue;
     const parts = sel.split(',').map((s) => s.trim()).filter(Boolean);
     check(parts.length && parts.every((p) => /\[data-skin="cork"\]/.test(p)), `코르크 스타일이 기본 화면에 새어 나갑니다: ${sel}`);
 }
 check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
-check(/min-width:\s*900px/.test(css), '넓은 화면 책상 소품 자리가 없습니다.');
+check(/min-width:\s*900px/.test(css), '넓은 화면 분필 받침대 자리가 없습니다.');
 const deco = src('src/ui/SkinDeco.jsx');
 check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('taegeukgi-mark.svg') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
 check(!/bg-frontwall-ref|wall-flag/.test(deco) && !/taegeukgi\.webp/.test(css), '부정확한 태극기 사진을 씁니다.');
-check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /data-prop="bell"/.test(css), '교실 앞벽 소품이 없습니다.');
-check(/desk\.webp/.test(css) && /drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css), '책상·서랍 그림이 없습니다.');
+check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css), '교실 앞벽 소품이 없습니다.');
+check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css), '서랍 그림이 없습니다.');
 check(/chalkboard\.webp/.test(css) && /background-size:\s*cover/.test(css) && /border-image:\s*url\('\.\/skin\/bg\/desk\.webp'\)/.test(css), '칠판 그림·나무 틀이 없습니다.');
 check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
 check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
-check(/padding-bottom:\s*48px/.test(css) && /100% 48px/.test(css), '넓은 화면 책상 상판이 없습니다.');
+check(/skin-tray/.test(css) && /tray-wood\.webp/.test(css) && /tray-chalk\.webp/.test(deco) && /tray-eraser\.webp/.test(deco), '분필 받침대가 없습니다.');
+check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
-check(/data-prop="books"/.test(css) && /data-prop="chalk"/.test(css) && /data-prop="abacus"/.test(css) && /data-prop="eraser"/.test(css), '책상 소품이 없습니다.');
-check(/data-prop="stove"/.test(css) && /data-prop="organ"/.test(css) && /data-prop="globe"/.test(css) && /data-prop="plant"/.test(css) && /data-prop="lunch"/.test(css), '넓은 화면 여백 소품이 없습니다.');
-check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*168px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
+check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
+check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
+check(/jam-eraser\.webp/.test(css) && /\.jar-svg/.test(css) && /chalk-puff/.test(css) && /pointer-events:\s*none/.test(css), '쨈 지우개·분필 가루가 없습니다.');
+check(/prefers-reduced-motion:\s*reduce/.test(css) && /cork-chalk-cloud/.test(css) && /cork-chalk-speck/.test(css), '분필 가루 움직임 줄이기가 없습니다.');
+check(!/linear-gradient\(90deg, rgba\(246, 240, 228/.test(css), '서랍 메뉴 종이 바탕이 남아 있습니다.');
+check(/side-hotkey/.test(css) && /justify-content:\s*center/.test(css), '서랍 글씨 가운데·단축키 위치가 없습니다.');
+const puff = src('src/ui/chalkPuff.js');
+check(puff.includes("getAttribute('data-skin') !== 'cork'") && puff.includes('prefers-reduced-motion'), '가루 효과가 코르크 밖에서도 돕니다.');
+
+check(src('src/ui/pressFeel.js').includes('puffChalkDust'), '짬 누름에 가루 효과가 없습니다.');
 for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chalk', 'globe', 'plant', 'books', 'clock', 'speaker']) {
     const file = `${root}/src/ui/skin/props/${name}.webp`;
     check(existsSync(file), `소품 파일이 없습니다: ${name}.webp`);
@@ -94,7 +103,7 @@ for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chal
     }
 }
 const bgLimit = { chalkboard: 120, desk: 120 };
-for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame']) {
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser', 'jam-eraser']) {
     const file = `${root}/src/ui/skin/bg/${name}.webp`;
     check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
     if (existsSync(file)) {

@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v6';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v7';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -499,6 +499,31 @@ try {
                 await capture(name, hash, prepare, width, mode);
             }
         }
+    }
+
+    /* 짬 지우개 분필 가루 중간 프레임. 팝업은 열지 않습니다. */
+    {
+        const page = await openPage({ width: 1280, height: 900, mode: 'light', skin: 'cork', hash: '#/today' });
+        await page.waitForSelector('.desk-fab .fab-disc');
+        await page.evaluate(() => {
+            const btn = [...document.querySelectorAll('.desk-fab')].find((el) => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+            });
+            btn?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+        });
+        await delay(70);
+        const dust = await page.evaluate(() => document.querySelector('.chalk-puff')?.className || '');
+        check(/chalk-puff/.test(dust), `분필 가루 효과가 없습니다: ${dust}`);
+        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-1.png') });
+        await delay(140);
+        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-2.png') });
+        await delay(160);
+        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-3.png') });
+        await page.evaluate(() => {
+            document.querySelector('.desk-fab')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse' }));
+        });
+        await page.close();
     }
 } finally {
     await browser.close().catch(() => {});
