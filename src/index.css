@@ -2040,3 +2040,42 @@ button.hero-pill.home-todo-link {
 .photo-staged { position: relative; aspect-ratio: 1 / 1; border-radius: 14px; overflow: hidden; box-shadow: var(--neo-inset); }
 .photo-staged img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .photo-drop.tap { position: absolute; top: 0; right: 0; width: 44px; height: 44px; display: grid; place-items: center; color: #fff; font-weight: 700; background: radial-gradient(circle at 70% 30%, rgba(0, 0, 0, .62) 0 14px, transparent 15px); }
+
+/* 급식판 팝업: 스테인리스 식판(위 4칸 · 아래 2칸) */
+.meal-pop-back { display: grid; place-items: center; padding: 12px; z-index: 60; }
+.meal-pop { width: min(560px, 100%); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; padding: 14px; border-radius: 22px; background: var(--bg); box-shadow: 0 18px 40px rgba(0, 0, 0, .35); display: grid; gap: 12px; }
+.meal-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.meal-pop-head .tap, .meal-pop-foot .tap { min-height: 44px; }
+.meal-pop-date { font-size: 17px; text-align: center; flex: 1 1 auto; min-width: 0; }
+.meal-pop-kcal { margin: 0; text-align: right; }
+.meal-pop-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.meal-tray {
+    display: grid; gap: 8px; padding: 12px; border-radius: 26px; color: #1F2328;
+    background:
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, .16) 0 1px, rgba(0, 0, 0, 0) 1px 3px),
+        linear-gradient(135deg, #F4F6F8 0%, #C9CED4 22%, #E9ECEF 45%, #B4BAC1 70%, #DDE1E5 100%);
+    box-shadow: inset 0 2px 1px rgba(255, 255, 255, .9), inset 0 -3px 4px rgba(60, 70, 80, .35), 0 2px 0 #8D949C, 0 10px 18px rgba(30, 40, 50, .3);
+}
+.tray-row { display: grid; gap: 8px; }
+.tray-top { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tray-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tray-cell {
+    position: relative; min-height: 86px; box-sizing: border-box; padding: 20px 6px 8px; border-radius: 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+    background: linear-gradient(160deg, #AEB5BC 0%, #D4D9DE 38%, #EEF1F3 70%, #C3C9CF 100%);
+    box-shadow: inset 0 5px 8px rgba(40, 50, 60, .42), inset 0 -2px 2px rgba(255, 255, 255, .85), inset 3px 0 5px rgba(40, 50, 60, .16), inset -3px 0 5px rgba(255, 255, 255, .4), 0 1px 0 rgba(255, 255, 255, .8);
+}
+.tray-cell.is-big { min-height: 118px; border-radius: 20px; }
+.tray-label { position: absolute; top: 5px; left: 9px; font-size: 11px; font-weight: 700; color: #3F4850; letter-spacing: .02em; }
+.tray-food { font-size: 14px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; word-break: keep-all; }
+.tray-cell.is-big .tray-food { font-size: 17px; }
+.tray-food .meal-code { display: block; font-size: 11px; font-weight: 400; color: #3F4850; }
+.tray-empty { width: 26px; height: 3px; border-radius: 2px; background: rgba(60, 70, 80, .28); }
+.meal-tray.is-empty { min-height: 180px; place-items: center; text-align: center; padding: 20px; }
+.meal-tray.is-empty p { margin: 0; font-weight: 700; }
+@media (max-width: 360px) {
+    .meal-tray { padding: 8px; gap: 6px; border-radius: 20px; }
+    .tray-row { gap: 6px; }
+    .tray-cell { padding: 18px 3px 6px; border-radius: 12px; }
+    .tray-food { font-size: 13px; }
+}

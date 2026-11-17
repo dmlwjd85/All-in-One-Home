@@ -20,7 +20,7 @@ import { TodoEditSheet } from './TodoEditSheet.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
-import { MealCard } from './MealCard.jsx';
+import { MealButton, MealCard } from './MealCard.jsx';
 import { pickHomeTip } from '../lib/homeTips.js';
 import { StorageNotice } from './StorageNotice.jsx';
 import { HomeLinks } from './EduLinks.jsx';
@@ -138,6 +138,7 @@ export function Home() {
                             <div className="hero-actions">
                                 <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>출결 보기</Btn>
                                 <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>
+                                <MealButton className="hero-action" notes={joined(data, 'notes')} today={clock.ymd} />
                             </div>
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{todayRest.label === '휴일' ? '휴일' : todayRest.label}</h2>
@@ -155,6 +156,7 @@ export function Home() {
                             <div className="hero-actions">
                                 <Btn className="hero-action" onClick={() => go(`#/attend/${clock.ymd}`)}>{checked ? '출결 고치기' : '출결 하기'}</Btn>
                                 <Btn className="hero-action" onClick={() => go('#/homework')}>과제 체크</Btn>
+                                <MealButton className="hero-action" notes={joined(data, 'notes')} today={clock.ymd} />
                             </div>
                         </div>
                         <h2 className="title-font font-display" style={{ fontSize: 26, lineHeight: '34px', margin: '14px 0 8px' }}>{count ? `오늘 우리 반 ${count}명` : '우리 반 이름을 적어 주세요'}</h2>

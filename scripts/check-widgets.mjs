@@ -25,6 +25,18 @@ const memory = () => { const map = new Map(); return { map, getItem: (k) => (map
     const odd = cleanLayout([{ id: 'month', on: true, size: 'zz' }, { id: 'month', on: false }, { id: '없는것' }, { id: 'todo', on: false, size: 'l' }]);
     check(odd[0].id === 'month' && odd[0].size === WIDGETS.find((w) => w.id === 'month').size && odd[1].id === 'todo' && odd[1].on === false && odd[1].size === 'l', `저장된 배치 고치기가 이상합니다: ${JSON.stringify(odd.slice(0, 2))}`);
     check(odd.length === WIDGETS.length && odd.slice(2).every((w) => w.on === (w.id === 'meal')), '새로 생긴 위젯은 꺼진 채로 뒤에 붙어야 합니다(급식만 켠 채로).');
+    {
+        const { mealTray, trayKind } = await import('../src/lib/mealPaste.js');
+        const names = (list) => list.map((i) => i.name).join('+');
+        const t = mealTray(['기장밥', '미역국', '제육볶음', '배추김치', '귤'].map((name) => ({ name })));
+        check(names(t.rice) === '기장밥' && names(t.soup) === '미역국' && names(t.top[0]) === '배추김치' && names(t.top[1]) === '제육볶음' && names(t.top[2]) === '귤' && !t.top[3].length, `급식판 자리가 틀립니다: ${JSON.stringify(t)}`);
+        const kinds = { 김치볶음밥: 'rice', 김치찌개: 'soup', 깍두기: 'kimchi', 칼국수: 'rice', 갈비탕: 'soup', 떡볶이: 'side', 요구르트: 'side', 잔치국수: 'rice', 크림스프: 'soup', 단무지: 'kimchi', 밥버거: 'side' };
+        for (const [name, want] of Object.entries(kinds)) check(trayKind(name) === want, `급식판 분류 ${name}: ${trayKind(name)} (바람: ${want})`);
+        const many = mealTray(['밥', '국', '김치', 'a', 'b', 'c', 'd', 'e', '잡곡밥', '된장국'].map((name) => ({ name })));
+        check(many.rice.length === 1 && many.soup.length === 1 && many.top.flat().length === 8 && many.top.every((c) => c.length === 2) && many.top[0][0].name === '김치', `메뉴가 많을 때 급식판: ${JSON.stringify(many.top.map((c) => names(c)))}`);
+        const mealUi = readFileSync('src/ui/MealCard.jsx', 'utf8');
+        check(/export function MealButton/.test(mealUi) && /role="dialog"/.test(mealUi) && /<MealButton className="hero-action"/.test(readFileSync('src/ui/Home.jsx', 'utf8')) && /<MealButton/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')) && /tray-top \{ grid-template-columns: repeat\(4/.test(readFileSync('src/index.css', 'utf8')) && /tray-bottom \{ grid-template-columns: repeat\(2/.test(readFileSync('src/index.css', 'utf8')), "출결·과제 옆 '오늘 급식' 단추나 급식판(위 4칸·아래 2칸) 팝업이 없습니다.");
+    }
     check(WIDGETS.some((w) => w.id === 'meal' && w.auto) && /meal: MealWidget/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')) && /<MealLine notes=/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')), '넓은 화면 오늘(위젯판)에 급식이 없습니다.');
     const base = defaultLayout();
     const up = moveWidget(base, base[1].id, -1);

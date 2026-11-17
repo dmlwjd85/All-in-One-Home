@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { addDaysYmd } from '../lib/date.js';
-import { mealCodesShown, mealSummary, mealsFromNotes } from '../lib/mealPaste.js';
+import { mealCodesShown, mealSummary, mealTray, mealsFromNotes, trayKind } from '../lib/mealPaste.js';
 import { Btn } from './bits.jsx';
 import { FoldCard } from './Fold.jsx';
 
@@ -79,5 +80,90 @@ export function MealDay({ notes, date }) {
             </ul>
             {day.kcal ? <p className="muted" style={{ margin: '6px 0 0' }}>{day.kcal} kcal</p> : null}
         </section>
+    );
+}
+
+const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+function dayLabel(ymd, today) {
+    const week = WEEK[new Date(`${ymd}T00:00:00`).getDay()];
+    return `${Number(ymd.slice(5, 7))}월 ${Number(ymd.slice(8, 10))}일 ${week}요일${ymd === today ? ' · 오늘' : ''}`;
+}
+
+function TrayCell({ items, label, showCodes, big = false, slot }) {
+    return (
+        <div className={big ? 'tray-cell is-big' : 'tray-cell'} data-tray={slot}>
+            <span className="tray-label">{label}</span>
+            {items.length ? items.map((item, index) => (
+                <span key={`${index}-${item.name}`} className="tray-food">
+                    {item.name}
+                    {showCodes && item.codes ? <span className="meal-code">{item.codes}</span> : null}
+                </span>
+            )) : <span className="tray-empty" aria-hidden="true" />}
+        </div>
+    );
+}
+
+/** 스테인리스 급식판: 위 4칸(김치부터 반찬), 아래 2칸(왼쪽 밥, 오른쪽 국). */
+export function MealTray({ day, showCodes }) {
+    const tray = mealTray(day?.items || []);
+    return (
+        <div className="meal-tray" data-role="meal-tray" role="group" aria-label="급식판">
+            <div className="tray-row tray-top">
+                {tray.top.map((items, index) => <TrayCell key={index} slot={`top${index + 1}`} items={items} label={trayKind(items[0]?.name) === 'kimchi' ? '김치' : '반찬'} showCodes={showCodes} />)}
+            </div>
+            <div className="tray-row tray-bottom">
+                <TrayCell slot="rice" big items={tray.rice} label="밥" showCodes={showCodes} />
+                <TrayCell slot="soup" big items={tray.soup} label="국" showCodes={showCodes} />
+            </div>
+        </div>
+    );
+}
+
+/** '오늘 급식' 단추. 누르면 급식판 팝업이 뜹니다. 출결·과제 단추 옆에 둡니다. */
+export function MealButton({ notes, today, className = 'chip' }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <>
+            <Btn className={className} data-role="meal-open" aria-haspopup="dialog" onClick={() => setOpen(true)}>오늘 급식</Btn>
+            {open ? <MealPopup notes={notes} today={today} onClose={() => setOpen(false)} /> : null}
+        </>
+    );
+}
+
+function MealPopup({ notes, today, onClose }) {
+    const map = mealsFromNotes(notes);
+    const [cursor, setCursor] = useState(today);
+    const [showCodes] = useState(() => mealCodesShown(globalThis.localStorage));
+    useEffect(() => {
+        const onKey = (event) => { if (event.key === 'Escape') onClose(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [onClose]);
+    const day = map[cursor];
+    const dates = Object.keys(map).sort();
+    /* 이전·다음은 급식이 있는 날로 건너뜁니다. 없으면 하루씩 움직입니다. */
+    const prev = [...dates].reverse().find((date) => date < cursor) || addDaysYmd(cursor, -1);
+    const next = dates.find((date) => date > cursor) || addDaysYmd(cursor, 1);
+    return createPortal(
+        <div className="sheet-back meal-pop-back" onClick={onClose}>
+            <div className="meal-pop" role="dialog" aria-modal="true" aria-label="급식" data-role="meal-pop" onClick={(event) => event.stopPropagation()}>
+                <div className="meal-pop-head">
+                    <Btn className="chip" aria-label="이전 급식" onClick={() => setCursor(prev)}>‹ 이전</Btn>
+                    <strong className="title-font meal-pop-date">{dayLabel(cursor, today)}</strong>
+                    <Btn className="chip" aria-label="다음 급식" onClick={() => setCursor(next)}>다음 ›</Btn>
+                </div>
+                {day?.items?.length ? <MealTray day={day} showCodes={showCodes} /> : (
+                    <div className="meal-tray is-empty" data-role="meal-tray-empty">
+                        <p>{dates.length ? '이 날은 적힌 메뉴가 없어요.' : '아직 넣은 급식표가 없어요. 가운데 쨈 버튼 › 「급식표 촬영」이나 「달력·급식 표」로 넣어 주세요.'}</p>
+                    </div>
+                )}
+                {day?.kcal ? <p className="muted meal-pop-kcal">{day.kcal} kcal</p> : null}
+                <div className="meal-pop-foot">
+                    {cursor !== today ? <Btn className="chip" onClick={() => setCursor(today)}>오늘로</Btn> : null}
+                    <Btn className="primary-btn" data-role="meal-close" onClick={onClose}>닫기</Btn>
+                </div>
+            </div>
+        </div>,
+        document.body,
     );
 }

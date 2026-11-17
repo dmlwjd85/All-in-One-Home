@@ -1,5 +1,5 @@
 import { mealCodesShown, mealsFromNotes } from '../lib/mealPaste.js';
-import { MealLine } from './MealCard.jsx';
+import { MealButton, MealLine } from './MealCard.jsx';
 import { useEffect, useState } from 'react';
 import { addDaysYmd, eventClock, monthCells, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
@@ -78,6 +78,7 @@ function DayWidget({ data, today, events }) {
             <div className="wb-actions">
                 <Btn className="chip wb-more" onClick={() => go(`#/attend/${today}`)}>{checked ? `출결 ${marks ? `${marks}명 표시` : '모두 출석'}` : '출결 하기'}</Btn>
                 <Btn className="chip wb-more" onClick={() => go('#/homework')}>과제 체크</Btn>
+                <MealButton className="chip wb-more" notes={joined(data, 'notes')} today={today} />
             </div>
         </>
     );

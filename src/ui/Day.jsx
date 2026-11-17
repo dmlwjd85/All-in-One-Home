@@ -14,7 +14,7 @@ import { EventLine } from './EventLine.jsx';
 import { isLocked, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { DayTimetable } from './DayTimetable.jsx';
-import { MealDay } from './MealCard.jsx';
+import { MealButton, MealDay } from './MealCard.jsx';
 import { tableForDateWithLocal } from '../lib/semester.js';
 
 const DAY_LABEL = { mon: '월', tue: '화', wed: '수', thu: '목', fri: '금' };
@@ -145,6 +145,7 @@ export function Day() {
                 <div className="hw-inline-actions">
                     <Btn className="chip" onClick={() => go(`#/attend/${date}`)}>출결 고치기</Btn>
                     <Btn className="chip" onClick={() => go('#/homework')}>과제 체크</Btn>
+                    <MealButton className="chip" notes={joined(data, 'notes')} today={date} />
                 </div>
             </section>
 

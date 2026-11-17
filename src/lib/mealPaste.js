@@ -547,3 +547,48 @@ export function mealSummary(day) {
     if (!names.length) return '';
     return names.slice(0, 2).join(' · ') + (names.length > 2 ? ` 외 ${names.length - 2}` : '');
 }
+
+/* ───────── 급식판(위 4칸 · 아래 2칸)에 메뉴 놓기 ───────── */
+const TRAY_SOUP = /(국|탕|찌개|찌게|전골|스프|수프|개장|해장국|미소시루)$/;
+const TRAY_NOODLE = /(국수|우동|라면|짜장면|짬뽕|파스타|스파게티|냉면|쫄면|쌀국수)/;
+const TRAY_RICE = /(밥|죽|라이스|리조또|김밥|주먹밥|비빔|덮밥)/;
+const TRAY_KIMCHI = /(김치|깍두기|석박지|섞박지|겉절이|단무지|피클|장아찌|무생채)/;
+
+/** 메뉴 하나가 어느 자리인지: 'rice'(왼쪽 아래) · 'soup'(오른쪽 아래) · 'kimchi'(위 맨 왼쪽) · 'side'(나머지). */
+export function trayKind(name) {
+    const text = String(name || '').replace(/\s+/g, '');
+    if (!text) return 'side';
+    if (TRAY_KIMCHI.test(text) && !/(김치볶음밥|김치찌개|김치찌게|김치국|김치전|김치말이)/.test(text)) return 'kimchi';
+    if (TRAY_NOODLE.test(text)) return 'rice';
+    if (TRAY_SOUP.test(text)) return 'soup';
+    if (TRAY_RICE.test(text) && !/(밥버거|밥전)/.test(text)) return 'rice';
+    return 'side';
+}
+
+/**
+ * 급식판에 놓을 자리. 돌려주는 값: { rice: [..], soup: [..], top: [[..],[..],[..],[..]] }
+ * - 밥류 하나는 왼쪽 아래, 국류 하나는 오른쪽 아래. 둘째 밥·국은 반찬 칸으로 갑니다.
+ * - 위 칸은 김치류부터 왼쪽에서 차례로. 다섯째부터는 가장 적게 든 칸에 덧붙입니다(뒤 칸 먼저).
+ */
+export function mealTray(items) {
+    const rice = [];
+    const soup = [];
+    const kimchi = [];
+    const side = [];
+    for (const item of items || []) {
+        if (!item?.name) continue;
+        const kind = trayKind(item.name);
+        if (kind === 'rice' && !rice.length) rice.push(item);
+        else if (kind === 'soup' && !soup.length) soup.push(item);
+        else if (kind === 'kimchi') kimchi.push(item);
+        else side.push(item);
+    }
+    const top = [[], [], [], []];
+    [...kimchi, ...side].forEach((item, index) => {
+        if (index < 4) { top[index].push(item); return; }
+        let slot = 3;
+        for (let i = 3; i >= 0; i -= 1) if (top[i].length < top[slot].length) slot = i;
+        top[slot].push(item);
+    });
+    return { rice, soup, top };
+}
