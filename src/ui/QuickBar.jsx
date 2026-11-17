@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { saveQuick } from '../lib/db.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
+import { PhotoStage, usePhotoStage } from './PhotoStrip.jsx';
 import { playSealBurst } from './sealBurst.js';
 import { quickDateLabel, textFromField } from './quickText.js';
 import { MINUTES_TITLE_MAX, readMinutesDraft, writeMinutesDraft } from '../lib/minutes.js';
@@ -36,6 +37,8 @@ const RECORD_KINDS = ['관찰', '상담', '칭찬', '보호자'];
 
 export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
     const { showToast, data, openPlus, go } = useUi();
+    const stage = usePhotoStage();
+    const [stageOpen, setStageOpen] = useState(false);
     const students = data?.students || [];
     const barRef = useRef(null);
     const lastKind = useRef('메모');
@@ -152,6 +155,11 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             return;
         }
         const usedKind = kind || lastKind.current || '메모';
+        /* 사진은 학생 기록에만 붙습니다. 붙일 곳이 없으면 저장 전에 알려 사진을 잃지 않게 합니다. */
+        if (stage.shots.length && !RECORD_KINDS.includes(usedKind)) {
+            showToast('사진은 학생 기록(관찰·상담·칭찬)에만 붙일 수 있어요. 종류를 바꾸거나 사진을 빼 주세요.');
+            return;
+        }
         if (!override && usedKind !== '관찰' && usedKind !== '메모') {
             const read = readPasteSchedule(text, { now: new Date(), periods: allStarts(data?.profile?.periodStarts) });
             if (read.mode === 'calendar' || read.mode === 'list' || read.items.length > 1) {
@@ -243,6 +251,13 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
             if (used === '일정' && date !== dateYmd) {
                 const label = quickDateLabel(date);
                 if (label) message = message.replace('일정에 넣었어요.', `${label} 일정에 넣었어요.`);
+            }
+            /* 골라 둔 사진을 방금 만든 학생 기록에 붙입니다. */
+            if (stage.shots.length && result.owners?.length) {
+                const count = stage.shots.length;
+                stage.attach(result.owners).then((done) => { if (done) showToast(`${message} 사진 ${count}장도 붙였어요.`, true); }).catch(() => {});
+                stage.clear();
+                setStageOpen(false);
             }
             showToast(message, true);
         }).catch(() => keepText('저장하지 못했어요.'));
@@ -477,13 +492,23 @@ export function QuickBar({ open, invite, inputRef, dateYmd, onClose }) {
                     onCompositionUpdate={(event) => { composing.current = { data: event.data || '' }; publishLive(); }}
                     onCompositionEnd={() => { composing.current = null; publishLive(); }}
                 />
+                {/* 마이크와 사진을 그림 글자로 나란히 둡니다(글자 단추 하나가 있던 자리). */}
                 <Btn
-                    className="quick-mic"
-                    aria-label="말로 입력"
+                    className={listening ? 'quick-mic is-on' : 'quick-mic'}
+                    aria-label={listening ? '말로 입력, 듣는 중' : '말로 입력'}
                     aria-pressed={listening ? 'true' : 'false'}
                     onClick={onMic}
-                >{listening ? '듣는 중' : '마이크'}</Btn>
+                ><span aria-hidden="true">🎤</span></Btn>
+                <Btn
+                    className={stageOpen || stage.shots.length ? 'quick-mic quick-cam is-on' : 'quick-mic quick-cam'}
+                    data-role="quick-cam"
+                    aria-label="사진 찍거나 붙이기"
+                    aria-pressed={stageOpen || stage.shots.length > 0 ? 'true' : 'false'}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setStageOpen((on) => !on)}
+                ><span aria-hidden="true">📷</span></Btn>
             </div>
+            {stageOpen || stage.shots.length ? <PhotoStage stage={stage} note="학생 기록(관찰·상담·칭찬)으로 남길 때 함께 붙어요." /> : null}
             {ask && (
                 <div className="quick-ask low-card" role="group" aria-label="시각 확인" data-quick-ask={ask.res.missing || 'late'}>
                     <p className="quick-ask-text">{phraseAskText(ask.res)}</p>
