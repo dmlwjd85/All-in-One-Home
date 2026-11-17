@@ -7,14 +7,24 @@ export const ALLERGENS = [
     [1, '난류'], [2, '우유'], [3, '메밀'], [4, '땅콩'], [5, '대두'], [6, '밀'], [7, '고등어'], [8, '게'], [9, '새우'], [10, '돼지고기'],
     [11, '복숭아'], [12, '토마토'], [13, '아황산류'], [14, '호두'], [15, '닭고기'], [16, '쇠고기'], [17, '오징어'], [18, '조개류'], [19, '잣'],
 ];
-const NAME = new Map(ALLERGENS);
+/* 급식 표시 19종에 없는 것까지 꼼꼼히 고를 수 있는 목록(20번부터). 급식표에는 이 번호가 적히지 않아 메뉴 이름으로만 찾습니다. */
+export const ALLERGEN_GROUPS = [
+    { id: 'meal', title: '급식 표시 19종', note: '급식표에 번호로 적히는 것', items: ALLERGENS },
+    { id: 'fruit', title: '과일', items: [[20, '키위'], [21, '딸기'], [22, '바나나'], [23, '사과'], [24, '망고'], [25, '파인애플'], [26, '멜론·참외'], [27, '수박'], [28, '포도'], [29, '귤·오렌지'], [30, '자두·체리·살구'], [66, '배'], [67, '감']] },
+    { id: 'nut', title: '견과·씨앗', items: [[31, '아몬드'], [32, '캐슈넛'], [33, '피스타치오'], [34, '헤이즐넛'], [35, '밤'], [36, '참깨'], [37, '들깨'], [38, '해바라기씨·호박씨'], [39, '코코넛']] },
+    { id: 'sea', title: '생선·해산물', items: [[40, '연어'], [41, '참치'], [42, '갈치'], [43, '꽁치·삼치'], [44, '명태·대구'], [45, '멸치'], [46, '문어·낙지·주꾸미'], [47, '굴'], [48, '전복'], [49, '홍합'], [50, '어묵·맛살'], [68, '김·미역·다시마']] },
+    { id: 'veg', title: '채소·곡류', items: [[51, '당근'], [52, '오이'], [53, '가지'], [54, '버섯'], [55, '셀러리'], [56, '마늘·양파'], [57, '옥수수'], [58, '감자'], [59, '쌀'], [60, '보리·귀리'], [69, '고구마'], [70, '시금치']] },
+    { id: 'etc', title: '그 밖', items: [[61, '초콜릿·코코아'], [62, '꿀'], [63, '겨자'], [64, '번데기'], [65, '젤라틴']] },
+];
+export const ALLERGEN_MAX = 70;
+const NAME = new Map(ALLERGEN_GROUPS.flatMap((group) => group.items));
 export function allergenName(code) { return NAME.get(Number(code)) || ''; }
 
 export function cleanAllergy(list) {
     const seen = new Set();
     for (const value of Array.isArray(list) ? list : []) {
         const n = Number(value);
-        if (Number.isInteger(n) && n >= 1 && n <= 19) seen.add(n);
+        if (Number.isInteger(n) && NAME.has(n)) seen.add(n);
     }
     return [...seen].sort((a, b) => a - b);
 }
@@ -40,6 +50,14 @@ const GUESS = [
     [17, /오징어|한치|낙지|쭈꾸미|주꾸미|문어|해물|짬뽕|팔보채|양장피|진미채|어묵/],
     [18, /조개|바지락|홍합|굴(?:$|[^비])|전복|가리비|재첩|꼬막|모시조개|해물|짬뽕|봉골레|굴소스|팔보채/],
     [19, /잣/],
+    [20, /키위|다래/], [21, /딸기/], [22, /바나나/], [23, /사과|(?<!파인)애플/], [24, /망고/], [25, /파인애플/], [26, /멜론|메론|참외/], [27, /수박/], [28, /포도|건포도|샤인머스캣/],
+    [29, /귤|오렌지|한라봉|천혜향|레몬|유자|자몽|감귤/], [30, /자두|체리|살구|매실/], [66, /^배$|배주스|배즙|배숙|생배|배깍두기|배무침/], [67, /단감|홍시|곶감|연시|^감$|감말랭이/],
+    [31, /아몬드/], [32, /캐슈/], [33, /피스타치오/], [34, /헤이즐넛/], [35, /밤(?:$|조림|맛탕|밥)|군밤|약밤/], [36, /참깨|깨소금|(?<!들)깨(?:$|무침|강정|드레싱)|참기름|흑임자/], [37, /들깨|깻잎|들기름/], [38, /해바라기씨|호박씨/], [39, /코코넛/],
+    [40, /연어/], [41, /참치|튜나/], [42, /갈치/], [43, /꽁치|삼치|임연수/], [44, /명태|동태|북어|황태|코다리|대구|생선까스|생선가스|피쉬/], [45, /멸치/], [46, /문어|낙지|쭈꾸미|주꾸미/],
+    [47, /굴(?:$|[^비])/], [48, /전복/], [49, /홍합/], [50, /어묵|오뎅|맛살|크래미|게맛살/], [68, /김(?:$|구이|자반|가루|무침|밥)|미역|다시마|파래|매생이|해조/],
+    [51, /당근/], [52, /오이/], [53, /가지/], [54, /버섯|표고|느타리|팽이|새송이|양송이/], [55, /셀러리|샐러리/], [56, /마늘|양파/], [57, /옥수수|콘(?:$|샐러드|치즈|스프)|팝콘/], [58, /감자|포테이토|해시브라운/],
+    [59, /밥|쌀|떡|죽|누룽지|식혜/], [60, /보리|귀리|오트/], [69, /고구마/], [70, /시금치/],
+    [61, /초코|초콜릿|코코아|카카오|브라우니/], [62, /꿀|허니/], [63, /겨자|머스타드|머스터드/], [64, /번데기/], [65, /젤리|젤라틴|푸딩|마시멜로/],
 ];
 
 /** 메뉴 이름으로 짐작한 알레르기 번호. */
@@ -53,30 +71,44 @@ export function guessAllergens(name) {
 
 /** 급식표에 적힌 번호('5.6.10'). */
 export function writtenAllergens(codes) {
-    return cleanAllergy(String(codes || '').split(/[^\d]+/).filter(Boolean));
+    return cleanAllergy(String(codes || '').split(/[^\d]+/).filter(Boolean)).filter((code) => code <= 19);
 }
 
 /**
  * 한 메뉴에서 이 학생에게 해당하는 알레르기.
- * 돌려주는 값: [{ code, label, sure }] — sure 는 급식표에 번호가 적혀 있던 것, 아니면 이름으로 짐작한 것.
+ * 돌려주는 값: [{ code, label, sure }] — sure 는 급식표에 번호가 적혀 있던 것(또는 직접 적은 낱말이 이름에 그대로 있는 것), 아니면 이름으로 짐작한 것.
  * 급식표에 번호가 적힌 메뉴는 그 번호만 믿고, 번호가 없는 메뉴만 이름으로 짐작합니다.
  */
 export function itemHits(item, allergy) {
     const mine = new Set(cleanAllergy(allergy));
     if (!mine.size || !item?.name) return [];
     const written = writtenAllergens(item.codes);
-    const list = written.length ? written.map((code) => [code, true]) : guessAllergens(item.name).map((code) => [code, false]);
+    const guessed = guessAllergens(item.name);
+    /* 급식 표시 19종은 급식표에 번호가 있으면 그 번호만 믿고, 20번부터는 급식표에 적히지 않으니 늘 이름으로 봅니다. */
+    const list = [
+        ...(written.length ? written.map((code) => [code, true]) : guessed.filter((code) => code <= 19).map((code) => [code, false])),
+        ...guessed.filter((code) => code > 19).map((code) => [code, false]),
+    ];
     return list.filter(([code]) => mine.has(code)).map(([code, sure]) => ({ code, label: allergenName(code), sure }));
+}
+
+/** 목록에 없어 직접 적은 낱말(쉼표·줄바꿈으로 나눔). 두 글자 이상만, 열 개까지. */
+export function ownWords(text) {
+    return [...new Set(String(text || '').split(/[,\n，、/]+/).map((word) => word.replace(/\s+/g, '').trim()).filter((word) => word.length >= 2 && word.length <= 12))].slice(0, 10);
+}
+function wordHits(item, words) {
+    const name = String(item?.name || '').replace(/\s+/g, '');
+    return ownWords(words).filter((word) => name.includes(word)).map((word) => ({ code: 0, label: word, sure: true }));
 }
 
 /** 그 날 급식에서 알레르기에 걸리는 학생과 메뉴. [{ student, items: [{ name, hits }] }], 번호 순. */
 export function allergyHits(students, day) {
     const out = [];
     for (const student of students || []) {
-        if (student?.active === false || !cleanAllergy(student?.allergy).length) continue;
+        if (student?.active === false || (!cleanAllergy(student?.allergy).length && !ownWords(student?.allergyWords).length)) continue;
         const items = [];
         for (const item of day?.items || []) {
-            const hits = itemHits(item, student.allergy);
+            const hits = [...itemHits(item, student.allergy), ...wordHits(item, student.allergyWords)];
             if (hits.length) items.push({ name: item.name, hits });
         }
         if (items.length) out.push({ student, items });

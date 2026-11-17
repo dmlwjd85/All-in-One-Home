@@ -1884,7 +1884,7 @@ export function studentCardLocal(current, sid) {
     const text = (value) => String(value || '').slice(0, CARD_TEXT_MAX);
     return {
         contacts: (Array.isArray(saved.contacts) ? saved.contacts : []).slice(0, 6).map((c) => ({ who: String(c?.who || '').slice(0, 12), phone: String(c?.phone || '').slice(0, 20), note: String(c?.note || '').slice(0, 40) })),
-        allergyNote: text(saved.allergyNote), health: text(saved.health), family: text(saved.family), etc: text(saved.etc),
+        allergyNote: text(saved.allergyNote), allergyWords: String(saved.allergyWords || '').slice(0, 120), health: text(saved.health), family: text(saved.family), etc: text(saved.etc),
     };
 }
 /** 예전 수첩에서 옮겨 온 학생별 칸(이 기기 전용). */
@@ -1898,16 +1898,16 @@ export async function saveStudentCard(sid, { birthday, sex, memo, allergy } = {}
         if (birthday !== undefined) student.birthday = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(birthday || '') ? birthday : '';
         if (sex !== undefined) student.sex = ['남', '여'].includes(sex) ? sex : '';
         if (memo !== undefined) student.memo = String(memo || '').slice(0, 200);
-        if (allergy !== undefined) student.allergy = cleanAllergy(allergy);
+        if (allergy !== undefined) student.allergy = cleanAllergy(allergy).slice(0, 40);
         if (local) {
             draft.local = draft.local || {};
             const list = (draft.local.contacts || []).filter((item) => item?.id !== `card-${sid}`);
             const body = {
                 contacts: (local.contacts || []).filter((c) => String(c?.who || '').trim() || String(c?.phone || '').trim()).slice(0, 6).map((c) => ({ who: String(c.who || '').trim().slice(0, 12), phone: String(c.phone || '').trim().slice(0, 20), note: String(c.note || '').trim().slice(0, 40) })),
-                allergyNote: String(local.allergyNote || '').slice(0, CARD_TEXT_MAX), health: String(local.health || '').slice(0, CARD_TEXT_MAX),
+                allergyNote: String(local.allergyNote || '').slice(0, CARD_TEXT_MAX), allergyWords: String(local.allergyWords || '').slice(0, 120), health: String(local.health || '').slice(0, CARD_TEXT_MAX),
                 family: String(local.family || '').slice(0, CARD_TEXT_MAX), etc: String(local.etc || '').slice(0, CARD_TEXT_MAX),
             };
-            const empty = !body.contacts.length && !body.allergyNote && !body.health && !body.family && !body.etc;
+            const empty = !body.contacts.length && !body.allergyNote && !body.allergyWords && !body.health && !body.family && !body.etc;
             if (!empty) list.push({ id: `card-${sid}`, sid, label: 'card', value: JSON.stringify(body), source: 'app', at: new Date().toISOString() });
             draft.local.contacts = list;
         }

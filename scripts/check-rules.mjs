@@ -624,7 +624,9 @@ try {
         await expectAllow('학생 알레르기 번호', () => setDoc(ref, { no: 7, name: '한지우', allergy: [1, 5, 10] }));
         await expectAllow('학생 알레르기 비우기', () => setDoc(ref, { no: 7, name: '한지우', allergy: [] }));
         await expectDeny('알레르기에 글자', () => setDoc(ref, { no: 7, name: '한지우', allergy: ['땅콩'] }));
-        await expectDeny('알레르기 번호 범위 밖', () => setDoc(ref, { no: 7, name: '한지우', allergy: [20] }));
+        await expectAllow('꼼꼼한 목록 번호', () => setDoc(ref, { no: 7, name: '한지우', allergy: [20, 36, 70] }));
+        await expectDeny('알레르기 번호 범위 밖', () => setDoc(ref, { no: 7, name: '한지우', allergy: [71] }));
+        await expectDeny('알레르기 번호 0', () => setDoc(ref, { no: 7, name: '한지우', allergy: [0] }));
         await expectDeny('알레르기가 목록이 아님', () => setDoc(ref, { no: 7, name: '한지우', allergy: '1.5' }));
         await expectDeny('학생 문서에 연락처 칸', () => setDoc(ref, { no: 7, name: '한지우', phone: '01012345678' }));
     }

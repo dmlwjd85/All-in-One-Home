@@ -2120,3 +2120,6 @@ button.hero-pill.home-todo-link {
 .allergy-banner li { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .allergy-banner ul { padding-left: 0; }
 .allergy-who.tap { min-height: 44px; font-weight: 700; }
+.allergy-group { display: grid; gap: 6px; }
+.allergy-group-head.tap { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 0 4px; text-align: left; background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom: 1px solid var(--line); border-radius: 0; }
+.allergy-group-head.tap:disabled { opacity: 1; }

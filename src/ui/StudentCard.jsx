@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ALLERGENS, allergenName, allergyHits, cleanAllergy, hitLine } from '../lib/allergy.js';
+import { ALLERGEN_GROUPS, allergenName, allergyHits, cleanAllergy, hitLine, ownWords } from '../lib/allergy.js';
 import { joined, saveStudentCard, studentCardLocal, studentLegacyFields } from '../lib/db.js';
 import { mealsFromNotes } from '../lib/mealPaste.js';
 import { CARD_LAYOUT_KEY, CARD_SECTIONS, cleanCardLayout, moveSection } from './cardLayout.js';
@@ -44,12 +44,14 @@ export function StudentCard({ student, recordSummary = '', children }) {
     const savedLocal = useMemo(() => studentCardLocal(data, student.id), [data, student.id]);
     const legacy = useMemo(() => studentLegacyFields(data, student.id), [data, student.id]);
     const [form, setForm] = useState(null);
+    const [find, setFind] = useState('');
+    const [groupOpen, setGroupOpen] = useState([]);
     /* 다른 학생으로 넘어가면 쓰던 칸을 비웁니다. */
     useEffect(() => { setForm(null); }, [student.id]);
     const base = {
         birthday: student.birthday || '', sex: student.sex || '', memo: student.memo || '', allergy: cleanAllergy(student.allergy),
         contacts: savedLocal.contacts.length ? savedLocal.contacts : [{ who: '', phone: '', note: '' }],
-        allergyNote: savedLocal.allergyNote, health: savedLocal.health, family: savedLocal.family, etc: savedLocal.etc,
+        allergyNote: savedLocal.allergyNote, allergyWords: savedLocal.allergyWords, health: savedLocal.health, family: savedLocal.family, etc: savedLocal.etc,
     };
     const now = form || base;
     const dirty = Boolean(form);
@@ -59,18 +61,18 @@ export function StudentCard({ student, recordSummary = '', children }) {
     const move = (id, step) => change(moveSection(layout, id, step));
 
     async function save() {
-        const result = await saveStudentCard(student.id, { birthday: now.birthday, sex: now.sex, memo: now.memo, allergy: now.allergy }, { contacts: now.contacts, allergyNote: now.allergyNote, health: now.health, family: now.family, etc: now.etc });
+        const result = await saveStudentCard(student.id, { birthday: now.birthday, sex: now.sex, memo: now.memo, allergy: now.allergy }, { contacts: now.contacts, allergyNote: now.allergyNote, allergyWords: now.allergyWords, health: now.health, family: now.family, etc: now.etc });
         if (!result.ok) { if (result.message) showToast(result.message); return; }
         setForm(null);
         showToast(result.message, true);
     }
 
     const todayMeal = mealsFromNotes(joined(data, 'notes'))[clock.ymd];
-    const todayHit = allergyHits([{ ...student, allergy: now.allergy }], todayMeal)[0];
+    const todayHit = allergyHits([{ ...student, allergy: now.allergy, allergyWords: now.allergyWords }], todayMeal)[0];
     const phones = now.contacts.filter((c) => c.who || c.phone);
     const summary = {
         basic: [now.birthday ? `생일 ${Number(now.birthday.slice(0, 2))}/${Number(now.birthday.slice(3))}` : '', now.sex, now.memo].filter(Boolean).join(' · ') || '아직 비어 있어요',
-        allergy: now.allergy.length ? now.allergy.map(allergenName).join(', ') : '없음',
+        allergy: [...now.allergy.map(allergenName), ...ownWords(now.allergyWords)].join(', ') || '없음',
         contacts: phones.length ? phones.map((c) => c.who || c.phone).join(', ') : '아직 비어 있어요',
         health: now.health.split('\n')[0] || '아직 비어 있어요',
         family: now.family.split('\n')[0] || '아직 비어 있어요',
@@ -96,12 +98,38 @@ export function StudentCard({ student, recordSummary = '', children }) {
         allergy: (
             <>
                 <p className="muted card-note">해당하는 것을 눌러 주세요. 급식에 나오는 날 오늘 화면에 알려 드려요. 번호만 계정에 올라가 폰과 컴퓨터에서 같이 보여요.</p>
-                <div className="card-chips" role="group" aria-label="알레르기">
-                    {ALLERGENS.map(([code, label]) => {
-                        const on = now.allergy.includes(code);
-                        return <Btn key={code} className={on ? 'chip on' : 'chip'} data-allergy={code} aria-pressed={on} onClick={() => patch({ allergy: on ? now.allergy.filter((c) => c !== code) : cleanAllergy([...now.allergy, code]) })}>{code}. {label}</Btn>;
-                    })}
-                </div>
+                <input className="field" type="search" placeholder="알레르기 찾기 (예: 키위, 새우)" aria-label="알레르기 찾기" data-role="allergy-find" value={find} onChange={(event) => setFind(event.target.value)} />
+                {now.allergy.length ? (
+                    <div className="card-chips" role="group" aria-label="고른 알레르기" data-role="allergy-picked">
+                        {now.allergy.map((code) => <Btn key={code} className="chip on" aria-label={`${allergenName(code)} 빼기`} onClick={() => patch({ allergy: now.allergy.filter((c) => c !== code) })}>{allergenName(code)} ✕</Btn>)}
+                    </div>
+                ) : null}
+                {ALLERGEN_GROUPS.map((group) => {
+                    const word = find.replace(/\s+/g, '');
+                    const items = word ? group.items.filter(([, label]) => label.replace(/\s+/g, '').includes(word)) : group.items;
+                    if (!items.length) return null;
+                    const picked = group.items.filter(([code]) => now.allergy.includes(code)).length;
+                    const open = Boolean(word) || group.id === 'meal' || groupOpen.includes(group.id);
+                    return (
+                        <div key={group.id} className="allergy-group" data-allergy-group={group.id}>
+                            <Btn className="allergy-group-head" aria-expanded={open} disabled={Boolean(word) || group.id === 'meal'} onClick={() => setGroupOpen((prev) => (prev.includes(group.id) ? prev.filter((id) => id !== group.id) : [...prev, group.id]))}>
+                                <span>{group.title}{picked ? ` · ${picked}개 고름` : ''}</span>
+                                {group.id === 'meal' || word ? null : <span aria-hidden="true">{open ? '▴' : '▾'}</span>}
+                            </Btn>
+                            {open ? (
+                                <div className="card-chips" role="group" aria-label={group.title}>
+                                    {items.map(([code, label]) => {
+                                        const on = now.allergy.includes(code);
+                                        return <Btn key={code} className={on ? 'chip on' : 'chip'} data-allergy={code} aria-pressed={on} onClick={() => patch({ allergy: on ? now.allergy.filter((c) => c !== code) : cleanAllergy([...now.allergy, code]) })}>{code <= 19 ? `${code}. ` : ''}{label}</Btn>;
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+                <label className="card-field">🔒 목록에 없는 것 직접 적기(이 기기에만, 쉼표로 나눠요)
+                    <input className="field" maxLength={120} placeholder="예: 파프리카, 깻잎" aria-label="목록에 없는 알레르기" data-role="allergy-words" value={now.allergyWords} onChange={(event) => patch({ allergyWords: event.target.value })} />
+                </label>
                 {todayHit ? <p className="low-card card-hit" role="status">오늘 급식: {todayHit.items.map((item) => `${item.name}(${item.hits.map((h) => (h.sure ? h.label : `${h.label}·짐작`)).join(', ')})`).join(', ')}</p> : null}
                 <label className="card-field">🔒 자세한 내용(이 기기에만)
                     <textarea className="field" rows={2} maxLength={1000} placeholder="증상, 대체식, 약 보관 위치" aria-label="알레르기 자세한 내용" value={now.allergyNote} onChange={(event) => patch({ allergyNote: event.target.value })} />
@@ -161,7 +189,8 @@ export function StudentCard({ student, recordSummary = '', children }) {
 export function AllergyBanner() {
     const { data, clock, go } = useUi();
     const day = mealsFromNotes(joined(data, 'notes'))[clock.ymd];
-    const hits = useMemo(() => allergyHits(data.students, day), [data.students, day]);
+    /* 직접 적은 낱말은 이 기기 전용 칸에 있어, 학생 줄에 잠깐 얹어 함께 봅니다. */
+    const hits = useMemo(() => allergyHits((data.students || []).map((student) => ({ ...student, allergyWords: studentCardLocal(data, student.id).allergyWords })), day), [data, day]);
     const lines = hits.map(hitLine);
     const text = lines.join('\n');
     useEffect(() => {
