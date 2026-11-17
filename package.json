@@ -76,6 +76,7 @@
     "check:class-xlsx": "node scripts/check-class-xlsx.mjs",
     "check:widgets": "node scripts/check-widgets.mjs",
     "check:photos": "node scripts/check-photos.mjs",
+    "check:student-card": "node scripts/check-student-card.mjs",
     "check:widgets-browser": "node scripts/check-widgets-browser.mjs",
     "check:minutes": "node scripts/check-minutes.mjs",
     "check:homework": "node scripts/check-homework.mjs",

@@ -164,7 +164,7 @@ check(!readEventChips('내일 학년 회의', { now }).timeOff, '시각이 없�
 
 const sw = readFileSync('public/sw.js', 'utf8');
 
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v96'"), 'SW가 v96가 아닙니다');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v97'"), 'SW가 v97가 아닙니다');
 
 if (bad) {
     console.error(`나이스·날짜칩 검사 실패 ${bad}건`);

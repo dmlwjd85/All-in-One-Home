@@ -245,12 +245,15 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && id(sid)
           && d().keys().hasAll(['no', 'name'])
-          && d().keys().hasOnly(['no', 'name', 'sex', 'birthday', 'active', 'memo', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['no', 'name', 'sex', 'birthday', 'active', 'memo', 'allergy', 'createdAt', 'updatedAt'])
           && d().no is int && d().no >= 1 && d().no <= 99
           && str(d().name, 1, 20)
           && (!('sex' in d()) || d().sex in ['m', 'f', ''])
           && (!('birthday' in d()) || (d().birthday is string && d().birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
           && optBool('active') && optStr('memo', 200) && (!('memo' in d()) || safeText(d().memo))
+          // 알레르기는 급식 알레르기 표시 번호(1~19)만. 글로 적은 건강 정보는 올리지 않습니다.
+          && (!('allergy' in d()) || (d().allergy is list && d().allergy.size() <= 19
+              && d().allergy.hasOnly([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])))
           && optTs('createdAt') && optTs('updatedAt');
       }
 

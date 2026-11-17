@@ -3,6 +3,7 @@ import { joinedRecords, removeItem, saveQuick, saveTextItem } from '../lib/db.js
 import { isSensitiveText, MEMO_LOCAL_HINT } from '../lib/sensitive.js';
 import { photoOwner, removeOwnerPhotos } from '../lib/photos.js';
 import { PhotoStrip, usePhotoCounts } from './PhotoStrip.jsx';
+import { StudentCard } from './StudentCard.jsx';
 import { useUi } from './context.jsx';
 import { Btn, givenName } from './bits.jsx';
 import { ClayMark } from './ClayMark.jsx';
@@ -215,13 +216,9 @@ export function Student() {
                     <p className="muted" style={{ margin: 0 }}>{student.no}번 · {data.profile.className}</p>
                 </div>
             </div>
-            {student.memo ? (
-                <div className="solid-card" style={{ padding: 12, marginTop: 12 }}>
-                    <p style={{ margin: 0 }}>{student.memo}</p>
-                    {isSensitiveText(student.memo) && <p style={{ margin: '6px 0 0' }}>{MEMO_LOCAL_HINT}</p>}
-                </div>
-            ) : null}
-            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {student.memo && isSensitiveText(student.memo) ? <p className="muted" style={{ margin: '8px 0 0' }}>{MEMO_LOCAL_HINT}</p> : null}
+            <StudentCard student={student} recordSummary={`기록 ${records.length} · 상담 ${records.filter((row) => row.kind === '상담').length} · 칭찬 ${records.filter((row) => row.kind === '칭찬').length}`}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {stats.map(([label, value]) => <span key={label} className="chip">{label} {value}</span>)}
             </div>
             <div style={{ marginTop: 8 }}>
@@ -331,6 +328,7 @@ export function Student() {
                 )}
             </div>
             <p className="muted">건강·민원처럼 민감한 내용은 자물쇠가 붙고, 클라우드로 보내지 않아요.</p>
+            </StudentCard>
         </div>
     );
 }

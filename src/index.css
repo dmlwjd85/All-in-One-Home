@@ -2089,3 +2089,34 @@ button.hero-pill.home-todo-link {
 }
 .cam-btn[aria-pressed="true"] { color: var(--accent); box-shadow: var(--neo-inset); }
 .msg-compose { flex-wrap: nowrap; }
+
+/* 학생카드: 접고 펴고 위아래로 옮기는 묶음 */
+.student-card { display: grid; gap: 10px; margin-top: 12px; }
+.card-sec { padding: 10px 12px; min-width: 0; }
+.card-sec-top { display: flex; align-items: center; gap: 6px; }
+.card-sec-h { margin: 0; flex: 1 1 auto; min-width: 0; font-size: 16px; }
+.card-sec-head.tap { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; text-align: left; background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; }
+.card-sec-text { display: grid; min-width: 0; }
+.card-sec-sum { font-size: 13px; font-weight: 400; }
+.card-sec-move.tap { flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; }
+.card-sec-move.tap:disabled { opacity: .35; }
+.card-sec-body { display: grid; gap: 10px; padding-top: 8px; min-width: 0; }
+.card-note { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card-field { display: grid; gap: 4px; font-size: 13px; font-weight: 700; min-width: 0; }
+.card-field .field { font-weight: 400; }
+.card-wide { grid-column: 1 / -1; }
+.card-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.card-chips .chip { min-height: 44px; }
+.card-contact { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 60px; gap: 6px; align-items: center; }
+.card-call { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; text-decoration: none; }
+.card-hit { margin: 0; padding: 8px 10px; }
+.card-save { position: sticky; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 10px; border-radius: 16px; background: var(--bg); box-shadow: 0 6px 18px rgba(0, 0, 0, .22); }
+.card-save span { margin-right: auto; font-weight: 700; }
+.card-save .tap { min-height: 44px; }
+.allergy-banner { display: grid; gap: 6px; padding: 12px; margin-bottom: 12px; }
+.allergy-banner ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+.allergy-banner p { margin: 0; font-size: 13px; }
+.allergy-banner li { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.allergy-banner ul { padding-left: 0; }
+.allergy-who.tap { min-height: 44px; font-weight: 700; }

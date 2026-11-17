@@ -618,6 +618,16 @@ try {
         const other = testEnv.authenticatedContext('teacher-b').firestore();
         await expectDeny('다른 사람 과제', () => getDoc(doc(other, 'users/teacher-a/homework/hw-rule1')));
     }
+    /* 학생 알레르기: 번호(1~19) 목록만 받습니다. */
+    {
+        const ref = doc(db, 'users/teacher-a/students/s7');
+        await expectAllow('학생 알레르기 번호', () => setDoc(ref, { no: 7, name: '한지우', allergy: [1, 5, 10] }));
+        await expectAllow('학생 알레르기 비우기', () => setDoc(ref, { no: 7, name: '한지우', allergy: [] }));
+        await expectDeny('알레르기에 글자', () => setDoc(ref, { no: 7, name: '한지우', allergy: ['땅콩'] }));
+        await expectDeny('알레르기 번호 범위 밖', () => setDoc(ref, { no: 7, name: '한지우', allergy: [20] }));
+        await expectDeny('알레르기가 목록이 아님', () => setDoc(ref, { no: 7, name: '한지우', allergy: '1.5' }));
+        await expectDeny('학생 문서에 연락처 칸', () => setDoc(ref, { no: 7, name: '한지우', phone: '01012345678' }));
+    }
     /* 붙인 사진: 작은 표지(photos)와 사진 글자(photoData). */
     {
         const meta = doc(db, 'users/teacher-a/photos/ph-abc12345');

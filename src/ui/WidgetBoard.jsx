@@ -1,5 +1,6 @@
 import { mealCodesShown, mealsFromNotes } from '../lib/mealPaste.js';
 import { MealButton, MealLine } from './MealCard.jsx';
+import { AllergyBanner } from './StudentCard.jsx';
 import { useEffect, useState } from 'react';
 import { addDaysYmd, eventClock, monthCells, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
@@ -408,6 +409,7 @@ export function WidgetBoard({ onLeave }) {
     }, [editing]);
     return (
         <div className={editing ? 'wb is-editing' : 'wb'} data-screen="widget-board">
+            <AllergyBanner />
             <div className="wb-bar">
                 {editing ? (
                     <>

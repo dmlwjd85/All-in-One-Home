@@ -1,4 +1,5 @@
 /** 화면은 한국어로 두고, 클라우드 문서는 배포된 규칙의 칸에만 맞춥니다. */
+import { cleanAllergy } from './allergy.js';
 import { isSensitiveText } from './sensitive.js';
 
 const STATUS_TO = { 결석: 'absent', 지각: 'late', 조퇴: 'early', 결과: 'out' };
@@ -124,6 +125,10 @@ function toStudent(row) {
     const memo = safeMemo(row.memo, 200);
     if (memo) body.memo = memo;
     else if (row.memo) clear.push('memo');
+    /* 알레르기는 번호(1~19)로만 올립니다(선생님이 고른 방식 B). 글로 적은 건강 정보·연락처는 이 기기에만 둡니다. */
+    const allergy = cleanAllergy(row.allergy);
+    if (allergy.length) body.allergy = allergy;
+    else if (Array.isArray(row.allergy)) clear.push('allergy');
     return { id, body, stamps: stamps(['updatedAt']), clear };
 }
 
@@ -321,6 +326,7 @@ export function fromCloudRow(collection, id, data = {}) {
             birthday: data.birthday || '',
             active: data.active !== false,
             memo: data.memo || '',
+            ...(Array.isArray(data.allergy) ? { allergy: cleanAllergy(data.allergy) } : {}),
             source: 'app',
         };
     }

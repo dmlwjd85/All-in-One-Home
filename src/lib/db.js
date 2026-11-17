@@ -1,3 +1,4 @@
+import { cleanAllergy } from './allergy.js';
 import { heldTimesToRetry } from './todoTimeHold.js';
 import { CONFLICT_PREFIX } from './conflict.js';
 import { syncAuthKnown, syncBegin, syncEnd, syncQueued, syncSeen } from './syncStatus.js';
@@ -1873,6 +1874,49 @@ export async function saveCalendarEvents(items, now = new Date()) {
  * 이미 넣어 둔 날은 지우지 않고, 이번에 읽은 날짜만 바꿉니다(주간 급식표를 주마다 올려도 앞 주가 남습니다).
  * 달이 넘어가는 표(11월 30일 ~ 12월 4일)는 날짜의 달에 맞춰 두 장으로 나눕니다.
  */
+/* ───────── 학생카드 ─────────
+   알레르기 번호·생일·성별·메모는 학생 줄에(로그인하면 올라감), 보호자 연락처·건강·가정 정보는 이 기기 전용 칸(local.contacts 의 'card-<sid>')에 둡니다. */
+export const CARD_TEXT_MAX = 1000;
+export function studentCardLocal(current, sid) {
+    const row = (current?.local?.contacts || []).find((item) => item?.id === `card-${sid}`);
+    let saved = {};
+    try { saved = row ? JSON.parse(row.value || '{}') : {}; } catch { saved = {}; }
+    const text = (value) => String(value || '').slice(0, CARD_TEXT_MAX);
+    return {
+        contacts: (Array.isArray(saved.contacts) ? saved.contacts : []).slice(0, 6).map((c) => ({ who: String(c?.who || '').slice(0, 12), phone: String(c?.phone || '').slice(0, 20), note: String(c?.note || '').slice(0, 40) })),
+        allergyNote: text(saved.allergyNote), health: text(saved.health), family: text(saved.family), etc: text(saved.etc),
+    };
+}
+/** 예전 수첩에서 옮겨 온 학생별 칸(이 기기 전용). */
+export function studentLegacyFields(current, sid) {
+    return (current?.local?.contacts || []).filter((item) => item?.sid === sid && item.id !== `card-${sid}` && item.label && item.label !== 'card');
+}
+export async function saveStudentCard(sid, { birthday, sex, memo, allergy } = {}, local = null) {
+    const failed = await update((draft) => {
+        const student = draft.students.find((row) => row.id === sid);
+        if (!student) return draft;
+        if (birthday !== undefined) student.birthday = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(birthday || '') ? birthday : '';
+        if (sex !== undefined) student.sex = ['남', '여'].includes(sex) ? sex : '';
+        if (memo !== undefined) student.memo = String(memo || '').slice(0, 200);
+        if (allergy !== undefined) student.allergy = cleanAllergy(allergy);
+        if (local) {
+            draft.local = draft.local || {};
+            const list = (draft.local.contacts || []).filter((item) => item?.id !== `card-${sid}`);
+            const body = {
+                contacts: (local.contacts || []).filter((c) => String(c?.who || '').trim() || String(c?.phone || '').trim()).slice(0, 6).map((c) => ({ who: String(c.who || '').trim().slice(0, 12), phone: String(c.phone || '').trim().slice(0, 20), note: String(c.note || '').trim().slice(0, 40) })),
+                allergyNote: String(local.allergyNote || '').slice(0, CARD_TEXT_MAX), health: String(local.health || '').slice(0, CARD_TEXT_MAX),
+                family: String(local.family || '').slice(0, CARD_TEXT_MAX), etc: String(local.etc || '').slice(0, CARD_TEXT_MAX),
+            };
+            const empty = !body.contacts.length && !body.allergyNote && !body.health && !body.family && !body.etc;
+            if (!empty) list.push({ id: `card-${sid}`, sid, label: 'card', value: JSON.stringify(body), source: 'app', at: new Date().toISOString() });
+            draft.local.contacts = list;
+        }
+        return draft;
+    });
+    if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
+    return { ok: true, message: '학생카드를 저장했어요.' };
+}
+
 /** 급식판에서 하루 메뉴를 고칩니다. items 가 비면 그 날 급식을 지웁니다. 다른 날은 그대로 둡니다. */
 export async function saveMealDay(date, items, { kcal = '', origin = '' } = {}) {
     if (!isValidYmd(date)) return { ok: false, message: '날짜가 맞지 않아요.' };

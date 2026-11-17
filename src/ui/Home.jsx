@@ -21,6 +21,7 @@ import { tableForDateWithLocal } from '../lib/semester.js';
 import { recentSummary } from '../lib/foldSummary.js';
 import { FoldCard } from './Fold.jsx';
 import { MealButton, MealCard } from './MealCard.jsx';
+import { AllergyBanner } from './StudentCard.jsx';
 import { pickHomeTip } from '../lib/homeTips.js';
 import { StorageNotice } from './StorageNotice.jsx';
 import { HomeLinks } from './EduLinks.jsx';
@@ -129,6 +130,7 @@ export function Home() {
         <>
         {/* G1 시안 B: 자료 저장·보호 안내는 오늘 화면 맨 위 접는 카드입니다(칸 배치 grid 밖). */}
         <StorageNotice />
+        <AllergyBanner />
         <div className={timer || setup ? 'home-grid has-leave' : 'home-grid'}>
             <section className="hero home-hero">
                 {todayRest.off ? (
