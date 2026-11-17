@@ -226,14 +226,14 @@ function MinutesView({ row }) {
             {row.localOnly ? <p className="muted">민감할 수 있는 낱말이 있어 이 기기에만 남겨 두었어요.</p> : null}
             {/* 할 일·일정으로 등록된 줄은 줄 끝에 ✅·📅 만 붙입니다(따로 목록을 늘어놓지 않아 스크롤이 늘지 않게). */}
             <div className="minutes-body solid-card" data-role="minutes-body">
-                {String(row.text || '').split('\n').map((line, index) => {
+                {String(row.text || '').split('\n').map((line, index, all) => {
                     const mark = marks[index] || { todo: 0, event: 0 };
                     return (
                         <span key={index} className="minutes-line">
                             {line}
                             {mark.todo ? <span className="origin-mark is-after" role="img" aria-label="할 일로 등록됨" title="할 일로 등록됨" data-line-mark="todo">✅</span> : null}
                             {mark.event ? <span className="origin-mark is-after" role="img" aria-label="일정으로 등록됨" title="일정으로 등록됨" data-line-mark="event">📅</span> : null}
-                            {'\n'}
+                            {index < all.length - 1 ? '\n' : null}
                         </span>
                     );
                 })}
