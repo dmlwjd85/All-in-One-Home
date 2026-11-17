@@ -794,6 +794,60 @@ html.dark[data-skin="cork"] .skin-motto-text {
     html[data-skin="cork"] .skin-prop[data-prop="speaker"] { left: calc(50% - 204px); width: 48px; height: 42px; }
     html[data-skin="cork"] .skin-prop[data-prop="clock"] { left: calc(50% + 180px); width: 48px; height: 42px; }
 }
+/* 900+: 칠판 가운데(사이드 200px)에 태극기·급훈·스피커·시계를 띠 높이까지 키워 모읍니다. */
+@media (min-width: 900px) {
+    html[data-skin="cork"] .skin-flag {
+        left: calc(50% + 100px - 217px);
+        top: 1px;
+        width: 96px;
+        height: 54px;
+    }
+    html[data-skin="cork"] .skin-motto {
+        left: calc(50% + 100px - 113px);
+        top: 1px;
+        width: 320px;
+        height: 54px;
+    }
+    html[data-skin="cork"] .skin-motto-text { font-size: 18px; }
+    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
+        left: calc(50% + 100px - 269px);
+        top: 1px;
+        width: 44px;
+        height: 54px;
+        object-fit: fill;
+    }
+    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
+        left: calc(50% + 100px + 215px);
+        top: 1px;
+        width: 54px;
+        height: 54px;
+        object-fit: contain;
+    }
+}
+@media (min-width: 1280px) {
+    html[data-skin="cork"] .skin-flag {
+        left: calc(50% + 100px - 273px);
+        width: 108px;
+        height: 54px;
+    }
+    html[data-skin="cork"] .skin-motto {
+        left: calc(50% + 100px - 157px);
+        width: 420px;
+        height: 54px;
+    }
+    html[data-skin="cork"] .skin-motto-text { font-size: 20px; }
+    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
+        left: calc(50% + 100px - 325px);
+        width: 44px;
+        height: 54px;
+        object-fit: fill;
+    }
+    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
+        left: calc(50% + 100px + 271px);
+        width: 54px;
+        height: 54px;
+    }
+}
 
 html[data-skin="cork"] .app-bg:has(.quick-bar.is-open) .skin-deco,
 html[data-skin="cork"] .app-bg:has(.sheet-back) .skin-deco {
@@ -835,7 +889,7 @@ html.dark[data-skin="cork"] .main {
 @media (min-width: 900px) {
     html[data-skin="cork"] .app-frame {
         padding-top: 56px;
-        padding-bottom: 44px;
+        padding-bottom: 96px;
         box-sizing: border-box;
         background-color: var(--cork-wall);
         background-image: none;
@@ -857,12 +911,12 @@ html.dark[data-skin="cork"] .main {
         padding-top: 10px;
         padding-left: 10px;
         padding-right: 10px;
-        padding-bottom: 80px;
-        scroll-padding-bottom: 80px;
+        padding-bottom: 16px;
+        scroll-padding-bottom: 24px;
     }
     html[data-skin="cork"] .home-todo,
     html[data-skin="cork"] .fold.home-todo {
-        padding-bottom: 72px;
+        padding-bottom: 16px;
     }
     html[data-skin="cork"] .app-bg::after { content: none; }
     html[data-skin="cork"] .desk-fab {
@@ -873,7 +927,7 @@ html.dark[data-skin="cork"] .main {
         left: 200px;
         right: 0;
         bottom: 0;
-        height: 44px;
+        height: 96px;
         z-index: 3;
         align-items: stretch;
         pointer-events: none;
@@ -1168,7 +1222,7 @@ html.dark[data-skin="cork"] .desk-fab .fab-txt {
     --text-halo: var(--primary);
 }
 
-/* 쨈 지우개: 흰 분필 가루. pointer-events 없음, transform/opacity만. */
+/* 쨈 지우개: 흰 분필 가루. 반경은 단추의 약 3~4배. pointer-events 없음, transform/opacity만. */
 html[data-skin="cork"] .chalk-puff {
     position: fixed;
     left: 0;
@@ -1176,56 +1230,76 @@ html[data-skin="cork"] .chalk-puff {
     width: 8px;
     height: 8px;
     margin: -4px 0 0 -4px;
+    overflow: visible;
     pointer-events: none;
     z-index: 80;
 }
-html[data-skin="cork"] .chalk-puff::before {
-    content: '';
+html[data-skin="cork"] .chalk-puff .chalk-cloud {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 148px;
-    height: 148px;
-    margin: -74px 0 0 -74px;
     border-radius: 50%;
     pointer-events: none;
-    background: radial-gradient(circle, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .55) 32%, rgba(255, 255, 255, 0) 72%);
-    animation: cork-chalk-cloud .62s ease-out forwards;
+    mix-blend-mode: plus-lighter;
+    background: radial-gradient(circle, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, .88) 16%, rgba(255, 255, 255, .5) 38%, rgba(255, 255, 255, .18) 58%, rgba(255, 255, 255, 0) 74%);
+    animation: cork-chalk-cloud .7s linear forwards;
+}
+html[data-skin="cork"] .chalk-puff .chalk-cloud.c1 {
+    width: var(--burst, 420px);
+    height: var(--burst, 420px);
+    margin: calc(var(--burst, 420px) / -2) 0 0 calc(var(--burst, 420px) / -2);
+}
+html[data-skin="cork"] .chalk-puff .chalk-cloud.c2 {
+    width: calc(var(--burst, 420px) * .72);
+    height: calc(var(--burst, 420px) * .72);
+    margin: calc(var(--burst, 420px) * -.36) 0 0 calc(var(--burst, 420px) * -.36);
+    animation-delay: 30ms;
+    background: radial-gradient(circle, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .55) 32%, rgba(255, 255, 255, .16) 58%, rgba(255, 255, 255, 0) 72%);
+}
+html[data-skin="cork"] .chalk-puff .chalk-cloud.c3 {
+    width: calc(var(--burst, 420px) * 1.12);
+    height: calc(var(--burst, 420px) * 1.12);
+    margin: calc(var(--burst, 420px) * -.56) 0 0 calc(var(--burst, 420px) * -.56);
+    animation-delay: 50ms;
+    background: radial-gradient(circle, rgba(255, 255, 255, .7) 0%, rgba(255, 255, 255, .32) 36%, rgba(255, 255, 255, .1) 60%, rgba(255, 255, 255, 0) 76%);
 }
 html[data-skin="cork"] .chalk-puff i {
     position: absolute;
     left: 0;
     top: 0;
-    width: 5px;
-    height: 4px;
+    width: var(--speck, 8px);
+    height: calc(var(--speck, 8px) * .7);
     border-radius: 50%;
     pointer-events: none;
-    background: rgba(255, 255, 255, .92);
-    animation: cork-chalk-speck .62s ease-out forwards;
+    background: #fff;
+    box-shadow: 0 0 6px 2px rgba(255, 255, 255, .9);
+    animation: cork-chalk-speck .7s linear forwards;
     animation-delay: var(--delay, 0ms);
 }
-html[data-skin="cork"] .chalk-puff.is-fade::before {
+html[data-skin="cork"] .chalk-puff.is-fade .chalk-cloud {
     animation: cork-chalk-fade .2s ease-out forwards;
 }
 html[data-skin="cork"] .chalk-puff.is-fade i {
     display: none;
 }
 @keyframes cork-chalk-cloud {
-    0% { transform: scale(.28); opacity: 1; }
-    35% { transform: scale(.85); opacity: .9; }
-    100% { transform: scale(1.4); opacity: 0; }
+    0% { transform: scale(.14); opacity: 1; }
+    25% { transform: scale(.55); opacity: 1; }
+    64% { transform: scale(1.02); opacity: 1; }
+    100% { transform: scale(1.16); opacity: 0; }
 }
 @keyframes cork-chalk-speck {
     0% { transform: translate(0, 0) scale(1); opacity: 1; }
-    35% { transform: translate(calc(var(--dx) * .45), calc(var(--dy) * .45)) scale(.8); opacity: .85; }
+    25% { transform: translate(calc(var(--dx) * .32), calc(var(--dy) * .32)) scale(1); opacity: 1; }
+    64% { transform: translate(calc(var(--dx) * .9), calc(var(--dy) * .9)) scale(.78); opacity: .95; }
     100% { transform: translate(var(--dx), var(--dy)) scale(.28); opacity: 0; }
 }
 @keyframes cork-chalk-fade {
-    from { transform: scale(.7); opacity: .8; }
-    to { transform: scale(.85); opacity: 0; }
+    from { transform: scale(.55); opacity: .9; }
+    to { transform: scale(.75); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-    html[data-skin="cork"] .chalk-puff::before {
+    html[data-skin="cork"] .chalk-puff .chalk-cloud {
         animation: cork-chalk-fade .2s ease-out forwards;
     }
     html[data-skin="cork"] .chalk-puff i {

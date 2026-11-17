@@ -84,7 +84,7 @@ check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.')
 check(/skin-tray/.test(css) && /tray-wood\.webp/.test(css) && /tray-chalk\.webp/.test(deco) && /tray-eraser\.webp/.test(deco), '분필 받침대가 없습니다.');
 check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
-check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
+check(/padding-bottom:\s*96px/.test(css) && /height:\s*96px/.test(css), '쨈이 분필 받침대 위에 앉을 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
 check(/jam-eraser\.webp/.test(css) && /\.jar-svg/.test(css) && /chalk-puff/.test(css) && /pointer-events:\s*none/.test(css), '쨈 지우개·분필 가루가 없습니다.');
 check(/prefers-reduced-motion:\s*reduce/.test(css) && /cork-chalk-cloud/.test(css) && /cork-chalk-speck/.test(css), '분필 가루 움직임 줄이기가 없습니다.');

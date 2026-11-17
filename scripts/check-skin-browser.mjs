@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v7';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v8';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -158,6 +158,74 @@ async function overlapHits(page, label) {
                 return;
             }
         }
+    }
+    const fabCoverFn = () => {
+        const overlap = (a, b) => a.left < b.right - 2 && a.right > b.left + 2 && a.top < b.bottom - 2 && a.bottom > b.top + 2;
+        const visible = (el) => {
+            const r = el.getBoundingClientRect();
+            const st = getComputedStyle(el);
+            if (r.width < 8 || r.height < 8) return null;
+            if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return null;
+            return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        };
+        const clip = (el, r) => {
+            let box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+            let p = el;
+            while (p && p !== document.body) {
+                const cs = getComputedStyle(p);
+                if (cs.overflowY !== 'visible' || cs.overflowX !== 'visible') {
+                    const pr = p.getBoundingClientRect();
+                    box = {
+                        left: Math.max(box.left, pr.left),
+                        top: Math.max(box.top, pr.top),
+                        right: Math.min(box.right, pr.right),
+                        bottom: Math.min(box.bottom, pr.bottom),
+                    };
+                }
+                p = p.parentElement;
+            }
+            box.left = Math.max(box.left, 0);
+            box.top = Math.max(box.top, 0);
+            box.right = Math.min(box.right, innerWidth);
+            box.bottom = Math.min(box.bottom, innerHeight);
+            if (box.right - box.left < 2 || box.bottom - box.top < 2) return null;
+            return box;
+        };
+        const fabs = [...document.querySelectorAll('.desk-fab')].map(visible).filter(Boolean);
+        if (!fabs.length) return [];
+        const hits = [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                const p = node.parentElement;
+                if (!p || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
+                if (p.closest('.desk-fab, .tbj-mid, .tabbar, .quick-bar, .sheet, .sheet-back, .skin-deco')) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        while (walker.nextNode()) {
+            const p = walker.currentNode.parentElement;
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            const r = range.getBoundingClientRect();
+            const box = p ? clip(p, r) : null;
+            if (!box) continue;
+            if (fabs.some((fab) => overlap(fab, box))) hits.push(walker.currentNode.nodeValue.trim().slice(0, 28));
+        }
+        return hits;
+    };
+    const fabCover = await page.evaluate(fabCoverFn);
+    if (fabCover.length) check(false, `${label} 쨈 버튼이 글자를 가립니다: ${fabCover[0]}`);
+    const scrolled = await page.evaluate(() => {
+        const main = document.querySelector('.main');
+        if (!main || main.scrollHeight <= main.clientHeight + 4) return false;
+        main.scrollTop = main.scrollHeight;
+        return true;
+    });
+    if (scrolled) {
+        await delay(50);
+        const after = await page.evaluate(fabCoverFn);
+        if (after.length) check(false, `${label} 끝까지 스크롤해도 쨈 버튼이 글자를 가립니다: ${after[0]}`);
     }
 }
 
@@ -501,28 +569,63 @@ try {
         }
     }
 
-    /* 짬 지우개 분필 가루 중간 프레임. 팝업은 열지 않습니다. */
-    {
-        const page = await openPage({ width: 1280, height: 900, mode: 'light', skin: 'cork', hash: '#/today' });
-        await page.waitForSelector('.desk-fab .fab-disc');
-        await page.evaluate(() => {
-            const btn = [...document.querySelectorAll('.desk-fab')].find((el) => {
+    /* 짬 지우개 분필 가루. 팝업은 열지 않고, 0·200·450ms 프레임을 멈춥니다. */
+    const pauseDust = async (page, ms) => {
+        const ok = await page.evaluate((t) => {
+            const puff = document.querySelector('.chalk-puff');
+            if (!puff) return false;
+            puff.dataset.hold = '1';
+            if (puff.dataset.drop) {
+                clearTimeout(Number(puff.dataset.drop));
+                puff.dataset.drop = '';
+            }
+            const anims = puff.getAnimations({ subtree: true });
+            for (const anim of anims) {
+                anim.pause();
+                anim.currentTime = t;
+            }
+            return anims.length > 0;
+        }, ms);
+        check(ok, `분필 가루 ${ms}ms 프레임이 없습니다.`);
+        await delay(40);
+    };
+    const fireDust = async (page, selector) => {
+        await page.waitForSelector(selector);
+        await page.evaluate((sel) => {
+            const btn = [...document.querySelectorAll(sel)].find((el) => {
                 const r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0;
+                const s = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== 'none';
             });
             btn?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
-        });
-        await delay(70);
+        }, selector);
+        await delay(30);
         const dust = await page.evaluate(() => document.querySelector('.chalk-puff')?.className || '');
         check(/chalk-puff/.test(dust), `분필 가루 효과가 없습니다: ${dust}`);
+    };
+    {
+        const page = await openPage({ width: 1280, height: 900, mode: 'light', skin: 'cork', hash: '#/today' });
+        await fireDust(page, '.desk-fab');
+        await pauseDust(page, 16);
         await page.screenshot({ path: resolve(shots, 'cork-jam-dust-1.png') });
-        await delay(140);
+        await pauseDust(page, 200);
         await page.screenshot({ path: resolve(shots, 'cork-jam-dust-2.png') });
-        await delay(160);
+        await pauseDust(page, 450);
         await page.screenshot({ path: resolve(shots, 'cork-jam-dust-3.png') });
-        await page.evaluate(() => {
-            document.querySelector('.desk-fab')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse' }));
-        });
+        await page.close();
+    }
+    {
+        const page = await openPage({ width: 1280, height: 900, mode: 'dark', skin: 'cork', hash: '#/today' });
+        await fireDust(page, '.desk-fab');
+        await pauseDust(page, 200);
+        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-1280-dark.png') });
+        await page.close();
+    }
+    {
+        const page = await openPage({ width: 390, height: 844, mode: 'light', skin: 'cork', hash: '#/today' });
+        await fireDust(page, '.tbj-mid');
+        await pauseDust(page, 200);
+        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-390-light.png') });
         await page.close();
     }
 } finally {
