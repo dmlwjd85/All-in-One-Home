@@ -86,7 +86,7 @@ check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
 check(/padding-bottom:\s*96px/.test(css) && /height:\s*96px/.test(css), '쨈이 분필 받침대 위에 앉을 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
-check(/jam-eraser\.webp/.test(css) && /\.jar-svg/.test(css) && /chalk-puff/.test(css) && /pointer-events:\s*none/.test(css), '쨈 지우개·분필 가루가 없습니다.');
+check(/fab-eraser\.webp/.test(css) && /\.jar-svg/.test(css) && /chalk-puff/.test(css) && /pointer-events:\s*none/.test(css), '쨈 지우개·분필 가루가 없습니다.');
 check(/prefers-reduced-motion:\s*reduce/.test(css) && /cork-chalk-cloud/.test(css) && /cork-chalk-speck/.test(css), '분필 가루 움직임 줄이기가 없습니다.');
 check(!/linear-gradient\(90deg, rgba\(246, 240, 228/.test(css), '서랍 메뉴 종이 바탕이 남아 있습니다.');
 check(/side-hotkey/.test(css) && /justify-content:\s*center/.test(css), '서랍 글씨 가운데·단축키 위치가 없습니다.');
@@ -103,7 +103,7 @@ for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chal
     }
 }
 const bgLimit = { chalkboard: 120, desk: 120 };
-for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser', 'jam-eraser']) {
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser', 'fab-eraser']) {
     const file = `${root}/src/ui/skin/bg/${name}.webp`;
     check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
     if (existsSync(file)) {
