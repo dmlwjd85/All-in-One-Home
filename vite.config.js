@@ -127,6 +127,10 @@ export default defineConfig(({ mode }) => {
         base,
         build: {
             manifest: true,
+            assetsInlineLimit(filePath, content) {
+                if (/\.webp$/i.test(filePath)) return false;
+                return content.length < 4096;
+            },
             rollupOptions: {
                 output: {
                     manualChunks(id) {

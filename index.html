@@ -55,6 +55,10 @@
             var meta = document.querySelector('meta[name="theme-color"]');
             if (meta && dark) meta.setAttribute('content', '#2A2627');
             var skin = localStorage.getItem('ssug-gyomu-skin');
+            if (skin === 'classic') {
+                skin = 'cork';
+                localStorage.setItem('ssug-gyomu-skin', 'cork');
+            }
             if (skin === 'cork') document.documentElement.setAttribute('data-skin', 'cork');
         } catch (e) {}
     </script>

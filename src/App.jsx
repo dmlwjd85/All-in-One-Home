@@ -23,6 +23,7 @@ import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVo
 import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
 import { applyStoredSkin } from './ui/skin.js';
+import { SkinDeco } from './ui/SkinDeco.jsx';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, defaultHotkeyRows, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey, modalOpen, seedHotkeys } from './ui/hotkeys.js';
 import { Minutes } from './ui/Minutes.jsx';
@@ -724,6 +725,7 @@ export default function App() {
     return (
         <Ui.Provider value={ui}>
             <div className="app-bg app-frame" data-ready="1">
+                <SkinDeco />
                 <FuseBar />
                 <aside className="side">
                     <div className="side-brand">

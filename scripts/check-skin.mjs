@@ -1,5 +1,5 @@
-/** 화면 꾸미기(교실 코르크). 저장 키, html 속성, 클라우드 미사용, 스타일 범위, 글자 대비. */
-import { readFileSync } from 'node:fs';
+/** 화면 꾸미기(클래식 교실풍경). 저장 키, html 속성, 클라우드 미사용, 스타일 범위, 글자 대비. */
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,7 +17,9 @@ const { SKIN_KEY, DEFAULT_SKIN, SKIN_CHOICES, normalizeSkin, skinId, applySkin, 
 check(SKIN_KEY === 'ssug-gyomu-skin', '화면 꾸미기 저장 키가 다릅니다.');
 check(DEFAULT_SKIN === 'basic', '기본 꾸미기가 basic이 아닙니다.');
 check(SKIN_CHOICES.map((item) => item.id).join() === 'basic,cork', `꾸미기 순서가 다릅니다: ${SKIN_CHOICES.map((item) => item.id)}`);
-check(SKIN_CHOICES.map((item) => item.label).join() === '기본,교실 코르크', '꾸미기 이름이 다릅니다.');
+check(SKIN_CHOICES.map((item) => item.label).join() === '기본,클래식 교실풍경', '꾸미기 이름이 다릅니다.');
+check(SKIN_CHOICES.find((item) => item.id === 'cork')?.hint === '어두운 화면은 밤 교실', '밤 교실 안내가 없습니다.');
+check(normalizeSkin('classic') === 'cork', 'classic 저장값을 cork 로 읽지 않습니다.');
 for (const bad of [null, '', 'CORK', 'theme', '__proto__']) check(normalizeSkin(bad) === 'basic', `잘못된 값 ${bad} 를 기본으로 돌리지 않습니다.`);
 
 const doc = { attrs: new Map() };
@@ -46,6 +48,7 @@ check([...st.bag.keys()].join() === 'ssug-gyomu-skin', `꾸미기가 다른 저�
 
 const indexHtml = src('index.html');
 check(indexHtml.includes("localStorage.getItem('ssug-gyomu-skin')") && indexHtml.includes("setAttribute('data-skin', 'cork')"), '첫 스크립트가 꾸미기를 읽지 않습니다.');
+check(indexHtml.includes("skin === 'classic'") && indexHtml.includes("setItem('ssug-gyomu-skin', 'cork')"), 'classic 값을 cork 로 바꾸지 않습니다.');
 const app = src('src/App.jsx');
 check(app.includes('applyStoredSkin()'), '앱 시작에서 꾸미기를 적용하지 않습니다.');
 const settings = src('src/ui/Settings.jsx');
@@ -69,13 +72,37 @@ for (const sel of selectors) {
 check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 책상 소품 자리가 없습니다.');
-check(/taegeukgi\.svg/.test(css) && /motto-frame\.svg/.test(css) && /speaker\.svg/.test(css) && /wall-clock\.svg/.test(css), '교실 앞벽 소품이 없습니다.');
-check(/desk-wood\.svg/.test(css) && /drawer-handle\.svg/.test(css), '책상·서랍 소품이 없습니다.');
-check(/--cork-chalk/.test(css) && /inset 0 0 0 8px/.test(css), '칠판 나무 틀이 없습니다.');
-check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
-check(/32px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
-check(/padding-bottom:\s*48px/.test(css) && /160px 48px/.test(css), '넓은 화면 책상 상판이 없습니다.');
-check(/pencil-cup\.svg/.test(css) && /attend-book\.svg/.test(css), '책상 소품이 없습니다.');
+const deco = src('src/ui/SkinDeco.jsx');
+check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('taegeukgi-mark.svg') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
+check(!/bg-frontwall-ref|wall-flag/.test(deco) && !/taegeukgi\.webp/.test(css), '부정확한 태극기 사진을 씁니다.');
+check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /data-prop="bell"/.test(css), '교실 앞벽 소품이 없습니다.');
+check(/desk\.webp/.test(css) && /drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css), '책상·서랍 그림이 없습니다.');
+check(/chalkboard\.webp/.test(css) && /background-size:\s*cover/.test(css) && /border-image:\s*url\('\.\/skin\/bg\/desk\.webp'\)/.test(css), '칠판 그림·나무 틀이 없습니다.');
+check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
+check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
+check(/padding-bottom:\s*48px/.test(css) && /100% 48px/.test(css), '넓은 화면 책상 상판이 없습니다.');
+check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
+check(/data-prop="books"/.test(css) && /data-prop="chalk"/.test(css) && /data-prop="abacus"/.test(css) && /data-prop="eraser"/.test(css), '책상 소품이 없습니다.');
+check(/data-prop="stove"/.test(css) && /data-prop="organ"/.test(css) && /data-prop="globe"/.test(css) && /data-prop="plant"/.test(css) && /data-prop="lunch"/.test(css), '넓은 화면 여백 소품이 없습니다.');
+check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*168px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
+for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chalk', 'globe', 'plant', 'books', 'clock', 'speaker']) {
+    const file = `${root}/src/ui/skin/props/${name}.webp`;
+    check(existsSync(file), `소품 파일이 없습니다: ${name}.webp`);
+    if (existsSync(file)) {
+        const bytes = statSync(file).size;
+        check(bytes > 800 && bytes <= 40 * 1024, `소품 용량이 이상합니다: ${name}.webp ${bytes}B`);
+    }
+}
+const bgLimit = { chalkboard: 120, desk: 120 };
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame']) {
+    const file = `${root}/src/ui/skin/bg/${name}.webp`;
+    check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
+    if (existsSync(file)) {
+        const bytes = statSync(file).size;
+        const cap = (bgLimit[name] || 30) * 1024;
+        check(bytes > 400 && bytes <= cap, `배경 용량이 이상합니다: ${name}.webp ${bytes}B / ${cap}B`);
+    }
+}
 check(/cork-drawer-open/.test(css) && /translateX\(12px\)/.test(css), '활성 서랍이 앞으로 나오지 않습니다.');
 check(!/side-menu[^{]*\.on[^{]*\{[^}]*cork-chip-on/.test(css.replace(/\s+/g, ' ')), '활성 서랍을 분홍 판으로 칠합니다.');
 check(/--cork-chip-ink/.test(css) && /--cork-field-ink/.test(css) && /--cork-paper-ink/.test(css) && /--cork-drawer-ink/.test(css), '배경·글자 토큰 쌍이 없습니다.');
@@ -85,7 +112,8 @@ check(!/\.store-notice h2[^{]*\{[^}]*cork-tag-orange/.test(css.replace(/\s+/g, '
 check(!/nth-of-type\(4n/.test(css), '라벨 색이 카드 순서로 무작정 돕니다.');
 check(/\[data-screen="todo"\]/.test(css) && /\[data-screen="attend"\]/.test(css) && /\[data-screen="notice"\]/.test(css), '화면별 라벨 색 규칙이 없습니다.');
 check(/scrollbar-color/.test(css), '스크롤바가 테마에 안 맞습니다.');
-check(/--primary:\s*#A84838/.test(css), '주 색이 코르크 코랄이 아닙니다.');
+check(/--primary:\s*#9C3B32/.test(css), '주 색이 베릭 레드가 아닙니다.');
+check(/--accent:\s*#215E5E/.test(css), '보조 색이 틸이 아닙니다.');
 check(/\.field:focus/.test(css) && /\.chip\.on/.test(css) && /\.todo-check/.test(css), '입력창·선택·체크 다듬기가 없습니다.');
 check(css.includes('html.dark[data-skin="cork"]'), '어두운 밤 교실 톤이 없습니다.');
 check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 그림을 씁니다.');
@@ -112,8 +140,8 @@ const darkAt = css.indexOf('html.dark[data-skin="cork"] {');
 const dark = css.slice(darkAt, css.indexOf('\n}', darkAt) + 2);
 let worst = 99;
 for (const [label, block, page] of [
-    ['밝은 카드', light, hex('#F6EDD8')],
-    ['어두운 카드', dark, hex('#3E342C')],
+    ['밝은 카드', light, hex('#F6F0E4')],
+    ['어두운 카드', dark, hex('#2E281F')],
 ]) {
     const ink = readVar(block, '--ink');
     const sub = readVar(block, '--ink-sub');

@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v5';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v6';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -87,18 +87,15 @@ async function overlapHits(page, label) {
         const deco = [];
         const root = document.querySelector('.app-bg');
         if (!root) return { deco, hits: [] };
-        for (const name of ['::before', '::after']) {
-            const s = getComputedStyle(root, name);
-            const raw = String(s.content || '');
-            if (!raw || raw === 'none' || raw === 'normal') continue;
-            const w = parseFloat(s.width);
-            const h = parseFloat(s.height);
-            if (!w || !h || s.display === 'none' || s.visibility === 'hidden') continue;
-            const right = s.right === 'auto' ? NaN : parseFloat(s.right);
-            const bottom = s.bottom === 'auto' ? NaN : parseFloat(s.bottom);
-            const left = s.left === 'auto' ? (Number.isFinite(right) ? innerWidth - right - w : 0) : parseFloat(s.left);
-            const top = s.top === 'auto' ? (Number.isFinite(bottom) ? innerHeight - bottom - h : 0) : parseFloat(s.top);
-            deco.push({ left, top, right: left + w, bottom: top + h, name });
+        const wrap = document.querySelector('.skin-deco');
+        if (wrap && getComputedStyle(wrap).display !== 'none' && getComputedStyle(wrap).visibility !== 'hidden') {
+            wrap.querySelectorAll('.skin-prop, .skin-flag').forEach((el) => {
+                const st = getComputedStyle(el);
+                if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) return;
+                const r = el.getBoundingClientRect();
+                if (r.width < 2 || r.height < 2) return;
+                deco.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name: el.getAttribute('data-prop') || el.className });
+            });
         }
         const hits = [];
         const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
@@ -254,20 +251,24 @@ async function contrastHits(page, label) {
                 a: 1,
             };
         };
+        const photoLayer = (st) => /url\(/.test(st.backgroundImage || '') && /\.webp|\.jpg|\.jpeg|\.png/i.test(st.backgroundImage || '');
         const opaqueBg = (el) => {
             let cur = el;
             let acc = null;
+            let photo = false;
             while (cur && cur !== document.documentElement.parentElement) {
                 const st = getComputedStyle(cur);
+                if (photoLayer(st)) photo = true;
                 const c = parse(st.backgroundColor);
                 if (c && c.a > 0.01) {
                     acc = acc ? blend(acc, c) : { r: c.r, g: c.g, b: c.b, a: c.a };
-                    if ((acc.a ?? 1) >= 0.95) return { r: acc.r, g: acc.g, b: acc.b, a: 1 };
+                    if ((acc.a ?? 1) >= 0.95) return { r: acc.r, g: acc.g, b: acc.b, a: 1, photo };
                 }
                 cur = cur.parentElement;
             }
             const root = parse(getComputedStyle(document.documentElement).backgroundColor) || { r: 255, g: 255, b: 255, a: 1 };
-            return acc ? blend(acc, root) : root;
+            const out = acc ? blend(acc, root) : root;
+            return { r: out.r, g: out.g, b: out.b, a: 1, photo };
         };
         const visible = (el, r) => {
             if (!el || r.width < 1 || r.height < 1) return false;
@@ -296,6 +297,7 @@ async function contrastHits(page, label) {
                 text: String(text || '').replace(/\s+/g, ' ').trim().slice(0, 36),
                 ratio: contrast,
                 need,
+                photo: bg.photo,
                 fg: `rgb(${Math.round(paint.r)}, ${Math.round(paint.g)}, ${Math.round(paint.b)})`,
                 bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
                 large,
@@ -359,7 +361,8 @@ try {
         }));
         check(!first.skin, `기본인데 data-skin 이 있습니다: ${first.skin}`);
         check(first.tiles.join() === 'basic,cork', `꾸미기 타일이 다릅니다: ${first.tiles}`);
-        check(first.labels.includes('기본') && first.labels.includes('교실 코르크'), '설정 타일 이름이 없습니다.');
+        check(first.labels.includes('기본') && first.labels.includes('클래식 교실풍경'), '설정 타일 이름이 없습니다.');
+        check(first.labels.includes('밤 교실'), '밤 교실 안내가 없습니다.');
         await page.click('[data-skin-pick="cork"]');
         await delay(120);
         const after = await page.evaluate(() => ({
@@ -368,7 +371,7 @@ try {
             theme: localStorage.getItem('ssug-gyomu-theme'),
             kb: document.documentElement.getAttribute('data-kb'),
             bg: getComputedStyle(document.documentElement).backgroundColor,
-            deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
+            deco: getComputedStyle(document.querySelector('.skin-deco') || document.body).pointerEvents,
         }));
         check(after.skin === 'cork' && after.stored === 'cork', `코르크로 바꾸지 못합니다: ${JSON.stringify(after)}`);
         check(after.kb == null, '꾸미기를 바꾸며 키보드 테마가 바뀝니다.');
@@ -463,17 +466,23 @@ try {
         await delay(180);
         const file = `cork-${name}-${width}-${mode}.png`;
         if (shotNames.has(name)) await page.screenshot({ path: resolve(shots, file) });
-        const look = await page.evaluate(() => ({
-            skin: document.documentElement.getAttribute('data-skin'),
-            deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
-            before: getComputedStyle(document.querySelector('.app-bg'), '::before').content,
-        }));
+        const look = await page.evaluate(() => {
+            const wrap = document.querySelector('.skin-deco');
+            const shown = wrap && getComputedStyle(wrap).display !== 'none' && getComputedStyle(wrap).visibility !== 'hidden';
+            const props = shown ? [...wrap.querySelectorAll('.skin-prop, .skin-flag, .skin-motto')].filter((el) => getComputedStyle(el).display !== 'none').length : 0;
+            return {
+                skin: document.documentElement.getAttribute('data-skin'),
+                deco: wrap ? getComputedStyle(wrap).pointerEvents : 'none',
+                shown: Boolean(shown),
+                props,
+            };
+        });
         check(look.skin === 'cork', `${file} 에 코르크가 없습니다.`);
         check(look.deco === 'none', `${file} 장식이 클릭을 가로챕니다.`);
         if (name === 'jam' || name === 'sheet') {
-            check(look.before === 'none' || look.before === 'normal', `${file} 팝업인데 장식이 남아 있습니다.`);
+            check(!look.shown, `${file} 팝업인데 장식이 남아 있습니다.`);
         } else {
-            check(look.before !== 'none' && look.before !== 'normal', `${file} 떠 있는 소품이 없습니다.`);
+            check(look.shown && look.props > 0, `${file} 떠 있는 소품이 없습니다.`);
         }
         await overlapHits(page, file);
         await haloHits(page, file);

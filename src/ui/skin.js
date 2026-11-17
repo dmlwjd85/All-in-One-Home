@@ -1,15 +1,17 @@
 /** 화면 꾸미기(스킨). 값은 이 기기 키 ssug-gyomu-skin 에만 둡니다. 기록·클라우드에는 넣지 않습니다.
-    기본(basic)은 지금 화면 그대로라 html 속성을 두지 않습니다. 교실 코르크만 data-skin="cork" 입니다. */
+    기본(basic)은 지금 화면 그대로라 html 속성을 두지 않습니다.
+    클래식 교실풍경의 저장값·html 속성은 호환을 위해 cork 입니다. classic 은 cork 로 읽습니다. */
 
 export const SKIN_KEY = 'ssug-gyomu-skin';
 export const DEFAULT_SKIN = 'basic';
 
 export const SKIN_CHOICES = [
     { id: 'basic', label: '기본', hint: '지금 화면' },
-    { id: 'cork', label: '교실 코르크', hint: '게시판 느낌' },
+    { id: 'cork', label: '클래식 교실풍경', hint: '어두운 화면은 밤 교실' },
 ];
 
 export function normalizeSkin(id) {
+    if (id === 'classic') return 'cork';
     return SKIN_CHOICES.some((item) => item.id === id) ? id : DEFAULT_SKIN;
 }
 
