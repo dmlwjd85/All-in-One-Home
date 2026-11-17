@@ -13,8 +13,6 @@ html {
 
 html.dark { color-scheme: dark; }
 
-:root { --text-halo: var(--bg); }
-
 body {
     margin: 0;
     min-height: 100dvh;
@@ -26,23 +24,6 @@ body {
     font-weight: 500;
     word-break: keep-all;
     overflow-wrap: break-word;
-    /* 양각 단추 그림자가 아래 글자를 덮어도 바탕색 헤일로로 읽히게 합니다.
-       여백·그림자 크기는 그대로 두고, 글자만 1~2px 테두리를 둡니다. */
-    -webkit-text-stroke: 1.15px var(--text-halo);
-    paint-order: stroke fill;
-}
-
-.glass, .solid-card, .hero, .sheet, .quick-bar, .minutes-body, .main {
-    --text-halo: var(--bg);
-}
-
-.primary-btn, .hero-action, .add-event-fab {
-    --text-halo: var(--primary);
-}
-
-.icon-btn, .fab-txt, .store-badge, svg, input, textarea, select {
-    -webkit-text-stroke: 0;
-    paint-order: normal;
 }
 
 button, input, textarea { font-family: inherit; }

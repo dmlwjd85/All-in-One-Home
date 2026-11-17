@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 48" width="72" height="48">
+  <rect width="72" height="48" fill="#fff"/>
+  <g transform="translate(36,24)">
+    <path fill="#CD2E3A" d="M0-12A12 12 0 1 1 0 12A6 6 0 0 1 0 0A6 6 0 0 0 0-12Z"/>
+    <path fill="#0047A0" d="M0 12A12 12 0 1 1 0-12A6 6 0 0 1 0 0A6 6 0 0 0 0 12Z"/>
+    <circle cy="-6" r="2.5" fill="#0047A0"/>
+    <circle cy="6" r="2.5" fill="#CD2E3A"/>
+  </g>
+  <g fill="#111" transform="translate(7,5)">
+    <rect x="0" y="0" width="12" height="2.1"/>
+    <rect x="0" y="4" width="12" height="2.1"/>
+    <rect x="0" y="8" width="12" height="2.1"/>
+  </g>
+  <g fill="#111" transform="translate(53,5)">
+    <rect x="0" y="0" width="5" height="2.1"/>
+    <rect x="7" y="0" width="5" height="2.1"/>
+    <rect x="0" y="4" width="12" height="2.1"/>
+    <rect x="0" y="8" width="5" height="2.1"/>
+    <rect x="7" y="8" width="5" height="2.1"/>
+  </g>
+  <g fill="#111" transform="translate(7,33)">
+    <rect x="0" y="0" width="12" height="2.1"/>
+    <rect x="0" y="4" width="5" height="2.1"/>
+    <rect x="7" y="4" width="5" height="2.1"/>
+    <rect x="0" y="8" width="12" height="2.1"/>
+  </g>
+  <g fill="#111" transform="translate(53,33)">
+    <rect x="0" y="0" width="5" height="2.1"/>
+    <rect x="7" y="0" width="5" height="2.1"/>
+    <rect x="0" y="4" width="5" height="2.1"/>
+    <rect x="7" y="4" width="5" height="2.1"/>
+    <rect x="0" y="8" width="5" height="2.1"/>
+    <rect x="7" y="8" width="5" height="2.1"/>
+  </g>
+</svg>

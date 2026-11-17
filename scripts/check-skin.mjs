@@ -69,8 +69,10 @@ for (const sel of selectors) {
 check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 책상 소품 자리가 없습니다.');
-check(/pencil\.svg/.test(css) && /globe\.svg/.test(css) && /blocks\.svg/.test(css) && /plant\.svg/.test(css), '책상 소품이 없습니다.');
-check(/star\.svg/.test(css) && /flower\.svg/.test(css) && /postit\.svg/.test(css), '별·꽃·메모 소품이 없습니다.');
+check(/taegeukgi\.svg/.test(css) && /motto-frame\.svg/.test(css) && /speaker\.svg/.test(css) && /wall-clock\.svg/.test(css), '교실 앞벽 소품이 없습니다.');
+check(/desk-wood\.svg/.test(css) && /drawer-handle\.svg/.test(css), '책상·서랍 소품이 없습니다.');
+check(/--cork-chalk/.test(css) && /inset 0 -12px 0/.test(css), '칠판 나무 틀이 없습니다.');
+check(/--cork-chip-ink/.test(css) && /--cork-field-ink/.test(css) && /--cork-paper-ink/.test(css) && /--cork-drawer-ink/.test(css), '배경·글자 토큰 쌍이 없습니다.');
 check(/quick-bar\.is-open/.test(css) && /content:\s*none/.test(css), '쨈 팝업에서 장식을 가리지 않습니다.');
 check(/\.store-badge/.test(css) && /cork-tag-orange/.test(css), '보호 라벨 색이 없습니다.');
 check(!/\.store-notice h2[^{]*\{[^}]*cork-tag-orange/.test(css.replace(/\s+/g, ' ')), '보호 안내를 제목 막대로 칠합니다.');
@@ -84,8 +86,8 @@ check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 �
 
 const indexCss = src('src/index.css');
 check(/\.skin-swatch/.test(indexCss) && indexCss.includes('data-skin-sample="cork"'), '설정 꾸미기 견본이 없습니다.');
-check(indexCss.includes('--text-halo') && indexCss.includes('-webkit-text-stroke'), '단추 그림자 위 글자 테두리가 없습니다.');
-check(css.includes('--text-halo'), '코르크 바탕 헤일로 변수가 없습니다.');
+check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 남았습니다.');
+check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
 check(sw.includes("const CACHE = 'ssug-gyomu-shell-v102'"), '서비스 워커가 v102가 아닙니다.');
@@ -105,9 +107,7 @@ const dark = css.slice(darkAt, css.indexOf('\n}', darkAt) + 2);
 let worst = 99;
 for (const [label, block, page] of [
     ['밝은 카드', light, hex('#F6EDD8')],
-    ['밝은 코르크', light, hex('#D4B896')],
     ['어두운 카드', dark, hex('#3E342C')],
-    ['어두운 코르크', dark, hex('#2A221C')],
 ]) {
     const ink = readVar(block, '--ink');
     const sub = readVar(block, '--ink-sub');
@@ -121,6 +121,33 @@ for (const [label, block, page] of [
     check(inkR >= 4.5, `${label} 본문 대비 ${inkR.toFixed(2)} 가 4.5보다 낮습니다.`);
     check(subR >= 4.5, `${label} 보조 글자 대비 ${subR.toFixed(2)} 가 4.5보다 낮습니다.`);
     check(hintR >= 4.5, `${label} 안내 글자 대비 ${hintR.toFixed(2)} 가 4.5보다 낮습니다.`);
+}
+const pairs = [
+    ['--cork-paper', '--cork-paper-ink'],
+    ['--cork-chip', '--cork-chip-ink'],
+    ['--cork-chip-on', '--cork-chip-on-ink'],
+    ['--cork-field', '--cork-field-ink'],
+    ['--cork-chalk', '--cork-chalk-ink'],
+    ['--cork-drawer', '--cork-drawer-ink'],
+    ['--cork-tab', '--cork-tab-muted'],
+    ['--cork-tab', '--cork-tab-on'],
+    ['--cork-tag-blue', '--cork-tag-ink'],
+    ['--cork-tag-coral', '--cork-tag-ink'],
+    ['--cork-tag-green', '--cork-tag-ink'],
+    ['--cork-tag-orange', '--cork-tag-ink'],
+    ['--primary', '--on-primary'],
+    ['--keycap-top', '--on-primary'],
+];
+for (const [label, block] of [['밝은', light], ['어두운', dark]]) {
+    for (const [bgName, inkName] of pairs) {
+        const bg = readVar(block, bgName);
+        const ink = readVar(block, inkName);
+        check(bg && ink, `${label} ${bgName}/${inkName} 토큰 쌍이 없습니다.`);
+        if (!bg || !ink) continue;
+        const r = ratio(bg, ink);
+        worst = Math.min(worst, r);
+        check(r >= 4.5, `${label} ${bgName} 대비 ${inkName} ${r.toFixed(2)} 가 4.5보다 낮습니다.`);
+    }
 }
 
 /* 키캡 그림자 깊이(px)는 원래 값을 유지하고 색만 바꿉니다. */

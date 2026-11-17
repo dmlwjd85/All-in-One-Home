@@ -16,10 +16,12 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v3';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v4';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
+let contrastChecked = 0;
+let contrastFailed = 0;
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 const chrome = [process.env.CHROME_PATH, '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium'].find((path) => path && existsSync(path));
 if (!chrome) {
@@ -132,7 +134,7 @@ async function overlapHits(page, label) {
             if (!box) return;
             hits.push({ ...box, name });
         };
-        document.querySelectorAll('button, a, input, textarea, select, [role="button"], .fuse, .tabbar, .desk-fab, .cloud-note').forEach((el) => add(el, el.getAttribute('aria-label') || el.className || el.tagName));
+        document.querySelectorAll('button, a, input, textarea, select, [role="button"], .fuse-face, .fuse-text, .fuse-k, .fuse-v, .tabbar, .desk-fab, .cloud-note').forEach((el) => add(el, el.getAttribute('aria-label') || el.className || el.tagName));
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
                 if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
@@ -203,8 +205,10 @@ async function haloHits(page, label) {
             },
         });
         const overlap = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+        const overlay = document.querySelector('.sheet-back, .quick-bar.is-open');
         while (walker.nextNode()) {
             const parent = walker.currentNode.parentElement;
+            if (overlay && parent && !parent.closest('.sheet, .quick-bar, .tabbar, .desk-fab, .fuse, .fuse-bar')) continue;
             const range = document.createRange();
             range.selectNodeContents(walker.currentNode);
             const r = range.getBoundingClientRect();
@@ -225,6 +229,106 @@ async function haloHits(page, label) {
     }
 }
 
+async function contrastHits(page, label) {
+    const result = await page.evaluate(() => {
+        const parse = (str) => {
+            if (!str || str === 'transparent') return null;
+            let m = String(str).match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+            if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] == null ? 1 : +m[4] };
+            m = String(str).match(/^rgba?\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+%?))?\s*\)$/i);
+            if (!m) return null;
+            let a = 1;
+            if (m[4]) a = String(m[4]).endsWith('%') ? parseFloat(m[4]) / 100 : +m[4];
+            return { r: +m[1], g: +m[2], b: +m[3], a };
+        };
+        const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+        const lum = ({ r, g, b }) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+        const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+        const blend = (fg, bg) => {
+            const a = Math.max(0, Math.min(1, fg.a ?? 1));
+            if (a >= 0.99) return { r: fg.r, g: fg.g, b: fg.b, a: 1 };
+            return {
+                r: fg.r * a + bg.r * (1 - a),
+                g: fg.g * a + bg.g * (1 - a),
+                b: fg.b * a + bg.b * (1 - a),
+                a: 1,
+            };
+        };
+        const opaqueBg = (el) => {
+            let cur = el;
+            let acc = null;
+            while (cur && cur !== document.documentElement.parentElement) {
+                const st = getComputedStyle(cur);
+                const c = parse(st.backgroundColor);
+                if (c && c.a > 0.01) {
+                    acc = acc ? blend(acc, c) : { r: c.r, g: c.g, b: c.b, a: c.a };
+                    if ((acc.a ?? 1) >= 0.95) return { r: acc.r, g: acc.g, b: acc.b, a: 1 };
+                }
+                cur = cur.parentElement;
+            }
+            const root = parse(getComputedStyle(document.documentElement).backgroundColor) || { r: 255, g: 255, b: 255, a: 1 };
+            return acc ? blend(acc, root) : root;
+        };
+        const visible = (el, r) => {
+            if (!el || r.width < 1 || r.height < 1) return false;
+            if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) return false;
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return false;
+            return true;
+        };
+        const skipTag = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'META', 'LINK', 'HEAD']);
+        const items = [];
+        const add = (el, text, colorStr) => {
+            const r = el.getBoundingClientRect();
+            if (!visible(el, r)) return;
+            const fg = parse(colorStr);
+            if (!fg || fg.a < 0.08) return;
+            const bg = opaqueBg(el);
+            const paint = blend(fg, bg);
+            const st = getComputedStyle(el);
+            const px = parseFloat(st.fontSize) || 16;
+            const weight = st.fontWeight;
+            const bold = weight === 'bold' || Number(weight) >= 700;
+            const large = px >= 24 || (px >= 18.67 && bold);
+            const need = large ? 3 : 4.5;
+            const contrast = ratio(paint, bg);
+            items.push({
+                text: String(text || '').replace(/\s+/g, ' ').trim().slice(0, 36),
+                ratio: contrast,
+                need,
+                fg: `rgb(${Math.round(paint.r)}, ${Math.round(paint.g)}, ${Math.round(paint.b)})`,
+                bg: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`,
+                large,
+            });
+        };
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                const p = node.parentElement;
+                if (!p || skipTag.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        while (walker.nextNode()) {
+            const p = walker.currentNode.parentElement;
+            add(p, walker.currentNode.nodeValue, getComputedStyle(p).color);
+        }
+        document.querySelectorAll('input, textarea').forEach((el) => {
+            const st = getComputedStyle(el);
+            if (el.value) add(el, el.value, st.color);
+            else if (el.placeholder) add(el, el.placeholder, getComputedStyle(el, '::placeholder').color || st.color);
+        });
+        const violations = items.filter((item) => item.ratio + 1e-6 < item.need);
+        return { checked: items.length, failed: violations.length, violations: violations.slice(0, 12) };
+    });
+    const failCount = result.failed;
+    if (failCount) {
+        const sample = result.violations.map((item) => `${item.text || '(빈칸)'} ${item.ratio.toFixed(2)}<${item.need} ${item.fg} / ${item.bg}`).join(' | ');
+        check(false, `${label} 글자 대비 위반 ${failCount}건: ${sample}`);
+    }
+    return result;
+}
+
 async function openPage({ width = 390, height = 844, mode = 'light', skin = 'basic', kb = null, hash = '#/today' } = {}) {
     const page = await browser.newPage();
     listen(page);
@@ -232,6 +336,7 @@ async function openPage({ width = 390, height = 844, mode = 'light', skin = 'bas
         if (skinId === 'cork') localStorage.setItem('ssug-gyomu-skin', 'cork');
         else localStorage.setItem('ssug-gyomu-skin', 'basic');
         if (kbId) localStorage.setItem('ssug-gyomu-kb-theme', kbId);
+        else localStorage.removeItem('ssug-gyomu-kb-theme');
     }, skin, kb);
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.goto(`${origin}?demo=1&at=08:42&mode=${mode}${hash}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -334,32 +439,30 @@ try {
         await page.waitForSelector('.sheet[aria-label="메뉴"]', { timeout: 5000 });
     };
 
+    const shotNames = new Set(['home', 'attend', 'todo', 'jam', 'settings']);
     const scenes = [
         ['home', '#/today', async () => {}],
-        ['calendar', '#/schedule', async (page) => {
-            await page.waitForFunction(() => location.hash.startsWith('#/schedule'), { timeout: 8000 });
-        }],
         ['attend', '#/attend', async () => {}],
+        ['todo', '#/todo', async () => {}],
+        ['jam', '#/today', openJam],
         ['settings', '#/settings/screen', async (page) => {
             await page.waitForSelector('[data-skin-pick="cork"]');
         }],
-        ['jam', '#/today', openJam],
-    ];
-    const extraScenes = [
-        ['todo', '#/todo', async () => {}],
+        ['calendar', '#/schedule', async (page) => {
+            await page.waitForFunction(() => location.hash.startsWith('#/schedule'), { timeout: 8000 });
+        }],
         ['homework', '#/homework', async () => {}],
         ['minutes', '#/minutes', async () => {}],
         ['notice', '#/notice', async () => {}],
         ['students', '#/students', async () => {}],
         ['sheet', '#/today', openMenu],
     ];
-
     async function capture(name, hash, prepare, width, mode) {
         const page = await openPage({ width, height: width >= 768 ? 900 : 844, mode, skin: 'cork', hash });
         await prepare(page);
         await delay(180);
         const file = `cork-${name}-${width}-${mode}.png`;
-        await page.screenshot({ path: resolve(shots, file) });
+        if (shotNames.has(name)) await page.screenshot({ path: resolve(shots, file) });
         const look = await page.evaluate(() => ({
             skin: document.documentElement.getAttribute('data-skin'),
             deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
@@ -374,30 +477,19 @@ try {
         }
         await overlapHits(page, file);
         await haloHits(page, file);
+        const contrast = await contrastHits(page, file);
+        contrastChecked += contrast.checked;
+        contrastFailed += contrast.failed;
         await page.close();
     }
 
     for (const width of [320, 390, 768, 1280]) {
         for (const mode of ['light', 'dark']) {
             for (const [name, hash, prepare] of scenes) {
+                if (name === 'sheet' && width >= 900) continue;
                 await capture(name, hash, prepare, width, mode);
             }
         }
-    }
-
-    for (const [width, mode] of [[390, 'light'], [390, 'dark'], [1280, 'light']]) {
-        for (const [name, hash, prepare] of extraScenes) {
-            if (name === 'sheet' && width >= 900) continue;
-            await capture(name, hash, prepare, width, mode);
-        }
-    }
-
-    /* 기본 화면도 양각 그림자 위 글자에 바탕색 테두리가 있어야 합니다. */
-    {
-        const page = await openPage({ width: 390, skin: 'basic', hash: '#/today' });
-        await delay(180);
-        await haloHits(page, '기본 홈');
-        await page.close();
     }
 } finally {
     await browser.close().catch(() => {});
@@ -410,6 +502,7 @@ check(uniqueErrors.length === 0, `콘솔 오류 ${uniqueErrors.length}건: ${uni
 if (failures.length) {
     console.error(`화면 꾸미기 브라우저 검사 실패 ${failures.length}건`);
     for (const item of failures) console.error(`- ${item}`);
+    console.error(`대비 검사 요소 ${contrastChecked}개, 위반 ${contrastFailed}건.`);
     process.exit(1);
 }
-console.log(`화면 꾸미기 브라우저 검사를 통과했습니다. 화면은 ${shots} 에 있습니다. 콘솔 오류 ${uniqueErrors.length}건.`);
+console.log(`화면 꾸미기 브라우저 검사를 통과했습니다. 화면은 ${shots} 에 있습니다. 콘솔 오류 ${uniqueErrors.length}건. 대비 검사 요소 ${contrastChecked}개, 위반 ${contrastFailed}건.`);
