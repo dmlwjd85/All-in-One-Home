@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="pp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF6C8"/>
+      <stop offset="100%" stop-color="#E8C86A"/>
+    </linearGradient>
+    <linearGradient id="fl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0D078"/>
+      <stop offset="100%" stop-color="#D4A84B"/>
+    </linearGradient>
+    <pattern id="pf" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M0 4h8" stroke="#D4B24A" stroke-width=".3" opacity=".35"/>
+    </pattern>
+  </defs>
+  <ellipse cx="24" cy="45" rx="16" ry="2.2" fill="#5A3A24" opacity=".18"/>
+  <path d="M6 4h32l4 4v34H6z" fill="url(#pp)" stroke="#C4A45A" stroke-width="1"/>
+  <path d="M6 4h32l4 4v34H6z" fill="url(#pf)"/>
+  <path d="M38 4v8h8z" fill="url(#fl)" stroke="#C4A45A" stroke-width=".8"/>
+  <path d="M12 16h24M12 24h20M12 32h18" stroke="#C4A45A" stroke-width="1.1" opacity=".4" stroke-linecap="round"/>
+  <path d="M7 5h30" stroke="#fff" stroke-width="1.1" opacity=".35"/>
+</svg>

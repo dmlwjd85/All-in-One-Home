@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="26" viewBox="0 0 200 26">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFD0C4"/><stop offset="100%" stop-color="#E07070"/></linearGradient>
+    <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C8E8F6"/><stop offset="100%" stop-color="#6AA8C8"/></linearGradient>
+    <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F8E48A"/><stop offset="100%" stop-color="#D4A84B"/></linearGradient>
+    <linearGradient id="g4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C8E8A8"/><stop offset="100%" stop-color="#6B9B6E"/></linearGradient>
+  </defs>
+  <path d="M2 5h196" stroke="#8B5E3C" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M2 4.2h196" stroke="#E8C8A0" stroke-width=".5" opacity=".6"/>
+  <g stroke="#5A3A24" stroke-width=".7">
+    <polygon points="8,5 22,5 15,22" fill="url(#g1)"/>
+    <polygon points="28,5 42,5 35,22" fill="url(#g2)"/>
+    <polygon points="48,5 62,5 55,22" fill="url(#g3)"/>
+    <polygon points="68,5 82,5 75,22" fill="url(#g4)"/>
+    <polygon points="88,5 102,5 95,22" fill="url(#g1)"/>
+    <polygon points="108,5 122,5 115,22" fill="url(#g2)"/>
+    <polygon points="128,5 142,5 135,22" fill="url(#g3)"/>
+    <polygon points="148,5 162,5 155,22" fill="url(#g4)"/>
+    <polygon points="168,5 182,5 175,22" fill="url(#g1)"/>
+    <polygon points="186,5 198,5 192,20" fill="url(#g2)"/>
+  </g>
+  <g fill="#fff" opacity=".35">
+    <polygon points="10,6 20,6 15,12"/>
+    <polygon points="30,6 40,6 35,12"/>
+    <polygon points="50,6 60,6 55,12"/>
+    <polygon points="70,6 80,6 75,12"/>
+    <polygon points="90,6 100,6 95,12"/>
+    <polygon points="110,6 120,6 115,12"/>
+    <polygon points="130,6 140,6 135,12"/>
+    <polygon points="150,6 160,6 155,12"/>
+    <polygon points="170,6 180,6 175,12"/>
+  </g>
+</svg>

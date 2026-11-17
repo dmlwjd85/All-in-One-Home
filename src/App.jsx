@@ -22,6 +22,8 @@ import { applyStoredFont } from './ui/fontpick.js';
 import { isKbVoice, keySoundEnabled, keySoundNoticePending, keyVoiceId, loadKbVoice, playKey, pressTarget, rememberKeySoundNotice, setKeySound, subscribeKeyPrefs, unlockKeyAudio } from './ui/keyfeel.js';
 import { jamFeelEnabled, pressDown, pressUp } from './ui/pressFeel.js';
 import { applyStoredKbTheme } from './ui/kbtheme.js';
+import { applyStoredSkin } from './ui/skin.js';
+import { SkinDeco } from './ui/SkinDeco.jsx';
 import { TYPE_SOUND_SHOWN, noteCompositionEnd, noteCompositionStart, noteCompositionUpdate, noteTypeInput, noteTypeKey, playTypeSound } from './ui/typesound.js';
 import { HOTKEY_ACTIONS, defaultHotkeyRows, hotkeyLabel, kokHotkeyHint, loadHotkeys, matchHotkey, modalOpen, seedHotkeys } from './ui/hotkeys.js';
 import { Minutes } from './ui/Minutes.jsx';
@@ -87,7 +89,7 @@ export default function App() {
     const [hotkeys, setHotkeys] = useState(() => loadHotkeys());
     const toastTimer = useRef(0);
 
-    useEffect(() => { applyStoredFont(); migrateFxLevel(); }, []);
+    useEffect(() => { applyStoredFont(); applyStoredSkin(); migrateFxLevel(); }, []);
     // 다른 기기(웹·태블릿·휴대폰)에서 고친 기록을 앱으로 돌아올 때 다시 받습니다.
     // 실시간 감시가 살아 있으면 숨었다가 다시 보일 때만 30분에 한 번 받고, 창 focus 만으로는 받지 않습니다. 언제 받을지는 db.js 의 fullPullDue가 정합니다.
     useEffect(() => {
@@ -723,6 +725,7 @@ export default function App() {
     return (
         <Ui.Provider value={ui}>
             <div className="app-bg app-frame" data-ready="1">
+                <SkinDeco />
                 <FuseBar />
                 <aside className="side">
                     <div className="side-brand">

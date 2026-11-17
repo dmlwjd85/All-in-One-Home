@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="44" viewBox="0 0 72 44">
+  <defs>
+    <linearGradient id="baF" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2A898"/>
+      <stop offset="100%" stop-color="#C45C4A"/>
+    </linearGradient>
+    <linearGradient id="baS" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A84838"/>
+      <stop offset="100%" stop-color="#7A3028"/>
+    </linearGradient>
+    <linearGradient id="bbF" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#B7D6EC"/>
+      <stop offset="100%" stop-color="#5A8FB3"/>
+    </linearGradient>
+    <linearGradient id="bbS" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3E6A88"/>
+      <stop offset="100%" stop-color="#2A4A62"/>
+    </linearGradient>
+    <linearGradient id="bcF" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F3D56A"/>
+      <stop offset="100%" stop-color="#C49A2A"/>
+    </linearGradient>
+    <linearGradient id="bcS" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A07818"/>
+      <stop offset="100%" stop-color="#6A5210"/>
+    </linearGradient>
+    <pattern id="wd" width="5" height="8" patternUnits="userSpaceOnUse">
+      <path d="M1 0c.8 2.4.8 5.6 0 8" fill="none" stroke="#5A3A24" stroke-width=".35" opacity=".22"/>
+    </pattern>
+  </defs>
+  <ellipse cx="36" cy="42" rx="28" ry="2" fill="#5A3A24" opacity=".22"/>
+  <g>
+    <path d="M4 16h20v20H4z" fill="url(#baF)" stroke="#5A3A24" stroke-width="1"/>
+    <path d="M24 16l6-5v20l-6 5z" fill="url(#baS)" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M4 16l6-5h20l-6 5z" fill="#F8C8BC" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M4 16h20v20H4z" fill="url(#wd)"/>
+    <text x="14" y="31" text-anchor="middle" font-size="13" font-weight="700" font-family="Georgia, serif" fill="#5A3A24">A</text>
+  </g>
+  <g>
+    <path d="M24 8h20v20H24z" fill="url(#bbF)" stroke="#5A3A24" stroke-width="1"/>
+    <path d="M44 8l6-5v20l-6 5z" fill="url(#bbS)" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M24 8l6-5h20l-6 5z" fill="#D8EAF6" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M24 8h20v20H24z" fill="url(#wd)"/>
+    <text x="34" y="23" text-anchor="middle" font-size="13" font-weight="700" font-family="Georgia, serif" fill="#5A3A24">B</text>
+  </g>
+  <g>
+    <path d="M46 18h20v20H46z" fill="url(#bcF)" stroke="#5A3A24" stroke-width="1"/>
+    <path d="M66 18l5-4v20l-5 4z" fill="url(#bcS)" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M46 18l5-4h20l-5 4z" fill="#F8E8A0" stroke="#5A3A24" stroke-width=".8"/>
+    <path d="M46 18h20v20H46z" fill="url(#wd)"/>
+    <text x="56" y="33" text-anchor="middle" font-size="13" font-weight="700" font-family="Georgia, serif" fill="#5A3A24">C</text>
+  </g>
+</svg>

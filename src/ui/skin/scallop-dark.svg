@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <defs>
+    <linearGradient id="scEdgeD" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4A3E34"/>
+      <stop offset="100%" stop-color="#332920"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#scEdgeD)" d="M0 10A5 5 0 0 0 10 10A5 5 0 0 0 20 10A5 5 0 0 0 30 10A5 5 0 0 0 40 10A5 5 0 0 0 40 20A5 5 0 0 0 40 30A5 5 0 0 0 40 40A5 5 0 0 0 30 40A5 5 0 0 0 20 40A5 5 0 0 0 10 40A5 5 0 0 0 0 40A5 5 0 0 0 0 30A5 5 0 0 0 0 20A5 5 0 0 0 0 10Z"/>
+  <path fill="none" stroke="#5A4A3C" stroke-width="1.6" d="M0 10A5 5 0 0 0 10 10A5 5 0 0 0 20 10A5 5 0 0 0 30 10A5 5 0 0 0 40 10A5 5 0 0 0 40 20A5 5 0 0 0 40 30A5 5 0 0 0 40 40A5 5 0 0 0 30 40A5 5 0 0 0 20 40A5 5 0 0 0 10 40A5 5 0 0 0 0 40A5 5 0 0 0 0 30A5 5 0 0 0 0 20A5 5 0 0 0 0 10Z"/>
+  <path fill="none" stroke="#2A2118" stroke-width=".9" d="M0 10A5 5 0 0 0 10 10A5 5 0 0 0 20 10A5 5 0 0 0 30 10A5 5 0 0 0 40 10A5 5 0 0 0 40 20A5 5 0 0 0 40 30A5 5 0 0 0 40 40A5 5 0 0 0 30 40A5 5 0 0 0 20 40A5 5 0 0 0 10 40A5 5 0 0 0 0 40A5 5 0 0 0 0 30A5 5 0 0 0 0 20A5 5 0 0 0 0 10Z"/>
+</svg>

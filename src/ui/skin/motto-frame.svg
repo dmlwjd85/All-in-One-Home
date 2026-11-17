@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 40" width="280" height="40">
+  <rect width="280" height="40" rx="3" fill="#6B4424"/>
+  <rect x="3" y="3" width="274" height="34" rx="1.5" fill="#8B5E3C"/>
+  <rect x="6" y="6" width="268" height="28" fill="#F3E6D0"/>
+  <rect x="7.5" y="7.5" width="265" height="25" fill="none" stroke="#C4A06A" stroke-width="1"/>
+  <text x="140" y="25" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="700" fill="#2E2A2B">서로 돕고 함께 자라는 우리 반</text>
+</svg>

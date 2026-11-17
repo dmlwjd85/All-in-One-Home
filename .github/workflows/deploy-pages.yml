@@ -55,6 +55,7 @@ jobs:
           npm run check:speech
           npm run check:keyfeel
           npm run check:kbtheme
+          npm run check:skin
           npm run check:brand
           npm run check:icons
           npm run check:gcal
@@ -181,6 +182,7 @@ jobs:
               CHROME_PATH=/usr/bin/google-chrome npm run check:swreload
               CHROME_PATH=/usr/bin/google-chrome npm run check:tabbar
               CHROME_PATH=/usr/bin/google-chrome npm run check:ui-a
+              CHROME_PATH=/usr/bin/google-chrome npm run check:skin-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:side-hotkey
           - part: 할 일·입력
             run: |
