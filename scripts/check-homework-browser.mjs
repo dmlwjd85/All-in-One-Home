@@ -271,7 +271,7 @@ try {
         const fit = await heroFit(width, height, iso, font);
         const guardTab = label.startsWith('320 평일');
         const tallLimit = label.includes('200%') ? 420 : 360;
-        check(fit.heroRight <= fit.w + 1 && fit.buttons === 2 && !fit.outside && !fit.overlap && fit.kW >= 64 && fit.kH > 0 && fit.kH < (label.includes('200%') ? 96 : 52) && fit.heroH > 0 && fit.heroH <= tallLimit && (!guardTab || !fit.covered), `${label} 홈 카드가 깨집니다: ${JSON.stringify(fit)}`);
+        check(fit.heroRight <= fit.w + 1 && fit.buttons === 3 && !fit.outside && !fit.overlap && fit.kW >= 64 && fit.kH > 0 && fit.kH < (label.includes('200%') ? 96 : 52) && fit.heroH > 0 && fit.heroH <= tallLimit && (!guardTab || !fit.covered), `${label} 홈 카드가 깨집니다: ${JSON.stringify(fit)}`);
     }
 } finally {
     await browser.close();
