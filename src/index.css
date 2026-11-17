@@ -2087,3 +2087,5 @@ button.hero-pill.home-todo-link {
     /* 좁은 화면에서 고칠 때는 글자 칠 자리가 좁아 위 칸을 두 줄(2칸씩)로 넓힙니다. */
     .meal-tray[data-role="meal-tray-edit"] .tray-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.cam-btn[aria-pressed="true"] { color: var(--accent); box-shadow: var(--neo-inset); }
+.msg-compose { flex-wrap: nowrap; }

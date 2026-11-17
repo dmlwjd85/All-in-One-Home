@@ -14,7 +14,7 @@ import puppeteer from 'puppeteer-core';
 const root = new URL('..', import.meta.url).pathname;
 const dir = mkdtempSync(join(tmpdir(), 'widgets-'));
 const fakes = {
-    db: 'export function joined(d, n) { return d[n] || []; }',
+    db: 'export function joined(d, n) { return d[n] || []; } export async function saveMealDay() { return { ok: true, message: "" }; }',
     fx: 'export async function toggleTodoFx(id) { window.__go.push("done:" + id); }',
     gcal: 'export function useGcal() { return { enabled: true, uid: "u1", external: [{ google: true, externalId: "g1", date: "2026-11-27", title: "구글 연수" }] }; }',
 };

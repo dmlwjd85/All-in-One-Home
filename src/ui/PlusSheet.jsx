@@ -78,9 +78,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     const [text, setText] = useState(() => takePasteSeed());
     const [image, setImage] = useState(null);
     const [gridMode, setGridMode] = useState('');
-    const mealFile = useRef(null);
-    const mealCamera = useRef(null);
     const stage = usePhotoStage();
+    const [stageOpen, setStageOpen] = useState(false);
     const [selectedNo, setSelectedNo] = useState(0);
     const [more, setMore] = useState(startMore);
     const moreGrid = useRef(null);
@@ -122,11 +121,10 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
         setPhase('grid');
     }
 
-    /* 급식표 사진: 사진을 고르면 바로 급식표로 읽습니다(알레르기 번호가 없는 표도). */
-    function openMealPhoto(file) {
-        if (!file) return;
+    /* 급식표: 급식표 읽기 화면을 열고, 거기서 촬영하거나 사진을 고릅니다(알레르기 번호가 없는 표도 급식표로 읽습니다). */
+    function openMeal() {
         speech.stop();
-        setImage(file);
+        setImage(null);
         setGridMode('meal');
         setPhase('grid');
     }
@@ -327,6 +325,9 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                     }
                                 }}
                             />
+                            <Btn className="icon-btn mic-btn cam-btn" data-role="stage-toggle" aria-label="사진 찍거나 붙이기" aria-pressed={stageOpen || stage.shots.length > 0} onClick={() => setStageOpen((on) => !on)}>
+                                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+                            </Btn>
                             {speech.available && (
                                 <Btn
                                     className={speech.listening ? 'icon-btn mic-btn is-on' : 'icon-btn mic-btn'}
@@ -352,12 +353,9 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                             <Btn className="chip" onClick={paste}>붙여넣기</Btn>
                             <Btn className="chip" onClick={openGrid}>달력·급식 표</Btn>
-                            <Btn className="chip" data-role="meal-shoot" onClick={() => mealCamera.current?.click()}>📸 급식표 촬영</Btn>
-                            <Btn className="chip" onClick={() => mealFile.current?.click()}>급식표 사진</Btn>
-                            <input ref={mealCamera} type="file" accept="image/*" capture="environment" aria-label="급식표 촬영" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
-                            <input ref={mealFile} type="file" accept="image/*" aria-label="급식표 사진" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
+                            <Btn className="chip" data-role="meal-open-grid" onClick={openMeal}>📸 급식표</Btn>
                         </div>
-                        <PhotoStage stage={stage} note="학생 기록·상담으로 남길 때 함께 붙어요." />
+                        {stageOpen || stage.shots.length ? <PhotoStage stage={stage} note="학생 기록·상담으로 남길 때 함께 붙어요." /> : null}
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={preview}>다음</Btn>
                         {recent.length > 0 && (
                             <>

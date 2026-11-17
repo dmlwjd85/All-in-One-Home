@@ -113,7 +113,7 @@ ok(/<PhotoStrip owner=\{photoOwner\('records', row\.id\)\} localOnly=/.test(stud
 ok(/accept="image\/\*"/.test(strip) && /data-role="photo-add"/.test(strip) && /role="dialog"/.test(strip) && /photoEligible/.test(strip), '사진 줄의 붙이기·크게 보기가 없습니다.');
 ok(/match \/photos\/\{pid\}/.test(rules) && /match \/photoData\/\{pid\}/.test(rules) && /d\(\)\.data\.size\(\) <= 750000/.test(rules) && /d\(\)\.at == request\.time/.test(rules), '보안 규칙에 사진 칸이 없습니다.');
 ok(/capture="environment"/.test(strip) && /data-role="photo-shoot"/.test(strip) && /export function usePhotoStage/.test(strip), '촬영 단추나 쨈 입력용 사진 줄이 없습니다.');
-ok(/usePhotoStage\(\)/.test(read('src/ui/PlusSheet.jsx')) && /stage\.attach\(result\.owners\)/.test(read('src/ui/PlusSheet.jsx')) && /capture="environment"/.test(read('src/ui/PlusSheet.jsx')) && /capture="environment"/.test(read('src/ui/GridPaste.jsx')), '쨈 입력·급식표에 촬영이 없습니다.');
+ok(/usePhotoStage\(\)/.test(read('src/ui/PlusSheet.jsx')) && /stage\.attach\(result\.owners\)/.test(read('src/ui/PlusSheet.jsx')) && /data-role="stage-toggle"/.test(read('src/ui/PlusSheet.jsx')) && /data-role="meal-open-grid"/.test(read('src/ui/PlusSheet.jsx')) && /capture="environment"/.test(read('src/ui/GridPaste.jsx')), '쨈 입력·급식표에 촬영이 없습니다.');
 ok(/return \{ ok: true, message, owners \};/.test(read('src/lib/db.js')), 'saveQuick 이 만든 기록(사진 붙일 곳)을 돌려주지 않습니다.');
 ok(/clearLocalPhotos/.test(read('src/lib/db.js')), "'모두 지우기'가 이 기기 사진을 비우지 않습니다.");
 ok(!/photos|photoData/.test(read('src/lib/cloud.js')), '사진이 전체 받기(동기화)에 들어가면 읽기 비용이 늘어납니다.');
