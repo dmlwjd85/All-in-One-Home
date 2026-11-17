@@ -1,11 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="22" viewBox="0 0 160 22">
-  <path d="M0 4h160" stroke="#8B5E3C" stroke-width="1.4"/>
-  <polygon points="6,4 18,4 12,18" fill="#E08A7A" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="26,4 38,4 32,18" fill="#7BA7C9" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="46,4 58,4 52,18" fill="#D4A84B" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="66,4 78,4 72,18" fill="#6B9B6E" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="86,4 98,4 92,18" fill="#E08A7A" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="106,4 118,4 112,18" fill="#7BA7C9" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="126,4 138,4 132,18" fill="#D4A84B" stroke="#5A3A24" stroke-width=".7"/>
-  <polygon points="146,4 158,4 152,18" fill="#6B9B6E" stroke="#5A3A24" stroke-width=".7"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="24" viewBox="0 0 200 24">
+  <path d="M2 4h196" stroke="#8B5E3C" stroke-width="1.6" stroke-linecap="round"/>
+  <polygon points="8,4 22,4 15,20" fill="#F0A090" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="28,4 42,4 35,20" fill="#8EC4E0" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="48,4 62,4 55,20" fill="#E8C86A" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="68,4 82,4 75,20" fill="#8FBF7A" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="88,4 102,4 95,20" fill="#F0A090" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="108,4 122,4 115,20" fill="#8EC4E0" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="128,4 142,4 135,20" fill="#E8C86A" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="148,4 162,4 155,20" fill="#8FBF7A" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="168,4 182,4 175,20" fill="#F0A090" stroke="#5A3A24" stroke-width=".8"/>
+  <polygon points="186,4 198,4 192,18" fill="#8EC4E0" stroke="#5A3A24" stroke-width=".8"/>
 </svg>

@@ -89,6 +89,7 @@ async function shot(browser, origin, label) {
         await delay(400);
         const skin = await page.evaluate(() => document.documentElement.getAttribute('data-skin'));
         if (skin) throw new Error(`${label} ${name} 에 data-skin=${skin} 이 있습니다.`);
+        await delay(500);
         const buf = await page.screenshot({ type: 'png' });
         writeFileSync(resolve(shots, `basic-${name}-390-light-${label}.png`), buf);
         out[name] = buf;
@@ -111,9 +112,16 @@ try {
     const report = {};
     if (mainCwd && existsSync(mainCwd)) {
         main = await serve(mainCwd);
-        const theirs = await shot(browser, main.origin, 'main');
-        for (const name of Object.keys(ours)) {
-            report[name] = diffPng(ours[name], theirs[name]);
+        let theirs = await shot(browser, main.origin, 'main');
+        for (const name of Object.keys(ours)) report[name] = diffPng(ours[name], theirs[name]);
+        for (let round = 0; round < 2 && Object.values(report).some((v) => v.same === false); round += 1) {
+            const againOurs = await shot(browser, here.origin, 'branch');
+            const againTheirs = await shot(browser, main.origin, 'main');
+            for (const name of Object.keys(ours)) {
+                ours[name] = againOurs[name];
+                theirs[name] = againTheirs[name];
+                report[name] = diffPng(ours[name], theirs[name]);
+            }
         }
     } else {
         for (const name of Object.keys(ours)) report[name] = { skipped: true, reason: 'MAIN_DIST 없음' };

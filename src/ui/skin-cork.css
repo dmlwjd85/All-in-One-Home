@@ -1,9 +1,9 @@
 /* 교실 코르크 화면 꾸미기. html[data-skin="cork"] 일 때만 색·장식이 바뀝니다.
    기능·화면 구조·동작은 건드리지 않습니다. 출결 색(--st-*)은 덮지 않습니다.
-   하단 탭·쨈 키캡은 그림자 깊이를 그대로 두고 색만 맞춥니다. */
+   하단 탭·쨈 키캡은 그림자 깊이를 그대로 두고 색만 맞춥니다.
+   떠 있는 장식은 넓은 화면 여백에만 두고, 글자·단추와 겹치지 않습니다. */
 
 html[data-skin="cork"] {
-    /* 카드·칸은 크림 인덱스카드. 코르크 바탕은 html/body/.app-bg 에서 따로 칠합니다. */
     --bg: #F6EDD8;
     --surface: #F6EDD8;
     --solid: #F6EDD8;
@@ -33,6 +33,10 @@ html[data-skin="cork"] {
     --k-todo: #F6EDD8;
     --rest-bg: #F3DCC8;
     --rest-ink: #8E3158;
+    --cork-tag-blue: #2F6AA8;
+    --cork-tag-coral: #C24A3A;
+    --cork-tag-green: #2F7A3E;
+    --cork-tag-orange: #C45C12;
 }
 
 html.dark[data-skin="cork"] {
@@ -64,48 +68,58 @@ html.dark[data-skin="cork"] {
     --k-todo: #3E342C;
     --rest-bg: #4A342C;
     --rest-ink: #F0A8BA;
+    --cork-tag-blue: #7EB4E0;
+    --cork-tag-coral: #F0A090;
+    --cork-tag-green: #8FBF7A;
+    --cork-tag-orange: #E8C86A;
 }
 
-/* 코르크 질감 + 크래프트지 완화. 카드 색(--bg)은 크림으로 두고 페이지만 코르크입니다. */
+/* 또렷한 코르크 질감. 카드 색(--bg)은 크림으로 두고 페이지만 코르크입니다. */
 html[data-skin="cork"],
 html[data-skin="cork"] body,
 html[data-skin="cork"] .app-bg {
-    background-color: #D4B896;
-    background-image:
-        linear-gradient(180deg, rgba(236, 220, 196, .42), rgba(210, 176, 136, .22)),
-        url('./skin/cork-grain.svg');
-    background-size: auto, 96px 96px;
+    background-color: #C9A06E;
+    background-image: url('./skin/cork-grain.svg');
+    background-size: 64px 64px;
     background-repeat: repeat;
 }
 
 html.dark[data-skin="cork"],
 html.dark[data-skin="cork"] body,
 html.dark[data-skin="cork"] .app-bg {
-    background-color: #2A221C;
-    background-image:
-        linear-gradient(180deg, rgba(40, 32, 24, .45), rgba(18, 12, 8, .35)),
-        url('./skin/cork-grain-dark.svg');
-    background-size: auto, 96px 96px;
+    background-color: #2A2118;
+    background-image: url('./skin/cork-grain-dark.svg');
+    background-size: 64px 64px;
 }
 
 html[data-skin="cork"] .side {
     background: transparent;
 }
 
-/* 인덱스카드: 크림 바탕, 은은한 물결 테두리, 색 압정. 패딩·크기는 그대로입니다. */
+html[data-skin="cork"] .app-bg {
+    position: relative;
+    isolation: isolate;
+}
+
+/* 크림 스칼럽 인덱스카드. 테두리는 장식이라 글자 칸을 늘리지 않게 얇게 둡니다. */
 html[data-skin="cork"] .glass,
 html[data-skin="cork"] .solid-card,
 html[data-skin="cork"] .hero,
-html[data-skin="cork"] .tip-bubble {
+html[data-skin="cork"] .tip-bubble,
+html[data-skin="cork"] .suggest-card,
+html[data-skin="cork"] .minutes-body,
+html[data-skin="cork"] .minutes-item {
     background-color: var(--bg);
-    background-image: url('./skin/pin-coral.svg');
-    background-repeat: no-repeat;
-    background-position: 14px 6px;
-    background-size: 12px 17px;
-    border-radius: 6px 4px 8px 5px;
-    box-shadow: var(--neo-inset), 0 0 0 1px #E0C9A0, inset 0 0 0 1px rgba(255, 246, 232, .7);
-    border: 2px solid transparent;
-    border-image: url('./skin/wave.svg') 6 round;
+    background-image:
+        url('./skin/pin-coral.svg'),
+        url('./skin/clip.svg');
+    background-repeat: no-repeat, no-repeat;
+    background-position: 12px 1px, calc(100% - 10px) 0;
+    background-size: 12px 16px, 11px 20px;
+    border-radius: 10px;
+    border: 6px solid transparent;
+    border-image: url('./skin/scallop.svg') 10 round;
+    box-shadow: 2px 3px 0 rgba(90, 58, 36, .16);
 }
 html[data-skin="cork"] button.glass,
 html[data-skin="cork"] button.solid-card,
@@ -113,51 +127,57 @@ html[data-skin="cork"] a.glass,
 html[data-skin="cork"] a.solid-card,
 html[data-skin="cork"] [role="button"].glass,
 html[data-skin="cork"] [role="button"].solid-card {
-    box-shadow: var(--neo-raise), 0 0 0 1px #E0C9A0;
+    box-shadow: var(--neo-raise), 2px 3px 0 rgba(90, 58, 36, .16);
 }
 html.dark[data-skin="cork"] .glass,
 html.dark[data-skin="cork"] .solid-card,
 html.dark[data-skin="cork"] .hero,
-html.dark[data-skin="cork"] .tip-bubble {
-    border-image-source: url('./skin/wave-dark.svg');
-    box-shadow: var(--neo-inset), 0 0 0 1px #5A4A3C, inset 0 0 0 1px rgba(74, 62, 50, .7);
-}
-html.dark[data-skin="cork"] .sheet,
-html.dark[data-skin="cork"] .quick-bar {
-    border-image-source: url('./skin/wave-dark.svg');
-    box-shadow: 0 -10px 24px rgba(0, 0, 0, .4), 0 0 0 1px #5A4A3C;
+html.dark[data-skin="cork"] .tip-bubble,
+html.dark[data-skin="cork"] .suggest-card,
+html.dark[data-skin="cork"] .minutes-body,
+html.dark[data-skin="cork"] .minutes-item {
+    border-image-source: url('./skin/scallop-dark.svg');
+    box-shadow: 2px 3px 0 rgba(0, 0, 0, .35);
 }
 
 html[data-skin="cork"] .home-todo,
-html[data-skin="cork"] .fold,
-html[data-skin="cork"] .home-event {
-    background-image: url('./skin/pin-sky.svg');
-    background-repeat: no-repeat;
-    background-position: 14px 6px;
-    background-size: 12px 17px;
+html[data-skin="cork"] .fold.home-todo {
+    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg');
 }
-
+html[data-skin="cork"] .home-time,
+html[data-skin="cork"] .fold.home-time {
+    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg');
+}
+html[data-skin="cork"] .home-event,
+html[data-skin="cork"] .fold.home-event {
+    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg');
+}
 html[data-skin="cork"] .hero,
 html[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg');
-    background-repeat: no-repeat;
-    background-position: 14px 6px;
-    background-size: 12px 17px;
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg');
+}
+html[data-skin="cork"] .store-notice {
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/postit.svg');
+    background-position: 12px 1px, calc(100% - 8px) 4px;
+    background-size: 12px 16px, 28px 28px;
 }
 
 html[data-skin="cork"] .sheet,
 html[data-skin="cork"] .quick-bar {
     background-color: var(--bg);
-    background-image:
-        url('./skin/clip.svg'),
-        url('./skin/pin-coral.svg');
+    background-image: url('./skin/clip.svg'), url('./skin/pin-coral.svg');
     background-repeat: no-repeat, no-repeat;
     background-position: calc(100% - 14px) 8px, 16px 8px;
     background-size: 14px 24px, 12px 17px;
-    border-radius: 8px 6px 4px 7px;
-    box-shadow: 0 -10px 24px rgba(90, 58, 36, .16), 0 0 0 1px #E0C9A0;
-    border: 2px solid transparent;
-    border-image: url('./skin/wave.svg') 6 round;
+    border-radius: 12px;
+    border: 6px solid transparent;
+    border-image: url('./skin/scallop.svg') 10 round;
+    box-shadow: 0 -10px 24px rgba(90, 58, 36, .16);
+}
+html.dark[data-skin="cork"] .sheet,
+html.dark[data-skin="cork"] .quick-bar {
+    border-image-source: url('./skin/scallop-dark.svg');
+    box-shadow: 0 -10px 24px rgba(0, 0, 0, .4);
 }
 
 html[data-skin="cork"] .sheet-foot {
@@ -176,15 +196,56 @@ html[data-skin="cork"] .quick-scrim {
     background: rgba(90, 58, 36, .28);
 }
 
-/* 상단 제목: 나무테 초록 칠판. 글꼴은 기존 title-font 그대로입니다.
-   나무테는 그림자로만 그려 제목 칸 너비가 늘어나지 않게 합니다. */
+/* 카드 제목: 파랑·코랄·초록·주황 라벨 태그. 글자 크기는 그대로입니다. */
+html[data-skin="cork"] .fold-title,
+html[data-skin="cork"] .fold-hide h3,
+html[data-skin="cork"] .home-quick-title,
+html[data-skin="cork"] .glass > h2.title-font,
+html[data-skin="cork"] .solid-card > h2.title-font {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 8px;
+    color: #fff;
+    background: var(--cork-tag-blue);
+    line-height: 1.35;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+html.dark[data-skin="cork"] .fold-title,
+html.dark[data-skin="cork"] .fold-hide h3,
+html.dark[data-skin="cork"] .home-quick-title,
+html.dark[data-skin="cork"] .glass > h2.title-font,
+html.dark[data-skin="cork"] .solid-card > h2.title-font {
+    color: #2E2A2B;
+}
+html[data-skin="cork"] .home-todo .fold-title,
+html[data-skin="cork"] .home-todo .fold-hide h3 {
+    background: var(--cork-tag-coral);
+}
+html[data-skin="cork"] .home-event .fold-title,
+html[data-skin="cork"] .home-event .fold-hide h3 {
+    background: var(--cork-tag-green);
+}
+html[data-skin="cork"] .home-quick-title,
+html[data-skin="cork"] .store-notice h2,
+html[data-skin="cork"] .fold[data-fold="recent"] .fold-title,
+html[data-skin="cork"] .fold[data-fold="recent"] .fold-hide h3 {
+    background: var(--cork-tag-orange);
+}
+html[data-skin="cork"] .glass:nth-of-type(4n+2) > h2.title-font { background: var(--cork-tag-coral); }
+html[data-skin="cork"] .glass:nth-of-type(4n+3) > h2.title-font { background: var(--cork-tag-green); }
+html[data-skin="cork"] .glass:nth-of-type(4n+4) > h2.title-font { background: var(--cork-tag-orange); }
+
+/* 상단 제목: 압정에 매달린 나무테 초록 칠판. 글꼴은 기존 title-font 그대로입니다. */
 html[data-skin="cork"] .topbar .date-block {
     background:
-        url('./skin/garland.svg') top 2px center / auto 14px no-repeat,
+        url('./skin/pin-coral.svg') 16% 2px / 12px 16px no-repeat,
+        url('./skin/pin-sky.svg') 84% 2px / 12px 16px no-repeat,
+        url('./skin/garland.svg') top 16px center / min(100%, 200px) 16px no-repeat,
         linear-gradient(#3E6B48, #365F40);
     color: #F7F3E8;
-    padding: 16px 10px 6px;
-    border-radius: 4px;
+    padding: 32px 10px 8px;
+    border-radius: 6px;
     box-shadow:
         inset 0 0 0 2px #6B4424,
         0 0 0 5px #8B5E3C,
@@ -211,7 +272,9 @@ html[data-skin="cork"] .side-brand .title-font {
 
 html.dark[data-skin="cork"] .topbar .date-block {
     background:
-        url('./skin/garland.svg') top 2px center / auto 14px no-repeat,
+        url('./skin/pin-coral.svg') 16% 2px / 12px 16px no-repeat,
+        url('./skin/pin-sky.svg') 84% 2px / 12px 16px no-repeat,
+        url('./skin/garland.svg') top 16px center / min(100%, 200px) 16px no-repeat,
         linear-gradient(#1A2F22, #14261C);
     box-shadow:
         inset 0 0 0 2px #2A1C12,
@@ -225,50 +288,25 @@ html.dark[data-skin="cork"] .side-brand .title-font {
     box-shadow: inset 0 0 0 1px #2A1C12;
 }
 
-/* 여백 장식. 클릭을 가로채지 않습니다. */
-html[data-skin="cork"] .app-bg::before {
-    content: "";
-    position: fixed;
-    inset: 0;
+/* 떠 있는 장식은 글자·단추와 겹치지 않게 기본으로 숨깁니다.
+   카드 압정·클립·칠판 가랜드만 쓰고, 여백이 없는 폭에서는 소품을 두지 않습니다. */
+html[data-skin="cork"] .app-bg::before,
+html[data-skin="cork"] .app-bg::after {
+    content: none;
     pointer-events: none;
-    background-image:
-        url('./skin/pencil.svg'),
-        url('./skin/globe.svg'),
-        url('./skin/blocks.svg'),
-        url('./skin/plant.svg'),
-        url('./skin/star.svg'),
-        url('./skin/star.svg'),
-        url('./skin/flower.svg'),
-        url('./skin/flower.svg');
-    background-repeat: no-repeat;
-    background-position:
-        left 6px bottom 88px,
-        right 8px bottom 96px,
-        left 8px top 112px,
-        right 10px top 140px,
-        left 28% top 72px,
-        right 22% top 88px,
-        left 18% bottom 140px,
-        right 16% bottom 168px;
-    background-size: 56px 72px, 52px 60px, 64px 40px, 44px 56px, 18px, 16px, 24px, 22px;
+}
+
+@media (max-width: 1279px) {
+    html[data-skin="cork"] .app-bg::before,
+    html[data-skin="cork"] .app-bg::after {
+        content: none;
+    }
 }
 
 @media (max-width: 390px) {
-    html[data-skin="cork"] .app-bg::before {
-        background-image:
-            url('./skin/star.svg'),
-            url('./skin/star.svg'),
-            url('./skin/flower.svg');
-        background-position:
-            left 8px top 64px,
-            right 10px top 80px,
-            right 8px bottom 96px;
-        background-size: 14px, 12px, 18px;
-        opacity: .7;
-    }
     html[data-skin="cork"] .topbar .date-block {
-        padding: 14px 8px 4px;
-        background-size: auto 12px, auto;
+        padding: 26px 8px 6px;
+        background-size: 10px 14px, 10px 14px, min(100%, 160px) 12px, auto;
         box-shadow:
             inset 0 0 0 1px #6B4424,
             0 0 0 4px #8B5E3C,
@@ -282,22 +320,16 @@ html[data-skin="cork"] .app-bg::before {
     }
 }
 
-@media (min-width: 391px) and (max-width: 767px) {
-    html[data-skin="cork"] .app-bg::before {
-        background-size: 44px 56px, 40px 48px, 48px 30px, 34px 44px, 16px, 14px, 20px, 18px;
-        opacity: .85;
-    }
-}
-
-/* 하단 탭·쨈: 키캡 형식·그림자 깊이는 그대로, 색만 코르크 파스텔에 맞춥니다. */
+/* 하단 탭: 크림 물결 테두리 종이. 키캡 형식·그림자 깊이는 그대로, 색만 맞춥니다. */
 html[data-skin="cork"] .tabbar.tabbar-jelly {
     --tbj-ink: #4A3424;
     --tbj-deep: #C45C4A;
     --tbj-muted: #7A6A58;
-    border-color: #4A3424;
+    border-color: #C4A882;
+    border-radius: 22px;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, .7), transparent 42%),
-        linear-gradient(180deg, #FFF8EC, #E8D4B8);
+        radial-gradient(circle at 10px 0, transparent 6px, #FFF8EC 6.5px) 0 0 / 20px 12px repeat-x,
+        linear-gradient(180deg, #FFFDF6 0%, #F3E6D0 100%);
     box-shadow:
         inset 0 2.5px 4px #fff,
         inset 0 -5px 10px rgba(0, 0, 0, .1),
@@ -324,7 +356,7 @@ html[data-skin="cork"] .tab-jelly.is-on .tbj-sticker,
 html[data-skin="cork"] .tab-jelly.is-on.is-squish .tbj-sticker {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, .5) 0%, transparent 32%),
-        linear-gradient(180deg, #F7C4B8, #E07A6A 50%, #A84838);
+        linear-gradient(180deg, #F7C4B8, #C45C4A 50%, #8A3028);
     box-shadow:
         inset 0 4px 6px rgba(255, 255, 255, .4),
         inset 0 -4px 6px rgba(0, 0, 0, .32),
@@ -351,9 +383,9 @@ html[data-skin="cork"] .tab-jelly.is-on .tbj-ico {
     html.dark[data-skin="cork"] .foil-fab .fab-disc.jar-disc {
         border-color: #4A3424;
         background:
-            radial-gradient(circle at 50% 28%, rgba(255, 214, 200, .6), transparent 58%),
-            linear-gradient(180deg, rgba(255, 255, 255, .92) 0%, transparent 40%),
-            linear-gradient(180deg, #FFFDF8, #FFF1E6 50%, #F2D9C8);
+            radial-gradient(circle at 50% 28%, rgba(255, 200, 190, .55), transparent 58%),
+            linear-gradient(180deg, rgba(255, 255, 255, .55) 0%, transparent 40%),
+            linear-gradient(180deg, #E07070, #C44848 50%, #8E2C2C);
         box-shadow:
             0 0 0 3px #E07A6A,
             inset 0 4px 3px #fff,
@@ -374,7 +406,7 @@ html[data-skin="cork"] .tab-jelly.is-on .tbj-ico {
             0 2px 0 2px #8A3A2C,
             0 4px 8px rgba(160, 70, 50, .28);
     }
-    html[data-skin="cork"] .tabbar.tabbar-jelly .tbj-mid .fab-txt { color: #A84838; }
+    html[data-skin="cork"] .tabbar.tabbar-jelly .tbj-mid .fab-txt { color: #8A3028; }
     html[data-skin="cork"]:not(.dark) .tbj-label { color: #4A433D; }
     html[data-skin="cork"]:not(.dark) .tab-jelly.is-on .tbj-label { color: #A84838; }
 }
@@ -383,7 +415,9 @@ html.dark[data-skin="cork"] .tabbar.tabbar-jelly {
     --tbj-ink: #1A1410;
     --tbj-deep: #F0A090;
     --tbj-muted: #C9BCB4;
-    background: linear-gradient(180deg, #3A322C 0%, #2A241E 100%);
+    background:
+        radial-gradient(circle at 10px 0, transparent 6px, #3A322C 6.5px) 0 0 / 20px 12px repeat-x,
+        linear-gradient(180deg, #3A322C 0%, #2A241E 100%);
     box-shadow: inset 0 2px 0 rgba(255, 255, 255, .08), 0 6px 0 #0E0C0B, 0 12px 24px rgba(0, 0, 0, .45);
 }
 html.dark[data-skin="cork"] .tabbar.tabbar-jelly .tbj-mid .fab-txt { color: #F0A090; }
@@ -398,5 +432,5 @@ html.dark[data-skin="cork"] .foil-fab .fab-disc.jar-disc {
         0 12px 16px rgba(0, 0, 0, .5);
 }
 
-html[data-skin="cork"] .desk-fab .fab-txt { color: #A84838; }
+html[data-skin="cork"] .desk-fab .fab-txt { color: #8A3028; }
 html.dark[data-skin="cork"] .desk-fab .fab-txt { color: #F0A090; }

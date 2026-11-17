@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v2';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -74,6 +74,65 @@ function listen(page) {
         const text = msg.text();
         if (!noisy.test(text)) consoleErrors.push(text);
     });
+}
+
+function boxesOverlap(a, b, pad = 1) {
+    return a.left < b.right - pad && a.right > b.left + pad && a.top < b.bottom - pad && a.bottom > b.top + pad;
+}
+
+async function overlapHits(page, label) {
+    const hits = await page.evaluate(() => {
+        const deco = [];
+        const root = document.querySelector('.app-bg');
+        if (!root) return { deco, hits: [] };
+        for (const name of ['::before', '::after']) {
+            const s = getComputedStyle(root, name);
+            const raw = String(s.content || '');
+            if (!raw || raw === 'none' || raw === 'normal') continue;
+            const w = parseFloat(s.width);
+            const h = parseFloat(s.height);
+            if (!w || !h || s.display === 'none' || s.visibility === 'hidden') continue;
+            const right = s.right === 'auto' ? NaN : parseFloat(s.right);
+            const bottom = s.bottom === 'auto' ? NaN : parseFloat(s.bottom);
+            const left = s.left === 'auto' ? (Number.isFinite(right) ? innerWidth - right - w : 0) : parseFloat(s.left);
+            const top = s.top === 'auto' ? (Number.isFinite(bottom) ? innerHeight - bottom - h : 0) : parseFloat(s.top);
+            deco.push({ left, top, right: left + w, bottom: top + h, name });
+        }
+        const hits = [];
+        const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
+        const add = (el, name) => {
+            const r = el.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) return;
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return;
+            hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name });
+        };
+        document.querySelectorAll('button, a, input, textarea, select, [role="button"], .fuse, .tabbar, .desk-fab, .cloud-note').forEach((el) => add(el, el.getAttribute('aria-label') || el.className || el.tagName));
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                const p = node.parentElement;
+                if (!p || skip.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        while (walker.nextNode()) {
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            const r = range.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) continue;
+            hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name: walker.currentNode.nodeValue.trim().slice(0, 28) });
+        }
+        return { deco, hits };
+    });
+    for (const box of hits.deco) {
+        for (const item of hits.hits) {
+            if (boxesOverlap(box, item)) {
+                check(false, `${label} 장식이 글자·단추와 겹칩니다: ${item.name}`);
+                return;
+            }
+        }
+    }
 }
 
 async function openPage({ width = 390, height = 844, mode = 'light', skin = 'basic', kb = null, hash = '#/today' } = {}) {
@@ -201,9 +260,12 @@ try {
                 const look = await page.evaluate(() => ({
                     skin: document.documentElement.getAttribute('data-skin'),
                     deco: getComputedStyle(document.querySelector('.app-bg'), '::before').pointerEvents,
+                    before: getComputedStyle(document.querySelector('.app-bg'), '::before').content,
                 }));
                 check(look.skin === 'cork', `${file} 에 코르크가 없습니다.`);
                 check(look.deco === 'none', `${file} 장식이 클릭을 가로챕니다.`);
+                check(look.before === 'none' || look.before === 'normal', `${file} 떠 있는 장식이 글자 위에 있습니다.`);
+                await overlapHits(page, file);
                 await page.close();
             }
         }

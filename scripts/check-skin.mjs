@@ -68,7 +68,8 @@ for (const sel of selectors) {
 }
 check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
-check(css.includes('max-width: 390px'), '좁은 화면에서 장식을 줄이지 않습니다.');
+check(css.includes('max-width: 1279px'), '좁은 화면에서 장식을 숨기지 않습니다.');
+check(/\.app-bg::before[\s\S]*content:\s*none/.test(css), '떠 있는 장식을 숨기지 않습니다.');
 check(css.includes('html.dark[data-skin="cork"]'), '어두운 밤 교실 톤이 없습니다.');
 check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 그림을 씁니다.');
 
