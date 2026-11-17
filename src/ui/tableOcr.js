@@ -15,7 +15,11 @@ import { cellsToTable, clusterTable } from '../lib/gridDetect.js';
 import { joinHangulSpaces } from '../lib/hangulFix.js';
 import { placeLines, prepareTable } from '../lib/tableImage.js';
 
-const MAX_SIDE = 2600;
+/* 휴대폰 사진(긴 변 4000px 안팎)을 2600px 로 줄이면 한 달 급식표의 작은 글자가 뭉개져 잘못 읽힙니다.
+   메모리가 넉넉한 기기에서는 원래 크기에 가깝게 두고, 적은 기기(2GB 이하)만 예전처럼 줄입니다. */
+export function maxSide(memory = globalThis.navigator?.deviceMemory) {
+    return Number(memory) > 0 && Number(memory) <= 2 ? 2600 : 4000;
+}
 let workerPromise = null;
 let listener = null;
 
@@ -47,7 +51,7 @@ async function decode(file) {
     } catch {
         bitmap = await createImageBitmap(file);
     }
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxSide() / Math.max(bitmap.width, bitmap.height));
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
     const canvas = document.createElement('canvas');

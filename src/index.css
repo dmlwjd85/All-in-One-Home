@@ -2050,7 +2050,7 @@ button.hero-pill.home-todo-link {
 .meal-pop-head .tap, .meal-pop-foot .tap { min-height: 44px; }
 .meal-pop-date { font-size: 17px; text-align: center; flex: 1 1 auto; min-width: 0; }
 .meal-pop-kcal { margin: 0; text-align: right; }
-.meal-pop-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.meal-pop-foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .meal-tray {
     display: grid; gap: 8px; padding: 12px; border-radius: 26px; color: #1F2328;
     background:
@@ -2085,9 +2085,9 @@ button.hero-pill.home-todo-link {
 .tray-input { width: 100%; min-height: 62px; flex: 1 1 auto; box-sizing: border-box; resize: none; border: 1.5px dashed rgba(40, 50, 60, .55); border-radius: 10px; background: rgba(255, 255, 255, .6); color: #1F2328; font: inherit; font-size: 16px; font-weight: 700; line-height: 1.25; text-align: center; padding: 4px 2px; }
 .tray-cell.is-big .tray-input { min-height: 84px; }
 .tray-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; background: #fff; }
+/* 고칠 때도 위 4칸은 한 줄로 둡니다(좁은 화면에서는 글자를 조금 줄입니다). */
 @media (max-width: 480px) {
-    /* 좁은 화면에서 고칠 때는 글자 칠 자리가 좁아 위 칸을 두 줄(2칸씩)로 넓힙니다. */
-    .meal-tray[data-role="meal-tray-edit"] .tray-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .meal-tray[data-role="meal-tray-edit"] .tray-top .tray-input { font-size: 16px; padding: 4px 0; letter-spacing: -0.02em; }
 }
 .cam-btn[aria-pressed="true"] { color: var(--accent); box-shadow: var(--neo-inset); }
 .msg-compose { flex-wrap: nowrap; }

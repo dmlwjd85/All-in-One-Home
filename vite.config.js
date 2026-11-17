@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -78,6 +78,33 @@ function findUp(rel) {
     return '';
 }
 
+/**
+ * PDF 읽기(pdf.js)와 한글 글꼴 표(cmap)를 public/pdf/ 로 옮겨 앱과 같은 주소에서 받게 합니다.
+ * pdf.js 는 묶음에 넣지 않습니다(요즘 문법이라 빌드 대상에 맞춰 바꾸지 못함). PDF 를 고를 때만 받습니다.
+ */
+export const PDF_FILES = [
+    ['node_modules/pdfjs-dist/legacy/build/pdf.min.mjs', 'pdf.min.mjs'],
+    ['node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs', 'pdf.worker.min.mjs'],
+];
+function copyPdfFiles() {
+    return {
+        name: 'copy-pdf-files',
+        buildStart() {
+            mkdirSync(resolve('public/pdf/cmaps'), { recursive: true });
+            for (const [from, to] of PDF_FILES) {
+                const src = findUp(from);
+                if (!src) throw new Error(`PDF 읽기 파일이 없습니다: ${from} (npm install 을 먼저 해 주세요)`);
+                copyFileSync(src, resolve('public/pdf', to));
+            }
+            const maps = findUp('node_modules/pdfjs-dist/cmaps');
+            if (!maps) throw new Error('PDF 읽기 파일이 없습니다: node_modules/pdfjs-dist/cmaps');
+            for (const name of readdirSync(maps)) {
+                if (/\.bcmap$/.test(name) && /KS|Korea|UCS2|UTF16|UTF8/.test(name)) copyFileSync(resolve(maps, name), resolve('public/pdf/cmaps', name));
+            }
+        },
+    };
+}
+
 function copyOcrFiles() {
     return {
         name: 'copy-ocr-files',
@@ -96,7 +123,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const base = env.VITE_BASE || './';
     return {
-        plugins: [copyOcrFiles(), react(), precacheFromBuild()],
+        plugins: [copyOcrFiles(), copyPdfFiles(), react(), precacheFromBuild()],
         base,
         build: {
             manifest: true,

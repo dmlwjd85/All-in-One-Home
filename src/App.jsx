@@ -664,7 +664,7 @@ export default function App() {
         showToast,
         openQuick: (kind, extra = {}) => setFlow({ id: 'quick', kind: kind || '관찰', ...extra }),
         openFlow: (next) => setFlow(next),
-        openPlus: (opts) => setPlus(opts?.more ? 'more' : true),
+        openPlus: (opts) => setPlus(opts?.meal ? 'meal' : opts?.more ? 'more' : true),
         go,
         openHotkeyHelp: () => setHelp(true),
         route,
@@ -824,6 +824,7 @@ export default function App() {
                 {plus && (
                     <PlusSheet
                         startMore={plus === 'more'}
+                        startMeal={plus === 'meal'}
                         onClose={() => setPlus(false)}
                         onPick={(action) => {
                             setPlus(false);

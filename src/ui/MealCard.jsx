@@ -151,7 +151,7 @@ function MealTrayEdit({ cells, onChange }) {
 }
 
 function MealPopup({ notes, today, onClose }) {
-    const { showToast } = useUi();
+    const { showToast, openPlus } = useUi();
     const map = mealsFromNotes(notes);
     const [cursor, setCursor] = useState(today);
     const [cells, setCells] = useState(null);
@@ -192,7 +192,7 @@ function MealPopup({ notes, today, onClose }) {
                     </>
                 ) : day?.items?.length ? <MealTray day={day} showCodes={showCodes} /> : (
                     <div className="meal-tray is-empty" data-role="meal-tray-empty">
-                        <p>{dates.length ? '이 날은 적힌 메뉴가 없어요.' : '아직 넣은 급식표가 없어요. 가운데 쨈 버튼 › 「급식표 촬영」이나 「달력·급식 표」로 넣어 주세요.'}</p>
+                        <p>{dates.length ? '이 날은 적힌 메뉴가 없어요.' : '아직 넣은 급식표가 없어요. 아래 「급식표 넣기」에서 사진·한글·PDF 파일로 넣어 주세요.'}</p>
                     </div>
                 )}
                 {!cells && day?.kcal ? <p className="muted meal-pop-kcal">{day.kcal} kcal</p> : null}
@@ -204,6 +204,7 @@ function MealPopup({ notes, today, onClose }) {
                 ) : (
                     <div className="meal-pop-foot">
                         {cursor !== today ? <Btn className="chip" onClick={() => setCursor(today)}>오늘로</Btn> : null}
+                        <Btn className="chip" data-role="meal-add" onClick={() => { onClose(); openPlus?.({ meal: true }); }}>📎 급식표 넣기</Btn>
                         <Btn className="chip" data-role="meal-edit" onClick={() => setCells(trayToCells(day?.items || []))}>고치기</Btn>
                         <Btn className="primary-btn" data-role="meal-close" onClick={onClose}>닫기</Btn>
                     </div>

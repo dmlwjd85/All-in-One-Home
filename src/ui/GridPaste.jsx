@@ -1,3 +1,4 @@
+import { DOC_ACCEPT, DOC_ERROR, readDocFile } from './docRead.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeCalendarItem } from '../lib/calWhen.js';
 import { saveCalendarEvents, saveMealMonth } from '../lib/db.js';
@@ -50,6 +51,7 @@ export function GridPaste({ text, image, mode = '', onBack }) {
     const { data, clock, showToast } = useUi();
     const fileRef = useRef(null);
     const cameraRef = useRef(null);
+    const docRef = useRef(null);
     const periods = periodsOf(data);
     const lengths = lengthsOf();
     const [asMeal, setAsMeal] = useState(mode === 'meal');
@@ -89,8 +91,31 @@ export function GridPaste({ text, image, mode = '', onBack }) {
         else setItems(shiftCalEvents(items, y, m));
     }
 
-    async function onFile(file) {
-        if (!file) return;
+    /* 사진·한글(hwp·hwpx)·PDF 를 받아 종류에 맞게 읽습니다. 글이 든 파일은 글자 인식 없이 바로 읽어 더 정확합니다. */
+    async function onFile(picked) {
+        if (!picked) return;
+        setBusy('파일을 열고 있어요.');
+        let file = picked;
+        try {
+            const doc = await readDocFile(picked);
+            if (doc.error) { showToast(DOC_ERROR[doc.error] || DOC_ERROR.read); setBusy(''); return; }
+            if (!doc.image) {
+                setFromImage(false);
+                setWeak(false);
+                setSmall(false);
+                const read = applyRead(doc.text, [], { fix: false });
+                if (read.kind === 'meal' && read.days.length) showToast(`급식 ${read.days.length}일치를 읽었어요. 맞는지만 봐 주세요.`, true);
+                else if (!String(doc.text || '').trim()) showToast('파일에서 글을 찾지 못했어요. 화면을 찍어 넣어 주세요.');
+                else showToast(read.kind === 'meal' ? '날짜를 찾지 못했어요. 읽은 글을 확인해 주세요.' : '파일에서 글을 읽었어요. 맞는지만 봐 주세요.');
+                setBusy('');
+                return;
+            }
+            file = doc.image;
+        } catch {
+            showToast(DOC_ERROR.read);
+            setBusy('');
+            return;
+        }
         setBusy('사진을 열고 있어요.');
         try {
             const found = await readImageTable(file, (message) => setBusy(message));
@@ -148,6 +173,8 @@ export function GridPaste({ text, image, mode = '', onBack }) {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 <Btn className="chip" disabled={Boolean(busy)} data-role="grid-shoot" onClick={() => cameraRef.current?.click()}>📸 {asMeal ? '급식표 촬영' : '표 촬영'}</Btn>
                 <Btn className="chip" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>{asMeal ? '급식표 사진 고르기' : '표 사진 고르기'}</Btn>
+                <Btn className="chip" disabled={Boolean(busy)} data-role="grid-file" onClick={() => docRef.current?.click()}>📎 파일(한글·PDF)</Btn>
+                <input ref={docRef} type="file" accept={DOC_ACCEPT} aria-label="한글·PDF 파일" style={{ display: 'none' }} data-role="grid-file-input" onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
                 <input ref={cameraRef} type="file" accept="image/*" capture="environment" aria-label="표 촬영" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
                 <Btn className={asMeal ? 'chip on' : 'chip'} aria-pressed={asMeal} onClick={toggleMeal}>{asMeal ? '✓ 급식표로 읽기' : '급식표로 읽기'}</Btn>
                 <input ref={fileRef} type="file" accept="image/*" aria-label="표 이미지" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />

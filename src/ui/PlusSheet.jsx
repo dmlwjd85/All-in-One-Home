@@ -61,12 +61,13 @@ function StopIcon() {
     );
 }
 
-export function PlusSheet({ onClose, onPick, startMore = false }) {
+export function PlusSheet({ onClose, onPick, startMore = false, startMeal = false }) {
     const { data, clock, showToast } = useUi();
-    const [phase, setPhase] = useState('write');
+    /* 급식판의 '급식표 넣기'에서 오면 급식표 읽기 화면을 바로 엽니다. */
+    const [phase, setPhase] = useState(startMeal ? 'grid' : 'write');
     const [text, setText] = useState(() => takePasteSeed());
     const [image, setImage] = useState(null);
-    const [gridMode, setGridMode] = useState('');
+    const [gridMode, setGridMode] = useState(startMeal ? 'meal' : '');
     const stage = usePhotoStage();
     const [stageOpen, setStageOpen] = useState(false);
     const [selectedNo, setSelectedNo] = useState(0);

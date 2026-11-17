@@ -77,6 +77,7 @@
     "check:widgets": "node scripts/check-widgets.mjs",
     "check:photos": "node scripts/check-photos.mjs",
     "check:student-card": "node scripts/check-student-card.mjs",
+    "check:doc-file": "node scripts/check-doc-file.mjs",
     "check:widgets-browser": "node scripts/check-widgets-browser.mjs",
     "check:minutes": "node scripts/check-minutes.mjs",
     "check:homework": "node scripts/check-homework.mjs",
@@ -89,6 +90,7 @@
   "dependencies": {
     "firebase": "^11.6.0",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "6.2.108",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tesseract.js": "^5.1.1"
