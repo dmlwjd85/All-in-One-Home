@@ -10,6 +10,7 @@ import { looksLikeCalGrid } from './calGrid.js';
 import { fixMenuName, isKnownMenu } from './hangulFix.js';
 
 export const MEAL_TAG = '급식';
+export const TRAY_SLOTS = ['top1', 'top2', 'top3', 'top4', 'rice', 'soup'];
 export const MEAL_CODE_KEY = 'ssug-gyomu-meal-codes';
 
 export function mealNoteId(year, month) {
@@ -492,7 +493,9 @@ export function encodeMeals(days) {
             const name = scrubWords(item.name);
             if (!name) continue;
             const codes = String(item.codes || '').replace(/[^\d.]/g, '');
-            lines.push(codes ? `${name}|${codes}` : name);
+            /* 셋째 칸은 급식판에서 손으로 정한 자리(rice·soup·top1~4). 옛 판은 앞의 두 칸만 읽습니다. */
+            const slot = TRAY_SLOTS.includes(item.slot) ? item.slot : '';
+            lines.push(slot ? `${name}|${codes}|${slot}` : (codes ? `${name}|${codes}` : name));
         }
         const kcal = String(day.kcal || '').match(/\d{2,4}(?:\.\d)?/);
         if (kcal) lines.push(`kcal ${kcal[0]}`);
@@ -515,8 +518,8 @@ export function decodeMeals(text) {
         if (!cur) continue;
         if (/^kcal\s+(\d+(?:\.\d)?)/.test(trimmed)) { cur.kcal = trimmed.match(/^kcal\s+(\d+(?:\.\d)?)/)[1]; continue; }
         if (/^origin\s+/.test(trimmed)) { cur.origin = trimmed.replace(/^origin\s+/, ''); continue; }
-        const [name, codes] = trimmed.split('|');
-        if (scrubWords(name)) cur.items.push({ name: scrubWords(name), codes: codes || '' });
+        const [name, codes, slot] = trimmed.split('|');
+        if (scrubWords(name)) cur.items.push({ name: scrubWords(name), codes: codes || '', ...(TRAY_SLOTS.includes(slot) ? { slot } : {}) });
     }
     return days.filter((day) => day.items.length);
 }
@@ -575,20 +578,53 @@ export function mealTray(items) {
     const soup = [];
     const kimchi = [];
     const side = [];
+    const fixed = [[], [], [], []];
     for (const item of items || []) {
         if (!item?.name) continue;
+        /* 손으로 정한 자리가 있으면 그 자리가 먼저입니다. */
+        if (item.slot === 'rice') { rice.push(item); continue; }
+        if (item.slot === 'soup') { soup.push(item); continue; }
+        if (/^top[1-4]$/.test(item.slot || '')) { fixed[Number(item.slot.slice(3)) - 1].push(item); continue; }
         const kind = trayKind(item.name);
         if (kind === 'rice' && !rice.length) rice.push(item);
         else if (kind === 'soup' && !soup.length) soup.push(item);
         else if (kind === 'kimchi') kimchi.push(item);
         else side.push(item);
     }
-    const top = [[], [], [], []];
+    const top = fixed;
+    const hand = fixed.some((cell) => cell.length);
     [...kimchi, ...side].forEach((item, index) => {
-        if (index < 4) { top[index].push(item); return; }
+        if (!hand && index < 4) { top[index].push(item); return; }
+        if (hand) {
+            let free = 0;
+            for (let i = 1; i < 4; i += 1) if (top[i].length < top[free].length) free = i;
+            top[free].push(item);
+            return;
+        }
         let slot = 3;
         for (let i = 3; i >= 0; i -= 1) if (top[i].length < top[slot].length) slot = i;
         top[slot].push(item);
     });
     return { rice, soup, top };
+}
+
+/** 급식판 고치기: 칸마다 적은 글(한 줄에 하나)을 메뉴 목록으로. 전에 있던 알레르기 번호는 이름이 같으면 이어 둡니다. */
+export function trayToItems(cells, before = []) {
+    const codes = new Map((before || []).map((item) => [item.name, item.codes || '']));
+    const out = [];
+    /* 한 줄 요약(오늘·한 주 화면)에서 밥·국이 먼저 나오게 밥, 국, 위 칸 순서로 둡니다. */
+    for (const slot of ['rice', 'soup', 'top1', 'top2', 'top3', 'top4']) {
+        for (const line of String(cells?.[slot] || '').split('\n')) {
+            const name = line.replace(/[|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+            if (name) out.push({ name, codes: codes.get(name) || '', slot });
+        }
+    }
+    return out.slice(0, 20);
+}
+
+/** 급식판의 지금 모습을 칸마다 글로(고치기 화면의 처음 값). */
+export function trayToCells(items) {
+    const tray = mealTray(items);
+    const text = (list) => list.map((item) => item.name).join('\n');
+    return { top1: text(tray.top[0]), top2: text(tray.top[1]), top3: text(tray.top[2]), top4: text(tray.top[3]), rice: text(tray.rice), soup: text(tray.soup) };
 }

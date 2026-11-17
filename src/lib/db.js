@@ -1873,6 +1873,35 @@ export async function saveCalendarEvents(items, now = new Date()) {
  * 이미 넣어 둔 날은 지우지 않고, 이번에 읽은 날짜만 바꿉니다(주간 급식표를 주마다 올려도 앞 주가 남습니다).
  * 달이 넘어가는 표(11월 30일 ~ 12월 4일)는 날짜의 달에 맞춰 두 장으로 나눕니다.
  */
+/** 급식판에서 하루 메뉴를 고칩니다. items 가 비면 그 날 급식을 지웁니다. 다른 날은 그대로 둡니다. */
+export async function saveMealDay(date, items, { kcal = '', origin = '' } = {}) {
+    if (!isValidYmd(date)) return { ok: false, message: '날짜가 맞지 않아요.' };
+    const y = Number(date.slice(0, 4));
+    const m = Number(date.slice(5, 7));
+    const id = mealNoteId(y, m);
+    const merged = new Map();
+    let from;
+    for (const [list, where] of [[state.notes || [], 'cloud'], [state.local?.notes || [], 'local']]) {
+        for (const row of list) {
+            if (row?.id !== id) continue;
+            from = where;
+            for (const day of decodeMeals(row.text)) merged.set(day.date, day);
+        }
+    }
+    const clean = (items || []).filter((item) => String(item?.name || '').trim());
+    if (clean.length) merged.set(date, { date, items: clean, kcal, origin });
+    else merged.delete(date);
+    const text = encodeMeals([...merged.values()]);
+    if (!text.trim()) {
+        if (!from) return { ok: true, message: '급식을 비웠어요.' };
+        const failed = await removeItem('notes', id);
+        return failed?.storageFailed ? { ok: false, storageFailed: true, message: failed.message } : { ok: true, message: '급식을 비웠어요.' };
+    }
+    const saved = await saveTextItem('notes', { id, title: `${y}년 ${m}월 급식`.slice(0, 60), text, date: `${date.slice(0, 7)}-01`, tags: [MEAL_TAG], pinned: false, source: 'app' }, { from });
+    if (saved?.storageFailed) return { ok: false, storageFailed: true, message: saved.message };
+    return { ok: true, message: clean.length ? '급식을 고쳤어요.' : '이 날 급식을 비웠어요.' };
+}
+
 export async function saveMealMonth(year, month, days) {
     const byMonth = new Map();
     for (const day of days || []) {

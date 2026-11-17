@@ -34,6 +34,18 @@ const memory = () => { const map = new Map(); return { map, getItem: (k) => (map
         for (const [name, want] of Object.entries(kinds)) check(trayKind(name) === want, `급식판 분류 ${name}: ${trayKind(name)} (바람: ${want})`);
         const many = mealTray(['밥', '국', '김치', 'a', 'b', 'c', 'd', 'e', '잡곡밥', '된장국'].map((name) => ({ name })));
         check(many.rice.length === 1 && many.soup.length === 1 && many.top.flat().length === 8 && many.top.every((c) => c.length === 2) && many.top[0][0].name === '김치', `메뉴가 많을 때 급식판: ${JSON.stringify(many.top.map((c) => names(c)))}`);
+        const { decodeMeals, encodeMeals, trayToCells, trayToItems } = await import('../src/lib/mealPaste.js');
+        const start = [{ name: '기장밥', codes: '' }, { name: '미역국', codes: '5.6' }, { name: '제육볶음', codes: '10' }, { name: '배추김치', codes: '9' }, { name: '귤', codes: '' }];
+        const cells = trayToCells(start);
+        check(cells.rice === '기장밥' && cells.soup === '미역국' && cells.top1 === '배추김치', `고치기 처음 값: ${JSON.stringify(cells)}`);
+        /* 귤을 국 칸으로 옮기고, 제육볶음 글자를 고치고, 한 칸에 두 줄을 적습니다. */
+        const edited = trayToItems({ ...cells, top3: '', soup: '미역국\n귤', top2: '제육 볶음', top4: '요구르트|x' }, start);
+        const round = decodeMeals(encodeMeals([{ date: '2026-11-17', items: edited, kcal: '612' }]))[0];
+        const again = mealTray(round.items);
+        check(names(again.soup) === '미역국+귤' && names(again.top[1]) === '제육 볶음' && !again.top[2].length && names(again.top[3]) === '요구르트 x' && names(again.rice) === '기장밥', `고친 자리가 저장 뒤 달라집니다: ${JSON.stringify(round.items)}`);
+        check(round.items.find((i) => i.name === '미역국').codes === '5.6' && round.kcal === '612', '고칠 때 알레르기 번호나 열량이 사라집니다.');
+        check(decodeMeals('2026-11-17\n밥\n국|5.6')[0].items.every((i) => !i.slot), '옛 급식 글을 읽지 못합니다.');
+        check(/export async function saveMealDay/.test(readFileSync('src/lib/db.js', 'utf8')) && /data-role="meal-edit"/.test(readFileSync('src/ui/MealCard.jsx', 'utf8')) && /data-tray-input/.test(readFileSync('src/ui/MealCard.jsx', 'utf8')), '급식판 고치기가 없습니다.');
         const mealUi = readFileSync('src/ui/MealCard.jsx', 'utf8');
         check(/export function MealButton/.test(mealUi) && /role="dialog"/.test(mealUi) && /<MealButton className="hero-action"/.test(readFileSync('src/ui/Home.jsx', 'utf8')) && /<MealButton/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')) && /tray-top \{ grid-template-columns: repeat\(4/.test(readFileSync('src/index.css', 'utf8')) && /tray-bottom \{ grid-template-columns: repeat\(2/.test(readFileSync('src/index.css', 'utf8')), "출결·과제 옆 '오늘 급식' 단추나 급식판(위 4칸·아래 2칸) 팝업이 없습니다.");
     }
