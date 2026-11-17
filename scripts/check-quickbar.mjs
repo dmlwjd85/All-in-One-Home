@@ -282,6 +282,7 @@ if (!failures.length) {
         await page.waitForFunction(() => document.body.innerText.includes('한지우가 발표를 잘했어요'));
         await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.innerText.includes('되돌리기'))?.click());
         await page.waitForFunction(() => !document.body.innerText.includes('한지우가 발표를 잘했어요'));
+        await page.waitForFunction(() => !document.querySelector('.toast'));
         }
         await page.evaluate(() => { location.hash = '#/today'; });
         await page.waitForSelector('.tabbar .fab');
@@ -289,6 +290,7 @@ if (!failures.length) {
         await page.waitForFunction(() => document.querySelector('.quick-bar')?.classList.contains('is-open'));
         }
 
+        await page.waitForFunction(() => !document.querySelector('.toast'));
         await page.evaluate(() => {
             const field = document.querySelector('.quick-field');
             field.value = '내일 운동회';
@@ -297,9 +299,10 @@ if (!failures.length) {
         const scheduleState = await page.waitForFunction(() => {
             const suggested = document.querySelector('[data-kind="일정"]')?.dataset.suggested === '1';
             const open = document.querySelector('.quick-bar')?.classList.contains('is-open') || false;
-            const undo = (document.querySelector('.toast')?.innerText || '').includes('되돌리기');
-            if (suggested && open && !undo) return 'ready';
-            if (!open || undo) return 'saved';
+            const toast = document.querySelector('.toast')?.innerText || '';
+            const savedKind = toast.includes('일정') && toast.includes('되돌리기');
+            if (suggested && open && !savedKind) return 'ready';
+            if (!open || savedKind) return 'saved';
             return false;
         });
         const scheduleReady = (await scheduleState.jsonValue()) === 'ready';
