@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v8';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v9';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -191,6 +191,7 @@ async function overlapHits(page, label) {
             if (box.right - box.left < 2 || box.bottom - box.top < 2) return null;
             return box;
         };
+        const overlay = document.querySelector('.sheet-back, .quick-bar.is-open');
         const fabs = [...document.querySelectorAll('.desk-fab')].map(visible).filter(Boolean);
         if (!fabs.length) return [];
         const hits = [];
@@ -200,6 +201,7 @@ async function overlapHits(page, label) {
                 const p = node.parentElement;
                 if (!p || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(p.tagName)) return NodeFilter.FILTER_REJECT;
                 if (p.closest('.desk-fab, .tbj-mid, .tabbar, .quick-bar, .sheet, .sheet-back, .skin-deco')) return NodeFilter.FILTER_REJECT;
+                if (overlay && !p.closest('.sheet, .quick-bar')) return NodeFilter.FILTER_REJECT;
                 return NodeFilter.FILTER_ACCEPT;
             },
         });
@@ -569,65 +571,6 @@ try {
         }
     }
 
-    /* 짬 지우개 분필 가루. 팝업은 열지 않고, 0·200·450ms 프레임을 멈춥니다. */
-    const pauseDust = async (page, ms) => {
-        const ok = await page.evaluate((t) => {
-            const puff = document.querySelector('.chalk-puff');
-            if (!puff) return false;
-            puff.dataset.hold = '1';
-            if (puff.dataset.drop) {
-                clearTimeout(Number(puff.dataset.drop));
-                puff.dataset.drop = '';
-            }
-            const anims = puff.getAnimations({ subtree: true });
-            for (const anim of anims) {
-                anim.pause();
-                anim.currentTime = t;
-            }
-            return anims.length > 0;
-        }, ms);
-        check(ok, `분필 가루 ${ms}ms 프레임이 없습니다.`);
-        await delay(40);
-    };
-    const fireDust = async (page, selector) => {
-        await page.waitForSelector(selector);
-        await page.evaluate((sel) => {
-            const btn = [...document.querySelectorAll(sel)].find((el) => {
-                const r = el.getBoundingClientRect();
-                const s = getComputedStyle(el);
-                return r.width > 0 && r.height > 0 && s.display !== 'none';
-            });
-            btn?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
-        }, selector);
-        await delay(30);
-        const dust = await page.evaluate(() => document.querySelector('.chalk-puff')?.className || '');
-        check(/chalk-puff/.test(dust), `분필 가루 효과가 없습니다: ${dust}`);
-    };
-    {
-        const page = await openPage({ width: 1280, height: 900, mode: 'light', skin: 'cork', hash: '#/today' });
-        await fireDust(page, '.desk-fab');
-        await pauseDust(page, 16);
-        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-1.png') });
-        await pauseDust(page, 200);
-        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-2.png') });
-        await pauseDust(page, 450);
-        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-3.png') });
-        await page.close();
-    }
-    {
-        const page = await openPage({ width: 1280, height: 900, mode: 'dark', skin: 'cork', hash: '#/today' });
-        await fireDust(page, '.desk-fab');
-        await pauseDust(page, 200);
-        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-1280-dark.png') });
-        await page.close();
-    }
-    {
-        const page = await openPage({ width: 390, height: 844, mode: 'light', skin: 'cork', hash: '#/today' });
-        await fireDust(page, '.tbj-mid');
-        await pauseDust(page, 200);
-        await page.screenshot({ path: resolve(shots, 'cork-jam-dust-390-light.png') });
-        await page.close();
-    }
 } finally {
     await browser.close().catch(() => {});
     preview.kill();

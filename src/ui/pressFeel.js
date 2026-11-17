@@ -2,7 +2,6 @@
     소리 곡선은 완성본의 뽁·톡이고, 재생은 글자 소리와 같은 오디오 컨텍스트·리미터를 씁니다.
     기본은 꺼져 있고, 소리를 끄면 진동도 같이 꺼집니다. */
 
-import { puffChalkDust } from './chalkPuff.js';
 import { withKeyAudio } from './keyfeel.js';
 
 export const JAM_KEY = 'ssug-gyomu-press-feel';
@@ -90,7 +89,6 @@ export function pressDown(target, options = {}) {
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', onUp);
     document.addEventListener('visibilitychange', onHide);
-    puffChalkDust(button);
     if (options.silent || !jamFeelEnabled()) return;
     playJam('pop');
     vibratePress();

@@ -84,16 +84,15 @@ check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.')
 check(/skin-tray/.test(css) && /tray-wood\.webp/.test(css) && /tray-chalk\.webp/.test(deco) && /tray-eraser\.webp/.test(deco), '분필 받침대가 없습니다.');
 check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
-check(/padding-bottom:\s*96px/.test(css) && /height:\s*96px/.test(css), '쨈이 분필 받침대 위에 앉을 자리가 없습니다.');
+check(/padding-bottom:\s*120px/.test(css) && /height:\s*120px/.test(css), '분필 받침대 자리가 없습니다.');
+check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
-check(/fab-eraser\.webp/.test(css) && /\.jar-svg/.test(css) && /chalk-puff/.test(css) && /pointer-events:\s*none/.test(css), '쨈 지우개·분필 가루가 없습니다.');
-check(/prefers-reduced-motion:\s*reduce/.test(css) && /cork-chalk-cloud/.test(css) && /cork-chalk-speck/.test(css), '분필 가루 움직임 줄이기가 없습니다.');
+check(!/fab-eraser|jam-eraser|chalk-puff|cork-chalk-cloud/.test(css), '쨈 지우개·분필 가루가 남아 있습니다.');
+check(!/jar-svg[^{]*\{[^}]*display:\s*none/.test(css.replace(/\s+/g, ' ')), '쨈 키캡 병을 숨깁니다.');
 check(!/linear-gradient\(90deg, rgba\(246, 240, 228/.test(css), '서랍 메뉴 종이 바탕이 남아 있습니다.');
 check(/side-hotkey/.test(css) && /justify-content:\s*center/.test(css), '서랍 글씨 가운데·단축키 위치가 없습니다.');
-const puff = src('src/ui/chalkPuff.js');
-check(puff.includes("getAttribute('data-skin') !== 'cork'") && puff.includes('prefers-reduced-motion'), '가루 효과가 코르크 밖에서도 돕니다.');
-
-check(src('src/ui/pressFeel.js').includes('puffChalkDust'), '짬 누름에 가루 효과가 없습니다.');
+check(!existsSync(`${root}/src/ui/chalkPuff.js`) && !existsSync(`${root}/src/ui/skin/bg/fab-eraser.webp`) && !existsSync(`${root}/src/ui/skin/bg/jam-eraser.webp`), '쓰지 않는 가루·지우개 파일이 남아 있습니다.');
+check(!src('src/ui/pressFeel.js').includes('puffChalkDust') && !src('src/ui/pressFeel.js').includes('chalkPuff'), '짬 누름에 가루 효과가 남아 있습니다.');
 for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chalk', 'globe', 'plant', 'books', 'clock', 'speaker']) {
     const file = `${root}/src/ui/skin/props/${name}.webp`;
     check(existsSync(file), `소품 파일이 없습니다: ${name}.webp`);
@@ -103,7 +102,7 @@ for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chal
     }
 }
 const bgLimit = { chalkboard: 120, desk: 120 };
-for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser', 'fab-eraser']) {
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser']) {
     const file = `${root}/src/ui/skin/bg/${name}.webp`;
     check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
     if (existsSync(file)) {
@@ -195,11 +194,12 @@ for (const [label, block] of [['밝은', light], ['어두운', dark]]) {
     }
 }
 
-/* 키캡 그림자 깊이(px)는 원래 값을 유지하고 색만 바꿉니다. */
-const jamShadow = css.match(/html\[data-skin="cork"\][\s\S]*?\.fab-disc\.jar-disc[\s\S]*?box-shadow:\s*([^;]+);/)?.[1] || '';
-check(/0 0 0 3px/.test(jamShadow) && /0 3px 0 3px/.test(jamShadow) && /0 6px 0 3px/.test(jamShadow)
-    && /0 12px 0 3px/.test(jamShadow) && /0 20px 28px/.test(jamShadow) && /0 8px 16px/.test(jamShadow),
-    `쨈 키캡 그림자 깊이가 바뀌었습니다: ${jamShadow.replace(/\s+/g, ' ').slice(0, 180)}`);
+/* 코르크는 원래 쨈 키캡(깊이·모양)을 덮지 않습니다. 깊이는 tabbar.css 그대로입니다. */
+check(!/\[data-skin="cork"\][^{]*\.fab-disc\.jar-disc/.test(css.replace(/\s+/g, ' ')), '코르크가 쨈 키캡을 덮습니다.');
+const tab = src('src/ui/tabbar.css');
+check(/0 0 0 3px/.test(tab) && /0 3px 0 3px/.test(tab) && /0 6px 0 3px/.test(tab)
+    && /0 12px 0 3px/.test(tab) && /0 20px 28px/.test(tab) && /0 8px 16px/.test(tab),
+    '원래 쨈 키캡 그림자 깊이가 없습니다.');
 
 if (failures.length) {
     console.error(failures.map((m) => `- ${m}`).join('\n'));
