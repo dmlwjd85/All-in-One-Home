@@ -175,13 +175,14 @@ export function statusBg(status) {
 }
 
 /** 할 일 제목. 충돌 사본이면 머리글 대신 '충돌 사본' 배지를 달고, 좁은 화면(320px)에서도 자르지 않고 줄을 바꿉니다. */
-export function TodoTitle({ title, className = '', lead = '' }) {
+/** mark: 제목 앞에 붙는 작은 표시(회의록에서 온 할 일의 📝 같은 것). */
+export function TodoTitle({ title, className = '', lead = '', mark = null }) {
     const part = splitConflict(title);
-    if (!part.conflict) return <span className={className}>{lead}{part.title}</span>;
+    if (!part.conflict) return <span className={className}>{lead}{mark}{part.title}</span>;
     return (
         <span className={`${className} is-conflict`} data-conflict-copy="1">
             <span className="conflict-badge">충돌 사본</span>
-            <span className="conflict-text">{lead}{part.title}</span>
+            <span className="conflict-text">{lead}{mark}{part.title}</span>
         </span>
     );
 }

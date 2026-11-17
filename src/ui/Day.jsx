@@ -10,6 +10,7 @@ import { refreshGcal } from '../lib/gcalLive.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { Btn, TodoTitle } from './bits.jsx';
+import { OriginMark } from './OriginMark.jsx';
 import { EventLine } from './EventLine.jsx';
 import { isLocked, withUsedCount } from '../lib/periodLocal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
@@ -109,7 +110,7 @@ export function Day() {
                 })()}
                 {todos.map((row) => (
                     <div key={row.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} title={row.title} /></Btn>
+                        <Btn className={row.done ? 'chip on' : 'chip'} style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', whiteSpace: 'normal' }} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}><TodoTitle className="day-todo-title" lead={`${row.done ? '끝냄' : '아직'} `} mark={<OriginMark row={row} />} title={row.title} /></Btn>
                         <Btn className="chip" onClick={async () => {
                             const failed = await removeItem('todos', row.id);
                             if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);

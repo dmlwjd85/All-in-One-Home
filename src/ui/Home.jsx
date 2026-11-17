@@ -9,6 +9,8 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { splitConflict } from '../lib/conflict.js';
 import { Btn, Motto, Symbol, TodoTitle, studentName } from './bits.jsx';
+import { OriginMark } from './OriginMark.jsx';
+import { plainMemo } from '../lib/origin.js';
 import { ClayMark } from './ClayMark.jsx';
 import { ReasonSheet } from './Attend.jsx';
 import { allLengths, allStarts, isLocked, lastPeriod, skipPeriods, withUsedCount, workCardOff } from '../lib/periodLocal.js';
@@ -208,7 +210,7 @@ export function Home() {
                 <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                     {todos.slice(0, 3).map((row) => (
                         <Btn key={row.id} className="home-line" data-home-todo="1" aria-label={`할 일 자세히: ${splitConflict(row.title).conflict ? `충돌 사본, ${splitConflict(row.title).title}` : row.title}`} onClick={() => setDetail({ kind: 'todo', id: row.id })}>
-                            <TodoTitle className="home-line-text" lead={`${row.done ? '☑' : '☐'} `} title={row.title} />
+                            <TodoTitle className="home-line-text" lead={`${row.done ? '☑' : '☐'} `} mark={<OriginMark row={row} />} title={row.title} />
                             {row.of ? <span className="muted num" style={{ flex: 'none' }}>{row.of}명 중 {row.got}명</span> : <span className={`num${row.due ? ' todo-due' : ' muted'}`} style={{ flex: 'none' }}>{row.due ? dueLabel(row.due, clock.ymd) : ''}</span>}
                         </Btn>
                     ))}
@@ -229,7 +231,7 @@ export function Home() {
                     {events.slice(0, 3).map((row) => (
                         <Btn key={row.id} className="home-event-line" data-home-event="1" aria-label={`일정 자세히: ${row.title}`} onClick={() => setDetail({ kind: 'event', id: row.id })}>
                             <strong className="clip2">{row.end && row.end > row.date ? `${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}~${Number(row.end.slice(5, 7))}/${Number(row.end.slice(8))}` : `${weekdayKo(row.date)} ${Number(row.date.slice(5, 7))}/${Number(row.date.slice(8))}`} · {row.endTime ? `${eventClock(row)} ` : ''}{row.title}</strong>
-                            {row.memo && <p className="muted clip2" style={{ margin: '2px 0 0' }}>{row.memo}</p>}
+                            {plainMemo(row.memo, row) && <p className="muted clip2" style={{ margin: '2px 0 0' }}>{plainMemo(row.memo, row)}</p>}
                         </Btn>
                     ))}
                     {googleWeek.map((row) => (

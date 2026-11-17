@@ -3,7 +3,7 @@ import { finishMinutesAsk, joined, registerMinutes, removeItem, saveTextItem } f
 import { photoOwner, removeOwnerPhotos } from '../lib/photos.js';
 import { PhotoStrip, usePhotoCounts } from './PhotoStrip.jsx';
 import { allStarts } from '../lib/periodLocal.js';
-import { forgetMinutesLinks, setMinutesPending } from '../lib/minutesExtract.js';
+import { forgetMinutesLinks, minutesLineMarks, setMinutesPending } from '../lib/minutesExtract.js';
 import { MEET_KINDS } from '../lib/msgParse.js';
 import {
     MINUTES_ATTENDEES_MAX, MINUTES_TAG, MINUTES_TEXT_MAX, MINUTES_TITLE_MAX,
@@ -198,9 +198,10 @@ function MinutesListView({ rows }) {
 }
 
 function MinutesView({ row }) {
-    const { go, showToast } = useUi();
+    const { go, showToast, data } = useUi();
     const [asking, setAsking] = useState(false);
     const kinds = (row.tags || []).filter((tag) => tag && tag !== MINUTES_TAG);
+    const marks = minutesLineMarks(row.text, row.id, joined(data, 'todos').map((item) => item.id), joined(data, 'events').map((item) => item.id));
     async function drop() {
         const failed = await removeItem('notes', row.id);
         if (failed?.storageFailed) return;
@@ -223,7 +224,20 @@ function MinutesView({ row }) {
             {row.attendees ? <p className="minutes-view-meta">참석: {row.attendees}</p> : null}
             {kinds.length ? <p className="minutes-view-meta">{kinds.join(' · ')}</p> : null}
             {row.localOnly ? <p className="muted">민감할 수 있는 낱말이 있어 이 기기에만 남겨 두었어요.</p> : null}
-            <div className="minutes-body solid-card" data-role="minutes-body">{row.text}</div>
+            {/* 할 일·일정으로 등록된 줄은 줄 끝에 ✅·📅 만 붙입니다(따로 목록을 늘어놓지 않아 스크롤이 늘지 않게). */}
+            <div className="minutes-body solid-card" data-role="minutes-body">
+                {String(row.text || '').split('\n').map((line, index) => {
+                    const mark = marks[index] || { todo: 0, event: 0 };
+                    return (
+                        <span key={index} className="minutes-line">
+                            {line}
+                            {mark.todo ? <span className="origin-mark is-after" role="img" aria-label="할 일로 등록됨" title="할 일로 등록됨" data-line-mark="todo">✅</span> : null}
+                            {mark.event ? <span className="origin-mark is-after" role="img" aria-label="일정으로 등록됨" title="일정으로 등록됨" data-line-mark="event">📅</span> : null}
+                            {'\n'}
+                        </span>
+                    );
+                })}
+            </div>
             {photoOwner('notes', row.id) ? <PhotoStrip owner={photoOwner('notes', row.id)} localOnly={Boolean(row.localOnly)} /> : null}
             {asking ? (
                 <div className="minutes-confirm" role="alertdialog" aria-label="회의록 지우기 확인">

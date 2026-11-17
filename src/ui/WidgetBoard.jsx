@@ -19,6 +19,7 @@ import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
 import { usePeriodLocal } from './usePeriodLocal.js';
 import { Btn, Field, TodoTitle } from './bits.jsx';
+import { OriginMark } from './OriginMark.jsx';
 import './widgets.css';
 
 const META = Object.fromEntries(WIDGETS.map((w) => [w.id, w]));
@@ -94,7 +95,7 @@ function TodoWidget({ data }) {
             <div className="wb-list">
                 {left.slice(0, 5).map((row) => (
                     <Btn key={row.id} className="wb-todo" aria-label={`할 일 끝내기: ${row.title}`} onClick={(event) => toggleTodoFx(row.id, event, { showToast })}>
-                        <TodoTitle className="clip1" lead="☐ " title={row.title} />
+                        <TodoTitle className="clip1" lead="☐ " mark={<OriginMark row={row} />} title={row.title} />
                     </Btn>
                 ))}
                 {!left.length && <p className="wb-item muted">다 끝냈어요</p>}

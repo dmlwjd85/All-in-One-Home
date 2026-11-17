@@ -1945,7 +1945,6 @@ button.hero-pill.home-todo-link {
 
 /* 회의록 저장 뒤 노란 카드(PR #64)와 할 일·일정에서 회의록으로 가는 줄 */
 .minutes-ask-list { display: flex; flex-direction: column; gap: 8px; }
-.minutes-from { margin-top: 4px; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
 
 /* 회의록 확인 카드(시안 A): 왜 묻는지 배지 → 제목 → 고칠 칩 → 등록/빼기 */
 .ask-card { padding: 12px 14px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -2127,3 +2126,6 @@ button.hero-pill.home-todo-link {
 .allergy-group-head.tap:disabled { opacity: 1; }
 .msg-side { display: flex; flex-direction: column; gap: 4px; flex: 0 0 44px; }
 .msg-emoji { font-size: 22px; line-height: 1; }
+/* 파생 표시: 제목 앞 그림 글자 하나(줄을 늘리지 않음) */
+.origin-mark { display: inline-block; margin-right: 4px; font-size: .9em; line-height: 1; vertical-align: -0.05em; }
+.origin-mark.is-after { margin: 0 0 0 4px; }

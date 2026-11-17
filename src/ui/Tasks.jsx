@@ -9,6 +9,7 @@ import { GoalMeter, PriMark, PriPicks, SortToggle, useTodoSort } from './todoUi.
 import { clearNoticeDay, pickNotice, restoreNoticeDay, saveNotice } from './noticeSave.js';
 import { useUi } from './context.jsx';
 import { Btn, IconTrash, SpreadHint, TodoTitle } from './bits.jsx';
+import { OriginMark } from './OriginMark.jsx';
 import { ClayMark } from './ClayMark.jsx';
 import { DetailSheet } from './DetailSheet.jsx';
 import { TodoEditSheet } from './TodoEditSheet.jsx';
@@ -35,6 +36,8 @@ export function Tasks() {
     const todos = joined(data, 'todos');
     const inbox = data.inbox || [];
     const allNotes = joined(data, 'notes');
+    const meetingRows = minutesList(allNotes);
+    const meetOf = (row) => minutesOf(row.id, meetingRows);
     const notes = allNotes.filter((row) => !isMinutes(row) && !isMealNote(row) && !isHomeworkNote(row));
     const meetings = allNotes.filter((row) => isMinutes(row) && !isHomeworkNote(row)).length;
     const follows = joinedRecords(data).filter((row) => row.follow);
@@ -143,7 +146,7 @@ export function Tasks() {
                                     else toggle(row.id, { currentTarget: event.currentTarget.parentElement?.querySelector('.todo-check') || event.currentTarget });
                                 }}>
                                     <PriMark row={row} />
-                                    <TodoTitle className="todo-title" lead={row.localOnly ? '🔒 ' : ''} title={row.title} />
+                                    <TodoTitle className="todo-title" lead={row.localOnly ? '🔒 ' : ''} mark={<OriginMark row={row} title={meetOf(row) ? minutesTitle(meetOf(row)) : ''} minutesId={meetOf(row)?.id} />} title={row.title} />
                                 </Btn>
                                 {row.due ? <span className="todo-due num">{dueLabel(row.due, clock.ymd)}{row.time ? ` ${row.time}` : ''}</span> : null}
                                 <Btn className="icon-btn todo-edit-btn" aria-label="할 일 고치기" data-todo-edit="1" onClick={() => setEditing(row)}><span aria-hidden="true">✎</span></Btn>
@@ -152,10 +155,6 @@ export function Tasks() {
                                     if (!failed?.storageFailed) showToast('할 일을 지웠어요.', true);
                                 }}><IconTrash /></Btn>
                             </div>
-                            {(() => {
-                                const meet = minutesOf(row.id, minutesList(allNotes));
-                                return meet ? <Btn className="chip minutes-from" data-minutes-from={meet.id} onClick={() => go(`#/minutes/${meet.id}`)}>📝 회의록 · {minutesTitle(meet)}</Btn> : null;
-                            })()}
                             {row.of ? <p className="num" style={{ margin: '4px 0' }}>{row.of}명 중 {row.got}명 · 안 낸 친구 {row.pendingNos?.length || 0}명</p> : null}
                             {(row.pendingNos || []).length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

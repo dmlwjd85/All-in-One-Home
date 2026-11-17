@@ -704,7 +704,7 @@ for (const value of settingsWords) {
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v100'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v101'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

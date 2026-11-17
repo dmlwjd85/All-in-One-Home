@@ -414,3 +414,23 @@ export function untouchedSince(item, row, bucket) {
     if (String(row.time || '') !== String(item.time || '')) return false;
     return true;
 }
+
+/**
+ * 회의록 본문 줄마다 할 일(✅)·일정(📅)으로 등록된 것이 있는지. 화면에서 그 줄 끝에 그림 글자만 붙입니다.
+ * 돌려주는 값: 본문 줄 수만큼의 배열, 각 칸은 { todo, event } 개수.
+ */
+export function minutesLineMarks(text, minutesId, todoIds, eventIds) {
+    const todos = todoIds instanceof Set ? todoIds : new Set(todoIds || []);
+    const events = eventIds instanceof Set ? eventIds : new Set(eventIds || []);
+    return String(text || '').split('\n').map((raw) => {
+        const line = cleanLine(raw);
+        const out = { todo: 0, event: 0 };
+        if (!line || line.length < 3) return out;
+        for (let n = 0; n < 4; n += 1) {
+            const id = linkedId(minutesId, line, n);
+            if (todos.has(id)) out.todo += 1;
+            if (events.has(id)) out.event += 1;
+        }
+        return out;
+    });
+}

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { eventClock } from '../lib/date.js';
 import { removeItem, saveTextItem } from '../lib/db.js';
 import { Btn, TodoTitle } from './bits.jsx';
+import { OriginMark } from './OriginMark.jsx';
+import { plainMemo } from '../lib/origin.js';
 import { DetailSheet } from './DetailSheet.jsx';
 
 /** 일정 고치기·지우기. 자세히 보기 팝업 안에서만 씁니다(줄마다 있던 '고치기' 버튼은 없앴어요). */
@@ -37,7 +39,7 @@ export function EventLine({ row, showToast }) {
             <Btn className={row.google ? 'gcal-line event-line-text' : 'event-line-text'} data-event-detail="1" aria-label={`일정 자세히: ${row.title || '일정'}`} onClick={() => setDetail(true)}>
                 {row.google ? <span className="gcal-badge">구글</span> : (row.localOnly ? '🔒 ' : '')}
                 {/* 충돌 사본(업데이트 전 수정, PR #66 r4)은 할 일과 같은 '충돌 사본' 배지로 보입니다. */}
-                <TodoTitle lead={clock ? `${clock} ` : ''} title={row.title} />{row.memo ? ` · ${row.memo}` : ''}
+                <TodoTitle lead={clock ? `${clock} ` : ''} mark={<OriginMark row={row} />} title={row.title} />{plainMemo(row.memo, row) ? ` · ${plainMemo(row.memo, row)}` : ''}
                 {row.google ? <span className="muted"> · 보기만</span> : null}
             </Btn>
             {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} {...eventEditor(row, showToast)} />}
@@ -56,7 +58,7 @@ export function WeekEvent({ row, showToast }) {
                 <span className="week-time num">{start || '하루'}</span>
                 <span className="week-title">
                     {row.google ? <span className="gcal-badge">구글</span> : (row.localOnly ? '🔒 ' : '')}
-                    <TodoTitle title={row.title} />
+                    <TodoTitle mark={<OriginMark row={row} />} title={row.title} />
                 </span>
             </Btn>
             {detail && <DetailSheet kind="event" row={row} onClose={() => setDetail(false)} {...eventEditor(row, showToast)} />}
