@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v2';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v3';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -100,11 +100,27 @@ async function overlapHits(page, label) {
         }
         const hits = [];
         const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
+        const shown = (el, r) => {
+            if (r.width < 2 || r.height < 2) return false;
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return false;
+            if (r.bottom < 1 || r.top > innerHeight - 1 || r.right < 1 || r.left > innerWidth - 1) return false;
+            let p = el;
+            while (p && p !== document.body) {
+                const cs = getComputedStyle(p);
+                const oy = cs.overflowY;
+                const ox = cs.overflowX;
+                if (oy !== 'visible' || ox !== 'visible') {
+                    const pr = p.getBoundingClientRect();
+                    if (r.bottom <= pr.top + 1 || r.top >= pr.bottom - 1 || r.right <= pr.left + 1 || r.left >= pr.right - 1) return false;
+                }
+                p = p.parentElement;
+            }
+            return true;
+        };
         const add = (el, name) => {
             const r = el.getBoundingClientRect();
-            if (r.width < 2 || r.height < 2) return;
-            const st = getComputedStyle(el);
-            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) return;
+            if (!shown(el, r)) return;
             hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name });
         };
         document.querySelectorAll('button, a, input, textarea, select, [role="button"], .fuse, .tabbar, .desk-fab, .cloud-note').forEach((el) => add(el, el.getAttribute('aria-label') || el.className || el.tagName));
@@ -120,7 +136,8 @@ async function overlapHits(page, label) {
             const range = document.createRange();
             range.selectNodeContents(walker.currentNode);
             const r = range.getBoundingClientRect();
-            if (r.width < 2 || r.height < 2) continue;
+            const p = walker.currentNode.parentElement;
+            if (!p || !shown(p, r)) continue;
             hits.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, name: walker.currentNode.nodeValue.trim().slice(0, 28) });
         }
         return { deco, hits };
@@ -132,6 +149,69 @@ async function overlapHits(page, label) {
                 return;
             }
         }
+    }
+}
+
+async function haloHits(page, label) {
+    const misses = await page.evaluate(() => {
+        const miss = [];
+        const skipTag = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
+        const buttons = [...document.querySelectorAll('button, a, [role="button"], .chip, .icon-btn, .primary-btn')];
+        const shadows = [];
+        for (const el of buttons) {
+            const st = getComputedStyle(el);
+            if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 8 || r.height < 8) continue;
+            const down = (() => {
+                let maxDown = 0;
+                const shadow = st.boxShadow;
+                if (!shadow || shadow === 'none') return 0;
+                for (const part of shadow.split(/,(?![^(]*\))/)) {
+                    if (/inset/i.test(part)) continue;
+                    const nums = [...part.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1]));
+                    if (nums.length < 2) continue;
+                    maxDown = Math.max(maxDown, nums[1] + (nums[2] || 0) + (nums[3] || 0));
+                }
+                return maxDown;
+            })();
+            if (down < 4) continue;
+            shadows.push({
+                el,
+                left: r.left - 4,
+                top: r.bottom,
+                right: r.right + 4,
+                bottom: r.bottom + down,
+            });
+        }
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                const p = node.parentElement;
+                if (!p || skipTag.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+                return NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        const overlap = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+        while (walker.nextNode()) {
+            const parent = walker.currentNode.parentElement;
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            const r = range.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) continue;
+            const box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+            const hit = shadows.some((sh) => !sh.el.contains(parent) && overlap(sh, box));
+            if (!hit) continue;
+            const st = getComputedStyle(parent);
+            const stroke = parseFloat(st.webkitTextStrokeWidth) || 0;
+            const halo = String(st.getPropertyValue('--text-halo') || '').trim();
+            if (stroke >= 1 && halo) continue;
+            miss.push(walker.currentNode.nodeValue.trim().slice(0, 28));
+        }
+        return miss.slice(0, 8);
+    });
+    if (misses.length) {
+        check(false, `${label} 그림자 위 글자에 바탕색 테두리가 없습니다: ${misses.join(' | ')}`);
     }
 }
 
@@ -264,11 +344,24 @@ try {
                 }));
                 check(look.skin === 'cork', `${file} 에 코르크가 없습니다.`);
                 check(look.deco === 'none', `${file} 장식이 클릭을 가로챕니다.`);
-                check(look.before === 'none' || look.before === 'normal', `${file} 떠 있는 장식이 글자 위에 있습니다.`);
+                if (name === 'jam') {
+                    check(look.before === 'none' || look.before === 'normal', `${file} 쨈 팝업인데 장식이 남아 있습니다.`);
+                } else {
+                    check(look.before !== 'none' && look.before !== 'normal', `${file} 떠 있는 소품이 없습니다.`);
+                }
                 await overlapHits(page, file);
+                await haloHits(page, file);
                 await page.close();
             }
         }
+    }
+
+    /* 기본 화면도 양각 그림자 위 글자에 바탕색 테두리가 있어야 합니다. */
+    {
+        const page = await openPage({ width: 390, skin: 'basic', hash: '#/today' });
+        await delay(180);
+        await haloHits(page, '기본 홈');
+        await page.close();
     }
 } finally {
     await browser.close().catch(() => {});

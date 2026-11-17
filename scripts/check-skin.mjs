@@ -68,13 +68,19 @@ for (const sel of selectors) {
 }
 check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
-check(css.includes('max-width: 1279px'), '좁은 화면에서 장식을 숨기지 않습니다.');
-check(/\.app-bg::before[\s\S]*content:\s*none/.test(css), '떠 있는 장식을 숨기지 않습니다.');
+check(/min-width:\s*900px/.test(css), '넓은 화면 책상 소품 자리가 없습니다.');
+check(/pencil\.svg/.test(css) && /globe\.svg/.test(css) && /blocks\.svg/.test(css) && /plant\.svg/.test(css), '책상 소품이 없습니다.');
+check(/star\.svg/.test(css) && /flower\.svg/.test(css) && /postit\.svg/.test(css), '별·꽃·메모 소품이 없습니다.');
+check(/quick-bar\.is-open/.test(css) && /content:\s*none/.test(css), '쨈 팝업에서 장식을 가리지 않습니다.');
+check(/\.store-badge/.test(css) && /cork-tag-orange/.test(css), '보호 라벨 색이 없습니다.');
+check(!/\.store-notice h2[^{]*\{[^}]*cork-tag-orange/.test(css.replace(/\s+/g, ' ')), '보호 안내를 제목 막대로 칠합니다.');
 check(css.includes('html.dark[data-skin="cork"]'), '어두운 밤 교실 톤이 없습니다.');
 check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 그림을 씁니다.');
 
 const indexCss = src('src/index.css');
 check(/\.skin-swatch/.test(indexCss) && indexCss.includes('data-skin-sample="cork"'), '설정 꾸미기 견본이 없습니다.');
+check(indexCss.includes('--text-halo') && indexCss.includes('-webkit-text-stroke'), '단추 그림자 위 글자 테두리가 없습니다.');
+check(css.includes('--text-halo'), '코르크 바탕 헤일로 변수가 없습니다.');
 
 const sw = src('public/sw.js');
 check(sw.includes("const CACHE = 'ssug-gyomu-shell-v102'"), '서비스 워커가 v102가 아닙니다.');

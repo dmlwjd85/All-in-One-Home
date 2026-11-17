@@ -1,7 +1,7 @@
 /* 교실 코르크 화면 꾸미기. html[data-skin="cork"] 일 때만 색·장식이 바뀝니다.
    기능·화면 구조·동작은 건드리지 않습니다. 출결 색(--st-*)은 덮지 않습니다.
    하단 탭·쨈 키캡은 그림자 깊이를 그대로 두고 색만 맞춥니다.
-   떠 있는 장식은 넓은 화면 여백에만 두고, 글자·단추와 겹치지 않습니다. */
+   떠 있는 장식은 글자·단추와 겹치지 않는 여백에만 둡니다. */
 
 html[data-skin="cork"] {
     --bg: #F6EDD8;
@@ -37,6 +37,8 @@ html[data-skin="cork"] {
     --cork-tag-coral: #C24A3A;
     --cork-tag-green: #2F7A3E;
     --cork-tag-orange: #C45C12;
+    --cork-board: #C9A06E;
+    --text-halo: #C9A06E;
 }
 
 html.dark[data-skin="cork"] {
@@ -72,6 +74,8 @@ html.dark[data-skin="cork"] {
     --cork-tag-coral: #F0A090;
     --cork-tag-green: #8FBF7A;
     --cork-tag-orange: #E8C86A;
+    --cork-board: #2A2118;
+    --text-halo: #2A2118;
 }
 
 /* 또렷한 코르크 질감. 카드 색(--bg)은 크림으로 두고 페이지만 코르크입니다. */
@@ -101,7 +105,7 @@ html[data-skin="cork"] .app-bg {
     isolation: isolate;
 }
 
-/* 크림 스칼럽 인덱스카드. 테두리는 장식이라 글자 칸을 늘리지 않게 얇게 둡니다. */
+/* 크림 스칼럽 인덱스카드. 종이 두께·살짝 들뜬 그림자·은은한 종이결. */
 html[data-skin="cork"] .glass,
 html[data-skin="cork"] .solid-card,
 html[data-skin="cork"] .hero,
@@ -109,17 +113,23 @@ html[data-skin="cork"] .tip-bubble,
 html[data-skin="cork"] .suggest-card,
 html[data-skin="cork"] .minutes-body,
 html[data-skin="cork"] .minutes-item {
+    --text-halo: #F6EDD8;
     background-color: var(--bg);
     background-image:
         url('./skin/pin-coral.svg'),
-        url('./skin/clip.svg');
-    background-repeat: no-repeat, no-repeat;
-    background-position: 12px 1px, calc(100% - 10px) 0;
-    background-size: 12px 16px, 11px 20px;
+        url('./skin/clip.svg'),
+        url('./skin/paper-fiber.svg');
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-position: 12px 1px, calc(100% - 10px) 0, 0 0;
+    background-size: 12px 18px, 11px 22px, 48px 48px;
     border-radius: 10px;
     border: 6px solid transparent;
     border-image: url('./skin/scallop.svg') 10 round;
-    box-shadow: 2px 3px 0 rgba(90, 58, 36, .16);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 252, 245, .7),
+        1px 1px 0 #E6D3B4,
+        2px 3px 0 #D4C09A,
+        3px 6px 10px rgba(90, 58, 36, .18);
 }
 html[data-skin="cork"] button.glass,
 html[data-skin="cork"] button.solid-card,
@@ -127,7 +137,12 @@ html[data-skin="cork"] a.glass,
 html[data-skin="cork"] a.solid-card,
 html[data-skin="cork"] [role="button"].glass,
 html[data-skin="cork"] [role="button"].solid-card {
-    box-shadow: var(--neo-raise), 2px 3px 0 rgba(90, 58, 36, .16);
+    box-shadow:
+        var(--neo-raise),
+        inset 0 1px 0 rgba(255, 252, 245, .7),
+        1px 1px 0 #E6D3B4,
+        2px 3px 0 #D4C09A,
+        3px 6px 10px rgba(90, 58, 36, .18);
 }
 html.dark[data-skin="cork"] .glass,
 html.dark[data-skin="cork"] .solid-card,
@@ -136,48 +151,80 @@ html.dark[data-skin="cork"] .tip-bubble,
 html.dark[data-skin="cork"] .suggest-card,
 html.dark[data-skin="cork"] .minutes-body,
 html.dark[data-skin="cork"] .minutes-item {
+    --text-halo: #3E342C;
+    background-image:
+        url('./skin/pin-coral.svg'),
+        url('./skin/clip.svg'),
+        url('./skin/paper-fiber-dark.svg');
     border-image-source: url('./skin/scallop-dark.svg');
-    box-shadow: 2px 3px 0 rgba(0, 0, 0, .35);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .06),
+        1px 1px 0 #2A2118,
+        2px 3px 0 #1A1410,
+        3px 6px 12px rgba(0, 0, 0, .4);
 }
 
 html[data-skin="cork"] .home-todo,
 html[data-skin="cork"] .fold.home-todo {
-    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg');
+    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-time,
 html[data-skin="cork"] .fold.home-time {
-    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg');
+    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-event,
 html[data-skin="cork"] .fold.home-event {
-    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg');
+    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .hero,
 html[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg');
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .store-notice {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/postit.svg');
-    background-position: 12px 1px, calc(100% - 8px) 4px;
-    background-size: 12px 16px, 28px 28px;
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
+    background-position: 12px 1px, calc(100% - 10px) 0, 0 0;
+    background-size: 12px 18px, 11px 22px, 48px 48px;
+}
+html.dark[data-skin="cork"] .home-todo,
+html.dark[data-skin="cork"] .fold.home-todo {
+    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+}
+html.dark[data-skin="cork"] .home-time,
+html.dark[data-skin="cork"] .fold.home-time {
+    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+}
+html.dark[data-skin="cork"] .home-event,
+html.dark[data-skin="cork"] .fold.home-event {
+    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+}
+html.dark[data-skin="cork"] .hero,
+html.dark[data-skin="cork"] .home-quick {
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+}
+html.dark[data-skin="cork"] .store-notice {
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
 }
 
 html[data-skin="cork"] .sheet,
 html[data-skin="cork"] .quick-bar {
+    --text-halo: #F6EDD8;
     background-color: var(--bg);
-    background-image: url('./skin/clip.svg'), url('./skin/pin-coral.svg');
-    background-repeat: no-repeat, no-repeat;
-    background-position: calc(100% - 14px) 8px, 16px 8px;
-    background-size: 14px 24px, 12px 17px;
+    background-image: url('./skin/clip.svg'), url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-position: calc(100% - 14px) 8px, 16px 8px, 0 0;
+    background-size: 14px 24px, 12px 18px, 48px 48px;
     border-radius: 12px;
     border: 6px solid transparent;
     border-image: url('./skin/scallop.svg') 10 round;
-    box-shadow: 0 -10px 24px rgba(90, 58, 36, .16);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 252, 245, .7),
+        0 -10px 24px rgba(90, 58, 36, .16);
 }
 html.dark[data-skin="cork"] .sheet,
 html.dark[data-skin="cork"] .quick-bar {
+    --text-halo: #3E342C;
     border-image-source: url('./skin/scallop-dark.svg');
-    box-shadow: 0 -10px 24px rgba(0, 0, 0, .4);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 -10px 24px rgba(0, 0, 0, .4);
 }
 
 html[data-skin="cork"] .sheet-foot {
@@ -210,6 +257,9 @@ html[data-skin="cork"] .solid-card > h2.title-font {
     line-height: 1.35;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
+    -webkit-text-stroke: 0;
+    paint-order: normal;
+    --text-halo: var(--cork-tag-blue);
 }
 html.dark[data-skin="cork"] .fold-title,
 html.dark[data-skin="cork"] .fold-hide h3,
@@ -221,35 +271,85 @@ html.dark[data-skin="cork"] .solid-card > h2.title-font {
 html[data-skin="cork"] .home-todo .fold-title,
 html[data-skin="cork"] .home-todo .fold-hide h3 {
     background: var(--cork-tag-coral);
+    --text-halo: var(--cork-tag-coral);
 }
 html[data-skin="cork"] .home-event .fold-title,
 html[data-skin="cork"] .home-event .fold-hide h3 {
     background: var(--cork-tag-green);
+    --text-halo: var(--cork-tag-green);
 }
 html[data-skin="cork"] .home-quick-title,
-html[data-skin="cork"] .store-notice h2,
 html[data-skin="cork"] .fold[data-fold="recent"] .fold-title,
 html[data-skin="cork"] .fold[data-fold="recent"] .fold-hide h3 {
     background: var(--cork-tag-orange);
+    --text-halo: var(--cork-tag-orange);
 }
-html[data-skin="cork"] .glass:nth-of-type(4n+2) > h2.title-font { background: var(--cork-tag-coral); }
-html[data-skin="cork"] .glass:nth-of-type(4n+3) > h2.title-font { background: var(--cork-tag-green); }
-html[data-skin="cork"] .glass:nth-of-type(4n+4) > h2.title-font { background: var(--cork-tag-orange); }
+html[data-skin="cork"] .glass:nth-of-type(4n+2) > h2.title-font { background: var(--cork-tag-coral); --text-halo: var(--cork-tag-coral); }
+html[data-skin="cork"] .glass:nth-of-type(4n+3) > h2.title-font { background: var(--cork-tag-green); --text-halo: var(--cork-tag-green); }
+html[data-skin="cork"] .glass:nth-of-type(4n+4) > h2.title-font { background: var(--cork-tag-orange); --text-halo: var(--cork-tag-orange); }
 
-/* 상단 제목: 압정에 매달린 나무테 초록 칠판. 글꼴은 기존 title-font 그대로입니다. */
+/* 보호 안내는 크림 카드 그대로, 색은 작은 라벨에만 둡니다. */
+html[data-skin="cork"] .store-notice h2,
+html[data-skin="cork"] .store-notice-h,
+html[data-skin="cork"] .store-notice-title {
+    background: transparent;
+    color: var(--ink);
+    -webkit-text-stroke: 1.15px var(--text-halo);
+    paint-order: stroke fill;
+}
+html[data-skin="cork"] .store-badge {
+    background: var(--cork-tag-orange);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 1px 0 rgba(90, 58, 36, .2);
+    -webkit-text-stroke: 0;
+    --text-halo: var(--cork-tag-orange);
+}
+html.dark[data-skin="cork"] .store-badge {
+    color: #2E2A2B;
+}
+
+html[data-skin="cork"] .low-card,
+html[data-skin="cork"] .gcal-error,
+html[data-skin="cork"] .rest-banner {
+    background: var(--bg);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 252, 245, .7),
+        1px 1px 0 #E6D3B4,
+        2px 3px 0 #D4C09A;
+}
+html[data-skin="cork"] .rest-banner .day-rest-mark {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 8px;
+    background: var(--cork-tag-orange);
+    color: #fff;
+    -webkit-text-stroke: 0;
+}
+
+/* 상단 제목: 압정에 매달린 나무테 초록 칠판. 나무결·분필 자국. */
 html[data-skin="cork"] .topbar .date-block {
+    --text-halo: #2F5A3A;
     background:
-        url('./skin/pin-coral.svg') 16% 2px / 12px 16px no-repeat,
-        url('./skin/pin-sky.svg') 84% 2px / 12px 16px no-repeat,
+        url('./skin/pin-coral.svg') 16% 2px / 12px 18px no-repeat,
+        url('./skin/pin-sky.svg') 84% 2px / 12px 18px no-repeat,
         url('./skin/garland.svg') top 16px center / min(100%, 200px) 16px no-repeat,
-        linear-gradient(#3E6B48, #365F40);
+        url('./skin/chalk-dust.svg') center / 100% 100% no-repeat,
+        repeating-linear-gradient(90deg, rgba(90, 58, 36, .08) 0 1px, transparent 1px 7px),
+        linear-gradient(180deg, #4A7A54 0%, #365F40 42%, #2F5A3A 100%);
     color: #F7F3E8;
     padding: 32px 10px 8px;
     border-radius: 6px;
     box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .16),
+        inset 0 -1px 0 rgba(20, 30, 18, .35),
         inset 0 0 0 2px #6B4424,
-        0 0 0 5px #8B5E3C,
-        2px 3px 0 5px #5C3A22;
+        inset 0 0 22px rgba(20, 30, 18, .22),
+        0 0 0 3px #C4A06A,
+        0 0 0 6px #8B5E3C,
+        0 0 0 7px #5C3A22,
+        2px 4px 0 6px #5C3A22,
+        3px 8px 12px rgba(60, 40, 20, .3);
+    -webkit-text-stroke: 0;
 }
 html[data-skin="cork"] .topbar .date-block .kicker,
 html[data-skin="cork"] .topbar .date-block h1,
@@ -258,65 +358,146 @@ html[data-skin="cork"] .topbar .date-block .muted,
 html[data-skin="cork"] .topbar .date-block p {
     color: #F7F3E8;
     text-shadow: 0 1px 0 rgba(46, 42, 43, .28);
+    -webkit-text-stroke: 0;
 }
 html[data-skin="cork"] .home-brand-name,
 html[data-skin="cork"] .side-brand .title-font {
-    background: linear-gradient(#3E6B48, #365F40);
+    background: linear-gradient(180deg, #4A7A54, #2F5A3A);
     color: #F7F3E8;
     padding: 4px 10px;
     border: 4px solid #8B5E3C;
-    box-shadow: inset 0 0 0 1px #6B4424;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .18),
+        inset 0 0 0 1px #6B4424,
+        1px 2px 0 #5C3A22;
     border-radius: 3px;
     display: inline-block;
+    -webkit-text-stroke: 0;
 }
 
 html.dark[data-skin="cork"] .topbar .date-block {
+    --text-halo: #14261C;
     background:
-        url('./skin/pin-coral.svg') 16% 2px / 12px 16px no-repeat,
-        url('./skin/pin-sky.svg') 84% 2px / 12px 16px no-repeat,
+        url('./skin/pin-coral.svg') 16% 2px / 12px 18px no-repeat,
+        url('./skin/pin-sky.svg') 84% 2px / 12px 18px no-repeat,
         url('./skin/garland.svg') top 16px center / min(100%, 200px) 16px no-repeat,
-        linear-gradient(#1A2F22, #14261C);
+        url('./skin/chalk-dust.svg') center / 100% 100% no-repeat,
+        linear-gradient(180deg, #1A2F22, #14261C);
     box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .08),
         inset 0 0 0 2px #2A1C12,
-        0 0 0 5px #4A3220,
-        2px 3px 0 5px #1A120C;
+        inset 0 0 22px rgba(0, 0, 0, .35),
+        0 0 0 3px #5A3E2A,
+        0 0 0 6px #4A3220,
+        0 0 0 7px #1A120C,
+        2px 4px 0 6px #1A120C,
+        3px 8px 12px rgba(0, 0, 0, .45);
 }
 html.dark[data-skin="cork"] .home-brand-name,
 html.dark[data-skin="cork"] .side-brand .title-font {
-    background: linear-gradient(#1A2F22, #14261C);
+    background: linear-gradient(180deg, #1A2F22, #14261C);
     border-color: #4A3220;
-    box-shadow: inset 0 0 0 1px #2A1C12;
+    box-shadow: inset 0 0 0 1px #2A1C12, 1px 2px 0 #1A120C;
 }
 
-/* 떠 있는 장식은 글자·단추와 겹치지 않게 기본으로 숨깁니다.
-   카드 압정·클립·칠판 가랜드만 쓰고, 여백이 없는 폭에서는 소품을 두지 않습니다. */
+/* 떠 있는 소품. 클릭은 통과하고, 글자·단추 여백에만 둡니다. */
 html[data-skin="cork"] .app-bg::before,
 html[data-skin="cork"] .app-bg::after {
-    content: none;
+    content: '';
+    position: fixed;
     pointer-events: none;
+    z-index: 0;
+    background-repeat: no-repeat;
 }
 
-@media (max-width: 1279px) {
-    html[data-skin="cork"] .app-bg::before,
+/* 폰·중간 폭: 카드 옆 16px 여백에 작은 별·꽃만. */
+html[data-skin="cork"] .app-bg::before {
+    left: 1px;
+    top: 34vh;
+    width: 16px;
+    height: 128px;
+    background-image: url('./skin/star.svg'), url('./skin/flower.svg'), url('./skin/star.svg');
+    background-position: 1px 0, 1px 52px, 2px 104px;
+    background-size: 14px 14px, 14px 14px, 12px 12px;
+    filter: drop-shadow(1px 2px 2px rgba(90, 58, 36, .28));
+}
+html[data-skin="cork"] .app-bg::after {
+    right: 1px;
+    top: 42vh;
+    width: 16px;
+    height: 110px;
+    background-image: url('./skin/flower.svg'), url('./skin/star.svg'), url('./skin/postit.svg');
+    background-position: 1px 0, 1px 46px, 1px 86px;
+    background-size: 14px 14px, 13px 13px, 14px 14px;
+    filter: drop-shadow(1px 2px 2px rgba(90, 58, 36, .28));
+}
+
+/* 넓은 화면: 하단 탭이 없고 좌우·하단 여백이 넓습니다. 책상 소품을 둡니다. */
+@media (min-width: 900px) {
+    /* 잠 오른쪽 하단 여백. 왼쪽 정렬 안내 글·일정 더하기와 떨어집니다. */
     html[data-skin="cork"] .app-bg::after {
-        content: none;
+        left: auto;
+        right: 148px;
+        top: auto;
+        bottom: 4px;
+        width: 108px;
+        height: 60px;
+        background-image: url('./skin/globe.svg'), url('./skin/plant.svg'), url('./skin/flower.svg'), url('./skin/postit.svg');
+        background-position: 0 2px, 44px 0, 86px 2px, 82px 32px;
+        background-size: 42px 54px, 38px 56px, 20px 20px, 24px 24px;
+        filter: drop-shadow(2px 3px 3px rgba(90, 58, 36, .28));
     }
+    html[data-skin="cork"] .app-bg::before {
+        left: auto;
+        right: 264px;
+        top: auto;
+        bottom: 4px;
+        width: 108px;
+        height: 60px;
+        background-image: url('./skin/pencil.svg'), url('./skin/blocks.svg'), url('./skin/star.svg');
+        background-position: 0 2px, 46px 20px, 86px 4px;
+        background-size: 44px 56px, 62px 36px, 18px 18px;
+        filter: drop-shadow(2px 3px 3px rgba(90, 58, 36, .28));
+    }
+    /* 홈은 카드가 짧아 잠 왼쪽 하단에도 책상 소품을 둡니다. */
+    html[data-skin="cork"] .app-bg:has(.home-grid)::before {
+        left: 216px;
+        right: auto;
+        width: 150px;
+        height: 62px;
+        background-image: url('./skin/pencil.svg'), url('./skin/blocks.svg'), url('./skin/postit.svg'), url('./skin/star.svg');
+        background-position: 2px 2px, 52px 22px, 118px 4px, 122px 36px;
+        background-size: 48px 58px, 70px 38px, 26px 26px, 16px 16px;
+    }
+}
+
+html[data-skin="cork"] .app-bg:has(.quick-bar.is-open)::before,
+html[data-skin="cork"] .app-bg:has(.quick-bar.is-open)::after,
+html[data-skin="cork"] .app-bg:has(.sheet-back)::before,
+html[data-skin="cork"] .app-bg:has(.sheet-back)::after {
+    content: none;
 }
 
 @media (max-width: 390px) {
     html[data-skin="cork"] .topbar .date-block {
         padding: 26px 8px 6px;
-        background-size: 10px 14px, 10px 14px, min(100%, 160px) 12px, auto;
+        background-size: 10px 14px, 10px 14px, min(100%, 160px) 12px, 100% 100%, auto, auto;
         box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, .14),
             inset 0 0 0 1px #6B4424,
-            0 0 0 4px #8B5E3C,
-            1px 2px 0 4px #5C3A22;
+            0 0 0 3px #C4A06A,
+            0 0 0 5px #8B5E3C,
+            1px 3px 0 5px #5C3A22,
+            2px 6px 10px rgba(60, 40, 20, .28);
     }
     html.dark[data-skin="cork"] .topbar .date-block {
         box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, .08),
             inset 0 0 0 1px #2A1C12,
-            0 0 0 4px #4A3220,
-            1px 2px 0 4px #1A120C;
+            0 0 0 3px #5A3E2A,
+            0 0 0 5px #4A3220,
+            1px 3px 0 5px #1A120C,
+            2px 6px 10px rgba(0, 0, 0, .4);
     }
 }
 
@@ -325,6 +506,7 @@ html[data-skin="cork"] .tabbar.tabbar-jelly {
     --tbj-ink: #4A3424;
     --tbj-deep: #C45C4A;
     --tbj-muted: #7A6A58;
+    --text-halo: #F3E6D0;
     border-color: #C4A882;
     border-radius: 22px;
     background:
@@ -415,6 +597,7 @@ html.dark[data-skin="cork"] .tabbar.tabbar-jelly {
     --tbj-ink: #1A1410;
     --tbj-deep: #F0A090;
     --tbj-muted: #C9BCB4;
+    --text-halo: #2A241E;
     background:
         radial-gradient(circle at 10px 0, transparent 6px, #3A322C 6.5px) 0 0 / 20px 12px repeat-x,
         linear-gradient(180deg, #3A322C 0%, #2A241E 100%);
@@ -434,3 +617,9 @@ html.dark[data-skin="cork"] .foil-fab .fab-disc.jar-disc {
 
 html[data-skin="cork"] .desk-fab .fab-txt { color: #8A3028; }
 html.dark[data-skin="cork"] .desk-fab .fab-txt { color: #F0A090; }
+
+html[data-skin="cork"] .primary-btn,
+html[data-skin="cork"] .hero-action,
+html[data-skin="cork"] .add-event-fab {
+    --text-halo: var(--primary);
+}

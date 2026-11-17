@@ -1,14 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="56" height="72" viewBox="0 0 56 72">
-  <path d="M10 30h36l-3.5 36H13.5z" fill="#E8C9A4" stroke="#5A3A24" stroke-width="1.4" stroke-linejoin="round"/>
-  <path d="M13 30h30l-1.2 8H14.2z" fill="#F4D8B8"/>
-  <path d="M16 8.5l6 .8 2 38-6-.8z" fill="#E08A7A" stroke="#5A3A24" stroke-width="1.1" transform="rotate(-9 19 28)"/>
-  <path d="M16 8.5l6 .8 1.2 6-6-.8z" fill="#F2C4BA" transform="rotate(-9 19 28)"/>
-  <path d="M17.2 7.2l3.6.5-1.8-5z" fill="#F6E2B8" stroke="#5A3A24" stroke-width=".9" transform="rotate(-9 19 28)"/>
-  <path d="M24 6l6 .4 1.2 40-6-.4z" fill="#7BA7C9" stroke="#5A3A24" stroke-width="1.1"/>
-  <path d="M24 6l6 .4.8 6-6-.4z" fill="#B7D2E6"/>
-  <path d="M25.2 4.6l3.6.2-1.7-4.8z" fill="#F6E2B8" stroke="#5A3A24" stroke-width=".9"/>
-  <path d="M33 9.5l6-.6 3 39-6 .6z" fill="#D4A84B" stroke="#5A3A24" stroke-width="1.1" transform="rotate(8 36 29)"/>
-  <path d="M33 9.5l6-.6 1 6-6 .6z" fill="#E8C86A" transform="rotate(8 36 29)"/>
-  <path d="M34.4 8l3.5-.4 1.5-5z" fill="#F6E2B8" stroke="#5A3A24" stroke-width=".9" transform="rotate(8 36 29)"/>
-  <path d="M28 10l5 .2.6 38-5-.2z" fill="#6B9B6E" stroke="#5A3A24" stroke-width="1.1"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="80" viewBox="0 0 64 80">
+  <defs>
+    <linearGradient id="cupW" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A07848"/>
+      <stop offset="22%" stop-color="#E2C08A"/>
+      <stop offset="48%" stop-color="#C49A62"/>
+      <stop offset="78%" stop-color="#8A5E32"/>
+      <stop offset="100%" stop-color="#6E4824"/>
+    </linearGradient>
+    <linearGradient id="cupIn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5A3A22"/>
+      <stop offset="100%" stop-color="#C4A06A"/>
+    </linearGradient>
+    <pattern id="wg" width="6" height="10" patternUnits="userSpaceOnUse">
+      <path d="M1 0c1 3 1 7 0 10" fill="none" stroke="#6A4424" stroke-width=".4" opacity=".28"/>
+    </pattern>
+  </defs>
+  <ellipse cx="32" cy="76" rx="18" ry="3.2" fill="#5A3A24" opacity=".28"/>
+  <path d="M10 34h44l-4.2 40H14.2z" fill="url(#cupW)" stroke="#5A3A24" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="M10 34h44l-4.2 40H14.2z" fill="url(#wg)"/>
+  <ellipse cx="32" cy="34" rx="22" ry="6.2" fill="url(#cupIn)" stroke="#5A3A24" stroke-width="1.1"/>
+  <ellipse cx="32" cy="33.2" rx="16" ry="3.4" fill="#3A2414" opacity=".55"/>
+  <path d="M14 38h36" stroke="#F2D8A8" stroke-width="1.2" opacity=".45"/>
+  <g transform="rotate(-11 22 28)">
+    <path d="M19 6h7l2.2 42h-11.4z" fill="#D86A5A"/>
+    <path d="M19 6h7l.6 8h-8.2z" fill="#F0A090"/>
+    <path d="M20.2 6h4.6l.4 5h-5.4z" fill="#fff" opacity=".28"/>
+    <path d="M19 48h11.4l-5.7 10z" fill="#F3D7A8" stroke="#5A3A24" stroke-width=".6"/>
+    <path d="M24.7 55.4l0 2.6-1.6 0z" fill="#3A2A22"/>
+    <rect x="19.4" y="44.2" width="10.6" height="4.2" fill="#C8C4C0" stroke="#6A6A68" stroke-width=".4"/>
+    <path d="M20 6.2h5.2l-2.6-5.4z" fill="#F4D0C8" stroke="#5A3A24" stroke-width=".6"/>
+  </g>
+  <g>
+    <path d="M27 4h7l1.4 44h-9.8z" fill="#5A92B8"/>
+    <path d="M27 4h7l.5 7h-8z" fill="#9EC6DE"/>
+    <path d="M28.1 4h4.8l.35 5H27.8z" fill="#fff" opacity=".3"/>
+    <path d="M27 48h9.8L32.4 58z" fill="#F3D7A8" stroke="#5A3A24" stroke-width=".6"/>
+    <path d="M32.4 55.2v2.8l-1.5-.1z" fill="#3A2A22"/>
+    <rect x="27.3" y="44.4" width="9.2" height="4" fill="#C8C4C0" stroke="#6A6A68" stroke-width=".4"/>
+    <path d="M28 4.2h5l-2.5-5.2z" fill="#F4E2B0" stroke="#5A3A24" stroke-width=".6"/>
+  </g>
+  <g transform="rotate(9 42 30)">
+    <path d="M38 8h7l2.4 41H35.8z" fill="#E0B24A"/>
+    <path d="M38 8h7l.55 7h-8.1z" fill="#F0D078"/>
+    <path d="M39 8h5l.4 4.5h-5.8z" fill="#fff" opacity=".28"/>
+    <path d="M35.8 49h11.6L41.6 59z" fill="#F3D7A8" stroke="#5A3A24" stroke-width=".6"/>
+    <path d="M41.6 56.2v2.6l-1.5 0z" fill="#3A2A22"/>
+    <rect x="36.2" y="45.2" width="10.8" height="4" fill="#C8C4C0" stroke="#6A6A68" stroke-width=".4"/>
+    <path d="M39 8.2h5l-2.5-5.2z" fill="#F4E2B0" stroke="#5A3A24" stroke-width=".6"/>
+  </g>
+  <g>
+    <path d="M33 7h5.2l.8 40H32.2z" fill="#5E8A58"/>
+    <path d="M33 7h5.2l.35 6H32.7z" fill="#8FBF7A"/>
+  </g>
 </svg>
