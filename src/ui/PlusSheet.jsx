@@ -53,17 +53,6 @@ function summaryLine(item) {
     return bits.filter(Boolean).join(' · ');
 }
 
-function MicIcon() {
-    return (
-        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="3" width="6" height="11" rx="3" />
-            <path d="M6 11a6 6 0 0 0 12 0" />
-            <path d="M12 17v4" />
-            <path d="M8 21h8" />
-        </svg>
-    );
-}
-
 function StopIcon() {
     return (
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -325,20 +314,23 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                                     }
                                 }}
                             />
-                            <Btn className="icon-btn mic-btn cam-btn" data-role="stage-toggle" aria-label="사진 찍거나 붙이기" aria-pressed={stageOpen || stage.shots.length > 0} onClick={() => setStageOpen((on) => !on)}>
-                                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
-                            </Btn>
-                            {speech.available && (
-                                <Btn
-                                    className={speech.listening ? 'icon-btn mic-btn is-on' : 'icon-btn mic-btn'}
-                                    aria-label={speech.listening ? '받아쓰기 멈추기' : '말로 적기'}
-                                    aria-pressed={speech.listening}
-                                    onClick={speech.toggle}
-                                >
-                                    {speech.listening ? <StopIcon /> : <MicIcon />}
-                                    {speech.listening && <span className="mic-dot" aria-hidden="true" />}
+                            {/* 입력 칸 옆 한 자리에 마이크와 사진을 위아래로 둡니다(입력 칸 너비는 그대로). */}
+                            <div className="msg-side">
+                                {speech.available && (
+                                    <Btn
+                                        className={speech.listening ? 'icon-btn mic-btn is-on' : 'icon-btn mic-btn'}
+                                        aria-label={speech.listening ? '받아쓰기 멈추기' : '말로 적기'}
+                                        aria-pressed={speech.listening}
+                                        onClick={speech.toggle}
+                                    >
+                                        {speech.listening ? <StopIcon /> : <span className="msg-emoji" aria-hidden="true">🎤</span>}
+                                        {speech.listening && <span className="mic-dot" aria-hidden="true" />}
+                                    </Btn>
+                                )}
+                                <Btn className="icon-btn mic-btn cam-btn" data-role="stage-toggle" aria-label="사진 찍거나 붙이기" aria-pressed={stageOpen || stage.shots.length > 0} onClick={() => setStageOpen((on) => !on)}>
+                                    <span className="msg-emoji" aria-hidden="true">📷</span>
                                 </Btn>
-                            )}
+                            </div>
                         </div>
                         <LiveEventChips
                             chipRead={chipRead}

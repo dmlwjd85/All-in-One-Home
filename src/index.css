@@ -2123,3 +2123,5 @@ button.hero-pill.home-todo-link {
 .allergy-group { display: grid; gap: 6px; }
 .allergy-group-head.tap { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 0 4px; text-align: left; background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom: 1px solid var(--line); border-radius: 0; }
 .allergy-group-head.tap:disabled { opacity: 1; }
+.msg-side { display: flex; flex-direction: column; gap: 4px; flex: 0 0 44px; }
+.msg-emoji { font-size: 22px; line-height: 1; }
