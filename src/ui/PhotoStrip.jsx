@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { joined } from '../lib/db.js';
-import { PHOTO_MAX_PER_OWNER, addPhoto, listPhotos, photoCounts, photoData, photoUrl, removePhoto, subscribePhotos, syncPhotos, usePhotoMemory } from '../lib/photos.js';
+import { PHOTO_MAX_PER_OWNER, addPhoto, addShrunk, listPhotos, photoCounts, photoData, photoUrl, removePhoto, shrinkPhoto, subscribePhotos, syncPhotos, usePhotoMemory } from '../lib/photos.js';
 import { useUi } from './context.jsx';
 import { Btn } from './bits.jsx';
 
@@ -111,6 +111,7 @@ export function PhotoStrip({ owner, localOnly = false }) {
     const [open, setOpen] = useState(null);
     const [busy, setBusy] = useState(false);
     const input = useRef(null);
+    const camera = useRef(null);
     const eligible = useMemo(() => photoEligible(data), [data]);
     const eligibleRef = useRef(eligible);
     eligibleRef.current = eligible;
@@ -158,11 +159,86 @@ export function PhotoStrip({ owner, localOnly = false }) {
                 </ul>
             ) : null}
             <div className="photo-row">
-                <Btn className="chip photo-add" data-role="photo-add" aria-busy={busy} disabled={full || busy} onClick={() => input.current?.click()}>📷 {busy ? '줄이는 중' : '사진 붙이기'}</Btn>
+                <Btn className="chip photo-add" data-role="photo-shoot" aria-busy={busy} disabled={full || busy} onClick={() => camera.current?.click()}>📸 {busy ? '줄이는 중' : '촬영'}</Btn>
+                <Btn className="chip photo-add" data-role="photo-add" disabled={full || busy} onClick={() => input.current?.click()}>🖼 사진 고르기</Btn>
                 <span className="muted photo-count">{photos.length}/{PHOTO_MAX_PER_OWNER}장{localOnly ? ' · 🔒 이 기기에만 있어요' : ''}</span>
                 <input ref={input} type="file" accept="image/*" multiple aria-label="붙일 사진" style={{ display: 'none' }} data-role="photo-input" onChange={pick} />
+                <input ref={camera} type="file" accept="image/*" capture="environment" aria-label="사진 촬영" style={{ display: 'none' }} data-role="photo-camera" onChange={pick} />
             </div>
             {open ? <Viewer photo={open} onClose={() => setOpen(null)} onRemove={drop} /> : null}
+        </section>
+    );
+}
+
+/** 쨈 입력에서 저장 전에 골라 둔 사진. 저장할 때 만든 학생 기록에 붙입니다. */
+export function usePhotoStage() {
+    const { data, showToast } = useUi();
+    const who = useWho();
+    const [shots, setShots] = useState([]);
+    const [busy, setBusy] = useState(false);
+    const eligibleRef = useRef(null);
+    eligibleRef.current = photoEligible(data);
+    async function add(files) {
+        const list = [...(files || [])];
+        if (!list.length || busy) return;
+        setBusy(true);
+        const made = [];
+        let bad = 0;
+        for (const file of list) {
+            const small = await shrinkPhoto(file);
+            if (small) made.push(small);
+            else bad += 1;
+        }
+        setBusy(false);
+        setShots((prev) => {
+            const next = [...prev, ...made];
+            if (next.length > PHOTO_MAX_PER_OWNER) showToast(WHY.full);
+            return next.slice(0, PHOTO_MAX_PER_OWNER);
+        });
+        if (bad) showToast(WHY.read);
+    }
+    /** 방금 만든 글(owners)에 골라 둔 사진을 붙이고 올리기를 시작합니다. 붙인 장수를 돌려줍니다. */
+    async function attach(owners) {
+        let done = 0;
+        for (const owner of owners || []) {
+            for (const small of shots) {
+                const result = await addShrunk(owner, small, { now: Date.now() + done });
+                if (result.ok) done += 1;
+            }
+        }
+        /* 방금 저장한 글이 화면 상태에 들어온 뒤에 올릴 수 있는 글인지 봅니다. */
+        if (done && who.uid) setTimeout(() => { syncPhotos(who, (key) => eligibleRef.current(key), { force: true }).catch(() => {}); }, 300);
+        return done;
+    }
+    return { shots, busy, add, attach, remove: (index) => setShots((prev) => prev.filter((_, i) => i !== index)), clear: () => setShots([]) };
+}
+
+/** 골라 둔 사진 줄(촬영·사진 고르기·빼기). */
+export function PhotoStage({ stage, note = '' }) {
+    const input = useRef(null);
+    const camera = useRef(null);
+    const full = stage.shots.length >= PHOTO_MAX_PER_OWNER;
+    const pick = (event) => { const files = [...(event.target.files || [])]; event.target.value = ''; stage.add(files); };
+    return (
+        <section className="photo-strip photo-stage" data-role="photo-stage" aria-label="붙일 사진">
+            {stage.shots.length ? (
+                <ul className="photo-list">
+                    {stage.shots.map((shot, index) => (
+                        <li key={index} className="photo-staged">
+                            <img src={photoUrl(shot.data)} alt={`붙일 사진 ${index + 1}`} />
+                            <Btn className="photo-drop" aria-label={`붙일 사진 ${index + 1} 빼기`} onClick={() => stage.remove(index)}>✕</Btn>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            <div className="photo-row">
+                <Btn className="chip photo-add" data-role="stage-shoot" aria-busy={stage.busy} disabled={full || stage.busy} onClick={() => camera.current?.click()}>📸 {stage.busy ? '줄이는 중' : '촬영'}</Btn>
+                <Btn className="chip photo-add" data-role="stage-add" disabled={full || stage.busy} onClick={() => input.current?.click()}>🖼 사진 붙이기</Btn>
+                {stage.shots.length ? <span className="muted photo-count">{stage.shots.length}/{PHOTO_MAX_PER_OWNER}장</span> : null}
+                <input ref={input} type="file" accept="image/*" multiple aria-label="붙일 사진 고르기" style={{ display: 'none' }} data-role="stage-input" onChange={pick} />
+                <input ref={camera} type="file" accept="image/*" capture="environment" aria-label="붙일 사진 촬영" style={{ display: 'none' }} data-role="stage-camera" onChange={pick} />
+            </div>
+            {stage.shots.length && note ? <p className="muted photo-count" style={{ margin: 0 }}>{note}</p> : null}
         </section>
     );
 }

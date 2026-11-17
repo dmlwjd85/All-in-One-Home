@@ -1,3 +1,5 @@
+import { mealCodesShown, mealsFromNotes } from '../lib/mealPaste.js';
+import { MealLine } from './MealCard.jsx';
 import { useEffect, useState } from 'react';
 import { addDaysYmd, eventClock, monthCells, startOfWeekMon, weekdayKo } from '../lib/date.js';
 import { restInfo } from '../lib/daymark.js';
@@ -72,6 +74,7 @@ function DayWidget({ data, today, events }) {
                 {todays.slice(0, 3).map((row) => <p key={row.id} className="wb-item clip1">📅 {eventClock(row) ? `${eventClock(row)} ` : ''}{row.title}</p>)}
                 {!todays.length && <p className="wb-item muted">오늘 일정은 없어요</p>}
             </div>
+            <MealLine notes={joined(data, 'notes')} date={today} />
             <div className="wb-actions">
                 <Btn className="chip wb-more" onClick={() => go(`#/attend/${today}`)}>{checked ? `출결 ${marks ? `${marks}명 표시` : '모두 출석'}` : '출결 하기'}</Btn>
                 <Btn className="chip wb-more" onClick={() => go('#/homework')}>과제 체크</Btn>
@@ -116,6 +119,26 @@ function EventsWidget({ today, events }) {
         </>
     );
 }
+/** 급식: 오늘과 다음 급식일 메뉴. 넓은 화면 '오늘'에도 급식이 보이게 합니다. */
+function MealWidget({ data, today }) {
+    const map = mealsFromNotes(joined(data, 'notes'));
+    const days = Object.keys(map).filter((date) => date >= today).sort().slice(0, 2);
+    const codesOn = mealCodesShown(globalThis.localStorage);
+    if (!days.length) {
+        return <p className="wb-item muted" data-role="wb-meal-empty">아직 넣은 급식표가 없어요. 가운데 쨈 버튼 › 「급식표 촬영」이나 「달력·급식 표」로 넣어 주세요.</p>;
+    }
+    return (
+        <div className="wb-list" data-role="wb-meal">
+            {days.map((date) => (
+                <div key={date}>
+                    <p className="wb-sub">{date === today ? '오늘' : `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))} ${weekdayKo(date)}`}</p>
+                    <p className="wb-notice">{map[date].items.map((item) => (codesOn && item.codes ? `${item.name} ${item.codes}` : item.name)).join(' · ')}</p>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 function NoticeWidget({ data, today }) {
     const { go } = useUi();
     const tomorrow = addDaysYmd(today, 1);
@@ -353,6 +376,7 @@ const BODY = {
     year: YearWidget,
     events: EventsWidget,
     notice: NoticeWidget,
+    meal: MealWidget,
 };
 
 const HINT_KEY = 'ssug-gyomu-widget-hint';

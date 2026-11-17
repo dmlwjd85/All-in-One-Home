@@ -24,7 +24,8 @@ const memory = () => { const map = new Map(); return { map, getItem: (k) => (map
     check(cleanLayout('깨짐').length === WIDGETS.length && cleanLayout(null).length === WIDGETS.length, '깨진 배치를 기본값으로 돌리지 않습니다.');
     const odd = cleanLayout([{ id: 'month', on: true, size: 'zz' }, { id: 'month', on: false }, { id: '없는것' }, { id: 'todo', on: false, size: 'l' }]);
     check(odd[0].id === 'month' && odd[0].size === WIDGETS.find((w) => w.id === 'month').size && odd[1].id === 'todo' && odd[1].on === false && odd[1].size === 'l', `저장된 배치 고치기가 이상합니다: ${JSON.stringify(odd.slice(0, 2))}`);
-    check(odd.length === WIDGETS.length && odd.slice(2).every((w) => w.on === false), '새로 생긴 위젯은 꺼진 채로 뒤에 붙어야 합니다.');
+    check(odd.length === WIDGETS.length && odd.slice(2).every((w) => w.on === (w.id === 'meal')), '새로 생긴 위젯은 꺼진 채로 뒤에 붙어야 합니다(급식만 켠 채로).');
+    check(WIDGETS.some((w) => w.id === 'meal' && w.auto) && /meal: MealWidget/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')) && /<MealLine notes=/.test(readFileSync('src/ui/WidgetBoard.jsx', 'utf8')), '넓은 화면 오늘(위젯판)에 급식이 없습니다.');
     const base = defaultLayout();
     const up = moveWidget(base, base[1].id, -1);
     check(up[0].id === base[1].id && up[1].id === base[0].id, '위로 옮기기가 안 됩니다.');

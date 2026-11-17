@@ -1441,7 +1441,10 @@ export async function saveQuick(input, now = new Date()) {
         ? (isTodoTime(input.time) ? input.time : '')
         : (paste.time || '');
     let message = '남겼어요.';
+    /* 이번에 만든 기록·메모(사진을 붙일 곳). 'records-<id>' 꼴입니다. */
+    let owners = [];
     const failed = await update((draft) => {
+        owners = [];
         /* 지난 명단 학생(active: false)과 번호가 겹쳐도 지금 반 학생에게 붙입니다. */
         const student = draft.students.find((row) => row.no === Number(no) && isActiveStudent(row));
         const sid = student?.id || '';
@@ -1468,11 +1471,13 @@ export async function saveQuick(input, now = new Date()) {
                 const group = newGroupId(now.getTime());
                 many.forEach((one, index) => {
                     put(local ? draft.local.records : draft.records, { ...row, id: groupRecordId(group, index), sid: one.id });
+                    owners.push(`records-${groupRecordId(group, index)}`);
                 });
                 message = `${many.map((one) => one.name).join(', ')} 기록에 하나씩 넣었어요.`;
             } else {
                 if (many.length === 1) row.sid = many[0].id;
                 put(local ? draft.local.records : draft.records, row);
+                owners.push(`records-${row.id}`);
                 const named = many[0] || student;
                 message = named ? `${named.name} 기록에 넣었어요.` : '기록에 넣었어요.';
             }
@@ -1527,7 +1532,7 @@ export async function saveQuick(input, now = new Date()) {
     }, { undoable: true });
     if (failed?.storageFailed) return { ok: false, storageFailed: true, message: failed.message };
     if (sensitive) message = `이 내용은 이 기기에만 남겨 둘게요. ${message}`;
-    return { ok: true, message };
+    return { ok: true, message, owners };
 }
 
 const CYCLE = ['결석', '지각', '조퇴', '결과'];

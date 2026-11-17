@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { allStarts } from '../lib/periodLocal.js';
 import { clipboardHint, readClipboard } from '../lib/msgParse.js';
 import { joinedRecords, saveParsed, saveQuick, setAttendance } from '../lib/db.js';
+import { PhotoStage, usePhotoStage } from './PhotoStrip.jsx';
 import { useUi } from './context.jsx';
 import { Area, Btn, HoldToggle, SpreadHint } from './bits.jsx';
 import { DateGrid, NumberGrid, PeriodRow, TimeChips } from './pickers.jsx';
@@ -78,6 +79,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     const [image, setImage] = useState(null);
     const [gridMode, setGridMode] = useState('');
     const mealFile = useRef(null);
+    const mealCamera = useRef(null);
+    const stage = usePhotoStage();
     const [selectedNo, setSelectedNo] = useState(0);
     const [more, setMore] = useState(startMore);
     const moreGrid = useRef(null);
@@ -171,6 +174,12 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
     async function save() {
         speech.stop();
         const chosen = items.filter((item) => item.include !== false);
+        /* 사진은 학생 기록·상담에만 붙습니다. 붙일 곳이 없으면 저장 전에 알려 사진을 잃지 않게 합니다. */
+        if (stage.shots.length && !chosen.some((item) => item.kind === '학생기록' || item.kind === '상담')) {
+            showToast('사진은 학생 기록·상담에만 붙일 수 있어요. 학생 번호를 넣거나 사진을 빼 주세요.');
+            return;
+        }
+        let photoDone = 0;
         const held = items.filter((item) => item.include === false && String(item.title || '').trim());
         if (!chosen.length && !held.length) {
             showToast('등록할 항목이 없어요.');
@@ -225,6 +234,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                 }
                 message = result.message;
                 record = true;
+                if (stage.shots.length) photoDone += await stage.attach(result.owners);
                 continue;
             }
             const result = await saveQuick({
@@ -251,6 +261,8 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
             if (result.held) message = record ? `${message} ${result.message}` : result.message;
             else if (schedule.length > 1 || !record) message = result.message;
         }
+        if (photoDone) message = `${message} 사진 ${stage.shots.length}장도 붙였어요.`;
+        stage.clear();
         setSavedRecord(record);
         setSavedNote(message);
         showToast(message, true);
@@ -340,9 +352,12 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                             <Btn className="chip" onClick={paste}>붙여넣기</Btn>
                             <Btn className="chip" onClick={openGrid}>달력·급식 표</Btn>
+                            <Btn className="chip" data-role="meal-shoot" onClick={() => mealCamera.current?.click()}>📸 급식표 촬영</Btn>
                             <Btn className="chip" onClick={() => mealFile.current?.click()}>급식표 사진</Btn>
+                            <input ref={mealCamera} type="file" accept="image/*" capture="environment" aria-label="급식표 촬영" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
                             <input ref={mealFile} type="file" accept="image/*" aria-label="급식표 사진" style={{ display: 'none' }} onChange={(event) => { openMealPhoto(event.target.files?.[0]); event.target.value = ''; }} />
                         </div>
+                        <PhotoStage stage={stage} note="학생 기록·상담으로 남길 때 함께 붙어요." />
                         <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={preview}>다음</Btn>
                         {recent.length > 0 && (
                             <>
@@ -385,6 +400,7 @@ export function PlusSheet({ onClose, onPick, startMore = false }) {
                         {items.map((item) => (
                             <CaptureCard key={item.id} item={item} students={data.students} today={clock.ymd} onPatch={patch} />
                         ))}
+                        {stage.shots.length ? <PhotoStage stage={stage} note="학생 기록·상담으로 남길 때 함께 붙어요." /> : null}
                         <div className="sheet-foot">
                             <Btn className="primary-btn block" onClick={save}>{keptCount > 1 ? `${keptCount}개 남기기` : '남기기'}</Btn>
                             <Btn className="chip block" style={{ marginTop: 8 }} onClick={() => setPhase('write')}>다시 적기</Btn>

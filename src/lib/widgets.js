@@ -18,6 +18,7 @@ export const WIDGETS = [
     { id: 'week', label: '한 주', size: 'm', icon: '📆', hint: '요일마다 시각과 일정' },
     { id: 'events', label: '다가오는 일정', size: 's', icon: '⏳', hint: 'D-day 순서' },
     { id: 'year', label: '일 년', size: 'm', icon: '🧭', hint: '달마다 큰 일정' },
+    { id: 'meal', label: '급식', size: 's', icon: '🍚', hint: '오늘·내일 급식 메뉴', auto: true },
 ];
 
 /** 크기 단추를 누를 때마다 작게 → 넓게 → 크게 → 작게 */
@@ -44,7 +45,8 @@ export function defaultLayout() {
     return WIDGETS.map((w) => ({ id: w.id, on: true, size: w.size }));
 }
 
-/** 저장된 배치를 믿을 수 있는 모양으로 고칩니다. 모르는 위젯은 빼고, 새로 생긴 위젯은 꺼진 채로 뒤에 붙입니다. */
+/** 저장된 배치를 믿을 수 있는 모양으로 고칩니다. 모르는 위젯은 빼고, 새로 생긴 위젯은 꺼진 채로 뒤에 붙입니다.
+    단, auto 표시가 있는 위젯(급식)은 기본 화면에 늘 있던 것이라 켠 채로 붙입니다. */
 export function cleanLayout(raw) {
     if (!Array.isArray(raw)) return defaultLayout();
     const seen = new Set();
@@ -56,7 +58,7 @@ export function cleanLayout(raw) {
         out.push({ id, on: item.on !== false, size: WIDGET_SIZES.includes(item.size) ? item.size : KNOWN.get(id).size });
     }
     if (!out.length) return defaultLayout();
-    for (const w of WIDGETS) if (!seen.has(w.id)) out.push({ id: w.id, on: false, size: w.size });
+    for (const w of WIDGETS) if (!seen.has(w.id)) out.push({ id: w.id, on: Boolean(w.auto), size: w.size });
     return out;
 }
 

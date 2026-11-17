@@ -49,6 +49,7 @@ function markClipped(items, clipped) {
 export function GridPaste({ text, image, mode = '', onBack }) {
     const { data, clock, showToast } = useUi();
     const fileRef = useRef(null);
+    const cameraRef = useRef(null);
     const periods = periodsOf(data);
     const lengths = lengthsOf();
     const [asMeal, setAsMeal] = useState(mode === 'meal');
@@ -145,7 +146,9 @@ export function GridPaste({ text, image, mode = '', onBack }) {
                 <Btn className="chip" onClick={() => moveMonth(1)}>다음 달</Btn>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                <Btn className="chip" disabled={Boolean(busy)} data-role="grid-shoot" onClick={() => cameraRef.current?.click()}>📸 {asMeal ? '급식표 촬영' : '표 촬영'}</Btn>
                 <Btn className="chip" disabled={Boolean(busy)} onClick={() => fileRef.current?.click()}>{asMeal ? '급식표 사진 고르기' : '표 사진 고르기'}</Btn>
+                <input ref={cameraRef} type="file" accept="image/*" capture="environment" aria-label="표 촬영" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
                 <Btn className={asMeal ? 'chip on' : 'chip'} aria-pressed={asMeal} onClick={toggleMeal}>{asMeal ? '✓ 급식표로 읽기' : '급식표로 읽기'}</Btn>
                 <input ref={fileRef} type="file" accept="image/*" aria-label="표 이미지" style={{ display: 'none' }} onChange={(event) => { onFile(event.target.files?.[0]); event.target.value = ''; }} />
             </div>

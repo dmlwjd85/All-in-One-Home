@@ -2037,3 +2037,6 @@ button.hero-pill.home-todo-link {
 .photo-view-img img { cursor: zoom-in; }
 .photo-view-img.is-zoom { display: block; }
 .photo-view-img.is-zoom img { max-width: none; max-height: none; cursor: zoom-out; }
+.photo-staged { position: relative; aspect-ratio: 1 / 1; border-radius: 14px; overflow: hidden; box-shadow: var(--neo-inset); }
+.photo-staged img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-drop.tap { position: absolute; top: 0; right: 0; width: 44px; height: 44px; display: grid; place-items: center; color: #fff; font-weight: 700; background: radial-gradient(circle at 70% 30%, rgba(0, 0, 0, .62) 0 14px, transparent 15px); }
