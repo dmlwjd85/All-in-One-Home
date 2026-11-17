@@ -1,15 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 32" width="120" height="32">
-  <rect width="120" height="32" fill="#8B5E3C"/>
-  <g fill="none" stroke="#6B4424" stroke-width="1" opacity=".55">
-    <path d="M0 6h120"/>
-    <path d="M0 16h120"/>
-    <path d="M0 25h120"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" width="160" height="48">
+  <rect width="160" height="48" fill="#8B5E3C"/>
+  <rect width="160" height="8" fill="#C4A06A" opacity=".55"/>
+  <rect y="8" width="160" height="3" fill="#E6D3B4" opacity=".45"/>
+  <g fill="none" stroke="#6B4424" stroke-width="1.2" opacity=".5">
+    <path d="M0 16h160"/>
+    <path d="M0 26h160"/>
+    <path d="M0 36h160"/>
   </g>
-  <g fill="none" stroke="#C4A06A" stroke-width=".7" opacity=".35">
-    <path d="M0 3c20 2 40-2 60 1 20 3 40 0 60 2"/>
-    <path d="M0 12c18-2 36 3 54 0 24-3 42 2 66 0"/>
-    <path d="M0 21c22 3 38-1 58 1s40-2 62 1"/>
+  <g fill="none" stroke="#C4A06A" stroke-width=".8" opacity=".4">
+    <path d="M0 14c24 3 48-3 80 1 32 4 52 0 80 2"/>
+    <path d="M0 24c28-2 44 4 78 0 30-3 50 2 82 1"/>
+    <path d="M0 34c20 3 50-2 76 1 28 3 52-1 84 2"/>
   </g>
-  <rect y="0" width="120" height="3" fill="#C4A06A" opacity=".45"/>
-  <rect y="29" width="120" height="3" fill="#5C3A22" opacity=".55"/>
+  <rect y="42" width="160" height="6" fill="#5C3A22"/>
+  <rect y="40" width="160" height="2" fill="#3E2416" opacity=".5"/>
 </svg>

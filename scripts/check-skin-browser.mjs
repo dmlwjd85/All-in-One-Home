@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v4';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/cork-skin-v5';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };

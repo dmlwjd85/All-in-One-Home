@@ -71,7 +71,13 @@ check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다
 check(/min-width:\s*900px/.test(css), '넓은 화면 책상 소품 자리가 없습니다.');
 check(/taegeukgi\.svg/.test(css) && /motto-frame\.svg/.test(css) && /speaker\.svg/.test(css) && /wall-clock\.svg/.test(css), '교실 앞벽 소품이 없습니다.');
 check(/desk-wood\.svg/.test(css) && /drawer-handle\.svg/.test(css), '책상·서랍 소품이 없습니다.');
-check(/--cork-chalk/.test(css) && /inset 0 -12px 0/.test(css), '칠판 나무 틀이 없습니다.');
+check(/--cork-chalk/.test(css) && /inset 0 0 0 8px/.test(css), '칠판 나무 틀이 없습니다.');
+check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
+check(/32px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
+check(/padding-bottom:\s*48px/.test(css) && /160px 48px/.test(css), '넓은 화면 책상 상판이 없습니다.');
+check(/pencil-cup\.svg/.test(css) && /attend-book\.svg/.test(css), '책상 소품이 없습니다.');
+check(/cork-drawer-open/.test(css) && /translateX\(12px\)/.test(css), '활성 서랍이 앞으로 나오지 않습니다.');
+check(!/side-menu[^{]*\.on[^{]*\{[^}]*cork-chip-on/.test(css.replace(/\s+/g, ' ')), '활성 서랍을 분홍 판으로 칠합니다.');
 check(/--cork-chip-ink/.test(css) && /--cork-field-ink/.test(css) && /--cork-paper-ink/.test(css) && /--cork-drawer-ink/.test(css), '배경·글자 토큰 쌍이 없습니다.');
 check(/quick-bar\.is-open/.test(css) && /content:\s*none/.test(css), '쨈 팝업에서 장식을 가리지 않습니다.');
 check(/\.store-badge/.test(css) && /cork-tag-orange/.test(css), '보호 라벨 색이 없습니다.');
@@ -129,6 +135,8 @@ const pairs = [
     ['--cork-field', '--cork-field-ink'],
     ['--cork-chalk', '--cork-chalk-ink'],
     ['--cork-drawer', '--cork-drawer-ink'],
+    ['--cork-drawer-face', '--cork-drawer-ink'],
+    ['--cork-drawer-open', '--cork-drawer-ink'],
     ['--cork-tab', '--cork-tab-muted'],
     ['--cork-tab', '--cork-tab-on'],
     ['--cork-tag-blue', '--cork-tag-ink'],
