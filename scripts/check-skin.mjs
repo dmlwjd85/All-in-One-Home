@@ -89,6 +89,16 @@ check(/padding-bottom:\s*120px/.test(css) && /height:\s*120px/.test(css), '분�
 check(/--cork-side:\s*140px/.test(css) && /grid-template-columns:\s*var\(--cork-side\)/.test(css), '넓은 화면 서랍 폭이 70%가 아닙니다.');
 check(!/left:\s*200px/.test(css), '앞벽·받침대가 서랍장 옆에 묶여 있습니다.');
 check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시계 원 비율이 없습니다.');
+{
+    /* 시계는 실제로 갑니다: 바늘 각도와, 그림(네모 바탕) 대신 그린 둥근 시계. */
+    const { clockAngles } = await import('../src/ui/skin.js');
+    const at = clockAngles(new Date(2026, 10, 18, 15, 30, 45));
+    check(Math.abs(at.hour - 105.375) < 0.01 && Math.abs(at.minute - 184.5) < 0.01 && at.second === 270, `시계 바늘 각도가 틀립니다: ${JSON.stringify(at)}`);
+    check(clockAngles(new Date(2026, 0, 1, 0, 0, 0)).hour === 0 && clockAngles(new Date(2026, 0, 1, 12, 0, 0)).hour === 0, '12시 바늘');
+    const deco = readFileSync(`${root}/src/ui/SkinDeco.jsx`, 'utf8');
+    check(/function SkinClock/.test(deco) && /data-hand="second"/.test(deco) && /visibilitychange/.test(deco) && !/wall-clock\.webp/.test(deco), '벽시계가 실제로 가는 시계가 아닙니다.');
+    check(/html\.dark\[data-skin="cork"\] \.skin-flag,[\s\S]{0,120}filter: brightness/.test(css) && /\.main,\s*html\[data-skin="cork"\] \.topbar \{\s*--neo-raise: 0 2px 0/.test(css), '밤 교실 소품 어둡게·칠판 위 단추 그림자 다듬기가 없습니다.');
+}
 check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
 check(!/fab-eraser|jam-eraser|chalk-puff|cork-chalk-cloud/.test(css), '쨈 지우개·분필 가루가 남아 있습니다.');
@@ -142,7 +152,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v106'"), '서비스 워커가 v106가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v107'"), '서비스 워커가 v107가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

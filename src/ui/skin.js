@@ -59,3 +59,11 @@ export function setSkin(id, storage) {
     }
     return applySkin(skin);
 }
+
+/** 벽시계 바늘 각도(도). 시침은 분에, 분침은 초에 맞춰 조금씩 움직입니다. */
+export function clockAngles(date = new Date()) {
+    const h = date.getHours() % 12;
+    const m = date.getMinutes();
+    const sec = date.getSeconds();
+    return { hour: (h + m / 60 + sec / 3600) * 30, minute: (m + sec / 60) * 6, second: sec * 6 };
+}
