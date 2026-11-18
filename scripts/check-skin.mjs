@@ -86,6 +86,9 @@ check(!/scallop/.test(css), '카드 바느질 땀 테두리가 남아 있습니�
 check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
 check(/padding-bottom:\s*120px/.test(css) && /height:\s*120px/.test(css), '분필 받침대 자리가 없습니다.');
+check(/--cork-side:\s*140px/.test(css) && /grid-template-columns:\s*var\(--cork-side\)/.test(css), '넓은 화면 서랍 폭이 70%가 아닙니다.');
+check(!/left:\s*200px/.test(css), '앞벽·받침대가 서랍장 옆에 묶여 있습니다.');
+check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시계 원 비율이 없습니다.');
 check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
 check(!/fab-eraser|jam-eraser|chalk-puff|cork-chalk-cloud/.test(css), '쨈 지우개·분필 가루가 남아 있습니다.');
@@ -139,7 +142,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v104'"), '서비스 워커가 v104가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v105'"), '서비스 워커가 v105가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

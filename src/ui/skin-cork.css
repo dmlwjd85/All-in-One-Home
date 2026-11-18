@@ -74,6 +74,7 @@ html[data-skin="cork"] {
     --cork-tab-ink: #3A2C20;
     --cork-tab-muted: #4A4036;
     --cork-tab-on: #9C3B32;
+    --cork-side: 140px;
 }
 
 html.dark[data-skin="cork"] {
@@ -636,7 +637,15 @@ html[data-skin="cork"] .skin-motto {
 html[data-skin="cork"] .skin-prop[data-prop="speaker"],
 html[data-skin="cork"] .skin-prop[data-prop="clock"] {
     width: auto;
+    flex: 0 0 auto;
     object-fit: contain;
+    object-position: center;
+}
+html[data-skin="cork"] .skin-prop[data-prop="clock"] {
+    aspect-ratio: 1 / 1;
+    height: 88%;
+    width: auto;
+    max-width: none;
 }
 html[data-skin="cork"] .skin-flag,
 html[data-skin="cork"] .skin-flag-mark {
@@ -718,7 +727,7 @@ html.dark[data-skin="cork"] .skin-motto-text {
 }
 @media (min-width: 900px) {
     html[data-skin="cork"] .skin-wall {
-        left: 200px;
+        left: 0;
         height: 64px;
         gap: 16px;
     }
@@ -763,19 +772,20 @@ html.dark[data-skin="cork"] .main {
 /* 넓은 화면: 앞벽 56px · 칠판 아래 분필 받침대. 책상 띠·소품은 두지 않습니다. */
 @media (min-width: 900px) {
     html[data-skin="cork"] .app-frame {
+        grid-template-columns: var(--cork-side) minmax(0, 1fr);
         padding-top: 64px;
         padding-bottom: 120px;
         box-sizing: border-box;
         background-color: var(--cork-wall);
         background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
-        background-size: 200px 100%;
-        background-position: 0 0;
+        background-size: var(--cork-side) calc(100% - 64px - 120px);
+        background-position: 0 64px;
         background-repeat: no-repeat;
     }
     html.dark[data-skin="cork"] .app-frame {
         background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
-        background-size: 200px 100%;
-        background-position: 0 0;
+        background-size: var(--cork-side) calc(100% - 64px - 120px);
+        background-position: 0 64px;
         background-repeat: no-repeat;
     }
     html[data-skin="cork"] .side {
@@ -783,6 +793,47 @@ html.dark[data-skin="cork"] .main {
         max-height: 100%;
         min-height: 0;
         align-self: stretch;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+    html[data-skin="cork"] .side-brand > div {
+        gap: 4px !important;
+        padding: 4px 2px 0 !important;
+        flex-wrap: wrap;
+    }
+    html[data-skin="cork"] .side-brand .brand-symbol {
+        width: 22px;
+        height: 22px;
+    }
+    html[data-skin="cork"] .side-brand .title-font {
+        font-size: 13px !important;
+        line-height: 18px !important;
+        padding: 2px 6px;
+        border-width: 3px;
+    }
+    html[data-skin="cork"] .side-brand .brand-motto {
+        font-size: 11px;
+        line-height: 15px;
+        margin: 6px 4px 8px;
+    }
+    html[data-skin="cork"] .side-brand .brand-motto span {
+        white-space: normal;
+    }
+    html[data-skin="cork"] .side-menu .tap.chip.block {
+        padding-left: 6px;
+        padding-right: 20px;
+        font-size: 12.5px;
+        letter-spacing: -0.02em;
+    }
+    html[data-skin="cork"] .side-hotkey,
+    html[data-skin="cork"] .side-hotkey.muted {
+        right: 4px;
+        font-size: 9px;
+        line-height: 12px;
+        padding: 0 2px;
+    }
+    html[data-skin="cork"] .minutes-text {
+        max-width: calc(100vw - var(--cork-side) - 48px);
     }
     html[data-skin="cork"] .main {
         align-self: stretch;
@@ -802,7 +853,7 @@ html.dark[data-skin="cork"] .main {
     html[data-skin="cork"] .app-bg::after { content: none; }
     html[data-skin="cork"] .skin-tray {
         display: block;
-        left: 200px;
+        left: 0;
         right: 0;
         bottom: 0;
         height: 120px;
@@ -811,10 +862,10 @@ html.dark[data-skin="cork"] .main {
         pointer-events: none;
         border-style: solid;
         border-color: transparent;
-        border-width: 0 140px 0 220px;
+        border-width: 0 140px 0 180px;
         border-image-source: url('./skin/bg/tray-long.webp');
         border-image-slice: 0 280 0 400 fill;
-        border-image-width: 0 140px 0 220px;
+        border-image-width: 0 140px 0 180px;
         border-image-repeat: stretch;
         background: none;
     }
