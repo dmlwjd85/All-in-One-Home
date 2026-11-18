@@ -177,7 +177,7 @@ export function Tasks() {
             <h3>메모</h3>
             <NoteBox />
             {notes.map((row) => (
-                <article key={row.id} className="solid-card" style={{ padding: 12, marginBottom: 8 }}>
+                <article key={row.id} className="solid-card" data-note-pin={row.pinned ? '1' : undefined} style={{ padding: 12, marginBottom: 8 }}>
                     <p style={{ marginTop: 0 }}>{row.localOnly ? '🔒 ' : ''}{row.pinned ? '📌 ' : ''}{row.text}</p>
                     <Btn className="chip" aria-label="메모 지우기" onClick={async () => {
                         // 할 일 지우기와 같이 바로 지우고, 알림의 '되돌리기'로 되살릴 수 있어요.

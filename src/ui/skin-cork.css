@@ -209,7 +209,7 @@ html.dark[data-skin="cork"] .side {
     box-shadow: none;
 }
 
-/* 칠판 위 메모장: 둥근 종이 카드. 바느질 땀은 두지 않고 상단 압정만. */
+/* 칠판 위 메모장: 둥근 종이 카드. 압정은 고정해 둔 메모(할 일 화면의 메모)에만 꽂습니다(아래 [data-note-pin]). */
 html[data-skin="cork"] .glass,
 html[data-skin="cork"] .solid-card,
 html[data-skin="cork"] .hero,
@@ -221,11 +221,10 @@ html[data-skin="cork"] .minutes-item {
     color: var(--cork-paper-ink);
     background-color: var(--bg);
     background-image:
-        url('./skin/pin-coral.svg'),
         url('./skin/paper-fiber.svg');
-    background-repeat: no-repeat, repeat;
-    background-position: 50% 2px, 0 0;
-    background-size: 12px 18px, 48px 48px;
+    background-repeat: repeat;
+    background-position: 0 0;
+    background-size: 48px 48px;
     border-radius: 12px;
     border: 0;
     box-shadow:
@@ -285,11 +284,10 @@ html.dark[data-skin="cork"] .minutes-body,
 html.dark[data-skin="cork"] .minutes-item {
     --text-halo: var(--cork-paper);
     background-image:
-        url('./skin/pin-coral.svg'),
         url('./skin/paper-fiber-dark.svg');
-    background-repeat: no-repeat, repeat;
-    background-position: 50% 2px, 0 0;
-    background-size: 12px 18px, 48px 48px;
+    background-repeat: repeat;
+    background-position: 0 0;
+    background-size: 48px 48px;
     border: 0;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .06),
@@ -299,43 +297,43 @@ html.dark[data-skin="cork"] .minutes-item {
 
 html[data-skin="cork"] .home-todo,
 html[data-skin="cork"] .fold.home-todo {
-    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-time,
 html[data-skin="cork"] .fold.home-time {
-    background-image: url('./skin/pin-sky.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-event,
 html[data-skin="cork"] .fold.home-event {
-    background-image: url('./skin/pin-green.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .hero,
 html[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .store-notice {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber.svg');
-    background-position: 50% 2px, 0 0;
-    background-size: 12px 18px, 48px 48px;
+    background-image: url('./skin/paper-fiber.svg');
+    background-position: 0 0;
+    background-size: 48px 48px;
 }
 html.dark[data-skin="cork"] .home-todo,
 html.dark[data-skin="cork"] .fold.home-todo {
-    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .home-time,
 html.dark[data-skin="cork"] .fold.home-time {
-    background-image: url('./skin/pin-sky.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .home-event,
 html.dark[data-skin="cork"] .fold.home-event {
-    background-image: url('./skin/pin-green.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .hero,
 html.dark[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .store-notice {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
 }
 
 html[data-skin="cork"] .sheet,
@@ -343,10 +341,10 @@ html[data-skin="cork"] .quick-bar {
     --text-halo: var(--cork-paper);
     color: var(--cork-paper-ink);
     background-color: var(--bg);
-    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
-    background-repeat: no-repeat, repeat;
-    background-position: 50% 8px, 0 0;
-    background-size: 12px 18px, 48px 48px;
+    background-image: url('./skin/paper-fiber.svg');
+    background-repeat: repeat;
+    background-position: 0 0;
+    background-size: 48px 48px;
     border-radius: 12px;
     border: 0;
     box-shadow:
@@ -356,9 +354,21 @@ html[data-skin="cork"] .quick-bar {
 html.dark[data-skin="cork"] .sheet,
 html.dark[data-skin="cork"] .quick-bar {
     --text-halo: var(--cork-paper);
-    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/paper-fiber-dark.svg');
     border: 0;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 8px 24px rgba(0, 0, 0, .4);
+}
+
+/* 압정은 고정한 메모에만: 카드마다 꽂으면 휴대폰 화면이 압정으로 가득 찹니다. */
+html[data-skin="cork"] .solid-card[data-note-pin="1"] {
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
+    background-repeat: no-repeat, repeat;
+    background-position: 50% 2px, 0 0;
+    background-size: 12px 18px, 48px 48px;
+    padding-top: 20px !important;
+}
+html.dark[data-skin="cork"] .solid-card[data-note-pin="1"] {
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber-dark.svg');
 }
 
 html[data-skin="cork"] .sheet-foot {

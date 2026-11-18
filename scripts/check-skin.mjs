@@ -142,7 +142,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v105'"), '서비스 워커가 v105가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v106'"), '서비스 워커가 v106가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
