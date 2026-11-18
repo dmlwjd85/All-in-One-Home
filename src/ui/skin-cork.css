@@ -1,5 +1,5 @@
 /* 클래식 교실풍경. html[data-skin="cork"] 일 때만 색·장식이 바뀝니다.
-   기능·화면 구조·동작은 건드리지 않습니다. 출결 색(--st-*)은 덮지 않습니다.
+   기능·화면 구조·동작은 건드리지 않습니다. 출결 색(--st-*)은 덮지 않습니다(칠판 위 판서 카드 안에서만 어두운 바탕용 값으로 바꿉니다).
    하단 탭·쨈 키캡은 그림자 깊이를 그대로 두고 색만 맞춥니다.
    떠 있는 장식은 글자·단추와 겹치지 않는 여백에만 둡니다.
    팔레트: 머스터드·틸·베릭 레드·올리브·크림·월넛. 어두운 화면은 밤 교실. */
@@ -1724,6 +1724,15 @@ html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) {
     --cork-tag-green: #B8C878;
     --cork-tag-orange: #E0C878;
     --cork-tag-ink: #1A241C;
+    --st-present: #8EDEBE;
+    --st-absent: #FF8B96;
+    --st-late: #F0C08A;
+    --st-early: #9EC0FF;
+    --st-out: #D4B6FF;
+    --st-absent-bg: #3D2424;
+    --st-late-bg: #3A2E28;
+    --st-early-bg: #1C2A44;
+    --st-out-bg: #2C2140;
     --text-halo: var(--cork-chalk);
     --cork-paper: var(--cork-chalk);
     --cork-paper-ink: #FDFCF6;
@@ -1743,7 +1752,8 @@ html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) {
     --neo-inset-deep: inset 0 0 0 1.5px rgba(253, 252, 246, .3), inset 0 4px 8px rgba(0, 0, 0, .34);
     color: var(--ink);
     font-weight: 700;
-    -webkit-text-stroke: 0;
+    -webkit-text-stroke: 1.15px var(--cork-chalk);
+    paint-order: stroke fill;
     background: none;
     border: 2px solid transparent;
     border-image: url('./skin/chalk-frame-white.svg') 30 / 18px / 0 round;
