@@ -94,6 +94,7 @@ check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css) && /gap:\s*
 check(/chalkboard\.webp/.test(css) && /background-size:\s*cover/.test(css) && /border-image:\s*url\('\.\/skin\/bg\/desk\.webp'\)/.test(css), '칠판 그림·나무 틀이 없습니다.');
 check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /padding-top:\s*64px/.test(css) && /height:\s*64px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css) && /wall-cover\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
 check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
+check(/\.app-frame:not\(:has\(> \.fuse\)\) \{\s*padding-top: calc\(env\(safe-area-inset-top, 0px\) \+ 44px\);/.test(css) && /\.app-frame:not\(:has\(> \.fuse\)\) \.skin-wall \{\s*top: env\(safe-area-inset-top, 0px\);/.test(css), '타이머 띠가 없을 때 폰 앞벽 띠가 칠판을 가립니다.');
 check(/skin-tray/.test(css) && /tray-long\.webp/.test(css) && /border-image-slice/.test(css), '이어진 분필 받침대가 없습니다.');
 check(!/scallop/.test(css), '카드 바느질 땀 테두리가 남아 있습니다.');
 check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
@@ -205,7 +206,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v110'"), '서비스 워커가 v110가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v111'"), '서비스 워커가 v111가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
