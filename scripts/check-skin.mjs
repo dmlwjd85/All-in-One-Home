@@ -15,12 +15,12 @@ const memory = () => {
 const { SKIN_KEY, DEFAULT_SKIN, SKIN_CHOICES, normalizeSkin, skinId, applySkin, setSkin, applyStoredSkin } = await import('../src/ui/skin.js');
 
 check(SKIN_KEY === 'ssug-gyomu-skin', '화면 꾸미기 저장 키가 다릅니다.');
-check(DEFAULT_SKIN === 'basic', '기본 꾸미기가 basic이 아닙니다.');
+check(DEFAULT_SKIN === 'cork', '처음 여는 화면이 교실풍경(cork)이 아닙니다.');
 check(SKIN_CHOICES.map((item) => item.id).join() === 'basic,cork', `꾸미기 순서가 다릅니다: ${SKIN_CHOICES.map((item) => item.id)}`);
-check(SKIN_CHOICES.map((item) => item.label).join() === '기본,클래식 교실풍경', '꾸미기 이름이 다릅니다.');
+check(SKIN_CHOICES.map((item) => item.label).join() === '심플,클래식 교실풍경', '꾸미기 이름이 다릅니다.');
 check(SKIN_CHOICES.find((item) => item.id === 'cork')?.hint === '어두운 화면은 밤 교실', '밤 교실 안내가 없습니다.');
 check(normalizeSkin('classic') === 'cork', 'classic 저장값을 cork 로 읽지 않습니다.');
-for (const bad of [null, '', 'CORK', 'theme', '__proto__']) check(normalizeSkin(bad) === 'basic', `잘못된 값 ${bad} 를 기본으로 돌리지 않습니다.`);
+for (const bad of [null, '', 'CORK', 'theme', '__proto__']) check(normalizeSkin(bad) === 'cork', `잘못된 값 ${bad} 를 처음 화면(교실풍경)으로 돌리지 않습니다.`);
 
 const doc = { attrs: new Map() };
 const rootEl = {
@@ -31,9 +31,9 @@ const rootEl = {
 globalThis.document = { documentElement: rootEl };
 
 const st = memory();
-check(skinId(st) === 'basic', '저장값이 없으면 기본이어야 합니다.');
+check(skinId(st) === 'cork', '저장값이 없으면 교실풍경이어야 합니다.');
 st.setItem(SKIN_KEY, 'weird');
-check(skinId(st) === 'basic', '이상한 저장값을 기본으로 돌리지 않습니다.');
+check(skinId(st) === 'cork', '이상한 저장값을 교실풍경으로 돌리지 않습니다.');
 setSkin('cork', st);
 check(st.getItem(SKIN_KEY) === 'cork' && skinId(st) === 'cork', '고른 꾸미기가 저장되지 않습니다.');
 check(doc.attrs.get('data-skin') === 'cork', '코르크를 골라도 data-skin 이 없습니다.');
@@ -49,6 +49,8 @@ check([...st.bag.keys()].join() === 'ssug-gyomu-skin', `꾸미기가 다른 저�
 const indexHtml = src('index.html');
 check(indexHtml.includes("localStorage.getItem('ssug-gyomu-skin')") && indexHtml.includes("setAttribute('data-skin', 'cork')"), '첫 스크립트가 꾸미기를 읽지 않습니다.');
 check(indexHtml.includes("skin === 'classic'") && indexHtml.includes("setItem('ssug-gyomu-skin', 'cork')"), 'classic 값을 cork 로 바꾸지 않습니다.');
+check(indexHtml.includes("skin = '%VITE_DEFAULT_SKIN%' === 'basic' ? 'basic' : 'cork'"), '첫 스크립트가 고른 적 없는 기기를 교실풍경으로 열지 않습니다.');
+check(/VITE_DEFAULT_SKIN: basic/.test(src('.github/workflows/deploy-pages.yml')) && !/배포용 빌드[\s\S]*VITE_DEFAULT_SKIN/.test(src('.github/workflows/deploy-pages.yml')), '검사용 빌드만 basic 이어야 합니다(배포용 빌드에는 두지 않습니다).');
 const app = src('src/App.jsx');
 check(app.includes('applyStoredSkin()'), '앱 시작에서 꾸미기를 적용하지 않습니다.');
 const settings = src('src/ui/Settings.jsx');
@@ -190,7 +192,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v108'"), '서비스 워커가 v108가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v109'"), '서비스 워커가 v109가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

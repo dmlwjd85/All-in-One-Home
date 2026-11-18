@@ -431,7 +431,7 @@ try {
         }));
         check(!first.skin, `기본인데 data-skin 이 있습니다: ${first.skin}`);
         check(first.tiles.join() === 'basic,cork', `꾸미기 타일이 다릅니다: ${first.tiles}`);
-        check(first.labels.includes('기본') && first.labels.includes('클래식 교실풍경'), '설정 타일 이름이 없습니다.');
+        check(first.labels.includes('심플') && first.labels.includes('클래식 교실풍경'), '설정 타일 이름이 없습니다.');
         check(first.labels.includes('밤 교실'), '밤 교실 안내가 없습니다.');
         await page.click('[data-skin-pick="cork"]');
         await delay(120);

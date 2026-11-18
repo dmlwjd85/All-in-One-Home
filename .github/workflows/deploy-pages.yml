@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE: ./
+      VITE_DEFAULT_SKIN: basic
       VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
@@ -93,6 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE: ./
+      VITE_DEFAULT_SKIN: basic
       VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
       VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
@@ -155,6 +157,7 @@ jobs:
       - name: 설치하고 빌드
         env:
           VITE_BASE: ./
+          VITE_DEFAULT_SKIN: basic
           VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
@@ -168,6 +171,7 @@ jobs:
       - name: 검사
         env:
           VITE_BASE: ./
+          VITE_DEFAULT_SKIN: basic
           VITE_FIREBASE_CONFIG: ${{ secrets.VITE_FIREBASE_CONFIG }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
         run: ${{ matrix.run }}

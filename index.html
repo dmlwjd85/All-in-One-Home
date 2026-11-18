@@ -59,6 +59,8 @@
                 skin = 'cork';
                 localStorage.setItem('ssug-gyomu-skin', 'cork');
             }
+            /* 고른 적이 없으면 교실풍경으로 엽니다(검사용 빌드만 basic). */
+            if (skin !== 'basic' && skin !== 'cork') skin = '%VITE_DEFAULT_SKIN%' === 'basic' ? 'basic' : 'cork';
             if (skin === 'cork') document.documentElement.setAttribute('data-skin', 'cork');
         } catch (e) {}
     </script>
