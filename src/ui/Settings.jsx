@@ -7,7 +7,7 @@ import { HotkeyForm } from './HotkeyForm.jsx';
 import { FONT_CHOICES, fontId, setFont } from './fontpick.js';
 import { KB_THEMES } from './kbvoices.js';
 import { kbThemeId, loadKbThemeCss, setKbTheme } from './kbtheme.js';
-import { SKIN_CHOICES, setSkin, skinId } from './skin.js';
+import { DEFAULT_MOTTO, MOTTO_MAX, SKIN_CHOICES, setSkin, setSkinMotto, skinId, skinMotto } from './skin.js';
 import { RosterSlots, rosterTextFromSlots, slotsFromStudents } from './RosterSlots.jsx';
 import { RosterPaste, RosterPreview, quietSave } from './RosterPaste.jsx';
 import { MAX_STUDENTS, readRosterText } from '../lib/roster.js';
@@ -157,6 +157,7 @@ export function Settings() {
     const [className, setClassName] = useState(data.profile.className || '');
     const [font, setFontId] = useState(() => fontId());
     const [skin, setSkinId] = useState(() => skinId());
+    const [motto, setMotto] = useState(() => { const now = skinMotto(); return now === DEFAULT_MOTTO ? '' : now; });
     const [kbTheme, setKbThemeId] = useState(() => kbThemeId());
     /* 테마 견본 키캡을 그리려고 설정을 열 때 테마 스타일을 받아 둡니다. 첫 화면에는 들어가지 않습니다. */
     useEffect(() => { loadKbThemeCss(); }, []);
@@ -255,6 +256,21 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">이 기기에만 저장돼요. 밝기와 키보드 테마는 그대로예요.</p>
+                {skin === 'cork' && (
+                    <label className="skin-motto-set" style={{ display: 'block', margin: '10px 0 0' }}>
+                        <span className="muted" style={{ display: 'block', margin: '0 0 6px' }}>학급 급훈 · 교실 앞벽 액자에 걸려요</span>
+                        <input
+                            className="field"
+                            data-role="skin-motto"
+                            value={motto}
+                            maxLength={MOTTO_MAX}
+                            placeholder={DEFAULT_MOTTO}
+                            aria-label="학급 급훈"
+                            onChange={(event) => { setMotto(event.target.value); setSkinMotto(event.target.value); }}
+                        />
+                        <span className="muted" style={{ display: 'block', margin: '6px 0 0', fontSize: 12 }}>{MOTTO_MAX}자까지. 비우면 기본 급훈으로 돌아가요. 이 기기에만 저장돼요.</span>
+                    </label>
+                )}
                 <p className="muted" style={{ margin: '14px 0 0' }}>키보드 테마</p>
                 <div className="kb-grid" role="group" aria-label="키보드 테마">
                     {KB_THEMES.map((item) => (

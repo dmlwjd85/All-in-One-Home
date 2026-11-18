@@ -67,3 +67,42 @@ export function clockAngles(date = new Date()) {
     const sec = date.getSeconds();
     return { hour: (h + m / 60 + sec / 3600) * 30, minute: (m + sec / 60) * 6, second: sec * 6 };
 }
+
+/** 교실 앞벽 급훈. 이 기기 키 ssug-gyomu-skin-motto 에만 둡니다(기록·클라우드에 넣지 않음). */
+export const MOTTO_KEY = 'ssug-gyomu-skin-motto';
+export const DEFAULT_MOTTO = '서로 돕고 함께 자라는 우리 반';
+export const MOTTO_MAX = 24;
+export const MOTTO_EVENT = 'ssug-skin-motto';
+
+/** 줄바꿈·겹친 빈칸을 지우고 MOTTO_MAX 글자까지만. 비면 기본 급훈. */
+export function cleanMotto(text) {
+    const one = String(text ?? '').replace(/\s+/g, ' ').trim();
+    return Array.from(one).slice(0, MOTTO_MAX).join('') || DEFAULT_MOTTO;
+}
+
+export function skinMotto(storage) {
+    try {
+        const saved = (storage || liveStorage())?.getItem?.(MOTTO_KEY);
+        return saved ? cleanMotto(saved) : DEFAULT_MOTTO;
+    } catch {
+        return DEFAULT_MOTTO;
+    }
+}
+
+/** 급훈을 이 기기에 저장하고 열려 있는 화면에 바로 알립니다. 비우면 기본 급훈으로 돌아갑니다. */
+export function setSkinMotto(text, storage) {
+    const motto = cleanMotto(text);
+    try {
+        const store = storage || liveStorage();
+        if (motto === DEFAULT_MOTTO) store?.removeItem?.(MOTTO_KEY);
+        else store?.setItem?.(MOTTO_KEY, motto);
+    } catch {
+        /* 저장이 막혀도 이번 화면에는 보입니다. */
+    }
+    try {
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(MOTTO_EVENT, { detail: motto }));
+    } catch {
+        /* 알림이 안 되면 다음에 열 때 반영됩니다. */
+    }
+    return motto;
+}

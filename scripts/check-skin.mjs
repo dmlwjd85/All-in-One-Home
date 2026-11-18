@@ -74,7 +74,7 @@ check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출�
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 분필 받침대 자리가 없습니다.');
 const deco = src('src/ui/SkinDeco.jsx');
-check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
+check(src('src/ui/skin.js').includes('서로 돕고 함께 자라는 우리 반') && /skinMotto\(\)/.test(deco) && deco.includes('loading="lazy"') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
 check(!/bg-frontwall-ref|wall-flag|taegeukgi-mark\.svg/.test(deco), '부정확한 태극기 그림을 씁니다.');
 check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /justify-content:\s*center/.test(css) && /gap:\s*16px/.test(css), '교실 앞벽 소품이 한 띠로 이어지지 않습니다.');
 check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css) && /gap:\s*8px/.test(css), '서랍 그림·칸 사이 틀이 없습니다.');
@@ -98,6 +98,33 @@ check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시
     const deco = readFileSync(`${root}/src/ui/SkinDeco.jsx`, 'utf8');
     check(/function SkinClock/.test(deco) && /data-hand="second"/.test(deco) && /visibilitychange/.test(deco) && !/wall-clock\.webp/.test(deco), '벽시계가 실제로 가는 시계가 아닙니다.');
     check(/html\.dark\[data-skin="cork"\] \.skin-flag,[\s\S]{0,120}filter: brightness/.test(css) && /\.main,\s*html\[data-skin="cork"\] \.topbar \{\s*--neo-raise: 0 2px 0/.test(css), '밤 교실 소품 어둡게·칠판 위 단추 그림자 다듬기가 없습니다.');
+}
+{
+    /* 급훈: 이 기기에만 저장, 길이 제한, 비우면 기본. */
+    const { DEFAULT_MOTTO, MOTTO_KEY, MOTTO_MAX, cleanMotto, setSkinMotto, skinMotto } = await import('../src/ui/skin.js');
+    const box = new Map();
+    const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)), removeItem: (k) => box.delete(k) };
+    check(skinMotto(store) === DEFAULT_MOTTO, '급훈 기본값');
+    check(setSkinMotto('  꿈을   키우는\n교실 ', store) === '꿈을 키우는 교실' && skinMotto(store) === '꿈을 키우는 교실' && box.has(MOTTO_KEY), '급훈 저장·정리');
+    check(Array.from(cleanMotto('가'.repeat(80))).length === MOTTO_MAX, '급훈 길이 제한');
+    check(setSkinMotto('   ', store) === DEFAULT_MOTTO && !box.has(MOTTO_KEY), '급훈을 비우면 기본으로 돌아가야 합니다.');
+    const settings = src('src/ui/Settings.jsx');
+    check(/data-role="skin-motto"/.test(settings) && /setSkinMotto\(event\.target\.value\)/.test(settings) && /skin === 'cork' &&/.test(settings), '설정에 급훈 입력칸이 없습니다.');
+    check(!/skin-motto|MOTTO_KEY/.test(src('src/lib/db.js')), '급훈은 기록·클라우드에 넣지 않습니다.');
+}
+{
+    /* 판서 카드: 칠판 위 카드는 채움 없이 분필 테두리, 흰 굵은 글씨. 칠판 가장자리는 네 색 분필. */
+    for (const name of ['frame-white', 'frame-yellow', 'frame-pink', 'frame-sky', 'frame-green', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right']) {
+        check(existsSync(`${root}/src/ui/skin/chalk-${name}.svg`), `분필 그림이 없습니다: chalk-${name}.svg`);
+    }
+    const board = css.slice(css.indexOf('판서 카드'));
+    check(/\.main \.glass:not\(button\):not\(a\):not\(\[role="button"\]\),/.test(board) && /background: none;\s*border: 2px solid transparent;\s*border-image: url\('\.\/skin\/chalk-frame-white\.svg'\)/.test(board), '판서 카드: 채움을 빼고 분필 테두리를 그려야 합니다.');
+    check(/--ink: #FDFCF6;/.test(board) && /font-weight: 700;/.test(board) && /--text-halo: var\(--cork-chalk\);/.test(board), '판서 카드 글씨는 진한 흰 분필이어야 합니다.');
+    check(/\.solid-card:not\(button\):not\(a\):not\(\[role="button"\]\):not\(\[data-note-pin="1"\]\)/.test(board), '고정한 메모는 압정 꽂은 종이로 남아야 합니다.');
+    check(/\.week-event \{\s*background-image: none;/.test(board) || /\.cell-grid \.tap \{\s*background-image: none;/.test(board), '판서 카드 안 단추의 종이 결을 걷어야 합니다.');
+    check(['top', 'bottom', 'left', 'right'].every((side) => board.split(`chalk-edge-${side}.svg`).length === 3), '칠판 가장자리 네 변(밝은·밤) 분필 선이 없습니다.');
+    const hex = (file) => (src(`src/ui/skin/${file}`).match(/stroke="(#[0-9A-Fa-f]{6})"/) || [])[1];
+    check(new Set(['chalk-edge-top.svg', 'chalk-edge-bottom.svg', 'chalk-edge-left.svg', 'chalk-edge-right.svg'].map(hex)).size === 4, '칠판 가장자리는 변마다 다른 색 분필이어야 합니다.');
 }
 check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
@@ -152,7 +179,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v107'"), '서비스 워커가 v107가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v108'"), '서비스 워커가 v108가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

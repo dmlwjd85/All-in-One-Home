@@ -1684,3 +1684,257 @@ html[data-skin="cork"]:not(.dark) .tabbar.tabbar-jelly {
         0 6px 0 #4A2E18,
         0 14px 24px rgba(34, 30, 28, .3);
 }
+
+/* ───────── 판서 카드 ─────────
+   칠판(.main) 위의 카드는 종이를 붙이지 않고 분필로 테두리만 그립니다(안은 칠판 그대로).
+   글씨는 진한 분필 흰색. 카드 안의 단추·칩·입력칸도 종이 결을 걷고 분필 선으로 바꿉니다.
+   고정한 메모(data-note-pin)는 압정으로 꽂은 종이라 그대로 두고,
+   팝업(.sheet)·쨈 입력(.quick-bar)도 칠판 위에 겹쳐 뜨므로 종이 그대로입니다. */
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]),
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .minutes-item,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) {
+    --bg: rgba(8, 16, 12, .24);
+    --surface: rgba(8, 16, 12, .24);
+    --solid: rgba(8, 16, 12, .24);
+    --brand-soft: rgba(8, 16, 12, .24);
+    --k-observe: rgba(8, 16, 12, .24);
+    --k-counsel: rgba(8, 16, 12, .24);
+    --k-parent: rgba(8, 16, 12, .24);
+    --k-praise: rgba(8, 16, 12, .24);
+    --k-todo: rgba(8, 16, 12, .24);
+    --line: rgba(253, 252, 246, .4);
+    --ink: #FDFCF6;
+    --ink-sub: #E6EDE0;
+    --ink-hint: #E6EDE0;
+    --hero-ink: #FDFCF6;
+    --accent: #A5E0D6;
+    --glow: rgba(165, 224, 214, .28);
+    --toast-action: #A5E0D6;
+    --warn: rgba(246, 221, 124, .18);
+    --rest-bg: rgba(249, 188, 200, .18);
+    --rest-ink: #F9BCC8;
+    --cork-tag-blue: #7EB8B0;
+    --cork-tag-coral: #E09080;
+    --cork-tag-green: #B8C878;
+    --cork-tag-orange: #E0C878;
+    --cork-tag-ink: #1A241C;
+    --text-halo: var(--cork-chalk);
+    --cork-paper: var(--cork-chalk);
+    --cork-paper-ink: #FDFCF6;
+    --cork-paper-sub: #E6EDE0;
+    --cork-chip: rgba(253, 252, 246, .13);
+    --cork-chip-ink: #FDFCF6;
+    --cork-chip-on: rgba(165, 224, 214, .22);
+    --cork-chip-on-ink: #E4F7F3;
+    --cork-field: rgba(0, 0, 0, .3);
+    --cork-field-ink: #FDFCF6;
+    --neo-shadow: rgba(0, 0, 0, .35);
+    --neo-highlight: rgba(253, 252, 246, .18);
+    --neo-raise: inset 0 0 0 1.5px rgba(253, 252, 246, .5), 0 1px 2px rgba(6, 12, 9, .3);
+    --neo-raise-sm: inset 0 0 0 1.5px rgba(253, 252, 246, .45), 0 1px 2px rgba(6, 12, 9, .26);
+    --shadow: inset 0 0 0 1.5px rgba(253, 252, 246, .5), 0 1px 2px rgba(6, 12, 9, .3);
+    --neo-inset: inset 0 0 0 1.5px rgba(253, 252, 246, .3), inset 0 3px 6px rgba(0, 0, 0, .3);
+    --neo-inset-deep: inset 0 0 0 1.5px rgba(253, 252, 246, .3), inset 0 4px 8px rgba(0, 0, 0, .34);
+    color: var(--ink);
+    font-weight: 700;
+    -webkit-text-stroke: 0;
+    background: none;
+    border: 2px solid transparent;
+    border-image: url('./skin/chalk-frame-white.svg') 30 / 18px / 0 round;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: 0 0 5px rgba(255, 255, 255, .16);
+}
+html.dark[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]),
+html.dark[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .minutes-item,
+html.dark[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]),
+html.dark[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) {
+    --ink: #F4F1E6;
+    --ink-sub: #D6DECF;
+    --ink-hint: #D6DECF;
+    --hero-ink: #F4F1E6;
+    --cork-paper-ink: #F4F1E6;
+    --cork-paper-sub: #D6DECF;
+    --cork-chip-ink: #F4F1E6;
+    --cork-field-ink: #F4F1E6;
+    background: none;
+    border: 2px solid transparent;
+    border-image: url('./skin/chalk-frame-white.svg') 30 / 18px / 0 round;
+    box-shadow: none;
+    text-shadow: none;
+}
+/* 분필 색: 카드 종류마다, 그리고 나란히 놓인 카드는 차례로 다른 색. */
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .home-quick:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) { border-image-source: url('./skin/chalk-frame-yellow.svg'); }
+html[data-skin="cork"] .main .home-todo:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]):nth-of-type(3n+2),
+html[data-skin="cork"] .main .minutes-row:nth-of-type(3n+2) .minutes-item { border-image-source: url('./skin/chalk-frame-pink.svg'); }
+html[data-skin="cork"] .main .home-time:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]):nth-of-type(3n),
+html[data-skin="cork"] .main .minutes-row:nth-of-type(3n) .minutes-item { border-image-source: url('./skin/chalk-frame-sky.svg'); }
+html[data-skin="cork"] .main .home-event:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .home-meal:not(button):not(a):not([role="button"]),
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) { border-image-source: url('./skin/chalk-frame-green.svg'); }
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .muted,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .minutes-item .muted,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .muted,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .muted { color: var(--ink-sub); }
+/* 카드 안 단추·칩·입력칸: 종이 결 무늬를 걷어 내고 분필 선만 남깁니다. */
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .chip,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .choice-tile,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .settings-key,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .field,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .tray-input,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .week-event,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .num-tile,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .roster-cell,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .cal-grid .tap,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .period-picks .tap,
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) .cell-grid .tap,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .minutes-item .chip,
+html[data-skin="cork"] .main .minutes-item .choice-tile,
+html[data-skin="cork"] .main .minutes-item .settings-key,
+html[data-skin="cork"] .main .minutes-item .field,
+html[data-skin="cork"] .main .minutes-item .tray-input,
+html[data-skin="cork"] .main .minutes-item .week-event,
+html[data-skin="cork"] .main .minutes-item .num-tile,
+html[data-skin="cork"] .main .minutes-item .roster-cell,
+html[data-skin="cork"] .main .minutes-item .cal-grid .tap,
+html[data-skin="cork"] .main .minutes-item .period-picks .tap,
+html[data-skin="cork"] .main .minutes-item .cell-grid .tap,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) .cell-grid .tap,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .chip,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .choice-tile,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .settings-key,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .field,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .tray-input,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .week-event,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .num-tile,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .roster-cell,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .cal-grid .tap,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .period-picks .tap,
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .cell-grid .tap {
+    background-image: none;
+    box-shadow: inset 0 0 0 1.5px rgba(253, 252, 246, .46);
+    font-weight: 700;
+}
+
+/* 칠판 가장자리: 네 변을 서로 다른 색 분필(노랑·분홍·하늘·연두)로 그은 선. */
+html[data-skin="cork"] .main {
+    background-image:
+        url('./skin/chalk-edge-top.svg'),
+        url('./skin/chalk-edge-bottom.svg'),
+        url('./skin/chalk-edge-left.svg'),
+        url('./skin/chalk-edge-right.svg'),
+        url('./skin/bg/chalkboard.webp');
+    background-repeat: repeat-x, repeat-x, repeat-y, repeat-y, no-repeat;
+    background-size: 240px 8px, 240px 8px, 8px 240px, 8px 240px, cover;
+    background-position: left 0 top 1px, left 0 bottom 1px, left 1px top 0, right 1px top 0, center;
+}
+html.dark[data-skin="cork"] .main {
+    background-image:
+        url('./skin/chalk-edge-top.svg'),
+        url('./skin/chalk-edge-bottom.svg'),
+        url('./skin/chalk-edge-left.svg'),
+        url('./skin/chalk-edge-right.svg'),
+        linear-gradient(rgba(6, 12, 10, .42), rgba(6, 12, 10, .42)),
+        url('./skin/bg/chalkboard.webp');
+    background-repeat: repeat-x, repeat-x, repeat-y, repeat-y, no-repeat, no-repeat;
+    background-size: 240px 8px, 240px 8px, 8px 240px, 8px 240px, cover, cover;
+    background-position: left 0 top 1px, left 0 bottom 1px, left 1px top 0, right 1px top 0, center, center;
+}
+
+/* 긴 급훈(17자 이상)은 액자 안에서 두 줄로 접습니다. */
+html[data-skin="cork"] .skin-motto-text[data-len="long"] {
+    white-space: normal;
+    line-height: 1.12;
+    text-align: center;
+    word-break: keep-all;
+    font-size: clamp(8px, .95vw, 12.5px);
+}
+@media (max-width: 640px) {
+    html[data-skin="cork"] .skin-motto-text[data-len="long"] { font-size: 7px; }
+}

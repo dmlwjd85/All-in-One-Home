@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import flagFrame from './skin/bg/flag-frame.webp';
 import mottoFrame from './skin/bg/motto-frame.webp';
 import wallSpeaker from './skin/bg/wall-speaker.webp';
-import { clockAngles } from './skin.js';
+import { MOTTO_EVENT, clockAngles, skinMotto } from './skin.js';
 
 const TICKS = Array.from({ length: 12 }, (_, i) => i);
 
@@ -64,6 +64,16 @@ export function SkinDeco() {
         sync();
         return () => obs.disconnect();
     }, []);
+    const [motto, setMotto] = useState(() => skinMotto());
+    useEffect(() => {
+        const sync = () => setMotto(skinMotto());
+        window.addEventListener(MOTTO_EVENT, sync);
+        window.addEventListener('storage', sync);
+        return () => {
+            window.removeEventListener(MOTTO_EVENT, sync);
+            window.removeEventListener('storage', sync);
+        };
+    }, []);
     if (!on) return null;
     return (
         <div className="skin-deco" aria-hidden="true">
@@ -72,7 +82,7 @@ export function SkinDeco() {
                 <img className="skin-flag skin-flag-mark" src={flagFrame} alt="" decoding="async" />
                 <div className="skin-motto">
                     <img className="skin-motto-frame" src={mottoFrame} alt="" decoding="async" />
-                    <span className="skin-motto-text title-font">서로 돕고 함께 자라는 우리 반</span>
+                    <span className="skin-motto-text title-font" data-len={Array.from(motto).length > 16 ? 'long' : undefined}>{motto}</span>
                 </div>
                 <SkinClock />
             </div>
