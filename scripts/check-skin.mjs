@@ -70,7 +70,18 @@ for (const sel of selectors) {
     const parts = sel.split(',').map((s) => s.trim()).filter(Boolean);
     check(parts.length && parts.every((p) => /\[data-skin="cork"\]/.test(p)), `코르크 스타일이 기본 화면에 새어 나갑니다: ${sel}`);
 }
-check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출결 색 의미를 덮습니다.');
+{
+    /* 출결 색 의미는 덮지 않습니다. 단, 칠판 위 판서 카드(어두운 바탕) 안에서는 앱의 어두운 화면 값 그대로만 씁니다. */
+    const at = css.indexOf('판서 카드');
+    const before = at < 0 ? css : css.slice(0, at);
+    check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(before), '출결 색 의미를 덮습니다.');
+    const tokens = src('src/styles/tokens.css');
+    const darkTokens = tokens.slice(tokens.lastIndexOf('--st-present:'));
+    for (const [, name, value] of (at < 0 ? '' : css.slice(at)).matchAll(/(--st-[a-z-]+):\s*([^;]+);/g)) {
+        const want = (darkTokens.match(new RegExp(`${name}:\\s*([^;]+);`)) || [])[1];
+        check(want && want.trim() === value.trim(), `판서 카드 출결 색이 어두운 화면 값과 다릅니다: ${name} ${value}`);
+    }
+}
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 분필 받침대 자리가 없습니다.');
 const deco = src('src/ui/SkinDeco.jsx');
