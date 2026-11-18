@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v9';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v12';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -512,7 +512,107 @@ try {
         await page.waitForSelector('.sheet[aria-label="메뉴"]', { timeout: 5000 });
     };
 
-    const shotNames = new Set(['home', 'attend', 'todo', 'jam', 'settings']);
+    const shotNames = new Set(['home', 'attend', 'todo', 'settings']);
+
+    async function flagGeometry(page, label) {
+        const result = await page.evaluate(async () => {
+            const img = document.querySelector('.skin-flag-mark');
+            if (!img) return { ok: false, why: '없음' };
+            await img.decode().catch(() => {});
+            const w = img.naturalWidth;
+            const h = img.naturalHeight;
+            if (w < 16 || h < 16) return { ok: false, why: '작음', w, h };
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const insetX = Math.round(w * 0.12);
+            const insetY = Math.round(h * 0.12);
+            const innerW = w - insetX * 2;
+            const innerH = h - insetY * 2;
+            const { data } = ctx.getImageData(insetX, insetY, innerW, innerH);
+            const black = (x, y) => {
+                const i = (y * innerW + x) * 4;
+                return data[i] < 50 && data[i + 1] < 50 && data[i + 2] < 50;
+            };
+            const color = (x, y) => {
+                const i = (y * innerW + x) * 4;
+                return [data[i], data[i + 1], data[i + 2]];
+            };
+            const top = color(Math.round(innerW * 0.5), Math.round(innerH * 0.38));
+            const bot = color(Math.round(innerW * 0.5), Math.round(innerH * 0.62));
+            const isRed = top[0] > 140 && top[1] < 100 && top[2] < 100;
+            const isBlue = bot[2] > 90 && bot[0] < 90;
+            const midX = Math.floor(innerW / 2);
+            const midY = Math.floor(innerH / 2);
+            const count = (x0, y0, x1, y1) => {
+                const seen = new Uint8Array((x1 - x0) * (y1 - y0));
+                const idx = (x, y) => (y - y0) * (x1 - x0) + (x - x0);
+                let n = 0;
+                const stack = [];
+                for (let y = y0; y < y1; y += 1) {
+                    for (let x = x0; x < x1; x += 1) {
+                        if (!black(x, y) || seen[idx(x, y)]) continue;
+                        n += 1;
+                        stack.push(x, y);
+                        seen[idx(x, y)] = 1;
+                        let size = 0;
+                        while (stack.length) {
+                            const cy = stack.pop();
+                            const cx = stack.pop();
+                            size += 1;
+                            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+                                const nx = cx + dx;
+                                const ny = cy + dy;
+                                if (nx < x0 || ny < y0 || nx >= x1 || ny >= y1) continue;
+                                if (!black(nx, ny) || seen[idx(nx, ny)]) continue;
+                                seen[idx(nx, ny)] = 1;
+                                stack.push(nx, ny);
+                            }
+                        }
+                        if (size < 20) n -= 1;
+                    }
+                }
+                return n;
+            };
+            const parts = {
+                ul: count(0, 0, midX, midY),
+                ur: count(midX, 0, innerW, midY),
+                ll: count(0, midY, midX, innerH),
+                lr: count(midX, midY, innerW, innerH),
+            };
+            const centers = [];
+            for (const yf of [0.20, 0.245, 0.29]) {
+                const y = Math.round(yf * innerH);
+                let start = null;
+                let first = 0;
+                for (let x = Math.round(innerW * 0.08); x <= Math.round(innerW * 0.42); x += 1) {
+                    if (black(x, y)) {
+                        if (start == null) start = x;
+                    } else if (start != null) {
+                        first = (start + x - 1) / 2;
+                        break;
+                    }
+                }
+                centers.push(first);
+            }
+            const present = centers.filter((c) => c > 0);
+            const rotated = present.length >= 2 && Math.max(...present) - Math.min(...present) > innerW * 0.02;
+            return {
+                ok: isRed && isBlue && rotated
+                    && parts.ul === 3 && parts.ur === 5 && parts.ll === 4 && parts.lr === 6,
+                ratio: innerW / innerH,
+                top,
+                bot,
+                parts,
+                centers,
+                rotated,
+                layout: { ul: 'geon-3', ur: 'broken-solid-broken-5', ll: 'solid-broken-solid-4', lr: 'gon-6' },
+            };
+        });
+        check(result.ok, `${label} 태극기 괘가 공식 도안과 다릅니다: ${JSON.stringify(result)}`);
+    }
     const scenes = [
         ['home', '#/today', async () => {}],
         ['attend', '#/attend', async () => {}],
@@ -559,6 +659,22 @@ try {
         const contrast = await contrastHits(page, file);
         contrastChecked += contrast.checked;
         contrastFailed += contrast.failed;
+        if (name === 'home' && width === 1280 && mode === 'light') {
+            await flagGeometry(page, file);
+        }
+        await page.close();
+    }
+
+    {
+        const page = await openPage({ width: 1280, height: 900, mode: 'light', skin: 'cork', hash: '#/today' });
+        await delay(200);
+        await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 3 });
+        await delay(120);
+        const wall = await page.$('.skin-wall');
+        if (wall) await wall.screenshot({ path: resolve(shots, 'cork-wall-band-closeup.png') });
+        const flag = await page.$('.skin-flag');
+        if (flag) await flag.screenshot({ path: resolve(shots, 'cork-wall-flag-closeup.png') });
+        await flagGeometry(page, 'cork-wall-flag-closeup.png');
         await page.close();
     }
 

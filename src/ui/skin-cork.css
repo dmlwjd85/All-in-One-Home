@@ -62,8 +62,8 @@ html[data-skin="cork"] {
     --cork-field-ink: #2A241C;
     --cork-chalk: #2F3E35;
     --cork-chalk-ink: #F6F0E4;
-    --cork-wall: #E8D3B0;
-    --cork-desk: #9E6A33;
+    --cork-wall: #E0CDAE;
+    --cork-desk: #7B5638;
     --cork-drawer: #4A3018;
     --cork-drawer-face: #3E2A18;
     --cork-drawer-open: #5C3A22;
@@ -74,6 +74,7 @@ html[data-skin="cork"] {
     --cork-tab-ink: #3A2C20;
     --cork-tab-muted: #4A4036;
     --cork-tab-on: #9C3B32;
+    --cork-side: 140px;
 }
 
 html.dark[data-skin="cork"] {
@@ -208,7 +209,7 @@ html.dark[data-skin="cork"] .side {
     box-shadow: none;
 }
 
-/* 크림 스칼럽 인덱스카드. 종이 두께·살짝 들뜬 그림자·은은한 종이결. */
+/* 칠판 위 메모장: 둥근 종이 카드. 바느질 땀은 두지 않고 상단 압정만. */
 html[data-skin="cork"] .glass,
 html[data-skin="cork"] .solid-card,
 html[data-skin="cork"] .hero,
@@ -221,19 +222,16 @@ html[data-skin="cork"] .minutes-item {
     background-color: var(--bg);
     background-image:
         url('./skin/pin-coral.svg'),
-        url('./skin/clip.svg'),
         url('./skin/paper-fiber.svg');
-    background-repeat: no-repeat, no-repeat, repeat;
-    background-position: 12px 1px, calc(100% - 10px) 0, 0 0;
-    background-size: 12px 18px, 11px 22px, 48px 48px;
-    border-radius: 10px;
-    border: 6px solid transparent;
-    border-image: url('./skin/scallop.svg') 10 round;
+    background-repeat: no-repeat, repeat;
+    background-position: 50% 2px, 0 0;
+    background-size: 12px 18px, 48px 48px;
+    border-radius: 12px;
+    border: 0;
     box-shadow:
         inset 0 1px 0 rgba(255, 252, 245, .7),
-        1px 1px 0 #E6D3B4,
-        2px 3px 0 #D4C09A,
-        3px 6px 10px rgba(90, 58, 36, .18);
+        0 1px 2px rgba(90, 58, 36, .08),
+        0 6px 14px rgba(90, 58, 36, .16);
 }
 html[data-skin="cork"] button.glass,
 html[data-skin="cork"] button.solid-card,
@@ -244,9 +242,7 @@ html[data-skin="cork"] [role="button"].solid-card {
     box-shadow:
         var(--neo-raise),
         inset 0 1px 0 rgba(255, 252, 245, .7),
-        1px 1px 0 #E6D3B4,
-        2px 3px 0 #D4C09A,
-        3px 6px 10px rgba(90, 58, 36, .18);
+        0 6px 14px rgba(90, 58, 36, .16);
 }
 /* 작은 칸(명단·달력 날짜·칩)에는 압정·집게를 두지 않습니다. */
 html[data-skin="cork"] button.glass,
@@ -290,55 +286,56 @@ html.dark[data-skin="cork"] .minutes-item {
     --text-halo: var(--cork-paper);
     background-image:
         url('./skin/pin-coral.svg'),
-        url('./skin/clip.svg'),
         url('./skin/paper-fiber-dark.svg');
-    border-image-source: url('./skin/scallop-dark.svg');
+    background-repeat: no-repeat, repeat;
+    background-position: 50% 2px, 0 0;
+    background-size: 12px 18px, 48px 48px;
+    border: 0;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, .06),
-        1px 1px 0 #2A2118,
-        2px 3px 0 #1A1410,
-        3px 6px 12px rgba(0, 0, 0, .4);
+        0 1px 2px rgba(0, 0, 0, .25),
+        0 8px 16px rgba(0, 0, 0, .4);
 }
 
 html[data-skin="cork"] .home-todo,
 html[data-skin="cork"] .fold.home-todo {
-    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-time,
 html[data-skin="cork"] .fold.home-time {
-    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/pin-sky.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .home-event,
 html[data-skin="cork"] .fold.home-event {
-    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/pin-green.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .hero,
 html[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber.svg');
 }
 html[data-skin="cork"] .store-notice {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber.svg');
-    background-position: 12px 1px, calc(100% - 10px) 0, 0 0;
-    background-size: 12px 18px, 11px 22px, 48px 48px;
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber.svg');
+    background-position: 50% 2px, 0 0;
+    background-size: 12px 18px, 48px 48px;
 }
 html.dark[data-skin="cork"] .home-todo,
 html.dark[data-skin="cork"] .fold.home-todo {
-    background-image: url('./skin/pin-coral.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .home-time,
 html.dark[data-skin="cork"] .fold.home-time {
-    background-image: url('./skin/pin-sky.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/pin-sky.svg'), url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .home-event,
 html.dark[data-skin="cork"] .fold.home-event {
-    background-image: url('./skin/pin-green.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/pin-green.svg'), url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .hero,
 html.dark[data-skin="cork"] .home-quick {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber-dark.svg');
 }
 html.dark[data-skin="cork"] .store-notice {
-    background-image: url('./skin/pin-mustard.svg'), url('./skin/clip.svg'), url('./skin/paper-fiber-dark.svg');
+    background-image: url('./skin/pin-mustard.svg'), url('./skin/paper-fiber-dark.svg');
 }
 
 html[data-skin="cork"] .sheet,
@@ -346,22 +343,22 @@ html[data-skin="cork"] .quick-bar {
     --text-halo: var(--cork-paper);
     color: var(--cork-paper-ink);
     background-color: var(--bg);
-    background-image: url('./skin/clip.svg'), url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
-    background-repeat: no-repeat, no-repeat, repeat;
-    background-position: calc(100% - 14px) 8px, 16px 8px, 0 0;
-    background-size: 14px 24px, 12px 18px, 48px 48px;
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber.svg');
+    background-repeat: no-repeat, repeat;
+    background-position: 50% 8px, 0 0;
+    background-size: 12px 18px, 48px 48px;
     border-radius: 12px;
-    border: 6px solid transparent;
-    border-image: url('./skin/scallop.svg') 10 round;
+    border: 0;
     box-shadow:
         inset 0 1px 0 rgba(255, 252, 245, .7),
-        0 -10px 24px rgba(90, 58, 36, .16);
+        0 8px 24px rgba(90, 58, 36, .18);
 }
 html.dark[data-skin="cork"] .sheet,
 html.dark[data-skin="cork"] .quick-bar {
     --text-halo: var(--cork-paper);
-    border-image-source: url('./skin/scallop-dark.svg');
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 -10px 24px rgba(0, 0, 0, .4);
+    background-image: url('./skin/pin-coral.svg'), url('./skin/paper-fiber-dark.svg');
+    border: 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 8px 24px rgba(0, 0, 0, .4);
 }
 
 html[data-skin="cork"] .sheet-foot {
@@ -593,70 +590,90 @@ html[data-skin="cork"] .skin-wall {
     right: 0;
     top: 0;
     height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 10px;
+    box-sizing: border-box;
     background-color: var(--cork-wall);
     background-image:
+        linear-gradient(to right, var(--cork-wall), transparent 8%, transparent 92%, var(--cork-wall)),
         url('./skin/bg/molding.webp'),
+        url('./skin/bg/wall-cover.webp'),
         url('./skin/bg/plaster.webp');
-    background-repeat: repeat-x, repeat;
-    background-position: 0 100%, 0 0;
-    background-size: auto 7px, auto 100%;
+    background-repeat: no-repeat;
+    background-position: 0 0, 0 100%, center top, center;
+    background-size: 100% 100%, 100% 6px, cover, cover;
 }
 html.dark[data-skin="cork"] .skin-wall {
     background-image:
-        url('./skin/bg/molding.webp'),
         linear-gradient(rgba(20, 12, 8, .4), rgba(20, 12, 8, .4)),
-        url('./skin/bg/plaster.webp');
-    background-repeat: repeat-x, no-repeat, repeat;
-    background-position: 0 100%, 0 0, 0 0;
-    background-size: auto 7px, 100% 100%, auto 100%;
+        linear-gradient(to right, var(--cork-wall), transparent 8%, transparent 92%, var(--cork-wall)),
+        url('./skin/bg/molding.webp'),
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-position: 0 0, 0 0, 0 100%, center top;
+    background-size: 100% 100%, 100% 100%, 100% 6px, cover;
 }
-html[data-skin="cork"] .skin-flag,
-html[data-skin="cork"] .skin-motto,
-html[data-skin="cork"] .skin-prop,
 html[data-skin="cork"] .skin-tray {
     position: absolute;
     display: none;
     margin: 0;
 }
-html[data-skin="cork"] .skin-flag {
-    display: none;
-}
-html[data-skin="cork"] .skin-flag-wood,
-html[data-skin="cork"] .skin-flag-mark,
-html[data-skin="cork"] .skin-motto-frame {
-    position: absolute;
+html[data-skin="cork"] .skin-wall > .skin-prop,
+html[data-skin="cork"] .skin-flag,
+html[data-skin="cork"] .skin-motto {
+    position: relative;
     display: block;
+    flex: 0 0 auto;
+    height: 88%;
+    width: auto;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    background: none;
 }
-html[data-skin="cork"] .skin-flag-wood {
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: fill;
+html[data-skin="cork"] .skin-prop[data-prop="speaker"],
+html[data-skin="cork"] .skin-prop[data-prop="clock"] {
+    width: auto;
+    flex: 0 0 auto;
+    object-fit: contain;
+    object-position: center;
 }
+html[data-skin="cork"] .skin-prop[data-prop="clock"] {
+    aspect-ratio: 1 / 1;
+    height: 88%;
+    width: auto;
+    max-width: none;
+}
+html[data-skin="cork"] .skin-flag,
 html[data-skin="cork"] .skin-flag-mark {
-    left: 11%;
-    top: 12%;
-    width: 78%;
-    height: 76%;
-    object-fit: fill;
+    height: 88%;
+    width: auto;
+    object-fit: contain;
 }
 html[data-skin="cork"] .skin-motto {
-    display: none;
+    width: clamp(168px, 30vw, 380px);
     color: #2A241C;
     --text-halo: #F6F0E4;
     -webkit-text-stroke: 0;
     user-select: none;
 }
 html[data-skin="cork"] .skin-motto-frame {
+    position: absolute;
+    display: block;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: fill;
+    border: 0;
+    box-shadow: none;
 }
 html[data-skin="cork"] .skin-motto-text {
     position: absolute;
-    left: 8%;
-    right: 8%;
+    left: 9%;
+    right: 9%;
     top: 16%;
     bottom: 16%;
     display: flex;
@@ -664,23 +681,23 @@ html[data-skin="cork"] .skin-motto-text {
     justify-content: center;
     margin: 0;
     padding: 0 4px;
-    background: rgba(246, 240, 228, .94);
+    background: #E8DCC4;
     color: #2A241C;
-    --text-halo: #F6F0E4;
-    letter-spacing: .02em;
+    --text-halo: #E8DCC4;
+    letter-spacing: .01em;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.15;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
+    font-size: clamp(9px, 1.15vw, 15px);
 }
 html.dark[data-skin="cork"] .skin-motto-text {
-    background: rgba(42, 36, 28, .94);
-    color: #F4EDE4;
-    --text-halo: #2A241C;
+    background: #E8DCC4;
+    color: #2A241C;
+    --text-halo: #E8DCC4;
 }
 
-/* 폰: 퇴근 바 아래 44px 앞벽. 태극기·급훈 옆에 스피커(·시계)를 붙여 크게. */
 @media (max-width: 640px) {
     html[data-skin="cork"] .app-frame:has(> .fuse) {
         padding-top: calc(var(--fuse-h) + 10px + var(--fuse-top) + 44px);
@@ -688,164 +705,31 @@ html.dark[data-skin="cork"] .skin-motto-text {
     html[data-skin="cork"] .skin-wall {
         top: calc(var(--fuse-h) + 10px + var(--fuse-top));
         height: 44px;
-    }
-    html[data-skin="cork"] .skin-flag {
-        display: block;
-        left: 10px;
-        top: calc(var(--fuse-h) + 10px + var(--fuse-top) + 2px);
-        width: 48px;
-        height: 40px;
+        gap: 12px;
+        padding: 0 6px;
     }
     html[data-skin="cork"] .skin-motto {
-        display: block;
-        left: 60px;
-        top: calc(var(--fuse-h) + 10px + var(--fuse-top) + 2px);
-        height: 40px;
-        width: min(176px, calc(100% - 108px));
+        width: clamp(112px, 42vw, 168px);
     }
     html[data-skin="cork"] .skin-motto-text {
-        font-size: 12px;
+        font-size: 8px;
         letter-spacing: 0;
-        padding: 0 4px;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
-        display: block;
-        left: calc(60px + min(176px, 100% - 108px) + 4px);
-        top: calc(var(--fuse-h) + 10px + var(--fuse-top) + 6px);
-        width: 34px;
-        height: 32px;
-        object-fit: contain;
+        padding: 0 2px;
+        white-space: normal;
+        line-height: 1.1;
     }
 }
-@media (max-width: 359px) {
-    html[data-skin="cork"] .skin-motto {
-        width: calc(100% - 58px);
-    }
-    html[data-skin="cork"] .skin-motto-text { font-size: 11px; }
-    html[data-skin="cork"] .skin-flag {
-        width: 42px;
-        height: 36px;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
-        display: none;
-    }
-}
-@media (min-width: 360px) and (max-width: 640px) {
-    html[data-skin="cork"] .skin-motto {
-        width: min(188px, calc(100% - 148px));
-    }
-    html[data-skin="cork"] .skin-motto-text { font-size: 12px; }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
-        left: calc(60px + min(188px, 100% - 148px) + 4px);
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
-        display: block;
-        left: calc(60px + min(188px, 100% - 148px) + 40px);
-        top: calc(var(--fuse-h) + 10px + var(--fuse-top) + 6px);
-        width: 34px;
-        height: 32px;
-        object-fit: contain;
-    }
-}
-
-/* 넓은 화면: 56px 앞벽. 태극기·급훈 중심으로 스피커·시계를 붙여 크게. */
 @media (min-width: 641px) {
     html[data-skin="cork"] .app-frame {
         padding-top: 56px;
         box-sizing: border-box;
     }
-    html[data-skin="cork"] .skin-flag {
-        display: block;
-        left: calc(50% - 168px);
-        top: 3px;
-        width: 72px;
-        height: 50px;
-    }
-    html[data-skin="cork"] .skin-motto {
-        display: block;
-        left: calc(50% - 88px);
-        top: 3px;
-        height: 50px;
-        width: 300px;
-    }
-    html[data-skin="cork"] .skin-motto-text { font-size: 16px; }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"],
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
-        display: block;
-        top: 6px;
-        height: 44px;
-        width: 48px;
-        object-fit: contain;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] { left: calc(50% - 224px); }
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] { left: calc(50% + 220px); }
 }
-@media (min-width: 641px) and (max-width: 899px) {
-    html[data-skin="cork"] .skin-flag {
-        left: calc(50% - 148px);
-        width: 64px;
-        height: 48px;
-    }
-    html[data-skin="cork"] .skin-motto {
-        left: calc(50% - 76px);
-        width: 248px;
-        height: 48px;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] { left: calc(50% - 204px); width: 48px; height: 42px; }
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] { left: calc(50% + 180px); width: 48px; height: 42px; }
-}
-/* 900+: 칠판 가운데(사이드 200px)에 태극기·급훈·스피커·시계를 띠 높이까지 키워 모읍니다. */
 @media (min-width: 900px) {
-    html[data-skin="cork"] .skin-flag {
-        left: calc(50% + 100px - 217px);
-        top: 1px;
-        width: 96px;
-        height: 54px;
-    }
-    html[data-skin="cork"] .skin-motto {
-        left: calc(50% + 100px - 113px);
-        top: 1px;
-        width: 320px;
-        height: 54px;
-    }
-    html[data-skin="cork"] .skin-motto-text { font-size: 18px; }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
-        left: calc(50% + 100px - 269px);
-        top: 1px;
-        width: 44px;
-        height: 54px;
-        object-fit: fill;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
-        left: calc(50% + 100px + 215px);
-        top: 1px;
-        width: 54px;
-        height: 54px;
-        object-fit: contain;
-    }
-}
-@media (min-width: 1280px) {
-    html[data-skin="cork"] .skin-flag {
-        left: calc(50% + 100px - 273px);
-        width: 108px;
-        height: 54px;
-    }
-    html[data-skin="cork"] .skin-motto {
-        left: calc(50% + 100px - 157px);
-        width: 420px;
-        height: 54px;
-    }
-    html[data-skin="cork"] .skin-motto-text { font-size: 20px; }
-    html[data-skin="cork"] .skin-prop[data-prop="speaker"] {
-        left: calc(50% + 100px - 325px);
-        width: 44px;
-        height: 54px;
-        object-fit: fill;
-    }
-    html[data-skin="cork"] .skin-prop[data-prop="clock"] {
-        left: calc(50% + 100px + 271px);
-        width: 54px;
-        height: 54px;
+    html[data-skin="cork"] .skin-wall {
+        left: 0;
+        height: 64px;
+        gap: 16px;
     }
 }
 
@@ -888,20 +772,68 @@ html.dark[data-skin="cork"] .main {
 /* 넓은 화면: 앞벽 56px · 칠판 아래 분필 받침대. 책상 띠·소품은 두지 않습니다. */
 @media (min-width: 900px) {
     html[data-skin="cork"] .app-frame {
-        padding-top: 56px;
+        grid-template-columns: var(--cork-side) minmax(0, 1fr);
+        padding-top: 64px;
         padding-bottom: 120px;
         box-sizing: border-box;
         background-color: var(--cork-wall);
-        background-image: none;
+        background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
+        background-size: var(--cork-side) calc(100% - 64px - 120px);
+        background-position: 0 64px;
+        background-repeat: no-repeat;
     }
     html.dark[data-skin="cork"] .app-frame {
-        background-image: none;
+        background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
+        background-size: var(--cork-side) calc(100% - 64px - 120px);
+        background-position: 0 64px;
+        background-repeat: no-repeat;
     }
     html[data-skin="cork"] .side {
         height: auto;
         max-height: 100%;
         min-height: 0;
         align-self: stretch;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+    html[data-skin="cork"] .side-brand > div {
+        gap: 4px !important;
+        padding: 4px 2px 0 !important;
+        flex-wrap: wrap;
+    }
+    html[data-skin="cork"] .side-brand .brand-symbol {
+        width: 22px;
+        height: 22px;
+    }
+    html[data-skin="cork"] .side-brand .title-font {
+        font-size: 13px !important;
+        line-height: 18px !important;
+        padding: 2px 6px;
+        border-width: 3px;
+    }
+    html[data-skin="cork"] .side-brand .brand-motto {
+        font-size: 11px;
+        line-height: 15px;
+        margin: 6px 4px 8px;
+    }
+    html[data-skin="cork"] .side-brand .brand-motto span {
+        white-space: normal;
+    }
+    html[data-skin="cork"] .side-menu .tap.chip.block {
+        padding-left: 6px;
+        padding-right: 20px;
+        font-size: 12.5px;
+        letter-spacing: -0.02em;
+    }
+    html[data-skin="cork"] .side-hotkey,
+    html[data-skin="cork"] .side-hotkey.muted {
+        right: 4px;
+        font-size: 9px;
+        line-height: 12px;
+        padding: 0 2px;
+    }
+    html[data-skin="cork"] .minutes-text {
+        max-width: calc(100vw - var(--cork-side) - 48px);
     }
     html[data-skin="cork"] .main {
         align-self: stretch;
@@ -920,32 +852,22 @@ html.dark[data-skin="cork"] .main {
     }
     html[data-skin="cork"] .app-bg::after { content: none; }
     html[data-skin="cork"] .skin-tray {
-        display: flex;
-        left: 200px;
+        display: block;
+        left: 0;
         right: 0;
         bottom: 0;
         height: 120px;
         z-index: 3;
-        align-items: stretch;
+        box-sizing: border-box;
         pointer-events: none;
-    }
-    html[data-skin="cork"] .skin-tray-chalk,
-    html[data-skin="cork"] .skin-tray-eraser {
-        display: block;
-        height: 100%;
-        width: auto;
-        object-fit: fill;
-        flex: 0 0 auto;
-        pointer-events: none;
-    }
-    html[data-skin="cork"] .skin-tray-mid {
-        flex: 1 1 auto;
-        min-width: 24px;
-        background-color: var(--cork-desk);
-        background-image: url('./skin/bg/tray-wood.webp');
-        background-repeat: repeat-x;
-        background-position: center;
-        background-size: auto 100%;
+        border-style: solid;
+        border-color: transparent;
+        border-width: 0 140px 0 180px;
+        border-image-source: url('./skin/bg/tray-long.webp');
+        border-image-slice: 0 280 0 400 fill;
+        border-image-width: 0 140px 0 180px;
+        border-image-repeat: stretch;
+        background: none;
     }
 }
 html[data-skin="cork"] .main .glass,
@@ -977,30 +899,34 @@ html.dark[data-skin="cork"] .main > .cloud-note {
 html[data-skin="cork"] .fuse-face {
     background-color: var(--cork-wall);
     background-image:
-        linear-gradient(rgba(232, 211, 176, .94), rgba(232, 211, 176, .94)),
-        url('./skin/bg/plaster.webp');
-    background-repeat: no-repeat, repeat;
-    background-size: 100% 100%, auto 100%;
+        linear-gradient(rgba(224, 205, 174, .88), rgba(224, 205, 174, .88)),
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-size: 100% 100%, cover;
+    background-position: 0 0, center;
     color: var(--cork-paper-ink);
-    --text-halo: #E8D3B0;
+    --text-halo: #E0CDAE;
 }
 html.dark[data-skin="cork"] .fuse-face {
     background-image:
         linear-gradient(rgba(42, 36, 28, .94), rgba(42, 36, 28, .94)),
-        url('./skin/bg/plaster.webp');
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-size: 100% 100%, cover;
     --text-halo: #2A241C;
 }
 html[data-skin="cork"] .fuse-k { color: var(--cork-paper-sub); }
 html[data-skin="cork"] .fuse-v { color: var(--cork-paper-ink); }
 
 html[data-skin="cork"] .side-menu {
-    gap: 5px;
+    gap: 8px;
     padding: 4px 0;
 }
 html[data-skin="cork"] .side-menu .tap.chip.block {
     position: relative;
     justify-content: center;
     text-align: center;
+    overflow: hidden;
     background-color: var(--cork-drawer-face);
     background-image: url('./skin/bg/drawer-face.webp');
     background-repeat: no-repeat;
@@ -1082,7 +1008,7 @@ html[data-skin="cork"] .tabbar.tabbar-jelly {
     border-color: #6B4424;
     border-radius: 22px;
     background-color: var(--cork-desk);
-    background-image: url('./skin/bg/tray-wood.webp');
+    background-image: url('./skin/bg/desk.webp');
     background-repeat: repeat-x;
     background-size: auto 100%;
     background-position: center;
@@ -1147,7 +1073,7 @@ html.dark[data-skin="cork"] .tabbar.tabbar-jelly {
     background-color: var(--cork-desk);
     background-image:
         linear-gradient(rgba(20, 12, 8, .4), rgba(20, 12, 8, .4)),
-        url('./skin/bg/tray-wood.webp');
+        url('./skin/bg/desk.webp');
     background-repeat: no-repeat, repeat-x;
     background-size: 100% 100%, auto 100%;
     background-position: 0 0, center;

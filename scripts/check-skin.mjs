@@ -1,5 +1,5 @@
 /** 화면 꾸미기(클래식 교실풍경). 저장 키, html 속성, 클라우드 미사용, 스타일 범위, 글자 대비. */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,17 +74,21 @@ check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출�
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 분필 받침대 자리가 없습니다.');
 const deco = src('src/ui/SkinDeco.jsx');
-check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('taegeukgi-mark.svg') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
-check(!/bg-frontwall-ref|wall-flag/.test(deco) && !/taegeukgi\.webp/.test(css), '부정확한 태극기 사진을 씁니다.');
-check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css), '교실 앞벽 소품이 없습니다.');
-check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css), '서랍 그림이 없습니다.');
+check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
+check(!/bg-frontwall-ref|wall-flag|taegeukgi-mark\.svg/.test(deco), '부정확한 태극기 그림을 씁니다.');
+check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /justify-content:\s*center/.test(css) && /gap:\s*16px/.test(css), '교실 앞벽 소품이 한 띠로 이어지지 않습니다.');
+check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css) && /gap:\s*8px/.test(css), '서랍 그림·칸 사이 틀이 없습니다.');
 check(/chalkboard\.webp/.test(css) && /background-size:\s*cover/.test(css) && /border-image:\s*url\('\.\/skin\/bg\/desk\.webp'\)/.test(css), '칠판 그림·나무 틀이 없습니다.');
-check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
+check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /padding-top:\s*64px/.test(css) && /height:\s*64px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css) && /wall-cover\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
 check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
-check(/skin-tray/.test(css) && /tray-wood\.webp/.test(css) && /tray-chalk\.webp/.test(deco) && /tray-eraser\.webp/.test(deco), '분필 받침대가 없습니다.');
+check(/skin-tray/.test(css) && /tray-long\.webp/.test(css) && /border-image-slice/.test(css), '이어진 분필 받침대가 없습니다.');
+check(!/scallop/.test(css), '카드 바느질 땀 테두리가 남아 있습니다.');
 check(!/data-prop="books"/.test(css) && !/data-prop="stove"/.test(css) && !/data-prop="organ"/.test(css) && !/data-prop="globe"/.test(css) && !/data-prop="plant"/.test(css) && !/data-prop="lunch"/.test(css), '책상 소품이 남아 있습니다.');
 check(!/desk-wood\.svg|drawer-handle\.svg|wave\.svg/.test(css), '코드 SVG 텍스처를 배경으로 씁니다.');
 check(/padding-bottom:\s*120px/.test(css) && /height:\s*120px/.test(css), '분필 받침대 자리가 없습니다.');
+check(/--cork-side:\s*140px/.test(css) && /grid-template-columns:\s*var\(--cork-side\)/.test(css), '넓은 화면 서랍 폭이 70%가 아닙니다.');
+check(!/left:\s*200px/.test(css), '앞벽·받침대가 서랍장 옆에 묶여 있습니다.');
+check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시계 원 비율이 없습니다.');
 check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
 check(!/fab-eraser|jam-eraser|chalk-puff|cork-chalk-cloud/.test(css), '쨈 지우개·분필 가루가 남아 있습니다.');
@@ -101,8 +105,8 @@ for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chal
         check(bytes > 800 && bytes <= 40 * 1024, `소품 용량이 이상합니다: ${name}.webp ${bytes}B`);
     }
 }
-const bgLimit = { chalkboard: 120, desk: 120 };
-for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-wood', 'tray-chalk', 'tray-eraser']) {
+const bgLimit = { chalkboard: 120, desk: 120, 'tray-long': 80 };
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-long', 'taegeukgi', 'wall-cover']) {
     const file = `${root}/src/ui/skin/bg/${name}.webp`;
     check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
     if (existsSync(file)) {
@@ -110,6 +114,12 @@ for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', '
         const cap = (bgLimit[name] || 30) * 1024;
         check(bytes > 400 && bytes <= cap, `배경 용량이 이상합니다: ${name}.webp ${bytes}B / ${cap}B`);
     }
+}
+check(!existsSync(`${root}/src/ui/skin/bg/tray-chalk.webp`) && !existsSync(`${root}/src/ui/skin/bg/tray-eraser.webp`) && !existsSync(`${root}/src/ui/skin/bg/tray-wood.webp`), '조각난 분필 받침대 파일이 남아 있습니다.');
+check(!/\bjam\b/i.test(deco + css), '꾸미기 파일에 금지 영문이 있습니다.');
+check(/skin-flag-mark/.test(css) && /object-fit:\s*contain/.test(css), '태극기가 액자 안에서 비율을 지키지 않습니다.');
+for (const name of readdirSync(`${root}/src/ui/skin/bg`)) {
+    check(!/\bjam\b/i.test(name), `배경 파일 이름에 금지 영문이 있습니다: ${name}`);
 }
 check(/cork-drawer-open/.test(css) && /translateX\(12px\)/.test(css), '활성 서랍이 앞으로 나오지 않습니다.');
 check(!/side-menu[^{]*\.on[^{]*\{[^}]*cork-chip-on/.test(css.replace(/\s+/g, ' ')), '활성 서랍을 분홍 판으로 칠합니다.');
@@ -132,7 +142,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v102'"), '서비스 워커가 v102가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v105'"), '서비스 워커가 v105가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
