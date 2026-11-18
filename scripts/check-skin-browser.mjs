@@ -16,7 +16,7 @@ const freePort = () => new Promise((ok, fail) => {
 });
 const port = Number(process.env.SKIN_PORT) || await freePort();
 const origin = `http://127.0.0.1:${port}/`;
-const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v9';
+const shots = process.env.SHOT_DIR || '/opt/cursor/artifacts/classic-skin-v10';
 mkdirSync(shots, { recursive: true });
 const failures = [];
 const check = (ok, message) => { if (!ok) failures.push(message); };
@@ -512,7 +512,101 @@ try {
         await page.waitForSelector('.sheet[aria-label="메뉴"]', { timeout: 5000 });
     };
 
-    const shotNames = new Set(['home', 'attend', 'todo', 'jam', 'settings']);
+    const shotNames = new Set(['home', 'attend', 'todo', 'settings']);
+
+    async function flagGeometry(page, label) {
+        const result = await page.evaluate(async () => {
+            const img = document.querySelector('.skin-flag-mark');
+            if (!img) return { ok: false, why: '없음' };
+            await img.decode().catch(() => {});
+            const w = img.naturalWidth;
+            const h = img.naturalHeight;
+            if (w < 16 || h < 16) return { ok: false, why: '작음', w, h };
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const { data } = ctx.getImageData(0, 0, w, h);
+            const black = (x, y) => {
+                const i = (y * w + x) * 4;
+                return data[i] < 50 && data[i + 1] < 50 && data[i + 2] < 50;
+            };
+            const color = (x, y) => {
+                const i = (y * w + x) * 4;
+                return [data[i], data[i + 1], data[i + 2]];
+            };
+            const top = color(Math.round(w * 0.5), Math.round(h * 0.38));
+            const bot = color(Math.round(w * 0.5), Math.round(h * 0.62));
+            const isRed = top[0] > 140 && top[1] < 100 && top[2] < 100;
+            const isBlue = bot[2] > 90 && bot[0] < 90;
+            const midX = Math.floor(w / 2);
+            const midY = Math.floor(h / 2);
+            const count = (x0, y0, x1, y1) => {
+                const seen = new Uint8Array((x1 - x0) * (y1 - y0));
+                const idx = (x, y) => (y - y0) * (x1 - x0) + (x - x0);
+                let n = 0;
+                const stack = [];
+                for (let y = y0; y < y1; y += 1) {
+                    for (let x = x0; x < x1; x += 1) {
+                        if (!black(x, y) || seen[idx(x, y)]) continue;
+                        n += 1;
+                        stack.push(x, y);
+                        seen[idx(x, y)] = 1;
+                        let size = 0;
+                        while (stack.length) {
+                            const cy = stack.pop();
+                            const cx = stack.pop();
+                            size += 1;
+                            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+                                const nx = cx + dx;
+                                const ny = cy + dy;
+                                if (nx < x0 || ny < y0 || nx >= x1 || ny >= y1) continue;
+                                if (!black(nx, ny) || seen[idx(nx, ny)]) continue;
+                                seen[idx(nx, ny)] = 1;
+                                stack.push(nx, ny);
+                            }
+                        }
+                        if (size < 20) n -= 1;
+                    }
+                }
+                return n;
+            };
+            const parts = {
+                ul: count(0, 0, midX, midY),
+                ur: count(midX, 0, w, midY),
+                ll: count(0, midY, midX, h),
+                lr: count(midX, midY, w, h),
+            };
+            const centers = [];
+            for (const yf of [0.20, 0.245, 0.29]) {
+                const y = Math.round(yf * h);
+                let start = null;
+                let first = 0;
+                for (let x = Math.round(w * 0.08); x <= Math.round(w * 0.42); x += 1) {
+                    if (black(x, y)) {
+                        if (start == null) start = x;
+                    } else if (start != null) {
+                        first = (start + x - 1) / 2;
+                        break;
+                    }
+                }
+                centers.push(first);
+            }
+            const rotated = centers[0] > 0 && centers[2] > 0 && centers[2] < centers[0] - w * 0.02;
+            return {
+                ok: Math.abs(w / h - 1.5) < 0.08 && isRed && isBlue && rotated
+                    && parts.ul === 3 && parts.ur === 5 && parts.ll === 4 && parts.lr === 6,
+                ratio: w / h,
+                top,
+                bot,
+                parts,
+                centers,
+                rotated,
+            };
+        });
+        check(result.ok, `${label} 태극기 괘가 공식 도안과 다릅니다: ${JSON.stringify(result)}`);
+    }
     const scenes = [
         ['home', '#/today', async () => {}],
         ['attend', '#/attend', async () => {}],
@@ -559,6 +653,11 @@ try {
         const contrast = await contrastHits(page, file);
         contrastChecked += contrast.checked;
         contrastFailed += contrast.failed;
+        if (name === 'home' && width === 1280 && mode === 'light') {
+            await flagGeometry(page, file);
+            const wall = await page.$('.skin-wall');
+            if (wall) await wall.screenshot({ path: resolve(shots, 'cork-wall-flag-closeup.png') });
+        }
         await page.close();
     }
 
