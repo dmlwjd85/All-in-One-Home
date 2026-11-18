@@ -62,7 +62,7 @@ html[data-skin="cork"] {
     --cork-field-ink: #2A241C;
     --cork-chalk: #2F3E35;
     --cork-chalk-ink: #F6F0E4;
-    --cork-wall: #E6D6B5;
+    --cork-wall: #E0CDAE;
     --cork-desk: #7B5638;
     --cork-drawer: #4A3018;
     --cork-drawer-face: #3E2A18;
@@ -590,27 +590,30 @@ html[data-skin="cork"] .skin-wall {
     top: 0;
     height: 56px;
     display: flex;
-    align-items: stretch;
-    justify-content: space-evenly;
-    gap: 8px;
-    padding: 1px 10px;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 10px;
     box-sizing: border-box;
     background-color: var(--cork-wall);
     background-image:
+        linear-gradient(to right, var(--cork-wall), transparent 8%, transparent 92%, var(--cork-wall)),
         url('./skin/bg/molding.webp'),
+        url('./skin/bg/wall-cover.webp'),
         url('./skin/bg/plaster.webp');
-    background-repeat: repeat-x, repeat;
-    background-position: 0 100%, 0 0;
-    background-size: auto 7px, auto 100%;
+    background-repeat: no-repeat;
+    background-position: 0 0, 0 100%, center top, center;
+    background-size: 100% 100%, 100% 6px, cover, cover;
 }
 html.dark[data-skin="cork"] .skin-wall {
     background-image:
-        url('./skin/bg/molding.webp'),
         linear-gradient(rgba(20, 12, 8, .4), rgba(20, 12, 8, .4)),
-        url('./skin/bg/plaster.webp');
-    background-repeat: repeat-x, no-repeat, repeat;
-    background-position: 0 100%, 0 0, 0 0;
-    background-size: auto 7px, 100% 100%, auto 100%;
+        linear-gradient(to right, var(--cork-wall), transparent 8%, transparent 92%, var(--cork-wall)),
+        url('./skin/bg/molding.webp'),
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-position: 0 0, 0 0, 0 100%, center top;
+    background-size: 100% 100%, 100% 100%, 100% 6px, cover;
 }
 html[data-skin="cork"] .skin-tray {
     position: absolute;
@@ -623,7 +626,8 @@ html[data-skin="cork"] .skin-motto {
     position: relative;
     display: block;
     flex: 0 0 auto;
-    height: 100%;
+    height: 88%;
+    width: auto;
     margin: 0;
     border: 0;
     box-shadow: none;
@@ -634,20 +638,19 @@ html[data-skin="cork"] .skin-prop[data-prop="clock"] {
     width: auto;
     object-fit: contain;
 }
-html[data-skin="cork"] .skin-flag {
-    aspect-ratio: 148 / 184;
+html[data-skin="cork"] .skin-flag,
+html[data-skin="cork"] .skin-flag-mark {
+    height: 88%;
     width: auto;
+    object-fit: contain;
 }
 html[data-skin="cork"] .skin-motto {
-    flex: 1 1 96px;
-    min-width: 72px;
-    max-width: 420px;
+    width: clamp(168px, 30vw, 380px);
     color: #2A241C;
     --text-halo: #F6F0E4;
     -webkit-text-stroke: 0;
     user-select: none;
 }
-html[data-skin="cork"] .skin-flag-wood,
 html[data-skin="cork"] .skin-motto-frame {
     position: absolute;
     display: block;
@@ -658,23 +661,12 @@ html[data-skin="cork"] .skin-motto-frame {
     border: 0;
     box-shadow: none;
 }
-html[data-skin="cork"] .skin-flag-mark {
-    position: absolute;
-    display: block;
-    left: 18%;
-    top: 15%;
-    width: 64%;
-    height: 70%;
-    object-fit: contain;
-    border: 0;
-    box-shadow: none;
-}
 html[data-skin="cork"] .skin-motto-text {
     position: absolute;
-    left: 16%;
-    right: 16%;
-    top: 22%;
-    bottom: 22%;
+    left: 9%;
+    right: 9%;
+    top: 16%;
+    bottom: 16%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -683,13 +675,13 @@ html[data-skin="cork"] .skin-motto-text {
     background: #E8DCC4;
     color: #2A241C;
     --text-halo: #E8DCC4;
-    letter-spacing: .02em;
+    letter-spacing: .01em;
     font-weight: 700;
     line-height: 1.15;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
-    font-size: clamp(10px, 1.55vw, 20px);
+    font-size: clamp(9px, 1.15vw, 15px);
 }
 html.dark[data-skin="cork"] .skin-motto-text {
     background: #E8DCC4;
@@ -704,13 +696,18 @@ html.dark[data-skin="cork"] .skin-motto-text {
     html[data-skin="cork"] .skin-wall {
         top: calc(var(--fuse-h) + 10px + var(--fuse-top));
         height: 44px;
-        gap: 4px;
-        padding: 1px 6px;
+        gap: 12px;
+        padding: 0 6px;
+    }
+    html[data-skin="cork"] .skin-motto {
+        width: clamp(112px, 42vw, 168px);
     }
     html[data-skin="cork"] .skin-motto-text {
-        font-size: 11px;
+        font-size: 8px;
         letter-spacing: 0;
         padding: 0 2px;
+        white-space: normal;
+        line-height: 1.1;
     }
 }
 @media (min-width: 641px) {
@@ -722,6 +719,8 @@ html.dark[data-skin="cork"] .skin-motto-text {
 @media (min-width: 900px) {
     html[data-skin="cork"] .skin-wall {
         left: 200px;
+        height: 64px;
+        gap: 16px;
     }
 }
 
@@ -764,14 +763,20 @@ html.dark[data-skin="cork"] .main {
 /* 넓은 화면: 앞벽 56px · 칠판 아래 분필 받침대. 책상 띠·소품은 두지 않습니다. */
 @media (min-width: 900px) {
     html[data-skin="cork"] .app-frame {
-        padding-top: 56px;
+        padding-top: 64px;
         padding-bottom: 120px;
         box-sizing: border-box;
         background-color: var(--cork-wall);
-        background-image: none;
+        background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
+        background-size: 200px 100%;
+        background-position: 0 0;
+        background-repeat: no-repeat;
     }
     html.dark[data-skin="cork"] .app-frame {
-        background-image: none;
+        background-image: linear-gradient(var(--cork-drawer), var(--cork-drawer));
+        background-size: 200px 100%;
+        background-position: 0 0;
+        background-repeat: no-repeat;
     }
     html[data-skin="cork"] .side {
         height: auto;
@@ -843,17 +848,20 @@ html.dark[data-skin="cork"] .main > .cloud-note {
 html[data-skin="cork"] .fuse-face {
     background-color: var(--cork-wall);
     background-image:
-        linear-gradient(rgba(230, 214, 181, .92), rgba(230, 214, 181, .92)),
-        url('./skin/bg/plaster.webp');
-    background-repeat: no-repeat, repeat;
-    background-size: 100% 100%, auto 100%;
+        linear-gradient(rgba(224, 205, 174, .88), rgba(224, 205, 174, .88)),
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-size: 100% 100%, cover;
+    background-position: 0 0, center;
     color: var(--cork-paper-ink);
-    --text-halo: #E6D6B5;
+    --text-halo: #E0CDAE;
 }
 html.dark[data-skin="cork"] .fuse-face {
     background-image:
         linear-gradient(rgba(42, 36, 28, .94), rgba(42, 36, 28, .94)),
-        url('./skin/bg/plaster.webp');
+        url('./skin/bg/wall-cover.webp');
+    background-repeat: no-repeat;
+    background-size: 100% 100%, cover;
     --text-halo: #2A241C;
 }
 html[data-skin="cork"] .fuse-k { color: var(--cork-paper-sub); }

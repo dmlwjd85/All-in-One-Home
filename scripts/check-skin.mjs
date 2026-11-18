@@ -74,12 +74,12 @@ check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(css), '출�
 check(css.includes('pointer-events: none'), '장식이 클릭을 가로챕니다.');
 check(/min-width:\s*900px/.test(css), '넓은 화면 분필 받침대 자리가 없습니다.');
 const deco = src('src/ui/SkinDeco.jsx');
-check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('taegeukgi.webp') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
+check(deco.includes('서로 돕고 함께 자라는 우리 반') && deco.includes('loading="lazy"') && deco.includes('flag-frame.webp') && deco.includes('motto-frame.webp'), '급훈·태극기·지연 불러오기가 없습니다.');
 check(!/bg-frontwall-ref|wall-flag|taegeukgi-mark\.svg/.test(deco), '부정확한 태극기 그림을 씁니다.');
-check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /space-evenly/.test(css), '교실 앞벽 소품이 한 띠로 이어지지 않습니다.');
+check(/data-prop="speaker"/.test(css) && /data-prop="clock"/.test(css) && /justify-content:\s*center/.test(css) && /gap:\s*16px/.test(css), '교실 앞벽 소품이 한 띠로 이어지지 않습니다.');
 check(/drawer-face\.webp/.test(css) && /cabinet-top\.webp/.test(css) && /gap:\s*8px/.test(css), '서랍 그림·칸 사이 틀이 없습니다.');
 check(/chalkboard\.webp/.test(css) && /background-size:\s*cover/.test(css) && /border-image:\s*url\('\.\/skin\/bg\/desk\.webp'\)/.test(css), '칠판 그림·나무 틀이 없습니다.');
-check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
+check(/padding-top:\s*56px/.test(css) && /height:\s*56px/.test(css) && /padding-top:\s*64px/.test(css) && /height:\s*64px/.test(css) && /plaster\.webp/.test(css) && /molding\.webp/.test(css) && /wall-cover\.webp/.test(css), '넓은 화면 앞벽 띠가 없습니다.');
 check(/44px/.test(css) && /fuse-h/.test(css), '폰 앞벽 띠가 없습니다.');
 check(/skin-tray/.test(css) && /tray-long\.webp/.test(css) && /border-image-slice/.test(css), '이어진 분필 받침대가 없습니다.');
 check(!/scallop/.test(css), '카드 바느질 땀 테두리가 남아 있습니다.');
@@ -103,7 +103,7 @@ for (const name of ['stove', 'lunch', 'organ', 'bell', 'abacus', 'eraser', 'chal
     }
 }
 const bgLimit = { chalkboard: 120, desk: 120, 'tray-long': 80 };
-for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-long', 'taegeukgi']) {
+for (const name of ['chalkboard', 'desk', 'plaster', 'molding', 'drawer-face', 'cabinet-top', 'cabinet-side', 'wall-speaker', 'wall-clock', 'motto-frame', 'flag-frame', 'tray-long', 'taegeukgi', 'wall-cover']) {
     const file = `${root}/src/ui/skin/bg/${name}.webp`;
     check(existsSync(file), `배경 조각이 없습니다: ${name}.webp`);
     if (existsSync(file)) {
@@ -139,7 +139,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v103'"), '서비스 워커가 v103가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v104'"), '서비스 워커가 v104가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

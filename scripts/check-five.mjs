@@ -191,7 +191,7 @@ check(joinSummary(['a', null, '']) === 'a', '빈 조각을 빼지 않습니다.'
 
 /* 캐시 판 */
 
-check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v103"), '서비스 워커가 v103가 아닙니다.');
+check(readFileSync('public/sw.js', 'utf8').includes("ssug-gyomu-shell-v104"), '서비스 워커가 v103가 아닙니다.');
 
 if (failed) { console.error(`check-five: ${failed}개 실패`); process.exit(1); }
 console.log('check-five: 통과');

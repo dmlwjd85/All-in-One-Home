@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import taegeukgi from './skin/bg/taegeukgi.webp';
 import flagFrame from './skin/bg/flag-frame.webp';
 import mottoFrame from './skin/bg/motto-frame.webp';
 import wallSpeaker from './skin/bg/wall-speaker.webp';
@@ -21,10 +20,7 @@ export function SkinDeco() {
         <div className="skin-deco" aria-hidden="true">
             <div className="skin-wall">
                 <img className="skin-prop" data-prop="speaker" src={wallSpeaker} alt="" loading="lazy" decoding="async" />
-                <div className="skin-flag">
-                    <img className="skin-flag-wood" src={flagFrame} alt="" decoding="async" />
-                    <img className="skin-flag-mark" src={taegeukgi} alt="" decoding="async" />
-                </div>
+                <img className="skin-flag skin-flag-mark" src={flagFrame} alt="" decoding="async" />
                 <div className="skin-motto">
                     <img className="skin-motto-frame" src={mottoFrame} alt="" decoding="async" />
                     <span className="skin-motto-text title-font">서로 돕고 함께 자라는 우리 반</span>
