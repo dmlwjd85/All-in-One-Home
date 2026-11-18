@@ -1955,6 +1955,8 @@ html[data-skin="cork"] .skin-motto-text[data-len="long"] {
 html[data-skin="cork"] .skin-motto {
     container-type: size;
     aspect-ratio: auto;
+    /* 판 색. 액자 그림(불투명)이 그 위를 다 덮어 보이지 않고, 글자 대비 검사가 판 색을 읽게 합니다. */
+    background-color: #E4D7BF;
 }
 html[data-skin="cork"] .skin-motto-frame {
     position: absolute;
