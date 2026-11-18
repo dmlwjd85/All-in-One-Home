@@ -9,6 +9,16 @@
     --font-plain: Pretendard, 'Pretendard Variable', -apple-system, sans-serif;
     --font-soft: 'NanumSquareRound', -apple-system, sans-serif;
     --font-neat: 'Gothic A1', -apple-system, sans-serif;
+    --font-pen: 'SG Pen Script', 'JJAEM Body', Pretendard, -apple-system, sans-serif;
+    --font-cute: 'Gaegu', 'JJAEM Body', Pretendard, -apple-system, sans-serif;
+    --font-serif: 'SG Myeongjo', 'JJAEM Body', Pretendard, serif;
+    --font-round: 'Jua', 'JJAEM Body', Pretendard, -apple-system, sans-serif;
+    --font-bold: 'Do Hyeon', 'JJAEM Body', Pretendard, -apple-system, sans-serif;
+    --font-sample-pen: 'SG Pen Script Sample', var(--font-pen);
+    --font-sample-cute: 'Gaegu Sample', var(--font-cute);
+    --font-sample-serif: 'SG Myeongjo Sample', var(--font-serif);
+    --font-sample-round: 'Jua Sample', var(--font-round);
+    --font-sample-bold: 'Do Hyeon Sample', var(--font-bold);
     --font-body: 'JJAEM Body', var(--font-plain);
     --font-jjaem: 'JJAEM Body', var(--font-plain);
     --font-title: 'JJAEM Body', var(--font-plain);
@@ -103,6 +113,32 @@
     --font-title: var(--font-neat);
     --font-body: var(--font-neat);
     --font-display: var(--font-neat);
+}
+
+:root[data-font="pen"] {
+    --font-title: var(--font-pen);
+    --font-body: var(--font-pen);
+    --font-display: var(--font-pen);
+}
+:root[data-font="cute"] {
+    --font-title: var(--font-cute);
+    --font-body: var(--font-cute);
+    --font-display: var(--font-cute);
+}
+:root[data-font="serif"] {
+    --font-title: var(--font-serif);
+    --font-body: var(--font-serif);
+    --font-display: var(--font-serif);
+}
+:root[data-font="round"] {
+    --font-title: var(--font-round);
+    --font-body: var(--font-round);
+    --font-display: var(--font-round);
+}
+:root[data-font="bold"] {
+    --font-title: var(--font-bold);
+    --font-body: var(--font-bold);
+    --font-display: var(--font-bold);
 }
 
 .dark {

@@ -80,8 +80,8 @@ export function SkinDeco() {
             <div className="skin-wall">
                 <img className="skin-prop" data-prop="speaker" src={wallSpeaker} alt="" loading="lazy" decoding="async" />
                 <img className="skin-flag skin-flag-mark" src={flagFrame} alt="" decoding="async" />
-                <div className="skin-motto">
-                    <img className="skin-motto-frame" src={mottoFrame} alt="" decoding="async" />
+                <div className="skin-motto" style={{ '--motto-frame': `url(${mottoFrame})` }}>
+                    <span className="skin-motto-frame" />
                     <span className="skin-motto-text title-font" data-len={Array.from(motto).length > 16 ? 'long' : undefined}>{motto}</span>
                 </div>
                 <SkinClock />

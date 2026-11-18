@@ -169,3 +169,97 @@
     src: url('./GothicA1-KR-700.woff2') format('woff2');
     unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7A3, U+D7B0-D7FF;
 }
+
+/* 설정 > 화면에서 고르는 글꼴 다섯 가지(손글씨·동글 손글씨·명조·통통한·또박또박). 모두 SIL Open Font License 1.1.
+   KS X 1001 한글 2,350자와 그 표의 기호·자모, ASCII·라틴1·문장부호만 남긴 서브셋입니다(한자 제외). 없는 글자는 쨈 본문으로 보입니다.
+   나눔손글씨 펜·나눔명조는 예약 이름(Reserved Font Name)이 있어, 줄인 판은 SG Pen Script·SG Myeongjo 로 이름을 바꿨습니다.
+   *.sample.woff2 는 설정 타일 이름 글자만 담은 견본이라, 고르기 전에는 전체 파일을 받지 않습니다. 원문은 OFL-extra-fonts.txt */
+@font-face {
+    font-family: 'SG Pen Script';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./SGPenScript-Regular.woff2') format('woff2');
+    size-adjust: 132%;
+}
+@font-face {
+    font-family: 'Gaegu';
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+    src: url('./Gaegu-Regular.woff2') format('woff2');
+    size-adjust: 100%;
+}
+@font-face {
+    font-family: 'Gaegu';
+    font-style: normal;
+    font-weight: 501 900;
+    font-display: swap;
+    src: url('./Gaegu-Bold.woff2') format('woff2');
+    size-adjust: 100%;
+}
+@font-face {
+    font-family: 'SG Myeongjo';
+    font-style: normal;
+    font-weight: 100 500;
+    font-display: swap;
+    src: url('./SGMyeongjo-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'SG Myeongjo';
+    font-style: normal;
+    font-weight: 501 900;
+    font-display: swap;
+    src: url('./SGMyeongjo-Bold.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Jua';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./Jua-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Do Hyeon';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./DoHyeon-Regular.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'SG Pen Script Sample';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./SGPenScript-Regular.sample.woff2') format('woff2');
+    size-adjust: 132%;
+}
+@font-face {
+    font-family: 'Gaegu Sample';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./Gaegu-Bold.sample.woff2') format('woff2');
+    size-adjust: 100%;
+}
+@font-face {
+    font-family: 'SG Myeongjo Sample';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./SGMyeongjo-Bold.sample.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Jua Sample';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./Jua-Regular.sample.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Do Hyeon Sample';
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+    src: url('./DoHyeon-Regular.sample.woff2') format('woff2');
+}

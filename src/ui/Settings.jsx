@@ -236,6 +236,7 @@ export function Settings() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <a className="chip" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="./fonts/LICENSE-JJAEM-TitleFlat.txt">제목 글꼴 안내</a>
                     <a className="chip" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="./fonts/OFL-JJAEMBody.txt">본문 글꼴 안내</a>
+                    <a className="chip" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="./fonts/OFL-extra-fonts.txt">다른 글꼴 안내</a>
                 </div>
                 <div className="font-grid" role="group" aria-label="글꼴">
                     {FONT_CHOICES.map((item) => (

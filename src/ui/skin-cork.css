@@ -1948,3 +1948,84 @@ html[data-skin="cork"] .skin-motto-text[data-len="long"] {
 @media (max-width: 640px) {
     html[data-skin="cork"] .skin-motto-text[data-len="long"] { font-size: 7px; }
 }
+
+/* 급훈 액자: 그림을 통째로 늘리지 않고 아홉 조각(border-image)으로 그려, 나무틀 두께가 어느 화면에서나 같습니다.
+   글자 칸은 액자 안쪽 판과 같은 자리(액자 높이 기준 cqh)에 바탕 없이 얹어, 판과 글자 칸 사이 단차가 없습니다.
+   motto-frame.webp 241×136: 위 34(나무 22 + 그늘 12) · 오른쪽 27 · 아래 22 · 왼쪽 30 이 틀입니다. */
+html[data-skin="cork"] .skin-motto {
+    container-type: size;
+    aspect-ratio: auto;
+}
+html[data-skin="cork"] .skin-motto-frame {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    box-sizing: border-box;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 25cqh 19.85cqh 16.18cqh 22.06cqh;
+    border-image-source: var(--motto-frame);
+    border-image-slice: 34 27 22 30 fill;
+    border-image-repeat: stretch;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+}
+html[data-skin="cork"] .skin-motto-text,
+html.dark[data-skin="cork"] .skin-motto-text {
+    left: 22.06cqh;
+    right: 19.85cqh;
+    top: 25cqh;
+    bottom: 16.18cqh;
+    padding: 0 3cqh;
+    background: none;
+    --text-halo: #E4D7BF;
+}
+
+/* 교실 테마의 쨈 키: 빨간 테두리·받침을 밝은 갈색(책상 나무색)으로. 병 그림(딸기쨈)은 그대로 둡니다. */
+@media (min-width: 301px) {
+    html[data-skin="cork"] .foil-fab .fab-disc.jar-disc,
+    html.dark[data-skin="cork"] .foil-fab .fab-disc.jar-disc {
+        border-color: #4A3424;
+        background:
+            radial-gradient(circle at 50% 28%, rgba(255, 228, 196, .6), transparent 58%),
+            linear-gradient(180deg, rgba(255, 255, 255, .92) 0%, transparent 40%),
+            linear-gradient(180deg, #FFFDF8, #FBF0E2 50%, #EBD6BC);
+        box-shadow:
+            0 0 0 3px #CDA57A,
+            inset 0 4px 3px #fff,
+            inset 0 -5px 8px rgba(120, 80, 40, .18),
+            0 3px 0 3px #A9805A,
+            0 6px 0 3px #8C6643,
+            0 12px 0 3px #6E4F33,
+            0 20px 28px rgba(110, 72, 36, .38),
+            0 8px 16px rgba(34, 26, 18, .26);
+    }
+    html[data-skin="cork"] .foil-fab.is-pressed .fab-disc.jar-disc,
+    html.dark[data-skin="cork"] .foil-fab.is-pressed .fab-disc.jar-disc {
+        box-shadow:
+            0 0 0 3px #CDA57A,
+            inset 0 6px 10px rgba(96, 62, 30, .32),
+            inset 0 -2px 4px rgba(255, 255, 255, .25),
+            0 1px 0 2px #A9805A,
+            0 2px 0 2px #8C6643,
+            0 4px 8px rgba(110, 72, 36, .28);
+    }
+    html[data-skin="cork"] .jar-svg {
+        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .22)) drop-shadow(0 4px 5px rgba(110, 72, 36, .22));
+    }
+}
+@media (max-width: 300px) {
+    html[data-skin="cork"] .foil-fab .fab-disc.jar-disc {
+        box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #CDA57A, 0 4px 8px rgba(110, 72, 36, .3);
+    }
+}
+html[data-skin="cork"] .tabbar.tabbar-jelly .tbj-mid .fab-txt,
+html[data-skin="cork"] .desk-fab .fab-txt {
+    color: #7A4E2A;
+}
+html.dark[data-skin="cork"] .tabbar.tabbar-jelly .tbj-mid .fab-txt,
+html.dark[data-skin="cork"] .desk-fab .fab-txt {
+    color: #DDB98E;
+}

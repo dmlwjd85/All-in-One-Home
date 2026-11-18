@@ -139,6 +139,19 @@ check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시
     const hex = (file) => (src(`src/ui/skin/${file}`).match(/stroke="(#[0-9A-Fa-f]{6})"/) || [])[1];
     check(new Set(['chalk-edge-top.svg', 'chalk-edge-bottom.svg', 'chalk-edge-left.svg', 'chalk-edge-right.svg'].map(hex)).size === 4, '칠판 가장자리는 변마다 다른 색 분필이어야 합니다.');
 }
+{
+    /* 급훈 액자: 아홉 조각 액자, 글자 칸이 안쪽 판과 같은 자리, 바탕 없음(단차 없음). */
+    const tail = css.slice(css.lastIndexOf('급훈 액자: 그림을 통째로'));
+    check(/border-image-slice: 34 27 22 30 fill;/.test(tail) && /border-width: 25cqh 19\.85cqh 16\.18cqh 22\.06cqh;/.test(tail), '급훈 액자는 아홉 조각으로 그려야 합니다.');
+    check(/left: 22\.06cqh;\s*right: 19\.85cqh;\s*top: 25cqh;\s*bottom: 16\.18cqh;[\s\S]{0,60}background: none;/.test(tail), '급훈 글자 칸이 액자 안쪽 판과 맞지 않습니다.');
+    check(/container-type: size;/.test(tail) && /--motto-frame/.test(src('src/ui/SkinDeco.jsx')) && !/<img className="skin-motto-frame"/.test(src('src/ui/SkinDeco.jsx')), '급훈 액자 그림을 통째로 늘리고 있습니다.');
+}
+{
+    /* 교실 테마 쨈 키: 빨강(#E84B68·#A01E42) 대신 밝은 갈색 테두리·받침, 「쨈」 글자도 갈색. */
+    const jam = css.slice(css.lastIndexOf('교실 테마의 쨈 키'));
+    check(/0 0 0 3px #CDA57A/.test(jam) && /0 3px 0 3px #A9805A/.test(jam) && !/#E84B68|#A01E42|#7E1634/.test(jam), '교실 테마 쨈 키가 밝은 갈색이 아닙니다.');
+    check(/html\.dark\[data-skin="cork"\] \.tabbar\.tabbar-jelly \.tbj-mid \.fab-txt,/.test(jam) && /color: #7A4E2A;/.test(jam), '교실 테마 「쨈」 글자색이 갈색이 아닙니다.');
+}
 check(/padding-bottom:\s*72px/.test(css) && /padding-bottom:\s*80px/.test(css), '쨈이 할 일 마지막 줄을 가릴 자리가 없습니다.');
 check(/padding-left:\s*10px/.test(css) && /padding-right:\s*10px/.test(css) && !/padding-left:\s*96px/.test(css), '칠판 안쪽 여백이 넓습니다.');
 check(!/fab-eraser|jam-eraser|chalk-puff|cork-chalk-cloud/.test(css), '쨈 지우개·분필 가루가 남아 있습니다.');
@@ -192,7 +205,7 @@ check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 
 check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v109'"), '서비스 워커가 v109가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v110'"), '서비스 워커가 v110가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
@@ -254,8 +267,16 @@ for (const [label, block] of [['밝은', light], ['어두운', dark]]) {
     }
 }
 
-/* 코르크는 원래 쨈 키캡(깊이·모양)을 덮지 않습니다. 깊이는 tabbar.css 그대로입니다. */
-check(!/\[data-skin="cork"\][^{]*\.fab-disc\.jar-disc/.test(css.replace(/\s+/g, ' ')), '코르크가 쨈 키캡을 덮습니다.');
+/* 코르크는 쨈 키캡의 깊이·모양을 덮지 않습니다(tabbar.css 그대로). 색(테두리·받침·바탕)만 '교실 테마의 쨈 키' 묶음에서 바꿉니다. */
+{
+    const at = css.lastIndexOf('교실 테마의 쨈 키');
+    const before = at < 0 ? css : css.slice(0, at);
+    check(!/\[data-skin="cork"\][^{]*\.fab-disc\.jar-disc/.test(before.replace(/\s+/g, ' ')), '코르크가 쨈 키캡을 덮습니다.');
+    const jamBlock = at < 0 ? '' : css.slice(at);
+    for (const m of jamBlock.matchAll(/\.fab-disc\.jar-disc[^{]*\{([^}]*)\}/g)) {
+        check(!/(^|;|\s)(width|height|border-radius|transform|transition|margin)\s*:/.test(m[1]), `교실 테마 쨈 키가 색 말고 모양까지 바꿉니다: ${m[1].trim().slice(0, 80)}`);
+    }
+}
 const tab = src('src/ui/tabbar.css');
 check(/0 0 0 3px/.test(tab) && /0 3px 0 3px/.test(tab) && /0 6px 0 3px/.test(tab)
     && /0 12px 0 3px/.test(tab) && /0 20px 28px/.test(tab) && /0 8px 16px/.test(tab),

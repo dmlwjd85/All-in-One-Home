@@ -6,6 +6,11 @@ export const FONT_CHOICES = [
     { id: 'soft', label: '부드러운', hint: '둥근 고딕' },
     { id: 'plain', label: '기본', hint: '쨈 본문' },
     { id: 'neat', label: '단정한', hint: '가지런한 고딕' },
+    { id: 'pen', label: '손글씨', hint: '펜으로 쓴 글씨' },
+    { id: 'cute', label: '동글동글', hint: '동글한 손글씨' },
+    { id: 'serif', label: '명조', hint: '책 같은 글씨' },
+    { id: 'round', label: '통통한', hint: '둥근 제목체' },
+    { id: 'bold', label: '또박또박', hint: '굵은 각진 글씨' },
 ];
 
 export function normalizeFont(id) {
