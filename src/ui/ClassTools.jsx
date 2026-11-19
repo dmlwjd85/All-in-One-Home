@@ -278,26 +278,33 @@ function LotteryTool({ students }) {
 const WHEEL_COLORS = ['#F7B5C4', '#FCE3A7', '#BFE3D3', '#C9D8F5', '#F9C9A8', '#DCCBF0', '#F4DDE6', '#D7EBB8'];
 function WheelTool({ students }) {
     const saved = loadTools().wheel || {};
-    const [items, setItems] = useState(() => { const list = cleanWheel(saved.items); return list.length >= WHEEL_MIN ? list : WHEEL_SAMPLE; });
+    const roster = useMemo(() => rosterLabels(students).map((p) => p.label).slice(0, WHEEL_MAX), [students]);
+    /* 칸 고르기: 「우리 반」은 명단 전체(지금 명단을 그대로), 「직접 적기」는 선생님이 적은 것. 둘 다 이 중에서 하나를 무작위로 뽑습니다. */
+    const [source, setSource] = useState(saved.source === 'custom' || !roster.length ? 'custom' : 'roster');
+    const [custom, setCustom] = useState(() => { const list = cleanWheel(saved.items); return list.length >= WHEEL_MIN ? list : WHEEL_SAMPLE; });
+    const [out, setOut] = useState([]);
     const [angle, setAngle] = useState(0);
     const [spinning, setSpinning] = useState(false);
     const [result, setResult] = useState(null);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
     const [dropWinner, setDropWinner] = useState(Boolean(saved.dropWinner));
-    useEffect(() => { saveTools({ wheel: { items, dropWinner } }); }, [items, dropWinner]);
+    useEffect(() => { saveTools({ wheel: { items: custom, dropWinner, source } }); }, [custom, dropWinner, source]);
+    const base = source === 'roster' && roster.length ? roster : custom;
+    const items = base.filter((label) => !out.includes(label));
     const n = items.length;
-    const seg = 360 / n;
+    const seg = 360 / Math.max(1, n);
+    const pickSource = (next) => { if (spinning) return; setSource(next); setOut([]); setResult(null); };
     const spin = () => {
-        if (spinning || n < WHEEL_MIN) return;
+        if (spinning) return;
+        /* 「뽑힌 칸 빼기」가 켜져 있으면 지난번에 뽑힌 칸을 빼고 바로 다시 돌립니다. */
+        let left = n;
         if (result != null && dropWinner) {
-            const next = items.filter((_, i) => i !== result);
-            setResult(null);
-            if (next.length < WHEEL_MIN) return;
-            setItems(next);
-            return;
+            setOut((list) => [...list, items[result]]);
+            left = n - 1;
         }
-        const turn = spinWheel(n, angle);
+        if (left < WHEEL_MIN) { setResult(null); return; }
+        const turn = spinWheel(left, angle);
         setResult(null);
         setSpinning(true);
         setAngle(turn.angle);
@@ -307,14 +314,14 @@ function WheelTool({ students }) {
     if (editing) {
         return (
             <div className="ct-wheel-edit">
-                <p className="muted ct-note">한 줄에 한 칸씩 적어 주세요. {WHEEL_MIN}~{WHEEL_MAX}칸, 칸마다 14자까지.</p>
+                <p className="muted ct-note">뽑을 것을 한 줄에 하나씩 적어 주세요. {WHEEL_MIN}~{WHEEL_MAX}칸, 칸마다 14자까지. 적은 것 중에서 하나를 무작위로 뽑아요.</p>
                 <textarea className="field ct-wheel-text" aria-label="돌림판 칸" value={draft} onChange={(e) => setDraft(e.target.value)} />
                 <div className="ct-row">
-                    <Btn className="chip" disabled={!students.length} onClick={() => setDraft(rosterLabels(students).map((p) => p.label).slice(0, WHEEL_MAX).join('\n'))}>명단으로 채우기</Btn>
+                    <Btn className="chip" disabled={!roster.length} onClick={() => setDraft(roster.join('\n'))}>명단 가져와 고치기</Btn>
                     <Btn className="chip" onClick={() => setDraft(WHEEL_SAMPLE.join('\n'))}>예시로</Btn>
                 </div>
                 <div className="ct-row ct-main">
-                    <Btn className="primary-btn" disabled={cleanWheel(draft.split('\n')).length < WHEEL_MIN} onClick={() => { setItems(cleanWheel(draft.split('\n'))); setResult(null); setEditing(false); }}>이대로 쓰기</Btn>
+                    <Btn className="primary-btn" disabled={cleanWheel(draft.split('\n')).length < WHEEL_MIN} onClick={() => { setCustom(cleanWheel(draft.split('\n'))); setSource('custom'); setOut([]); setResult(null); setEditing(false); }}>이대로 쓰기</Btn>
                     <Btn className="chip" onClick={() => setEditing(false)}>그만두기</Btn>
                 </div>
             </div>
@@ -322,6 +329,11 @@ function WheelTool({ students }) {
     }
     return (
         <div className="ct-wheel">
+            <div className="ct-row ct-wheel-src" role="group" aria-label="돌림판 칸">
+                <Btn className={source === 'roster' ? 'chip on' : 'chip'} aria-pressed={source === 'roster'} data-role="wheel-roster" disabled={!roster.length} onClick={() => pickSource('roster')}>👥 우리 반{roster.length ? ` ${roster.length}명` : ''}</Btn>
+                <Btn className={source === 'custom' ? 'chip on' : 'chip'} aria-pressed={source === 'custom'} data-role="wheel-custom" onClick={() => pickSource('custom')}>✏️ 직접 적기</Btn>
+                {source === 'custom' && <Btn className="chip" disabled={spinning} onClick={() => { setDraft(custom.join('\n')); setEditing(true); }}>칸 고치기</Btn>}
+            </div>
             <div className="ct-stage ct-wheel-stage">
                 <div className="ct-wheel-pin" aria-hidden="true" />
                 <svg className="ct-wheel-disc" viewBox="0 0 200 200" style={{ transform: `rotate(${angle}deg)`, transition: spinning ? 'transform 4.2s cubic-bezier(.12,.62,.08,1)' : 'none' }} role="img" aria-label={`돌림판 ${n}칸`}>
@@ -330,7 +342,7 @@ function WheelTool({ students }) {
                         const a1 = ((i + 1) * seg * Math.PI) / 180;
                         const mid = ((i + 0.5) * seg);
                         const path = n === 1 ? '' : `M100 100 L${100 + 96 * Math.sin(a0)} ${100 - 96 * Math.cos(a0)} A96 96 0 ${seg > 180 ? 1 : 0} 1 ${100 + 96 * Math.sin(a1)} ${100 - 96 * Math.cos(a1)} Z`;
-                        const fs = n > 16 ? 6.2 : n > 10 ? 7.4 : 9;
+                        const fs = n > 30 ? 4.6 : n > 24 ? 5.2 : n > 16 ? 6.2 : n > 10 ? 7.4 : 9;
                         return (
                             <g key={i}>
                                 <path d={path} fill={WHEEL_COLORS[i % WHEEL_COLORS.length]} stroke="#fff" strokeWidth="1" />
@@ -341,11 +353,11 @@ function WheelTool({ students }) {
                     <circle cx="100" cy="100" r="13" fill="#fff" stroke="#3A2A2C" strokeWidth="1.4" />
                 </svg>
             </div>
-            <p className="ct-wheel-result" aria-live="polite" data-role="wheel-result">{spinning ? '돌아가는 중…' : result != null ? <>🎉 <strong>{items[result]}</strong></> : `${n}칸이에요. 돌려 보세요.`}</p>
+            <p className="ct-wheel-result" aria-live="polite" data-role="wheel-result">{spinning ? '돌아가는 중…' : result != null ? <>🎉 <strong>{items[result]}</strong></> : n < WHEEL_MIN ? '남은 칸이 하나뿐이에요. 「다시 채우기」를 눌러 주세요.' : `${n}칸 중에서 하나를 뽑아요.`}</p>
             <div className="ct-row ct-main">
-                <Btn className="primary-btn" data-role="wheel-spin" disabled={spinning} onClick={spin}>{result != null && dropWinner ? '뽑힌 칸 빼기' : '돌리기'}</Btn>
-                <Btn className="chip" disabled={spinning} onClick={() => { setDraft(items.join('\n')); setEditing(true); }}>칸 고치기</Btn>
+                <Btn className="primary-btn" data-role="wheel-spin" disabled={spinning || n < WHEEL_MIN} onClick={spin}>{result != null && dropWinner ? '빼고 다시 돌리기' : '돌리기'}</Btn>
                 <Btn className={dropWinner ? 'chip on' : 'chip'} aria-pressed={dropWinner} onClick={() => setDropWinner(!dropWinner)}>뽑힌 칸 빼기</Btn>
+                {out.length > 0 && <Btn className="chip" disabled={spinning} onClick={() => { setOut([]); setResult(null); }}>다시 채우기 ({out.length})</Btn>}
             </div>
         </div>
     );

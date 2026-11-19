@@ -8,7 +8,7 @@ export const TOOL_IDS = ['timer', 'lottery', 'wheel', 'vote', 'board'];
 export const TOOL_INFO = {
     timer: { label: '타이머', hint: '숫자·원판·모래시계', icon: '⏱️' },
     lottery: { label: '제비뽑기', hint: '명단에서 한 명씩 또는 한꺼번에', icon: '🎫' },
-    wheel: { label: '돌림판', hint: '2~24칸, 명단으로 채우기', icon: '🎡' },
+    wheel: { label: '돌림판', hint: '우리 반 명단 또는 직접 적은 것 중에서', icon: '🎡' },
     vote: { label: '학급투표', hint: '손들기 세기·돌려 가며 비밀 투표', icon: '🗳️' },
     board: { label: '판서', hint: '분필·형광펜·지우개, 칠판 세 가지', icon: '🖍️' },
 };
@@ -62,10 +62,10 @@ export function rosterLabels(students) {
 }
 
 export const WHEEL_MIN = 2;
-export const WHEEL_MAX = 24;
+export const WHEEL_MAX = 40; /* 학급 명단 전체(최대 40명)가 들어가게 */
 export const WHEEL_SAMPLE = ['칭찬 한마디', '노래 한 소절', '다음 발표', '박수 세 번', '퀴즈 내기', '통과!'];
 
-/** 돌림판 칸 글자를 다듬습니다: 앞뒤 빈칸 지우기, 빈 칸 빼기, 24칸·칸마다 14자까지. */
+/** 돌림판 칸 글자를 다듬습니다: 앞뒤 빈칸 지우기, 빈 칸 빼기, 40칸·칸마다 14자까지. */
 export function cleanWheel(items) {
     return (Array.isArray(items) ? items : [])
         .map((text) => Array.from(String(text ?? '').replace(/\s+/g, ' ').trim()).slice(0, 14).join(''))

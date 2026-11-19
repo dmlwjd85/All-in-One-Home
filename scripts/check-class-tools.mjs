@@ -39,7 +39,9 @@ for (const n of [2, 3, 6, 7, 24]) {
     }
 }
 check(cleanWheel(['  가  ', '', 'x'.repeat(30), null]).join('|') === `가|${'x'.repeat(14)}`, '돌림판 칸 다듬기');
-check(cleanWheel(Array.from({ length: 40 }, (_, i) => `칸${i}`)).length === 24, '돌림판은 24칸까지');
+check(cleanWheel(Array.from({ length: 50 }, (_, i) => `칸${i}`)).length === 40, '돌림판은 40칸까지(학급 명단 전체)');
+for (const r of [0, 0.37, 0.999]) { const turn = spinWheel(37, 0, seq(r, r, r)); check(wheelIndexAt(turn.angle, 37) === turn.index, `돌림판 37칸·${r}`); }
+check(/data-role="wheel-roster"/.test(src('src/ui/ClassTools.jsx')) && /data-role="wheel-custom"/.test(src('src/ui/ClassTools.jsx')) && /rosterLabels\(students\)\.map\(\(p\) => p\.label\)\.slice\(0, WHEEL_MAX\)/.test(src('src/ui/ClassTools.jsx')), '돌림판은 우리 반 명단 전체와 직접 적은 것 중에서 고를 수 있어야 합니다.');
 
 /* 투표 */
 check(!checkVote(newVote('', ['피구', ''])).ok && !checkVote(newVote('', ['피구', '피구'])).ok && checkVote(newVote('', ['피구', ' 발야구 ', ''])).options.join() === '피구,발야구', '투표 선택지 확인');
