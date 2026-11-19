@@ -146,6 +146,9 @@ check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시
     const tail = css.slice(css.lastIndexOf('급훈 액자: 그림을 통째로'));
     check(/border-image-slice: 34 27 22 30 fill;/.test(tail) && /border-width: 25cqh 19\.85cqh 16\.18cqh 22\.06cqh;/.test(tail), '급훈 액자는 아홉 조각으로 그려야 합니다.');
     check(/left: 22\.06cqh;\s*right: 19\.85cqh;\s*top: 25cqh;\s*bottom: 16\.18cqh;[\s\S]{0,60}background: none;/.test(tail), '급훈 글자 칸이 액자 안쪽 판과 맞지 않습니다.');
+    const decoSrc = src('src/ui/SkinDeco.jsx');
+    check(/export function fitMotto\(box, inner\)/.test(decoSrc) && /<MottoText text=\{motto\} \/>/.test(decoSrc) && /ResizeObserver/.test(decoSrc) && /attributeFilter: \['data-font', 'class'\]/.test(decoSrc) && /loadingdone/.test(decoSrc), '급훈 글자를 액자 판에 맞춰 키우지 않습니다.');
+    check(!/data-len=/.test(decoSrc) && /\.skin-motto-fit \{/.test(css), '급훈 글자 크기를 글자 수 칸막이(data-len)로 정하고 있습니다.');
     check(/container-type: size;/.test(tail) && /--motto-frame/.test(src('src/ui/SkinDeco.jsx')) && !/<img className="skin-motto-frame"/.test(src('src/ui/SkinDeco.jsx')), '급훈 액자 그림을 통째로 늘리고 있습니다.');
 }
 {
@@ -208,7 +211,7 @@ check(css.includes('--text-halo') && css.includes('text-shadow: 0 0 1px var(--te
 check(!/-webkit-text-stroke:\s*[1-9]/.test(css), '글자 테두리를 획(-webkit-text-stroke)으로 그리면 글씨가 굵게 뭉개집니다. 글자 그림자로 두세요.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v113'"), '서비스 워커가 v113가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v114'"), '서비스 워커가 v114가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

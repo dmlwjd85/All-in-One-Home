@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import flagFrame from './skin/bg/flag-frame.webp';
 import mottoFrame from './skin/bg/motto-frame.webp';
 import wallSpeaker from './skin/bg/wall-speaker.webp';
@@ -53,6 +53,56 @@ function SkinClock() {
     );
 }
 
+/** 급훈 글자를 액자 안쪽 판에 꽉 차게: 한 줄과 두 줄 가운데 글자가 더 커지는 쪽으로, 판에 맞는 가장 큰 크기를 찾습니다.
+    판 크기가 바뀌거나(화면 폭) 글꼴이 바뀌거나(설정 › 화면) 글꼴 파일이 늦게 와도 다시 맞춥니다. */
+export function fitMotto(box, inner) {
+    if (!box || !inner) return null;
+    const cs = getComputedStyle(box);
+    const width = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    const height = box.clientHeight;
+    if (width <= 0 || height <= 0) return null;
+    const fits = () => inner.scrollWidth <= width + 0.5 && inner.offsetHeight <= height + 0.5;
+    const tryWrap = (wrap) => {
+        inner.style.whiteSpace = wrap ? 'normal' : 'nowrap';
+        let lo = 6;
+        let hi = Math.max(6, Math.floor(height * (wrap ? 0.5 : 0.8)));
+        while (lo < hi) {
+            const mid = Math.ceil((lo + hi) / 2);
+            inner.style.fontSize = `${mid}px`;
+            if (fits()) lo = mid; else hi = mid - 1;
+        }
+        return lo;
+    };
+    const one = tryWrap(false);
+    const two = Array.from(inner.textContent || '').length > 6 ? tryWrap(true) : 0;
+    /* 두 줄은 한 줄보다 15% 넘게 커질 때만: 한 줄이 더 읽기 쉽습니다. */
+    const wrap = two > one * 1.15;
+    inner.style.whiteSpace = wrap ? 'normal' : 'nowrap';
+    inner.style.fontSize = `${wrap ? two : one}px`;
+    return { size: wrap ? two : one, wrap };
+}
+
+function MottoText({ text }) {
+    const box = useRef(null);
+    const inner = useRef(null);
+    useLayoutEffect(() => {
+        const run = () => fitMotto(box.current, inner.current);
+        run();
+        const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(run);
+        if (box.current) ro?.observe(box.current);
+        const mo = new MutationObserver(run);
+        mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-font', 'class'] });
+        document.fonts?.ready?.then(run).catch(() => {});
+        document.fonts?.addEventListener?.('loadingdone', run);
+        return () => { ro?.disconnect(); mo.disconnect(); document.fonts?.removeEventListener?.('loadingdone', run); };
+    }, [text]);
+    return (
+        <span ref={box} className="skin-motto-text title-font">
+            <span ref={inner} className="skin-motto-fit">{text}</span>
+        </span>
+    );
+}
+
 /** 교실 소품. data-skin="cork" 일 때만 붙습니다. 클릭은 통과합니다. */
 export function SkinDeco() {
     const [on, setOn] = useState(() => typeof document !== 'undefined' && document.documentElement.getAttribute('data-skin') === 'cork');
@@ -82,7 +132,7 @@ export function SkinDeco() {
                 <img className="skin-flag skin-flag-mark" src={flagFrame} alt="" decoding="async" />
                 <div className="skin-motto" style={{ '--motto-frame': `url(${mottoFrame})` }}>
                     <span className="skin-motto-frame" />
-                    <span className="skin-motto-text title-font" data-len={Array.from(motto).length > 16 ? 'long' : undefined}>{motto}</span>
+                    <MottoText text={motto} />
                 </div>
                 <SkinClock />
             </div>
