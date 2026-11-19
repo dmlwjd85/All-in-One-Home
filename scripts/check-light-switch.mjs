@@ -8,7 +8,7 @@ const app = src('src/App.jsx');
 const ui = src('src/ui/LightSwitch.jsx');
 const css = src('src/ui/lightSwitch.css');
 check(/<LightSwitch dark=\{dark\} onToggle=\{/.test(app) && !/<IconSun \/> : <IconMoon \/>/.test(app), '윗줄 밝기 단추가 전등 스위치가 아닙니다.');
-check(/교실 불 켜기\(밝게\)/.test(ui) && /교실 불 끄기\(어둡게\)/.test(ui) && /aria-pressed=\{!dark\}/.test(ui), '스위치 이름(읽기 프로그램)·눌림 상태');
+check(/교실 불 켜기\(밝게\)/.test(ui) && /교실 불 끄기\(어둡게\)/.test(ui) && !/aria-pressed/.test(ui), '스위치 이름(읽기 프로그램)은 할 일(켜기·끄기)로 말하고, 눌림 표시(aria-pressed)는 두지 않습니다(이름과 겹쳐 헷갈리고, 다른 화면 검사가 첫 눌림 단추로 잘못 잡습니다).');
 check(/className=\{`icon-btn light-switch/.test(ui), '스위치도 44px 단추 크기를 지켜야 합니다.');
 check(/\.light-switch\.is-off \.ls-led \{ fill: #FF9A3C;/.test(css), '꺼진 스위치 표시등이 없습니다.');
 check(/prefers-reduced-motion: reduce/.test(css) && /prefers-reduced-motion: reduce/.test(ui), '움직임 줄이기 설정을 따라야 합니다.');

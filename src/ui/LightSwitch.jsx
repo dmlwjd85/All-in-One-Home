@@ -10,7 +10,7 @@ export function LightSwitch({ dark, onToggle }) {
             className={`icon-btn light-switch${dark ? ' is-off' : ' is-on'}`}
             aria-label={label}
             title={label}
-            aria-pressed={!dark}
+            data-on={dark ? '0' : '1'}
             data-role="light-switch"
             onClick={() => { roomFx(dark ? 'on' : 'off'); onToggle(); }}
         >
