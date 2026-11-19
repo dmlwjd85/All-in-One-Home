@@ -242,3 +242,44 @@
 .ct-board-face[data-back="white"] { background: #FBFBF8; border-color: #B7BCC4; }
 .ct-canvas { position: absolute; inset: 0; display: block; touch-action: none; cursor: crosshair; }
 .ct-pop.is-full .ct-board-face { border-width: 8px; }
+
+/* 판서: 글쓰기·그림·지우기 확인 */
+.ct-board-face[data-tool="text"] .ct-canvas { cursor: text; }
+.ct-text-editor {
+    position: absolute;
+    z-index: 3;
+    min-width: 8em;
+    max-width: calc(100% - 8px);
+    margin: 0;
+    padding: 0 2px;
+    border: 2px dashed rgba(255, 255, 255, .55);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .12);
+    font-family: var(--font-body);
+    font-weight: 700;
+    line-height: 1.25;
+    resize: none;
+    overflow: hidden;
+    outline: none;
+    field-sizing: content;
+}
+.ct-board-face[data-back="white"] .ct-text-editor { border-color: rgba(0, 0, 0, .35); background: rgba(0, 0, 0, .03); }
+.ct-board-hint {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 12px;
+    text-align: center;
+    color: rgba(255, 255, 255, .45);
+    font-size: clamp(14px, 3vmin, 24px);
+    pointer-events: none;
+}
+.ct-board-face[data-back="white"] .ct-board-hint { color: rgba(0, 0, 0, .35); }
+.ct-board-note { flex: 0 0 auto; }
+.ct-ask { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border-radius: 14px; background: rgba(194, 55, 78, .12); }
+.ct-ask-q { font-weight: 800; font-size: 14px; color: #C2374E; }
+.ct-board-bar .ct-danger { background: #C2374E; color: #fff; }
+.ct-start { margin-left: auto; }
+.ct-size b { line-height: 1; color: var(--ink); }

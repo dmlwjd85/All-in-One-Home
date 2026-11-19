@@ -406,7 +406,7 @@ check(JSON.parse(s4.getItem('ssug-gyomu-hotkeys'))._v === 2, '저장 판 표시'
 // 초기화: 예전 기기도 새 기본
 hk.resetHotkeys(s3);
 eq([hk.loadHotkeys(s3).today, hk.loadHotkeys(s3).plus, s3.getItem('ssug-gyomu-hotkeys-seed')], ['t', '/', 'fresh'], '기본값으로 되돌리기');
-eq(hk.defaultHotkeyRows().map((r) => r.key).join(''), '/?FTASDMN', '단축키 목록 기본 줄');
+eq(hk.defaultHotkeyRows().map((r) => r.key).join(''), '/?FTASDMCN12345', '단축키 목록 기본 줄');
 // 키 처리
 check(hk.matchHotkey({ key: 't', target: { tagName: 'BODY' } }, fresh) === 'today', 't 키 오늘');
 check(hk.matchHotkey({ key: 'T', target: { tagName: 'BODY' } }, fresh) === 'today', 'Shift+T도 오늘');

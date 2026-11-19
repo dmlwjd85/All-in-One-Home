@@ -195,7 +195,7 @@ if (!/minutesOf\(row\.id/.test(detail) || !/data-role="detail-minutes"/.test(det
 if (!/minutesOf\(row\.id/.test(tasks)) failures.push('할 일 목록에 회의록 표시가 없습니다.');
 const sw = readFileSync('public/sw.js', 'utf8');
 
-if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v116'")) failures.push('서비스 워커가 v103가 아닙니다.');
+if (!sw.includes("const CACHE = 'ssug-gyomu-shell-v117'")) failures.push('서비스 워커가 v103가 아닙니다.');
 
 /* 변이: 일부러 망가뜨린 코드를 이 검사가 잡는지 봅니다. */
 const LIB = readFileSync('src/lib/minutesExtract.js', 'utf8');

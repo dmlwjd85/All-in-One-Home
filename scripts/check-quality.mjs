@@ -622,6 +622,20 @@ const hotStore = {
     setItem(key, value) { this.map.set(key, String(value)); },
     removeItem(key) { this.map.delete(key); },
 };
+{
+    /* 수업 도구 기본 키와, 선생님이 저장해 둔 키는 건드리지 않는지. */
+    const d = defaultHotkeys();
+    check(d.tools === 'c' && d['tool:timer'] === '1' && d['tool:lottery'] === '2' && d['tool:wheel'] === '3' && d['tool:vote'] === '4' && d['tool:board'] === '5', `수업 도구 기본 키가 다릅니다: ${d.tools} ${d['tool:timer']}`);
+    check(defaultHotkeys({ legacy: true })['tool:timer'] === '' && defaultHotkeys({ legacy: true }).tools === '', '예전 기기 기본에 새 키가 끼어듭니다.');
+    const mine = { map: new Map(), getItem(k) { return this.map.has(k) ? this.map.get(k) : null; }, setItem(k, v) { this.map.set(k, String(v)); }, removeItem(k) { this.map.delete(k); } };
+    /* 수업 도구 키가 생기기 전에 저장한 선생님 키: 1 을 오늘에, 수업 도구 칸은 없음 */
+    mine.setItem('ssug-gyomu-hotkeys', JSON.stringify({ _v: 2, plus: '/', help: '?', search: 'f', today: '1', attend: 'a', schedule: 's', todo: 'd', minutesList: 'm', memo: 'n', settings: 'c' }));
+    const got = loadHotkeys(mine);
+    check(got.today === '1' && got.settings === 'c' && got.attend === 'a', `저장해 둔 선생님 키가 바뀌었습니다: ${JSON.stringify(got)}`);
+    check(got['tool:timer'] === '' && got.tools === '' && got['tool:lottery'] === '2', `겹치는 새 기본 키가 선생님 키를 밀어냅니다: ${got['tool:timer']} ${got.tools}`);
+    mine.setItem('ssug-gyomu-hotkeys', JSON.stringify({ _v: 2, plus: '/', 'tool:wheel': '' }));
+    check(loadHotkeys(mine)['tool:wheel'] === '', '선생님이 비워 둔 칸에 기본 키가 들어갑니다.');
+}
 check(defaultHotkeys().plus === '/' && defaultHotkeys().help === '?' && defaultHotkeys().attend === 'a' && defaultHotkeys({ legacy: true }).attend === '', '단축키 기본(새 설치 / ? a, 예전 기기 / ? 만)이 다릅니다.');
 check(loadHotkeys(hotStore).plus === '/', '저장된 값이 없어도 발라 두기가 / 가 아닙니다.');
 const moved = assignHotkey(loadHotkeys(hotStore), 'attend', '/');
@@ -716,7 +730,7 @@ for (const value of settingsWords) {
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v116'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v117'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

@@ -77,6 +77,11 @@ const app = src('src/App.jsx');
 check(/lazy\(\(\) => import\('\.\/ui\/ClassTools\.jsx'\)\)/.test(app) && /route\.name === 'tools'/.test(app), '수업 도구 화면을 처음 열 때만 받아야 합니다.');
 check(/role="dialog" aria-modal="true"/.test(ui) && /data-role="tool-full"/.test(ui) && /requestFullscreen/.test(ui) && /fullscreenchange/.test(ui) && /'Escape'/.test(ui), '팝업·전체화면·Esc 닫기');
 for (const name of ['TimerTool', 'LotteryTool', 'WheelTool', 'VoteTool', 'BoardTool']) check(new RegExp(`function ${name}\\(`).test(ui), `${name} 이 없습니다.`);
+check(/data-role="board-clear"[^>]*onClick=\{\(\) => setAskClear\(true\)\}/.test(ui) && /data-role="board-clear-yes" onClick=\{clear\}/.test(ui), '판서 모두 지우기는 한 번 더 물어야 합니다.');
+check(/data-role="board-text"/.test(ui) && /className="ct-text-editor"/.test(ui) && /kind: 'text'/.test(ui) && /function drawText\(/.test(ui), '판서 글쓰기가 없습니다.');
+check(/data-role="board-image"/.test(ui) && /addEventListener\('paste'/.test(ui) && /getDisplayMedia/.test(ui) && /kind: 'img'/.test(ui), '판서 그림 넣기·붙여넣기·화면 캡처가 없습니다.');
+check(/data-role="board-start"/.test(ui) && /saveTools\(\{ board: \{ start \} \}\)/.test(ui) && /useState\(start\)/.test(ui), '판서 처음 모드(글쓰기·펜)를 정할 수 없습니다.');
+check(/editorRef\.current = null;/.test(ui), '글칸 확정이 두 번 들어갈 수 있습니다.');
 check(/setCover\(true\)/.test(ui) && /다음 사람/.test(ui), '비밀 투표는 누르면 화면을 가려야 합니다.');
 check(/touch-action: none/.test(src('src/ui/classTools.css')) && /\.ct-pop\.is-full \{[^}]*inset: 0/.test(src('src/ui/classTools.css')), '판서 터치·전체화면 모양');
 

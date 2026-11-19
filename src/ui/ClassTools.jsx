@@ -466,26 +466,90 @@ function VoteTool({ students }) {
 }
 
 /* ───── 판서 ───── */
-const boardMemory = { strokes: [], back: 'green' };
+/* 판서 칠판에 놓인 것들(그린 순서대로). 선: { points, tool, color, size }, 글: { kind: 'text', x, y, text, color, fs },
+   그림: { kind: 'img', src, x, y, w, ar }. 자리·크기는 칠판 크기에 대한 비율이라 전체화면으로 키워도 같은 자리에 남습니다.
+   앱을 닫으면 지워집니다(그림 저장으로 남깁니다). */
+const boardMemory = { items: [], back: 'green' };
+const TEXT_SIZES = { 3: 0.05, 6: 0.075, 12: 0.11 };
+const imageCache = new Map();
+function boardImage(src, onLoad) {
+    let img = imageCache.get(src);
+    if (!img) {
+        img = new Image();
+        img.onload = onLoad;
+        img.src = src;
+        imageCache.set(src, img);
+    }
+    return img.complete && img.naturalWidth ? img : null;
+}
+function boardFont(px) {
+    const family = typeof document === 'undefined' ? 'sans-serif' : getComputedStyle(document.body).fontFamily || 'sans-serif';
+    return `700 ${Math.round(px)}px ${family}`;
+}
+/** 그림 파일·붙여넣은 그림·화면 캡처를 1600px 안으로 줄여 dataURL 로. */
+function shrinkImage(source, width, height) {
+    const scale = Math.min(1, 1600 / Math.max(width, height));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(width * scale));
+    cv.height = Math.max(1, Math.round(height * scale));
+    cv.getContext('2d').drawImage(source, 0, 0, cv.width, cv.height);
+    return { src: cv.toDataURL('image/jpeg', 0.9), ar: cv.height / cv.width };
+}
+function fileToImage(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { try { resolve(shrinkImage(img, img.naturalWidth, img.naturalHeight)); } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); } };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('그림을 읽지 못했어요.')); };
+        img.src = url;
+    });
+}
+
 function BoardTool() {
     const wrap = useRef(null);
     const canvas = useRef(null);
+    const fileRef = useRef(null);
+    const savedBoard = loadTools().board || {};
+    const [start, setStart] = useState(savedBoard.start === 'text' ? 'text' : 'pen');
     const [back, setBack] = useState(boardMemory.back);
     const light = back === 'white';
     const palette = light ? BOARD_INKS : BOARD_COLORS;
     const [color, setColor] = useState(palette[0][0]);
     const [size, setSize] = useState(BOARD_SIZES[1][1]);
-    const [tool, setTool] = useState('pen');
+    const [tool, setTool] = useState(start);
+    const [editor, setEditorState] = useState(null);
+    const editorRef = useRef(null);
+    const setEditor = (next) => { editorRef.current = next; setEditorState(next); };
+    const [askClear, setAskClear] = useState(false);
+    const [note, setNote] = useState('');
     const [, force] = useState(0);
     const drawing = useRef(null);
+    const drag = useRef(null);
+    const boxes = useRef(new Map());
+    const items = boardMemory.items;
+    const canCapture = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getDisplayMedia);
+    useEffect(() => { saveTools({ board: { start } }); }, [start]);
     const paint = useCallback(() => {
         const cv = canvas.current;
         if (!cv) return;
         const ctx = cv.getContext('2d');
         const dpr = window.devicePixelRatio || 1;
+        const w = cv.width / dpr;
+        const h = cv.height / dpr;
+        const isLight = boardMemory.back === 'white';
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, cv.width, cv.height);
-        for (const s of boardMemory.strokes) drawStroke(ctx, s, cv.width / dpr, cv.height / dpr, boardMemory.back === 'white');
+        ctx.clearRect(0, 0, w, h);
+        boxes.current = new Map();
+        for (const item of boardMemory.items) {
+            if (item.kind === 'text') boxes.current.set(item, drawText(ctx, item, w, h, isLight));
+            else if (item.kind === 'img') {
+                const img = boardImage(item.src, () => paint());
+                const rw = item.w * w;
+                const rh = rw * item.ar;
+                if (img) ctx.drawImage(img, item.x * w, item.y * h, rw, rh);
+                boxes.current.set(item, { x: item.x * w, y: item.y * h, w: rw, h: rh });
+            } else drawStroke(ctx, item, w, h, isLight);
+        }
     }, []);
     useEffect(() => { setColor((light ? BOARD_INKS : BOARD_COLORS)[0][0]); boardMemory.back = back; paint(); }, [back, light, paint]);
     useEffect(() => {
@@ -506,25 +570,129 @@ function BoardTool() {
         ro?.observe(box);
         return () => ro?.disconnect();
     }, [paint]);
+    const addImage = useCallback((pic) => {
+        const cv = canvas.current;
+        const r = cv.getBoundingClientRect();
+        /* 칠판 높이의 70% 안, 너비의 60% 안으로 가운데에 놓습니다. */
+        let w = 0.6;
+        if (w * r.width * pic.ar > 0.7 * r.height) w = (0.7 * r.height) / (pic.ar * r.width);
+        boardMemory.items.push({ kind: 'img', src: pic.src, ar: pic.ar, w, x: (1 - w) / 2, y: Math.max(0.03, (1 - (w * r.width * pic.ar) / r.height) / 2) });
+        setTool('text');
+        setNote('그림을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿔요.');
+        paint();
+        force((n) => n + 1);
+    }, [paint]);
+    /* Ctrl+V 로 복사해 둔 그림(스크린샷)을 붙입니다. 글을 쓰는 중에는 글자를 붙입니다. */
+    useEffect(() => {
+        const onPaste = (event) => {
+            if (event.target?.closest?.('.ct-text-editor')) return;
+            const file = [...(event.clipboardData?.items || [])].find((it) => it.type.startsWith('image/'))?.getAsFile();
+            if (!file) return;
+            event.preventDefault();
+            fileToImage(file).then(addImage).catch((e) => setNote(e.message));
+        };
+        document.addEventListener('paste', onPaste);
+        return () => document.removeEventListener('paste', onPaste);
+    }, [addImage]);
+    const capture = async () => {
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            const video = document.createElement('video');
+            video.muted = true;
+            video.playsInline = true;
+            video.srcObject = stream;
+            await video.play();
+            await new Promise((r) => setTimeout(r, 250));
+            addImage(shrinkImage(video, video.videoWidth, video.videoHeight));
+        } catch {
+            setNote('화면 캡처를 그만두었어요. 캡처할 창이나 화면을 고르면 칠판에 붙어요.');
+        } finally {
+            stream?.getTracks().forEach((t) => t.stop());
+        }
+    };
     /* 점은 0~1 비율로 둡니다: 팝업을 전체화면으로 키워도 그림이 같은 자리에 남습니다. */
     const at = (event) => { const r = canvas.current.getBoundingClientRect(); return [(event.clientX - r.left) / r.width, (event.clientY - r.top) / r.height]; };
+    const hitAt = (event) => {
+        const r = canvas.current.getBoundingClientRect();
+        const px = event.clientX - r.left;
+        const py = event.clientY - r.top;
+        for (const item of [...boardMemory.items].reverse()) {
+            const b = boxes.current.get(item);
+            if (!b) continue;
+            if (px >= b.x - 6 && px <= b.x + b.w + 6 && py >= b.y - 6 && py <= b.y + b.h + 6) {
+                const corner = item.kind === 'img' && px > b.x + b.w - 28 && py > b.y + b.h - 28;
+                return { item, corner, px, py, b };
+            }
+        }
+        return null;
+    };
+    const openEditor = (pos, item = null) => {
+        const index = item ? boardMemory.items.indexOf(item) : -1;
+        if (item) { boardMemory.items.splice(index, 1); paint(); }
+        setEditor({ x: pos[0], y: pos[1], text: item?.text || '', color: item?.color || color, fs: item?.fs || TEXT_SIZES[size] || TEXT_SIZES[6], index });
+    };
+    const commitEditor = () => {
+        /* 칠판 누르기와 글칸 벗어나기가 함께 와도 한 번만 넣습니다. */
+        const ed = editorRef.current;
+        if (!ed) return;
+        editorRef.current = null;
+        const text = ed.text.replace(/\s+$/, '');
+        if (text) {
+            const item = { kind: 'text', x: ed.x, y: ed.y, text, color: ed.color, fs: ed.fs };
+            if (ed.index >= 0) boardMemory.items.splice(ed.index, 0, item); else boardMemory.items.push(item);
+        }
+        setEditor(null);
+        paint();
+        force((n) => n + 1);
+    };
     const down = (event) => {
         event.preventDefault();
+        if (editor) { commitEditor(); return; }
         canvas.current.setPointerCapture?.(event.pointerId);
+        if (tool === 'text') {
+            const hit = hitAt(event);
+            drag.current = hit ? { ...hit, start: at(event), origin: { x: hit.item.x, y: hit.item.y, w: hit.item.w }, moved: false } : { start: at(event), moved: false };
+            return;
+        }
         const stroke = { tool, color, dark: !light, size: tool === 'erase' ? size * 4 : tool === 'mark' ? size * 3 : size, points: [at(event)] };
         drawing.current = stroke;
-        boardMemory.strokes.push(stroke);
+        boardMemory.items.push(stroke);
         paint();
     };
     const move = (event) => {
+        if (drag.current?.item) {
+            const d = drag.current;
+            const p = at(event);
+            const dx = p[0] - d.start[0];
+            const dy = p[1] - d.start[1];
+            if (!d.moved && Math.hypot(dx, dy) * 400 < 4) return;
+            d.moved = true;
+            if (d.corner) d.item.w = Math.max(0.08, Math.min(1, d.origin.w + dx));
+            else { d.item.x = d.origin.x + dx; d.item.y = d.origin.y + dy; }
+            paint();
+            return;
+        }
         if (!drawing.current) return;
         const events = event.getCoalescedEvents?.() || [event];
         for (const e of events) drawing.current.points.push(at(e));
         paint();
     };
-    const up = () => { if (drawing.current) { drawing.current = null; force((n) => n + 1); } };
-    const undo = () => { boardMemory.strokes.pop(); paint(); force((n) => n + 1); };
-    const clear = () => { boardMemory.strokes = []; paint(); force((n) => n + 1); };
+    const up = (event) => {
+        if (drag.current) {
+            const d = drag.current;
+            drag.current = null;
+            if (event?.type === 'pointerup' && !d.moved) {
+                if (!d.item) openEditor(d.start);
+                else if (d.item.kind === 'text') openEditor([d.item.x, d.item.y], d.item);
+            }
+            force((n) => n + 1);
+            return;
+        }
+        if (drawing.current) { drawing.current = null; force((n) => n + 1); }
+    };
+    const undo = () => { boardMemory.items.pop(); paint(); force((n) => n + 1); };
+    const clear = () => { boardMemory.items = []; setAskClear(false); setEditor(null); paint(); force((n) => n + 1); };
     const savePng = () => {
         const cv = canvas.current;
         const out = document.createElement('canvas');
@@ -539,28 +707,73 @@ function BoardTool() {
         a.href = out.toDataURL('image/png');
         a.click();
     };
+    const pick = (next) => { if (editor) commitEditor(); setTool(next); setNote(next === 'text' ? '칠판을 누르면 그 자리에 글을 써요. 쓴 글을 누르면 고치고, 끌면 옮겨요.' : ''); };
+    const faceH = wrap.current?.getBoundingClientRect().height || 400;
     return (
         <div className="ct-board">
             <div className="ct-board-bar" role="toolbar" aria-label="판서 도구">
-                <Btn className={tool === 'pen' ? 'chip on' : 'chip'} aria-pressed={tool === 'pen'} onClick={() => setTool('pen')}>{light ? '🖊️ 펜' : '🖍️ 분필'}</Btn>
-                <Btn className={tool === 'mark' ? 'chip on' : 'chip'} aria-pressed={tool === 'mark'} onClick={() => setTool('mark')}>형광펜</Btn>
-                <Btn className={tool === 'erase' ? 'chip on' : 'chip'} aria-pressed={tool === 'erase'} onClick={() => setTool('erase')}>지우개</Btn>
+                <Btn className={tool === 'text' ? 'chip on' : 'chip'} aria-pressed={tool === 'text'} data-role="board-text" onClick={() => pick('text')}>⌨️ 글쓰기</Btn>
+                <Btn className={tool === 'pen' ? 'chip on' : 'chip'} aria-pressed={tool === 'pen'} data-role="board-pen" onClick={() => pick('pen')}>{light ? '🖊️ 펜' : '🖍️ 분필'}</Btn>
+                <Btn className={tool === 'mark' ? 'chip on' : 'chip'} aria-pressed={tool === 'mark'} onClick={() => pick('mark')}>형광펜</Btn>
+                <Btn className={tool === 'erase' ? 'chip on' : 'chip'} aria-pressed={tool === 'erase'} onClick={() => pick('erase')}>지우개</Btn>
+                <Btn className="chip" data-role="board-image" onClick={() => fileRef.current?.click()}>🖼️ 그림 넣기</Btn>
+                {canCapture && <Btn className="chip" data-role="board-capture" onClick={capture}>📸 화면 캡처</Btn>}
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) fileToImage(f).then(addImage).catch((err) => setNote(err.message)); }} />
                 <span className="ct-swatches" role="group" aria-label="색">
-                    {palette.map(([hex, name]) => <Btn key={hex} className={`ct-swatch${color === hex ? ' is-on' : ''}`} style={{ '--sw': hex }} aria-label={name} aria-pressed={color === hex} onClick={() => { setColor(hex); if (tool === 'erase') setTool('pen'); }} />)}
+                    {palette.map(([hex, name]) => <Btn key={hex} className={`ct-swatch${color === hex ? ' is-on' : ''}`} style={{ '--sw': hex }} aria-label={name} aria-pressed={color === hex} onClick={() => { setColor(hex); if (editor) setEditor({ ...editor, color: hex }); if (tool === 'erase') setTool('pen'); }} />)}
                 </span>
-                <span className="ct-sizes" role="group" aria-label="굵기">
-                    {BOARD_SIZES.map(([name, px]) => <Btn key={px} className={`ct-size${size === px ? ' is-on' : ''}`} aria-label={name} aria-pressed={size === px} onClick={() => setSize(px)}><i style={{ width: px + 2, height: px + 2 }} /></Btn>)}
+                <span className="ct-sizes" role="group" aria-label={tool === 'text' ? '글자 크기' : '굵기'}>
+                    {BOARD_SIZES.map(([name, px]) => <Btn key={px} className={`ct-size${size === px ? ' is-on' : ''}`} aria-label={tool === 'text' ? `글자 ${name === '가늘게' ? '작게' : name === '굵게' ? '크게' : '보통'}` : name} aria-pressed={size === px} onClick={() => { setSize(px); if (editor) setEditor({ ...editor, fs: TEXT_SIZES[px] }); }}>{tool === 'text' ? <b style={{ fontSize: 10 + px }}>가</b> : <i style={{ width: px + 2, height: px + 2 }} />}</Btn>)}
                 </span>
-                <Btn className="chip" aria-label="되돌리기" disabled={!boardMemory.strokes.length} onClick={undo}>↩︎</Btn>
+                <Btn className="chip" aria-label="되돌리기" disabled={!items.length} onClick={undo}>↩︎</Btn>
                 <Btn className="chip" onClick={() => setBack(BOARD_BACKS[(BOARD_BACKS.findIndex(([k]) => k === back) + 1) % BOARD_BACKS.length][0])}>{BOARD_BACKS.find(([k]) => k === back)[1]}</Btn>
                 <Btn className="chip" onClick={savePng}>그림 저장</Btn>
-                <Btn className="chip" disabled={!boardMemory.strokes.length} onClick={clear}>모두 지우기</Btn>
+                {askClear
+                    ? <span className="ct-ask" role="group" aria-label="모두 지우기 확인"><span className="ct-ask-q">정말 다 지울까요?</span><Btn className="chip ct-danger" data-role="board-clear-yes" onClick={clear}>지우기</Btn><Btn className="chip" onClick={() => setAskClear(false)}>그만두기</Btn></span>
+                    : <Btn className="chip" data-role="board-clear" disabled={!items.length} onClick={() => setAskClear(true)}>모두 지우기</Btn>}
+                <Btn className="chip ct-start" data-role="board-start" aria-label={`처음 열 때 ${start === 'text' ? '글쓰기' : '펜'}로 시작, 눌러서 바꾸기`} onClick={() => setStart(start === 'text' ? 'pen' : 'text')}>처음: {start === 'text' ? '글쓰기' : '펜'}</Btn>
             </div>
-            <div ref={wrap} className="ct-board-face" data-back={back}>
-                <canvas ref={canvas} className="ct-canvas" aria-label="판서 칠판" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up} />
+            {note && <p className="muted ct-note ct-board-note" aria-live="polite">{note}</p>}
+            <div ref={wrap} className="ct-board-face" data-back={back} data-tool={tool}>
+                <canvas ref={canvas} className="ct-canvas" aria-label="판서 칠판" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={(e) => { if (drawing.current) up(e); }} />
+                {editor && (
+                    <textarea
+                        className="ct-text-editor"
+                        data-role="board-editor"
+                        aria-label="칠판에 쓸 글"
+                        autoFocus
+                        rows={Math.max(1, editor.text.split('\n').length)}
+                        value={editor.text}
+                        style={{ left: `${editor.x * 100}%`, top: `${editor.y * 100}%`, color: swapInk(editor.color, light), fontSize: `${Math.round(editor.fs * faceH)}px` }}
+                        onChange={(e) => setEditor({ ...editor, text: e.target.value })}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); commitEditor(); }
+                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitEditor(); }
+                        }}
+                        onBlur={() => commitEditor()}
+                    />
+                )}
+                {!items.length && !editor && <p className="ct-board-hint" aria-hidden="true">{tool === 'text' ? '눌러서 글쓰기 · Ctrl+V 로 그림 붙이기' : '손가락이나 펜으로 써 보세요'}</p>}
             </div>
         </div>
     );
+}
+
+/** 글 한 덩이를 그리고 차지한 칸(px)을 돌려줍니다. 여러 줄이면 줄마다. */
+function drawText(ctx, item, w, h, light) {
+    const px = Math.max(10, item.fs * h);
+    const lines = String(item.text).split('\n');
+    ctx.save();
+    ctx.font = boardFont(px);
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = swapInk(item.color, light);
+    let width = 0;
+    lines.forEach((line, i) => {
+        ctx.fillText(line, item.x * w, item.y * h + i * px * 1.25);
+        width = Math.max(width, ctx.measureText(line).width);
+    });
+    ctx.restore();
+    return { x: item.x * w, y: item.y * h, w: width, h: lines.length * px * 1.25 };
 }
 
 /* 칠판을 바꿔도 글씨가 사라지지 않게: 흰 분필은 화이트보드에서 검정, 검정 펜은 칠판에서 흰 분필로 보입니다. */
