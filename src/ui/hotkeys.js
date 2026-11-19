@@ -13,23 +13,33 @@ export const HOTKEY_ACTIONS = [
     { id: 'plus', label: '쨈 빠른 입력', group: '동작', fallback: '/', legacy: '/' },
     { id: 'help', label: '단축키 목록', group: '동작', fallback: '?', legacy: '?' },
     { id: 'search', label: '찾기', group: '동작', fallback: 'f' },
-    { id: 'today', label: '오늘', group: '이동', fallback: 't' },
-    { id: 'attend', label: '출결', group: '이동', fallback: 'a' },
-    { id: 'homework', label: '과제 체크', group: '이동', fallback: '' },
-    { id: 'schedule', label: '일정', group: '이동', fallback: 's' },
-    { id: 'todo', label: '할 일·메모', group: '이동', fallback: 'd' },
-    { id: 'minutesList', label: '회의록', group: '이동', fallback: 'm' },
-    { id: 'notice', label: '알림장', group: '이동', fallback: '' },
-    { id: 'students', label: '학생 기록', group: '이동', fallback: '' },
-    { id: 'neis', label: '나이스 모아 보기', group: '이동', fallback: '' },
-    { id: 'settings', label: '설정', group: '이동', fallback: '' },
+    { id: 'today', label: '오늘', group: '이동', fallback: 't', href: '#/today' },
+    { id: 'attend', label: '출결', group: '이동', fallback: 'a', href: '#/attend' },
+    { id: 'homework', label: '과제 체크', group: '이동', fallback: '', href: '#/homework' },
+    { id: 'schedule', label: '일정', group: '이동', fallback: 's', href: '#/schedule' },
+    { id: 'todo', label: '할 일·메모', group: '이동', fallback: 'd', href: '#/todo' },
+    { id: 'minutesList', label: '회의록', group: '이동', fallback: 'm', href: '#/minutes' },
+    { id: 'notice', label: '알림장', group: '이동', fallback: '', href: '#/notice' },
+    { id: 'students', label: '학생 기록', group: '이동', fallback: '', href: '#/students' },
+    { id: 'neis', label: '나이스 모아 보기', group: '이동', fallback: '', href: '#/students/neis' },
+    { id: 'tools', label: '수업 도구', group: '이동', fallback: '', href: '#/tools' },
+    { id: 'settings', label: '설정', group: '이동', fallback: '', href: '#/settings' },
     { id: 'quick:상담', label: '상담 적기', group: '자주 쓰는 일', fallback: '' },
     { id: 'quick:할 일', label: '할 일 적기', group: '자주 쓰는 일', fallback: '' },
     { id: 'quick:일정', label: '일정 적기', group: '자주 쓰는 일', fallback: '' },
     { id: 'memo', label: '메모 적기', group: '자주 쓰는 일', fallback: 'n' },
     { id: 'message', label: '메시지 붙여넣기', group: '자주 쓰는 일', fallback: '' },
     { id: 'minutes', label: '회의록 적기', group: '자주 쓰는 일', fallback: '' },
+    { id: 'tool:timer', label: '타이머', group: '수업 도구', fallback: '', href: '#/tools/timer' },
+    { id: 'tool:lottery', label: '제비뽑기', group: '수업 도구', fallback: '', href: '#/tools/lottery' },
+    { id: 'tool:wheel', label: '돌림판', group: '수업 도구', fallback: '', href: '#/tools/wheel' },
+    { id: 'tool:vote', label: '학급투표', group: '수업 도구', fallback: '', href: '#/tools/vote' },
+    { id: 'tool:board', label: '판서', group: '수업 도구', fallback: '', href: '#/tools/board' },
 ];
+
+/* 규칙: 메뉴(ui/menu.js MENU)에 화면을 하나 더하면 여기 '이동' 묶음에도 같은 이름·주소로 하나 더합니다.
+   하단 탭에 고를 수 있는 화면(ui/tabSlots.js TAB_POOL)도 모두 단축키가 있어야 합니다. 검사(check:quality)가 지킵니다.
+   새 키는 기본으로 비워 둡니다(fallback ''): 이미 쓰는 키와 겹치지 않게, 선생님이 설정 › 단축키에서 고릅니다. */
 
 const LABELS = {
     ArrowUp: '위',

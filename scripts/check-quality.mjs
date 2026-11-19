@@ -556,7 +556,7 @@ check(studentsSrc.includes('>나이스 모아 보기</Btn>') || studentsSrc.incl
 const appSrc = readFileSync(`${root}/src/App.jsx`, 'utf8');
 check(appSrc.includes("neis: ['나이스 모아 보기'"), '화면 제목이 나이스 모아 보기가 아닙니다.');
 check(!appSrc.includes("neis: ['나이스에 옮길 것'"), '옛 나이스 제목이 App에 남아 있습니다.');
-check(appSrc.includes("minutesList: '#/minutes'"), '단축키 회의록 이동 주소가 없습니다.');
+check(/\{ id: 'minutesList', label: '회의록', group: '이동', fallback: 'm', href: '#\/minutes' \}/.test(readFileSync(`${root}/src/ui/hotkeys.js`, 'utf8')), '단축키 회의록 이동 주소가 없습니다.');
 const scheduleSrc = readFileSync(`${root}/src/ui/Schedule.jsx`, 'utf8');
 check(scheduleSrc.includes("className={row.google ? 'cal-event-title is-google' : 'cal-event-title'}") && scheduleSrc.includes('titleNames'), '월간 칸에 일정 제목이 없습니다.');
 check(scheduleSrc.includes("{row.title || (row.google ? '구글' : '일정')}</span>"), '월간 칸 제목이 · 등으로 바뀌었습니다.');
@@ -599,7 +599,19 @@ check(/const \{ localOnly: _localOnlyFlag, \.\.\.stored \} = row;/.test(dbSrc)
     && !/put\([^,]+,\s*\{\s*\.\.\.row,\s*source:\s*row\.source/.test(dbSrc), '저장 시 localOnly 표시를 걷지 않습니다.');
 const hotkeysSrc = readFileSync(`${root}/src/ui/hotkeys.js`, 'utf8');
 const moveLabels = [...hotkeysSrc.matchAll(/\{ id: '[^']+', label: '([^']+)', group: '이동'/g)].map((m) => m[1]);
-check(moveLabels.join('|') === '오늘|출결|과제 체크|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `단축키 이동 순서가 메뉴와 다릅니다: ${moveLabels.join('|')}`);
+check(moveLabels.join('|') === MENU.map((row) => row[0]).join('|'), `단축키 이동 순서가 메뉴와 다릅니다: ${moveLabels.join('|')}`);
+{
+    /* 화면(탭)이 새로 생기면 단축키도 같이: 메뉴의 화면마다 같은 이름·주소의 '이동' 단축키가, 하단 탭에 고를 수 있는 화면마다 그 주소로 가는 단축키가 있어야 합니다. */
+    const { HOTKEY_ACTIONS } = await import('../src/ui/hotkeys.js');
+    const { TAB_POOL } = await import('../src/ui/tabSlots.js');
+    const moves = HOTKEY_ACTIONS.filter((action) => action.group === '이동');
+    for (const [label, href] of MENU) check(moves.some((action) => action.label === label && action.href === href), `메뉴 「${label}」에 단축키가 없습니다. ui/hotkeys.js '이동' 묶음에 더해 주세요.`);
+    for (const tab of TAB_POOL.filter((row) => row.href)) check(HOTKEY_ACTIONS.some((action) => action.href === tab.href), `하단 탭 「${tab.label}」(${tab.href})에 단축키가 없습니다.`);
+    const { TOOL_IDS } = await import('../src/lib/classTools.js');
+    for (const id of TOOL_IDS) check(HOTKEY_ACTIONS.some((action) => action.id === `tool:${id}` && action.href === `#/tools/${id}`), `수업 도구 ${id} 단축키가 없습니다.`);
+    const appSrc = readFileSync(`${root}/src/App.jsx`, 'utf8');
+    check(/HOTKEY_ACTIONS\.find\(\(action\) => action\.id === id\)\?\.href/.test(appSrc) && !/minutesList: '#\/minutes'/.test(appSrc), '단축키 이동이 단축키 목록의 주소를 따르지 않습니다(손으로 적은 주소 표가 남아 있음).');
+}
 const tasksSrc = readFileSync(`${root}/src/ui/Tasks.jsx`, 'utf8');
 check(/showToast\(result\.ok \? '확정했어요\.'[\s\S]*?,\s*Boolean\(result\.ok\)\)/.test(tasksSrc) || tasksSrc.includes("showToast(result.ok ? '확정했어요.' : (result.message || '확정하지 못했어요.'), Boolean(result.ok))"), '임시보관함 확정 토스트에 되돌리기가 없습니다.');
 
@@ -704,7 +716,7 @@ for (const value of settingsWords) {
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v115'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v116'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

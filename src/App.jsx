@@ -426,18 +426,9 @@ export default function App() {
             setFlow({ id: 'quick', kind: id.slice(6) });
             return;
         }
-        const href = {
-            today: '#/today',
-            attend: `#/attend/${ymd}`,
-            homework: '#/homework',
-            schedule: '#/schedule',
-            todo: '#/todo',
-            minutesList: '#/minutes',
-            notice: '#/notice',
-            students: '#/students',
-            neis: '#/students/neis',
-            settings: '#/settings',
-        }[id];
+        /* 이동·수업 도구 키는 단축키 목록(ui/hotkeys.js)에 적힌 주소로 갑니다. 출결은 오늘 날짜를 붙입니다. */
+        const target = HOTKEY_ACTIONS.find((action) => action.id === id)?.href || '';
+        const href = target ? menuTarget(target, ymd) : '';
         if (!href) return;
         closeLayers();
         go(href);

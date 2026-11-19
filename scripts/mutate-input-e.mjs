@@ -23,7 +23,7 @@ const MUTANTS = [
     ['E14 어간 겹침 규칙 제거', 'src/lib/timePhrase.js', 'if (kept.some((k) => hit.index < k.end && k.index < hit.end)) continue;', ''],
     ['E15 완료 어미를 메모로 안 봄', 'src/ui/quickMatch.js', "if (ending === 'done') return '메모';", ''],
     ['E16 취소 어미도 추천', 'src/ui/quickMatch.js', "if (ending === 'cancel' || ending === 'negate') return '';", ''],
-    ['E17 새 설치 기본 키 없음', 'src/ui/hotkeys.js', "{ id: 'today', label: '오늘', group: '이동', fallback: 't' },", "{ id: 'today', label: '오늘', group: '이동', fallback: '' },"],
+    ['E17 새 설치 기본 키 없음', 'src/ui/hotkeys.js', "{ id: 'today', label: '오늘', group: '이동', fallback: 't', href: '#/today' },", "{ id: 'today', label: '오늘', group: '이동', fallback: '', href: '#/today' },"],
     ['E18 쓰던 기기도 새 기본', 'src/ui/hotkeys.js', "const seed = started || saved ? 'legacy' : 'fresh';", "const seed = 'fresh';"],
     ['E19 판1 저장값에 새 기본 섞음', 'src/ui/hotkeys.js', 'const base = defaultHotkeys({ legacy: saved._v !== STORE_VERSION });', 'const base = defaultHotkeys();'],
     ['E20 초기화가 예전 기본으로', 'src/ui/hotkeys.js', "    writeSeed('fresh', storage);\n    notifyHotkeys();\n    return defaultHotkeys();", '    notifyHotkeys();\n    return defaultHotkeys();'],
