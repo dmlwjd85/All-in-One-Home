@@ -13,7 +13,7 @@ import { watchAuth } from './lib/cloud.js';
 import { setAuth } from './lib/db.js';
 import { cloudReady, signOutFirebase } from './firebase.js';
 import { Ui, useUi } from './ui/context.jsx';
-import { Btn, IconMenu, IconMoon, IconSearch, IconSettings, IconSun, IconWidgets, Motto, Symbol } from './ui/bits.jsx';
+import { Btn, IconMenu, IconSearch, IconSettings, IconWidgets, Motto, Symbol } from './ui/bits.jsx';
 import { playFoilPop } from './ui/sealBurst.js';
 import { bloomQuickBar, guardCupBurst, playCupGhost, resetQuickLayer } from './ui/cupBurst.js';
 import { QuickBar } from './ui/QuickBar.jsx';
@@ -37,6 +37,7 @@ import { SideLinks } from './ui/EduLinks.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { TodoAlarm } from './ui/TodoAlarm.jsx';
 import { MorningBrief, openBrief } from './ui/MorningBrief.jsx';
+import { LightSwitch } from './ui/LightSwitch.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
 import { MsgSheet } from './ui/MsgSheet.jsx';
 import { Attend } from './ui/Attend.jsx';
@@ -786,10 +787,10 @@ export default function App() {
                                 <Btn className={showBoard ? 'chip on top-widget-toggle' : 'chip top-widget-toggle'} aria-label={showBoard ? '기본 화면으로 보기' : '위젯 화면으로 보기'} aria-pressed={showBoard ? 'true' : 'false'} data-role="widget-toggle" onClick={() => setBoardOn(writeWidgetMode(!showBoard))}><IconWidgets /><span>{showBoard ? '기본 화면' : '위젯 화면'}</span></Btn>
                             )}
                             <Btn className="icon-btn" aria-label="찾기" onClick={() => setSearch(true)}><IconSearch /></Btn>
-                            <Btn className="icon-btn" aria-label={dark ? '밝게' : '어둡게'} onClick={() => {
+                            <LightSwitch dark={dark} onToggle={() => {
                                 const next = dark ? 'light' : 'dark';
                                 import('./lib/db.js').then(({ patchProfile }) => patchProfile({ theme: next })).catch(() => {});
-                            }}>{dark ? <IconSun /> : <IconMoon />}</Btn>
+                            }} />
                             <Btn className={route.name === 'settings' || route.name === 'roster' ? 'icon-btn is-on' : 'icon-btn'} aria-label={gcalDot ? '설정, 구글 캘린더 다시 연결 필요' : '설정'} aria-pressed={route.name === 'settings' || route.name === 'roster'} onClick={() => go('#/settings')}><IconSettings /><GcalDot gcal={gcalSnap} /></Btn>
                             <Btn className="icon-btn" aria-label="메뉴" onClick={() => setMenu(true)}><IconMenu /></Btn>
                         </div>

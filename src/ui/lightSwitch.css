@@ -1,0 +1,39 @@
+/* 교실 전등 스위치(ui/LightSwitch.jsx). 판은 벽 스위치처럼 미색, 누름쇠는 위(켬)·아래(끔)로 기웁니다. */
+.light-switch .ls-svg { width: 26px; height: 33px; overflow: visible; }
+.ls-plate { fill: #FBF8F1; stroke: rgba(46, 42, 43, .35); stroke-width: 1; }
+.ls-well { fill: #E2DCD0; }
+.ls-key { fill: #FFFFFF; stroke: rgba(46, 42, 43, .3); stroke-width: .8; }
+.ls-key-hi { fill: #F1ECE2; }
+.ls-lever { transform-box: view-box; transform-origin: 14px 18px; transition: transform .18s cubic-bezier(.3, 1.6, .5, 1); }
+/* 켜짐: 위쪽이 눌려 들어간 모양(위 반쪽이 그늘), 꺼짐: 아래쪽이 눌린 모양(아래 반쪽이 그늘) */
+.light-switch.is-on .ls-lever { transform: translateY(-1px); }
+.light-switch.is-on .ls-key-hi { fill: #C8BFAE; }
+.light-switch.is-off .ls-lever { transform: translateY(1px); }
+.light-switch.is-off .ls-key-hi { fill: #FFFFFF; }
+.light-switch.is-off .ls-key { fill: #B9B09F; }
+.ls-led { fill: #C9C2B6; transition: fill .2s; }
+/* 꺼진 스위치의 주황 표시등(어두운 교실에서 스위치를 찾는 그 불빛) */
+.light-switch.is-off .ls-led { fill: #FF9A3C; filter: drop-shadow(0 0 2.5px #FF9A3C); }
+.light-switch.is-on { box-shadow: var(--neo-raise-sm), 0 0 0 0 transparent; }
+.light-switch.is-on::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: 0 0 10px 1px rgba(255, 214, 120, .35);
+}
+.light-switch { position: relative; }
+.dark .ls-plate { fill: #D9D3C7; stroke: rgba(0, 0, 0, .45); }
+.dark .ls-well { fill: #BDB6A9; }
+
+/* 방 전체 빛 효과: 켤 때는 형광등처럼 두 번 깜빡, 끌 때는 스르르 어둡게 */
+.room-fx { position: fixed; inset: 0; z-index: 9999; pointer-events: none; }
+.room-fx.is-off { background: #000; animation: room-off .7s ease-out forwards; }
+.room-fx.is-on { background: #FFF7DD; animation: room-on .8s linear forwards; }
+@keyframes room-off { 0% { opacity: 0; } 25% { opacity: .55; } 100% { opacity: 0; } }
+@keyframes room-on { 0% { opacity: 0; } 8% { opacity: .55; } 16% { opacity: 0; } 30% { opacity: .4; } 38% { opacity: .05; } 55% { opacity: .3; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .ls-lever { transition: none; }
+    .room-fx { display: none; }
+}

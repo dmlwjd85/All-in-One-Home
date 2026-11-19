@@ -82,6 +82,7 @@ jobs:
           npm run check:student-card
           npm run check:class-tools
           npm run check:briefing
+          npm run check:light-switch
           npm run check:doc-file
           npm run check:sensitive
           npm run check:keep-text
