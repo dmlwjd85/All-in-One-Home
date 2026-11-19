@@ -529,7 +529,7 @@ const missingTable = resolveHash('#/schedule/table/2026-13-01', '2026-10-26');
 check(missingTable.params.view === '시간표' && missingTable.params.date === '2026-10-26' && missingTable.replace === '#/schedule/table/2026-10-26' && missingTable.notice.includes('달력에 없어요'), '잘못된 시간표 날짜가 주 보기로 풀립니다.');
 
 /** PR #68: 메뉴 순서·CSV·삭제 확인·월간 제목·단축키 간격을 지키는 검사. */
-check(MENU.map((row) => row[0]).join('|') === '오늘|출결|과제 체크|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
+check(MENU.map((row) => row[0]).join('|') === '오늘|출결|과제 체크|일정|할 일·메모|회의록|알림장|학생 기록|나이스 모아 보기|수업 도구|설정', `메뉴 순서가 바뀌었습니다: ${MENU.map((row) => row[0]).join('|')}`);
 check(csvEscape('=1+1') === "'=1+1" && csvEscape('+CMD') === "'+CMD" && csvEscape('@A1') === "'@A1", 'CSV 수식 앞 글자에 따옴표를 붙이지 않습니다.');
 check(csvEscape('+2') === '+2' && csvEscape('+82') === '+82' && csvEscape('+82-10-1234-5678') === '+82-10-1234-5678', '전화·국번처럼 +숫자에도 CSV 따옴표를 붙입니다.');
 check(csvEscape('-5') === '-5' && csvEscape('- 글머리') === '- 글머리', '정상 음수·글머리에도 CSV 따옴표를 붙입니다.');
@@ -704,7 +704,7 @@ for (const value of settingsWords) {
 }
 const sw = readFileSync(`${root}/public/sw.js`, 'utf8');
 
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v112'"), '캐시 판이 올라가지 않았습니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v113'"), '캐시 판이 올라가지 않았습니다.');
 const swCache = sw.match(/const CACHE = '(ssug-gyomu-shell-v\d+)'/)?.[1];
 const iconDoc = readFileSync(`${root}/docs/icon.md`, 'utf8');
 const docCaches = [...iconDoc.matchAll(/ssug-gyomu-shell-v\d+/g)].map((m) => m[0]);

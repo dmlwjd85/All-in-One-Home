@@ -21,6 +21,7 @@ const ICONS = {
     notice: <><path d="M12 4a5 5 0 00-5 5v4l-2 3h14l-2-3V9a5 5 0 00-5-5z" fill="url(#tbj-pink)" /><circle cx="12" cy="19" r="1.8" fill="url(#tbj-pink)" /></>,
     neis: <><rect x="4" y="5" width="16" height="14" rx="2" fill="url(#tbj-pink)" /><path d="M8 10l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></>,
     settings: <><circle cx="12" cy="12" r="7" fill="url(#tbj-pink)" /><circle cx="12" cy="12" r="2.6" fill="#fff" /></>,
+    tools: <><circle cx="12" cy="13" r="7.5" fill="url(#tbj-pink)" /><path d="M12 9v4l2.6 1.8" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" /><path d="M9.5 3.5h5" stroke="url(#tbj-pink)" strokeWidth="2.4" strokeLinecap="round" /></>,
 };
 
 function TabIcon({ id }) {

@@ -23,6 +23,7 @@ export const TAB_POOL = [
     { id: 'notice', label: '알림장', href: '#/notice' },
     { id: 'neis', label: '나이스', href: '#/students/neis' },
     { id: 'settings', label: '설정', href: '#/settings' },
+    { id: 'tools', label: '도구', href: '#/tools' },
 ];
 
 export const DEFAULT_ORDER = ['today', 'todo', 'attend', 'schedule', 'students', 'more'];

@@ -89,6 +89,10 @@ export function resolveHash(raw, today) {
     if (path === '/todo' || path === '/work' || path === '/deadlines' || path === '/budget') {
         return pack('todo', {}, '#/todo', incoming);
     }
+    if (path === '/tools' || path === '/class-tools') return pack('tools', { tool: '' }, '#/tools', incoming);
+    const tool = path.match(/^\/tools\/(timer|lottery|wheel|vote|board)$/);
+    if (tool) return pack('tools', { tool: tool[1] }, `#/tools/${tool[1]}`, incoming);
+    if (path.startsWith('/tools/')) return pack('tools', { tool: '' }, '#/tools', incoming);
     if (path === '/settings') return pack('settings', {}, '#/settings', incoming);
     if (path === '/settings/roster') return pack('roster', {}, '#/settings/roster', incoming);
     if (path === '/settings/legacy' || path === '/legacy') return pack('legacy', { page: '' }, '#/settings/legacy', incoming);

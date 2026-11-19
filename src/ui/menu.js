@@ -9,6 +9,7 @@ export const MENU = [
     ['알림장', '#/notice'],
     ['학생 기록', '#/students'],
     ['나이스 모아 보기', '#/students/neis'],
+    ['수업 도구', '#/tools'],
     ['설정', '#/settings'],
 ];
 
@@ -31,6 +32,7 @@ export function menuSelected(routeName, href) {
     if (href === '#/todo') return routeName === 'todo';
     if (href === '#/notice') return routeName === 'notice';
     if (href === '#/minutes') return routeName === 'minutes';
+    if (href === '#/tools') return routeName === 'tools';
     if (href === '#/settings') return routeName === 'settings' || routeName === 'legacy' || routeName === 'roster';
     return false;
 }

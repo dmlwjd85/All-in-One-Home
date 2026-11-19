@@ -296,7 +296,7 @@ const RULE_MUTANTS = [
     ['목표 키 제한 빼기', "&& g.keys().hasOnly(['n', 'nAt', 'days', 'updatedAt'])", ''],
     ['목표 날짜 기록 모양 빼기', "&& g.days.matches('^(20[2-9]", "&& g.days.matches('(?s).*') || g.days.matches('^(20[2-9]"],
     ['탭바 겹침 검사 빼기', "&& t.order.toSet().size() == 6", ''],
-    ['탭바 탭 이름 빼기', "&& t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings'])", ''],
+    ['탭바 탭 이름 빼기', "&& t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings', 'tools'])", ''],
     ['탭바 미래 시각 빼기', "&& t.at <= request.time.toMillis() + 300000", ''],
     ['탭바 키 제한 빼기', "&& t.keys().hasOnly(['order', 'at', 'updatedAt'])", ''],
     ['at 검사 빼기', "&& v.at is int && v.at > 0 && v.at <= 4102444800000", ''],

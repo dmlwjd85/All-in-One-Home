@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { rosterView } from './lib/roster.js';
 import { boot, flushCloud, joined, refreshFromCloud, snapshot, subscribe, subscribeStorageIssue, undo, saveTip } from './lib/db.js';
 import { refreshGcal, startGcalBridge } from './lib/gcalLive.js';
@@ -50,6 +50,9 @@ import { SyncChip } from './ui/SyncChip.jsx';
 import { FuseBar } from './ui/FuseBar.jsx';
 import { migrateFxLevel } from './ui/doneFx.js';
 import { syncAuthKnown } from './lib/syncStatus.js';
+
+/* 수업 도구는 처음 열 때만 받습니다(첫 화면을 가볍게). */
+const ClassTools = lazy(() => import('./ui/ClassTools.jsx'));
 
 export default function App() {
     const [data, setData] = useState(null);
@@ -699,6 +702,7 @@ export default function App() {
     if (route.name === 'day') screen = <Day key={route.params.date} />;
     if (route.name === 'legacy') screen = <Legacy />;
     if (route.name === 'minutes') screen = <Minutes />;
+    if (route.name === 'tools') screen = <Suspense fallback={<p className="muted">수업 도구를 여는 중이에요…</p>}><ClassTools /></Suspense>;
 
     const titles = {
         today: [clock.label, `${data.profile.className || '학급을 아직 안 적었어요'} · ${clock.clock}`],
@@ -711,6 +715,7 @@ export default function App() {
         todo: ['할 일·메모', '오늘 할 일부터 보여 드려요'],
         notice: ['알림장', '복사해서 붙여 넣어요'],
         minutes: ['회의록', '저장 버튼으로 남겨요'],
+        tools: ['수업 도구', '타이머·제비뽑기·돌림판·투표·판서'],
         settings: ['설정', '학급, 소리, 단축키, 계정'],
         roster: ['명단', '번호에 이름을 적어 주세요'],
         day: ['그날의 일지', '나이스에 넣기 전에 이 날을 훑어 보세요'],

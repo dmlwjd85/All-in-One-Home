@@ -173,7 +173,7 @@ service cloud.firestore {
     function tabbarOk(t) {
       return t.keys().hasAll(['order', 'at', 'updatedAt']) && t.keys().hasOnly(['order', 'at', 'updatedAt'])
         && t.order is list && t.order.size() == 6 && t.order.toSet().size() == 6
-        && t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings'])
+        && t.order.hasOnly(['today', 'todo', 'attend', 'schedule', 'students', 'more', 'minutes', 'notice', 'neis', 'settings', 'tools'])
         && t.order.hasAll(['more'])
         && t.at is int && t.at > 0 && t.at <= request.time.toMillis() + 300000
         && t.updatedAt == request.time;
