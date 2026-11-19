@@ -210,6 +210,19 @@ export function Settings() {
                 <h2 className="title-font" style={{ marginTop: 0 }}>학급</h2>
                 <input className="field" aria-label="학급 이름" value={className} onChange={(event) => setClassName(event.target.value)} />
                 <p className="muted">{data.students.filter((row) => row.name).length}명이 명단에 있어요. 이름은 명단 화면에서 고쳐요.</p>
+                <label className="skin-motto-set" style={{ display: 'block', margin: '10px 0' }}>
+                    <span className="muted" style={{ display: 'block', margin: '0 0 6px' }}>학급 급훈 · 교실 테마 앞벽 액자에 걸려요</span>
+                    <input
+                        className="field"
+                        data-role="skin-motto"
+                        value={motto}
+                        maxLength={MOTTO_MAX}
+                        placeholder={DEFAULT_MOTTO}
+                        aria-label="학급 급훈"
+                        onChange={(event) => { setMotto(event.target.value); setSkinMotto(event.target.value); }}
+                    />
+                    <span className="muted" style={{ display: 'block', margin: '6px 0 0', fontSize: 12 }}>{MOTTO_MAX}자까지, 바로 걸려요. 비우면 기본 급훈. 이 기기에만 저장돼요.</span>
+                </label>
                 <Btn className="chip block" onClick={() => go('#/settings/roster', { state: { rosterFrom: 'settings' } })}>명단 고치기</Btn>
                 <Btn className="primary-btn block" style={{ marginTop: 8 }} onClick={async () => {
                     const saved = await patchProfile({ className: className.trim() });
@@ -257,21 +270,6 @@ export function Settings() {
                     ))}
                 </div>
                 <p className="muted">이 기기에만 저장돼요. 밝기와 키보드 테마는 그대로예요.</p>
-                {skin === 'cork' && (
-                    <label className="skin-motto-set" style={{ display: 'block', margin: '10px 0 0' }}>
-                        <span className="muted" style={{ display: 'block', margin: '0 0 6px' }}>학급 급훈 · 교실 앞벽 액자에 걸려요</span>
-                        <input
-                            className="field"
-                            data-role="skin-motto"
-                            value={motto}
-                            maxLength={MOTTO_MAX}
-                            placeholder={DEFAULT_MOTTO}
-                            aria-label="학급 급훈"
-                            onChange={(event) => { setMotto(event.target.value); setSkinMotto(event.target.value); }}
-                        />
-                        <span className="muted" style={{ display: 'block', margin: '6px 0 0', fontSize: 12 }}>{MOTTO_MAX}자까지. 비우면 기본 급훈으로 돌아가요. 이 기기에만 저장돼요.</span>
-                    </label>
-                )}
                 <p className="muted" style={{ margin: '14px 0 0' }}>키보드 테마</p>
                 <div className="kb-grid" role="group" aria-label="키보드 테마">
                     {KB_THEMES.map((item) => (

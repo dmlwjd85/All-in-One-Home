@@ -149,12 +149,17 @@ html.dark[data-skin="cork"] {
 }
 
 /* 교실 공간: 위는 앞벽, 가운데는 칠판, 아래는 책상 상판. 카드(--bg)는 크림 종이. */
+/* 글자 테두리(헤일로)는 글자 그림자로, 요소마다 그 자리 바탕색(--text-halo)으로 둡니다.
+   예전처럼 body 한 곳에 두면 body 의 바탕색(크림)이 그대로 물려 내려가, 칠판 위 흰 글씨에 크림 테두리가 붙어 굵고 흐려 보였습니다.
+   :where 로 감싸 특이도 0 — 다른 규칙이 정한 글자 그림자가 있으면 그것이 이깁니다. */
 html[data-skin="cork"] {
     --text-halo: var(--cork-paper);
 }
 html[data-skin="cork"] body {
-    -webkit-text-stroke: 1.15px var(--text-halo);
-    paint-order: stroke fill;
+    -webkit-text-stroke: 0;
+}
+:where(html[data-skin="cork"] body *) {
+    text-shadow: 0 0 1px var(--text-halo), 0 0 2px var(--text-halo), 0 0 3px var(--text-halo);
 }
 html[data-skin="cork"] .icon-btn,
 html[data-skin="cork"] .store-badge,
@@ -164,6 +169,7 @@ html[data-skin="cork"] textarea,
 html[data-skin="cork"] select,
 html[data-skin="cork"] .skin-deco {
     -webkit-text-stroke: 0;
+    text-shadow: none;
     paint-order: normal;
 }
 
@@ -402,6 +408,7 @@ html[data-skin="cork"] .solid-card > h2.title-font {
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
     -webkit-text-stroke: 0;
+    text-shadow: none;
     paint-order: normal;
     --text-halo: var(--cork-tag-blue);
 }
@@ -490,14 +497,15 @@ html[data-skin="cork"] .store-notice-h,
 html[data-skin="cork"] .store-notice-title {
     background: transparent;
     color: var(--cork-paper-ink);
-    -webkit-text-stroke: 1.15px var(--text-halo);
-    paint-order: stroke fill;
+    -webkit-text-stroke: 0;
+    text-shadow: 0 0 1px var(--text-halo), 0 0 2px var(--text-halo), 0 0 3px var(--text-halo);
 }
 html[data-skin="cork"] .store-badge {
     background: var(--cork-tag-orange);
     color: var(--cork-tag-ink);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 1px 0 rgba(90, 58, 36, .2);
     -webkit-text-stroke: 0;
+    text-shadow: none;
     --text-halo: var(--cork-tag-orange);
 }
 
@@ -517,6 +525,7 @@ html[data-skin="cork"] .rest-banner .day-rest-mark {
     background: var(--cork-tag-orange);
     color: var(--cork-tag-ink);
     -webkit-text-stroke: 0;
+    text-shadow: none;
     --text-halo: var(--cork-tag-orange);
 }
 
@@ -556,6 +565,7 @@ html[data-skin="cork"] .side-brand .title-font {
     border-radius: 3px;
     display: inline-block;
     -webkit-text-stroke: 0;
+    text-shadow: none;
 }
 
 html.dark[data-skin="cork"] .topbar .date-block {
@@ -668,6 +678,7 @@ html[data-skin="cork"] .skin-motto {
     color: #2A241C;
     --text-halo: #F6F0E4;
     -webkit-text-stroke: 0;
+    text-shadow: none;
     user-select: none;
 }
 html[data-skin="cork"] .skin-motto-frame {
@@ -944,8 +955,8 @@ html[data-skin="cork"] .side-menu .tap.chip.block {
     background-size: 100% 100%;
     color: var(--cork-drawer-ink);
     --text-halo: #1A120C;
-    -webkit-text-stroke: 1.15px #1A120C;
-    paint-order: stroke fill;
+    -webkit-text-stroke: 0;
+    text-shadow: 0 0 1px #1A120C, 0 0 2px #1A120C, 0 0 3px #1A120C;
     text-shadow: 0 0 3px #1A120C, 0 1px 2px #1A120C, 0 0 6px #1A120C;
     border-radius: 2px;
     padding-left: 10px;
@@ -1489,8 +1500,8 @@ html[data-skin="cork"] .sheet,
 html[data-skin="cork"] .sheet .chip,
 html[data-skin="cork"] .sheet h2,
 html[data-skin="cork"] .side-menu .chip {
-    -webkit-text-stroke: 1.15px var(--text-halo);
-    paint-order: stroke fill;
+    -webkit-text-stroke: 0;
+    text-shadow: 0 0 1px var(--text-halo), 0 0 2px var(--text-halo), 0 0 3px var(--text-halo);
 }
 
 /* 키보드 테마 CSS가 뒤에 붙어도 코르크 토큰 쌍이 배경·글자를 같이 바꿉니다. */
@@ -1577,9 +1588,8 @@ html[data-skin="cork"] .side > p.muted,
 html[data-skin="cork"] .side-links-note {
     color: var(--cork-drawer-ink);
     --text-halo: #1A120C;
-    -webkit-text-stroke: 1.15px #1A120C;
-    paint-order: stroke fill;
-    text-shadow: 0 0 3px #1A120C, 0 1px 2px #1A120C;
+    -webkit-text-stroke: 0;
+    text-shadow: 0 0 1px #1A120C, 0 0 2px #1A120C, 0 0 3px #1A120C, 0 1px 2px #1A120C;
 }
 
 /* ───────── 경계 다듬기(밝은 화면·밤 교실 공통) ─────────
@@ -1687,7 +1697,7 @@ html[data-skin="cork"]:not(.dark) .tabbar.tabbar-jelly {
 
 /* ───────── 판서 카드 ─────────
    칠판(.main) 위의 카드는 종이를 붙이지 않고 분필로 테두리만 그립니다(안은 칠판 그대로).
-   글씨는 진한 분필 흰색. 카드 안의 단추·칩·입력칸도 종이 결을 걷고 분필 선으로 바꿉니다.
+   글씨는 분필 흰색, 보통 굵기(굵게 하면 획이 뭉쳐 읽기 어렵습니다). 제목만 원래 굵기. 카드 안의 단추·칩·입력칸도 종이 결을 걷고 분필 선으로 바꿉니다.
    고정한 메모(data-note-pin)는 압정으로 꽂은 종이라 그대로 두고,
    팝업(.sheet)·쨈 입력(.quick-bar)도 칠판 위에 겹쳐 뜨므로 종이 그대로입니다. */
 html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]),
@@ -1751,15 +1761,15 @@ html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) {
     --neo-inset: inset 0 0 0 1.5px rgba(253, 252, 246, .3), inset 0 3px 6px rgba(0, 0, 0, .3);
     --neo-inset-deep: inset 0 0 0 1.5px rgba(253, 252, 246, .3), inset 0 4px 8px rgba(0, 0, 0, .34);
     color: var(--ink);
-    font-weight: 700;
-    -webkit-text-stroke: 1.15px var(--cork-chalk);
+    font-weight: 400;
+    -webkit-text-stroke: 0;
     paint-order: stroke fill;
     background: none;
     border: 2px solid transparent;
     border-image: url('./skin/chalk-frame-white.svg') 30 / 18px / 0 round;
     border-radius: 0;
     box-shadow: none;
-    text-shadow: 0 0 5px rgba(255, 255, 255, .16);
+    text-shadow: 0 0 1px var(--cork-chalk), 0 0 2px var(--cork-chalk), 0 0 3px var(--cork-chalk);
 }
 html.dark[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]),
 html.dark[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]),
@@ -1782,7 +1792,19 @@ html.dark[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button
     border: 2px solid transparent;
     border-image: url('./skin/chalk-frame-white.svg') 30 / 18px / 0 round;
     box-shadow: none;
-    text-shadow: none;
+    text-shadow: 0 0 1px var(--cork-chalk), 0 0 2px var(--cork-chalk), 0 0 3px var(--cork-chalk);
+}
+/* 판서 카드 안 글씨는 제목(h1~h4·.title-font·.fold-title)과 강조(strong·b)만 굵게, 나머지는 보통 굵기. */
+html[data-skin="cork"] .main .glass:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .solid-card:not(button):not(a):not([role="button"]):not([data-note-pin="1"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .tip-bubble:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .suggest-card:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .minutes-body:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .minutes-item *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .store-notice:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title),
+html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) *:not(h1):not(h2):not(h3):not(h4):not(strong):not(b):not(.title-font):not(.fold-title) {
+    font-weight: 400;
 }
 /* 분필 색: 카드 종류마다, 그리고 나란히 놓인 카드는 차례로 다른 색. */
 html[data-skin="cork"] .main .hero:not(button):not(a):not([role="button"]),
@@ -1909,7 +1931,8 @@ html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .
 html[data-skin="cork"] .main .low-card:not(button):not(a):not([role="button"]) .cell-grid .tap {
     background-image: none;
     box-shadow: inset 0 0 0 1.5px rgba(253, 252, 246, .46);
-    font-weight: 700;
+    font-weight: 400;
+    --text-halo: var(--cork-chalk);
 }
 
 /* 칠판 가장자리: 네 변을 서로 다른 색 분필(노랑·분홍·하늘·연두)로 그은 선. */
@@ -2041,4 +2064,27 @@ html.dark[data-skin="cork"] .desk-fab .fab-txt {
     html[data-skin="cork"] .app-frame:not(:has(> .fuse)) .skin-wall {
         top: env(safe-area-inset-top, 0px);
     }
+}
+
+/* 글자 테두리(헤일로)를 그 자리 바탕색에 맞춥니다: 종이 칩은 칩 색, 검은 알약·오늘 동그라미처럼 진한 바탕은 테두리 없이. */
+html[data-skin="cork"] .sync-chip summary,
+html[data-skin="cork"] .goal-meter {
+    --text-halo: var(--cork-chip);
+}
+html[data-skin="cork"] .fuse-bomb,
+html[data-skin="cork"] .fuse-bomb * {
+    text-shadow: 0 0 1px #2E2A2B, 0 0 2px #2E2A2B, 0 0 3px #2E2A2B;
+}
+html.dark[data-skin="cork"] .fuse-bomb,
+html.dark[data-skin="cork"] .fuse-bomb * {
+    text-shadow: 0 0 1px #F6F2EE, 0 0 2px #F6F2EE, 0 0 3px #F6F2EE;
+}
+html[data-skin="cork"] .cal-grid .cal-today .num {
+    text-shadow: 0 0 1px #215E5E, 0 0 2px #215E5E, 0 0 3px #215E5E;
+}
+html.dark[data-skin="cork"] .cal-grid .cal-today .num {
+    text-shadow: 0 0 1px #7EB8B0, 0 0 2px #7EB8B0, 0 0 3px #7EB8B0;
+}
+html[data-skin="cork"] .skin-motto-text {
+    text-shadow: 0 0 1px #E4D7BF, 0 0 2px #E4D7BF, 0 0 3px #E4D7BF;
 }

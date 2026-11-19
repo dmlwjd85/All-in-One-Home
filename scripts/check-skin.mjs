@@ -74,7 +74,7 @@ for (const sel of selectors) {
 }
 {
     /* 출결 색 의미는 덮지 않습니다. 단, 칠판 위 판서 카드(어두운 바탕) 안에서는 앱의 어두운 화면 값 그대로만 씁니다. */
-    const at = css.indexOf('판서 카드');
+    const at = css.indexOf('───────── 판서 카드');
     const before = at < 0 ? css : css.slice(0, at);
     check(!/--st-present|--st-absent|--st-late|--st-early|--st-out/.test(before), '출결 색 의미를 덮습니다.');
     const tokens = src('src/styles/tokens.css');
@@ -123,7 +123,7 @@ check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시
     check(Array.from(cleanMotto('가'.repeat(80))).length === MOTTO_MAX, '급훈 길이 제한');
     check(setSkinMotto('   ', store) === DEFAULT_MOTTO && !box.has(MOTTO_KEY), '급훈을 비우면 기본으로 돌아가야 합니다.');
     const settings = src('src/ui/Settings.jsx');
-    check(/data-role="skin-motto"/.test(settings) && /setSkinMotto\(event\.target\.value\)/.test(settings) && /skin === 'cork' &&/.test(settings), '설정에 급훈 입력칸이 없습니다.');
+    check(/data-role="skin-motto"/.test(settings) && /setSkinMotto\(event\.target\.value\)/.test(settings) && (() => { const cls = settings.slice(settings.indexOf("{sec === 'class' && (<>"), settings.indexOf("{sec === 'calendar' && (<>")); return /data-role="skin-motto"/.test(cls); })(), '설정 › 학급에 급훈 입력칸이 없습니다.');
     check(!/skin-motto|MOTTO_KEY/.test(src('src/lib/db.js')), '급훈은 기록·클라우드에 넣지 않습니다.');
 }
 {
@@ -131,9 +131,10 @@ check(/\.skin-prop\[data-prop="clock"\][\s\S]*aspect-ratio:\s*1/.test(css), '시
     for (const name of ['frame-white', 'frame-yellow', 'frame-pink', 'frame-sky', 'frame-green', 'edge-top', 'edge-bottom', 'edge-left', 'edge-right']) {
         check(existsSync(`${root}/src/ui/skin/chalk-${name}.svg`), `분필 그림이 없습니다: chalk-${name}.svg`);
     }
-    const board = css.slice(css.indexOf('판서 카드'));
+    const board = css.slice(css.indexOf('───────── 판서 카드'));
     check(/\.main \.glass:not\(button\):not\(a\):not\(\[role="button"\]\),/.test(board) && /background: none;\s*border: 2px solid transparent;\s*border-image: url\('\.\/skin\/chalk-frame-white\.svg'\)/.test(board), '판서 카드: 채움을 빼고 분필 테두리를 그려야 합니다.');
-    check(/--ink: #FDFCF6;/.test(board) && /font-weight: 700;/.test(board) && /--text-halo: var\(--cork-chalk\);/.test(board), '판서 카드 글씨는 진한 흰 분필이어야 합니다.');
+    check(/--ink: #FDFCF6;/.test(board) && /color: var\(--ink\);\s*font-weight: 400;/.test(board) && !/font-weight: 700;/.test(board) && /--text-halo: var\(--cork-chalk\);/.test(board), '판서 카드 글씨는 흰 분필, 보통 굵기여야 합니다.');
+    check(/\.main \.glass:not\(button\):not\(a\):not\(\[role="button"\]\) \*:not\(h1\):not\(h2\):not\(h3\):not\(h4\):not\(strong\):not\(b\):not\(\.title-font\):not\(\.fold-title\)/.test(board), '판서 카드 안 본문이 굵게 남아 있습니다.');
     check(/\.solid-card:not\(button\):not\(a\):not\(\[role="button"\]\):not\(\[data-note-pin="1"\]\)/.test(board), '고정한 메모는 압정 꽂은 종이로 남아야 합니다.');
     check(/\.week-event \{\s*background-image: none;/.test(board) || /\.cell-grid \.tap \{\s*background-image: none;/.test(board), '판서 카드 안 단추의 종이 결을 걷어야 합니다.');
     check(['top', 'bottom', 'left', 'right'].every((side) => board.split(`chalk-edge-${side}.svg`).length === 3), '칠판 가장자리 네 변(밝은·밤) 분필 선이 없습니다.');
@@ -203,10 +204,11 @@ check(!/url\(\s*['"]?https?:|unsplash|pexels|shutterstock/i.test(css), '바깥 �
 const indexCss = src('src/index.css');
 check(/\.skin-swatch/.test(indexCss) && indexCss.includes('data-skin-sample="cork"'), '설정 꾸미기 견본이 없습니다.');
 check(!indexCss.includes('-webkit-text-stroke'), '기본 화면에 헤일로가 남았습니다.');
-check(css.includes('--text-halo') && css.includes('-webkit-text-stroke: 1.15px var(--text-halo)'), '코르크 바탕 헤일로가 없습니다.');
+check(css.includes('--text-halo') && css.includes('text-shadow: 0 0 1px var(--text-halo), 0 0 2px var(--text-halo), 0 0 3px var(--text-halo);'), '코르크 바탕 헤일로가 없습니다.');
+check(!/-webkit-text-stroke:\s*[1-9]/.test(css), '글자 테두리를 획(-webkit-text-stroke)으로 그리면 글씨가 굵게 뭉개집니다. 글자 그림자로 두세요.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v111'"), '서비스 워커가 v111가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v112'"), '서비스 워커가 v112가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };

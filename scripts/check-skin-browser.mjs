@@ -286,7 +286,9 @@ async function haloHits(page, label) {
             const st = getComputedStyle(parent);
             const stroke = parseFloat(st.webkitTextStrokeWidth) || 0;
             const halo = String(st.getPropertyValue('--text-halo') || '').trim();
-            if (stroke >= 1 && halo) continue;
+            /* 헤일로는 글자 그림자(겹쳐 3px까지)로 둡니다. 획 테두리는 글씨를 굵게 만들어 쓰지 않습니다. */
+            const glow = st.textShadow && st.textShadow !== 'none' && (st.textShadow.match(/0px 0px [1-9]/g) || []).length >= 2;
+            if ((stroke >= 1 || glow) && halo) continue;
             miss.push(walker.currentNode.nodeValue.trim().slice(0, 28));
         }
         return miss.slice(0, 8);
