@@ -20,7 +20,8 @@
 .brief-lead { margin: 0; font-weight: 800; }
 .brief-calm { margin: 4px 0; font-size: 16px; line-height: 1.5; }
 .brief-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.brief-step {
+/* .tap.block(가로 100% 블록)보다 뒤에 오도록 팝업 이름을 앞에 붙입니다. */
+.brief-pop .brief-step {
     display: grid;
     grid-template-columns: 22px 26px minmax(0, 1fr) 14px;
     align-items: center;
@@ -53,7 +54,7 @@
     .brief-agenda { display: none; }
     .brief-foot .muted { display: none; }
     .brief-foot { justify-content: flex-end; }
-    .brief-step { min-height: 48px; padding: 6px 8px; grid-template-columns: 18px 24px minmax(0, 1fr) 12px; gap: 6px; }
+    .brief-pop .brief-step { min-height: 48px; padding: 6px 8px; grid-template-columns: 18px 24px minmax(0, 1fr) 12px; gap: 6px; }
     .brief-hello h2 { font-size: 18px; }
     .brief-text .muted { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
     .brief-text strong { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }

@@ -83,6 +83,7 @@ check(/role="dialog" aria-modal="true" aria-label="오늘 브리핑"/.test(ui) &
 check(/querySelector\('\[aria-modal="true"\], \.sheet-back, \.quick-bar\.is-open'\)/.test(ui), '다른 창이 떠 있으면 기다려야 합니다.');
 check(/data-role="brief-toggle"/.test(src('src/ui/TodoSettings.jsx')) && /data-role="brief-now"/.test(src('src/ui/TodoSettings.jsx')), '설정에 아침 브리핑 켜기·끄기가 없습니다.');
 check(/\{ id: 'brief', label: '오늘 브리핑', group: '동작', fallback: 'b' \}/.test(src('src/ui/hotkeys.js')), '오늘 브리핑 단축키가 없습니다.');
+check(/\.brief-pop \.brief-step \{\s*display: grid;/.test(src('src/ui/brief.css')), '브리핑 줄 배치가 .block(display:block)에 덮입니다.');
 check(!/briefing|ssug-gyomu-brief/.test(src('src/lib/db.js')), '브리핑 표시는 기록·클라우드에 넣지 않습니다.');
 
 if (failures.length) {
