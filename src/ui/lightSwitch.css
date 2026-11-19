@@ -1,8 +1,8 @@
 /* 교실 전등 스위치(ui/LightSwitch.jsx). 그림은 옆 단추(찾기·설정)처럼 글자색 선 그림이고, 누름쇠 자리로 켬(위)·끔(아래)을 보입니다. */
 .light-switch { position: relative; flex-direction: column; gap: 0; }
 .light-switch .ls-svg { display: block; width: 18px; height: 18px; margin-top: 2px; }
-/* 그림 아래 아주 작은 ON/OFF. 글자색은 옆 단추 그림과 같은 글자색 */
-.ls-word { font-size: 8.5px; font-weight: 800; line-height: 1; letter-spacing: .04em; margin-top: 1px; font-family: var(--font-plain); }
+/* 그림 아래 아주 작은 ON/OFF. 글자색은 옆 단추 그림과 같은 글자색. 14px보다 작은 글자는 굵게 쓰지 않는 앱 규칙(600 미만)을 따릅니다. */
+.ls-word { font-size: 9px; font-weight: 500; line-height: 1; letter-spacing: .04em; margin-top: 1px; font-family: var(--font-plain); }
 .light-switch.ls-off .ls-word { color: #FF9A3C; }
 .ls-lever { transition: y .16s cubic-bezier(.3, 1.6, .5, 1); }
 /* 꺼진 스위치의 주황 표시등(어두운 교실에서 스위치를 찾는 그 불빛) */

@@ -14,5 +14,6 @@ check(/<span className="ls-word" aria-hidden="true">\{dark \? 'OFF' : 'ON'\}<\/s
 check(/\.ls-led \{ fill: #FF9A3C;/.test(css) && /\{dark && <circle className="ls-led"/.test(ui), '꺼진 스위치 표시등이 없습니다.');
 check(/width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"/.test(ui) && !/#FBF8F1|#E2DCD0/.test(css), '스위치 그림이 옆 단추(찾기·설정)와 같은 선 그림·글자색이 아닙니다.');
 check(/prefers-reduced-motion: reduce/.test(css) && /prefers-reduced-motion: reduce/.test(ui), '움직임 줄이기 설정을 따라야 합니다.');
+check(/\.ls-word \{ font-size: 9px; font-weight: 500;/.test(css), 'ON/OFF 는 작은 글자라 굵기를 600 미만으로 둡니다(앱 규칙).');
 if (failures.length) { console.error(`전등 스위치 검사 실패 ${failures.length}건`); for (const f of failures) console.error(`- ${f}`); process.exit(1); }
 console.log('전등 스위치 검사를 통과했습니다.');
