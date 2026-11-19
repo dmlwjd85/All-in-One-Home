@@ -435,6 +435,8 @@ try {
         check(first.tiles.join() === 'basic,cork', `꾸미기 타일이 다릅니다: ${first.tiles}`);
         check(first.labels.includes('심플') && first.labels.includes('클래식 교실풍경'), '설정 타일 이름이 없습니다.');
         check(first.labels.includes('밤 교실'), '밤 교실 안내가 없습니다.');
+        /* 사람처럼 타일을 화면 가운데로 굴린 뒤 누릅니다(아래 탭바·쨈에 반쯤 가린 채 누르면 탭바가 눌립니다). */
+        await page.$eval('[data-skin-pick="cork"]', (el) => el.scrollIntoView({ block: 'center' }));
         await page.click('[data-skin-pick="cork"]');
         await delay(120);
         const after = await page.evaluate(() => ({
@@ -448,6 +450,8 @@ try {
         check(after.skin === 'cork' && after.stored === 'cork', `코르크로 바꾸지 못합니다: ${JSON.stringify(after)}`);
         check(after.kb == null, '꾸미기를 바꾸며 키보드 테마가 바뀝니다.');
         check(after.deco === 'none', `장식이 클릭을 가로챕니다: ${after.deco}`);
+        /* 사람처럼 타일을 화면 가운데로 굴린 뒤 누릅니다(아래 탭바·쨈에 반쯤 가린 채 누르면 탭바가 눌립니다). */
+        await page.$eval('[data-skin-pick="basic"]', (el) => el.scrollIntoView({ block: 'center' }));
         await page.click('[data-skin-pick="basic"]');
         await delay(120);
         const back = await page.evaluate(() => ({
