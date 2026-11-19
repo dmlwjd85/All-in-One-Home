@@ -80,6 +80,7 @@
     "check:photos": "node scripts/check-photos.mjs",
     "check:student-card": "node scripts/check-student-card.mjs",
     "check:class-tools": "node scripts/check-class-tools.mjs",
+    "check:briefing": "node scripts/check-briefing.mjs",
     "check:doc-file": "node scripts/check-doc-file.mjs",
     "check:widgets-browser": "node scripts/check-widgets-browser.mjs",
     "check:minutes": "node scripts/check-minutes.mjs",

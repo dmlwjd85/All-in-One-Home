@@ -1,0 +1,60 @@
+/* 아침 브리핑 팝업(ui/MorningBrief.jsx). 색은 앱 토큰만 써서 기본·교실 테마·어두운 화면을 따릅니다. 한 화면에 다 보이게 짧게 둡니다. */
+.brief-back { display: grid; place-items: center; padding: 12px; z-index: 62; }
+.brief-pop {
+    width: min(560px, 100%);
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+    box-sizing: border-box;
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 22px;
+    background: var(--bg);
+    color: var(--ink);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .35);
+}
+.brief-head { display: flex; align-items: flex-start; gap: 8px; }
+.brief-hello { flex: 1 1 auto; min-width: 0; }
+.brief-hello h2 { margin: 0; font-size: 20px; line-height: 1.3; word-break: keep-all; }
+.brief-hello p { margin: 4px 0 0; font-size: 14px; }
+.brief-lead { margin: 0; font-weight: 800; }
+.brief-calm { margin: 4px 0; font-size: 16px; line-height: 1.5; }
+.brief-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.brief-step {
+    display: grid;
+    grid-template-columns: 22px 26px minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: 8px;
+    min-height: 56px;
+    padding: 8px 10px;
+    border-radius: 16px;
+    background: var(--surface, var(--bg));
+    box-shadow: var(--neo-raise-sm);
+    text-align: left;
+}
+.brief-n { font-weight: 800; color: var(--accent); text-align: center; }
+.brief-ico { font-size: 20px; line-height: 1; text-align: center; }
+.brief-text { display: grid; gap: 1px; min-width: 0; }
+.brief-text strong { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; word-break: keep-all; }
+.brief-text .muted { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; word-break: keep-all; }
+.brief-go { color: var(--ink-sub); font-size: 18px; }
+.brief-more { margin: 0; font-size: 13px; }
+.brief-agenda { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.brief-slot { padding: 3px 8px; border-radius: 999px; font-size: 12.5px; background: var(--surface, var(--bg)); box-shadow: var(--neo-inset); white-space: nowrap; }
+.brief-slot.is-event { font-weight: 800; }
+.brief-slot.is-now { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 800; }
+.brief-slot.is-past { opacity: .55; }
+.brief-foot { display: flex; align-items: center; gap: 10px; }
+.brief-foot .muted { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.35; }
+.brief-foot .primary-btn { flex: 0 0 auto; padding: 0 20px; min-height: 48px; }
+/* 작은 화면(320px 폭·낮은 높이)에서도 스크롤 없이: 오늘 흐름 띠와 안내 글을 접고, 줄을 조금 낮춥니다. */
+@media (max-width: 360px), (max-height: 700px) {
+    .brief-pop { padding: 12px; gap: 8px; }
+    .brief-agenda { display: none; }
+    .brief-foot .muted { display: none; }
+    .brief-foot { justify-content: flex-end; }
+    .brief-step { min-height: 48px; padding: 6px 8px; grid-template-columns: 18px 24px minmax(0, 1fr) 12px; gap: 6px; }
+    .brief-hello h2 { font-size: 18px; }
+    .brief-text .muted { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+    .brief-text strong { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+}

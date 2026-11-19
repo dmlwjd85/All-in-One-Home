@@ -36,6 +36,7 @@ import { readWidgetMode, writeWidgetMode } from './lib/widgets.js';
 import { SideLinks } from './ui/EduLinks.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { TodoAlarm } from './ui/TodoAlarm.jsx';
+import { MorningBrief, openBrief } from './ui/MorningBrief.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
 import { MsgSheet } from './ui/MsgSheet.jsx';
 import { Attend } from './ui/Attend.jsx';
@@ -411,6 +412,11 @@ export default function App() {
             setSearch(true);
             return;
         }
+        if (id === 'brief') {
+            closeLayers();
+            openBrief();
+            return;
+        }
         if (id === 'message') {
             closeLayers();
             setMsg(true);
@@ -742,7 +748,8 @@ export default function App() {
                                 </Btn>
                             );
                         })}
-                        {HOTKEY_ACTIONS.filter((action) => action.group !== '이동' && hotkeys[action.id]).map((action) => {
+                        {/* 수업 도구 다섯 가지는 「수업 도구」 화면에 있으니 옆 메뉴에 또 늘어놓지 않습니다(스크롤 줄이기). 키는 그대로 작동합니다. */}
+                        {HOTKEY_ACTIONS.filter((action) => action.group !== '이동' && action.group !== '수업 도구' && hotkeys[action.id]).map((action) => {
                             const key = hotkeyLabel(hotkeys[action.id]);
                             return (
                                 <Btn key={action.id} block className="chip" aria-label={`${action.label}, 단축키 ${key}`} onClick={() => runHotkey(action.id)}>
@@ -820,6 +827,7 @@ export default function App() {
                 <Btn className="desk-fab foil-fab" aria-label="쨈 빠른 입력 열기" onPointerDown={(event) => pressDown(event.currentTarget)} onPointerUp={(event) => pressUp(event.currentTarget)} onPointerCancel={(event) => pressUp(event.currentTarget)} onKeyDown={(event) => { if (!event.repeat && (event.key === 'Enter' || event.key === ' ')) pressDown(event.currentTarget); }} onKeyUp={(event) => { if (event.key === 'Enter' || event.key === ' ') pressUp(event.currentTarget); }} onClick={(event) => openQuickBar(event)}><JjaemJar /><span className="fab-txt" aria-hidden="true">쨈</span></Btn>
                 <QuickBar open={quickOpen} invite={quickInvite} inputRef={quickInput} dateYmd={quickDate(route.name, route.params?.date)} onClose={closeQuickBar} />
                 <TodoAlarm />
+                <MorningBrief busy={locked || route.name === 'start'} />
                 {plus && (
                     <PlusSheet
                         startMore={plus === 'more'}

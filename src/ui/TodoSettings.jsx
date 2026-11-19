@@ -3,11 +3,14 @@ import { setTodoGoal } from '../lib/db.js';
 import { GOAL_CHOICES, normalizeGoals } from '../lib/todoAchieve.js';
 import { FX_LEVELS, celebrateDone, fxLevel, reducedMotion, setFxLevel } from './doneFx.js';
 import { Btn } from './bits.jsx';
+import { briefEnabled, setBriefEnabled } from '../lib/briefing.js';
+import { openBrief } from './MorningBrief.jsx';
 
 /** 설정 › 할 일 목표·효과(PR C). 목표는 계정과 함께 다른 기기에도 맞춰지고, 효과 세기는 이 기기에만 둡니다. */
 export function TodoSettings({ data, showToast }) {
     const goals = normalizeGoals(data.goals);
     const [fx, setFx] = useState(() => fxLevel());
+    const [brief, setBrief] = useState(() => briefEnabled());
     const choices = GOAL_CHOICES.includes(goals.n) ? GOAL_CHOICES : [...GOAL_CHOICES, goals.n].sort((a, b) => a - b);
     return (
         <section className="glass" style={{ padding: 14 }} data-screen="todo-settings">
@@ -37,6 +40,12 @@ export function TodoSettings({ data, showToast }) {
                 const button = event.currentTarget;
                 celebrateDone({ done: true, pri: 3, allDone: true }, { rect: button.getBoundingClientRect(), button, level: fx, streak: 0 });
             }}>효과 미리 보기</Btn>
+            <h3 style={{ margin: '16px 0 8px' }}>아침 브리핑</h3>
+            <p className="muted" style={{ marginTop: 0 }}>아침 8시 뒤 그날 처음 앱을 열면, 오늘 일정과 할 일을 차례를 잡아 한 번 알려 드려요. 쉬는 날에는 뜨지 않아요. 이 기기에만 저장돼요.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-label="아침 브리핑">
+                <Btn className={brief ? 'chip on' : 'chip'} aria-pressed={brief} data-role="brief-toggle" onClick={() => { setBriefEnabled(!brief); setBrief(!brief); showToast(brief ? '아침 브리핑을 껐어요.' : '아침 브리핑을 켰어요.'); }}>{brief ? '켜짐' : '꺼짐'}</Btn>
+                <Btn className="chip" data-role="brief-now" onClick={() => openBrief()}>지금 보기</Btn>
+            </div>
         </section>
     );
 }

@@ -13,6 +13,7 @@ export const HOTKEY_ACTIONS = [
     { id: 'plus', label: '쨈 빠른 입력', group: '동작', fallback: '/', legacy: '/' },
     { id: 'help', label: '단축키 목록', group: '동작', fallback: '?', legacy: '?' },
     { id: 'search', label: '찾기', group: '동작', fallback: 'f' },
+    { id: 'brief', label: '오늘 브리핑', group: '동작', fallback: 'b' },
     { id: 'today', label: '오늘', group: '이동', fallback: 't', href: '#/today' },
     { id: 'attend', label: '출결', group: '이동', fallback: 'a', href: '#/attend' },
     { id: 'homework', label: '과제 체크', group: '이동', fallback: '', href: '#/homework' },
