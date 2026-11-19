@@ -211,7 +211,7 @@ check(css.includes('--text-halo') && css.includes('text-shadow: 0 0 1px var(--te
 check(!/-webkit-text-stroke:\s*[1-9]/.test(css), '글자 테두리를 획(-webkit-text-stroke)으로 그리면 글씨가 굵게 뭉개집니다. 글자 그림자로 두세요.');
 
 const sw = src('public/sw.js');
-check(sw.includes("const CACHE = 'ssug-gyomu-shell-v120'"), '서비스 워커가 v120가 아닙니다.');
+check(sw.includes("const CACHE = 'ssug-gyomu-shell-v121'"), '서비스 워커가 v121가 아닙니다.');
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
