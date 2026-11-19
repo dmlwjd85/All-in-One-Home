@@ -206,6 +206,7 @@ jobs:
               npm run check:quickbar
               npm run check:academic
               CHROME_PATH=/usr/bin/google-chrome npm run check:widgets-browser
+              CHROME_PATH=/usr/bin/google-chrome npm run check:top-weather
               CHROME_PATH=/usr/bin/google-chrome npm run check:meal-ocr-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:homework-browser
               CHROME_PATH=/usr/bin/google-chrome npm run check:homework-old

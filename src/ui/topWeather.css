@@ -1,0 +1,68 @@
+/* 맨 위 날짜 칸 안의 날씨. 넓은 화면은 날짜 오른쪽, 휴대폰은 '11월' 줄 오른쪽에 둬서 칸 높이를 거의 늘리지 않습니다.
+   누르는 자리(단추)는 늘 44px, 보이는 모양은 안쪽 .tw-pill 입니다. */
+.date-block.has-weather {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    align-items: center;
+}
+.date-block.has-weather > :not(.top-weather) { grid-column: 1; }
+.date-block.has-weather > .top-weather { grid-column: 2; grid-row: 1 / span 3; }
+.top-weather {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: inherit;
+    text-align: left;
+    max-width: 230px;
+}
+.top-weather .tw-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 3px 12px 3px 8px;
+    border: 1.5px dashed var(--line);
+    border-radius: 10px;
+    min-width: 0;
+}
+.top-weather .tw-ico { font-size: 24px; line-height: 1; }
+.top-weather .tw-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.top-weather .tw-temp { font-size: 18px; font-weight: 700; }
+.top-weather .tw-place { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) {
+    /* 1fr 칸을 지나는 날짜 줄은 auto 칸 너비를 키우지 않습니다(그리드 규칙) → 날씨 칸이 제 너비를 받습니다. */
+    .date-block.has-weather { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 6px; }
+    .date-block.has-weather > .kicker { grid-column: 1; grid-row: 1; }
+    .date-block.has-weather > :not(.top-weather):not(.kicker) { grid-column: 1 / -1; }
+    .date-block.has-weather > .top-weather { grid-column: 2; grid-row: 1; justify-self: end; margin: -12px -4px -12px 0; max-width: 100%; }
+    .date-block.has-weather .kicker .ky { display: none; }
+    .top-weather .tw-pill { min-height: 22px; padding: 0 8px 0 4px; gap: 4px; border-radius: 8px; }
+    .top-weather .tw-text { flex-direction: row; align-items: baseline; gap: 4px; }
+    .top-weather .tw-ico { font-size: 15px; }
+    .top-weather .tw-temp { font-size: 14px; }
+    .top-weather .tw-label { display: none; }
+    .top-weather .tw-text,
+    .top-weather .tw-place { flex: none; overflow: visible; }
+}
+
+.tw-sheet { max-width: 520px; padding-bottom: 16px; }
+.tw-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tw-head h2 { margin: 0; }
+.tw-now { margin: 8px 0 4px; }
+.tw-now-line { margin: 0 0 6px; font-size: 16px; }
+.tw-now-line b { font-size: 22px; }
+.tw-days { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.tw-day { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); font-size: 14px; }
+.tw-day-name { font-weight: 700; }
+.tw-ask { margin: 12px 0 6px; font-size: 14px; }
+.tw-places { display: flex; flex-wrap: wrap; gap: 6px; }
+.tw-places .chip { min-width: 60px; justify-content: center; }
+.tw-search { display: flex; gap: 6px; margin-top: 10px; }
+.tw-search .field { flex: 1; min-width: 0; }
+.tw-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 13px; }

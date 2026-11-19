@@ -393,49 +393,58 @@ html[data-skin="cork"] .quick-scrim {
     background: rgba(90, 58, 36, .28);
 }
 
-/* 카드 제목: 파랑·코랄·초록·주황 라벨 태그. 글자 크기는 그대로입니다. */
+/* 카드 제목: 쨈 교무수첩 팻말처럼 나무 테 + 칠판 속 + 분필 글씨. 화면 갈래(파랑·코랄·초록·주황)는 아래 분필 줄 색으로 남깁니다.
+   글자 크기는 그대로입니다. */
 html[data-skin="cork"] .fold-title,
 html[data-skin="cork"] .fold-hide h3,
 html[data-skin="cork"] .home-quick-title,
 html[data-skin="cork"] .glass > h2.title-font,
 html[data-skin="cork"] .solid-card > h2.title-font {
     display: inline-block;
-    padding: 2px 8px;
-    border-radius: 8px;
-    color: var(--cork-tag-ink);
-    background: var(--cork-tag-blue);
+    padding: 1px 9px 3px;
+    border: 3px solid #8B5E3C;
+    border-radius: 4px;
+    color: var(--cork-chalk-ink);
+    background-color: var(--cork-chalk);
+    background-image:
+        linear-gradient(rgba(22, 36, 30, .38), rgba(22, 36, 30, .38)),
+        url('./skin/bg/chalkboard.webp');
+    background-size: 100% 100%, cover;
+    background-position: 0 0, center;
+    box-shadow: inset 0 -3px 0 var(--plaque-line, #7EB8B0), inset 0 1px 0 rgba(255, 255, 255, .16), 1px 2px 0 #5C3A22;
     line-height: 1.35;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
     -webkit-text-stroke: 0;
     text-shadow: none;
     paint-order: normal;
-    --text-halo: var(--cork-tag-blue);
+    --text-halo: var(--cork-chalk);
 }
 html.dark[data-skin="cork"] .fold-title,
 html.dark[data-skin="cork"] .fold-hide h3,
 html.dark[data-skin="cork"] .home-quick-title,
 html.dark[data-skin="cork"] .glass > h2.title-font,
 html.dark[data-skin="cork"] .solid-card > h2.title-font {
-    color: var(--cork-tag-ink);
+    color: var(--cork-chalk-ink);
+    background-image:
+        linear-gradient(rgba(6, 12, 10, .5), rgba(6, 12, 10, .5)),
+        url('./skin/bg/chalkboard.webp');
+    border-color: #5A3C26;
 }
 html[data-skin="cork"] .home-todo .fold-title,
 html[data-skin="cork"] .home-todo .fold-hide h3 {
-    background: var(--cork-tag-coral);
-    --text-halo: var(--cork-tag-coral);
+    --plaque-line: #E09080;
 }
 html[data-skin="cork"] .home-event .fold-title,
 html[data-skin="cork"] .home-event .fold-hide h3 {
-    background: var(--cork-tag-green);
-    --text-halo: var(--cork-tag-green);
+    --plaque-line: #B8C878;
 }
 html[data-skin="cork"] .home-quick-title,
 html[data-skin="cork"] .fold[data-fold="recent"] .fold-title,
 html[data-skin="cork"] .fold[data-fold="recent"] .fold-hide h3 {
-    background: var(--cork-tag-orange);
-    --text-halo: var(--cork-tag-orange);
+    --plaque-line: #E0C878;
 }
-/* 화면별 라벨 색. 시간표·일정·달력·회의록=파랑, 할 일·과제=코랄, 출결·학생=초록, 안내·설정·알림장=주황. */
+/* 화면별 팻말 분필 줄 색. 시간표·일정·달력·회의록=파랑, 할 일·과제=코랄, 출결·학생=초록, 안내·설정·알림장=주황. */
 html[data-skin="cork"] [data-screen="schedule"] .fold-title,
 html[data-skin="cork"] [data-screen="schedule"] .fold-hide h3,
 html[data-skin="cork"] [data-screen="schedule"] .glass > h2.title-font,
@@ -449,8 +458,7 @@ html[data-skin="cork"] [data-screen="minutes-view"] h2.title-font,
 html[data-skin="cork"] [data-screen="minutes-editor"] h2.title-font,
 html[data-skin="cork"] [data-screen="default-tt"] h2.title-font,
 html[data-skin="cork"] [data-screen="academic"] h2.title-font {
-    background: var(--cork-tag-blue);
-    --text-halo: var(--cork-tag-blue);
+    --plaque-line: #7EB8B0;
 }
 html[data-skin="cork"] [data-screen="todo"] .fold-title,
 html[data-skin="cork"] [data-screen="todo"] .fold-hide h3,
@@ -462,8 +470,7 @@ html[data-skin="cork"] [data-screen="homework"] .glass > h2.title-font,
 html[data-skin="cork"] [data-screen="homework"] h2.title-font,
 html[data-skin="cork"] [data-screen="todo-settings"] h2.title-font,
 html[data-skin="cork"] [data-screen="todo-edit"] h2.title-font {
-    background: var(--cork-tag-coral);
-    --text-halo: var(--cork-tag-coral);
+    --plaque-line: #E09080;
 }
 html[data-skin="cork"] [data-screen="attend"] .fold-title,
 html[data-skin="cork"] [data-screen="attend"] .fold-hide h3,
@@ -473,8 +480,7 @@ html[data-skin="cork"] [data-screen="students"] .fold-title,
 html[data-skin="cork"] [data-screen="students"] .fold-hide h3,
 html[data-skin="cork"] [data-screen="students"] .glass > h2.title-font,
 html[data-skin="cork"] [data-screen="students"] h2.title-font {
-    background: var(--cork-tag-green);
-    --text-halo: var(--cork-tag-green);
+    --plaque-line: #B8C878;
 }
 html[data-skin="cork"] [data-screen="notice"] .fold-title,
 html[data-skin="cork"] [data-screen="notice"] .fold-hide h3,
@@ -487,8 +493,7 @@ html[data-skin="cork"] [data-screen="settings"] h2.title-font,
 html[data-skin="cork"] [data-screen="hotkeys"] h2.title-font,
 html[data-skin="cork"] [data-screen="quick-help"] h2.title-font,
 html[data-skin="cork"] [data-screen="store-guide"] h2.title-font {
-    background: var(--cork-tag-orange);
-    --text-halo: var(--cork-tag-orange);
+    --plaque-line: #E0C878;
 }
 
 /* 보호 안내는 크림 카드 그대로, 색은 작은 라벨에만 둡니다. */
@@ -2091,4 +2096,61 @@ html.dark[data-skin="cork"] .cal-grid .cal-today .num {
 }
 html[data-skin="cork"] .skin-motto-text {
     text-shadow: 0 0 1px #E4D7BF, 0 0 2px #E4D7BF, 0 0 3px #E4D7BF;
+}
+
+/* ───────── 칠판 팻말 ─────────
+   쨈 교무수첩 이름표처럼 나무 테 + 칠판 속 + 분필 글씨. 칠판 위에 크림·빨강 단색 판이 떠 보이지 않게
+   맨 위 날짜 칸, 맨 위 도구 단추, 크게 누르는 단추(.hero-action·.primary-btn), 보호 표를 같은 결로 맞춥니다.
+   배경 그림 아래에는 늘 같은 색(background-color)을 깔아 글자 대비 검사가 그 색으로 잽니다. */
+html[data-skin="cork"] body .topbar .date-block,
+html[data-skin="cork"] body .topbar .icon-btn,
+html[data-skin="cork"] body .topbar .top-widget-toggle,
+html[data-skin="cork"] body .main .hero-action,
+html[data-skin="cork"] body .main .primary-btn,
+html[data-skin="cork"] body .store-badge {
+    --plaque-wash: rgba(22, 36, 30, .38);
+    background-color: var(--cork-chalk);
+    background-image: linear-gradient(var(--plaque-wash), var(--plaque-wash)), url('./skin/bg/chalkboard.webp');
+    background-size: 100% 100%, cover;
+    background-position: 0 0, center;
+    color: var(--cork-chalk-ink);
+    --text-halo: var(--cork-chalk);
+    border: 3px solid #8B5E3C;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px #6B4424, 1px 2px 0 #5C3A22;
+}
+html[data-skin="cork"] body .topbar .date-block { border-width: 5px; padding: 6px 12px; }
+html[data-skin="cork"] body .store-badge { border-width: 2px; }
+/* 크게 누르는 단추: 칠판 속에 붉은 물을 들여 다른 팻말과 구분합니다(글자는 그대로 분필 흰색). */
+html[data-skin="cork"] body .main .hero-action,
+html[data-skin="cork"] body .main .primary-btn {
+    --plaque-wash: rgba(122, 38, 30, .66);
+    background-color: #5E2A22;
+    --text-halo: #5E2A22;
+}
+html.dark[data-skin="cork"] body .topbar .date-block,
+html.dark[data-skin="cork"] body .topbar .icon-btn,
+html.dark[data-skin="cork"] body .topbar .top-widget-toggle,
+html.dark[data-skin="cork"] body .store-badge {
+    --plaque-wash: rgba(6, 12, 10, .5);
+    border-color: #5A3C26;
+    box-shadow: inset 0 0 0 1px #2A1C12, 1px 2px 0 #1A120C;
+}
+html.dark[data-skin="cork"] body .main .hero-action,
+html.dark[data-skin="cork"] body .main .primary-btn {
+    border-color: #5A3C26;
+    box-shadow: inset 0 0 0 1px #2A1C12, 1px 2px 0 #1A120C;
+}
+/* 날짜 칸 안의 날씨: 칠판에 분필로 그린 칸. */
+html[data-skin="cork"] body .topbar .date-block .top-weather {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    color: var(--cork-chalk-ink);
+    --text-halo: var(--cork-chalk);
+}
+html[data-skin="cork"] body .topbar .date-block .top-weather .tw-pill { border-color: rgba(246, 240, 228, .6); }
+html[data-skin="cork"] body .topbar .date-block .top-weather .tw-place { color: var(--cork-chalk-ink); }
+@media (max-width: 600px) {
+    html[data-skin="cork"] body .topbar .date-block { border-width: 3px; padding: 4px 8px; }
 }

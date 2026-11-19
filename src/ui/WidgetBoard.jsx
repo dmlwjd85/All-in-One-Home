@@ -13,7 +13,7 @@ import {
     SIZE_LABEL, WIDGETS, dropWidget, eventOn, eventsByDay, moveWidget, nextSize, noticesNear, readWidgetLayout, setWidgetSize,
     titlesByMonth, toggleWidget, upcomingEvents, writeWidgetLayout, yearProgress,
 } from '../lib/widgets.js';
-import { findPlace, loadWeather, readPlace, weatherText, writePlace } from '../lib/weather.js';
+import { WEATHER_PLACE_EVENT, findPlace, loadWeather, readPlace, weatherText, writePlace } from '../lib/weather.js';
 import { toggleTodoFx } from './doneFx.js';
 import { useUi } from './context.jsx';
 import { useGcal } from './useGcal.js';
@@ -262,6 +262,13 @@ function WeatherWidget() {
     const [draft, setDraft] = useState('');
     const [state, setState] = useState({ data: null, at: 0, error: '', busy: false });
     const [asking, setAsking] = useState(false);
+
+    /* 맨 위 날씨 칸에서 지역을 바꾸면 위젯도 따라 바뀝니다. */
+    useEffect(() => {
+        const sync = () => setPlace(readPlace());
+        window.addEventListener(WEATHER_PLACE_EVENT, sync);
+        return () => window.removeEventListener(WEATHER_PLACE_EVENT, sync);
+    }, []);
 
     useEffect(() => {
         if (!place) return undefined;

@@ -7,6 +7,10 @@
 export const WEATHER_PLACE_KEY = 'ssug-gyomu-weather-place';
 export const WEATHER_CACHE_KEY = 'ssug-gyomu-weather';
 export const WEATHER_TTL_MS = 30 * 60 * 1000;
+/** 지역을 바꾸면 이 신호를 보내 맨 위 날씨 칸과 날씨 위젯이 같이 바뀝니다. */
+export const WEATHER_PLACE_EVENT = 'ssug-gyomu-weather-place';
+/** 지역 고르기 창에 바로 누르게 보여 줄 곳(모두 아래 목록에 있어 바깥에 묻지 않습니다). */
+export const QUICK_PLACES = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '수원', '춘천', '강릉', '청주', '천안', '아산', '전주', '창원', '포항', '제주'];
 const GEO_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 
@@ -136,6 +140,7 @@ export function writePlace(place, storage) {
             store(storage)?.removeItem(WEATHER_CACHE_KEY);
         }
     } catch { /* 못 적어도 이번 화면에서는 씁니다. */ }
+    try { globalThis.dispatchEvent?.(new Event(WEATHER_PLACE_EVENT)); } catch { /* 창이 없으면(검사) 넘어갑니다. */ }
 }
 
 function cacheKey(place) { return `${round2(place.lat)},${round2(place.lon)}`; }

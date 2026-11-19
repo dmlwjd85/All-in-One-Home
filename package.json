@@ -82,6 +82,7 @@
     "check:class-tools": "node scripts/check-class-tools.mjs",
     "check:briefing": "node scripts/check-briefing.mjs",
     "check:light-switch": "node scripts/check-light-switch.mjs",
+    "check:top-weather": "node scripts/check-top-weather.mjs",
     "check:doc-file": "node scripts/check-doc-file.mjs",
     "check:widgets-browser": "node scripts/check-widgets-browser.mjs",
     "check:minutes": "node scripts/check-minutes.mjs",

@@ -37,6 +37,7 @@ import { SideLinks } from './ui/EduLinks.jsx';
 import { PlusSheet } from './ui/PlusSheet.jsx';
 import { TodoAlarm } from './ui/TodoAlarm.jsx';
 import { MorningBrief, openBrief } from './ui/MorningBrief.jsx';
+import { TopWeather } from './ui/TopWeather.jsx';
 import { LightSwitch } from './ui/LightSwitch.jsx';
 import { FlowSheet } from './ui/FlowSheet.jsx';
 import { MsgSheet } from './ui/MsgSheet.jsx';
@@ -771,10 +772,11 @@ export default function App() {
                             <Btn className="icon-btn" aria-label="뒤로" onClick={goBack}>‹</Btn>
                         )}
                         {route.name === 'today' ? (
-                            <div className="date-block">
-                                <span className="kicker">{clock.ymd.slice(0, 4)}년 {Number(clock.ymd.slice(5, 7))}월</span>
+                            <div className="date-block has-weather">
+                                <span className="kicker"><span className="ky">{clock.ymd.slice(0, 4)}년 </span>{Number(clock.ymd.slice(5, 7))}월</span>
                                 <h1 className="title-font date-line"><span>{Number(clock.ymd.slice(8, 10))}일</span><em className={todayRest.off ? 'day-rest-mark' : undefined}>{clock.weekday}요일</em></h1>
                                 <p className="muted">{headingSub}</p>
+                                <TopWeather />
                             </div>
                         ) : (
                             <div className="date-block">
